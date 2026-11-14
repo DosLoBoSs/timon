@@ -62,7 +62,7 @@ test('a short script shows under the warning, whole, with its fingerprint', asyn
   assert.match(text, /This command runs files from the project/);
   assert.match(document.querySelector('pre')!.textContent ?? '', /aws\/credentials/);
   assert.match(text, /SHA-256 aaaaaaaaaaaaaaaa/);
-  assert.equal(document.querySelector('button'), null, 'nothing to fold');
+  assert.ok(!document.querySelector('button'), 'nothing to fold');
 });
 
 test('a long script starts folded and unfolds on demand', async (t) => {
@@ -80,7 +80,7 @@ test('a long script starts folded and unfolds on demand', async (t) => {
 test('an unread file gets its reason and no excerpt; a changed one says it was not run', async (t) => {
   const w = await mount(t);
   await w.render([{ kind: 'file', path: 'linked.sh', status: 'symlink_outside' }], ['run_tests.sh']);
-  assert.equal(document.querySelector('pre'), null);
+  assert.ok(!document.querySelector('pre'));
   const text = document.body.textContent ?? '';
   assert.match(text, /leads outside the project folder: not read/);
   assert.match(text, /Not run: run_tests\.sh changed/);
@@ -89,7 +89,7 @@ test('an unread file gets its reason and no excerpt; a changed one says it was n
 test('a card that offers to remember the approval says it lapses when the files change', async (t) => {
   const w = await mount(t);
   await w.render([short]);
-  assert.equal(document.querySelector('[data-script-remembered]'), null);
+  assert.ok(!document.querySelector('[data-script-remembered]'));
   await w.render([short], [], true);
   assert.match(document.querySelector('[data-script-remembered]')?.textContent ?? '', /only while these files stay as shown/);
 });
