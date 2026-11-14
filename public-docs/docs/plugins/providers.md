@@ -315,13 +315,16 @@ is painted on the pages of the providers your plugin brings, and nowhere else.
 
 ```js
 import React from 'react'
-import { useProviderPage, ProviderSection } from '@timon/ui'
+import { useProviderPage, ProviderSection, ProviderSettingRow } from '@timon/ui'
 
 function UsageSection() {
   const page = useProviderPage()
   if (!page) return null
   return React.createElement(ProviderSection, { title: 'Usage' },
-    `${page.provider.modelCount} models`)
+    React.createElement(ProviderSettingRow, {
+      title: 'Models offered',
+      status: `${page.provider.modelCount} models`,
+    }))
 }
 
 export function apply(ctx) {
@@ -334,8 +337,14 @@ export function apply(ctx) {
   vault entry it needs is present — names only, never a value), `status`,
   `defaultBackend`, `refresh()` and `back()`. Call `refresh()` after a change your
   section made, so the header and the other sections read the provider again.
-- `ProviderSection` is the frame of Timon's own sections: a `title`, a
-  `description`, `actions` at the right of the title, and your content.
+- Draw your section as Timon draws its own, so the page reads as one.
+  `ProviderSection` is a short `title` over a card; its children are
+  `ProviderSettingRow`s: a `title` and one `status` line at the left (`leading`
+  before them, for a logo), ONE main `action` at the right (a button, a switch),
+  and the other actions as `DropdownMenuItem`s in `menu`, shown in a "…" menu.
+  No paragraph of explanation under the title (a `description` folds behind an
+  information mark), and no field shown in permanence: a form opens after a
+  click, in a dialog or under its row (the row's `children`).
 - `order` places the section: the common ones are at 100 (Connection), 200 (API
   key), 300 (Program), 400 (own settings) and 500 (Models). Without `order`, it
   comes after Models.

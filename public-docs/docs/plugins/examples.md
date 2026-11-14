@@ -600,31 +600,27 @@ export function apply(ctx) {
 
 Source: `examples/plugin-provider-section`. Manifest ID: `example-provider-section`. Minimum API: **16**.
 
-API 16. A declarative provider pack, Acme Gateway, with a browser half that registers one section in the settings.provider.section list slot. Timon paints it on the page of the providers this plugin brings only, in Settings › AI models › Providers › Acme Gateway. The component reads useProviderPage(): the provider on screen, its status, refresh() and back(), and draws itself in ProviderSection, the frame of the product's own sections. Registered with key settings, it takes the place of the common own-settings section on that page; without a key, order places it among the common sections (100 to 500).
+API 16. A declarative provider pack, Acme Gateway, with a browser half that registers one section in the settings.provider.section list slot. Timon paints it on the page of the providers this plugin brings only, in Settings › AI models › Providers › Acme Gateway. The component reads useProviderPage(): the provider on screen, its status, refresh() and back(), and draws itself as the product's own sections do: a ProviderSection (a short label over a card) holding ProviderSettingRow rows, each with a title, one status line, one main action and a menu. Registered with key settings, it takes the place of the common own-settings section on that page; without a key, order places it among the common sections (100 to 500).
 
 Permissions: `backends:register`. Read the [related guide](providers.md).
 
 `timon plugin add ./examples/plugin-provider-section` installs this package on the target instance.
 
-From `examples/plugin-provider-section/lib/client.js`, line 49 (excerpt):
+From `examples/plugin-provider-section/lib/client.js`, line 54 (excerpt):
 
 ```js
 function AcmeGatewaySection() {
   const page = useProviderPage()
   if (!page) return null
   const { provider, refresh } = page
-  return h(ProviderSection, {
-    title: t('title'),
-    description: t('description', { url: GATEWAY }),
-    actions: h('button', {
-      type: 'button',
-      onClick: () => void refresh(),
-      className: 'rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground',
-    }, t('refresh')),
-  },
-  h('div', { className: 'flex items-center justify-between gap-3 text-[13px]' },
-    h('span', { className: 'tabular-nums' }, t('models', { count: provider.modelCount })),
-    h('a', { href: CONSOLE, target: '_blank', rel: 'noreferrer', className: 'text-primary hover:underline' }, t('console'))))
+  return h(ProviderSection, { title: t('title') },
+    h(ProviderSettingRow, {
+      title: t('gateway'),
+      status: h('span', { className: 'tabular-nums' }, `${new URL(GATEWAY).host} · ${t('models', { count: provider.modelCount })}`),
+      action: h(Button, { size: 'sm', variant: 'outline', asChild: true },
+        h('a', { href: CONSOLE, target: '_blank', rel: 'noreferrer' }, t('console'))),
+      menu: h(DropdownMenuItem, { onSelect: () => void refresh() }, t('refresh')),
+    }))
 }
 
 export function apply(ctx) {

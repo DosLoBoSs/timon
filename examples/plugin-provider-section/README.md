@@ -13,8 +13,11 @@ on the pages of the providers it brings only: its `pluginId` is the provider's.
 
 - The component takes no props: it reads `useProviderPage()` from `@timon/ui`
   (`provider`, `status`, `defaultBackend`, `refresh()`, `back()`), client API 16.
-- It draws itself in `ProviderSection`, the frame of the product's sections, so
-  the page reads as one.
+- It draws itself as the product's sections do, so the page reads as one: a
+  `ProviderSection` (a short label over a card) holding `ProviderSettingRow`s —
+  a title and one status line at the left, one main action at the right, the
+  others in the row's "…" menu. No paragraph under the label, no field shown in
+  permanence.
 - `key: 'settings'` puts it in place of the common "own settings" section, on
   this provider's page only. Without a key it is added; `order` places it (the
   common sections are 100 to 500).

@@ -638,6 +638,10 @@
         "type": "export",
         "since": 16
       },
+      "ProviderSettingRow": {
+        "type": "export",
+        "since": 16
+      },
       "useProviderPage": {
         "type": "export",
         "since": 16

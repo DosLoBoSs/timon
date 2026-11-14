@@ -1711,11 +1711,22 @@ declare module '@timon/ui' {
     back(): void;
   } | null;
   /**
-   * The frame of a provider page's section (client API 16): `title`,
-   * `description`, `actions` (buttons at the right of the title) and the
-   * content as children, on the same surface as the product's sections.
+   * The frame of a provider page's section (client API 16): a short `title`
+   * above a card raised over the page, whose children are rows
+   * (`ProviderSettingRow`). `description` folds behind an information mark
+   * (no paragraph under the title); `actions` are small controls at the right
+   * of the title.
    */
   export const ProviderSection: PlatformComponent;
+  /**
+   * One row of a `ProviderSection` card (client API 16): `title` and one
+   * `status` line at the left (`leading` before them: a logo), ONE main
+   * `action` at the right (a button, a switch), the secondary actions as
+   * `DropdownMenuItem`s in `menu`, painted in a "…" menu (`menuLabel` names
+   * it). `children` unfold under the row: what a gesture opens, never a form
+   * shown in permanence. `data-*` attributes are passed through.
+   */
+  export const ProviderSettingRow: PlatformComponent;
   /**
    * The row a `providers.row` occupant is painted for (client API 16): one
    * provider in the providers list of Settings › AI models (`mode: 'settings'`)

@@ -1,5 +1,5 @@
 import React from 'react'
-import { createTranslator, useProviderPage, ProviderSection } from '@timon/ui'
+import { createTranslator, useProviderPage, ProviderSection, ProviderSettingRow, Button, DropdownMenuItem } from '@timon/ui'
 
 const h = React.createElement
 
@@ -7,16 +7,16 @@ const h = React.createElement
 const t = createTranslator({
   en: {
     title: 'Acme Gateway',
-    description: 'Missions reach the gateway at {url}. Your key stays in the plugin settings.',
+    gateway: 'Gateway',
     models: '{count, plural, one {# model offered} other {# models offered}}',
-    console: 'Open the Acme console',
+    console: 'Open the console',
     refresh: 'Check again',
   },
   fr: {
     title: 'Acme Gateway',
-    description: 'Les missions joignent la passerelle à {url}. Votre clé reste dans les réglages du plugin.',
+    gateway: 'Passerelle',
     models: '{count, plural, one {# modèle proposé} other {# modèles proposés}}',
-    console: 'Ouvrir la console Acme',
+    console: 'Ouvrir la console',
     refresh: 'Vérifier à nouveau',
   },
 })
@@ -40,6 +40,11 @@ const CONSOLE = 'https://console.example.com'
  * common sections are 100, 200, 300, 400 and 500).
  *
  * What a section must respect:
+ *   - draw itself as the product's do: a `ProviderSection` (a short label over
+ *     a card) holding `ProviderSettingRow`s — a title and one status line at
+ *     the left, ONE main action at the right, the others in the row's "…"
+ *     menu. No paragraph of explanation, no field shown in permanence: a form
+ *     opens after a click, in a dialog or under the row (`children`);
  *   - render nothing when it has nothing to say (`return null`): the page
  *     leaves no gap for it;
  *   - after a change it made itself, call `refresh()` so the header and the
@@ -50,18 +55,14 @@ function AcmeGatewaySection() {
   const page = useProviderPage()
   if (!page) return null
   const { provider, refresh } = page
-  return h(ProviderSection, {
-    title: t('title'),
-    description: t('description', { url: GATEWAY }),
-    actions: h('button', {
-      type: 'button',
-      onClick: () => void refresh(),
-      className: 'rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground',
-    }, t('refresh')),
-  },
-  h('div', { className: 'flex items-center justify-between gap-3 text-[13px]' },
-    h('span', { className: 'tabular-nums' }, t('models', { count: provider.modelCount })),
-    h('a', { href: CONSOLE, target: '_blank', rel: 'noreferrer', className: 'text-primary hover:underline' }, t('console'))))
+  return h(ProviderSection, { title: t('title') },
+    h(ProviderSettingRow, {
+      title: t('gateway'),
+      status: h('span', { className: 'tabular-nums' }, `${new URL(GATEWAY).host} · ${t('models', { count: provider.modelCount })}`),
+      action: h(Button, { size: 'sm', variant: 'outline', asChild: true },
+        h('a', { href: CONSOLE, target: '_blank', rel: 'noreferrer' }, t('console'))),
+      menu: h(DropdownMenuItem, { onSelect: () => void refresh() }, t('refresh')),
+    }))
 }
 
 export function apply(ctx) {
