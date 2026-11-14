@@ -82,6 +82,7 @@ before you ship).
 - [ModelsStrategy](type-aliases/ModelsStrategy.md)
 - [ModelTier](type-aliases/ModelTier.md)
 - [NativeProviderDefinition](type-aliases/NativeProviderDefinition.md)
+- [NestedSandboxDeclaration](type-aliases/NestedSandboxDeclaration.md)
 - [NormalizedEvent](type-aliases/NormalizedEvent.md)
 - [OpenSpan](type-aliases/OpenSpan.md)
 - [PackageManagerName](type-aliases/PackageManagerName.md)
