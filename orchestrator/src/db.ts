@@ -401,6 +401,7 @@ CREATE TABLE IF NOT EXISTS approval_rules (
   tool_name TEXT NOT NULL,
   command TEXT,
   command_hash TEXT,
+  content_state TEXT,
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_approval_rules_agent ON approval_rules(agent, owner_user_id, scope);
@@ -1661,6 +1662,12 @@ if (!triggerLaterCols.includes('approved_at')) db.exec(`ALTER TABLE triggers ADD
 // still here are dropped (their owner gets the card again, with what the new
 // rule will cover). A `session` rule dies with its mission (`finishMission`);
 // one left behind by a daemon that stopped before the mission ended goes here.
+// `content_state` binds the rule of a command that runs local files to their
+// fingerprints (`script-preview.ts`). A rule written before it stays NULL and
+// no longer answers such a command: its owner gets the card again, and the
+// click records the new form. Nothing assumes the old content was safe.
+const approvalRuleCols = (db.prepare(`PRAGMA table_info(approval_rules)`).all() as { name: string }[]).map((c) => c.name);
+if (!approvalRuleCols.includes('content_state')) db.exec(`ALTER TABLE approval_rules ADD COLUMN content_state TEXT`);
 function pruneApprovalRules(): number {
   return db.prepare(`DELETE FROM approval_rules WHERE command_hash IS NULL`).run().changes
     + db.prepare(`DELETE FROM approval_rules WHERE scope = 'session'
@@ -2582,6 +2589,8 @@ export type ApprovalRuleRow = {
   /** Masked, for display only: a shell rule matches on `command_hash`. */
   command: string | null;
   command_hash: string | null;
+  /** The state of the local files the command runs, when it runs any (`script-preview.ts`). */
+  content_state: string | null;
   created_at: number;
 };
 
@@ -6756,20 +6765,39 @@ export const dbApi = {
   insertApprovalRule(r: Omit<ApprovalRuleRow, 'created_at'>): ApprovalRuleRow {
     const now = Date.now();
     db.prepare(
-      `INSERT INTO approval_rules (id, scope, owner_user_id, agent, mission_id, tool_name, command, command_hash, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(r.id, r.scope, r.owner_user_id, r.agent, r.mission_id, r.tool_name, redactNullable(r.command), r.command_hash, now);
+      `INSERT INTO approval_rules (id, scope, owner_user_id, agent, mission_id, tool_name, command, command_hash, content_state, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(r.id, r.scope, r.owner_user_id, r.agent, r.mission_id, r.tool_name, redactNullable(r.command), r.command_hash, r.content_state, now);
     return db.prepare(`SELECT * FROM approval_rules WHERE id = ?`).get(r.id) as ApprovalRuleRow;
   },
   /** The rule that answers this motif for this mission, if any: one of the
-   *  mission's own `session` rules, or an `always` rule of its agent and owner. */
-  findApprovalRule(q: { missionId: string; ownerUserId: string; agent: string; toolName: string; commandHash: string | null }): ApprovalRuleRow | undefined {
+   *  mission's own `session` rules, or an `always` rule of its agent and owner.
+   *  `contentState` must match too: null for a command that runs no local file. */
+  findApprovalRule(q: {
+    missionId: string; ownerUserId: string; agent: string; toolName: string; commandHash: string | null; contentState: string | null;
+  }): ApprovalRuleRow | undefined {
     return db.prepare(
       `SELECT * FROM approval_rules
-       WHERE tool_name = ? AND command_hash IS ? AND owner_user_id = ? AND agent = ?
+       WHERE tool_name = ? AND command_hash IS ? AND content_state IS ? AND owner_user_id = ? AND agent = ?
          AND ((scope = 'session' AND mission_id = ?) OR scope = 'always')
        ORDER BY created_at LIMIT 1`,
-    ).get(q.toolName, q.commandHash, q.ownerUserId, q.agent, q.missionId) as ApprovalRuleRow | undefined;
+    ).get(q.toolName, q.commandHash, q.contentState, q.ownerUserId, q.agent, q.missionId) as ApprovalRuleRow | undefined;
+  },
+  /** The rule of this motif at exactly this scope, whatever the state of its files. */
+  findApprovalRuleAtScope(q: {
+    missionId: string; ownerUserId: string; agent: string; toolName: string; commandHash: string | null; scope: ApprovalRuleScope;
+  }): ApprovalRuleRow | undefined {
+    return db.prepare(
+      `SELECT * FROM approval_rules
+       WHERE tool_name = ? AND command_hash IS ? AND owner_user_id = ? AND agent = ? AND scope = ?
+         AND (scope = 'always' OR mission_id = ?)
+       ORDER BY created_at LIMIT 1`,
+    ).get(q.toolName, q.commandHash, q.ownerUserId, q.agent, q.scope, q.missionId) as ApprovalRuleRow | undefined;
+  },
+  /** Moves a rule to the files' state a new click approved. */
+  setApprovalRuleContentState(id: string, contentState: string): ApprovalRuleRow | undefined {
+    db.prepare(`UPDATE approval_rules SET content_state = ? WHERE id = ?`).run(contentState, id);
+    return db.prepare(`SELECT * FROM approval_rules WHERE id = ?`).get(id) as ApprovalRuleRow | undefined;
   },
   /** `always` rules of an agent; `ownerUserId` null = every owner (operator). */
   listAlwaysApprovalRules(agent: string, ownerUserId: string | null): ApprovalRuleRow[] {

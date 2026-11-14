@@ -47,7 +47,9 @@ import { seriesPlanDefaults } from './series-plan-defaults.js';
 import type { ApprovalScope } from './backends/types.js';
 import { approvalMotif, findApproval, motifLabel, rememberApproval, rememberableScopes, shellCommandOfTool } from './approval-rules.js';
 import { loadConfig } from './agent-config.js';
-import { scriptPreviews, scriptsChanged, type ScriptCheck, type ScriptPreview } from './script-preview.js';
+import {
+  MAX_HASH_BYTES, scriptPreviews, scriptsChanged, type ScriptCheck, type ScriptPreview, type ScriptPreviews,
+} from './script-preview.js';
 import type { PushFanoutResult } from './notifications.js';
 import { ownerCanPaste, pasteReply, shellCommandOf } from './plugins-bundled/terminal-web/command-requests.js';
 import { emitQuestionEvent, type QuestionActor, type QuestionSnapshot } from './question-bus.js';
@@ -162,6 +164,10 @@ type Pending = {
   script_previews?: ScriptPreview[];
   /** Their fingerprints, read again on approval. Never leaves the daemon. */
   script_checks?: ScriptCheck[];
+  /** The digest a remembered approval of this card is bound to (`ScriptPreviews.state`). */
+  script_state?: string;
+  /** Files too large to fingerprint: an Allow is refused. */
+  script_too_large?: string[];
   created_at: number;
   /** Auto-deny delay ACTUALLY applied (0 = never). May be extended along the
    *  way if the push reaches a device — cf. `adaptTimeoutToPush`. */
@@ -209,10 +215,12 @@ function resolvedKey(missionId: string, toolUseId: string): string {
 }
 
 /** A pending card as it can be shown: no callback, no host path. */
-type PendingView = Omit<Pending, 'resolve' | 'onPaste' | 'script_checks'>;
+type PendingView = Omit<Pending, 'resolve' | 'onPaste' | 'script_checks' | 'script_state' | 'script_too_large'>;
 
 function viewOf(p: Pending): PendingView {
-  const { resolve: _, onPaste: _onPaste, script_checks: _checks, ...rest } = p;
+  const {
+    resolve: _, onPaste: _onPaste, script_checks: _checks, script_state: _state, script_too_large: _large, ...rest
+  } = p;
   return rest;
 }
 
@@ -710,7 +718,7 @@ export function userQuestionRefusal(input: RequestInput): string | null {
  * that cannot be built never keeps the card from opening: it only loses the
  * reading aid.
  */
-function missionScriptPreviews(input: RequestInput): { previews: ScriptPreview[]; checks: ScriptCheck[] } | null {
+function missionScriptPreviews(input: RequestInput): ScriptPreviews | null {
   const command = shellCommandOfTool(input.tool_name, input.input);
   if (!command) return null;
   try {
@@ -724,6 +732,14 @@ function missionScriptPreviews(input: RequestInput): { previews: ScriptPreview[]
     console.warn(`[permissions] script preview unavailable (${input.mission_id.slice(0, 8)}): ${(err as Error).message}`);
     return null;
   }
+}
+
+/** What the agent reads when a file is too large for the card to vouch for. */
+export function scriptTooLargeMessage(paths: readonly string[]): string {
+  const list = paths.map((p) => `\`${p}\``).join(', ');
+  return `${list} ${paths.length > 1 ? 'are' : 'is'} larger than ${MAX_HASH_BYTES / (1024 * 1024)} MiB: `
+    + 'Timon cannot fingerprint it, so it cannot check that what runs is what the user approved, '
+    + 'and refused the approval. Nothing ran. Ask the user to run the command themselves.';
 }
 
 /** What the agent reads when the file changed between the card and the click. */
@@ -847,15 +863,18 @@ export function requestPermission(input: RequestInput): Promise<PermissionDecisi
   //    Nothing here reaches past the human click — the classifier's refusals
   //    never come this far (cf. `approval-rules.ts`).
   const nativeScopes = !!input.scopes?.length;
-  // A command that runs a local file is never answered by a remembered
-  // approval, nor offers one: the rule keeps the command, not the file's
-  // content, and the file can be rewritten after the click that allowed it.
-  // A file that is not there runs nothing; one that will be is previewed then.
+  // A command that runs a local file is answered by a remembered approval only
+  // while every file it names is in the state the approval was given for (the
+  // same fingerprint, or still absent): the command alone says nothing of a
+  // content that can be rewritten after the click. One whose content cannot
+  // be checked (outside the folder, unresolved, too large) gets no remembered
+  // answer, and neither do an agent's own scopes, which Timon cannot bind.
   const scripts = missionScriptPreviews(input);
-  const runsLocalFile = !!scripts?.previews.some((p) => p.status !== 'missing' && p.status !== 'not_found');
-  const timonKeeps = input.timonScopes === true && !nativeScopes && !runsLocalFile;
+  const runsLocalFile = !!scripts;
+  const scriptState = scripts?.state ?? null;
+  const timonKeeps = input.timonScopes === true && !nativeScopes && (!runsLocalFile || scriptState !== null);
   if (timonKeeps) {
-    const rule = findApproval(input.mission_id, input.tool_name, input.input);
+    const rule = findApproval(input.mission_id, input.tool_name, input.input, scriptState);
     if (rule) {
       const decision: PermissionDecision = { behavior: 'allow', updatedInput: input.input };
       RESOLVED.set(key, decision);
@@ -879,7 +898,7 @@ export function requestPermission(input: RequestInput): Promise<PermissionDecisi
   const shellCommand = shellCommandOf(input.tool_name, effectiveInput);
   const pasteable = shellCommand !== null && ownerCanPaste(dbApi.getMission(input.mission_id));
   const timonScopes = timonKeeps ? rememberableScopes(input.mission_id, input.tool_name, input.input) : [];
-  const scopes = nativeScopes ? input.scopes : timonScopes.length ? timonScopes : undefined;
+  const scopes = nativeScopes ? (runsLocalFile ? undefined : input.scopes) : timonScopes.length ? timonScopes : undefined;
   const motif = timonScopes.length ? approvalMotif(input.tool_name, input.input) : null;
   const remembers = motif ? motifLabel(motif) : undefined;
 
@@ -903,6 +922,8 @@ export function requestPermission(input: RequestInput): Promise<PermissionDecisi
       ...(pasteable ? { shell_command: shellCommand, choices: SHELL_CARD_CHOICES } : {}),
       ...(pasteable && input.onPaste ? { onPaste: input.onPaste } : {}),
       ...(scripts ? { script_previews: scripts.previews, script_checks: scripts.checks } : {}),
+      ...(scriptState !== null ? { script_state: scriptState } : {}),
+      ...(scripts?.tooLarge.length ? { script_too_large: scripts.tooLarge } : {}),
       created_at: Date.now(),
       timeout_ms: timeoutMs,
       resolve,
@@ -1249,6 +1270,9 @@ export function resolvePermission(
   // gone, or now a link out of the folder) is not what they approved: the
   // Allow becomes a refusal that tells the agent to ask again.
   let scriptChanged: string[] | undefined;
+  if (final.behavior === 'allow' && p.script_too_large?.length) {
+    final = { behavior: 'deny', message: scriptTooLargeMessage(p.script_too_large) };
+  }
   if (final.behavior === 'allow' && p.script_checks?.length) {
     const changed = scriptsChanged(p.script_checks);
     if (changed.length) {
@@ -1263,7 +1287,8 @@ export function resolvePermission(
     const { scope, ...plain } = final;
     final = plain;
     try {
-      const rule = rememberApproval(p.mission_id, p.tool_name, p.input, scope);
+      // Bound to the files' state the click was given for, checked just above.
+      const rule = rememberApproval(p.mission_id, p.tool_name, p.input, scope, p.script_state ?? null);
       if (rule) remembered = { scope, rule_id: rule.id };
     } catch (err) {
       // The Allow stands: only its reach is lost, and the next card says so.
