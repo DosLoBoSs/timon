@@ -10,6 +10,12 @@ Once your pro licence is active and Multi-user is installed and on, its **Team**
 
 Each person keeps their own missions, projects and settings; what they may see beyond their own work is what their groups allow.
 
+### What permissions do not cover yet
+
+Every mission runs under the same operating-system account as Timon itself, whoever started it. Permissions decide what a person may do through Timon's screens, commands and tools; they do not wall off the files on the machine. A mission an account starts can read the files in Timon's data directory, including the operator's credentials and the key of the secrets vault. On an installation with several accounts, anyone who may start missions can therefore reach more than their own permissions allow.
+
+Until Timon can run each account's missions under a separate operating-system account, give the **Spawn missions** permission (`missions:spawn`) only to people you would trust with the whole installation.
+
 ## Without it
 
 If the licence ends, or Multi-user is removed or turned off, **only the administrator keeps access**. The other accounts are suspended, never deleted: they cannot sign in, but their missions, settings and data stay where they are. The administrator sees a card explaining why. Access comes back, unchanged, as soon as the pro licence and Multi-user are both there again.
