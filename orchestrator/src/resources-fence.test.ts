@@ -22,7 +22,7 @@ import { hasSystemd } from './host/systemd.js';
 import type { FencePolicy } from './host/isolation.js';
 import type { HostFence, HostFenceProbe } from './host/types.js';
 import {
-  fenceLaunchFailure, fenceMissionCommand, fencePolicyFile, hostFenceStatus, MissionFenceRefusedError, noteFenceLaunchFailure,
+  fenceLaunchFailure, launchErrorStatus, missionLaunchErrorBody, fenceMissionCommand, fencePolicyFile, hostFenceStatus, MissionFenceRefusedError, noteFenceLaunchFailure,
   resetFenceLaunchFailureForTest, watchFencedLaunch, wrapMissionLaunch, type MissionFenceOutcome,
 } from './resources.js';
 
@@ -346,4 +346,19 @@ test('the log says a missing fence once per cause, an altered package at every l
   }
   assert.equal(lines.filter((l) => l.includes('(once)')).length, 1);
   assert.equal(lines.filter((l) => l.includes('(every time)')).length, 2);
+});
+
+/**
+ * A launch refused by `enforce` reaches the person in words: a stable code the
+ * interface translates, the daemon's English beside it, and a 503 that no
+ * client reads as "the agent is still talking" (409 queues the message).
+ */
+test('a fence refusal answers a translatable code, never a bare launch error', () => {
+  const refused = new MissionFenceRefusedError('Mission refused: host.isolation.filesystem is "enforce" and it cannot be fenced: kernel without Landlock.');
+  assert.deepEqual(missionLaunchErrorBody(refused), { error: refused.message, code: 'mission_fence_refused' });
+  assert.equal(launchErrorStatus(refused, 500), 503);
+
+  const other = new Error('spawn claude ENOENT');
+  assert.deepEqual(missionLaunchErrorBody(other), { error: 'spawn claude ENOENT' });
+  assert.equal(launchErrorStatus(other, 400), 400);
 });
