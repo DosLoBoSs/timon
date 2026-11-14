@@ -21,6 +21,8 @@ import { NativeViewCover } from './native-view-cover';
 import { useOpenInNewWindow } from './open-window';
 import { useGlassScope } from '../components/glass-scope';
 import { useAgentMenuItem } from '../plugins-client/bots/agent-menu-slot';
+import { useProviderPage } from '../components/provider-page/provider-page-context';
+import { ProviderSection } from '../components/provider-page/provider-section';
 import { platformModuleExports } from './plugin-host/platform-modules';
 import { PLATFORM_MODULES } from './plugin-host/modules';
 
@@ -163,6 +165,18 @@ test('UI_KIT hands an agent menu entry the agent it is rendered for, with the pr
   assert.ok(platformModuleExports('ui.js').includes('useAgentMenuItem'));
   assert.equal(snapshot.modules['ui.js']?.useAgentMenuItem?.since, 15);
   assert.ok(declarations.includes('export function useAgentMenuItem(): AgentMenuItem | null;'));
+});
+
+test('UI_KIT hands a provider page section the provider on screen, and the frame of the product\'s sections', () => {
+  const declarations = readFileSync(join(process.cwd(), '../packages/sdk/src/ui.d.ts'), 'utf8');
+  assert.equal(UI_KIT.useProviderPage, useProviderPage);
+  assert.equal(UI_KIT.ProviderSection, ProviderSection);
+  for (const name of ['useProviderPage', 'ProviderSection']) {
+    assert.ok(platformModuleExports('ui.js').includes(name), name);
+    assert.equal(snapshot.modules['ui.js']?.[name]?.since, 16, name);
+  }
+  assert.ok(declarations.includes('export function useProviderPage(): {'));
+  assert.ok(declarations.includes('export const ProviderSection: PlatformComponent;'));
 });
 
 /** Platform names a client bundle imports, per module file (`ui.js`, …). */

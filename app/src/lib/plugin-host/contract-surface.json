@@ -1,5 +1,5 @@
 {
-  "apiVersion": 15,
+  "apiVersion": 16,
   "clientContext": {
     "api": {
       "type": "function",
@@ -633,6 +633,14 @@
       "NavLink": {
         "type": "export",
         "since": 15
+      },
+      "ProviderSection": {
+        "type": "export",
+        "since": 16
+      },
+      "useProviderPage": {
+        "type": "export",
+        "since": 16
       }
     },
     "api.js": {

@@ -66,6 +66,8 @@ import { usePageToc } from '@/components/page-toc/page-toc-context';
 import { useAgentMascot } from '@/components/mascot/agent-mascot-context';
 import { useEmailCode } from '@/components/email-code/email-code-context';
 import { useLookStyler } from '@/components/mascot/look-styler/look-styler-context';
+import { useProviderPage } from '@/components/provider-page/provider-page-context';
+import { ProviderSection } from '@/components/provider-page/provider-section';
 import { useMcpTab } from '@/lib/mcp-tab-context';
 import { useGlassScope } from '@/components/glass-scope';
 import { useModelFavorites } from '@/hooks/use-model-favorites';
@@ -195,6 +197,9 @@ export const UI_KIT = {
   // The mascot configurator (client API 15, `agent.lookstyler`): the look being edited, the
   // change, the agent's name and role, the states to try, the closed lists and a random look.
   useLookStyler,
+  // The page of one provider (client API 16, `settings.provider.section`): the provider on
+  // screen, its status, `refresh` and `back`; and the frame the product's sections use.
+  useProviderPage, ProviderSection,
 };
 
 /**
