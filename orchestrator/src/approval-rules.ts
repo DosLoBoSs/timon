@@ -66,6 +66,11 @@ function shellCommand(input: unknown): string | null {
   return command && command.length <= MAX_COMMAND_CHARS ? command : null;
 }
 
+/** The command a shell tool would run, or null for any other tool. */
+export function shellCommandOfTool(toolName: string, input: unknown): string | null {
+  return SHELL_TOOLS.has(toolName.trim()) ? shellCommand(input) : null;
+}
+
 function filePath(input: unknown, field: string): string | null {
   if (!isRecord(input)) return null;
   const raw = input[field];
