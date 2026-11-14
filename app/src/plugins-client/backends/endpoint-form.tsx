@@ -178,7 +178,9 @@ export function EndpointFields({ form, protocols, patch }: {
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label className={LABEL} htmlFor="backend-name">{t('backendsSettings.fields.name')}</Label>
-        <Input className={FIELD} id="backend-name" value={form.name} placeholder="DeepSeek" autoComplete="off" onChange={(e) => patch({ name: e.target.value })} />
+        <Input className={FIELD} id="backend-name" value={form.name} autoComplete="off" onChange={(e) => patch({ name: e.target.value })}
+          // i18n-exempt: a provider's brand name, given as an example, the same in every language
+          placeholder="DeepSeek" />
       </div>
       <div className="space-y-1.5">
         <span className={cn(LABEL, 'block')}>{t('backendsSettings.fields.picto')}</span>
