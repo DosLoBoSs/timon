@@ -4,7 +4,7 @@ import type {
   SpawnSyncOptionsWithStringEncoding,
 } from 'node:child_process';
 import type { DetachedResult, DetachedSpec } from './detached.js';
-import type { IsolationTarget, LauncherKind } from './isolation.js';
+import type { FencePolicy, IsolationTarget, LauncherKind } from './isolation.js';
 import type { ListenPortState } from './listen-port.js';
 import type { DesktopSession } from './desktop-session.js';
 
@@ -37,6 +37,31 @@ export interface Keyring {
   get(account: string): string | undefined;
   set(account: string, value: string): void;
   del(account: string): void;
+}
+
+export type FenceMechanism = 'seatbelt' | 'landlock';
+
+export type HostFenceProbe = {
+  available: boolean;
+  /** Why missions cannot be fenced here, in English, for doctor and the logs. */
+  reason?: string;
+};
+
+/**
+ * Applies a fence policy to one mission launch. The wrapper it returns is the
+ * INNERMOST layer of the launch chain and exec()s the command, so the pid the
+ * daemon spawns stays the backend CLI's; resource wrappers go around it.
+ */
+export interface HostFence {
+  readonly mechanism: FenceMechanism;
+  /** Asked once per daemon: the answer does not change while it runs. */
+  probe(): HostFenceProbe;
+  /**
+   * Writes what the launcher reads to `policyFile` — a path no mission can
+   * write — and returns the wrapped command. Throws when the policy cannot be
+   * rendered faithfully; the caller then decides between `auto` and `enforce`.
+   */
+  wrap(policy: FencePolicy, cmd: string, args: readonly string[], policyFile: string): { cmd: string; args: string[] };
 }
 
 export interface Host {
@@ -95,6 +120,13 @@ export interface Host {
     desktopSession?(): Promise<DesktopSession>;
   };
   keyring?: Keyring;
+  /**
+   * The mission fence this OS can apply (`host/isolation.ts`, `resolveFence`):
+   * Seatbelt on macOS (`host/darwin.ts`), Landlock on Linux. Absent where the
+   * adapter has no mechanism at all (Windows); present but not `available`
+   * when the OS refuses it on this machine.
+   */
+  fence?: HostFence;
   /**
    * Starts a process that outlives the daemon AND the service manager
    * stopping it — the terminal host keeps the web shells across a restart.
