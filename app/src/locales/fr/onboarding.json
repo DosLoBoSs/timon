@@ -45,7 +45,7 @@
       "mismatch": "Les deux mots de passe ne correspondent pas.",
       "tooShort": "Au moins {min} caractères.",
       "create": "Créer mon compte",
-      "privacy": "Nous collectons uniquement l'e-mail au cas où vous souhaiteriez réinitialiser votre mot de passe. Le compte créé reste local."
+      "privacy": "Votre compte et votre mot de passe restent sur cet ordinateur. Votre adresse e-mail et ses codes passent par notre serveur, qui vous les envoie. Des statistiques d'usage anonymes sont partagées par défaut ; vous pouvez les désactiver dans les Réglages."
     },
     "legacy": {
       "opening": "Ouverture de l’écran suivant…"
