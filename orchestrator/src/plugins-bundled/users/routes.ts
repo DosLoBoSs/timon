@@ -32,7 +32,7 @@ import {
 } from '../../users/throttle-http.js';
 import { createNotification } from '../../notifications.js';
 import { readAvatar, saveAvatar } from '../../uploads.js';
-import { generateTemporaryPassword, hashPassword, verifyPassword } from '../../users/password.js';
+import { generateTemporaryPassword, hashPassword, needsRehash, verifyPassword } from '../../users/password.js';
 import { galleryPlugins, loaderFromApp } from '../../plugins/runtime.js';
 import {
   forbidden,
@@ -567,6 +567,9 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
       return;
     }
     clearThrottle(keys);
+    // The only moment the plain password is at hand: move a hash written with
+    // an older cost onto the current one.
+    if (needsRehash(user.password_hash)) dbApi.setUserPassword(user.id, hashPassword(password));
     setSession(res, user.id, req.header('user-agent') ?? undefined);
     // Signed in again after the upgrade: the mascot is offered next.
     if (dbApi.userWelcomeStage(user.id) === 'signin') dbApi.setUserWelcomeStage(user.id, 'mascot');

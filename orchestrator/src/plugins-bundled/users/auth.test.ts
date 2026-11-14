@@ -140,6 +140,26 @@ test('login / logout round-trip, wrong password is 401', async () => {
   assert.deepEqual(after.json, { user: null, needsSetup: false, setupRequiresToken: false, setupRequiresLicense: false, setupRequiresEmailCode: false, prefs: DEFAULT_USER_PREFS, can: { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false }, welcome: null });
 });
 
+test('a password hashed with the old scrypt cost signs in and is rehashed', async () => {
+  const { randomBytes, scryptSync } = await import('node:crypto');
+  const { verifyPassword } = await import('../../users/password.js');
+  const user = dbApi.getUserByEmail('robin@example.com');
+  assert.ok(user);
+  const salt = randomBytes(16);
+  const key = scryptSync('super-secret', salt, 32, { N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+  dbApi.setUserPassword(user.id, `scrypt$16384$8$1$${salt.toString('base64url')}$${key.toString('base64url')}`);
+
+  const wrong = await call('POST', '/api/auth/login', { body: { email: 'robin@example.com', password: 'nope-nope' } });
+  assert.equal(wrong.status, 401);
+  assert.match(dbApi.getUserById(user.id)!.password_hash, /^scrypt\$16384\$/, 'a failed sign-in rewrites nothing');
+
+  const login = await call('POST', '/api/auth/login', { body: { email: 'robin@example.com', password: 'super-secret' } });
+  assert.equal(login.status, 200);
+  const rehashed = dbApi.getUserById(user.id)!.password_hash;
+  assert.match(rehashed, /^scrypt\$131072\$8\$1\$/);
+  assert.ok(verifyPassword('super-secret', rehashed));
+});
+
 test('daemon-token is superadmin; a second account comes from the account provider', async () => {
   await import('../../../tests/helpers/paid-license.js');
   const me = await call('GET', '/api/auth/me', { bearer: TOKEN });
