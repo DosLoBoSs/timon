@@ -68,7 +68,7 @@ async function call(
 test('me before setup reports needsSetup, health stays public, stats stay 401', async () => {
   const me = await call('GET', '/api/auth/me');
   assert.equal(me.status, 200);
-  assert.deepEqual(me.json, { user: null, needsSetup: true, setupRequiresToken: false, setupRequiresLicense: false, setupRequiresEmailCode: false, prefs: DEFAULT_USER_PREFS, can: { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false }, welcome: null });
+  assert.deepEqual(me.json, { user: null, needsSetup: true, setupRequiresToken: false, setupRequiresLicense: false, setupRequiresEmailCode: false, prefs: DEFAULT_USER_PREFS, can: { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false, 'providers:manage': false, 'providers:accounts': false }, welcome: null });
 
   const health = await fetch(`${base}/api/health`);
   assert.equal(health.status, 200);
@@ -83,7 +83,7 @@ test('setup with a short password is refused while the table is still empty', as
   });
   assert.equal(short.status, 400);
   const me = await call('GET', '/api/auth/me');
-  assert.deepEqual(me.json, { user: null, needsSetup: true, setupRequiresToken: false, setupRequiresLicense: false, setupRequiresEmailCode: false, prefs: DEFAULT_USER_PREFS, can: { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false }, welcome: null });
+  assert.deepEqual(me.json, { user: null, needsSetup: true, setupRequiresToken: false, setupRequiresLicense: false, setupRequiresEmailCode: false, prefs: DEFAULT_USER_PREFS, can: { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false, 'providers:manage': false, 'providers:accounts': false }, welcome: null });
 });
 
 test('setup creates the first superadmin, sets an httpOnly cookie, and refuses a second time', async () => {
@@ -137,7 +137,61 @@ test('login / logout round-trip, wrong password is 401', async () => {
   const out = await call('POST', '/api/auth/logout', { cookie });
   assert.equal(out.status, 200);
   const after = await call('GET', '/api/auth/me', { cookie });
-  assert.deepEqual(after.json, { user: null, needsSetup: false, setupRequiresToken: false, setupRequiresLicense: false, setupRequiresEmailCode: false, prefs: DEFAULT_USER_PREFS, can: { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false }, welcome: null });
+  assert.deepEqual(after.json, { user: null, needsSetup: false, setupRequiresToken: false, setupRequiresLicense: false, setupRequiresEmailCode: false, prefs: DEFAULT_USER_PREFS, can: { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false, 'providers:manage': false, 'providers:accounts': false }, welcome: null });
+});
+
+test('a password hashed with the old scrypt cost signs in and is rehashed', async () => {
+  const { randomBytes, scryptSync } = await import('node:crypto');
+  const { verifyPassword } = await import('../../users/password.js');
+  const user = dbApi.getUserByEmail('robin@example.com');
+  assert.ok(user);
+  const salt = randomBytes(16);
+  const key = scryptSync('super-secret', salt, 32, { N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+  dbApi.setUserPassword(user.id, `scrypt$16384$8$1$${salt.toString('base64url')}$${key.toString('base64url')}`);
+
+  const wrong = await call('POST', '/api/auth/login', { body: { email: 'robin@example.com', password: 'nope-nope' } });
+  assert.equal(wrong.status, 401);
+  assert.match(dbApi.getUserById(user.id)!.password_hash, /^scrypt\$16384\$/, 'a failed sign-in rewrites nothing');
+
+  const login = await call('POST', '/api/auth/login', { body: { email: 'robin@example.com', password: 'super-secret' } });
+  assert.equal(login.status, 200);
+  const rehashed = dbApi.getUserById(user.id)!.password_hash;
+  assert.match(rehashed, /^scrypt\$131072\$8\$1\$/);
+  assert.ok(await verifyPassword('super-secret', rehashed));
+});
+
+test('an unknown e-mail is checked against the dummy hash and gets the same 401', async (t) => {
+  const { passwordTiming } = await import('../../users/password.js');
+  const { resetThrottle } = await import('../../users/login-throttle.js');
+  resetThrottle();
+  t.after(() => resetThrottle());
+  const dummy = t.mock.method(passwordTiming, 'verifyDummy');
+
+  const unknown = await call('POST', '/api/auth/login', { body: { email: 'nobody@example.com', password: 'nope-nope' } });
+  const wrong = await call('POST', '/api/auth/login', { body: { email: 'robin@example.com', password: 'nope-nope' } });
+  assert.equal(unknown.status, 401);
+  assert.deepEqual(unknown.json, wrong.json, 'nothing tells the two apart');
+  assert.equal(dummy.mock.callCount(), 1, 'only the unknown e-mail goes through the dummy hash');
+});
+
+test('parallel attempts past the throttle budget are refused before any hash', async (t) => {
+  const { passwordTiming } = await import('../../users/password.js');
+  const { resetThrottle } = await import('../../users/login-throttle.js');
+  resetThrottle();
+  t.after(() => resetThrottle());
+  const dummy = t.mock.method(passwordTiming, 'verifyDummy');
+
+  // Fired together: none has failed yet when the others are admitted. The
+  // default budget is 5 failures.
+  const answers = await Promise.all(Array.from({ length: 8 }, () =>
+    call('POST', '/api/auth/login', { body: { email: 'burst@example.com', password: 'nope-nope' } })));
+  const statuses = answers.map((a) => a.status).sort();
+  assert.deepEqual(statuses, [401, 401, 401, 401, 401, 429, 429, 429]);
+  assert.equal(dummy.mock.callCount(), 5, 'a refused attempt computes nothing');
+
+  const after = await call('POST', '/api/auth/login', { body: { email: 'robin@example.com', password: 'super-secret' } });
+  assert.equal(after.status, 429, 'the address is locked out once the budget is spent');
+  assert.equal(dummy.mock.callCount(), 5);
 });
 
 test('daemon-token is superadmin; a second account comes from the account provider', async () => {
@@ -197,7 +251,7 @@ test('loopback after setup: anonymous 401s, TIMON_API_TOKEN Bearer still works, 
 
     const me = await fetch(`${url}/api/auth/me`);
     assert.equal(me.status, 200);
-    assert.deepEqual(await me.json(), { user: null, needsSetup: false, setupRequiresToken: false, setupRequiresLicense: false, setupRequiresEmailCode: false, prefs: DEFAULT_USER_PREFS, can: { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false }, welcome: null });
+    assert.deepEqual(await me.json(), { user: null, needsSetup: false, setupRequiresToken: false, setupRequiresLicense: false, setupRequiresEmailCode: false, prefs: DEFAULT_USER_PREFS, can: { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false, 'providers:manage': false, 'providers:accounts': false }, welcome: null });
 
     // CLI / operator still send this header (`TIMON_API_TOKEN` = daemon-token).
     const agent = await fetch(`${url}/api/stats`, {

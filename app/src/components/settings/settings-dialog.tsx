@@ -5,7 +5,7 @@
  * `?settings=<category>[/<tab>]` parameter (see `settings-navigation.ts`);
  * the filing of rows, grafts and plugin panes lives in `settings-layout.ts`.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MutableRefObject, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement, type RefObject } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Brain, ChevronLeft, Cpu, Gauge, Globe, KeyRound, LayoutPanelLeft, Puzzle, Rocket, ScrollText, Wrench, type LucideIcon,
@@ -15,7 +15,6 @@ import { DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { DesktopUninstallSettings } from '@/components/desktop-uninstall-settings';
 import { SystemInstallationSettings } from '@/components/settings/system-installation-settings';
 import { FallbackSettings } from '@/components/fallback-settings';
-import { BackendAccountsSettings } from '@/components/settings/backend-accounts-settings';
 import { GlobalInstructionsSettings } from '@/plugins-client/settings/global-instructions-settings';
 import { TimonPreambleSettings } from '@/plugins-client/settings/timon-preamble-settings';
 import { PluginSettingsPane } from '@/components/plugin-settings-sections';
@@ -23,6 +22,7 @@ import { PluginWebhooksPane } from '@/components/plugin-webhooks-pane';
 import { PluginConnectionsSettings } from '@/components/settings/plugin-connections';
 import { DevicesSettings } from '@/components/settings/devices-settings';
 import { DeveloperModeSettings } from '@/components/settings/developer-mode-settings';
+import { MissionIsolationSettings } from '@/components/settings/mission-isolation-settings';
 import { LanguageSettings } from '@/components/settings/language-settings';
 import { PushToggle } from '@/components/push-toggle';
 import { VoiceDictationSettings } from '@/components/voice-dictation-settings';
@@ -39,6 +39,7 @@ import { SettingsRow, type Setting } from '@/components/settings/settings-row';
 import { isPageSurfaceAllowed, isZoneVisible, useCapabilities } from '@/lib/capabilities';
 import { useMe } from '@/hooks/use-me';
 import { actingUser } from '@/lib/auth';
+import { providerAccess } from '@/lib/provider-access';
 import { desktopBridge } from '@/lib/desktop';
 import { t } from '@/lib/i18n';
 import { SlotKeyed, useSlotEntries } from '@/lib/plugin-host/render';
@@ -109,7 +110,7 @@ export function SettingsDialog(): ReactElement | null {
   );
 }
 
-function SettingsPanel({ onClose, unsavedRef }: { onClose: () => void; unsavedRef: MutableRefObject<boolean> }): ReactElement {
+function SettingsPanel({ onClose, unsavedRef }: { onClose: () => void; unsavedRef: RefObject<boolean> }): ReactElement {
   const searchParams = useSearchParams();
   const target = parseSettingsParam(searchParams.get(SETTINGS_PARAM)) ?? { category: 'interface', tab: null };
   const { select: navigate, selectAccount } = useSettingsNavigation();
@@ -211,6 +212,9 @@ function SettingsPanel({ onClose, unsavedRef }: { onClose: () => void; unsavedRe
     desktop,
     secrets: hasSecrets,
     superadmin: actingUser(me)?.is_superadmin === true,
+    // While the account is read, the tab stays: a link to a provider's page must not land on another tab.
+    // The pane itself waits for the level (`providers-settings.tsx`).
+    providers: providerAccess(me) ?? undefined,
   }), [settings, includeAdvanced, pluginStates, catalog, sectionEntries, graftedGroups, desktop, hasSecrets, me]);
 
   const resolved = resolveSettingsTarget(target, layout);
@@ -535,8 +539,6 @@ function TabContent({
         return <TimonPreambleSettings />;
       case 'fallback':
         return <><FallbackSettings />{grafts}</>;
-      case 'accounts':
-        return <BackendAccountsSettings />;
       case 'secrets':
         return <SecretsClient />;
       case 'connections':
@@ -545,6 +547,8 @@ function TabContent({
         return <DevicesSettings />;
       case 'developer':
         return <DeveloperModeSettings />;
+      case 'isolation':
+        return <MissionIsolationSettings />;
     }
   }
   return (

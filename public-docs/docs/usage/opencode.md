@@ -19,7 +19,7 @@ Timon can run agents on **opencode**, the open-source coding agent, including it
    opencode auth login
    ```
 
-3. Restart Timon. **opencode** then appears among the LLM backends.
+3. Restart Timon. **opencode** then appears in the model selectors.
 
 Timon looks for `opencode` on the service's PATH, in the npm and Homebrew folders, and in `~/.opencode/bin`, where opencode's own install script puts it; on Windows it also looks in the Scoop (`%USERPROFILE%\scoop\shims`) and Chocolatey (`%ProgramData%\chocolatey\bin`) folders.
 

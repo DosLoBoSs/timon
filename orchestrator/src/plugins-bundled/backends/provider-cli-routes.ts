@@ -4,7 +4,8 @@
  * official installer run as a job the screen follows (TODO #251, SUG-0005).
  *
  * Served to the onboarding's "Your AIs" step and to Settings › AI models ›
- * Providers alike. A browser session of a superadmin only, like the CLI
+ * Providers alike. A person signed in to the app with full access to the
+ * Providers screen (the superadmin, or `providers:manage`), like the CLI
  * binaries next to it: installing a program on the machine is the machine
  * administrator's gesture, and neither the daemon token nor a mission token
  * may start one. The body never names a command: the path names a CLI from a
@@ -21,7 +22,7 @@ import { whichBin } from '../../doctor.js';
 import { ensureCliVersionsChecked, installedBeyondSupportedMajor, refreshCliVersions } from '../../provider-cli-versions.js';
 import { settingBool } from '../../settings.js';
 import { auditRequest } from '../../users/audit-actor.js';
-import { requireSessionSuperadmin } from './binary-routes.js';
+import { requireSessionProvidersManager } from './binary-routes.js';
 
 const NameParam = z.enum(PROVIDER_CLI_NAMES as [string, ...string[]]);
 
@@ -62,7 +63,7 @@ export function registerProviderCliRoutes(router: Router, deps: RouteDeps = {}):
   const { readVersion, ...installDeps } = deps;
   const locate = deps.locate ?? ((name: string) => whichBin(name, config().host.binaries).path);
   router.get('/api/host/provider-clis', async (req, res) => {
-    if (!requireSessionSuperadmin(req, res)) return;
+    if (!requireSessionProvidersManager(req, res)) return;
     // Never waits for the vendors: the first read of a fresh daemon starts the check and answers.
     ensureCliVersionsChecked();
     await list(res);
@@ -71,13 +72,13 @@ export function registerProviderCliRoutes(router: Router, deps: RouteDeps = {}):
   // "Check for updates": the versions are read again before answering, each
   // vendor bounded by its own timeout.
   router.post('/api/host/provider-clis/check', async (req, res) => {
-    if (!requireSessionSuperadmin(req, res)) return;
+    if (!requireSessionProvidersManager(req, res)) return;
     await refreshCliVersions().catch((error: Error) => console.warn(`[provider-cli] version check: ${error.message}`));
     await list(res);
   });
 
   router.post('/api/host/provider-clis/:name/install', async (req, res) => {
-    if (!requireSessionSuperadmin(req, res)) return;
+    if (!requireSessionProvidersManager(req, res)) return;
     const name = cliName(req, res);
     if (!name) return;
     const declared = providerClis().find((cli) => cli.name === name);
@@ -98,7 +99,7 @@ export function registerProviderCliRoutes(router: Router, deps: RouteDeps = {}):
   });
 
   router.get('/api/host/provider-clis/:name/install', (req, res) => {
-    if (!requireSessionSuperadmin(req, res)) return;
+    if (!requireSessionProvidersManager(req, res)) return;
     const name = cliName(req, res);
     if (!name) return;
     const job = cliInstallJob(name);

@@ -5,7 +5,7 @@ sidebar_position: 10
 
 | Symptom | Check | Next action |
 | --- | --- | --- |
-| Mission fails with a missing executable | CLI location and service PATH | Pin its path in **Settings → AI models → Providers → CLI binaries** (applies without a restart), or click **Check again** after installing it (during setup: **Re-detect** in the Prerequisites panel) |
+| Mission fails with a missing executable | CLI location and service PATH | Open the provider in **Settings → AI models → Providers**: install it from **Program**, or set its path under **Program → Advanced** (applies without a restart); click **Check again** after installing it yourself (during setup: **Re-detect** in the Prerequisites panel) |
 | CLI launches but authentication fails | Sign-in under the daemon's OS account | Authenticate the CLI directly, then retry a small mission |
 | Mission fails before producing output | Agent's working directory | Use an existing absolute host path accessible to the daemon |
 | UI cannot reach the daemon | Address, port and authentication | Compare the app's daemon URL with the actual listener |

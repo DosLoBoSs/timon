@@ -96,7 +96,9 @@ test('a flagged account loses its browser sessions at its next /me, once', async
   const me = await call('GET', '/api/auth/me', { cookie });
   assert.equal(me.json.user, null, 'signed out');
   assert.equal(me.json.welcome, 'returning', 'the login hands over to the onboarding');
-  assert.deepEqual(Object.values(me.json.can as Record<string, boolean>), [false, false, false], 'no grant on a signed-out answer');
+  const can = Object.entries(me.json.can as Record<string, boolean>);
+  assert.ok(can.length > 0, 'the answer still says what it grants');
+  assert.deepEqual(can.filter(([, granted]) => granted), [], 'no grant on a signed-out answer');
   assert.ok(setCookies(me.res).some((line) => line.startsWith(`${SESSION_COOKIE}=;`) || /Max-Age=0/i.test(line)), 'the cookie is cleared');
 
   const again = await call('GET', '/api/auth/me', { cookie: otherCookie });

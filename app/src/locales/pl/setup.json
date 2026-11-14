@@ -202,7 +202,6 @@
     "loading": "Szukanie CLI AI na tej maszynie…",
     "unavailable": "Nie można teraz wyświetlić listy CLI AI tej maszyny.",
     "retry": "Spróbuj ponownie",
-    "checkUpdates": "Sprawdź aktualizacje",
     "updateCheckOff": "Sprawdzanie aktualizacji jest wyłączone (ustawienie „Sprawdzaj aktualizacje CLI”).",
     "install": "Zainstaluj",
     "installing": "Instalowanie…",
@@ -241,10 +240,6 @@
       "continue": "Dalej",
       "needOne": "Zainstaluj i zaloguj Claude, Codex, Grok lub Copilot, aby kontynuować.",
       "anyway": "Mimo to kontynuuj"
-    },
-    "settings": {
-      "title": "Narzędzia AI na tej maszynie",
-      "description": "Zainstaluj CLI AI oficjalnym instalatorem producenta, zaloguj go i aktualizuj, gdy wyjdzie nowa wersja. Timon sprawdza aktualizacje przy starcie, a potem co kilka godzin."
     }
   }
 }

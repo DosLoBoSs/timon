@@ -7,13 +7,20 @@
  * Web Push payload, since the service worker (static JS in public/) cannot
  * import this module.
  */
+import type { ProviderAccess } from './provider-access';
+
 export type NotificationLinkFields = {
   mission_id: string | null;
   task_id: string | null;
   anchor: string | null;
 };
 
-export function notificationHref(n: NotificationLinkFields): string | null {
+export type NotificationLinkViewer = {
+  /** The viewer's level of the Providers screen: a provider page is a link only at `full`. Absent = linked. */
+  providers?: ProviderAccess | null;
+};
+
+export function notificationHref(n: NotificationLinkFields, viewer: NotificationLinkViewer = {}): string | null {
   const egress = n.anchor ? EGRESS_ANCHOR.exec(n.anchor) : null;
   if (egress) return `/chat?mission=${encodeURIComponent(egress[1]!)}&egress=1`;
   if (n.mission_id) {
@@ -29,6 +36,8 @@ export function notificationHref(n: NotificationLinkFields): string | null {
   const consent = n.anchor ? PLUGIN_SECRET_ANCHOR.exec(n.anchor) : null;
   if (consent) return `/secrets?grant=${encodeURIComponent(consent[2]!)}&plugin=${encodeURIComponent(consent[1]!)}`;
   const launch = n.anchor ? PROVIDER_LAUNCH_ANCHOR.exec(n.anchor) : null;
+  // The program to authorise is in the Program section, which only the full level is shown.
+  if (launch && viewer.providers !== undefined && viewer.providers !== 'full') return null;
   if (launch) return `/?settings=${encodeURIComponent('models/backends')}&provider=${encodeURIComponent(launch[1]!)}`;
   return null;
 }
@@ -42,9 +51,10 @@ export function notificationHref(n: NotificationLinkFields): string | null {
 const EGRESS_ANCHOR = /^egress:(.+)$/;
 
 /**
- * Refused launch of a third-party provider (`provider-launch:<id>`, TODO #598):
- * the card opens Settings › AI models › Backends on that provider, where the
- * re-authorisation is confirmed (`ProvidersPanel`, `provider` parameter).
+ * Refused launch of a third-party provider (`provider-launch:<plugin>`, TODO #598):
+ * the card opens Settings › AI models › Providers on that provider's page
+ * (`provider` parameter, `ProvidersSettings`), whose Program section offers the
+ * re-authorisation and confirms it (`provider-common-sections.tsx`).
  */
 const PROVIDER_LAUNCH_ANCHOR = /^provider-launch:(.+)$/;
 

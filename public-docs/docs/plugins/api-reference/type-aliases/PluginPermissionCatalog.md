@@ -13,6 +13,12 @@
 
 ***
 
+### choices
+
+> **choices**: [`PluginPermissionChoice`](PluginPermissionChoice.md)[]
+
+***
+
 ### plugins
 
 > **plugins**: `object`[]

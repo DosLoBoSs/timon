@@ -10,7 +10,7 @@ import type { AddressInfo } from 'node:net';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { postTestAccount } from '../../../tests/helpers/accounts.js';
+import { grantTestPermissions, postTestAccount } from '../../../tests/helpers/accounts.js';
 
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-account-routes-'));
 await import('../../../tests/helpers/paid-license.js');
@@ -70,6 +70,9 @@ const ada = await login('ada@example.com', 'ada-secret');
 const bob = await login('bob@example.com', 'bob-secret');
 const adaId = dbApi.getUserByEmail('ada@example.com')!.id;
 const bobId = dbApi.getUserByEmail('bob@example.com')!.id;
+// Their own accounts are the `accounts` level of the Providers screen (`provider-access-routes.test.ts` covers the others).
+grantTestPermissions(dbApi, adaId, ['providers:accounts']);
+grantTestPermissions(dbApi, bobId, ['providers:accounts']);
 
 test('an anonymous caller is refused on every verb', async () => {
   for (const [method, path] of [['GET', '/api/backends/accounts'], ['POST', '/api/backends/accounts'],
@@ -121,7 +124,12 @@ test('the superadmin sees every account, adds instance accounts and grants them'
   const granted = await call('PUT', `/api/backends/accounts/${bobAccount.id}/grants`, { cookie: admin, body: { userIds: [adaId] } });
   assert.equal(granted.status, 200);
   assert.deepEqual(granted.json.account!.grantedTo, [adaId]);
+  // At the `accounts` level, one's own only; at `full`, the granted ones too.
+  const ownLevel = (await call('GET', '/api/backends/accounts', { cookie: ada })).json.accounts!;
+  assert.equal(ownLevel.some((a) => a.id === bobAccount.id), false);
+  grantTestPermissions(dbApi, adaId, ['providers:manage']);
   const adaSees = (await call('GET', '/api/backends/accounts', { cookie: ada })).json.accounts!;
+  grantTestPermissions(dbApi, adaId, ['providers:accounts']);
   assert.ok(adaSees.some((a) => a.id === bobAccount.id));
   assert.equal(adaSees.find((a) => a.id === bobAccount.id)!.grantedTo, undefined, 'grants are the superadmin\'s to read');
   assert.equal((await call('PATCH', `/api/backends/accounts/${bobAccount.id}`, { cookie: ada, body: { name: 'Mine' } })).status, 403,
