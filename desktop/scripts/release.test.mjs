@@ -357,13 +357,40 @@ test('the Linux mission launcher is signed with the release: replacing or removi
   for (const action of ['edit', 'delete']) {
     const root = fixtureUnsealed(t);
     mkdirSync(join(root, 'native'));
-    writeFileSync(join(root, 'native', 'timon-fence'), 'launcher');
+    writeFileSync(join(root, 'native', 'timon-fence'), 'launcher', { mode: 0o755 });
     sealTree(root, keys);
     assert.ok(verifyRelease(root, keys.publicKey).files['native/timon-fence'], 'native/timon-fence is not in the signed inventory');
     if (action === 'edit') writeFileSync(join(root, 'native', 'timon-fence'), '#!/bin/sh\nexec "$@"\n');
     else rmSync(join(root, 'native'), { recursive: true });
     assert.throws(() => verifyRelease(root, keys.publicKey), undefined, action);
   }
+});
+
+// The daemon skips a launcher it cannot execute (host/fence.ts) and the
+// digest does not see a mode: the execute bit must be checked on its own, or a
+// chmod on the durable copy would unfence every mission without failing boot.
+test('a release whose launcher lost its execute bit fails the check; a release without one is unaffected', { skip: process.platform === 'win32' && 'Windows has no execute bit' }, (t) => {
+  const root = fixtureUnsealed(t);
+  mkdirSync(join(root, 'native'));
+  const fence = join(root, 'native', 'timon-fence');
+  writeFileSync(fence, 'launcher', { mode: 0o755 });
+  sealTree(root, keys);
+  assert.doesNotThrow(() => verifyRelease(root, keys.publicKey));
+  chmodSync(fence, 0o644);
+  assert.throws(() => verifyRelease(root, keys.publicKey), /native\/timon-fence is not executable/);
+  chmodSync(fence, 0o755);
+  assert.doesNotThrow(() => verifyRelease(root, keys.publicKey));
+
+  const older = fixtureUnsealed(t);
+  sealTree(older, keys);
+  assert.equal(verifyRelease(older, keys.publicKey).files['native/timon-fence'], undefined);
+});
+
+test('a launcher that is not executable is never sealed', { skip: process.platform === 'win32' && 'Windows has no execute bit' }, (t) => {
+  const root = fixtureUnsealed(t);
+  mkdirSync(join(root, 'native'));
+  writeFileSync(join(root, 'native', 'timon-fence'), 'launcher', { mode: 0o644 });
+  assert.throws(() => sealTree(root, keys), /not executable/);
 });
 
 test('the launcher is staged on Linux only, and a Linux build without a compiler stops', () => {
