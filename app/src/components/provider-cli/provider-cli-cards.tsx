@@ -7,10 +7,9 @@
  * while it runs, the sign-in line built on the path the daemon resolved, and
  * "Update available" when the vendor has published a newer version.
  *
- * One component for three screens (the onboarding's "Choose your LLM" step,
- * drawn as rows, its "cannot start" screen, Settings › AI models ›
- * Providers), and a slot
- * (`providers.cli`) so a plugin can replace it on all three at once:
+ * One component for the onboarding's screens (its "Choose your LLM" step,
+ * drawn as rows, and its "cannot start" screen), and a slot
+ * (`providers.cli`) so a plugin can replace it on both at once:
  * `ProviderCliCards` is the host that owns the data, `ProductProviderCliCards`
  * the product's occupant, which reads the host's context like any replacement.
  */

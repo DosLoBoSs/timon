@@ -12,9 +12,8 @@ const t = createTranslator({
  *
  * `providers.cli` is a `single` slot declared at boot, whose default occupant
  * is the product's cards (`fallback`). Registering here claims it on every
- * screen that shows them — the onboarding's "Your AIs" step, its "cannot
- * start" screen, Settings › AI models; removing the plugin gives the
- * product's cards back.
+ * screen that shows them — the onboarding's "Your AIs" step and its "cannot
+ * start" screen; removing the plugin gives the product's cards back.
  *
  * The component receives no props: it reads its host with
  * `useProviderCliCards()`. The host owns the data and the gestures — calling
