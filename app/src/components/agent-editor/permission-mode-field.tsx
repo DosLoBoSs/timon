@@ -8,6 +8,9 @@
  * `plan` and believe the agent was read-only (TIM-0126). The choice is then
  * frozen and says where the rules really live. The saved value is kept as is,
  * so switching the agent back to another backend restores it.
+ *
+ * A backend that runs a guarded mode read-only (`modeRunsReadOnly`, today
+ * grok) keeps the choice open but says what the picked mode really does.
  */
 import React from 'react';
 import { TriangleAlert } from 'lucide-react';
@@ -20,11 +23,14 @@ export function PermissionModeField({
   value,
   onChange,
   ignored,
+  readOnly = false,
 }: {
   value: string;
   onChange: (mode: string) => void;
   /** The backend applies its own permission configuration. */
   ignored: boolean;
+  /** The picked mode runs read-only on this backend. */
+  readOnly?: boolean;
 }): React.ReactElement {
   return (
     <div className="flex flex-col gap-2">
@@ -64,6 +70,16 @@ export function PermissionModeField({
         >
           <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           <span>{t('editPage.permissionModeIgnored')}</span>
+        </p>
+      )}
+      {readOnly && !ignored && (
+        <p
+          role="note"
+          data-permission-mode-read-only
+          className="flex items-start gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-2 text-[12px] text-amber-900 dark:text-amber-200"
+        >
+          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>{t('editPage.permissionModeReadOnly')}</span>
         </p>
       )}
     </div>
