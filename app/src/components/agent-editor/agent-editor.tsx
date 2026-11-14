@@ -27,7 +27,6 @@ import { BrowserProfileSelect } from '@/components/browser-profile-select';
 import { ModelPickerPanel, type ModelPick } from '@/components/model-picker';
 import { SelfPermissionsBadge } from '@/components/self-permissions-badge';
 import { PermissionModeField } from './permission-mode-field';
-import { modeRunsReadOnly } from '@/lib/read-only-modes';
 import { AgentApprovals } from '@/components/agent-editor/agent-approvals';
 import { BackendLimitsBadge } from '@/components/backend-limits-badge';
 import { t } from '@/lib/i18n';
@@ -1374,7 +1373,6 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
                   value={draft.mode}
                   onChange={(m) => updateDraft('mode', m)}
                   ignored={ownPermissions}
-                  readOnly={modeRunsReadOnly(draftBackend, draft.mode)}
                 />
               </FormRow>
               <FormRow label="Allowed tools" hint="green-list — agent can call">

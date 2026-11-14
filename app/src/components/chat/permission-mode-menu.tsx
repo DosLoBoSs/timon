@@ -13,7 +13,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { t as i18n } from '@/lib/i18n';
-import { modeRunsReadOnly } from '@/lib/read-only-modes';
 import { cn } from '@/lib/utils';
 
 /** What the daemon says about the mission's level (`GET …/permission-mode`). */
@@ -22,8 +21,6 @@ export type PermissionModeState = {
   switchable: boolean;
   /** What this account may pick, lowest first. */
   choices: string[];
-  /** The backend serving the mission: some run a guarded mode read-only. */
-  backend?: string;
 };
 
 /** Levels the menu knows how to name. Anything else is shown by its raw name:
@@ -42,12 +39,7 @@ export function parsePermissionModeState(raw: unknown): PermissionModeState | nu
   if (typeof raw !== 'object' || raw === null) return null;
   const o = raw as Record<string, unknown>;
   if (typeof o.mode !== 'string' || typeof o.switchable !== 'boolean' || !Array.isArray(o.choices)) return null;
-  return {
-    mode: o.mode,
-    switchable: o.switchable,
-    choices: o.choices.filter((c): c is string => typeof c === 'string'),
-    ...(typeof o.backend === 'string' ? { backend: o.backend } : {}),
-  };
+  return { mode: o.mode, switchable: o.switchable, choices: o.choices.filter((c): c is string => typeof c === 'string') };
 }
 
 /**
@@ -163,8 +155,7 @@ export function PermissionModeMenu({
           {i18n('chatPage.permMode.nextMessage')}
         </DropdownMenuLabel>
         {state.choices.map((mode) => {
-          const readOnly = modeRunsReadOnly(state.backend, mode);
-          const hint = readOnly ? i18n('chatPage.permMode.readOnlyHint') : permissionModeHint(mode);
+          const hint = permissionModeHint(mode);
           return (
             <DropdownMenuItem
               key={mode}
@@ -175,14 +166,7 @@ export function PermissionModeMenu({
               <Check aria-hidden className={cn('mt-0.5 size-3 shrink-0', mode === state.mode ? 'opacity-100' : 'opacity-0')} />
               <span className="flex min-w-0 flex-col">
                 <span className={cn(mode === 'bypassPermissions' && 'text-destructive')}>{permissionModeLabel(mode)}</span>
-                {hint && (
-                  <span
-                    data-read-only={readOnly || undefined}
-                    className={cn('text-[10.5px]', readOnly ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}
-                  >
-                    {hint}
-                  </span>
-                )}
+                {hint && <span className="text-[10.5px] text-muted-foreground">{hint}</span>}
               </span>
             </DropdownMenuItem>
           );

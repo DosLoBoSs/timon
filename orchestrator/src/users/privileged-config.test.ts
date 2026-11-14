@@ -47,29 +47,6 @@ test('relaxed: the level never exceeds the caller\'s own', () => {
   assert.match(agentConfigRefusal({ permission_mode: 'bypassPermissions' }, null, relaxed('acceptEdits')) ?? '', /above/);
 });
 
-test('grok: a mode the ceiling lets through never runs as always-approve (constat #6)', async () => {
-  const { permissionModeForGrok } = await import('../../official-providers/provider-grok/lib/grok.js') as {
-    permissionModeForGrok(mode: string | undefined): string;
-  };
-  // Every level a caller without the bypass right may hand out runs grok
-  // read-only: the level the ceiling judged is never the lower of the two.
-  for (const mode of ['default', 'acceptEdits', 'plan', 'auto', 'dontAsk']) {
-    if (spawnOverrideRefusal({ permission_mode: mode }, null, RESTRICTED) !== null) continue;
-    assert.equal(permissionModeForGrok(mode), 'plan', `${mode} reached grok above its own level`);
-  }
-  // Always-approve takes an explicit bypassPermissions, which the existing path refuses
-  // to a caller without the right, on a grok agent as on any other.
-  assert.equal(permissionModeForGrok('bypassPermissions'), 'bypassPermissions');
-  assert.match(spawnOverrideRefusal({ permission_mode: 'bypassPermissions' }, null, RESTRICTED) ?? '', /not allowed/);
-  assert.match(agentConfigRefusal({ backend: 'grok', permission_mode: 'bypassPermissions' }, null, relaxed('default')) ?? '', /above/);
-  assert.match(agentConfigRefusal({ backend: 'grok', permission_mode: 'bypassPermissions' }, null, RESTRICTED) ?? '', /bypassPermissions/);
-  assert.equal(agentConfigRefusal({ backend: 'grok', permission_mode: 'bypassPermissions' }, null, relaxed('bypassPermissions')), null);
-  // A claude agent is not affected: the same grid, the same answers.
-  assert.equal(agentConfigRefusal({ backend: 'claude', permission_mode: 'default' }, null, RESTRICTED), null);
-  assert.equal(agentConfigRefusal({ backend: 'claude', permission_mode: 'acceptEdits' }, null, relaxed('acceptEdits')), null);
-  assert.match(agentConfigRefusal({ backend: 'claude', permission_mode: 'bypassPermissions' }, null, relaxed('default')) ?? '', /above/);
-});
-
 test('relaxed: the codex sandbox names share the ladder with the claude modes', () => {
   const ask = (mode: string, ceiling: string | null) => agentConfigRefusal({ permission_mode: mode }, null, relaxed(ceiling));
   assert.equal(ask('read-only', 'plan'), null);

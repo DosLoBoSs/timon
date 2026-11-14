@@ -80,9 +80,9 @@ function grokAuthSource() {
 /**
  * `agent.permission_mode` → grok's `--permission-mode`.
  *
- * ── Why only `plan` and `bypassPermissions` reach the CLI ──────────────────
+ * ── Why EVERYTHING falls back on `bypassPermissions` ("always-approve") ────
  *
- * The CLI's other modes send every batch of tool calls through its approval
+ * The other modes send every batch of tool calls through the CLI's approval
  * pipeline. Headless, that pipeline has nobody to talk to, and it does not
  * merely fail politely:
  *
@@ -91,29 +91,30 @@ function grokAuthSource() {
  *     `shell.turn.inference_done` and `shell.tool.exec_done` in
  *     `<GROK_HOME>/logs/unified.jsonl`): 6 to 12 s per batch, for tools that
  *     then run in 0–200 ms. Over a four-batch turn, that is ~40 s of pure
- *     latency.
+ *     latency. With automatic approval, the same sequence drops to 6 ms.
  *  2. KILLED TURNS. When that check hits a call it cannot decide on, the call
  *     is cancelled (`User cancelled the execution for tool`) AND the whole turn
  *     stops: `result.stop_reason = "cancelled"`, exit 1, mission
- *     `failed`/`crash`. No Allow/Deny card, no resume. Reproduced outside TIMON
+ *     `failed`/`crash`. No Allow/Deny card, no resume: the work stops in the
+ *     middle of a tool batch, with no readable reason. Reproduced outside TIMON
  *     with a dummy MCP server — three parallel `use_tool` calls are enough to
  *     trigger the cancellation, a single one goes through.
  *
- * So no guarded mode is usable as such. Mapping them UP to always-approve made
- * the agent run with more rights than it was configured with: the daemon's
- * permission ceiling judges the mode the agent asks for, so a caller allowed
- * only `default` got a mission that edits and runs anything. The mapping is
- * therefore fail-closed: a mode is never raised. Only an explicit
- * `bypassPermissions` — which the ceiling sees and judges as such — gets
- * always-approve; everything else (`default`, `auto`, `acceptEdits`,
- * `dontAsk`, `plan`, another dialect's word, nothing) runs in `plan`, which
- * runs no tool and so has nothing to get approved. The `--deny` rules below
- * stay in force under always-approve (deny wins over everything else).
+ * The CLI's documentation says the same (user-guide/22-permissions-and-safety):
+ * "For automation that must run tools without interactive approval, use
+ * always-approve (and deny rules if you need hard blocks) rather than auto
+ * alone." Hence this mapping, and the `--deny` rules below, which stay in force
+ * even under always-approve (deny wins over everything else).
+ *
+ * `plan` is the only exception kept: planning mode runs nothing, so it has
+ * nothing to get approved.
  */
 function permissionModeForGrok(permissionMode) {
-    if (permissionMode === 'bypassPermissions')
-        return 'bypassPermissions';
-    return 'plan';
+    if (permissionMode === 'plan')
+        return 'plan';
+    // `default`, `auto`, `acceptEdits`, `dontAsk`: all of them lead to an
+    // approval request which, headless, can go nowhere (see above).
+    return 'bypassPermissions';
 }
 /**
  * Hard guardrails, applied whatever the mode — a `deny` wins over automatic

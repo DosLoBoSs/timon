@@ -227,7 +227,6 @@ test('sheet: line of work, exact permission mode with its warning, the daemon\'s
     await click(r, '[data-tab="perms"]');
     assert.deepEqual(Array.from(r.host.querySelectorAll('[data-permission]')).map((el) => el.getAttribute('data-permission')), ['default', 'acceptEdits', 'plan', 'auto', 'bypassPermissions']);
     assert.ok(!r.host.querySelector('[data-bypass-warning]'));
-    assert.ok(!r.host.querySelector('[data-read-only-warning]'), 'a claude agent runs the mode it is given');
     await click(r, '[data-permission="bypassPermissions"]');
     assert.ok(q(r.host, '[data-bypass-warning]'));
     await click(r, '[data-tab="tools"]');

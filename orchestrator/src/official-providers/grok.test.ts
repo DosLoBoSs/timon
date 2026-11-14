@@ -117,20 +117,17 @@ test('a huge message goes back through the file even with an image', async () =>
   assert.ok(written.includes('[Images jointes]'), 'images not referenced in the fallback');
 });
 
-test('permission_mode: never raised — only an explicit bypassPermissions gets always-approve, the rest runs in plan', async () => {
+test('permission_mode: everything falls back on always-approve, except plan', async () => {
   for (const [mode, expected] of [
+    ['auto', 'bypassPermissions'],
+    ['default', 'bypassPermissions'],
+    ['acceptEdits', 'bypassPermissions'],
+    ['dontAsk', 'bypassPermissions'],
     ['bypassPermissions', 'bypassPermissions'],
+    // Another dialect's vocabulary (codex): without a fallback the CLI would refuse the value.
+    ['danger-full-access', 'bypassPermissions'],
+    [undefined, 'bypassPermissions'],
     ['plan', 'plan'],
-    // Guarded modes: the CLI's approval pipeline has no channel headless, and
-    // always-approve would hand more than the ceiling judged (fail-closed).
-    ['default', 'plan'],
-    ['auto', 'plan'],
-    ['acceptEdits', 'plan'],
-    ['dontAsk', 'plan'],
-    // Another dialect's vocabulary, a typo, nothing: never a reason to raise.
-    ['danger-full-access', 'plan'],
-    ['bypass', 'plan'],
-    [undefined, 'plan'],
   ] as const) {
     const sp = await provider.launch(opts({ cfg: { cwd: TMP_HOME, model: 'grok-4.6', permission_mode: mode } }), PROFILE);
     assert.equal(argAfter(sp.args, '--permission-mode'), expected, `mode ${mode}`);

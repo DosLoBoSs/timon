@@ -1886,7 +1886,6 @@
       "bypassConfirm": "L'agent lancera tous les outils sans demander, sans carte Autoriser/Refuser ni classifieur, jusqu'à ce que vous choisissiez un autre mode.",
       "bypassCancel": "Annuler",
       "bypassAccept": "Contourner les permissions",
-      "readOnlyHint": "Avec Grok, ce mode s'exécute en lecture seule (Plan). Choisissez Sans garde-fou pour lui permettre de modifier des fichiers et de lancer des commandes.",
       "label": {
         "plan": "Plan",
         "default": "Demander",
@@ -2307,8 +2306,7 @@
     "permissionsSelfBadge": "Gère ses permissions lui-même",
     "permissionsSelfBadgeHint": "Cet agent décide seul de ses tool uses : c'est le bac à sable de sa propre configuration qui s'applique, et TIMON n'affiche aucune carte Allow/Deny pour lui.",
     "permissionModeLabel": "Mode de permission",
-    "permissionModeIgnored": "Ce mode est ignoré : le backend applique sa propre configuration de permissions. Pour opencode, modifiez la clé permission de son fichier opencode.json.",
-    "permissionModeReadOnly": "Avec Grok, ce mode s'exécute en lecture seule (plan). Choisissez bypassPermissions pour lui permettre de modifier des fichiers et de lancer des commandes."
+    "permissionModeIgnored": "Ce mode est ignoré : le backend applique sa propre configuration de permissions. Pour opencode, modifiez la clé permission de son fichier opencode.json."
   },
   "route": {
     "unknown": "Aucune page n'est enregistrée pour {path}.",
