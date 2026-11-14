@@ -56,6 +56,8 @@ test('"Add a provider" offers the catalog or an endpoint, and what is added open
       }
       return Response.json({});
     }
+    // The Providers screen is painted at the caller's level: the superadmin's, full.
+    if (url === '/api/ui/auth/me') return Response.json({ user: { id: 'u-root', is_superadmin: true }, can: {} });
     reads.push(url);
     if (url === '/api/ui/providers/overview') return Response.json({ providers: [claude], defaultBackend: 'claude' });
     if (url.startsWith('/api/ui/providers/acp-registry')) return Response.json(registry);
