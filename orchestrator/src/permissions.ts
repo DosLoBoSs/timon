@@ -714,11 +714,12 @@ export function userQuestionRefusal(input: RequestInput): string | null {
 
 /**
  * The local files a shell command of this mission would run, read from the
- * mission's folder (`script-preview.ts`), or null when it runs none. A preview
- * that cannot be built never keeps the card from opening: it only loses the
- * reading aid.
+ * mission's folder (`script-preview.ts`), null when it runs none, or `failed`
+ * when they could not be read. A preview that cannot be built never keeps the
+ * card from opening: it loses the reading aid, and no remembered approval
+ * answers in its place, since nothing says what the command runs.
  */
-function missionScriptPreviews(input: RequestInput): ScriptPreviews | null {
+function missionScriptPreviews(input: RequestInput): ScriptPreviews | 'failed' | null {
   const command = shellCommandOfTool(input.tool_name, input.input);
   if (!command) return null;
   try {
@@ -730,7 +731,7 @@ function missionScriptPreviews(input: RequestInput): ScriptPreviews | null {
     return found.previews.length ? found : null;
   } catch (err) {
     console.warn(`[permissions] script preview unavailable (${input.mission_id.slice(0, 8)}): ${(err as Error).message}`);
-    return null;
+    return 'failed';
   }
 }
 
@@ -867,10 +868,12 @@ export function requestPermission(input: RequestInput): Promise<PermissionDecisi
   // while every file it names is in the state the approval was given for (the
   // same fingerprint, or still absent): the command alone says nothing of a
   // content that can be rewritten after the click. One whose content cannot
-  // be checked (outside the folder, unresolved, too large) gets no remembered
+  // be checked (outside the folder, unresolved, too large, past the depth the
+  // scripts are followed to, or no preview at all) gets no remembered
   // answer, and neither do an agent's own scopes, which Timon cannot bind.
-  const scripts = missionScriptPreviews(input);
-  const runsLocalFile = !!scripts;
+  const read = missionScriptPreviews(input);
+  const scripts = read === 'failed' ? null : read;
+  const runsLocalFile = read !== null;
   const scriptState = scripts?.state ?? null;
   const timonKeeps = input.timonScopes === true && !nativeScopes && (!runsLocalFile || scriptState !== null);
   if (timonKeeps) {

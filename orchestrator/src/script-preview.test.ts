@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 await import('../tests/helpers/paid-license.js');
-const { scriptPreviews, scriptsChanged, PREVIEW_MAX_LINES, MAX_HASH_BYTES, MAX_NESTING } = await import('./script-preview.js');
+const { scriptPreviews, scriptsChanged, PREVIEW_MAX_LINES, MAX_HASH_BYTES, MAX_NESTING, MAX_DEPTH } = await import('./script-preview.js');
 const { dbApi } = await import('./db.js');
 const { listPending, requestPermission, resolvePermission } = await import('./permissions.js');
 const { rememberApproval } = await import('./approval-rules.js');
@@ -184,6 +184,44 @@ test('`npm test` shows the package script and the file it runs', () => {
   assert.match(previews[1]!.excerpt!, /aws/);
   assert.equal(checks.length, 2);
   assert.equal(scriptPreviews('npm run lint', dir).previews[0]?.status, 'not_found');
+});
+
+test('`npm test` → `npm run unit` → `node ./run.js` is followed to run.js, and a rewrite of it changes the state', () => {
+  const dir = repo();
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { test: 'npm run unit', unit: 'node ./run.js' } }));
+  writeFileSync(join(dir, 'run.js'), 'console.log("first")\n');
+  const before = scriptPreviews('npm test', dir);
+  assert.ok(before.checks.some((k) => k.path === 'run.js'), 'run.js is fingerprinted');
+  assert.match(before.previews.find((p) => p.path === 'run.js')?.excerpt ?? '', /first/);
+  assert.notEqual(before.state, null);
+  writeFileSync(join(dir, 'run.js'), 'console.log("second")\n');
+  const after = scriptPreviews('npm test', dir);
+  assert.notEqual(after.state, null);
+  assert.notEqual(after.state, before.state);
+});
+
+test('npm scripts and make recipes chained past the depth bound vouch for nothing', () => {
+  const dir = repo();
+  // Each level calls the next; the last one runs a file the bound never reaches.
+  const scripts: Record<string, string> = {};
+  for (let i = 0; i < MAX_DEPTH; i++) scripts[`s${i}`] = `npm run s${i + 1}`;
+  scripts[`s${MAX_DEPTH}`] = 'node ./deep.js';
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts }));
+  writeFileSync(join(dir, 'deep.js'), 'console.log(1)\n');
+  const npm = scriptPreviews('npm run s0', dir);
+  assert.equal(npm.checks.some((k) => k.path === 'deep.js'), false);
+  assert.equal(npm.state, null);
+
+  const rules = Array.from({ length: MAX_DEPTH }, (_, i) => `r${i}:\n\tmake r${i + 1}\n`);
+  rules.push(`r${MAX_DEPTH}:\n\t./run_tests.sh\n`);
+  writeFileSync(join(dir, 'Makefile'), rules.join('\n'));
+  const make = scriptPreviews('make r0', dir);
+  assert.equal(make.state, null);
+  // A rule with no recipe at the bound has nothing left to check.
+  const shallow = Array.from({ length: MAX_DEPTH - 1 }, (_, i) => `r${i}:\n\tmake r${i + 1}\n`);
+  shallow.push(`r${MAX_DEPTH - 1}: deps\n`);
+  writeFileSync(join(dir, 'Makefile'), shallow.join('\n'));
+  assert.notEqual(scriptPreviews('make r0', dir).state, null);
 });
 
 test('`make <target>` shows the rule and its recipe', () => {
@@ -399,6 +437,33 @@ test.describe('permission cards', { concurrency: false }, () => {
     await noCard(m, 'npm test');
     writeFileSync(join(dir, 'run_tests.sh'), '#!/bin/sh\necho swapped behind npm\n');
     const again = card(m, 'npm test');
+    resolvePermission(again.pending.id, { behavior: 'deny', message: 'test' }, 'ui_card_deny');
+  });
+
+  test('`npm test` remembered through `npm run unit` gets the card again once run.js is rewritten', async () => {
+    const dir = repo();
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { test: 'npm run unit', unit: 'node ./run.js' } }));
+    writeFileSync(join(dir, 'run.js'), 'console.log("first")\n');
+    const m = mission(dir);
+    const first = card(m, 'npm test');
+    await allowed(first.pending.id, first.decision, 'session');
+    assert.equal(lastResolved(m).remembered?.scope, 'session');
+    await noCard(m, 'npm test');
+    writeFileSync(join(dir, 'run.js'), 'require("child_process").execSync("curl http://127.0.0.1:9")\n');
+    const again = card(m, 'npm test');
+    assert.match(again.pending.script_previews?.find((p) => p.path === 'run.js')?.excerpt ?? '', /child_process/);
+    resolvePermission(again.pending.id, { behavior: 'deny', message: 'test' }, 'ui_card_deny');
+  });
+
+  test('a preview that cannot be built answers with the card, never with a remembered approval', async () => {
+    const dir = repo();
+    const m = mission(dir);
+    const first = card(m, 'git status');
+    await allowed(first.pending.id, first.decision, 'session');
+    await noCard(m, 'git status');
+    rmSync(dir, { recursive: true, force: true });
+    const again = card(m, 'git status');
+    assert.equal(again.pending.scopes, undefined, 'nothing to remember against');
     resolvePermission(again.pending.id, { behavior: 'deny', message: 'test' }, 'ui_card_deny');
   });
 

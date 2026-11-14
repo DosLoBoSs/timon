@@ -47,8 +47,12 @@ export const MAX_PREVIEWS = 4;
 export const MAX_HASH_BYTES = 32 * 1024 * 1024;
 /** A `package.json` larger than this is not parsed for its scripts. */
 const MAX_MANIFEST_BYTES = 1024 * 1024;
-/** npm scripts and make recipes are read for the files they run, this deep. */
-const MAX_DEPTH = 2;
+/**
+ * npm scripts and make recipes are read for the files they run, this deep:
+ * `test` → `test:unit` → `node run.js` is followed to the end. Past it, what
+ * the body runs is not checked, so no remembered approval holds.
+ */
+export const MAX_DEPTH = 4;
 /** `sh -c '…'` and `eval '…'` are read for the command they hold, this deep. */
 export const MAX_NESTING = 3;
 
@@ -515,7 +519,11 @@ function previewPackageScript(c: Collector, base: string | null, manager: string
     return;
   }
   Object.assign(preview, excerptOf(lines.join('\n'), 0));
-  if (depth + 1 >= MAX_DEPTH) return;
+  if (depth + 1 >= MAX_DEPTH) {
+    // The body may run a file no check covers: a rewrite would go unnoticed.
+    c.unverifiable = true;
+    return;
+  }
   const dir = dirname(got.real);
   for (const n of names) {
     const body = scripts[n];
@@ -597,9 +605,14 @@ function previewMakeTarget(c: Collector, base: string | null, args: string[], de
   }
   preview.name = rule.name;
   Object.assign(preview, excerptOf(rule.block, 0));
-  if (depth + 1 >= MAX_DEPTH) return;
+  const recipe = rule.block.split('\n').slice(1);
+  if (depth + 1 >= MAX_DEPTH) {
+    // The recipe may run a file no check covers: a rewrite would go unnoticed.
+    if (recipe.some((line) => line.trim() !== '')) c.unverifiable = true;
+    return;
+  }
   const makeDir = dirname(got.real);
-  for (const line of rule.block.split('\n').slice(1)) {
+  for (const line of recipe) {
     collect(c, line.replace(/^\t[@+-]*/, ''), makeDir, depth + 1, 0);
   }
 }
