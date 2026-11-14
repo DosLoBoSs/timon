@@ -31,7 +31,7 @@ test('diagnosticFileName: the desktop\'s saved-report name, local time', () => {
   assert.equal(diagnosticFileName(new Date(2026, 9, 13, 19, 6, 11)), 'timon-diagnostic-20261013-190611.txt');
 });
 
-test('sessionModeView: the machine first, the recorded answer when it cannot tell, Windows without a button', () => {
+test('sessionModeView: the machine first, the recorded answer when it cannot tell, the same on the three systems', () => {
   const linux = { installed: true, supervisor: 'systemd-user' as const, sessionModeSupported: true };
   assert.deepEqual(sessionModeView({ ...linux, offSession: false, sessionMode: 'session' }), { kind: 'choice', keeps: false, pending: false, next: 'always' });
   assert.deepEqual(sessionModeView({ ...linux, offSession: true, sessionMode: 'always' }), { kind: 'choice', keeps: true, pending: false, next: 'session' });
@@ -39,7 +39,10 @@ test('sessionModeView: the machine first, the recorded answer when it cannot tel
   assert.deepEqual(sessionModeView({ ...linux, offSession: true, sessionMode: 'session' }), { kind: 'choice', keeps: true, pending: true, next: 'session' });
   assert.deepEqual(sessionModeView({ ...linux, offSession: null, sessionMode: 'always' }), { kind: 'choice', keeps: true, pending: false, next: 'session' });
   assert.deepEqual(sessionModeView({ ...linux, offSession: null, sessionMode: null }), { kind: 'choice', keeps: false, pending: false, next: 'always' });
-  assert.deepEqual(sessionModeView({ installed: true, supervisor: 'windows', sessionModeSupported: false, offSession: true, sessionMode: null }), { kind: 'fixed' });
+  // Windows chooses like the others: a boot task (S4U) or a logon task.
+  assert.deepEqual(sessionModeView({ installed: true, supervisor: 'windows', sessionModeSupported: true, offSession: false, sessionMode: 'session' }), { kind: 'choice', keeps: false, pending: false, next: 'always' });
+  assert.deepEqual(sessionModeView({ installed: true, supervisor: 'windows', sessionModeSupported: true, offSession: true, sessionMode: 'session' }), { kind: 'choice', keeps: true, pending: true, next: 'session' });
+  assert.deepEqual(sessionModeView({ installed: true, supervisor: null, sessionModeSupported: false, offSession: null, sessionMode: null }), { kind: 'hidden' });
   assert.deepEqual(sessionModeView({ ...linux, installed: false, offSession: null, sessionMode: null }), { kind: 'hidden' }, 'nothing registered');
   assert.deepEqual(sessionModeView({ installed: true, supervisor: 'launchd' }), { kind: 'hidden' }, 'an older daemon says nothing');
 });

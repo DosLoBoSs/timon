@@ -184,7 +184,11 @@ test('the guard keeps the agent step closed while the service is not ready; the 
  * page asked, in order — `/api/ui/onboarding` actions, the configuration
  * write, and the moment the stand-in left (`left:<hash>`).
  */
-async function renderPrepared(url: string, steps: readonly OnboardingStepEntry[]): Promise<string[]> {
+async function renderPrepared(
+  url: string,
+  steps: readonly OnboardingStepEntry[],
+  seen?: { status?: Record<string, unknown>; html?: string[] },
+): Promise<string[]> {
   return withDom(url, async (dom, React) => {
     const { createRoot } = await import('react-dom/client');
     const { OnboardingShell } = await import('./onboarding-shell');
@@ -212,6 +216,7 @@ async function renderPrepared(url: string, steps: readonly OnboardingStepEntry[]
         const { action } = JSON.parse(String(init?.body)) as { action: string };
         events.push(action);
         if (action === 'install-service') installed = true;
+        if (action === 'service-status' && seen?.status) return json({ ok: installed, installed, ...seen.status });
         return json({ ok: installed, installed });
       }
       return json({}, 404);
@@ -230,6 +235,7 @@ async function renderPrepared(url: string, steps: readonly OnboardingStepEntry[]
       for (let i = 0; i < 8; i += 1) {
         await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
       }
+      seen?.html?.push(host.innerHTML);
       return events;
     } finally {
       await React.act(async () => { root.unmount(); });
@@ -256,6 +262,17 @@ test('the background question reads the machine but installs nothing: the instal
   const { BackgroundStep } = await import('./steps/background');
   const events = await renderPrepared('http://localhost/onboarding?step=background', [{ id: 'background', Component: BackgroundStep }]);
   assert.deepEqual(events, ['service-status']);
+});
+
+test('on a Linux account that already lingers, "only while logged in" says it turns lingering off (audit F2)', async () => {
+  const { BackgroundStep } = await import('./steps/background');
+  const steps: OnboardingStepEntry[] = [{ id: 'background', Component: BackgroundStep }];
+  for (const lingering of [true, false]) {
+    const html: string[] = [];
+    await renderPrepared('http://localhost/onboarding?step=background', steps, { status: { sessionModeSupported: true, lingering }, html });
+    assert.match(html[0]!, /data-session-mode="session"/);
+    assert.equal(/data-linger-note/.test(html[0]!), lingering, String(lingering));
+  }
 });
 
 // Last: the page's store is shared by the module, and this one starts it.

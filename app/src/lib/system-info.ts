@@ -27,7 +27,7 @@ export type ServiceReport = {
   offSession?: boolean | null;
   /** The recorded answer to "keep running when logged out?", `null` when never asked. */
   sessionMode?: ServiceSessionMode | null;
-  /** The answer can be changed on this OS (Linux, macOS). */
+  /** The answer can be changed on this OS (Linux, macOS, Windows). */
   sessionModeSupported?: boolean;
 };
 
@@ -89,18 +89,17 @@ export function diagnosticFileName(now: Date): string {
  * What the "When you log out" row of Settings › System shows.
  * `choice`: the user can flip it, `keeps` read from the machine first and
  * from the recorded answer when the machine could not tell; `pending` when
- * the two disagree (macOS waiting for its reinstall, a Linux whose lingering
- * was switched by hand). `fixed`: a service that keeps running whatever is
- * chosen (the Windows task). `hidden`: nothing registered, or an older daemon.
+ * the two disagree (macOS or Windows waiting for their reinstall, a Linux
+ * whose lingering was switched by hand). `hidden`: nothing registered, a
+ * system with no choice, or an older daemon.
  */
 export type SessionModeView =
   | { kind: 'hidden' }
-  | { kind: 'fixed' }
   | { kind: 'choice'; keeps: boolean; pending: boolean; next: ServiceSessionMode };
 
 export function sessionModeView(service: Pick<ServiceReport, 'installed' | 'supervisor' | 'offSession' | 'sessionMode' | 'sessionModeSupported'>): SessionModeView {
   if (!service.installed || service.sessionModeSupported === undefined) return { kind: 'hidden' };
-  if (!service.sessionModeSupported) return service.supervisor === 'windows' ? { kind: 'fixed' } : { kind: 'hidden' };
+  if (!service.sessionModeSupported) return { kind: 'hidden' };
   const machine = service.offSession ?? null;
   const chosen = service.sessionMode ?? null;
   const keeps = machine ?? chosen === 'always';

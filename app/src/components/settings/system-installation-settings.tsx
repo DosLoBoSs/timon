@@ -237,14 +237,16 @@ function ServiceGroup({ info, onChanged }: { info: SystemInfo; onChanged: () => 
 /**
  * Does the service keep running once the user logs out? The onboarding asked
  * (`steps/background.tsx`); this row shows what the machine does and offers
- * the one gesture that flips it. Windows has no choice yet: the row says what
- * its scheduled task does, with no button.
+ * the one gesture that flips it. On Linux, stopping at logout turns lingering
+ * off for the whole account: the row says so before the click and after it.
  */
 function SessionModeFact({ service, onChanged }: { service: SystemInfo['service']; onChanged: () => Promise<void> }): ReactElement | null {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean; command: string | null } | null>(null);
   const view = sessionModeView(service);
   if (view.kind === 'hidden') return null;
+  // Linux "stop at logout" is `loginctl disable-linger`, which is account-wide.
+  const lingerGoesOff = service.supervisor === 'systemd-user' && view.next === 'session';
 
   async function change(mode: ServiceSessionMode): Promise<void> {
     setBusy(true);
@@ -259,7 +261,7 @@ function SessionModeFact({ service, onChanged }: { service: SystemInfo['service'
       if (response.ok && answer.ok) {
         setMessage(answer.command
           ? { text: t('systemSettings.sessionModeTerminal'), ok: true, command: answer.command }
-          : { text: t('systemSettings.sessionModeSaved'), ok: true, command: null });
+          : { text: t(lingerGoesOff && mode === 'session' ? 'systemSettings.sessionModeSavedLinger' : 'systemSettings.sessionModeSaved'), ok: true, command: null });
       } else {
         setMessage({ text: answer.reason ?? apiErrorMessage(answer, t('systemSettings.sessionModeFailed')), ok: false, command: null });
       }
@@ -275,14 +277,13 @@ function SessionModeFact({ service, onChanged }: { service: SystemInfo['service'
     <Fact label={t('systemSettings.loggedOut')}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="min-w-0">
-          {t(view.kind === 'fixed' ? 'systemSettings.loggedOutWindows' : view.keeps ? 'systemSettings.loggedOutKeeps' : 'systemSettings.loggedOutStops')}
-          {view.kind === 'choice' && view.pending && <Hint>{t('systemSettings.loggedOutPending')}</Hint>}
+          {t(view.keeps ? 'systemSettings.loggedOutKeeps' : 'systemSettings.loggedOutStops')}
+          {view.pending && <Hint>{t('systemSettings.loggedOutPending')}</Hint>}
+          {lingerGoesOff && !message && <Warning>{t('systemSettings.stopAtLogoutLinger')}</Warning>}
         </span>
-        {view.kind === 'choice' && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => void change(view.next)}>
-            {t(view.next === 'always' ? 'systemSettings.keepRunning' : 'systemSettings.stopAtLogout')}
-          </Button>
-        )}
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => void change(view.next)}>
+          {t(view.next === 'always' ? 'systemSettings.keepRunning' : 'systemSettings.stopAtLogout')}
+        </Button>
       </div>
       {message && (
         <div role={message.ok ? 'status' : 'alert'} className="pt-1">

@@ -24,7 +24,8 @@
       "recommended": "Recommended",
       "session": {
         "title": "Only while I'm logged in",
-        "description": "Timon stops when you log out and starts again when you log back in. Locking the screen keeps it running."
+        "description": "Timon stops when you log out and starts again when you log back in. Locking the screen keeps it running.",
+        "lingerNote": "Lingering is already on for your account: this choice turns it off, so your other user services also stop when you log out."
       },
       "always": {
         "title": "Even when I'm logged out",

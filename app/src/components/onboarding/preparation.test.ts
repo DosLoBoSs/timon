@@ -224,7 +224,7 @@ test('the install carries the answer of the background step; none chosen, none s
 test('the background question steps aside when there is nothing to ask', () => {
   assert.equal(skipsSessionChoice({ kind: 'closed' }), true, 'onboarding over');
   assert.equal(skipsSessionChoice({ kind: 'answer', answer: { ok: true, installed: true, sessionModeSupported: true } }), true, 'already installed: Settings holds it');
-  assert.equal(skipsSessionChoice({ kind: 'answer', answer: { ok: false, installed: false, sessionModeSupported: false } }), true, 'Windows, or no supervisor');
+  assert.equal(skipsSessionChoice({ kind: 'answer', answer: { ok: false, installed: false, sessionModeSupported: false } }), true, 'a Linux without systemd: no supervisor');
   assert.equal(skipsSessionChoice({ kind: 'answer', answer: { ok: false, installed: false, sessionModeSupported: true } }), false);
   assert.equal(skipsSessionChoice({ kind: 'unauthorized' }), false, 'asked anyway before the account');
   assert.equal(skipsSessionChoice({ kind: 'answer', answer: { ok: false, installed: false } }), false, 'an older daemon: asked, the answer is ignored');

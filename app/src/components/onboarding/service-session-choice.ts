@@ -3,7 +3,7 @@
  * (`steps/background.tsx`), kept until the background install sends it with
  * `install-service` (`preparation.ts`). The daemon records it and decides
  * from it whether the service outlives the session (Linux lingering, macOS
- * LaunchDaemon). Kept in the machine's session storage: the install runs a
+ * LaunchDaemon, Windows boot task). Kept in the machine's session storage: the install runs a
  * step or two later, possibly after a reload.
  */
 import type { ServiceStatusRead } from '@/lib/setup-plan';
@@ -31,7 +31,7 @@ export function keepSessionChoice(storage: ChoiceStorage | null, mode: ServiceSe
 /**
  * Is there nothing to ask? The onboarding is over, a service is already
  * registered (the answer then lives in Settings › System), or the answer
- * changes nothing on this machine (Windows, a Linux without systemd). A
+ * changes nothing on this machine (a Linux without systemd). A
  * daemon that refuses to answer before the account is asked anyway: an
  * answer the daemon then ignores costs nothing.
  */

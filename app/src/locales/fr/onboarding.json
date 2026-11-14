@@ -24,7 +24,8 @@
       "recommended": "Recommandé",
       "session": {
         "title": "Seulement quand ma session est ouverte",
-        "description": "Timon s’arrête quand vous fermez votre session et redémarre à la suivante. Verrouiller l’écran ne l’arrête pas."
+        "description": "Timon s’arrête quand vous fermez votre session et redémarre à la suivante. Verrouiller l’écran ne l’arrête pas.",
+        "lingerNote": "Le lingering est déjà activé pour votre compte : ce choix le désactive, et vos autres services utilisateur s’arrêtent aussi à la fermeture de session."
       },
       "always": {
         "title": "Même quand ma session est fermée",

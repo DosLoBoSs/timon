@@ -4,10 +4,13 @@
  * "When you log out, should Timon keep working?" — right after the welcome,
  * because the background service is installed as soon as the reader leaves it
  * (`preparation.ts`), and how it is installed depends on the answer: lingering
- * on Linux, the LaunchDaemon on macOS, only for "even when logged out".
+ * on Linux, the LaunchDaemon on macOS, the boot task on Windows, only for
+ * "even when logged out".
  * Nothing is preselected: the answer is the reader's click. "Only while I'm
  * logged in" comes first and is the recommended one: nothing runs with nobody
- * at the screen unless the reader asked for it.
+ * at the screen unless the reader asked for it. On a Linux account that
+ * already lingers, that row says before the click that it turns lingering
+ * off, which stops the reader's other user services at logout too.
  *
  * The step steps aside when there is nothing to ask (`skipsSessionChoice`):
  * a service already registered, or a machine where the answer changes nothing.
@@ -30,6 +33,7 @@ const ROWS: readonly { mode: ServiceSessionMode; Icon: typeof Sun }[] = [
 export function BackgroundStep(): ReactElement | null {
   const { next, back, direction } = useOnboarding();
   const [asking, setAsking] = useState(false);
+  const [lingering, setLingering] = useState(false);
   const [recorded] = useState(() => readSessionChoice(machineSessionStorage()));
   const moves = useRef({ next, back, direction });
   moves.current = { next, back, direction };
@@ -38,7 +42,11 @@ export function BackgroundStep(): ReactElement | null {
     let active = true;
     void postOnboarding('service-status').then((read) => {
       if (!active) return;
-      if (!skipsSessionChoice(read)) { setAsking(true); return; }
+      if (!skipsSessionChoice(read)) {
+        setLingering(read.kind === 'answer' && read.answer.lingering === true);
+        setAsking(true);
+        return;
+      }
       // Stepped over in the direction the reader was going, so "Back" from the account still reaches the welcome.
       if (moves.current.direction === -1) moves.current.back();
       else moves.current.next();
@@ -89,6 +97,11 @@ export function BackgroundStep(): ReactElement | null {
                 )}
               </span>
               <span className="mt-0.5 block text-[13px] leading-snug text-muted-foreground">{t(`onboarding.background.${mode}.description`)}</span>
+              {mode === 'session' && lingering && (
+                <span data-linger-note className="mt-1 block text-[12.5px] leading-snug text-amber-700 dark:text-amber-400">
+                  {t('onboarding.background.session.lingerNote')}
+                </span>
+              )}
             </span>
             <ChevronRight
               aria-hidden

@@ -240,8 +240,10 @@ export type OnboardingAnswer = {
   command?: string | null;
   reason?: string | null;
   error?: string;
-  /** `service-status`: the answer to "keep running when logged out?" changes something here (Linux, macOS). */
+  /** `service-status`: the answer to "keep running when logged out?" changes something here (Linux, macOS, Windows). */
   sessionModeSupported?: boolean;
+  /** `service-status`, Linux: lingering is already on for the account, so "only while logged in" turns it off. */
+  lingering?: boolean | null;
 };
 
 /**
