@@ -31,6 +31,24 @@ const {
 } = await import('./isolation.js');
 
 const FAKE_HOME = '/home/tester';
+
+/**
+ * The "never" list of the fence framing (§1), copied here on purpose instead of
+ * read from `MISSION_TIMON_ZONES.refused`: a test looping over the list it checks
+ * passes whatever is removed from it. A `*` of the framing is spelled as the
+ * names it must catch, the copies included.
+ */
+const FRAMING_REFUSED: readonly string[] = [
+  'daemon-token',
+  'secret-key', 'secret-key.next', 'secret-key.location', 'secret-key.old',
+  'plugin-token-key', 'setup-token', 'update-token', 'remote-key', 'remote.db', 'secrets.env',
+  'license.jwt', 'license.key', 'license.state.json', 'license.enrollment-secret', 'license.state.json.tmp-7',
+  'device-id', 'install-id', 'cli-daemons.json',
+  'timon.db', 'timon.db-wal', 'timon.db-shm', 'timon.db-journal',
+  'integrations.db', 'integrations.db-wal', 'integrations.db-shm',
+  'timon.config.json', 'timon.config.json.bak-20261025',
+  'plugins-data', 'browser-profiles', 'browser-native', 'desktop-profile', 'mcp', 'run', 'backups', 'archive',
+];
 const cfg = (isolation: Record<string, unknown> = {}) =>
   TimonConfigSchema.parse({ host: { isolation } });
 
@@ -79,9 +97,10 @@ test('TIMON_HOME and its ancestors are never masked, the private files in it alw
   const timonHome = `${FAKE_HOME}/state/timon`;
   const { deny } = resolveIsolation(cfg({ deny: ['~/state'] }), { home: FAKE_HOME, timonHome });
   assert.ok(!deny.includes(`${FAKE_HOME}/state`) && !deny.includes(timonHome), 'the folders themselves stay visible');
-  // Guard 3 no longer spares what lives inside: every refused entry is masked.
-  for (const name of MISSION_TIMON_ZONES.refused) {
-    assert.ok(deny.includes(`${timonHome}/${name}`), `${name} must be masked`);
+  // Guard 3 no longer spares what lives inside: every entry of the framing is masked.
+  const withCopies = resolveIsolation(cfg(), { home: FAKE_HOME, timonHome, timonHomeEntries: FRAMING_REFUSED });
+  for (const name of FRAMING_REFUSED) {
+    assert.ok(withCopies.deny.includes(`${timonHome}/${name}`), `${name} must be masked`);
   }
   assert.deepEqual(
     deny.filter((p) => p.startsWith(`${FAKE_HOME}/state`)).sort(),
@@ -273,16 +292,21 @@ const access = (policy: ReturnType<typeof resolveFence>, path: string) => {
 test('fence: no private entry of the Timon home is reachable, copies included', () => {
   const policy = resolveFence(cfg(), fullTarget());
   assert.equal(policy.enabled, true);
-  const secrets = [
-    ...MISSION_TIMON_ZONES.refused,
-    'timon.config.json.bak-20261025', 'license.state.json.tmp-7', 'timon.db-journal', 'secret-key.old',
-  ];
-  for (const name of secrets) {
+  for (const name of FRAMING_REFUSED) {
     assert.equal(access(policy, `${TH}/${name}`), 'none', `${name} must be out of the projection`);
     assert.equal(access(policy, `${TH}/${name}/inner`), 'none', `${name}/… must be out of the projection`);
   }
   for (const name of ['timon.config.json.bak-20261025', 'license.state.json.tmp-7', 'daemon-token']) {
     assert.ok(policy.denyUnderTimonHome.includes(`${TH}/${name}`), `${name} is named for masking renderers`);
+  }
+  // Named for the masking renderers once listed, and no handed-over path reopens one.
+  const listed = resolveFence(cfg(), fullTarget({ timonHomeEntries: FRAMING_REFUSED }));
+  for (const name of FRAMING_REFUSED) {
+    assert.ok(listed.denyUnderTimonHome.includes(`${TH}/${name}`), `${name} is named for masking renderers`);
+    const path = `${TH}/${name}`;
+    const handed = resolveFence(cfg(), fullTarget({ cwd: path, gitDirs: [path], timonRead: [path], pluginDirs: [path] }));
+    assert.equal(handed.ignored.filter((i) => i.path === path).length, 4, `${name} must be dropped from every grant`);
+    assert.equal(access(handed, path), 'none', `${name} must stay out of the projection`);
   }
   // The home itself cannot be listed, and what nobody listed is refused by default.
   assert.equal(access(policy, TH), 'none');
