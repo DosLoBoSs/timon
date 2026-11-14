@@ -20,7 +20,7 @@ import type { CustomBackend } from './form';
 const MANAGE_API = '/api/ui/backends/manage';
 
 /** A file the person dropped by hand without a dialect cannot be written to: it keeps its place. */
-export function rankable(backend: Pick<CustomBackend, 'origin' | 'dialect'>): boolean {
+export function editableBackend(backend: Pick<CustomBackend, 'origin' | 'dialect'>): boolean {
   return backend.origin !== 'file' || backend.dialect !== null;
 }
 
@@ -35,7 +35,7 @@ async function errorText(res: Response): Promise<string> {
 }
 
 function SortableRow({ backend, busy }: { backend: CustomBackend; busy: boolean }): ReactElement {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: backend.id, disabled: busy || !rankable(backend) });
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: backend.id, disabled: busy || !editableBackend(backend) });
   return (
     <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} data-reorder-row={backend.id}
       className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/60">
@@ -87,7 +87,7 @@ export function ProvidersReorder({ onChanged }: { onChanged?: () => void }): Rea
     mutating.current = true;
     try {
       for (const [rank, row] of next.entries()) {
-        if (!rankable(row)) continue;
+        if (!editableBackend(row)) continue;
         let res: Response;
         try {
           res = await fetch(`${MANAGE_API}/${encodeURIComponent(row.id)}`, {

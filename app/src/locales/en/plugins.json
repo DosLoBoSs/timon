@@ -574,6 +574,12 @@
     "errors": {
       "forbidden": "Only an administrator can see the providers.",
       "generic": "The providers could not be read (error {status})."
+    },
+    "activation": {
+      "on": "On",
+      "off": "Off",
+      "readOnly": "This provider's file cannot be changed from here: fix it in its folder first.",
+      "pluginOff": "Its plugin is turned off: turn it on in Settings › Plugins."
     }
   },
   "providerList": {
