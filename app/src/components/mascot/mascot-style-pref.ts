@@ -3,10 +3,13 @@
  * flat 2D drawing on request. Stored per account in the daemon's layout
  * scopes (`/api/ui/layout?scope=mascot.style`), read once per page. Without
  * WebGL2 the 3D choice draws in 2D: the browser cannot render it.
+ *
+ * The welcome screen offers it before any account exists: the choice then
+ * waits in this browser (`MASCOT_STYLE_LOCAL_KEY`) and goes to the account
+ * once a session can take it (`mascot-layout-pref.ts`).
  */
 import { useSyncExternalStore } from 'react';
-import type { LayoutIo } from '@/lib/ui-layout-store';
-import { createMascotLayoutPref, type MascotLayoutPref } from './mascot-layout-pref';
+import { createMascotLayoutPref, type MascotLayoutPref, type MascotLayoutPrefIo } from './mascot-layout-pref';
 import { hasWebGL2 } from './three/tile';
 
 export type MascotStyle = '3d' | '2d';
@@ -15,6 +18,9 @@ export const MASCOT_STYLES: readonly MascotStyle[] = ['3d', '2d'];
 
 export const MASCOT_STYLE_SCOPE = 'mascot.style';
 
+/** Browser key of a choice made before the account exists. */
+export const MASCOT_STYLE_LOCAL_KEY = 'timon.mascot.style';
+
 /** What the scope holds; anything but an explicit `2d` is the 3D default. */
 export function readMascotStyle(raw: unknown): MascotStyle {
   return raw && typeof raw === 'object' && (raw as { style?: unknown }).style === '2d' ? '2d' : '3d';
@@ -22,11 +28,18 @@ export function readMascotStyle(raw: unknown): MascotStyle {
 
 export type MascotStylePref = MascotLayoutPref<MascotStyle>;
 
-export function createMascotStylePref(io: Pick<LayoutIo, 'fetchImpl'> = {}): MascotStylePref {
-  return createMascotLayoutPref<MascotStyle>({ scope: MASCOT_STYLE_SCOPE, initial: '3d', read: readMascotStyle, write: (style) => ({ style }) }, io);
+export function createMascotStylePref(io: MascotLayoutPrefIo = {}): MascotStylePref {
+  return createMascotLayoutPref<MascotStyle>({
+    scope: MASCOT_STYLE_SCOPE, initial: '3d', read: readMascotStyle, write: (style) => ({ style }), localKey: MASCOT_STYLE_LOCAL_KEY,
+  }, io);
 }
 
 let shared: MascotStylePref | null = null;
+
+/** Forgets the page's shared preference, so the next read starts from storage again. */
+export function resetMascotStylePrefForTests(): void {
+  shared = null;
+}
 
 export function mascotStylePref(): MascotStylePref {
   shared ??= createMascotStylePref();

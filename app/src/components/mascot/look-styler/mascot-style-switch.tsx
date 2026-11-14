@@ -9,6 +9,11 @@
  * Without WebGL2 the browser cannot draw the 3D head: the switch shows 2D,
  * cannot be changed, and says why. The stored choice is left as it is, so a
  * browser that can draw 3D later still finds it.
+ *
+ * `MascotStyleToggle` is the compact form the welcome screen paints next to
+ * the light/dark switch, before any account exists: the preference keeps the
+ * choice in the browser until a session can take it, so a refused write is
+ * not an error there.
  */
 import { useId, type ReactElement } from 'react';
 import { MASCOT_STYLES, mascotStylePref, useMascotStyle, useWebGL2, type MascotStyle, type MascotStylePref } from '@/components/mascot/mascot-style-pref';
@@ -20,21 +25,27 @@ const LABEL_KEYS: Record<MascotStyle, string> = {
   '2d': 'appearance.mascotsStyle2d',
 };
 
-export function MascotStyleSwitch({ pref = mascotStylePref() }: { pref?: MascotStylePref }): ReactElement {
+/** The style shown (2D without WebGL2) and the way to change it; `onRefused` hears a write the daemon did not take. */
+function useStyleChoice(pref: MascotStylePref, onRefused?: () => void): { shown: MascotStyle; webgl2: boolean; choose: (next: MascotStyle) => void } {
   const chosen = useMascotStyle(pref);
   const webgl2 = useWebGL2();
-  const labelId = useId();
-  const shown: MascotStyle = webgl2 ? chosen : '2d';
   const choose = (next: MascotStyle): void => {
     if (!webgl2 || next === chosen) return;
-    void pref.set(next).then(async (ok) => {
-      if (ok) return;
+    void pref.set(next).then((ok) => { if (!ok) onRefused?.(); });
+  };
+  return { shown: webgl2 ? chosen : '2d', webgl2, choose };
+}
+
+export function MascotStyleSwitch({ pref = mascotStylePref() }: { pref?: MascotStylePref }): ReactElement {
+  const labelId = useId();
+  const { shown, webgl2, choose } = useStyleChoice(pref, () => {
+    void (async () => {
       // Loaded on failure only: the onboarding's steps stay free of the toaster
       // (and of the react-dom it pulls in) until there is something to say.
       const { toast } = await import('sonner');
       toast.error(t('appearance.saveError'));
-    });
-  };
+    })();
+  });
   return (
     <div className="flex flex-col gap-1.5" data-mascot-style-switch="">
       <div className="flex items-center gap-3">
@@ -70,6 +81,43 @@ export function MascotStyleSwitch({ pref = mascotStylePref() }: { pref?: MascotS
       <p className="px-0.5 text-[11.5px] text-muted-foreground" data-mascot-style-note={webgl2 ? 'shared' : 'no-webgl'}>
         {t(webgl2 ? 'appearance.mascotsStyleShared' : 'appearance.mascotsStyleNoWebgl')}
       </p>
+    </div>
+  );
+}
+
+export function MascotStyleToggle({ pref = mascotStylePref(), className }: { pref?: MascotStylePref; className?: string }): ReactElement {
+  const { shown, webgl2, choose } = useStyleChoice(pref);
+  const reason = webgl2 ? undefined : t('appearance.mascotsStyleNoWebgl');
+  return (
+    <div
+      role="radiogroup"
+      aria-label={t('appearance.mascotsStyle')}
+      aria-disabled={!webgl2 || undefined}
+      aria-description={reason}
+      title={reason ?? t('appearance.mascotsStyle')}
+      data-mascot-style-toggle={webgl2 ? '' : 'no-webgl'}
+      className={cn('flex gap-0.5 rounded-full bg-muted/70 p-0.5', className)}
+    >
+      {MASCOT_STYLES.map((option) => {
+        const on = shown === option;
+        return (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            disabled={!webgl2}
+            data-mascot-style={option}
+            onClick={() => choose(option)}
+            className={cn(
+              'flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed',
+              on ? 'bg-card text-foreground shadow-elev-1' : 'text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:hover:text-muted-foreground',
+            )}
+          >
+            {t(LABEL_KEYS[option])}
+          </button>
+        );
+      })}
     </div>
   );
 }

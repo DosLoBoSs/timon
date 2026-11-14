@@ -11,10 +11,14 @@
  * sixty frames a second. Each head starts as its 2D drawing (an SVG,
  * serialised and rasterised), so the scene falls at once; a 3D head's bitmap
  * is then swapped for its canvas once the engine has drawn the modelled head.
+ * The cast stays mounted until every head is copied, and mounts again in the
+ * other style when the mascot style changes (the welcome's 3D / 2D switch):
+ * the falling heads keep their old bitmaps until the new ones are drawn.
  */
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactElement } from 'react';
 import { AgentMascotHost, usePrefersReducedMotion } from '@/components/mascot/agent-mascot';
 import { skullSize } from '@/components/mascot/mascot-geometry';
+import { useMascot3D, type MascotStyle } from '@/components/mascot/mascot-style-pref';
 import {
   avalancheLooks, bodyAt, buildAvalanche, dragTo, drawOrder, grab, release, resizeAvalanche, scatter, stepAvalanche,
   type Avalanche,
@@ -93,6 +97,9 @@ export const MascotAvalanche = forwardRef<MascotAvalancheHandle, { className?: s
   const worldRef = useRef<Avalanche | null>(null);
   const bitmaps = useRef<(HTMLCanvasElement | null)[]>([]);
   const [ready, setReady] = useState(false);
+  /** The style whose bitmaps are all drawn: the cast is mounted while it differs from the one shown. */
+  const [drawn, setDrawn] = useState<MascotStyle | null>(null);
+  const style: MascotStyle = useMascot3D() ? '3d' : '2d';
   const reduced = usePrefersReducedMotion();
   const looks = useMemo(() => avalancheLooks(), []);
 
@@ -100,21 +107,33 @@ export const MascotAvalanche = forwardRef<MascotAvalancheHandle, { className?: s
     scatter: () => { if (worldRef.current) scatter(worldRef.current); },
   }), []);
 
-  // Rasterise the cast once, a frame after it mounted (a plugin's occupant may paint late).
+  // Rasterise the cast a frame after it mounted (a plugin's occupant may paint late), again at each change of style.
   useEffect(() => {
     let alive = true;
     const frame = requestAnimationFrame(() => {
       const cells = Array.from(castRef.current?.querySelectorAll<HTMLElement>('[data-avalanche-look]') ?? []);
+      // Back to the style already drawn before the other one was: its bitmaps are still the ones falling.
+      if (cells.length === 0) return;
+      const next: (HTMLCanvasElement | null)[] = [];
+      const heads: Promise<void>[] = [];
       void Promise.all(cells.map(async (cell, i) => {
         const head = cell.querySelector('canvas');
         const svg = cell.querySelector('svg');
-        bitmaps.current[i] = svg ? await rasterize(svg).catch(() => null) : null;
+        next[i] = svg ? await rasterize(svg).catch(() => null) : null;
         // The 3D head replaces it when it comes; the frame loop reads the array, so the swap shows by itself.
-        if (head) void copyHead(head).then((bitmap) => { if (alive && bitmap) bitmaps.current[i] = bitmap; }).catch(() => undefined);
-      })).finally(() => { if (alive) setReady(true); });
+        if (head) heads.push(copyHead(head).then((bitmap) => { if (alive && bitmap) next[i] = bitmap; }).catch(() => undefined));
+      })).finally(() => {
+        if (!alive) return;
+        // The whole set at once: a scene already falling never shows a gap between two styles.
+        bitmaps.current = next;
+        setReady(true);
+        // Until its 3D heads are in, no style is fully drawn: a switch back must mount the cast again.
+        setDrawn(null);
+        void Promise.all(heads).then(() => { if (alive) setDrawn(style); });
+      });
     });
     return () => { alive = false; cancelAnimationFrame(frame); };
-  }, []);
+  }, [style]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -203,8 +222,8 @@ export const MascotAvalanche = forwardRef<MascotAvalancheHandle, { className?: s
   return (
     <>
       <canvas ref={canvasRef} aria-hidden className={className} />
-      {!ready && (
-        <div ref={castRef} aria-hidden className="pointer-events-none fixed left-0 top-0 h-0 w-0 overflow-hidden opacity-0">
+      {drawn !== style && (
+        <div key={style} ref={castRef} aria-hidden data-avalanche-cast={style} className="pointer-events-none fixed left-0 top-0 h-0 w-0 overflow-hidden opacity-0">
           {looks.map((look, i) => (
             <div key={i} data-avalanche-look="">
               <AgentMascotHost look={look} size={200} fit shadow={false} />
