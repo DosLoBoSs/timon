@@ -242,10 +242,6 @@
       "needOne": "Install and sign in to Claude, Codex, Grok or Copilot to continue.",
       "anyway": "Continue anyway"
     },
-    "settings": {
-      "title": "AI tools on this machine",
-      "description": "Install an AI CLI with its vendor's official installer, sign it in, and update it when a new version is out. Timon checks for updates at startup and then every few hours."
-    },
     "rows": {
       "searching": "Looking…",
       "connected": "Connected",

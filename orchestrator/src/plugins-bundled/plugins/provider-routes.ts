@@ -37,7 +37,9 @@ function providerStatuses(req: Request) {
       reason: status.reason,
       error: status.error,
       signed: status.signed,
-      binaries: status.manifest ? providerBinaryRequests(status.manifest) : [],
+      // A provider shipped in the release is judged by the launch's own lists and waits for no
+      // operator: asking the plugin policy about it reads its own CLI (`claude`) as a refusal.
+      binaries: status.manifest && !status.builtin ? providerBinaryRequests(status.manifest) : [],
       osCredentials: [...(status.manifest?.provider?.osCredentials ?? [])],
       credentialDirs: [...(status.manifest?.provider?.credentialDirs ?? [])],
       backends: Object.entries(owners).filter(([, owner]) => owner === status.id).map(([backend]) => backend),

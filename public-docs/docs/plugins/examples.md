@@ -582,7 +582,7 @@ From `examples/plugin-provider-openrouter/package.json`, line 1:
 
 Source: `examples/plugin-provider-cards`. Manifest ID: `example-provider-cards`. Minimum API: **14**.
 
-API 14. One registration in the single providers.cli slot replaces the AI tool cards of the first-run Your AIs step and of Settings › AI models › Providers with one compact list. The component reads everything from useProviderCliCards(): the tools, their install jobs and four actions. Timon runs the installer and the sign-in command; the plugin only names a tool. Offer Install only for a tool marked installable and link its installDocs otherwise.
+API 14. One registration in the single providers.cli slot replaces the AI tool cards of the first-run Your AIs step with one compact list. The component reads everything from useProviderCliCards(): the tools, their install jobs and four actions. Timon runs the installer and the sign-in command; the plugin only names a tool. Offer Install only for a tool marked installable and link its installDocs otherwise.
 
 Permissions: none. Read the [related guide](slots.md).
 

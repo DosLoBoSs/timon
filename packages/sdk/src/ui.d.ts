@@ -988,8 +988,9 @@ declare module '@timon/ui' {
   };
   /**
    * The host a `providers.cli` occupant is painted for (client API 14): the
-   * onboarding's "Your AIs" step (`mode: 'onboarding'`), its "cannot start"
-   * screen (`recovery`) and Settings › AI models (`settings`). `null` outside
+   * onboarding's "Your AIs" step (`mode: 'onboarding'`) and its "cannot start"
+   * screen (`recovery`); `settings` is no longer painted, each provider's page
+   * shows its program instead, and stays for older plugins. `null` outside
    * that slot. The host owns the data and the gestures: it starts an install,
    * follows its console and reads the cards again when it ends.
    */

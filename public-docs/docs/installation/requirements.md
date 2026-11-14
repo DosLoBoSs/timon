@@ -23,7 +23,7 @@ npm --version
 git --version
 ```
 
-Then open your chosen backend CLI and confirm that an ordinary conversation works. A CLI installed in your interactive shell may still be missing from a service's PATH: pin its absolute path in **Settings → AI models → Providers → CLI binaries** (or `host.binaries` in the configuration file) if necessary.
+Then open your chosen backend CLI and confirm that an ordinary conversation works. A CLI installed in your interactive shell may still be missing from a service's PATH: pin its absolute path in **Settings → AI models → Providers**, on the provider's page under **Program → Advanced** (or `host.binaries` in the configuration file) if necessary.
 
 ## Optional tools
 

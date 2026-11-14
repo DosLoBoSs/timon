@@ -74,6 +74,18 @@ const loader = {
       id: 'acme-off', pkg: '@acme/off', version: '1.0.0', state: 'disabled', reason: 'disabled', error: null, signed: true,
       manifest: { id: 'acme-off', kind: ['provider'], label: 'Acme Off', provider: { binaries: [], osCredentials: [], credentialDirs: [], backends: [{ id: 'acme-off' }] } },
     },
+    // A third party that brings two backends, each with its own program, and a third program no backend names.
+    {
+      id: 'acme-duo', pkg: '@acme/duo', version: '1.0.0', state: 'active', reason: null, error: null, signed: true,
+      manifest: {
+        id: 'acme-duo', kind: ['provider'], label: 'Acme Duo',
+        provider: {
+          binaries: [{ name: 'duo-a-agent', aliases: [] }, { name: 'duo-b-agent', aliases: [] }, { name: 'duo-extra', aliases: [] }],
+          osCredentials: [], credentialDirs: [],
+          backends: [{ id: 'duo-a', binary: { names: ['duo-a-agent'] } }, { id: 'duo-b', binary: { names: ['duo-b-agent'] } }],
+        },
+      },
+    },
     { id: 'plain-widget', pkg: '@acme/w', version: '1.0.0', state: 'active', reason: null, error: null, signed: true, manifest: { id: 'plain-widget', kind: ['widget'] } },
   ],
 };
@@ -112,7 +124,7 @@ test.after(() => { server.closeAllConnections(); server.close(); process.env.PAT
 type Caller = 'admin' | 'bob' | 'mission' | 'daemon' | null;
 type Provider = {
   id: string; name: string; origin: string; status: string; enabled: boolean; pluginId: string | null; updateAvailable: boolean;
-  backends: { id: string }[]; programs: { name: string; path: string | null; authorization: string | null }[];
+  backends: { id: string }[]; programs: { name: string; path: string | null; authorization: string | null; pinKey: string | null }[];
   secret: { required: boolean; present: boolean; names: string[] };
   agentCount: number;
 };
@@ -148,6 +160,7 @@ test('one record per provider: plugins, split multi-backend plugins, hand-added 
   assert.ok(claude.programs.some((p) => p.name === 'claude'));
   assert.ok(claude.programs.every((p) => p.authorization === null), 'a provider shipped in the release asks no authorization');
   assert.notEqual(claude.status, 'blocked');
+  assert.equal(claude.programs.find((p) => p.name === 'claude')?.pinKey, 'claude', 'its CLI is pinned under its own command');
 
   for (const backend of ['opencode', 'hermes', 'antigravity']) {
     const split = byId.get(`provider-acp.${backend}`);
@@ -155,6 +168,11 @@ test('one record per provider: plugins, split multi-backend plugins, hand-added 
     assert.deepEqual(split.backends.map((b) => b.id), [backend]);
   }
   assert.equal(byId.has('provider-acp'), false);
+
+  // Split into one provider per backend: each page shows what its own backend launches, nothing of its sibling's.
+  assert.deepEqual(byId.get('acme-duo.duo-a')?.programs.map((p) => p.name), ['duo-a-agent']);
+  assert.deepEqual(byId.get('acme-duo.duo-b')?.programs.map((p) => p.name), ['duo-b-agent']);
+  assert.ok(byId.get('acme-duo.duo-a')?.programs.every((p) => p.pinKey === null), 'not a registered backend CLI: nothing to pin');
   assert.equal(byId.has('plain-widget'), false, 'a plugin that brings no backend is not a provider');
 
   const off = byId.get('acme-off')!;

@@ -241,10 +241,6 @@
       "continue": "Dalej",
       "needOne": "Zainstaluj i zaloguj Claude, Codex, Grok lub Copilot, aby kontynuować.",
       "anyway": "Mimo to kontynuuj"
-    },
-    "settings": {
-      "title": "Narzędzia AI na tej maszynie",
-      "description": "Zainstaluj CLI AI oficjalnym instalatorem producenta, zaloguj go i aktualizuj, gdy wyjdzie nowa wersja. Timon sprawdza aktualizacje przy starcie, a potem co kilka godzin."
     }
   }
 }

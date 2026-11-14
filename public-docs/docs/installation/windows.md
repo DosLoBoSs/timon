@@ -31,7 +31,7 @@ When Timon is already installed, the installer asks for the Windows permission p
 
 Follow [First run](first-run.md). Install and sign in to your CLI backend under the same Windows account. Keep agent working directories as existing absolute Windows paths; a Linux or container path is not interchangeable with one.
 
-Setup detects npm-installed backends without restarting Timon, including installations with a custom global npm directory. If you explicitly configured a backend path in `host.binaries`, that path takes precedence; `timon doctor` reports it when the file is missing. Correct or remove the outdated path in **Settings → AI models → Providers → CLI binaries**; it applies without restarting Timon.
+Setup detects npm-installed backends without restarting Timon, including installations with a custom global npm directory. If you explicitly configured a backend path in `host.binaries`, that path takes precedence; `timon doctor` reports it when the file is missing. Correct or remove the outdated path on the provider's page in **Settings → AI models → Providers**, under **Program → Advanced**; it applies without restarting Timon.
 
 ## Quitting and stopping
 

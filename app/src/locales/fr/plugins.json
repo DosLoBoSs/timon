@@ -401,8 +401,6 @@
     }
   },
   "providersSettings": {
-    "title": "Fournisseurs",
-    "description": "Les plugins fournisseurs apportent un service d'IA à Timon. Chaque programme qu'un fournisseur lance est autorisé ici, par son chemin résolu, avant de pouvoir s'exécuter.",
     "cancel": "Annuler",
     "consent": {
       "prompts": "Reçoit chaque instruction et chaque réponse des missions qu'il sert.",
@@ -417,26 +415,15 @@
       "allowHint": "Sans cela, le fournisseur est installé mais reste inactif tant que vous ne l'autorisez pas dans {settingsPath}."
     },
     "plugins": {
-      "title": "Plugins fournisseurs",
-      "none": "Aucun plugin fournisseur n'est installé.",
-      "backends": "Backends : {list}",
       "notFound": "non installé sur cette machine",
-      "authorize": "Examiner et autoriser",
       "authorizeTitle": "Autoriser {name}",
       "authorizeBody": "Timon a résolu ces programmes sur cette machine. N'autorisez que les chemins que vous reconnaissez.",
       "authorizeConfirm": "Autoriser ces programmes",
       "authorized": "{name} est autorisé.",
-      "state": {
-        "active": "Actif",
-        "failed": "À corriger",
-        "disabled": "Désactivé",
-        "skipped": "Refusé"
-      },
       "binary": {
         "authorize": "à autoriser",
         "ready": "autorisé",
-        "install": "à installer d'abord",
-        "refused": "jamais autorisé"
+        "install": "à installer d'abord"
       }
     },
     "acp": {
@@ -506,15 +493,7 @@
     }
   },
   "binariesSettings": {
-    "title": "Binaires CLI",
-    "description": "Où Timon a trouvé l'outil en ligne de commande de chaque fournisseur d'IA sur cette machine. S'il manque ou se trouve dans un endroit inhabituel, épinglez son chemin complet : il s'applique dès la prochaine mission, sans redémarrer Timon.",
-    "recheck": "Vérifier à nouveau",
-    "rechecked": "Binaires vérifiés à nouveau.",
-    "none": "Aucun fournisseur local n'utilise d'outil en ligne de commande.",
-    "backends": "Utilisé par : {list}",
-    "resolved": "Lance {path}",
     "brokenPin": "Le chemin épinglé ne peut pas être lancé : {path}",
-    "notFound": "Introuvable sur cette machine. Installez-le, ou épinglez son chemin ci-dessous.",
     "pathLabel": "Chemin du binaire {name}",
     "placeholder": "Chemin complet, par exemple /usr/local/bin/claude ou C:\\Users\\vous\\AppData\\Roaming\\npm\\claude.cmd",
     "browse": "Parcourir…",
@@ -522,12 +501,6 @@
     "clear": "Retirer l'épingle",
     "saved": "{name} : chemin enregistré. Les nouvelles missions l'utilisent.",
     "cleared": "{name} : épingle retirée. Timon le cherche de nouveau lui-même.",
-    "state": {
-      "found": "Trouvé",
-      "pinned": "Épinglé",
-      "brokenPin": "Chemin épinglé cassé",
-      "missing": "Introuvable"
-    },
     "errors": {
       "forbidden": "Seul un superadmin connecté à l'app peut modifier ces chemins.",
       "unknown_binary": "Ce n'est pas l'outil en ligne de commande d'un fournisseur local.",
@@ -600,7 +573,63 @@
     },
     "program": {
       "title": "Programme",
-      "waiting": "Le programme de ce fournisseur attend votre autorisation : Timon ne lance rien avant que vous l'ayez permis."
+      "description": "Ce que Timon lance sur cet ordinateur pour ce fournisseur.",
+      "recheck": "Vérifier à nouveau",
+      "rechecked": "Programme vérifié à nouveau.",
+      "plugin": "Apporté par le plugin {name}, version {version}.",
+      "version": "Version {version}",
+      "path": "Lance",
+      "pathDetails": "À propos de ce chemin",
+      "link": "Ce chemin est un lien. Le fichier vers lequel il pointe : {target}",
+      "pinned": "Ce chemin est celui imposé dans Avancé.",
+      "install": "Installer",
+      "installing": "Installation…",
+      "update": "Mettre à jour",
+      "updating": "Mise à jour…",
+      "state": {
+        "installed": "Installé",
+        "missing": "Introuvable sur cet ordinateur",
+        "brokenPin": "Le chemin imposé ne peut pas être lancé",
+        "update": "Mise à jour disponible",
+        "updateTo": "Mise à jour disponible : {latest}",
+        "unsupported": "La version {version} n'est pas prise en charge"
+      },
+      "advanced": "Avancé",
+      "pin": {
+        "title": "Chemin imposé",
+        "description": "Si le programme se trouve là où Timon ne cherche pas, donnez son chemin complet. Il s'applique dès la prochaine mission, sans redémarrer Timon."
+      },
+      "authorization": {
+        "title": "Autorisation de sécurité",
+        "review": "Examiner et autoriser",
+        "ready": {
+          "label": "Autorisé",
+          "body": "Ce plugin peut lancer ce programme, à ce chemin précis. Si le programme est déplacé ou remplacé, Timon vous redemande votre accord."
+        },
+        "authorize": {
+          "label": "À autoriser",
+          "body": "Ce plugin attend votre accord pour lancer ce programme : il est nouveau, a été déplacé ou mis à jour. Timon ne le lance pas tant que vous ne l'avez pas autorisé."
+        },
+        "install": {
+          "label": "À installer d'abord",
+          "body": "Le programme n'est pas encore sur cet ordinateur. Une fois installé, il vous sera demandé de l'autoriser avant son premier lancement."
+        },
+        "refused": {
+          "label": "Bloqué : ce programme ne peut pas être lancé par un plugin",
+          "body": "Par sécurité, aucun plugin ne peut lancer un shell, un interpréteur de scripts, un lanceur générique ni un programme que Timon gère lui-même. Aucune autorisation ne peut le débloquer : seul l'éditeur du plugin peut changer ce qu'il lance.",
+          "detail": "Raison donnée par Timon : {reason}"
+        }
+      },
+      "catalog": {
+        "installed": "Installé depuis le catalogue, version {version}",
+        "updateTo": "Mettre à jour vers {version}",
+        "repair": "Réinstaller",
+        "updated": "{name} est à jour.",
+        "state": {
+          "tampered": "Ses fichiers ont changé : non utilisé",
+          "missing": "Ses fichiers sont manquants"
+        }
+      }
     },
     "notFound": "Ce fournisseur n'est plus sur cet ordinateur.",
     "errors": {

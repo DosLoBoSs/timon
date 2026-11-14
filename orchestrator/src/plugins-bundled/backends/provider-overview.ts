@@ -70,6 +70,8 @@ export type ProviderProgramView = {
   linkTarget: string | null;
   /** Resolved through `host.binaries`. */
   pinned: boolean;
+  /** The `host.binaries` key a path is pinned under for it; `null` when nothing can be pinned (not a backend's CLI). */
+  pinKey: string | null;
   /** The pinned value as configured, even when it no longer resolves. */
   pin: string | null;
   version: string | null;
@@ -162,6 +164,8 @@ type Group = {
   declaredNames: Map<string, string[]>;
   /** Display rank per backend, when the manifest says so. */
   declaredRanks: Map<string, number>;
+  /** The only provider of its plugin: a program the plugin declares that no backend names is its own. */
+  alone: boolean;
 };
 
 /** Everything the aggregation reads once per request. */
@@ -224,12 +228,13 @@ function groups(sources: OverviewSources, snap: Snapshot): Group[] {
     const origin: ProviderOrigin = status.builtin ? 'built-in' : 'plugin';
     for (const id of ids) claimed.add(id);
     if (ids.length <= 1) {
-      result.push({ id: status.id, origin, backendIds: ids, plugin: status, pluginId: status.id, agent: null, declaredNames, declaredRanks });
+      result.push({ id: status.id, origin, backendIds: ids, plugin: status, pluginId: status.id, agent: null, declaredNames, declaredRanks, alone: true });
       continue;
     }
     for (const backendId of ids) {
       result.push({
         id: `${status.id}.${backendId}`, origin, backendIds: [backendId], plugin: status, pluginId: status.id, agent: null, declaredNames, declaredRanks,
+        alone: false,
       });
     }
   }
@@ -239,7 +244,7 @@ function groups(sources: OverviewSources, snap: Snapshot): Group[] {
     const backendId = agent.installed.profileId ?? profileIdOf(agent.id);
     claimed.add(backendId);
     result.push({
-      id: `catalog:${agent.id}`, origin: 'catalog', backendIds: [backendId], plugin: null, pluginId: null, agent, declaredNames: new Map(), declaredRanks: new Map(),
+      id: `catalog:${agent.id}`, origin: 'catalog', backendIds: [backendId], plugin: null, pluginId: null, agent, declaredNames: new Map(), declaredRanks: new Map(), alone: true,
     });
   }
 
@@ -248,12 +253,12 @@ function groups(sources: OverviewSources, snap: Snapshot): Group[] {
     const owner = owners[id];
     if (owner === ACP_REGISTRY_OWNER) continue;
     if (owner === LOCAL_FILE_OWNER) {
-      result.push({ id: `user:${id}`, origin: 'user', backendIds: [id], plugin: null, pluginId: null, agent: null, declaredNames: new Map(), declaredRanks: new Map() });
+      result.push({ id: `user:${id}`, origin: 'user', backendIds: [id], plugin: null, pluginId: null, agent: null, declaredNames: new Map(), declaredRanks: new Map(), alone: true });
     } else if (owner) {
       // A registration whose plugin the loader does not list (a test, a plugin being swapped).
-      result.push({ id: `${owner}.${id}`, origin: 'plugin', backendIds: [id], plugin: null, pluginId: owner, agent: null, declaredNames: new Map(), declaredRanks: new Map() });
+      result.push({ id: `${owner}.${id}`, origin: 'plugin', backendIds: [id], plugin: null, pluginId: owner, agent: null, declaredNames: new Map(), declaredRanks: new Map(), alone: true });
     } else {
-      result.push({ id: `builtin:${id}`, origin: 'built-in', backendIds: [id], plugin: null, pluginId: null, agent: null, declaredNames: new Map(), declaredRanks: new Map() });
+      result.push({ id: `builtin:${id}`, origin: 'built-in', backendIds: [id], plugin: null, pluginId: null, agent: null, declaredNames: new Map(), declaredRanks: new Map(), alone: true });
     }
   }
   return result;
@@ -338,8 +343,10 @@ function programs(group: Group, snap: Snapshot): ProviderProgramView[] {
     byName.set(name, buildProgram(name, card, pinStatus, matched, cmd ?? name, pins));
   }
 
-  // A program the plugin declares that no backend names: still the plugin's to authorize.
-  if (group.backendIds.length <= 1) {
+  // A program the plugin declares that no backend names: still the plugin's to authorize, on its
+  // page when it is the plugin's only provider. Split into one provider per backend, each page
+  // shows what its own backend launches — the only program a launch of it is checked against.
+  if (group.alone) {
     for (const request of requests) {
       if (used.has(request) || byName.has(request.name)) continue;
       byName.set(request.name, buildProgram(request.name, undefined, undefined, [request], request.name, pins));
@@ -365,6 +372,7 @@ function buildProgram(
     path,
     linkTarget: path && canonical && canonical !== path ? canonical : null,
     pinned: pinStatus?.pinned ?? false,
+    pinKey: pinStatus?.cmd ?? null,
     pin: pinStatus?.pin ?? (typeof pins[lookup] === 'string' && pins[lookup] ? pins[lookup] : null),
     version: card?.version ?? null,
     latest: card?.latest ?? null,

@@ -42,8 +42,6 @@ import {
 } from './form';
 import { ModelEditor } from './model-editor';
 import { PictoPanel } from './picto-panel';
-import { BinariesPanel } from './binaries-panel';
-import { ProviderCliPanel } from './provider-cli-panel';
 import { ProvidersPanel } from './providers-panel';
 import { SidePanel } from './side-panel';
 import { FIELD, HINT, LABEL } from './type-scale';
@@ -486,8 +484,6 @@ export function BackendsSettings(): ReactElement {
 
       <p className="mt-6 max-w-3xl text-xs leading-relaxed text-muted-foreground">{t('backendsSettings.reorderHint')}</p>
 
-      <ProviderCliPanel />
-      <BinariesPanel />
       <ProvidersPanel />
     </div>
   );

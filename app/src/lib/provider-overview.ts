@@ -35,6 +35,8 @@ export type ProviderProgramView = {
   path: string | null;
   linkTarget: string | null;
   pinned: boolean;
+  /** The `host.binaries` key a path is pinned under; `null` when nothing can be pinned. Absent from an older daemon. */
+  pinKey?: string | null;
   pin: string | null;
   version: string | null;
   latest: string | null;
@@ -140,4 +142,22 @@ const TONES: Readonly<Record<ProviderStatus, StatusTone>> = {
 
 export function statusTone(status: ProviderStatus): StatusTone {
   return TONES[status] ?? 'action';
+}
+
+export type ProgramState = 'installed' | 'missing' | 'brokenPin' | 'update' | 'unsupported';
+
+/** Where the program stands, in one word: the path a launch runs first, then its version. */
+export function programState(program: ProviderProgramView): ProgramState {
+  if (program.path === null) return program.pin !== null ? 'brokenPin' : 'missing';
+  if (program.unsupportedVersion) return 'unsupported';
+  return program.updateAvailable ? 'update' : 'installed';
+}
+
+/**
+ * The authorization to show for a program, `null` for none. Only a third
+ * party's program waits for the operator: a provider shipped in the release
+ * shows none even if a daemon answered one.
+ */
+export function shownAuthorization(provider: Pick<ProviderOverview, 'origin'>, program: ProviderProgramView): ProgramAuthorization | null {
+  return provider.origin === 'plugin' ? program.authorization : null;
 }

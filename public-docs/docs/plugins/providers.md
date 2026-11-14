@@ -210,7 +210,7 @@ the install sheet shows:
 - a tick-box, off by default, to allow Timon to run those exact programs.
 
 Without the tick the plugin installs but its program stays unauthorized; the same
-sheet is available later in **Settings → AI models → LLM backends → Providers**.
+review is available later on your provider's page in **Settings → AI models → Providers**, in its **Program** section.
 Only the path Timon found is ever allowed, and if it changes between the sheet
 and the click, nothing is installed and the sheet is shown again. `claude`,
 `codex`, `timon`, shells, interpreters and package runners can never be
@@ -223,9 +223,9 @@ What is authorized is the **file** the name leads to, links followed, and Timon 
 it again every time a mission starts your program — a first turn, a resumed
 conversation, a relaunch. If the name now leads to another file (the program moved,
 an update replaced the file a link points to) or the authorization was removed, the
-mission is refused and says which file it found; a notification card opens the same
-Providers sheet on your plugin, with the authorization dialog ready, and the person
-authorizes it again there. A path your `launch` returns that was not authorized is
+mission is refused and says which file it found; a notification card opens your
+provider's page, whose **Program** section offers **Review and authorize**, and the
+person authorizes it again there. A path your `launch` returns that was not authorized is
 refused the same way, even when its file name matches. The file checked is also the
 file started: replacing it, or retargeting a link to it, while a mission is starting
 refuses that start.

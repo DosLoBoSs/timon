@@ -130,14 +130,19 @@ function backendInstallCommand(cmd: string): string | null {
   });
 }
 
+/** Where the repair is: the Program section of the provider's own page. */
+const SETTINGS = 'Settings › AI models › Providers › (the provider) › Program';
+/** Where it was before the provider pages: what a stored warning may still name. */
+const LEGACY_SETTINGS = 'Settings › AI models › Providers › CLI binaries';
+
 /** English remains the stored diagnostic for the daemon and non-UI channels. */
 function binaryNotice(
   status: BackendBinaryStatus,
   install: string | null,
   legacyMarkdown = false,
+  settings = SETTINGS,
 ): { title: string; body: string } {
   const backends = status.backends.join(', ');
-  const settings = 'Settings › AI models › Providers › CLI binaries';
   const emphasize = (text: string) => legacyMarkdown ? `**${text}**` : text;
   const repair = status.pinned
     ? `The path pinned for \`${status.cmd}\` (\`host.binaries.${status.cmd}\`) does not point to an executable file. Fix it in ${emphasize(settings)}, or clear it to let Timon look for the CLI itself.`
@@ -182,9 +187,11 @@ export function backendBinaryPresentation(
   for (const pinned of [status.pinned, !status.pinned]) {
     for (const installCommand of install ? [install, null] : [null]) {
       for (const legacyMarkdown of [false, true]) {
-        const notice = binaryNotice({ ...status, pinned }, installCommand, legacyMarkdown);
-        if (notification.title === notice.title && notification.body === notice.body) {
-          return { kind: 'backend-binary', cmd: status.cmd, backends: status.backends, pinned, installCommand };
+        for (const settings of [SETTINGS, LEGACY_SETTINGS]) {
+          const notice = binaryNotice({ ...status, pinned }, installCommand, legacyMarkdown, settings);
+          if (notification.title === notice.title && notification.body === notice.body) {
+            return { kind: 'backend-binary', cmd: status.cmd, backends: status.backends, pinned, installCommand };
+          }
         }
       }
     }

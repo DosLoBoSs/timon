@@ -61,7 +61,7 @@ test('broken pin: the notice sends you to fix the path, not to reinstall', () =>
     assert.match(notice.body, new RegExp(`host\\.binaries\\.${target.cmd}`));
     assert.doesNotMatch(notice.body, /^Install it/m);
     // The repair is a screen of the app, not a JSON file to edit (TODO #413).
-    assert.match(notice.body, /Settings › AI models › Providers › CLI binaries/);
+    assert.match(notice.body, /Settings › AI models › Providers › \(the provider\) › Program/);
   } finally {
     resetConfig();
   }
@@ -101,10 +101,11 @@ test('legacy Markdown warning and its original pinned diagnosis remain recogniza
   for (const pinned of [false, true]) {
     const status = { cmd: 'custom-cli', backends: ['custom-provider'], path: null, pinned };
     const notice = backendBinaryNotice(status);
+    // Stored before the provider pages: it named the CLI binaries panel.
     const body = notice.body
       .replace('Action needed:', '**Action needed:**')
       .replace('Check again', '**Check again**')
-      .replace('Settings › AI models › Providers › CLI binaries', '**Settings › AI models › Providers › CLI binaries**');
+      .replace('Settings › AI models › Providers › (the provider) › Program', '**Settings › AI models › Providers › CLI binaries**');
     const presentation = backendBinaryPresentation({
       title: notice.title, body, type: 'alert', anchor: backendBinaryAnchor(status.cmd),
       source: null, task_id: null, mission_id: null, owner_user_id: null,

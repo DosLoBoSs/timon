@@ -372,8 +372,6 @@
     }
   },
   "providersSettings": {
-    "title": "공급자",
-    "description": "공급자 플러그인은 AI 서비스를 Timon에 가져옵니다. 공급자가 실행하는 각 프로그램은 실행 전에 확인된 경로로 여기서 승인됩니다.",
     "cancel": "취소",
     "consent": {
       "prompts": "담당하는 미션의 모든 지시와 모든 답변을 받습니다.",
@@ -388,26 +386,15 @@
       "allowHint": "허용하지 않으면 공급자는 설치되지만 {settingsPath}에서 승인할 때까지 비활성 상태로 남습니다."
     },
     "plugins": {
-      "title": "공급자 플러그인",
-      "none": "설치된 공급자 플러그인이 없습니다.",
-      "backends": "백엔드: {list}",
       "notFound": "이 머신에 설치되지 않음",
-      "authorize": "검토하고 승인",
       "authorizeTitle": "{name} 승인",
       "authorizeBody": "Timon이 이 머신에서 이 프로그램들을 확인했습니다. 알아보는 경로만 허용하세요.",
       "authorizeConfirm": "이 프로그램 허용",
       "authorized": "{name}이(가) 승인되었습니다.",
-      "state": {
-        "active": "활성",
-        "failed": "조치 필요",
-        "disabled": "꺼짐",
-        "skipped": "거부됨"
-      },
       "binary": {
         "authorize": "승인 필요",
         "ready": "승인됨",
-        "install": "먼저 설치",
-        "refused": "허용 불가"
+        "install": "먼저 설치"
       }
     },
     "acp": {
@@ -458,15 +445,7 @@
     }
   },
   "binariesSettings": {
-    "title": "CLI 바이너리",
-    "description": "이 컴퓨터에서 Timon이 각 AI 공급자의 명령줄 도구를 찾은 위치입니다. 없거나 특이한 위치에 있으면 전체 경로를 고정하세요: Timon을 다시 시작하지 않고 다음 미션부터 적용됩니다.",
-    "recheck": "다시 확인",
-    "rechecked": "바이너리를 다시 확인했습니다.",
-    "none": "명령줄 도구를 쓰는 로컬 공급자가 없습니다.",
-    "backends": "사용처: {list}",
-    "resolved": "{path} 실행",
     "brokenPin": "고정된 경로를 실행할 수 없습니다: {path}",
-    "notFound": "이 컴퓨터에서 찾을 수 없습니다. 설치하거나 아래에 경로를 고정하세요.",
     "pathLabel": "{name} 바이너리 경로",
     "placeholder": "전체 경로, 예: /usr/local/bin/claude 또는 C:\\Users\\you\\AppData\\Roaming\\npm\\claude.cmd",
     "browse": "찾아보기…",
@@ -474,12 +453,6 @@
     "clear": "고정 해제",
     "saved": "{name}: 경로가 저장되었습니다. 새 미션이 이를 사용합니다.",
     "cleared": "{name}: 고정이 해제되었습니다. Timon이 다시 스스로 찾습니다.",
-    "state": {
-      "found": "찾음",
-      "pinned": "고정됨",
-      "brokenPin": "고정된 경로 손상",
-      "missing": "찾을 수 없음"
-    },
     "errors": {
       "forbidden": "앱에 로그인한 최고 관리자만 이 경로를 변경할 수 있습니다.",
       "unknown_binary": "로컬 공급자의 명령줄 도구가 아닙니다.",

@@ -241,10 +241,6 @@
       "continue": "계속",
       "needOne": "계속하려면 Claude, Codex, Grok 또는 Copilot을 설치하고 로그인하세요.",
       "anyway": "그래도 계속"
-    },
-    "settings": {
-      "title": "이 컴퓨터의 AI 도구",
-      "description": "공급업체의 공식 설치 프로그램으로 AI CLI를 설치하고 로그인한 뒤, 새 버전이 나오면 업데이트하세요. Timon은 시작할 때와 그 후 몇 시간마다 업데이트를 확인합니다."
     }
   }
 }

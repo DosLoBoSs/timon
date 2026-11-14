@@ -241,10 +241,6 @@
       "continue": "Weiter",
       "needOne": "Installiere Claude, Codex, Grok oder Copilot und melde dich an, um fortzufahren.",
       "anyway": "Trotzdem fortfahren"
-    },
-    "settings": {
-      "title": "KI-Werkzeuge auf diesem Rechner",
-      "description": "Installiere eine KI-CLI mit dem offiziellen Installationsprogramm ihres Herstellers, melde sie an und aktualisiere sie, wenn eine neue Version erscheint. Timon sucht beim Start und danach alle paar Stunden nach Updates."
     }
   }
 }

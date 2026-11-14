@@ -242,10 +242,6 @@
       "needOne": "Installez et connectez Claude, Codex, Grok ou Copilot pour continuer.",
       "anyway": "Continuer quand même"
     },
-    "settings": {
-      "title": "Outils d’IA de cette machine",
-      "description": "Installez un CLI d’IA avec l’installeur officiel de son éditeur, connectez-le, et mettez-le à jour quand une nouvelle version sort. Timon vérifie les mises à jour au démarrage puis toutes les quelques heures."
-    },
     "rows": {
       "searching": "Recherche…",
       "connected": "Connecté",

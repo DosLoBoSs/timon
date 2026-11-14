@@ -411,8 +411,6 @@
     }
   },
   "providersSettings": {
-    "title": "Providers",
-    "description": "Provider plugins bring an AI service to Timon. Each program a provider launches is authorized here, by its resolved path, before it can run.",
     "cancel": "Cancel",
     "consent": {
       "prompts": "Receives every instruction and every answer of the missions it serves.",
@@ -427,26 +425,15 @@
       "allowHint": "Without this, the provider is installed but stays inactive until you authorize it in {settingsPath}."
     },
     "plugins": {
-      "title": "Provider plugins",
-      "none": "No provider plugin is installed.",
-      "backends": "Backends: {list}",
       "notFound": "not installed on this machine",
-      "authorize": "Review and authorize",
       "authorizeTitle": "Authorize {name}",
       "authorizeBody": "Timon resolved these programs on this machine. Allow only the paths you recognize.",
       "authorizeConfirm": "Allow these programs",
       "authorized": "{name} is authorized.",
-      "state": {
-        "active": "Active",
-        "failed": "Needs attention",
-        "disabled": "Off",
-        "skipped": "Refused"
-      },
       "binary": {
         "authorize": "to authorize",
         "ready": "authorized",
-        "install": "install it first",
-        "refused": "never allowed"
+        "install": "install it first"
       }
     },
     "acp": {
@@ -516,15 +503,7 @@
     }
   },
   "binariesSettings": {
-    "title": "CLI binaries",
-    "description": "Where Timon found the command-line tool of each AI provider on this machine. If one is missing or in an unusual place, pin its full path: it applies to the next mission, without restarting Timon.",
-    "recheck": "Check again",
-    "rechecked": "Binaries checked again.",
-    "none": "No local provider uses a command-line tool.",
-    "backends": "Used by: {list}",
-    "resolved": "Runs {path}",
     "brokenPin": "The pinned path cannot be run: {path}",
-    "notFound": "Not found on this machine. Install it, or pin its path below.",
     "pathLabel": "Path to the {name} binary",
     "placeholder": "Full path, for example /usr/local/bin/claude or C:\\Users\\you\\AppData\\Roaming\\npm\\claude.cmd",
     "browse": "Browse…",
@@ -532,12 +511,6 @@
     "clear": "Remove pin",
     "saved": "{name}: path saved. New missions use it.",
     "cleared": "{name}: pin removed. Timon looks for it on its own again.",
-    "state": {
-      "found": "Found",
-      "pinned": "Pinned",
-      "brokenPin": "Pinned path broken",
-      "missing": "Not found"
-    },
     "errors": {
       "forbidden": "Only a superadmin signed in to the app can change these paths.",
       "unknown_binary": "This is not the command-line tool of a local provider.",
@@ -610,7 +583,63 @@
     },
     "program": {
       "title": "Program",
-      "waiting": "The program this provider runs waits for your authorization: Timon launches nothing before you allow it."
+      "description": "What Timon runs on this computer for this provider.",
+      "recheck": "Check again",
+      "rechecked": "Program checked again.",
+      "plugin": "Brought by the plugin {name}, version {version}.",
+      "version": "Version {version}",
+      "path": "Runs",
+      "pathDetails": "About this path",
+      "link": "This path is a link. The file it points to: {target}",
+      "pinned": "This path is the one set under Advanced.",
+      "install": "Install",
+      "installing": "Installing…",
+      "update": "Update",
+      "updating": "Updating…",
+      "state": {
+        "installed": "Installed",
+        "missing": "Not found on this computer",
+        "brokenPin": "The path you set cannot be run",
+        "update": "Update available",
+        "updateTo": "Update available: {latest}",
+        "unsupported": "Version {version} is not supported"
+      },
+      "advanced": "Advanced",
+      "pin": {
+        "title": "Set the path",
+        "description": "If the program is somewhere Timon does not look, give its full path. It applies to the next mission, without restarting Timon."
+      },
+      "authorization": {
+        "title": "Security authorization",
+        "review": "Review and authorize",
+        "ready": {
+          "label": "Authorized",
+          "body": "This plugin may run this program, at this exact path. If the program moves or is replaced, Timon asks you again."
+        },
+        "authorize": {
+          "label": "To authorize",
+          "body": "This plugin waits for your agreement to run this program: it is new, was moved or was updated. Timon does not run it until you allow it."
+        },
+        "install": {
+          "label": "Install it first",
+          "body": "The program is not on this computer yet. Once it is installed, you will be asked to authorize it before its first run."
+        },
+        "refused": {
+          "label": "Blocked: this program cannot be run by a plugin",
+          "body": "For your safety, no plugin may run a shell, a script interpreter, a generic launcher or a program Timon manages itself. No authorization can unblock it: only the plugin's publisher can change what it runs.",
+          "detail": "Reason given by Timon: {reason}"
+        }
+      },
+      "catalog": {
+        "installed": "Installed from the catalog, version {version}",
+        "updateTo": "Update to {version}",
+        "repair": "Reinstall",
+        "updated": "{name} is up to date.",
+        "state": {
+          "tampered": "Its files changed: not used",
+          "missing": "Its files are missing"
+        }
+      }
     },
     "notFound": "This provider is no longer on this computer.",
     "errors": {
