@@ -16,9 +16,10 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import {
-  encodeFencePolicy, fenceBinaryCandidates, FENCE_EXIT, FENCE_POLICY_HEADER, findFenceBinary,
-  parseFenceProbe, probeFence, type FencePolicy,
+  encodeFencePolicy, fenceBinaryCandidates, fenceDeclaredByRelease, FENCE_EXIT, FENCE_POLICY_HEADER, FENCE_RELEASE_FILE,
+  fenceLaunchDecision, fenceStatus, findFenceBinary, parseFenceProbe, probeFence, type FencePolicy, type FenceProbe,
 } from './fence.js';
 
 test('the policy is NUL-separated: header, socket option, then one pair per path', () => {
@@ -52,11 +53,114 @@ test('no launcher is looked for off Linux, and a file without the exec bit is no
 });
 
 test('the probe tells a missing Landlock from a missing seccomp', () => {
-  assert.deepEqual(parseFenceProbe('landlock-abi=6 seccomp=yes\n', 0), { available: true, abi: 6, seccomp: true });
+  assert.deepEqual(parseFenceProbe('landlock-abi=6 seccomp=yes\n', 0), { available: true, answered: true, abi: 6, seccomp: true });
+  assert.equal(parseFenceProbe('landlock-abi=0 seccomp=yes\n', 69).answered, true);
   assert.equal(parseFenceProbe('landlock-abi=0 seccomp=yes\n', 69).reason, 'kernel without Landlock');
   assert.match(parseFenceProbe('landlock-abi=1 seccomp=yes\n', 69).reason ?? '', /ABI 1, 2 or later/);
   assert.equal(parseFenceProbe('landlock-abi=4 seccomp=no\n', 69).reason, 'kernel without seccomp filters');
   assert.equal(parseFenceProbe('', null).available, false);
+});
+
+// ---------------------------------------------------------------------------
+// The status of the fence, and what a launch does with it.
+
+const READY: FenceProbe = { available: true, answered: true, abi: 6, seccomp: true };
+const NO_LANDLOCK: FenceProbe = { available: false, answered: true, abi: 0, seccomp: true, reason: 'kernel without Landlock' };
+const SILENT: FenceProbe = { available: false, answered: false, abi: 0, seccomp: false, reason: 'the fence launcher did not answer its probe' };
+
+/** An orchestrator folder whose release ships (or not) a launcher. */
+function shippedRoot(content: string | null, mode = 0o755): { root: string; binary: string; digest: string } {
+  const root = mkdtempSync(join(tmpdir(), 'fence-release-'));
+  const binary = join(root, 'native', 'timon-fence');
+  const bytes = content ?? '';
+  if (content !== null) {
+    mkdirSync(join(root, 'native'));
+    writeFileSync(binary, bytes);
+    chmodSync(binary, mode);
+  }
+  return { root, binary, digest: createHash('sha256').update(bytes).digest('hex') };
+}
+
+const signed = (digest: string) => ({ files: { 'dist/boot.js': 'x', [FENCE_RELEASE_FILE]: digest } });
+const LINUX = { platform: 'linux' as const };
+
+test('a launcher the release declares but that lost its execute bit is an alteration: warned in auto, refused in enforce', { skip: process.platform === 'win32' && 'Windows has no execute bit' }, () => {
+  const { root, digest } = shippedRoot('launcher', 0o644);
+  let probed = false;
+  const status = fenceStatus({ ...LINUX, orchestratorRoot: root, release: signed(digest), probe: () => { probed = true; return READY; } });
+  assert.equal(status.state, 'tampered');
+  assert.match(status.state === 'tampered' ? status.reason : '', /ships .* is not executable/);
+  assert.equal(probed, false, 'a launcher that fails the file checks is never run');
+
+  const auto = fenceLaunchDecision('auto', status);
+  assert.equal(auto.action, 'unfenced');
+  assert.ok(auto.action === 'unfenced' && auto.tampered);
+  assert.match(auto.action === 'unfenced' ? auto.warning ?? '' : '', /UNFENCED: .*not executable\. The Timon package may have been altered/);
+
+  const enforce = fenceLaunchDecision('enforce', status);
+  assert.equal(enforce.action, 'refuse');
+  assert.match(enforce.action === 'refuse' ? enforce.error : '', /"enforce".*not executable.*altered/);
+});
+
+test('a declared launcher that is missing, replaced or does not run is an alteration too', { skip: process.platform === 'win32' && 'Windows has no execute bit' }, () => {
+  const missing = shippedRoot(null);
+  const gone = fenceStatus({ ...LINUX, orchestratorRoot: missing.root, release: signed(missing.digest), probe: () => READY });
+  assert.ok(gone.state === 'tampered' && /is missing/.test(gone.reason));
+
+  const replaced = shippedRoot('#!/bin/sh\nexec "$@"\n');
+  const swapped = fenceStatus({ ...LINUX, orchestratorRoot: replaced.root, release: signed('0'.repeat(64)), probe: () => READY });
+  assert.ok(swapped.state === 'tampered' && /no longer the file the release signed/.test(swapped.reason));
+
+  const mute = shippedRoot('launcher');
+  const silent = fenceStatus({ ...LINUX, orchestratorRoot: mute.root, release: signed(mute.digest), probe: () => SILENT });
+  assert.ok(silent.state === 'tampered' && /does not run/.test(silent.reason));
+});
+
+test('a declared, intact launcher on a kernel without Landlock is the machine, not an alteration', () => {
+  const { root, digest } = shippedRoot('launcher');
+  const status = fenceStatus({ ...LINUX, orchestratorRoot: root, release: signed(digest), probe: () => NO_LANDLOCK });
+  assert.deepEqual(status, { state: 'unsupported', reason: 'kernel without Landlock', abi: 0 });
+  const auto = fenceLaunchDecision('auto', status);
+  assert.deepEqual(auto, { action: 'unfenced', tampered: false, warning: 'Mission launched unfenced: kernel without Landlock.' });
+  const ready = fenceStatus({ ...LINUX, orchestratorRoot: root, release: signed(digest), probe: () => READY });
+  assert.equal(ready.state, 'ready');
+  assert.deepEqual(fenceLaunchDecision('enforce', ready), { action: 'fence', binary: join(root, 'native', 'timon-fence') });
+});
+
+test('the release manifest file declares the launcher even when no verified inventory was handed over', () => {
+  const { root } = shippedRoot(null);
+  writeFileSync(join(root, 'release-manifest.json'), JSON.stringify({ version: 2, files: { [FENCE_RELEASE_FILE]: 'abc' } }));
+  assert.deepEqual(fenceDeclaredByRelease(root, null), { declared: true, digest: null });
+  const status = fenceStatus({ ...LINUX, orchestratorRoot: root, release: null, probe: () => READY });
+  assert.equal(status.state, 'tampered');
+  // A verified inventory wins over the file: it does not list the launcher here.
+  assert.deepEqual(fenceDeclaredByRelease(root, { files: { 'dist/boot.js': 'x' } }), { declared: false, digest: null });
+});
+
+test('a release that does not declare the launcher keeps the plain behaviour', { skip: process.platform === 'win32' && 'Windows has no execute bit' }, () => {
+  // No launcher anywhere: unsupported, never an alteration.
+  const empty = shippedRoot(null);
+  const none = fenceStatus({ ...LINUX, orchestratorRoot: empty.root, release: { files: { 'dist/boot.js': 'x' } }, probe: () => READY });
+  assert.deepEqual(none, { state: 'unsupported', reason: 'no fence launcher built for this machine', abi: 0 });
+  assert.deepEqual(fenceLaunchDecision('auto', none),
+    { action: 'unfenced', tampered: false, warning: 'Mission launched unfenced: no fence launcher built for this machine.' });
+  const refused = fenceLaunchDecision('enforce', none);
+  assert.ok(refused.action === 'refuse' && !refused.tampered && !/altered/.test(refused.error));
+
+  // A launcher left without its execute bit in an undeclared tree is not used, and not called altered.
+  const loose = shippedRoot('launcher', 0o644);
+  const skipped = fenceStatus({ ...LINUX, orchestratorRoot: loose.root, release: null, probe: () => READY });
+  assert.equal(skipped.state, 'unsupported');
+
+  // An executable one is probed as before.
+  const dev = shippedRoot('launcher');
+  assert.equal(fenceStatus({ ...LINUX, orchestratorRoot: dev.root, release: null, probe: () => READY }).state, 'ready');
+  assert.equal(fenceStatus({ ...LINUX, orchestratorRoot: dev.root, release: null, probe: () => SILENT }).state, 'unsupported');
+
+  // Off Linux there is nothing to declare, and `off` never warns.
+  const mac = fenceStatus({ platform: 'darwin', orchestratorRoot: dev.root, release: signed(dev.digest), probe: () => READY });
+  assert.equal(mac.state, 'unsupported');
+  assert.deepEqual(fenceLaunchDecision('off', mac), { action: 'unfenced', warning: null, tampered: false });
 });
 
 // ---------------------------------------------------------------------------

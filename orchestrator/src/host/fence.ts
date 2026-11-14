@@ -8,9 +8,11 @@
  * that the C reader and the TypeScript writer change together.
  */
 import { spawnSync } from 'node:child_process';
-import { accessSync, constants, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verifiedRelease, type VerifiedRelease } from '../plugins/builtin.js';
 
 /** Exit codes of the launcher before the command runs (sysexits values). */
 export const FENCE_EXIT = Object.freeze({
@@ -87,6 +89,12 @@ export function findFenceBinary(options: { platform?: NodeJS.Platform; orchestra
 export interface FenceProbe {
   /** True when a mission can be fenced on this kernel. */
   readonly available: boolean;
+  /**
+   * True when the launcher ran and described the kernel. False when it could
+   * not run or said nothing a launcher would: then the launcher, not the
+   * kernel, is at fault.
+   */
+  readonly answered: boolean;
   /** Landlock ABI, 0 when absent or disabled. */
   readonly abi: number;
   readonly seccomp: boolean;
@@ -97,19 +105,160 @@ export interface FenceProbe {
 /** Parses `timon-fence --probe`: `landlock-abi=N seccomp=yes|no`. */
 export function parseFenceProbe(stdout: string, status: number | null): FenceProbe {
   const match = /landlock-abi=(\d+) seccomp=(yes|no)/.exec(stdout);
-  if (!match) return { available: false, abi: 0, seccomp: false, reason: 'the fence launcher did not answer its probe' };
+  if (!match) return { available: false, answered: false, abi: 0, seccomp: false, reason: 'the fence launcher did not answer its probe' };
   const abi = Number(match[1]);
   const seccomp = match[2] === 'yes';
-  if (status === 0) return { available: true, abi, seccomp };
+  if (status === 0) return { available: true, answered: true, abi, seccomp };
   const reason = abi < 2
     ? (abi === 0 ? 'kernel without Landlock' : `kernel with Landlock ABI ${abi}, 2 or later is required`)
     : 'kernel without seccomp filters';
-  return { available: false, abi, seccomp, reason };
+  return { available: false, answered: true, abi, seccomp, reason };
 }
 
 /** Asks the launcher what this kernel supports. */
 export function probeFence(binary: string): FenceProbe {
   const result = spawnSync(binary, ['--probe'], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
-  if (result.error) return { available: false, abi: 0, seccomp: false, reason: `the fence launcher cannot run (${result.error.message})` };
+  if (result.error) return { available: false, answered: false, abi: 0, seccomp: false, reason: `the fence launcher cannot run (${result.error.message})` };
   return parseFenceProbe(result.stdout, result.status);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Can this machine fence a mission, and what a launch does about it.
+
+   Two causes leave a mission unfenced, and they must never read alike. An OS
+   or a kernel without the mechanism is a property of the machine: `auto`
+   launches with a warning. A release that ships the launcher — its signed
+   manifest lists `native/timon-fence` — whose launcher is gone, no longer
+   executable, replaced or unable to run is a sign the package was altered
+   after the boot check: `auto` still launches, by design, but says
+   so in those words, and `enforce` refuses. A machine whose release does not
+   list the launcher (an older package, another OS, a source checkout) keeps
+   the plain "unsupported" outcome.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** The launcher's name in a release manifest (`desktop/scripts/release-integrity.mjs`). */
+export const FENCE_RELEASE_FILE = 'native/timon-fence';
+
+export type FenceStatus =
+  | { readonly state: 'ready'; readonly binary: string; readonly abi: number; readonly seccomp: boolean }
+  /** This OS, this kernel or this checkout cannot fence: nothing was altered. */
+  | { readonly state: 'unsupported'; readonly reason: string; readonly abi: number }
+  /** The release ships a launcher that is no longer usable: a sign of alteration. */
+  | { readonly state: 'tampered'; readonly reason: string; readonly abi: number };
+
+/**
+ * Whether the release under `root` ships the launcher, and the digest it was
+ * signed with. The inventory `dist/boot.js` verified comes first; failing
+ * that, the manifest file itself is read, unverified: it can only make the
+ * outcome stricter, never hand a launcher trust.
+ */
+export function fenceDeclaredByRelease(
+  root: string = ORCHESTRATOR_ROOT,
+  release: VerifiedRelease | null = verifiedRelease(),
+): { declared: boolean; digest: string | null } {
+  const signed = release?.files[FENCE_RELEASE_FILE];
+  if (signed !== undefined) return { declared: true, digest: signed };
+  if (release) return { declared: false, digest: null };
+  const manifest = join(root, 'release-manifest.json');
+  if (!existsSync(manifest)) return { declared: false, digest: null };
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(manifest, 'utf8'));
+    const files = typeof parsed === 'object' && parsed !== null ? (parsed as { files?: unknown }).files : undefined;
+    const declared = typeof files === 'object' && files !== null && Object.hasOwn(files, FENCE_RELEASE_FILE);
+    return { declared, digest: null };
+  } catch {
+    // An unreadable manifest in a packaged tree is itself an alteration; the
+    // boot check refuses it, and this status has nothing to add.
+    return { declared: false, digest: null };
+  }
+}
+
+/** What is wrong with the shipped launcher file, or null. */
+function shippedLauncherProblem(binary: string, digest: string | null): string | null {
+  let isFile: boolean;
+  try {
+    isFile = statSync(binary).isFile();
+  } catch {
+    return 'missing';
+  }
+  if (!isFile) return 'not a regular file';
+  if (!isExecutableFile(binary)) return 'not executable';
+  if (digest !== null) {
+    let actual: string;
+    try {
+      actual = createHash('sha256').update(readFileSync(binary)).digest('hex');
+    } catch {
+      return 'unreadable';
+    }
+    if (actual !== digest) return 'no longer the file the release signed';
+  }
+  return null;
+}
+
+export interface FenceStatusOptions {
+  platform?: NodeJS.Platform;
+  orchestratorRoot?: string;
+  arch?: string;
+  /** The verified inventory; defaults to the one handed over at boot. */
+  release?: VerifiedRelease | null;
+  probe?: (binary: string) => FenceProbe;
+}
+
+/**
+ * Can a mission be fenced right now. Not cached: a launcher altered after boot
+ * must show at the next launch, and a probe is one short exec.
+ */
+export function fenceStatus(options: FenceStatusOptions = {}): FenceStatus {
+  const platform = options.platform ?? process.platform;
+  if (platform !== 'linux') return { state: 'unsupported', reason: 'no fence launcher for this OS', abi: 0 };
+  const root = options.orchestratorRoot ?? ORCHESTRATOR_ROOT;
+  const probe = options.probe ?? probeFence;
+  const release = options.release === undefined ? verifiedRelease() : options.release;
+  const shipped = fenceDeclaredByRelease(root, release);
+
+  if (shipped.declared) {
+    // In a release, only the signed copy counts: never a build folder nearby.
+    const binary = fenceBinaryCandidates(root, options.arch)[0] ?? join(root, 'native', 'timon-fence');
+    const problem = shippedLauncherProblem(binary, shipped.digest);
+    if (problem) return { state: 'tampered', reason: `the fence launcher this release ships (${binary}) is ${problem}`, abi: 0 };
+    const result = probe(binary);
+    if (result.available) return { state: 'ready', binary, abi: result.abi, seccomp: result.seccomp };
+    if (!result.answered) return { state: 'tampered', reason: `the fence launcher this release ships (${binary}) does not run: ${result.reason ?? 'no answer'}`, abi: 0 };
+    return { state: 'unsupported', reason: result.reason ?? 'no fence on this kernel', abi: result.abi };
+  }
+
+  const binary = findFenceBinary({ platform, orchestratorRoot: root, ...(options.arch ? { arch: options.arch } : {}) });
+  if (!binary) return { state: 'unsupported', reason: 'no fence launcher built for this machine', abi: 0 };
+  const result = probe(binary);
+  if (result.available) return { state: 'ready', binary, abi: result.abi, seccomp: result.seccomp };
+  return { state: 'unsupported', reason: result.reason ?? 'no fence on this kernel', abi: result.abi };
+}
+
+export type FenceLaunch =
+  | { readonly action: 'fence'; readonly binary: string }
+  /** `warning` is null only when the configuration turned the fence off. */
+  | { readonly action: 'unfenced'; readonly warning: string | null; readonly tampered: boolean }
+  | { readonly action: 'refuse'; readonly error: string; readonly tampered: boolean };
+
+const ALTERED = 'The Timon package may have been altered: reinstall it.';
+
+/**
+ * What a mission launch does under `host.isolation.filesystem`. Never a silent
+ * fallback: `auto` launches unfenced with a warning naming the cause, and the
+ * cause of an altered release is worded apart from a machine that lacks the
+ * mechanism.
+ */
+export function fenceLaunchDecision(mode: 'auto' | 'enforce' | 'off', status: FenceStatus): FenceLaunch {
+  if (mode === 'off') return { action: 'unfenced', warning: null, tampered: false };
+  if (status.state === 'ready') return { action: 'fence', binary: status.binary };
+  const tampered = status.state === 'tampered';
+  const cause = tampered ? `${status.reason}. ${ALTERED}` : `${status.reason}.`;
+  if (mode === 'enforce') {
+    return { action: 'refuse', tampered, error: `Mission refused: host.isolation.filesystem is "enforce" and it cannot be fenced: ${cause}` };
+  }
+  return {
+    action: 'unfenced',
+    tampered,
+    warning: tampered ? `Mission launched UNFENCED: ${cause}` : `Mission launched unfenced: ${cause}`,
+  };
 }
