@@ -69,7 +69,7 @@ export function accountState(row: BackendAccountRow): AccountState {
   return isBackendCoolingDown(accountInstance(row)) ? 'cooldown' : 'active';
 }
 
-function publicAccount(row: BackendAccountRow, viewer: DbViewer) {
+export function publicAccount(row: BackendAccountRow, viewer: DbViewer) {
   return {
     id: row.id,
     instance: accountInstance(row),
