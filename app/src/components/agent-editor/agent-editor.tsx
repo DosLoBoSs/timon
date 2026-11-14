@@ -57,6 +57,7 @@ import {
   capabilitiesFor,
   permissionHintKey,
   managesOwnPermissions,
+  supportedPermissionModesFor,
   type BackendCatalog,
   type BackendName,
 } from '@/lib/backends';
@@ -1373,6 +1374,7 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
                   value={draft.mode}
                   onChange={(m) => updateDraft('mode', m)}
                   ignored={ownPermissions}
+                  supported={supportedPermissionModesFor(catalog, draftBackend)}
                 />
               </FormRow>
               <FormRow label="Allowed tools" hint="green-list — agent can call">
