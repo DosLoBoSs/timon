@@ -174,7 +174,7 @@ test('the Program section paints the daemon\'s program and drives its installer 
       const link = section()!.querySelector('[data-program-link]')!;
       assert.ok(link.closest('details'), 'the link\'s target sits in a folded detail');
       assert.match(link.textContent!, /versions\/2\.0\.14/);
-      assert.equal(section()!.querySelector('[data-program-authorization]'), null, 'no authorization for a shipped provider');
+      assert.ok(!section()!.querySelector('[data-program-authorization]'), 'no authorization for a shipped provider');
       assert.doesNotMatch(text(), /Blocked|never/);
       assert.match(section()!.querySelector('[data-program-state]')!.textContent!, /Installed/);
     });
