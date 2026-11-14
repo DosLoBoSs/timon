@@ -1,7 +1,13 @@
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 /** Staging dir for `timon-dev rebuild --app`: the live `.next` stays up
  *  until the new build has written prerender-manifest.json. Relative only —
  *  Next refuses an absolute `distDir`. */
 const distDir = process.env.NEXT_DIST_DIR || '.next';
+
+/** This folder, absolute: the root Next traces server files from. */
+const appDir = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Writes `<distDir>/bundle-modules.json`: for each client chunk file, the
@@ -57,6 +63,12 @@ const nextConfig = {
   // `node_modules` carried 25 000, each scanned by Windows Defender at
   // install time. A checkout and the Docker image keep the regular build.
   ...(process.env.TIMON_NEXT_STANDALONE === '1' ? { output: 'standalone' } : {}),
+  // Trace from the app itself, as Next 14 did. Next 15 otherwise picks the
+  // folder of the topmost lockfile it finds above the app (a stray one in the
+  // user's home qualifies), and the standalone output then nests the app
+  // under that path: `scripts/build-server.mjs` and the desktop packaging
+  // expect `server.js` and `node_modules` at its root.
+  outputFileTracingRoot: appDir,
   // No automatic 308 on URLs with a trailing slash.
   //
   // Next answers `308 Permanent Redirect` to `/path/` to send it to `/path`.
@@ -95,8 +107,15 @@ const nextConfig = {
   // (`next/dist/server/next-server.js`, `handleNextImageRequest`);
   // `src/lib/image-optimizer-off.test.ts` keeps both halves true.
   images: { unoptimized: true },
+  // Next 15 type-checks the generated route and page types at build time,
+  // and those now want `params` and `searchParams` as promises. The handlers
+  // still read them synchronously, which Next 15 keeps supporting at run
+  // time; their move to `await` is a separate change, which drops this flag.
+  // `npm run typecheck` still checks the sources.
+  typescript: { ignoreBuildErrors: true },
+  // Native addon: required at runtime from node_modules, never bundled.
+  serverExternalPackages: ['better-sqlite3'],
   experimental: {
-    serverComponentsExternalPackages: ['better-sqlite3'],
     externalDir: true,
   },
   // No redirect on `/` any more: the root serves the cockpit ((main)/page.tsx).
