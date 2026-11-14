@@ -13,7 +13,7 @@
  *   or a plugin could not replace it there.
  */
 
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useSyncExternalStore, type CSSProperties, type ReactElement } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, type CSSProperties, type ReactElement } from 'react';
 import { SlotSingle, useSlotEntries } from '@/lib/plugin-host/render';
 import { AGENT_MASCOT_SLOT } from '@/lib/plugin-host/slots';
 import { DEFAULT_LOOK, lookFurHex, normalizeAgentLook, type AgentLook } from './agent-look';
@@ -23,25 +23,10 @@ import { MascotAccessoryArt, MascotAccessoryIcon } from './mascot-accessories';
 import { exprPoints, furOf, headLayout, isDrawableEyes, luma, mix, ptsPath, shade, type MascotEyesKey } from './mascot-geometry';
 import { startMascotMotion, type MascotMotion } from './mascot-motion';
 import { isMascotState, stateExpression, type MascotState } from './mascot-states';
+import { usePrefersReducedMotion } from './reduced-motion';
 
-const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
-
-function subscribeMotion(onChange: () => void): () => void {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
-  const mq = window.matchMedia(REDUCED_MOTION);
-  mq.addEventListener?.('change', onChange);
-  return () => mq.removeEventListener?.('change', onChange);
-}
-function readMotion(): boolean {
-  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(REDUCED_MOTION).matches;
-}
-/** The server paints a still mascot; the client wakes it once it knows the user's preference. */
-const serverMotion = (): boolean => true;
-
-/** `true` when the user asked the system for reduced motion; follows the setting live. */
-export function usePrefersReducedMotion(): boolean {
-  return useSyncExternalStore(subscribeMotion, readMotion, serverMotion);
-}
+// Screens import it from here, beside the mascot it drives.
+export { usePrefersReducedMotion };
 
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 

@@ -9,7 +9,8 @@
  */
 import { useEffect, useRef, type ReactElement } from 'react';
 import { DEFAULT_LOOK, lookFurHex } from '../agent-look';
-import { AgentMascot, usePrefersReducedMotion, type AgentMascotProps } from '../agent-mascot';
+import { AgentMascot, type AgentMascotProps } from '../agent-mascot';
+import { usePrefersReducedMotion } from '../reduced-motion';
 import { isMascotState, STATES, type MascotState } from '../mascot-states';
 import { baseExpression } from './eyes';
 import type { Mascot3DEngine } from './engine';
