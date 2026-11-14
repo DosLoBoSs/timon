@@ -6,15 +6,23 @@
  * (`provider=<id>`, `lib/settings-navigation.ts`), or the "Add a provider"
  * page (`add-provider=[catalog|endpoint]`). The same parameter a refused
  * launch's card opens Settings with, so that card lands on its provider's page.
+ *
+ * Painted at the viewer's level (`lib/provider-access.ts`): `full` gets every
+ * section, the on/off switch and the editing below the list; `accounts` the
+ * list read only and, on a page, the Connection section alone, with its own
+ * subscription accounts; `none` has no tab, and a pasted link reads a refusal.
  */
 import type { ReactElement } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ProviderPage } from '@/components/provider-page/provider-page';
+import { useProviderAccess } from '@/hooks/use-me';
 import { ADD_PROVIDER_PARAM, PROVIDER_PARAM, addProviderChoice } from '@/lib/providers';
 import { useProviderNavigation } from '@/lib/settings-navigation';
+import { t } from '@/lib/i18n';
 import { AddProvider } from './add-provider';
 import { BackendsSettings } from './backends-settings';
 import { ProviderActivation } from './provider-activation';
+import { ProvidersList } from './providers-list';
 
 export function ProvidersSettings(): ReactElement {
   // Null outside the App Router (a test, a surface mounted elsewhere): the list.
@@ -22,9 +30,27 @@ export function ProvidersSettings(): ReactElement {
   const requested = params?.get(PROVIDER_PARAM) ?? null;
   const adding = params?.get(ADD_PROVIDER_PARAM) ?? null;
   const navigation = useProviderNavigation();
-  if (requested) return <ProviderPage requested={requested} onBack={navigation.back} onCanonical={navigation.show} HeaderAction={ProviderActivation} />;
-  if (adding !== null) {
+  const access = useProviderAccess();
+  if (access === null) return <p className="pt-4 text-[13px] text-muted-foreground">{t('common.loading')}</p>;
+  if (access === 'none') return <p className="pt-4 text-[13px] text-muted-foreground" data-providers-hidden>{t('providerList.hidden')}</p>;
+  const full = access === 'full';
+  if (requested) {
+    return (
+      <ProviderPage requested={requested} onBack={navigation.back} onCanonical={navigation.show}
+        {...(full ? { HeaderAction: ProviderActivation } : { sections: 'connection' as const })} />
+    );
+  }
+  // Adding a provider edits the shared configuration: the full level only.
+  if (full && adding !== null) {
     return <AddProvider choice={addProviderChoice(adding)} onChoose={navigation.choose} onBack={navigation.back} onAdded={navigation.show} />;
   }
-  return <BackendsSettings onOpenProvider={navigation.open} onAddProvider={navigation.add} />;
+  if (full) return <BackendsSettings onOpenProvider={navigation.open} onAddProvider={navigation.add} />;
+  return (
+    <div className="pt-4">
+      <p className="max-w-3xl text-[13px] leading-relaxed text-muted-foreground">{t('providerList.ownAccountsIntro')}</p>
+      <div className="mt-5 max-w-3xl">
+        <ProvidersList onOpen={navigation.open} readOnly />
+      </div>
+    </div>
+  );
 }

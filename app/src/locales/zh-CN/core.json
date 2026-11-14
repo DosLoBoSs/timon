@@ -1632,7 +1632,6 @@
       },
       "models": {
         "backends": "提供商",
-        "accounts": "订阅账号",
         "fallback": "自动切换",
         "breaker": "熔断机制",
         "quotas": "配额"
@@ -1692,8 +1691,7 @@
         "terminal": "shell 控制台 pty 字体"
       },
       "models": {
-        "backends": "claude codex 提供商 llm api 模型 默认 顺序",
-        "accounts": "订阅 账号 登录 连接 重连 多账号 claude codex chatgpt 套餐 设备代码",
+        "backends": "claude codex 提供商 llm api 模型 默认 顺序 订阅 账号 登录 连接 重连 多账号 chatgpt 套餐 设备代码",
         "fallback": "回退 备用 配额 切换 耗尽 冷却 兜底",
         "breaker": "熔断 无效轮次 暂停使用",
         "quotas": "用量 限额 点数 订阅 套餐 重置"
@@ -4044,7 +4042,6 @@
     }
   },
   "backendAccounts": {
-    "description": "同一提供商可使用多个订阅，每个订阅都是模型选择器中的独立选项（例如「Claude · 个人」）。你可以登录自己的账号，管理员可以登录任意账号。任务会话不会自行切换到其他订阅。",
     "loading": "正在加载账号…",
     "empty": "暂无订阅账号。任务会话将使用此设备上已登录的提供商账号。",
     "add": "添加账号",

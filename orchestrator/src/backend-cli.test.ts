@@ -433,13 +433,13 @@ test('a mission is refused every change, readably, and nothing moves', async () 
   dbApi.createMission(missionId, 'admin.agent', 'work', undefined, admin.id);
   const file = readFileSync(backendFile('cli-box'), 'utf8');
   const secrets = secretRows('cli-box').map((row) => row.id);
-  // The everyday mission token stops at the superadmin check, listing included.
+  // The everyday mission token stops at the Providers level, listing included: never in the mission cap.
   const plainMission = { TIMON_API_TOKEN: issueMissionApiToken(missionId), TIMON_MISSION_ID: missionId, TIMON_AGENT: 'admin.agent' };
   for (const args of [['list'], ['test', 'cli-box'], ['rm', 'cli-box'], ['add', 'Agent box', '--base-url', providerUrl, '--protocol', 'openai-responses', '--no-key']]) {
     const r = await timon(args, { env: plainMission });
     assert.equal(r.code, 2, `${args.join(' ')}: ${r.stderr}`);
-    assert.match(r.stderr, /refused \(403 operator_only\) — /);
-    assert.match(r.stderr, /not reachable from a mission/);
+    assert.match(r.stderr, /refused \(403 not_in_mission_cap\) — mission tokens never carry providers:manage/);
+    assert.match(r.stderr, /Do it from the UI/);
     assert.doesNotMatch(r.stderr, /^\{/m);
   }
   // A developer account's missions carry its authority: the strongest token an agent can hold.

@@ -1598,7 +1598,6 @@
       },
       "models": {
         "backends": "Provider",
-        "accounts": "Account in abbonamento",
         "fallback": "Cambio automatico",
         "breaker": "Circuit breaker",
         "quotas": "Quote"
@@ -1658,8 +1657,7 @@
         "terminal": "shell console pty font terminale"
       },
       "models": {
-        "backends": "claude codex provider llm api modello predefinito ordine model default order",
-        "accounts": "abbonamento account accesso login connetti riconnetti più claude codex chatgpt piano codice dispositivo subscription sign in plan device code",
+        "backends": "claude codex provider llm api modello predefinito ordine model default order abbonamento account accesso login connetti riconnetti più chatgpt piano codice dispositivo subscription sign in plan device code",
         "fallback": "fallback riserva quota cambio esaurito attesa ultima risorsa backup switch exhausted cooldown last resort",
         "breaker": "circuit breaker turni sterili escludi sterile turns sideline",
         "quotas": "limiti di utilizzo crediti abbonamento piano reset usage limits credits subscription plan"
@@ -3973,7 +3971,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Più abbonamenti dello stesso provider, ciascuno una scelta nei selettori dei modelli (“Claude · Perso”). Tu accedi con i tuoi account; un amministratore accede con quelli di chiunque. Una missione non passa mai da sola a un altro abbonamento.",
     "loading": "Caricamento degli account…",
     "empty": "Nessun account di abbonamento per ora: le missioni usano l’accesso del provider di questa macchina.",
     "add": "Aggiungi un account",

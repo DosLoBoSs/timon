@@ -1598,7 +1598,6 @@
       },
       "models": {
         "backends": "Dostawcy",
-        "accounts": "Konta subskrypcji",
         "fallback": "Auto-przełączanie",
         "breaker": "Bezpiecznik",
         "quotas": "Limity"
@@ -1658,8 +1657,7 @@
         "terminal": "powłoka konsola pty czcionka shell"
       },
       "models": {
-        "backends": "claude codex dostawca llm api model domyślny kolejność",
-        "accounts": "subskrypcja konto logowanie zaloguj połącz ponownie kilka claude codex chatgpt plan kod urządzenia",
+        "backends": "claude codex dostawca llm api model domyślny kolejność subskrypcja konto logowanie zaloguj połącz ponownie kilka chatgpt plan kod urządzenia",
         "fallback": "awaryjny zapasowy limit przełączanie wyczerpany przerwa ostatnia deska ratunku fallback",
         "breaker": "bezpiecznik jałowe tury odsunięcie circuit breaker",
         "quotas": "użycie limity kredyty subskrypcja plan reset"
@@ -3973,7 +3971,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Kilka subskrypcji tego samego dostawcy, każda jako wybór w selektorach modeli („Claude · Perso”). Logujesz własne konta; administrator loguje konta każdego. Misja nigdy nie przechodzi sama na inną subskrypcję.",
     "loading": "Wczytywanie kont…",
     "empty": "Brak kont subskrypcji: misje działają na logowaniu dostawcy na tej maszynie.",
     "add": "Dodaj konto",

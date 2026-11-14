@@ -5,10 +5,13 @@
  *   GET /api/providers/overview        every provider, the default one first
  *   GET /api/providers/overview/:id    one provider, 404 when unknown
  *
- * A browser session of a superadmin only, like the CLI binaries it shows: the
- * paths name the home folder and the account. Neither the daemon token nor a
- * mission token reads it. Read-only: every action stays on the route that owns
- * it (install, pin, authorize, accounts).
+ * A person signed in to the app, at a level of the Providers screen
+ * (`users/provider-access.ts`). `full` (the superadmin, `providers:manage`)
+ * reads everything, paths of this machine included. `accounts`
+ * (`providers:accounts`) reads every provider narrowed to the status line and
+ * its own subscription accounts (`narrowToOwnAccounts`). Anyone else, the
+ * daemon token and mission tokens included, is refused. Read-only: every
+ * action stays on the route that owns it (install, pin, authorize, accounts).
  *
  * Refreshing: nothing new on the stream. The screen reads it again on
  * `backends_changed` and `plugins_changed`, and after any action it takes.
@@ -20,8 +23,8 @@ import { loaderFromApp } from '../../plugins/runtime.js';
 import { ensureCliVersionsChecked } from '../../provider-cli-versions.js';
 import { acpRegistryService } from '../../providers/acp-registry/index.js';
 import type { AgentView } from '../../providers/acp-registry/service.js';
-import { requireSessionSuperadmin } from './binary-routes.js';
-import { providersOverview, type ProvidersOverview } from './provider-overview.js';
+import { requireProviderAccess, type ProviderAccess } from '../../users/provider-access.js';
+import { narrowToOwnAccounts, providersOverview, type ProvidersOverview } from './provider-overview.js';
 
 const PREFIX = '/api/providers/overview';
 /** Plugin ids, `<plugin>.<backend>`, `user:<backend>`, `catalog:<agent>`, `builtin:<backend>`. */
@@ -47,7 +50,14 @@ async function installedAcpAgents(): Promise<readonly AgentView[]> {
   }
 }
 
-async function overview(req: Request, res: Response, deps: RouteDeps): Promise<ProvidersOverview | null> {
+function reader(req: Request, res: Response): ProviderAccess | null {
+  return requireProviderAccess(req, res, 'accounts', {
+    session: true,
+    sessionReason: 'only a person signed in to the app reads the providers',
+  });
+}
+
+async function overview(req: Request, res: Response, deps: RouteDeps, access: ProviderAccess): Promise<ProvidersOverview | null> {
   const viewer = viewerFromRequest(req);
   if (!viewer) {
     res.status(401).json({ error: 'unauthorized' });
@@ -59,7 +69,8 @@ async function overview(req: Request, res: Response, deps: RouteDeps): Promise<P
     console.warn(`[providers] ACP agents unavailable: ${error.message}`);
     return [];
   });
-  return providersOverview({ plugins: loaderFromApp(req.app)?.list() ?? [], acpAgents, viewer });
+  const body = providersOverview({ plugins: loaderFromApp(req.app)?.list() ?? [], acpAgents, viewer });
+  return access === 'full' ? body : { ...body, providers: body.providers.map(narrowToOwnAccounts) };
 }
 
 function failed(res: Response, error: unknown): void {
@@ -70,9 +81,10 @@ function failed(res: Response, error: unknown): void {
 
 export function registerProviderOverviewRoutes(router: Router, deps: RouteDeps = {}): void {
   router.get(PREFIX, async (req, res) => {
-    if (!requireSessionSuperadmin(req, res)) return;
+    const access = reader(req, res);
+    if (!access) return;
     try {
-      const body = await overview(req, res, deps);
+      const body = await overview(req, res, deps, access);
       if (!body) return;
       res.setHeader('Cache-Control', 'no-store');
       res.json(body);
@@ -82,12 +94,13 @@ export function registerProviderOverviewRoutes(router: Router, deps: RouteDeps =
   });
 
   router.get(`${PREFIX}/:id`, async (req, res) => {
-    if (!requireSessionSuperadmin(req, res)) return;
+    const access = reader(req, res);
+    if (!access) return;
     const id = IdParam.safeParse(req.params.id);
     // zod's issues would quote the input: a fixed message instead.
     if (!id.success) return void res.status(400).json({ error: 'invalid_id' });
     try {
-      const body = await overview(req, res, deps);
+      const body = await overview(req, res, deps, access);
       if (!body) return;
       const provider = body.providers.find((entry) => entry.id === id.data);
       if (!provider) return void res.status(404).json({ error: 'provider_unknown' });

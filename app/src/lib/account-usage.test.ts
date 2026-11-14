@@ -72,17 +72,19 @@ test('a signed-out Copilot points at copilot login (TIM-0050)', () => {
   assert.doesNotMatch(idle, /Claude/);
 });
 
-test('a signed-out subscription account points at the settings, not at the CLI (TODO #330)', () => {
+test('a signed-out subscription account points at its provider\'s page, not at the CLI (TODO #330)', () => {
   setLocale('en');
-  const idle = renderToStaticMarkup(React.createElement(AccountUsageStatus, {
-    view: { kind: 'disconnected', backend: 'claude@k3f9a2b1c0' },
+  for (const providers of ['full', 'accounts'] as const) {
+    const shown = renderToStaticMarkup(React.createElement(AccountUsageStatus, {
+      view: { kind: 'disconnected', backend: 'claude@k3f9a2b1c0' }, providers,
+    }));
+    assert.match(shown, /Providers/, providers);
+    assert.doesNotMatch(shown, /\/login/, providers);
+  }
+  // Without the Providers screen, no path to a place the account cannot open.
+  const hidden = renderToStaticMarkup(React.createElement(AccountUsageStatus, {
+    view: { kind: 'disconnected', backend: 'claude@k3f9a2b1c0' }, providers: 'none',
   }));
-  assert.match(idle, /Subscription accounts/);
-  assert.doesNotMatch(idle, /\/login/);
-  // The superadmin has no such tab: the account is on its provider's page.
-  const admin = renderToStaticMarkup(React.createElement(AccountUsageStatus, {
-    view: { kind: 'disconnected', backend: 'claude@k3f9a2b1c0' }, superadmin: true,
-  }));
-  assert.match(admin, /Providers/);
-  assert.doesNotMatch(admin, /Subscription accounts/);
+  assert.doesNotMatch(hidden, /Providers|Settings/);
+  assert.match(hidden, /administrator/);
 });

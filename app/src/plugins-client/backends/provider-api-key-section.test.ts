@@ -43,6 +43,8 @@ test('the API key section writes the provider\'s key, reserved to it, and never 
   let overviewReads = 0;
   install('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
+    // The superadmin: the whole page (`lib/provider-access.ts`).
+    if (url === '/api/ui/auth/me') return Response.json({ user: { id: 'u-admin', is_superadmin: true }, can: {} });
     const method = init?.method ?? 'GET';
     addresses.push(url);
     if (url === '/api/ui/providers/overview') {

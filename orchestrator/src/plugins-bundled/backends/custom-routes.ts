@@ -5,10 +5,12 @@
  * hand, through the same schema (`backends/local-profiles.ts`): there is one
  * door, the UI merely holds it open.
  *
- * SUPERADMIN only, posed once on the prefix so a route added later is closed by
- * default. Two reasons, either one sufficient: a profile decides where the
- * prompts of every mission dispatched on it are sent, and saving a key grants
- * it `global` — a decision the vault itself reserves to a superadmin. Unlike
+ * FULL ACCESS to the Providers screen only (the superadmin, the daemon token,
+ * or `providers:manage`, `users/provider-access.ts`), posed once on the prefix
+ * so a route added later is closed by default. A profile decides where the
+ * prompts of every mission dispatched on it are sent, and saving a key files
+ * it in the vault reserved to that backend: both are what the `full` level
+ * is offered as, never what an account at `accounts` holds. Unlike
  * the historical open routes, an unauthenticated request is refused even on a
  * fresh install: nothing of first-run setup needs this surface. A change —
  * create, edit, test, remove — is moreover a person's gesture, never an
@@ -51,7 +53,7 @@ import { testBackendConnection, type BackendProtocol } from '../../backends/conn
 import { profileBaseUrl, resolveModelReasoning, type DeclaredReasoningControl } from '../../backends/reasoning.js';
 import type { EnvValue } from '../../backends/types.js';
 import { SecretStoreError, createSecret, deleteSecret, listSecrets, readSecretValue, updateSecret } from '../../secrets/store.js';
-import { requireSuperadmin } from '../../users/identity.js';
+import { requireProviderAccess } from '../../users/provider-access.js';
 import { auditRequest } from '../../users/audit-actor.js';
 import { deleteBackendIcon, readBackendIcon, saveBackendIcon } from '../../uploads.js';
 import { apiError } from '../../api-error.js';
@@ -429,7 +431,7 @@ function pruneIcons(candidates: readonly string[]): void {
 
 export function registerCustomBackendRoutes(router: Router): void {
   router.use('/api/backends/custom', (req: Request, res: Response, next) => {
-    if (!requireSuperadmin(req, res)) return;
+    if (!requireProviderAccess(req, res, 'full')) return;
     if (refuseBackendChange(req, res)) return;
     next();
   });
@@ -439,11 +441,11 @@ export function registerCustomBackendRoutes(router: Router): void {
    * refusals as a project icon (raster only — an SVG can carry script), and
    * the same client-side downscale before it gets here.
    *
-   * Posting one is a superadmin gesture, like the backend it illustrates;
-   * READING one is not: every selector in the product draws it.
+   * Posting one is a gesture of the `full` level, like the backend it
+   * illustrates; READING one is not: every selector in the product draws it.
    */
   router.post('/api/uploads/backends', (req: Request, res: Response) => {
-    if (!requireSuperadmin(req, res)) return;
+    if (!requireProviderAccess(req, res, 'full')) return;
     try {
       res.json(saveBackendIcon((req.body && typeof req.body === 'object') ? req.body as Record<string, unknown> : {}));
     } catch (err) {

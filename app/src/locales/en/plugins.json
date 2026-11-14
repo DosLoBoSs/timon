@@ -661,6 +661,8 @@
     }
   },
   "providerList": {
+    "hidden": "Your account has no access to the providers. Ask an administrator.",
+    "ownAccountsIntro": "The providers of this Timon. Open one to add and sign in your own subscription accounts.",
     "open": "Open {name}",
     "updateAvailable": "Update available",
     "search": "Search providers",

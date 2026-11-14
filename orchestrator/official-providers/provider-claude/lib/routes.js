@@ -1,11 +1,18 @@
-/** Preserve the write-only token endpoint used by the CLI and Settings. */
+/**
+ * Preserve the write-only token endpoint used by the CLI and Settings. Open to
+ * the superadmin (and the daemon token) and to the full level of the Providers
+ * screen (`providers:manage`), checked by the core's evaluator.
+ */
 export function registerClaudeTokenRoutes(ctx, token, usage) {
+  const managesProviders = () => {
+    try { ctx.assertPermission('providers:manage'); return true; } catch { return false; }
+  };
   function install(router, path) {
     const status = () => ({ ...token.claudeTokenStatus(), serviceOutsideSession: process.env.TIMON_SERVICE_KIND === 'launchd-system' });
     // No anonymous first-run exemption, no browser fallback to the daemon identity.
     router.use((req, res, next) => {
       if (!req.auth) return void res.status(401).json({ error: 'unauthorized' });
-      if (!req.auth.isSuperadmin) return void res.status(403).json({ error: 'forbidden' });
+      if (!req.auth.isSuperadmin && !managesProviders()) return void res.status(403).json({ error: 'forbidden' });
       next();
     });
     router.get(path, (_req, res) => res.json(status()));

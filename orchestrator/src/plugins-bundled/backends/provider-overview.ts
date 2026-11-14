@@ -511,3 +511,27 @@ export function providersOverview(sources: OverviewSources): ProvidersOverview {
     .map(({ view }) => view);
   return { providers, defaultBackend: snap.defaultBackend };
 }
+
+/**
+ * A provider as an account at the `accounts` level reads it
+ * (`users/provider-access.ts`): enough for the list's status line and for the
+ * Connection section with its OWN accounts. Nothing about this machine: no
+ * program, no path, no vault name, no reason (a reason may name a path), and
+ * not the sign-in of this computer's CLI, which is the operator's.
+ */
+export function narrowToOwnAccounts(provider: ProviderOverview): ProviderOverview {
+  return {
+    ...provider,
+    plugin: provider.plugin ? { ...provider.plugin, reason: null } : null,
+    backends: provider.backends.map((backend) => ({ ...backend, reason: null })),
+    connection: {
+      signedIn: null,
+      signInCommand: null,
+      signInThen: null,
+      acceptsAccounts: provider.connection.acceptsAccounts,
+      accounts: provider.connection.accounts.filter((account) => account.mine),
+    },
+    secret: { required: provider.secret.required, present: provider.secret.present, names: [] },
+    programs: [],
+  };
+}

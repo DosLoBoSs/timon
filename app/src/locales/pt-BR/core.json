@@ -1598,7 +1598,6 @@
       },
       "models": {
         "backends": "Provedores",
-        "accounts": "Contas de assinatura",
         "fallback": "Troca automática",
         "breaker": "Disjuntor",
         "quotas": "Cotas"
@@ -1658,8 +1657,7 @@
         "terminal": "shell console pty fonte font"
       },
       "models": {
-        "backends": "claude codex provedor llm api modelo padrão ordem provider model default order",
-        "accounts": "assinatura conta entrar login conectar reconectar várias claude codex chatgpt plano código dispositivo subscription account sign in connect several plan device code",
+        "backends": "claude codex provedor llm api modelo padrão ordem provider model default order assinatura conta entrar login conectar reconectar várias chatgpt plano código dispositivo subscription account sign in connect several plan device code",
         "fallback": "fallback reserva cota troca esgotada espera último recurso backup quota switch exhausted cooldown last resort",
         "breaker": "disjuntor circuit breaker turnos estéreis sterile turns sideline",
         "quotas": "limites de uso créditos assinatura plano redefinição usage limits credits subscription plan reset"
@@ -3973,7 +3971,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Várias assinaturas do mesmo provedor, cada uma uma opção nos seletores de modelo (\"Claude · Perso\"). Você entra nas suas próprias contas; um administrador entra nas de qualquer pessoa. Uma missão nunca passa para outra assinatura por conta própria.",
     "loading": "Carregando contas…",
     "empty": "Nenhuma conta de assinatura ainda: as missões rodam no login do provedor deste computador.",
     "add": "Adicionar uma conta",
