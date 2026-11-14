@@ -8,7 +8,7 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { createRole, deleteRole, listRoles, getRole, resetRoleDirectives, updateRole } from '../../agent-roles.js';
+import { createRole, deleteRole, isSafeRoleIconSvg, listRoles, getRole, resetRoleDirectives, updateRole } from '../../agent-roles.js';
 import { canonicalAgentName, createEphemeralAgent, deleteAgent, getAgent, restoreAgent, setAgentOrchestrates, teamVisibleAgents, clientTurnState, getTurnState, isAutonomousMission, killRunningForAgent, listAgents, loadConfig, patchAgentConfig, renamedTriggerReason, spawnAgent, upsertAgent } from '../../agent.js';
 import { config } from '../../config/load.js';
 import { dropTrashedAgentBrowserProfiles, resolveBrowserProfile } from '../../browser-profiles.js';
@@ -417,7 +417,7 @@ export function registerRoutes(app: express.IRouter): void {
     id: z.string().regex(/^[a-z][a-z0-9-]{1,31}$/),
     label: z.string().trim().min(1),
     iconName: z.string(),
-    iconSvg: z.string().trim().min(1),
+    iconSvg: z.string().trim().refine(isSafeRoleIconSvg),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     default_directives: z.string().optional(),
     default_model: z.string().optional(),
