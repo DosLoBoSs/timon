@@ -11,7 +11,7 @@ import { statusTone, type ProviderOverview } from '@/lib/provider-overview';
 
 export type ProviderGroups = { connected: ProviderOverview[]; others: ProviderOverview[] };
 
-/** Case and accents ignored: "Clé" is found by "cle". */
+/** Case and accents ignored: a name with accents is found when typed without them. */
 function fold(text: string): string {
   return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
