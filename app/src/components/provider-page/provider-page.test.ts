@@ -220,3 +220,26 @@ test('an unknown provider says so; a refused read says why, never in the daemon\
     await denied.unmount();
   }
 });
+
+test('a blocked provider says why under its header; another status keeps its reasons to itself', async () => {
+  const broken = provider('user:broken', {
+    name: 'broken', origin: 'user', pluginId: null, status: 'blocked',
+    backends: [{ id: 'broken', label: 'broken', active: false, disabled: false, reason: 'not valid JSON', modelCount: 0, defaultModel: null, isDefault: false, remote: false }],
+  });
+  const missing = provider('user:missing', {
+    name: 'missing', origin: 'user', pluginId: null, status: 'not-connected',
+    backends: [{ id: 'missing', label: 'missing', active: false, disabled: false, reason: 'missing credential', modelCount: 0, defaultModel: null, isDefault: false, remote: true }],
+  });
+  const m = await mount(() => ({ providers: [broken, missing], defaultBackend: null }));
+  try {
+    const reasons = () => Array.from(document.querySelectorAll('[data-provider-reason]')).map((node) => node.textContent);
+    await m.render(m.React.createElement(m.page.ProviderPage, { requested: 'user:broken', onBack: () => {} }));
+    await m.until(() => document.querySelector('h3')?.textContent === 'broken', 'the blocked provider');
+    assert.deepEqual(reasons(), ['not valid JSON']);
+    await m.render(m.React.createElement(m.page.ProviderPage, { requested: 'user:missing', onBack: () => {} }));
+    await m.until(() => document.querySelector('h3')?.textContent === 'missing', 'the other provider');
+    assert.deepEqual(reasons(), [], 'its own sections say what is missing');
+  } finally {
+    await m.unmount();
+  }
+});
