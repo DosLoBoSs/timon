@@ -22,3 +22,9 @@
 ### model
 
 > `readonly` **model**: [`PermissionModel`](PermissionModel.md)
+
+***
+
+### supportedModes?
+
+> `readonly` `optional` **supportedModes?**: readonly [`PermissionMode`](PermissionMode.md)[]
