@@ -295,6 +295,19 @@ const access = (policy: ReturnType<typeof resolveFence>, path: string) => {
   return write ? 'rw' : read ? (exec ? 'rx' : 'r') : 'none';
 };
 
+test('fence: a read-only workspace keeps the working tree and its git directories readable only', () => {
+  const writing = resolveFence(cfg(), fullTarget());
+  const reading = resolveFence(cfg(), fullTarget({ workspace: 'ro' }));
+  for (const path of [`${TH}/worktrees/task-1/src/a.ts`, `${FAKE_HOME}/code/app/.git/objects/x`]) {
+    assert.equal(access(writing, path), 'rw', path);
+    assert.equal(access(reading, path), 'rx', path);
+  }
+  // The CLI's own state is not the workspace: it stays writable.
+  for (const path of [`${TH}/tmp/missions/${MISSION}/f`, `${TH}/backend-accounts/acc-mine/x`, '/tmp/x']) {
+    assert.equal(access(reading, path), 'rw', path);
+  }
+});
+
 test('fence: no private entry of the Timon home is reachable, copies included', () => {
   const policy = resolveFence(cfg(), fullTarget());
   assert.equal(policy.enabled, true);

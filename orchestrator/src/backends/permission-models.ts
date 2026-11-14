@@ -88,3 +88,110 @@ export function resolveSupportedPermissionMode(
   }
   return UNSUPPORTED_MODE_FALLBACK;
 }
+
+/* ── A CLI's own sandbox inside Timon's mission fence ───────────────────── */
+
+/**
+ * A CLI whose own sandbox cannot run inside Timon's mission fence
+ * (`PermissionStrategy.nestedSandbox`). Kernel sandboxes do not nest: bwrap
+ * needs a mount namespace the fence's `no_new_privs` and Landlock domain
+ * refuse (`bwrap: Failed to make / slave`), and Seatbelt refuses a second
+ * profile (`sandbox_apply: Operation not permitted`). A fenced launch turns
+ * the CLI's sandbox off as declared here, and the fence applies the level
+ * that sandbox would have: under a read-only level, the mission's working
+ * tree is read-only. An unfenced launch is left exactly as the provider built it.
+ */
+export type NestedSandboxDeclaration = {
+  /**
+   * The option of the launch that names the CLI's sandbox level (`--sandbox`,
+   * as `--sandbox <level>` or `--sandbox=<level>`), the value that turns the
+   * sandbox off, and the levels under which the CLI writes nothing.
+   */
+  readonly level?: {
+    readonly flag: string;
+    readonly off: string;
+    readonly readOnly?: readonly string[];
+  };
+  /** Arguments put in front of a fenced launch's own, that keep the CLI's sandbox off whatever its settings say. */
+  readonly offArgs?: readonly string[];
+};
+
+const NESTED_FLAG = /^--?[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
+const NESTED_MAX_ARGS = 8;
+const NESTED_MAX_ARG_CHARS = 512;
+
+/** Why `value` cannot be a `nestedSandbox` declaration, as sentences for its author; `[]` when it can. */
+export function nestedSandboxProblems(value: unknown, where = 'permission.nestedSandbox'): string[] {
+  const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const plainArg = (v: unknown): v is string => typeof v === 'string' && v !== '' && v.length <= NESTED_MAX_ARG_CHARS && !v.includes('\0');
+  if (!isRecord(value)) return [`\`${where}\` must be \`{ level?, offArgs? }\``];
+  const problems: string[] = [];
+  const unknownKeys = Object.keys(value).filter((key) => key !== 'level' && key !== 'offArgs');
+  if (unknownKeys.length > 0) problems.push(`\`${where}\` has unknown keys ${unknownKeys.map((k) => JSON.stringify(k)).join(', ')}; known: 'level', 'offArgs'`);
+  if (value.level === undefined && value.offArgs === undefined) {
+    problems.push(`\`${where}\` must say how to turn the CLI's sandbox off: \`level\`, \`offArgs\` or both`);
+  }
+  if (value.level !== undefined) {
+    const level = value.level;
+    if (!isRecord(level)) problems.push(`\`${where}.level\` must be \`{ flag, off, readOnly? }\``);
+    else {
+      if (typeof level.flag !== 'string' || !NESTED_FLAG.test(level.flag)) {
+        problems.push(`\`${where}.level.flag\` must be an option name such as '--sandbox'`);
+      }
+      if (!plainArg(level.off)) problems.push(`\`${where}.level.off\` must be the non-empty value that turns the CLI's sandbox off`);
+      if (level.readOnly !== undefined) {
+        if (!Array.isArray(level.readOnly) || !level.readOnly.every(plainArg)) {
+          problems.push(`\`${where}.level.readOnly\` must be a list of level values`);
+        } else if ((level.readOnly as unknown[]).includes(level.off)) {
+          problems.push(`\`${where}.level.readOnly\` cannot list the value that turns the sandbox off`);
+        }
+      }
+    }
+  }
+  if (value.offArgs !== undefined) {
+    const args = value.offArgs;
+    if (!Array.isArray(args) || args.length === 0 || args.length > NESTED_MAX_ARGS || !args.every(plainArg)) {
+      problems.push(`\`${where}.offArgs\` must be 1 to ${NESTED_MAX_ARGS} non-empty arguments of at most ${NESTED_MAX_ARG_CHARS} characters`);
+    }
+  }
+  return problems;
+}
+
+export type FencedArgs = {
+  readonly args: string[];
+  /** The CLI's sandbox would have written nothing: the fence keeps the working tree read-only. */
+  readonly readOnly: boolean;
+  /** The declared level option is not in the launch: nothing was replaced. */
+  readonly levelMissing: boolean;
+};
+
+/**
+ * The arguments of a launch the fence wraps, with the CLI's own sandbox turned
+ * off as `declaration` says. Every occurrence of the level option is replaced,
+ * and the most restrictive one decides: a single read-only level keeps the
+ * working tree read-only. Pure.
+ */
+export function argsUnderFence(args: readonly string[], declaration: NestedSandboxDeclaration | undefined): FencedArgs {
+  if (!declaration) return { args: [...args], readOnly: false, levelMissing: false };
+  const out = [...(declaration.offArgs ?? []), ...args];
+  const level = declaration.level;
+  if (!level) return { args: out, readOnly: false, levelMissing: false };
+  const readOnlyLevels = level.readOnly ?? [];
+  const prefix = `${level.flag}=`;
+  let found = false;
+  let readOnly = false;
+  for (let i = (declaration.offArgs ?? []).length; i < out.length; i++) {
+    const arg = out[i] ?? '';
+    if (arg === level.flag && i + 1 < out.length) {
+      found = true;
+      if (readOnlyLevels.includes(out[i + 1] ?? '')) readOnly = true;
+      out[i + 1] = level.off;
+      i++;
+    } else if (arg.startsWith(prefix)) {
+      found = true;
+      if (readOnlyLevels.includes(arg.slice(prefix.length))) readOnly = true;
+      out[i] = `${prefix}${level.off}`;
+    }
+  }
+  return { args: out, readOnly, levelMissing: !found };
+}

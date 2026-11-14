@@ -60,6 +60,7 @@ import { listSkillFiles, readSkillFile, SkillFileError } from '../../skill-files
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { apiError } from '../../api-error.js';
+import { launchErrorStatus, missionLaunchErrorBody } from '../../resources.js';
 
 /**
  * Aggregate "agents worth showing right now" — derives a single visual
@@ -1029,7 +1030,7 @@ export function registerRoutes(app: express.IRouter): void {
       }
       res.status(201).json({ agent_name: agent.name, mission_id: missionId });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(launchErrorStatus(err, 400)).json(missionLaunchErrorBody(err));
     }
   });
 

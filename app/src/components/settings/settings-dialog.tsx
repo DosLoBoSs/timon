@@ -23,6 +23,7 @@ import { PluginWebhooksPane } from '@/components/plugin-webhooks-pane';
 import { PluginConnectionsSettings } from '@/components/settings/plugin-connections';
 import { DevicesSettings } from '@/components/settings/devices-settings';
 import { DeveloperModeSettings } from '@/components/settings/developer-mode-settings';
+import { MissionIsolationSettings } from '@/components/settings/mission-isolation-settings';
 import { LanguageSettings } from '@/components/settings/language-settings';
 import { PushToggle } from '@/components/push-toggle';
 import { VoiceDictationSettings } from '@/components/voice-dictation-settings';
@@ -545,6 +546,8 @@ function TabContent({
         return <DevicesSettings />;
       case 'developer':
         return <DeveloperModeSettings />;
+      case 'isolation':
+        return <MissionIsolationSettings />;
     }
   }
   return (

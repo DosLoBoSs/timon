@@ -86,6 +86,7 @@ import {
 } from './backend-fallback.js';
 import { backendStillDry } from './backend-recheck.js';
 import { resolvedPermissionModeFor } from './backends/catalog.js';
+import { nestedSandboxOf } from './backends/capabilities.js';
 import { settingBool, settingNum } from './settings.js';
 import { profileLimits, watchFencedLaunch, wrapMissionLaunch } from './resources.js';
 import { getHost, type Host } from './host/index.js';
@@ -1929,11 +1930,14 @@ async function spawnMissionProcess(
   const project = cfg.project ?? projectFromCwd(cwd) ?? '';
   // The fence (`resources.ts`) is the innermost wrapper: what it needs beyond
   // the working directory is the mission's identity, from which it reopens
-  // the mission's own folders of the Timon home and nothing else.
+  // the mission's own folders of the Timon home and nothing else. A CLI whose
+  // own sandbox cannot run inside it says how to turn that sandbox off; the
+  // fence then applies the level instead, and only when it does apply.
   const launch = wrapMissionLaunch(backendBin, spec.args, missionId, {
     cwd: cwd ?? undefined,
     backend: backend.name,
     timonHome: TIMON_HOME,
+    nestedSandbox: nestedSandboxOf(backend.name),
     ...missionFenceTarget({ missionId, agentName, project, backend: backend.name, cwd: cwd ?? null, mcpServers: cfg.mcp_servers ?? [] }),
   });
   // Vault slice computed HERE so the inject journal (§8 / §12.8) records the

@@ -40,7 +40,7 @@ import {
   type InterruptionDetail,
   type InterruptionReason,
 } from './interruption.js';
-import { profileLimits } from './resources.js';
+import { MissionFenceRefusedError, profileLimits } from './resources.js';
 import { gitTaskRefusal } from './task-git.js';
 import { spawnWideningRefusal } from './users/privileged-overrides.js';
 import { isMirrorTask } from './task-mirror.js';
@@ -1157,7 +1157,9 @@ async function dispatch(): Promise<void> {
         blockOnRefusedSpawn(task, err.backend);
         continue;
       }
-      const fails = (spawnFailures.get(taskId) ?? 0) + 1;
+      // `enforce` without a fence refuses every launch the same way until
+      // someone changes the machine or the setting: retrying is noise.
+      const fails = err instanceof MissionFenceRefusedError ? MAX_SPAWN_FAILURES : (spawnFailures.get(taskId) ?? 0) + 1;
       spawnFailures.set(taskId, fails);
       console.error(`[dispatcher] failed to spawn task ${taskId} (${fails}/${MAX_SPAWN_FAILURES}):`, msg);
       if (fails >= MAX_SPAWN_FAILURES) {

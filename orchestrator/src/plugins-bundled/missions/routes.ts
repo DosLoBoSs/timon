@@ -67,6 +67,7 @@ import type { PromptPresentation } from '../../prompt-presentation.js';
 import { servedIconUrl } from '../../uploads.js';
 import { TitleModelBodySchema, effectiveTitleModel, instanceTitleModel, parseTitleModelChoice, serializeTitleModelChoice, titleBackends, titleChoiceRefusal } from '../../mission-title-model.js';
 import { apiError } from '../../api-error.js';
+import { launchErrorStatus, missionLaunchErrorBody } from '../../resources.js';
 import { findReplyTarget, resolveReplyTo } from '../../reply-to.js';
 
 const TitleBodySchema = z.object({ title: z.string().max(200).nullable().optional() });
@@ -443,7 +444,7 @@ async function deliverMissionTurn(
         },
       };
     }
-    return { status: 500, body: { error: (err as Error).message } };
+    return { status: launchErrorStatus(err, 500), body: { ...missionLaunchErrorBody(err) } };
   } finally {
     if (!delivered) discardChatAttachments(persisted);
   }
@@ -1444,8 +1445,8 @@ export function registerRoutes(
       // backend/model refused.
       const status = err instanceof TurnInFlightError ? 409
         : err instanceof ContextTooLargeError ? 413
-          : 400;
-      res.status(status).json({ error: (err as Error).message });
+          : launchErrorStatus(err, 400);
+      res.status(status).json(missionLaunchErrorBody(err));
     }
   });
 

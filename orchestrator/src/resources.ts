@@ -79,12 +79,14 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { cpus, homedir, loadavg } from 'node:os';
 import { basename, join } from 'node:path';
 import { config } from './config/load.js';
+import { apiError } from './api-error.js';
 import { getHost } from './host/index.js';
 import { FENCE_EXIT, fenceLaunchDecision, type FenceStatus } from './host/fence.js';
 import {
   isFenceSegment, missionTmpDir, resolveFence, type FenceMode, type FenceTarget, type IsolationTarget,
 } from './host/isolation.js';
 import type { FenceMechanism, HostFence, HostFenceWitness } from './host/types.js';
+import { argsUnderFence, type NestedSandboxDeclaration } from './backends/permission-models.js';
 import { hasSystemd, systemctl, systemctlCallCount } from './host/systemd.js';
 import {
   instancePrefix,
@@ -422,6 +424,8 @@ export type MissionFenceOutcome =
     readonly policyFile: string;
     /** The mission's own temporary folder, to hand the CLI as `TMPDIR`; null when it could not be made. */
     readonly tmpDir: string | null;
+    /** `ro` when the fence applies a read-only level in place of the CLI's own sandbox. */
+    readonly workspace: 'rw' | 'ro';
   }
   /** `warning` is null only when the configuration turned the fence off. */
   | { readonly state: 'unfenced'; readonly warning: string | null; readonly tampered: boolean };
@@ -434,6 +438,26 @@ export class MissionFenceRefusedError extends Error {
     super(message);
     this.name = 'MissionFenceRefusedError';
   }
+}
+
+/**
+ * The body a route answers for a launch that failed. A fence refusal keeps a
+ * code the interface translates, so the person reads why Timon refused, in
+ * their language, rather than a launch error like any other; anything else
+ * keeps its message, as before.
+ */
+/**
+ * 503 for a fence refusal: this machine cannot serve the launch until its
+ * kernel or its setting changes. Never 409, which the chat reads as "the
+ * agent is still talking" and answers by queueing the message.
+ */
+export function launchErrorStatus(err: unknown, otherwise: number): number {
+  return err instanceof MissionFenceRefusedError ? 503 : otherwise;
+}
+
+export function missionLaunchErrorBody(err: unknown): { error: string; code?: string } {
+  if (err instanceof MissionFenceRefusedError) return { ...apiError('mission_fence_refused', err.message) };
+  return { error: err instanceof Error ? err.message : String(err) };
 }
 
 /**
@@ -550,6 +574,12 @@ const UNRESOLVED_GRANT = 'the path does not resolve to an existing file or folde
 export type FenceMissionOptions = {
   mode?: FenceMode;
   fence?: HostFence | undefined;
+  /**
+   * How the CLI's own sandbox turns off (`PermissionStrategy.nestedSandbox`):
+   * applied to a fenced launch only. An unfenced one keeps the arguments the
+   * provider built, its own sandbox included.
+   */
+  nestedSandbox?: NestedSandboxDeclaration | undefined;
   /** Where the decision and the dropped grants are reported. */
   warn?: (line: string) => void;
 };
@@ -595,15 +625,26 @@ export function fenceMissionCommand(
 
   sweepFencePolicies(target.timonHome);
   const { tmpDir } = prepareFencedFolders(target);
-  const policy = resolveFence({ ...cfg, host: { ...cfg.host, isolation: { ...cfg.host.isolation, filesystem: mode } } }, target);
+  // The CLI's own sandbox cannot run inside the fence: it is turned off, and
+  // the fence takes over the level it would have applied. Only here, once the
+  // fence is known to apply: an unfenced launch keeps the CLI's sandbox.
+  const nested = argsUnderFence(args, options.nestedSandbox);
+  if (nested.levelMissing) {
+    warn(`${label} the CLI's sandbox level option (${options.nestedSandbox?.level?.flag ?? ''}) is not in its launch: its own sandbox may fail inside the fence`);
+  }
+  const workspace = nested.readOnly || target.workspace === 'ro' ? 'ro' : 'rw';
+  const policy = resolveFence(
+    { ...cfg, host: { ...cfg.host, isolation: { ...cfg.host.isolation, filesystem: mode } } },
+    { ...target, workspace },
+  );
   for (const { path, reason } of policy.ignored) {
     if (reason !== UNRESOLVED_GRANT) warn(`${label} fence grant on ${path} dropped: ${reason}`);
   }
   const policyFile = fencePolicyFile(target.timonHome, unit);
   try {
-    const wrapped = fence.wrap(policy, cmd, args, policyFile);
+    const wrapped = fence.wrap(policy, cmd, nested.args, policyFile);
     reportFenceReady(fence.mechanism, status.abi);
-    return { ...wrapped, fence: { state: 'fenced', mechanism: fence.mechanism, policyFile, tmpDir } };
+    return { ...wrapped, fence: { state: 'fenced', mechanism: fence.mechanism, policyFile, tmpDir, workspace } };
   } catch (err) {
     return unfenced({ state: 'unsupported', reason: `the fence policy cannot be applied (${(err as Error).message})`, abi: status.abi });
   }
@@ -739,7 +780,10 @@ export function watchFencedLaunch(
 }
 
 /** A launch target: what the resource scope reads, and what the fence needs once `timonHome` is known. */
-export type MissionLaunchTarget = IsolationTarget & Partial<FenceTarget>;
+export type MissionLaunchTarget = IsolationTarget & Partial<FenceTarget> & {
+  /** Cf. `FenceMissionOptions.nestedSandbox`. */
+  nestedSandbox?: NestedSandboxDeclaration | undefined;
+};
 
 /** Wraps a spawn command in a confined systemd scope + nice +
  *  ionice, around the mission fence. The fence is applied whenever the
@@ -766,7 +810,9 @@ export function wrapMissionLaunch(
 ): MissionLaunch {
   const unit = missionScopeUnit(missionId);
   const fenced: MissionLaunch = target?.timonHome
-    ? fenceMissionCommand(cmd, args, unit, { ...target, timonHome: target.timonHome, missionId: target.missionId ?? missionId })
+    ? fenceMissionCommand(cmd, args, unit, { ...target, timonHome: target.timonHome, missionId: target.missionId ?? missionId }, {
+      ...(target.nestedSandbox ? { nestedSandbox: target.nestedSandbox } : {}),
+    })
     : { cmd, args, fence: null };
   if (!guardEnabled() || !hasSystemd() || wrapUsable === false) return fenced;
   return { ...getHost().confine(fenced.cmd, fenced.args, unit, target), fence: fenced.fence };

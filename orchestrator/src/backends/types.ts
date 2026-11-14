@@ -24,6 +24,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { Readable, Writable } from 'node:stream';
 import type { ProviderAgentConfig } from './provider-agent-config.js';
 import type { ReasoningControl } from './reasoning-control.js';
+import type { NestedSandboxDeclaration } from './permission-models.js';
 
 /**
  * Name of an LLM backend. Deliberately open (`string`): the source of truth
@@ -1019,6 +1020,11 @@ export interface Dialect {
    * every mode is honoured.
    */
   readonly supportedPermissionModes?: readonly string[];
+  /**
+   * How a fenced launch turns the CLI's own sandbox off
+   * (`PermissionStrategy.nestedSandbox`). Absent = nothing to turn off.
+   */
+  readonly nestedSandbox?: NestedSandboxDeclaration;
   /**
    * Kinds of thinking control this dialect can send for a CUSTOM provider's
    * model, read from the model's resolved `reasoning`. Absent = levels only:
