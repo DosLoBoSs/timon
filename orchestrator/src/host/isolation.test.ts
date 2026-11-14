@@ -15,7 +15,7 @@
  * and every mission then launches with no MemoryMax, no nice, no ionice.
  */
 import { strict as assert } from 'node:assert';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -88,6 +88,24 @@ test('TIMON_HOME and its ancestors are never masked, the private files in it alw
     MISSION_TIMON_ZONES.refused.map((name) => `${timonHome}/${name}`).sort(),
     'nothing else under the Timon home is masked by this launcher',
   );
+});
+
+test('the masking launcher masks the copies of a private file, listed or read from the folder', () => {
+  const timonHome = `${FAKE_HOME}/.timon`;
+  const listed = resolveIsolation(cfg(), {
+    home: FAKE_HOME, timonHome, timonHomeEntries: ['timon.config.json.bak-20261025', 'license.state.json.tmp-7', 'skills'],
+  });
+  assert.ok(listed.deny.includes(`${timonHome}/timon.config.json.bak-20261025`));
+  assert.ok(listed.deny.includes(`${timonHome}/license.state.json.tmp-7`));
+  assert.ok(!listed.deny.includes(`${timonHome}/skills`));
+
+  // Without a list, the folder itself is read.
+  const real = mkdtempSync(join(tmpdir(), 'timon-isolation-home-'));
+  writeFileSync(join(real, 'timon.config.json.bak-pre-x'), '{}');
+  writeFileSync(join(real, 'notes.md'), '');
+  const read = resolveIsolation(cfg(), { home: FAKE_HOME, timonHome: real });
+  assert.ok(read.deny.includes(join(real, 'timon.config.json.bak-pre-x')));
+  assert.ok(!read.deny.includes(join(real, 'notes.md')));
 });
 
 test('neither the cwd nor allow reopens a private file of the Timon home', () => {

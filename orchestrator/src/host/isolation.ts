@@ -52,6 +52,7 @@
  * so the pid and every kill path stay as they are. Unlike the masking, it is
  * an allow-list inside the Timon home and keeps the user's home read-only.
  */
+import { readdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import type { TimonConfig } from '../config/schema.js';
@@ -166,6 +167,19 @@ export function timonRefusedPaths(timonHome: string, entries: readonly string[] 
   return names.map((name) => join(timonHome, name));
 }
 
+/**
+ * The top-level entry names of the Timon home, for `timonRefusedPaths`, when
+ * the caller did not list them. An unreadable folder gives no name: the fixed
+ * list still applies.
+ */
+function listTimonHome(timonHome: string): string[] {
+  try {
+    return readdirSync(timonHome);
+  } catch {
+    return [];
+  }
+}
+
 export type IsolationTarget = {
   /** Working directory of the mission. Never masked, ancestors included. */
   cwd?: string | undefined;
@@ -175,6 +189,8 @@ export type IsolationTarget = {
   timonHome?: string | undefined;
   /** Overridable for tests; defaults to the daemon user's home. */
   home?: string | undefined;
+  /** Top-level entries of the Timon home; listed from the folder when absent, so the copies get masked. */
+  timonHomeEntries?: readonly string[] | undefined;
 };
 
 export type IsolationPolicy = {
@@ -202,8 +218,10 @@ function contains(parent: string, child: string): boolean {
 }
 
 /**
- * The policy for one mission launch. Pure: same inputs, same output, no
- * process state read beyond the defaults it is given.
+ * The policy for one mission launch. Same inputs, same output; the only thing
+ * read from the filesystem is the list of the Timon home's top-level entries,
+ * when the target does not give it, so the copies of a private file
+ * (`timon.config.json.bak-…`) are masked like the file.
  *
  * Three guards, and they are the point of the function — a deny list that
  * swallows one of these turns a hardening measure into an outage:
@@ -266,7 +284,9 @@ export function resolveIsolation(config: TimonConfig, target: IsolationTarget = 
   // Added after every spared path on purpose: neither the cwd nor `allow` can
   // reopen them.
   if (target.timonHome) {
-    for (const path of timonRefusedPaths(resolve(target.timonHome))) {
+    const timonHome = resolve(target.timonHome);
+    const entries = target.timonHomeEntries ?? listTimonHome(timonHome);
+    for (const path of timonRefusedPaths(timonHome, entries)) {
       if (!deny.includes(path)) deny.push(path);
     }
   }
