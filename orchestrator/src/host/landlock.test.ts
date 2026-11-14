@@ -121,7 +121,7 @@ function fakePolicy(isolation: Record<string, unknown> = {}): FencePolicy {
   return resolveFence(cfg(isolation), {
     timonHome: TH, home: HOME, platform: 'linux', backend: 'claude',
     cwd: `${TH}/worktrees/task-1`, gitDirs: [`${HOME}/code/app/.git`],
-    missionId: MISSION, agent: 'timon.coder', account: 'accmine',
+    missionId: MISSION, agent: 'timon.coder', account: 'accmine', realpath: FAKE.realpath,
   });
 }
 
@@ -172,7 +172,7 @@ test('a path is rendered in its resolved spelling, the only one the kernel match
     '/home': ['u'],
     [HOME]: ['.ssh', 'code'],
   }, { [`${HOME}/.ssh`]: '/data/ssh' });
-  const rules = renderLandlockPolicy(resolveFence(cfg(), { timonHome: TH, home: HOME, platform: 'linux' }), linked);
+  const rules = renderLandlockPolicy(resolveFence(cfg(), { timonHome: TH, home: HOME, platform: 'linux', realpath: linked.realpath }), linked);
   assert.equal(landlockLevel(rules, '/data/ssh/key'), 'none', 'the refusal follows the link to its target');
   assert.equal(landlockLevel(rules, '/data/work'), 'ro');
 });
