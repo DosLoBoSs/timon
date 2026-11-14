@@ -82,7 +82,7 @@ import { config } from './config/load.js';
 import { getHost } from './host/index.js';
 import { FENCE_EXIT, fenceLaunchDecision, type FenceStatus } from './host/fence.js';
 import {
-  isFenceSegment, missionTmpDir, resolveFence, type FenceMode, type FenceTarget, type IsolationTarget,
+  agentPackageCacheDir, isFenceSegment, missionTmpDir, resolveFence, type FenceMode, type FenceTarget, type IsolationTarget,
 } from './host/isolation.js';
 import type { FenceMechanism, HostFence } from './host/types.js';
 import { hasSystemd, systemctl, systemctlCallCount } from './host/systemd.js';
@@ -422,6 +422,8 @@ export type MissionFenceOutcome =
     readonly policyFile: string;
     /** The mission's own temporary folder, to hand the CLI as `TMPDIR`; null when it could not be made. */
     readonly tmpDir: string | null;
+    /** The agent's package cache (`agentPackageCacheDir`), for the package managers; null without one. */
+    readonly packageCacheDir: string | null;
   }
   /** `warning` is null only when the configuration turned the fence off. */
   | { readonly state: 'unfenced'; readonly warning: string | null; readonly tampered: boolean };
@@ -514,7 +516,7 @@ function reportFenceReady(mechanism: FenceMechanism, abi: number): void {
  * the CLI would then find neither its temporary folder nor its agent's memory.
  * Created owner-only, like the rest of the Timon home.
  */
-function prepareFencedFolders(target: FenceTarget): { tmpDir: string | null } {
+function prepareFencedFolders(target: FenceTarget): { tmpDir: string | null; packageCacheDir: string | null } {
   const make = (dir: string): boolean => {
     try {
       mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -529,12 +531,17 @@ function prepareFencedFolders(target: FenceTarget): { tmpDir: string | null } {
     const dir = missionTmpDir(target.timonHome, target.missionId);
     if (make(dir)) tmpDir = dir;
   }
-  // Only under an agent folder that exists: a name alone never creates an agent.
+  // Only for an agent folder that exists: a name alone never creates an agent.
+  let packageCacheDir: string | null = null;
   if (target.agent && isFenceSegment(target.agent)) {
     const agentDir = join(target.timonHome, 'agents', target.agent);
-    if (existsSync(agentDir)) make(join(agentDir, 'memory'));
+    if (existsSync(agentDir)) {
+      make(join(agentDir, 'memory'));
+      const cache = agentPackageCacheDir(target.timonHome, target.agent);
+      if (make(cache)) packageCacheDir = cache;
+    }
   }
-  return { tmpDir };
+  return { tmpDir, packageCacheDir };
 }
 
 /**
@@ -591,7 +598,7 @@ export function fenceMissionCommand(
   }
 
   sweepFencePolicies(target.timonHome);
-  const { tmpDir } = prepareFencedFolders(target);
+  const { tmpDir, packageCacheDir } = prepareFencedFolders(target);
   const policy = resolveFence({ ...cfg, host: { ...cfg.host, isolation: { ...cfg.host.isolation, filesystem: mode } } }, target);
   for (const { path, reason } of policy.ignored) {
     if (reason !== UNRESOLVED_GRANT) warn(`${label} fence grant on ${path} dropped: ${reason}`);
@@ -600,7 +607,7 @@ export function fenceMissionCommand(
   try {
     const wrapped = fence.wrap(policy, cmd, args, policyFile);
     reportFenceReady(fence.mechanism, status.abi);
-    return { ...wrapped, fence: { state: 'fenced', mechanism: fence.mechanism, policyFile, tmpDir } };
+    return { ...wrapped, fence: { state: 'fenced', mechanism: fence.mechanism, policyFile, tmpDir, packageCacheDir } };
   } catch (err) {
     return unfenced({ state: 'unsupported', reason: `the fence policy cannot be applied (${(err as Error).message})`, abi: status.abi });
   }

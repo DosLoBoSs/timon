@@ -55,7 +55,7 @@ test('a fence that answers wraps the CLI, with the policy under the folder no mi
   assert.deepEqual(launch, {
     cmd: '/opt/timon/timon-fence',
     args: ['--policy', policyFile, '--', '/usr/bin/claude', '-p'],
-    fence: { state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: join(TH, 'tmp', 'missions', MISSION) },
+    fence: { state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: join(TH, 'tmp', 'missions', MISSION), packageCacheDir: null },
   });
   assert.equal(fence.policies[0]?.enabled, true);
   assert.ok(fence.policies[0]?.rw.includes(TARGET.cwd), 'the policy is the daemon\'s own projection of the target');
@@ -188,9 +188,21 @@ test('the mission\'s own folders are made before the policy, so the fence grants
   assert.deepEqual(warnings, []);
 });
 
-test('a name alone never creates an agent folder', () => {
-  fenceMissionCommand('/usr/bin/claude', [], 'unit-5', { ...TARGET, agent: 'nobody' }, { mode: 'auto', fence: fakeFence({ available: true }), warn: () => {} });
+test('the agent\'s package cache is made before the policy, granted, and handed back for the environment', () => {
+  const fence = fakeFence({ available: true });
+  const launch = fenceMissionCommand('/usr/bin/claude', [], 'unit-6', { ...TARGET, agent: 'coder' }, { mode: 'auto', fence, warn: () => {} });
+  const cache = join(TH, 'provider-cache', '.agents', 'coder');
+  assert.ok(launch.fence?.state === 'fenced' && launch.fence.packageCacheDir === cache);
+  assert.ok(existsSync(cache));
+  assert.ok(fence.policies[0]?.rw.includes(cache));
+  assert.ok(!fence.policies[0]?.rw.some((p) => p === join(TH, 'provider-cache') || p === join(TH, 'provider-cache', '.agents')));
+});
+
+test('a name alone never creates an agent folder, nor a package cache', () => {
+  const launch = fenceMissionCommand('/usr/bin/claude', [], 'unit-5', { ...TARGET, agent: 'nobody' }, { mode: 'auto', fence: fakeFence({ available: true }), warn: () => {} });
   assert.equal(existsSync(join(TH, 'agents', 'nobody')), false);
+  assert.equal(existsSync(join(TH, 'provider-cache', '.agents', 'nobody')), false);
+  assert.ok(launch.fence?.state === 'fenced' && launch.fence.packageCacheDir === null);
 });
 
 test('only the launcher\'s own words, with its "cannot fence here" codes, count as a fence failure', () => {
@@ -209,7 +221,7 @@ test('a launcher that could not fence turns the fence off for the next launches,
   writeFileSync(policyFile, 'x');
   const stderr = new PassThrough();
   const proc = Object.assign(new EventEmitter(), { stderr });
-  const outcome: MissionFenceOutcome = { state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: null };
+  const outcome: MissionFenceOutcome = { state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: null, packageCacheDir: null };
   try {
     watchFencedLaunch(proc, outcome);
     let read = '';
@@ -233,7 +245,7 @@ test('a launcher that could not fence turns the fence off for the next launches,
 test('a CLI that fails on its own leaves the fence on', async () => {
   const stderr = new PassThrough();
   const proc = Object.assign(new EventEmitter(), { stderr });
-  watchFencedLaunch(proc, { state: 'fenced', mechanism: 'landlock', policyFile: join(TH, 'run', 'fence', 'other.policy'), tmpDir: null });
+  watchFencedLaunch(proc, { state: 'fenced', mechanism: 'landlock', policyFile: join(TH, 'run', 'fence', 'other.policy'), tmpDir: null, packageCacheDir: null });
   stderr.on('data', () => {});
   stderr.write('Error: invalid API key\n');
   await new Promise((resolve) => setImmediate(resolve));
@@ -322,7 +334,7 @@ test('the real chain: nice, ionice and timon-fence exec down to the CLI, which k
 test('what the CLI says before the mission reads its stderr waits for the mission\'s reader', async () => {
   const stderr = new PassThrough();
   const proc = Object.assign(new EventEmitter(), { stderr });
-  watchFencedLaunch(proc, { state: 'fenced', mechanism: 'landlock', policyFile: join(TH, 'run', 'fence', 'early.policy'), tmpDir: null });
+  watchFencedLaunch(proc, { state: 'fenced', mechanism: 'landlock', policyFile: join(TH, 'run', 'fence', 'early.policy'), tmpDir: null, packageCacheDir: null });
   stderr.write('early line\n');
   await new Promise((resolve) => setImmediate(resolve));
   let read = '';

@@ -104,6 +104,16 @@ test('the CLI is spawned through the fence launcher, its own temporary folder as
   assert.ok(run.policy.rw.includes(tmp));
 });
 
+test('the CLI\'s package managers download into its agent\'s cache, which the policy opens', async () => {
+  const run = await launch();
+  const cache = join(TIMON_HOME, 'provider-cache', '.agents', 'fence.witness');
+  assert.equal(run.env.npm_config_cache, join(cache, 'npm'));
+  assert.equal(run.env.npm_config_cache_dir, join(cache, 'pnpm', 'cache'));
+  assert.equal(run.env.npm_config_store_dir, join(cache, 'pnpm', 'store'));
+  assert.equal(run.env.UV_CACHE_DIR, join(cache, 'uv'));
+  assert.ok(run.policy.rw.includes(cache));
+});
+
 test('the policy opens the mission\'s worktree, repository and provider folders, and nothing else of the Timon home', async () => {
   const run = await launch();
   const { policy } = run;
@@ -115,7 +125,7 @@ test('the policy opens the mission\'s worktree, repository and provider folders,
   for (const path of policy.rw) {
     if (!path.startsWith(`${TIMON_HOME}/`)) continue;
     assert.ok(
-      [WT, join(TIMON_HOME, 'tmp', 'missions'), join(TIMON_HOME, 'provider-runs', 'provider-codex'), join(TIMON_HOME, 'provider-cache', 'provider-codex'), join(TIMON_HOME, 'agents', 'fence.witness')]
+      [WT, join(TIMON_HOME, 'tmp', 'missions'), join(TIMON_HOME, 'provider-runs', 'provider-codex'), join(TIMON_HOME, 'provider-cache', 'provider-codex'), join(TIMON_HOME, 'provider-cache', '.agents', 'fence.witness'), join(TIMON_HOME, 'agents', 'fence.witness')]
         .some((own) => path === own || path.startsWith(`${own}/`)),
       `${path} is one of the mission's own folders`,
     );
@@ -144,6 +154,10 @@ test('without a fence on the machine, auto launches the bare CLI with the plain 
   assert.match(seen.cmd, /codex$/);
   assert.equal(seen.env.DISABLE_AUTOUPDATER, undefined);
   assert.notEqual(seen.env.TMPDIR?.includes(join('tmp', 'missions')), true);
+  // Unfenced, the package managers keep the user's own caches.
+  for (const name of ['npm_config_cache', 'npm_config_cache_dir', 'npm_config_store_dir', 'UV_CACHE_DIR']) {
+    assert.notEqual(seen.env[name]?.includes('.agents'), true, name);
+  }
 });
 
 test('enforce refuses a mission it cannot fence, before any process starts', async () => {

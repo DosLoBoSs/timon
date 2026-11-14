@@ -109,6 +109,7 @@ import { missionProcessDir, trackMissionProcess } from './host/mission-processes
 import { closeLaunchSeal, openLaunchSeal } from './backends/launch-seal.js';
 import { assertSpawnPinned, buildSealedSpawn } from './backends/sealed-spawn.js';
 import { parkProviderScratch } from './backends/provider-scratch.js';
+import { packageCacheEnv } from './backends/package-cache-env.js';
 import { launchBackendName, launchForMission, replaceMissionLaunch, resolveLaunchBackend } from './backends/account-launch.js';
 import { servedIconUrl } from './uploads.js';
 import {
@@ -1983,6 +1984,11 @@ async function spawnMissionProcess(
     // none of them earned a place on the write list.
     if (launch.fence.tmpDir) procEnv.TMPDIR = launch.fence.tmpDir;
     procEnv.DISABLE_AUTOUPDATER = '1';
+    // `npx -y`, `pnpm dlx` and `uvx` write their caches, which the read-only
+    // home refuses: they get the agent's own. The CLI hands its environment
+    // to the MCP servers it starts (claude, grok), or the names to pass
+    // (codex, `serializeCodexMcpToml`).
+    if (launch.fence.packageCacheDir) Object.assign(procEnv, packageCacheEnv(launch.fence.packageCacheDir));
   }
   // Issued once: a second call would revoke the row the first one handed out.
   const missionToken = seal ? seal.token() : procEnv.TIMON_API_TOKEN ?? '';
