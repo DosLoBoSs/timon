@@ -7619,7 +7619,12 @@ function PermissionCard({
                   {inputPreview}
                 </pre>
               )}
-              {perm.script_previews && <ScriptPreviewList previews={perm.script_previews} />}
+              {perm.script_previews && (
+                <ScriptPreviewList
+                  previews={perm.script_previews}
+                  remembered={offersAllow && effectiveState === 'pending' && (perm.scopes ?? []).length > 0}
+                />
+              )}
               {perm.script_changed && <ScriptChangedNotice paths={perm.script_changed} />}
               <div className="mt-3 flex items-center gap-2">
                 {effectiveState === 'pending' ? (

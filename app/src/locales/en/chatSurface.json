@@ -51,14 +51,17 @@
         "symlink_outside": "A link that leads outside the project folder: not read. Check its target yourself before you allow.",
         "missing": "File not found.",
         "not_file": "Not a regular file: not read.",
-        "unresolved": "The path depends on the shell (variable, home folder, wildcard): not read.",
+        "unresolved": "The path depends on the shell (variable, home folder, wildcard, a command nested too deep): not read.",
         "not_found": "No such script in package.json.",
-        "binary": "Binary file: no excerpt."
+        "binary": "Binary file: no excerpt.",
+        "unreadable": "Could not be opened: not read.",
+        "too_large": "Too large to fingerprint (over 32 MiB): Allow will be refused. Run it yourself if you trust it."
       },
       "unfold": "Show all {count, plural, one {# line} other {# lines}}",
       "fold": "Fold",
       "truncated": "First lines only: the file goes on.",
-      "changed": "Not run: {paths} changed after this card showed it. The agent was asked to request again."
+      "changed": "Not run: {paths} changed after this card showed it. The agent was asked to request again.",
+      "remembered": "A remembered approval holds only while these files stay as shown here."
     }
   }
 }

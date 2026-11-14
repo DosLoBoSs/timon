@@ -9,7 +9,8 @@ export const SCRIPT_PREVIEW_KINDS = ['file', 'npm_script', 'make_target'] as con
 export type ScriptPreviewKind = (typeof SCRIPT_PREVIEW_KINDS)[number];
 
 export const SCRIPT_PREVIEW_STATUSES = [
-  'ok', 'binary', 'outside_cwd', 'symlink_outside', 'missing', 'not_file', 'unresolved', 'not_found',
+  'ok', 'binary', 'outside_cwd', 'symlink_outside', 'missing', 'not_file', 'unreadable', 'unresolved', 'not_found',
+  'too_large',
 ] as const;
 export type ScriptPreviewStatus = (typeof SCRIPT_PREVIEW_STATUSES)[number];
 

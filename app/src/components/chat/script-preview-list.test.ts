@@ -31,9 +31,9 @@ async function mount(ctx: TestContext) {
   });
   return {
     act,
-    render: (previews: ScriptPreview[], changed: string[] = []) => act(() => {
+    render: (previews: ScriptPreview[], changed: string[] = [], remembered = false) => act(() => {
       root.render(React.createElement(React.Fragment, null,
-        React.createElement(ScriptPreviewList, { previews }),
+        React.createElement(ScriptPreviewList, { previews, remembered }),
         React.createElement(ScriptChangedNotice, { paths: changed })));
     }),
   };
@@ -84,4 +84,21 @@ test('an unread file gets its reason and no excerpt; a changed one says it was n
   const text = document.body.textContent ?? '';
   assert.match(text, /leads outside the project folder: not read/);
   assert.match(text, /Not run: run_tests\.sh changed/);
+});
+
+test('a card that offers to remember the approval says it lapses when the files change', async (t) => {
+  const w = await mount(t);
+  await w.render([short]);
+  assert.equal(document.querySelector('[data-script-remembered]'), null);
+  await w.render([short], [], true);
+  assert.match(document.querySelector('[data-script-remembered]')?.textContent ?? '', /only while these files stay as shown/);
+});
+
+test('a file too large to fingerprint shows its head and says Allow will be refused', async (t) => {
+  assert.deepEqual(scriptPreviewsOf([{ kind: 'file', path: 'big.sh', status: 'too_large', size: 40e6, excerpt: 'echo big' }]).length, 1);
+  assert.deepEqual(scriptPreviewsOf([{ kind: 'file', path: 'x', status: 'unreadable' }]).length, 1);
+  const w = await mount(t);
+  await w.render([{ kind: 'file', path: 'big.sh', status: 'too_large', size: 40e6, excerpt: 'echo big' }]);
+  assert.match(document.body.textContent ?? '', /Allow will be refused/);
+  assert.match(document.querySelector('pre')?.textContent ?? '', /echo big/);
 });

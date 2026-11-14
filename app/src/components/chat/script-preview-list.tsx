@@ -71,7 +71,13 @@ function PreviewItem({ preview }: { preview: ScriptPreview }): ReactElement {
   );
 }
 
-export function ScriptPreviewList({ previews }: { previews: ScriptPreview[] }): ReactElement | null {
+/**
+ * `remembered`: the card offers to remember the approval. The daemon binds it
+ * to the state of these files, so the card says it lapses when they change.
+ */
+export function ScriptPreviewList(
+  { previews, remembered = false }: { previews: ScriptPreview[]; remembered?: boolean },
+): ReactElement | null {
   if (previews.length === 0) return null;
   return (
     <div className="mt-2 flex min-w-0 flex-col gap-1.5" data-script-previews="">
@@ -82,6 +88,11 @@ export function ScriptPreviewList({ previews }: { previews: ScriptPreview[] }): 
       {previews.map((p) => (
         <PreviewItem key={`${p.kind}:${p.path}:${p.name ?? ''}`} preview={p} />
       ))}
+      {remembered && (
+        <div className="text-[11.5px] text-muted-foreground" data-script-remembered="">
+          {t('chatSurface.scriptPreview.remembered')}
+        </div>
+      )}
     </div>
   );
 }
