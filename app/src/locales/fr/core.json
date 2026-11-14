@@ -2755,6 +2755,7 @@
     "save": "Enregistrer",
     "cancel": "Annuler",
     "editor": "Modifier cette injection",
+    "freshConversation": "L’agent repartira d’une nouvelle conversation à sa prochaine mission : l’ancienne contenait encore cette règle ({agents}).",
     "skillMode": { "include": "catalogue", "import": "importé" },
     "skillVia": {
       "global": "tous les agents",

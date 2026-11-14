@@ -2964,6 +2964,7 @@
     "save": "저장",
     "cancel": "취소",
     "editor": "이 주입 편집",
+    "freshConversation": "에이전트는 다음 미션에서 새 대화를 시작합니다. 이전 대화에는 아직 이 규칙이 남아 있었습니다 ({agents}).",
     "skillMode": {
       "include": "카탈로그",
       "import": "가져옴"

@@ -2964,6 +2964,7 @@
     "save": "Speichern",
     "cancel": "Abbrechen",
     "editor": "Diese Injektion bearbeiten",
+    "freshConversation": "Der Agent beginnt bei seiner nächsten Mission eine neue Unterhaltung: Die bisherige enthielt diese Regel noch ({agents}).",
     "skillMode": {
       "include": "Katalog",
       "import": "importiert"

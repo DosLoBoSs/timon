@@ -2964,6 +2964,7 @@
     "save": "Opslaan",
     "cancel": "Annuleren",
     "editor": "Deze injectie bewerken",
+    "freshConversation": "De agent begint bij zijn volgende missie een nieuw gesprek: het vorige bevatte deze regel nog ({agents}).",
     "skillMode": {
       "include": "catalogus",
       "import": "geïmporteerd"

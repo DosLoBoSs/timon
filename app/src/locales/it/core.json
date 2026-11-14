@@ -2964,6 +2964,7 @@
     "save": "Salva",
     "cancel": "Annulla",
     "editor": "Modifica questa iniezione",
+    "freshConversation": "L’agente inizierà una nuova conversazione alla prossima missione: quella precedente conteneva ancora questa regola ({agents}).",
     "skillMode": {
       "include": "catalogo",
       "import": "importata"
