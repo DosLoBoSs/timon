@@ -429,6 +429,26 @@ export function missionTmpDir(timonHome: string, missionId: string): string {
 }
 
 /**
+ * Folder of `provider-cache/` holding one package cache per agent. Its name
+ * starts with `.` so that no provider plugin id, which `FENCE_SEGMENT` makes
+ * start with a letter or a digit, can ever be granted it as its own cache.
+ */
+const AGENT_CACHES = '.agents';
+
+/**
+ * The package cache of one agent: where a fenced mission's `npx`, `pnpm dlx`
+ * and `uvx` download, since the user's own caches sit in the read-only home.
+ * One per agent, shared by its missions only: a mission of another agent
+ * cannot plant a package that this agent's MCP servers then run, and the
+ * user's own `~/.npm`, which programs outside Timon read, stays out of reach.
+ * Under `provider-cache/` because it is a cache: never exported, rebuilt on
+ * demand. The caller checks `agent` with `isFenceSegment`.
+ */
+export function agentPackageCacheDir(timonHome: string, agent: string): string {
+  return join(timonHome, 'provider-cache', AGENT_CACHES, agent);
+}
+
+/**
  * Where a grant comes from, which decides how far it may reach into the Timon home:
  * - `own`: a folder the fence builds itself from the mission's identity (its
  *   account, its scratch folders), each segment checked by `FENCE_SEGMENT`;
@@ -453,7 +473,7 @@ type GrantSource = 'own' | 'own-memory' | 'mission' | 'config';
 const OWNER_ZONES: readonly (readonly string[])[] = Object.freeze([
   ['backend-accounts'], // backend-accounts/<account>: a sign-in, credentials included
   ['provider-runs'], // provider-runs/<plugin>/<mission>: a mission's provider home
-  ['provider-cache'], // provider-cache/<plugin>: shared by every mission of that provider
+  ['provider-cache'], // provider-cache/<plugin>: shared by every mission of that provider; .agents/<agent>: one agent's package cache
   ['codex-runs'], // codex-runs/<mission>: CODEX_HOME of one mission
   ['grok-runs'], // grok-runs/<mission>: GROK_HOME of one mission
   ['tmp', 'missions'], // tmp/missions/<mission>: TMPDIR of one mission
@@ -627,6 +647,8 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
   if (plugin) grant(inTimon('provider-cache', plugin), 'rw', 'own');
   if (account) grant(inTimon('backend-accounts', account), 'rw', 'own');
   if (agent) {
+    // Writable and executable: `npx` runs the package it installed there.
+    grant(agentPackageCacheDir(timonHome, agent), 'rw', 'own');
     grant(inTimon('agents', agent), 'ro', 'own');
     grant(inTimon('agents', agent, 'memory'), 'rw', 'own-memory');
     if (missionId) grant(inTimon('agents', agent, 'missions', missionId, 'memory'), 'rw', 'own-memory');
