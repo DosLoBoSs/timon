@@ -34,6 +34,15 @@ test('a colour in upper case is the same fur; a missing accessory is none', () =
   });
 });
 
+test('a fur off the palette is any #rrggbb, stored lower case', () => {
+  assert.equal(parseAgentLook({ ...BASE, color: '#123456' })?.color, '#123456');
+  assert.equal(parseAgentLook({ ...BASE, color: '#A1B2C3' })?.color, '#a1b2c3');
+  assert.equal(readAgentLook({ ...BASE, color: '#0f0f0f' })?.color, '#0f0f0f');
+  for (const color of ['#fff', '#1234567', '123456', '#gggggg', 'red']) {
+    assert.throws(() => parseAgentLook({ ...BASE, color }), /look\.color: unknown value/, color);
+  }
+});
+
 test('null clears', () => {
   assert.equal(parseAgentLook(null), null);
 });
@@ -41,7 +50,7 @@ test('null clears', () => {
 test('an unknown value is refused with the field and the accepted values', () => {
   assert.throws(() => parseAgentLook({ ...BASE, shape: 'star' }),
     /^Error: look\.shape: unknown value "star" \(expected one of squircle, tri, gem, round, bean, cloud, hex\)$/);
-  assert.throws(() => parseAgentLook({ ...BASE, color: '#123456' }), /look\.color: unknown value "#123456" \(expected one of #d4a373/);
+  assert.throws(() => parseAgentLook({ ...BASE, color: '#12345' }), /look\.color: unknown value "#12345" \(expected one of #d4a373.*, or any #rrggbb colour\)/);
   assert.throws(() => parseAgentLook({ ...BASE, eyes: 'glossy' }), /look\.eyes: unknown value "glossy"/);
   assert.throws(() => parseAgentLook({ ...BASE, acc: 'sword' }), /look\.acc: unknown value "sword" \(expected one of none, loupe/);
   assert.throws(() => parseAgentLook({ ...BASE, shape: 3 }), /look\.shape: unknown value number/);

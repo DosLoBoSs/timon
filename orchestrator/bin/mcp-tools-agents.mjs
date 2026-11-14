@@ -31,12 +31,16 @@ export const AGENT_AVATAR_MODES = ['emoji', 'image', 'mascot'];
  */
 export const MASCOT_PART_ID_PATTERN = '^[a-z0-9-]{3,40}:[a-z0-9][a-z0-9-]{0,39}$';
 
+/** Any fur off the palette, `#rrggbb` (same pattern as `AGENT_LOOK_CUSTOM_COLOR_RE`, kept equal by the parity test). */
+export const AGENT_LOOK_CUSTOM_COLOR_PATTERN = '^#[0-9a-fA-F]{6}$';
+
 /** One look field: a product value, or a pack's part checked by the daemon. */
-function lookField(values, description) {
+function lookField(values, description, extra = []) {
   return {
     anyOf: [
       { type: 'string', enum: values },
       { type: 'string', pattern: MASCOT_PART_ID_PATTERN, description: 'A part of an installed and enabled mascot pack, `<plugin>:<part>`.' },
+      ...extra,
     ],
     description,
   };
@@ -47,7 +51,8 @@ const LOOK_SCHEMA = {
   type: 'object',
   properties: {
     shape: lookField(AGENT_LOOK_SHAPES, 'Skull of the mascot.'),
-    color: lookField(AGENT_LOOK_COLORS, 'Fur colour, #rrggbb from this palette, or a pack\'s fur.'),
+    color: lookField(AGENT_LOOK_COLORS, 'Fur colour: #rrggbb from this palette, any other #rrggbb, or a pack\'s fur.',
+      [{ type: 'string', pattern: AGENT_LOOK_CUSTOM_COLOR_PATTERN, description: 'Any other fur, #rrggbb.' }]),
     eyes: lookField(AGENT_LOOK_EYES, 'Resting eyes.'),
     acc: lookField(AGENT_LOOK_ACCESSORIES, 'Job accessory held by the mascot.'),
   },
