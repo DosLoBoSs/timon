@@ -2005,7 +2005,7 @@ async function spawnMissionProcess(
     });
   }
   // A launcher that cannot fence on this machine after all switches the fence off for the next launches.
-  watchFencedLaunch(proc, launch.fence);
+  void watchFencedLaunch(proc, launch.fence);
   journalInjectedSecrets({ missionId, agent: agentName, injected: vault?.injected ?? [] });
   requested?.consume();
   // On disk, for whoever comes after a daemon that dies without ending it.

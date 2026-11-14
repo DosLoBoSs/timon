@@ -17,12 +17,14 @@ import { fileURLToPath } from 'node:url';
 import { TimonConfigSchema } from './config/schema.js';
 import { findFenceBinary, probeFence } from './host/fence.js';
 import { createLandlockFence } from './host/landlock.js';
+import { createSeatbeltFence } from './host/darwin.js';
+import { SANDBOX_EXEC } from './host/seatbelt.js';
 import { createLinuxHost } from './host/linux.js';
 import { hasSystemd } from './host/systemd.js';
 import type { FencePolicy } from './host/isolation.js';
-import type { HostFence, HostFenceProbe } from './host/types.js';
+import type { HostFence, HostFenceProbe, HostFenceWitness } from './host/types.js';
 import {
-  fenceLaunchFailure, fenceMissionCommand, fencePolicyFile, hostFenceStatus, MissionFenceRefusedError, noteFenceLaunchFailure,
+  fenceLaunchFailure, fenceMissionCommand, fencePolicyFile, fenceWitnessFailure, hostFenceStatus, MissionFenceRefusedError, noteFenceLaunchFailure,
   resetFenceLaunchFailureForTest, watchFencedLaunch, wrapMissionLaunch, type MissionFenceOutcome,
 } from './resources.js';
 
@@ -33,17 +35,50 @@ const TARGET = { timonHome: TH, cwd: join(TH, 'worktrees', 'task-1'), missionId:
 mkdirSync(TARGET.cwd, { recursive: true });
 mkdirSync(join(TH, 'agents', 'coder'), { recursive: true });
 
-function fakeFence(probe: HostFenceProbe, wrap?: HostFence['wrap']): HostFence & { policies: FencePolicy[] } {
+const WITNESS_OK: HostFenceWitness = { ran: true, status: 0, stderr: '' };
+
+function fakeFence(
+  probe: HostFenceProbe,
+  wrap?: HostFence['wrap'],
+  witness: HostFenceWitness = WITNESS_OK,
+): HostFence & { policies: FencePolicy[]; witnessed: string[] } {
   const policies: FencePolicy[] = [];
+  const witnessed: string[] = [];
   return {
     mechanism: 'landlock',
     policies,
+    witnessed,
     probe: () => probe,
     wrap: wrap ?? ((policy, cmd, args, policyFile) => {
       policies.push(policy);
       return { cmd: '/opt/timon/timon-fence', args: ['--policy', policyFile, '--', cmd, ...args] };
     }),
+    witness: async (policyFile) => {
+      witnessed.push(policyFile);
+      return witness;
+    },
   };
+}
+
+/** A fenced launch the test ends by hand: what its CLI wrote on stderr, then its exit code. */
+async function endLaunch(outcome: MissionFenceOutcome, fence: HostFence | undefined, stderrText: string, code: number | null): Promise<string> {
+  const stderr = new PassThrough();
+  const proc = Object.assign(new EventEmitter(), { stderr });
+  const settled = watchFencedLaunch(proc, outcome, { fence });
+  let read = '';
+  stderr.on('data', (chunk: Buffer) => { read += chunk.toString(); }); // the mission's own reader
+  stderr.write(stderrText);
+  await new Promise((resolve) => setImmediate(resolve));
+  proc.emit('close', code);
+  await settled;
+  return read;
+}
+
+function fencedOutcome(name: string, mechanism: 'landlock' | 'seatbelt' = 'landlock'): MissionFenceOutcome & { state: 'fenced' } {
+  const policyFile = join(TH, 'run', 'fence', `${name}.policy`);
+  mkdirSync(join(TH, 'run', 'fence'), { recursive: true });
+  writeFileSync(policyFile, 'x');
+  return { state: 'fenced', mechanism, policyFile, tmpDir: null };
 }
 
 test('a fence that answers wraps the CLI, with the policy under the folder no mission reaches', () => {
@@ -193,7 +228,7 @@ test('a name alone never creates an agent folder', () => {
   assert.equal(existsSync(join(TH, 'agents', 'nobody')), false);
 });
 
-test('only the launcher\'s own words, with its "cannot fence here" codes, count as a fence failure', () => {
+test('only the launcher\'s own words, with its "cannot fence here" codes, raise the suspicion of a fence failure', () => {
   assert.equal(fenceLaunchFailure('landlock', 71, 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n'),
     'timon-fence: cannot apply the Landlock ruleset: Operation not permitted');
   assert.equal(fenceLaunchFailure('landlock', 69, 'timon-fence: Landlock ABI 2 or later is required (found 0)'), 'timon-fence: Landlock ABI 2 or later is required (found 0)');
@@ -203,42 +238,181 @@ test('only the launcher\'s own words, with its "cannot fence here" codes, count 
   assert.equal(fenceLaunchFailure('seatbelt', 71, 'sandbox-exec: sandbox_apply: Operation not permitted'), 'sandbox-exec: sandbox_apply: Operation not permitted');
 });
 
-test('a launcher that could not fence turns the fence off for the next launches, and its policy goes', async () => {
-  const policyFile = join(TH, 'run', 'fence', 'watched.policy');
-  mkdirSync(join(TH, 'run', 'fence'), { recursive: true });
-  writeFileSync(policyFile, 'x');
-  const stderr = new PassThrough();
-  const proc = Object.assign(new EventEmitter(), { stderr });
-  const outcome: MissionFenceOutcome = { state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: null };
+test('a launcher that could not fence, and fails its witness run too, turns the fence off for the next launches', async () => {
+  const outcome = fencedOutcome('watched');
+  const fence = fakeFence({ available: true, abi: 6 }, undefined, {
+    ran: true, status: 71, stderr: 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n',
+  });
   try {
-    watchFencedLaunch(proc, outcome);
-    let read = '';
-    stderr.on('data', (chunk: Buffer) => { read += chunk.toString(); }); // the mission's own reader
-    stderr.write('timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n');
-    await new Promise((resolve) => setImmediate(resolve));
-    proc.emit('close', 71);
+    const read = await endLaunch(outcome, fence, 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n', 71);
     assert.match(read, /Operation not permitted/, 'the mission\'s reader still gets every byte');
-    assert.equal(existsSync(policyFile), false);
-    const status = hostFenceStatus(fakeFence({ available: true, abi: 6 }));
-    assert.equal(status.state, 'unsupported');
+    assert.deepEqual(fence.witnessed, [outcome.policyFile], 'the witness runs on the launch\'s own policy');
+    assert.equal(existsSync(outcome.policyFile), false, 'the policy goes once the witness is done');
+    assert.equal(hostFenceStatus(fakeFence({ available: true, abi: 6 })).state, 'unsupported');
     assert.throws(
       () => fenceMissionCommand('/usr/bin/claude', [], 'u', TARGET, { mode: 'enforce', fence: fakeFence({ available: true, abi: 6 }), warn: () => {} }),
       (err: unknown) => err instanceof MissionFenceRefusedError && /Operation not permitted/.test(err.message),
     );
+    // A real failure is said once: a second one finds the fence already off and asks nothing.
+    const again = fencedOutcome('watched-again');
+    await endLaunch(again, fence, 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n', 71);
+    assert.equal(fence.witnessed.length, 1);
   } finally {
     resetFenceLaunchFailureForTest();
   }
 });
 
-test('a CLI that fails on its own leaves the fence on', async () => {
-  const stderr = new PassThrough();
-  const proc = Object.assign(new EventEmitter(), { stderr });
-  watchFencedLaunch(proc, { state: 'fenced', mechanism: 'landlock', policyFile: join(TH, 'run', 'fence', 'other.policy'), tmpDir: null });
-  stderr.on('data', () => {});
-  stderr.write('Error: invalid API key\n');
-  await new Promise((resolve) => setImmediate(resolve));
-  proc.emit('close', 1);
-  assert.equal(hostFenceStatus(fakeFence({ available: true, abi: 6 })).state, 'ready');
+test('a CLI that prints the launcher\'s words and exits 69 or 71 does not turn the fence off', async () => {
+  for (const [code, line] of [
+    [71, 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted'],
+    [69, 'timon-fence: Landlock ABI 2 or later is required (found 0)'],
+  ] as const) {
+    const outcome = fencedOutcome(`forged-${code}`);
+    const fence = fakeFence({ available: true, abi: 6 });
+    await endLaunch(outcome, fence, `some output\n${line}\n`, code);
+    assert.deepEqual(fence.witnessed, [outcome.policyFile], 'the launcher is asked, not the mission');
+    assert.equal(existsSync(outcome.policyFile), false);
+    assert.equal(hostFenceStatus(fence).state, 'ready', `a forged ${code} leaves the fence on`);
+    const next = fenceMissionCommand('/usr/bin/claude', [], 'u', TARGET, { mode: 'enforce', fence, warn: () => {} });
+    assert.equal(next.fence?.state, 'fenced', 'the next mission is still fenced');
+  }
+});
+
+test('macOS: a CLI exiting non-zero with sandbox-exec\'s words does not turn the fence off; a profile the OS rejects does', async () => {
+  const witnessed: Array<[string, readonly string[]]> = [];
+  let answer: HostFenceWitness = WITNESS_OK;
+  const seatbelt = createSeatbeltFence({
+    run: () => ({ status: 0, stderr: '' }),
+    writeProfile: () => {},
+    realpath: (path) => path,
+    runWitness: async (file, args) => {
+      witnessed.push([file, args]);
+      return answer;
+    },
+  });
+  try {
+    const forged = fencedOutcome('mac-forged', 'seatbelt');
+    await endLaunch(forged, seatbelt, 'sandbox-exec: sandbox_apply: Operation not permitted\n', 1);
+    assert.deepEqual(witnessed, [[SANDBOX_EXEC, ['-f', forged.policyFile, '--', '/usr/bin/true']]], 'sandbox-exec is run on the launch\'s profile, with /usr/bin/true');
+    assert.equal(hostFenceStatus(seatbelt).state, 'ready', 'a CLI exit code proves nothing under Seatbelt');
+
+    answer = { ran: true, status: 65, stderr: 'sandbox-exec: /x.sb:12: unbound variable: file-read-xattr (cutoff)\n' };
+    const rejected = fencedOutcome('mac-rejected', 'seatbelt');
+    await endLaunch(rejected, seatbelt, 'sandbox-exec: /x.sb:12: unbound variable: file-read-xattr (cutoff)\n', 65);
+    assert.deepEqual(hostFenceStatus(seatbelt), { state: 'unsupported', reason: 'sandbox-exec: /x.sb:12: unbound variable: file-read-xattr (cutoff)', abi: 0 });
+    const lines: string[] = [];
+    for (let i = 0; i < 3; i += 1) fenceMissionCommand('/usr/bin/claude', [], 'u', TARGET, { mode: 'auto', fence: seatbelt, warn: (l) => lines.push(l) });
+    assert.equal(lines.filter((l) => l.includes('unbound variable')).length, 3, 'each launch carries the cause');
+  } finally {
+    resetFenceLaunchFailureForTest();
+  }
+});
+
+test('auto: a real launcher failure is warned about once in the log', async () => {
+  const warned: string[] = [];
+  const original = console.warn;
+  const fence = fakeFence({ available: true, abi: 6 }, undefined, { ran: true, status: 71, stderr: 'timon-fence: cannot set no_new_privs: Invalid argument (once)\n' });
+  try {
+    await endLaunch(fencedOutcome('warn-once'), fence, 'timon-fence: cannot set no_new_privs: Invalid argument (once)\n', 71);
+    console.warn = (line: string) => { warned.push(line); };
+    for (let i = 0; i < 3; i += 1) fenceMissionCommand('/usr/bin/claude', [], 'u', TARGET, { mode: 'auto', fence });
+  } finally {
+    console.warn = original;
+    resetFenceLaunchFailureForTest();
+  }
+  assert.equal(warned.filter((l) => l.includes('(once)')).length, 1);
+});
+
+test('a launcher that cannot even start at the witness run turns the fence off', async () => {
+  const missing = join(mkdtempSync(join(tmpdir(), 'fence-missing-')), 'timon-fence');
+  const fence = createLandlockFence({ status: () => ({ state: 'ready', binary: missing, abi: 6, seccomp: true }) });
+  try {
+    await endLaunch(fencedOutcome('missing'), fence, 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n', 71);
+    const status = hostFenceStatus(fence);
+    assert.equal(status.state, 'unsupported');
+    assert.ok(status.state === 'unsupported' && /the fence launcher cannot run \(.*ENOENT/.test(status.reason), JSON.stringify(status));
+  } finally {
+    resetFenceLaunchFailureForTest();
+  }
+});
+
+test('an altered launcher that fails whatever it runs turns the fence off', { skip: process.platform === 'win32' && 'a stand-in launcher is a shell script' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fence-altered-'));
+  const launcher = join(dir, 'timon-fence');
+  writeFileSync(launcher, '#!/bin/sh\necho "timon-fence: cannot apply the Landlock ruleset: Operation not permitted" >&2\nexit 71\n');
+  chmodSync(launcher, 0o755);
+  const fence = createLandlockFence({ status: () => ({ state: 'ready', binary: launcher, abi: 6, seccomp: true }) });
+  try {
+    await endLaunch(fencedOutcome('altered'), fence, 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n', 71);
+    assert.deepEqual(hostFenceStatus(fence), { state: 'unsupported', reason: 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted', abi: 0 });
+  } finally {
+    resetFenceLaunchFailureForTest();
+  }
+});
+
+test('a witness that gives no answer in time proves nothing: the fence stays on', async () => {
+  const fence = fakeFence({ available: true, abi: 6 }, undefined, { ran: false, reason: 'no answer within 5000 ms', timedOut: true });
+  await endLaunch(fencedOutcome('slow'), fence, 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n', 71);
+  assert.equal(fence.witnessed.length, 1);
+  assert.equal(hostFenceStatus(fence).state, 'ready');
+});
+
+test('a launcher the probe no longer finds is left to the next launch\'s probe, without a witness', async () => {
+  let available = true;
+  const fence: HostFence & { witnessed: string[] } = {
+    ...fakeFence({ available: true, abi: 6 }),
+    probe: () => (available ? { available: true, abi: 6 } : { available: false, reason: 'the launcher is gone', abi: 0, tampered: true }),
+  };
+  available = false;
+  await endLaunch(fencedOutcome('gone'), fence, 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n', 71);
+  assert.deepEqual(fence.witnessed, []);
+  available = true;
+  assert.equal(hostFenceStatus(fence).state, 'ready', 'a launcher put back is trusted again: nothing sticky was noted');
+});
+
+test('launches that end alike at the same time share one witness run', async () => {
+  let release: (() => void) | undefined;
+  const witnessed: string[] = [];
+  const fence: HostFence = {
+    ...fakeFence({ available: true, abi: 6 }),
+    witness: (policyFile) => {
+      witnessed.push(policyFile);
+      return new Promise((resolve) => { release = () => resolve(WITNESS_OK); });
+    },
+  };
+  const first = endLaunch(fencedOutcome('pair-1'), fence, 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n', 71);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const second = fencedOutcome('pair-2');
+  await endLaunch(second, fence, 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n', 71);
+  assert.equal(existsSync(second.policyFile), false, 'the second launch does not wait for the first one\'s witness');
+  release?.();
+  await first;
+  assert.equal(witnessed.length, 1);
+  assert.equal(hostFenceStatus(fence).state, 'ready');
+});
+
+test('a CLI that fails on its own leaves the fence on, without asking the launcher', async () => {
+  const fence = fakeFence({ available: true, abi: 6 });
+  await endLaunch(fencedOutcome('other'), fence, 'Error: invalid API key\n', 1);
+  assert.deepEqual(fence.witnessed, []);
+  assert.equal(hostFenceStatus(fence).state, 'ready');
+});
+
+test('what a witness run proves', () => {
+  assert.equal(fenceWitnessFailure('landlock', { ran: true, status: 0, stderr: '' }), null);
+  assert.equal(fenceWitnessFailure('landlock', { ran: true, status: 127, stderr: 'timon-fence: cannot execute /bin/true: No such file or directory' }), null,
+    '127 comes after every fence step succeeded');
+  assert.equal(fenceWitnessFailure('landlock', { ran: true, status: 78, stderr: 'timon-fence: policy truncated' }), null, 'the daemon\'s bug, not the machine');
+  assert.equal(fenceWitnessFailure('landlock', { ran: true, status: 69, stderr: 'timon-fence: Landlock ABI 2 or later is required (found 0)\n' }),
+    'timon-fence: Landlock ABI 2 or later is required (found 0)');
+  assert.equal(fenceWitnessFailure('landlock', { ran: true, status: 71, stderr: '' }), 'timon-fence exited with 71');
+  assert.equal(fenceWitnessFailure('seatbelt', { ran: true, status: 0, stderr: '' }), null);
+  assert.equal(fenceWitnessFailure('seatbelt', { ran: true, status: 1, stderr: '' }), 'sandbox-exec exited with 1');
+  assert.equal(fenceWitnessFailure('seatbelt', { ran: true, status: 71, stderr: 'sandbox-exec: sandbox_apply: Operation not permitted\n' }),
+    'sandbox-exec: sandbox_apply: Operation not permitted');
+  assert.equal(fenceWitnessFailure('seatbelt', { ran: false, reason: 'spawn /usr/bin/sandbox-exec ENOENT', timedOut: false }),
+    'the fence launcher cannot run (spawn /usr/bin/sandbox-exec ENOENT)');
+  assert.equal(fenceWitnessFailure('landlock', { ran: false, reason: 'no answer within 5000 ms', timedOut: true }), null);
 });
 
 /* ── The real chain, on a kernel that can fence ─────────────────────────── */
@@ -317,6 +491,55 @@ test('the real chain: nice, ionice and timon-fence exec down to the CLI, which k
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+const FORGING_CLI = String.raw`
+process.stderr.write('timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n');
+process.exit(71);
+`;
+
+test('the real launcher: a fenced CLI that imitates its failure does not turn the fence off', { skip: realSkip }, async () => {
+  const runtime = process.env.XDG_RUNTIME_DIR;
+  const base = runtime && existsSync(runtime) ? runtime : tmpdir();
+  const root = realpathSync(mkdtempSync(join(base, 'fence-forge-')));
+  try {
+    const home = join(root, 'home');
+    const th = join(home, '.timon');
+    const cwd = join(th, 'worktrees', 'task-f');
+    mkdirSync(cwd, { recursive: true });
+    const fence = createLandlockFence({ status: () => ({ state: 'ready', binary: REAL as string, abi: REAL_PROBE?.abi ?? 0, seccomp: true }) });
+    fence.probe();
+    const target = { timonHome: th, home, cwd, missionId: MISSION, platform: 'linux' as const };
+    const launch = fenceMissionCommand(process.execPath, ['-e', FORGING_CLI], 'unit-forge', target, { mode: 'enforce', fence, warn: () => {} });
+    assert.ok(launch.fence?.state === 'fenced');
+    const child = spawn(launch.cmd, launch.args, { cwd, stdio: ['ignore', 'ignore', 'pipe'] });
+    const settled = watchFencedLaunch(child, launch.fence, { fence });
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+    const code = await new Promise<number | null>((resolve) => child.on('close', resolve));
+    await settled;
+    assert.equal(code, 71, stderr);
+    assert.match(stderr, /^timon-fence: cannot apply the Landlock ruleset/, 'the CLI ran inside the fence and printed the forged line');
+    assert.equal(fenceLaunchFailure('landlock', code, stderr) !== null, true, 'the old reading would have turned the fence off');
+    assert.equal(existsSync(launch.fence.policyFile), false);
+    assert.equal(hostFenceStatus(fence).state, 'ready', 'the real launcher applied the fence at its witness run');
+    const next = fenceMissionCommand(process.execPath, ['-e', ''], 'unit-forge-2', target, { mode: 'enforce', fence, warn: () => {} });
+    assert.equal(next.fence?.state, 'fenced');
+  } finally {
+    resetFenceLaunchFailureForTest();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the real launcher, run as a witness on a policy, answers 0 or 127 and nothing a failure is read from', { skip: realSkip }, async () => {
+  const fence = createLandlockFence({ status: () => ({ state: 'ready', binary: REAL as string, abi: REAL_PROBE?.abi ?? 0, seccomp: true }) });
+  fence.probe();
+  const launch = fenceMissionCommand('/bin/true', [], 'unit-witness', TARGET, { mode: 'enforce', fence, warn: () => {} });
+  assert.ok(launch.fence?.state === 'fenced');
+  const witness = await fence.witness(launch.fence.policyFile);
+  assert.ok(witness.ran && (witness.status === 0 || witness.status === 127), JSON.stringify(witness));
+  assert.equal(fenceWitnessFailure('landlock', witness), null);
+  rmSync(launch.fence.policyFile, { force: true });
 });
 
 test('what the CLI says before the mission reads its stderr waits for the mission\'s reader', async () => {
