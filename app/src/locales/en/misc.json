@@ -65,7 +65,7 @@
     "loadOlder": "Load older connections",
     "loadingOlder": "Loading…",
     "empty": "No connection journaled for this mission yet.",
-    "limit": "Only programs that honour HTTP(S)_PROXY go through the journal. Those that ignore it, Node's built-in fetch among them, reach the network without appearing here.",
+    "limit": "Only programs that honour HTTP(S)_PROXY go through the journal. Those that ignore it, Node's built-in fetch among them, or that are told to skip it, reach the network without appearing here.",
     "offTitle": "Connection journal disabled",
     "offBody": "This mission's connections are not recorded, so this view says nothing about what it reached. To enable the journal, set host.isolation.egress.mode to \"log\" in timon.config.json, then restart Timon.",
     "offHistory": "The connections below were recorded before it was turned off.",
