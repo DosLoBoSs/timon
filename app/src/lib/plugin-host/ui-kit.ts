@@ -68,6 +68,8 @@ import { useEmailCode } from '@/components/email-code/email-code-context';
 import { useLookStyler } from '@/components/mascot/look-styler/look-styler-context';
 import { useProviderPage } from '@/components/provider-page/provider-page-context';
 import { ProviderSection } from '@/components/provider-page/provider-section';
+import { useProviderRow } from '@/components/provider-list/provider-row-context';
+import { ProviderRow } from '@/components/provider-list/provider-row';
 import { useMcpTab } from '@/lib/mcp-tab-context';
 import { useGlassScope } from '@/components/glass-scope';
 import { useModelFavorites } from '@/hooks/use-model-favorites';
@@ -200,6 +202,9 @@ export const UI_KIT = {
   // The page of one provider (client API 16, `settings.provider.section`): the provider on
   // screen, its status, `refresh` and `back`; and the frame the product's sections use.
   useProviderPage, ProviderSection,
+  // One provider's row (client API 16, `providers.row`): the provider it is painted for, how
+  // to open its page, the surface's action; and the host, to paint rows of your own.
+  useProviderRow, ProviderRow,
 };
 
 /**

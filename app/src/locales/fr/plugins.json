@@ -565,5 +565,9 @@
       "forbidden": "Seul un administrateur peut voir les fournisseurs.",
       "generic": "Impossible de lire les fournisseurs (erreur {status})."
     }
+  },
+  "providerList": {
+    "open": "Ouvrir {name}",
+    "updateAvailable": "Mise à jour disponible"
   }
 }

@@ -1715,6 +1715,29 @@ declare module '@timon/ui' {
    * content as children, on the same surface as the product's sections.
    */
   export const ProviderSection: PlatformComponent;
+  /**
+   * The row a `providers.row` occupant is painted for (client API 16): one
+   * provider in the providers list of Settings › AI models (`mode: 'settings'`)
+   * or in the first-run "Your AIs" step (`mode: 'onboarding'`). `null` outside
+   * a row. Show the provider's logo, name and one status line; offer `open`
+   * when it is set (the list: the provider's page) and paint `action` at the
+   * end when the surface hands one (the onboarding's install button).
+   */
+  export function useProviderRow(): {
+    mode: 'settings' | 'onboarding';
+    provider: ProviderOverview;
+    status: ProviderStatus;
+    /** Opens the provider's page; `null` where the row leads nowhere. */
+    open: (() => void) | null;
+    /** The surface's own control for this row, or `null`. */
+    action: unknown;
+  } | null;
+  /**
+   * The host of one provider's row (client API 16): paints the `providers.row`
+   * occupant for `provider`, with `onOpen`, `action` and `mode` as
+   * `useProviderRow()` reads them.
+   */
+  export const ProviderRow: PlatformComponent;
 }
 
 declare module '@timon/api' {

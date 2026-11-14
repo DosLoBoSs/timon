@@ -575,5 +575,9 @@
       "forbidden": "Only an administrator can see the providers.",
       "generic": "The providers could not be read (error {status})."
     }
+  },
+  "providerList": {
+    "open": "Open {name}",
+    "updateAvailable": "Update available"
   }
 }
