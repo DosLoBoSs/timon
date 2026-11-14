@@ -15,9 +15,9 @@
  * and every mission then launches with no MemoryMax, no nice, no ionice.
  */
 import { strict as assert } from 'node:assert';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
 const HOME = mkdtempSync(join(tmpdir(), 'timon-isolation-test-'));
@@ -261,6 +261,8 @@ const fullTarget = (over: Record<string, unknown> = {}) => ({
   pluginDirs: [`${TH}/plugins/node_modules/acme-mcp`],
   timonRead: [`${TH}/uploads/chat/conv-1`],
   timonHomeEntries: ['timon.config.json.bak-20261025', 'license.state.json.tmp-7', 'skills'],
+  // The fake home does not exist: paths resolve to themselves. Links are tested on a real folder.
+  realpath: (path: string) => path,
   ...over,
 });
 const access = (policy: ReturnType<typeof resolveFence>, path: string) => {
@@ -487,4 +489,98 @@ test('fence: a handed-over path never lands in another account\'s or mission\'s 
   for (const path of [`${TH}/worktrees/task-9`, `${TH}/tmp/scratch-1`, `${TH}/workflows/nightly`]) {
     assert.equal(access(resolveFence(cfg(), fullTarget({ cwd: path })), `${path}/a`), 'rw', `${path} is a working directory`);
   }
+});
+
+/* ── Links and case: every grant is checked on the path it resolves to ──── */
+
+// A real folder: links are followed by the default `realpath`. The temporary
+// root is resolved first, since `/var/folders` is a link to `/private/var/folders` on macOS.
+const LINKS = realpathSync.native(mkdtempSync(join(tmpdir(), 'timon-fence-links-')));
+const LTH = join(LINKS, '.timon');
+for (const dir of ['worktrees/task-1', 'backend-accounts/acc-mine', 'backend-accounts/acc-other', 'tmp/missions', 'skills']) {
+  mkdirSync(join(LTH, dir), { recursive: true });
+}
+writeFileSync(join(LTH, 'daemon-token'), 'x');
+// Creating a link may need a privilege on Windows (developer mode or an
+// elevated account): the link tests are skipped there rather than failing.
+const linkSkip = ((): string | false => {
+  try {
+    symlinkSync(join(LTH, 'skills'), join(LINKS, 'probe-link'), 'dir');
+    return false;
+  } catch (err) {
+    return `this account cannot create a symbolic link (${(err as NodeJS.ErrnoException).code ?? 'unknown'})`;
+  }
+})();
+const linkTarget = (over: Record<string, unknown> = {}) => ({
+  timonHome: LTH, home: LINKS, platform: process.platform, cwd: join(LTH, 'worktrees', 'task-1'),
+  missionId: MISSION, account: 'acc-mine', timonHomeEntries: [], ...over,
+});
+
+test('fence: a link planted in a worktree carries no grant into the Timon home', { skip: linkSkip }, () => {
+  const worktree = join(LTH, 'worktrees', 'task-1');
+  symlinkSync(LTH, join(worktree, 'to-home'), 'dir');
+  symlinkSync(join(LTH, 'backend-accounts', 'acc-other'), join(worktree, 'to-other'), 'dir');
+  for (const link of ['to-home', 'to-other']) {
+    const path = join(worktree, link);
+    for (const over of [{ cwd: path }, { gitDirs: [path] }, { timonRead: [path] }]) {
+      const policy = resolveFence(cfg(), linkTarget(over));
+      assert.ok(policy.ignored.some((i) => i.path === path), `${JSON.stringify(over)} must be dropped`);
+      assert.ok(![...policy.rw, ...policy.ro].some((p) => p === LTH || p.startsWith(join(LTH, 'backend-accounts', 'acc-other'))));
+      assert.equal(access(policy, join(LTH, 'daemon-token')), 'none');
+      assert.equal(access(policy, join(LTH, 'backend-accounts', 'acc-other', 'x')), 'none');
+    }
+  }
+  // The same through `host.isolation.writable`, which grants nothing in the Timon home.
+  const viaConfig = resolveFence(cfg({ writable: [join(worktree, 'to-home')] }), linkTarget());
+  assert.ok(viaConfig.ignored.some((i) => i.path === join(worktree, 'to-home')));
+  assert.equal(access(viaConfig, join(LTH, 'daemon-token')), 'none');
+});
+
+test('fence: the mission\'s own folder is refused when a link leads it elsewhere in the Timon home', { skip: linkSkip }, () => {
+  const own = join(LTH, 'backend-accounts', 'acc-linked');
+  symlinkSync(join(LTH, 'backend-accounts', 'acc-other'), own, 'dir');
+  const policy = resolveFence(cfg(), linkTarget({ account: 'acc-linked' }));
+  assert.ok(policy.ignored.some((i) => i.path === own && i.reason.includes('a link leads it elsewhere')));
+  assert.equal(access(policy, join(LTH, 'backend-accounts', 'acc-other', '.credentials.json')), 'none');
+});
+
+test('fence: a Timon home reached through a link is refused under its real name', { skip: linkSkip }, () => {
+  const linkedHome = join(LINKS, 'home-link');
+  symlinkSync(LTH, linkedHome, 'dir');
+  const policy = resolveFence(cfg(), linkTarget({ timonHome: linkedHome, cwd: join(linkedHome, 'worktrees', 'task-1') }));
+  assert.ok(policy.deny.includes(LTH) && policy.deny.includes(linkedHome));
+  assert.equal(access(policy, join(LTH, 'daemon-token')), 'none');
+  assert.equal(access(policy, join(LTH, 'worktrees', 'task-1', 'a.ts')), 'rw', 'the worktree is granted under its real name');
+  assert.ok(policy.denyUnderTimonHome.includes(join(LTH, 'daemon-token')));
+});
+
+test('fence: a path that does not resolve gets no grant at all', () => {
+  const missing = join(LTH, 'worktrees', 'task-gone');
+  const policy = resolveFence(cfg(), linkTarget({ cwd: missing, gitDirs: [join(LINKS, 'nowhere', '.git')] }));
+  assert.ok(policy.ignored.some((i) => i.path === missing && i.reason.includes('does not resolve')));
+  assert.ok(policy.ignored.some((i) => i.path === join(LINKS, 'nowhere', '.git')));
+  assert.ok(![...policy.rw, ...policy.ro].includes(missing));
+});
+
+test('fence: the Timon home is matched without case on macOS and Windows, with case on Linux', () => {
+  const home = resolve('/Users/tester');
+  const timonHome = join(home, '.timon');
+  const upper = join(home, '.TIMON');
+  const handed = { cwd: join(upper, 'backend-accounts'), timonRead: [join(upper, 'agents')], gitDirs: [join(upper, 'tmp')] };
+  for (const platform of ['darwin', 'win32'] as const) {
+    const policy = resolveFence(cfg(), {
+      timonHome, home, platform, missionId: MISSION, realpath: (path: string) => path, ...handed,
+    });
+    for (const path of [handed.cwd, ...handed.timonRead, ...handed.gitDirs]) {
+      assert.ok(policy.ignored.some((i) => i.path === path), `${platform}: ${path} is the Timon home's zone root`);
+    }
+    // A refused entry spelled in another case is still refused.
+    const token = resolveFence(cfg(), {
+      timonHome, home, platform, realpath: (path: string) => path, cwd: join(upper, 'Daemon-Token'),
+    });
+    assert.ok(token.ignored.some((i) => i.path === join(upper, 'Daemon-Token')), `${platform}: the token in another case`);
+  }
+  // On Linux, `.TIMON` is another folder of the user's home.
+  const linux = resolveFence(cfg(), { timonHome, home, platform: 'linux', realpath: (path: string) => path, cwd: handed.cwd });
+  assert.ok(linux.rw.includes(handed.cwd));
 });

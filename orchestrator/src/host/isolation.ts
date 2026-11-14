@@ -377,8 +377,16 @@ export type FenceTarget = {
   pluginDirs?: readonly string[] | undefined;
   /** Further paths under the Timon home the daemon hands the mission (chat attachments): readable. */
   timonRead?: readonly string[] | undefined;
-  /** Top-level entries of the Timon home, as listed by the caller: refused copies get named. */
+  /** Top-level entries of the Timon home: refused copies get named. Listed from the folder when absent. */
   timonHomeEntries?: readonly string[] | undefined;
+  /**
+   * Resolves an existing path, links followed; `fs.realpathSync.native` by
+   * default, throws when the path does not exist. Landlock and Seatbelt follow
+   * links, so every grant is checked on the path it resolves to, and a path
+   * that does not resolve gets no grant at all: the caller creates the
+   * mission's own folders before it resolves the fence.
+   */
+  realpath?: ((path: string) => string) | undefined;
 };
 
 export type FencePolicy = {
@@ -497,7 +505,9 @@ const NO_FENCE: FencePolicy = Object.freeze({
 });
 
 /**
- * The fence of one mission launch. Pure: same inputs, same output.
+ * The fence of one mission launch. Same inputs, same output; what it reads
+ * from the filesystem is where each granted path leads (`target.realpath`)
+ * and, when the target does not list them, the Timon home's top-level entries.
  *
  * - The system is readable and executable; the user's home is read-only but
  *   for the mission's own working folders, the backend's state when the
@@ -514,28 +524,70 @@ const NO_FENCE: FencePolicy = Object.freeze({
  * - A path the caller hands over (working directory, git directory, file,
  *   plugin folder) never opens a zone root, nor a zone of per-account or
  *   per-mission folders (`HANDED_DEPTH`, `OWNER_ZONES`).
+ * - Every check runs on the path a grant resolves to, links followed and,
+ *   on macOS and Windows, without case: the kernel follows links too.
  */
 export function resolveFence(config: TimonConfig, target: FenceTarget): FencePolicy {
   const iso = config.host.isolation;
   if (iso.filesystem === 'off') return NO_FENCE;
 
   const home = resolve(target.home ?? homedir());
-  const timonHome = resolve(target.timonHome);
   const platform = target.platform ?? process.platform;
+  const realpath = target.realpath ?? ((path: string) => realpathSync.native(path));
+  const resolveLinks = (path: string): string | null => {
+    try {
+      return realpath(path);
+    } catch {
+      return null;
+    }
+  };
+  // The folder the links lead to is the one to refuse: a Timon home reached
+  // through a link would otherwise be granted under its real name.
+  const lexicalHome = resolve(target.timonHome);
+  const timonHome = resolveLinks(lexicalHome) ?? lexicalHome;
+  // macOS and Windows file systems ignore case by default: `~/.TIMON` is the Timon home there.
+  const fold = platform === 'darwin' || platform === 'win32'
+    ? (path: string) => path.toLowerCase()
+    : (path: string) => path;
+  const foldedHome = fold(timonHome);
   const exceptions = fenceExceptions(iso, target);
   const ignored: Array<{ path: string; reason: string }> = [];
   const ro = new Set<string>([parse(home).root]);
   const rw = new Set<string>(SYSTEM_WRITABLE[platform] ?? []);
   const exec = new Set<string>([parse(home).root]);
 
-  const grant = (path: string, access: 'ro' | 'rw', source: GrantSource): boolean => {
-    const problem = timonGrantProblem(timonHome, path, access, source);
-    if (problem) {
-      ignored.push({ path, reason: problem });
-      return false;
+  /**
+   * Grants `path` once resolved, and returns what it resolved to, or `null`
+   * when the grant is dropped. Every check runs on the resolved path: a link
+   * planted in a worktree must not carry a grant into the Timon home.
+   * `handed` adds the check of one kind of handed-over path.
+   */
+  const grant = (
+    path: string,
+    access: 'ro' | 'rw',
+    source: GrantSource,
+    handed?: (folded: string) => string | null,
+  ): string | null => {
+    const resolved = resolveLinks(path);
+    if (resolved === null) {
+      ignored.push({ path, reason: 'the path does not resolve to an existing file or folder' });
+      return null;
     }
-    (access === 'rw' ? rw : ro).add(path);
-    return true;
+    const folded = fold(resolved);
+    // A folder the fence builds from the mission's identity is granted under
+    // that name only: a link in it pointing elsewhere in the Timon home would
+    // reopen what the identity checks closed.
+    const redirected = (source === 'own' || source === 'own-memory')
+      && contains(foldedHome, folded) && folded !== fold(path);
+    const problem = redirected
+      ? 'a link leads it elsewhere in the Timon home'
+      : (handed?.(folded) ?? timonGrantProblem(foldedHome, folded, access, source));
+    if (problem) {
+      ignored.push({ path, reason: resolved === path ? problem : `${problem} (resolves to ${resolved})` });
+      return null;
+    }
+    (access === 'rw' ? rw : ro).add(resolved);
+    return resolved;
   };
   const segment = (kind: string, value: string | undefined): string | null => {
     if (value === undefined || value === '') return null;
@@ -574,24 +626,24 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
     grant(inTimon('projects', project, 'memory'), 'ro', 'own');
     grant(inTimon('uploads', 'projects', project), 'ro', 'own');
   }
-  for (const raw of target.timonRead ?? []) {
-    const path = resolve(raw);
-    // Handed-over files come from a read-only zone; a writable one holds other missions' folders.
-    const first = relative(timonHome, path).split(sep)[0] ?? '';
-    if (contains(timonHome, path) && !MISSION_TIMON_ZONES.readable.includes(first)) {
-      ignored.push({ path, reason: `"${first}" is not a zone the daemon hands files from` });
-      continue;
-    }
-    grant(path, 'ro', 'mission');
-  }
+  // Handed-over files come from a read-only zone; a writable one holds other missions' folders.
+  const handedFile = (folded: string): string | null => {
+    const first = relative(foldedHome, folded).split(sep)[0] ?? '';
+    return contains(foldedHome, folded) && !MISSION_TIMON_ZONES.readable.includes(first)
+      ? `"${first}" is not a zone the daemon hands files from`
+      : null;
+  };
+  for (const raw of target.timonRead ?? []) grant(resolve(raw), 'ro', 'mission', handedFile);
+  // Executable code from the Timon home comes from one plugin's folder, nowhere else.
+  const plugins = join(foldedHome, 'plugins');
+  const pluginFolder = (folded: string): string | null => (
+    !contains(plugins, folded) || folded === plugins
+      ? 'a plugin folder lives under the plugins folder of the Timon home'
+      : null
+  );
   for (const dir of target.pluginDirs ?? []) {
-    const path = resolve(dir);
-    // Executable code from the Timon home comes from one plugin's folder, nowhere else.
-    if (!contains(inTimon('plugins'), path) || path === inTimon('plugins')) {
-      ignored.push({ path, reason: 'a plugin folder lives under the plugins folder of the Timon home' });
-      continue;
-    }
-    if (grant(path, 'ro', 'mission')) exec.add(path);
+    const granted = grant(resolve(dir), 'ro', 'mission', pluginFolder);
+    if (granted) exec.add(granted);
   }
 
   // The backend's own state. With an account, the CLI is pointed at the
@@ -609,7 +661,9 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
   if (!account) for (const path of ownDirs) grant(path, 'rw', 'own');
 
   for (const path of exceptions.writable) grant(expand(path, home), 'rw', 'config');
-  const allowed = iso.allow.map((p) => expand(p, home)).filter((path) => grant(path, 'ro', 'config'));
+  const allowed = iso.allow
+    .map((p) => grant(expand(p, home), 'ro', 'config'))
+    .filter((path): path is string => path !== null);
   for (const path of iso.readOnly) grant(expand(path, home), 'ro', 'config');
 
   // Read-only wins over read-write on the very same path: `readOnly` is a restriction.
@@ -630,6 +684,7 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
     deny.add(path);
   }
   deny.add(timonHome);
+  deny.add(lexicalHome);
 
   for (const path of rw) exec.add(path);
 
@@ -640,7 +695,7 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
     rw: [...rw],
     exec: [...exec],
     deny: [...deny],
-    denyUnderTimonHome: timonRefusedPaths(timonHome, target.timonHomeEntries ?? []),
+    denyUnderTimonHome: timonRefusedPaths(timonHome, target.timonHomeEntries ?? listTimonHome(timonHome)),
     unixSockets: exceptions.unixSockets,
     ignored,
   };

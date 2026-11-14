@@ -26,7 +26,7 @@ const cfg = (isolation: Record<string, unknown> = {}) => TimonConfigSchema.parse
 function policyFor(isolation: Record<string, unknown> = {}, extra: Record<string, unknown> = {}): FencePolicy {
   return resolveFence(cfg(isolation), {
     timonHome: TH, cwd: WT, home: HOME, platform: 'darwin', missionId: 'm1', agent: 'a1', project: 'p1',
-    account: 'acc1', backend: 'claude', providerPlugin: 'claude', ...extra,
+    account: 'acc1', backend: 'claude', providerPlugin: 'claude', realpath: (path: string) => path, ...extra,
   });
 }
 
@@ -142,7 +142,9 @@ test('a fence path is spelled as an escaped SBPL string', () => {
 test('a home with quotes, spaces and backslashes renders rules that still mean the same paths', () => {
   const home = '/Users/we ird"q\\b\tt';
   const th = `${home}/.timon`;
-  const policy = resolveFence(cfg(), { timonHome: th, cwd: `${th}/worktrees/m1`, home, platform: 'darwin', missionId: 'm1' });
+  const policy = resolveFence(cfg(), {
+    timonHome: th, cwd: `${th}/worktrees/m1`, home, platform: 'darwin', missionId: 'm1', realpath: (path) => path,
+  });
   const text = renderSeatbeltProfile(policy).text;
   assert.ok(text.includes('(deny file-read-data file-write* (subpath "/Users/we ird\\"q\\\\b\\tt/.timon"))'));
   const rules = rulesOf(text);
