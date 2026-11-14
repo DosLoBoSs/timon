@@ -60,7 +60,7 @@ test('the mode is frozen with a warning only when the backend ignores it', async
     assert.ok(runsAs, 'the runs-as note is shown');
     assert.match(runsAs.textContent ?? '', /cannot run auto/);
     assert.match(runsAs.textContent ?? '', /read-only/);
-    assert.equal(document.querySelector('[aria-checked="true"]'), null);
+    assert.ok(!document.querySelector('[aria-checked="true"]'), 'no mode is checked');
     await React.act(async () => { Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'bypassPermissions')!.click(); });
     assert.equal(picked.at(-1), 'bypassPermissions');
     await show('bypassPermissions', ['plan', 'bypassPermissions']);
