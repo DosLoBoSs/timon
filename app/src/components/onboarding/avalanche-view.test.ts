@@ -1,6 +1,6 @@
 /**
  * Which way the avalanche's 3D heads face: along their flight, into the drag,
- * nodding on a landing, at a pointer close by once in the heap; always the
+ * nodding on a landing, facing front once in the heap; always the
  * front under reduced motion.
  */
 import assert from 'node:assert/strict';
@@ -8,11 +8,10 @@ import test from 'node:test';
 import { SHAPES } from '../mascot/agent-look';
 import { skullSize } from '../mascot/mascot-geometry';
 import { buildAvalanche, dragTo, grab, isSettled, scatter, seededRng, stepAvalanche, type Avalanche, type AvalancheBody } from './avalanche';
-import { aimOf, createHeadAims, HEAD_VIEWS, MAX_PITCH, MAX_YAW, pickView, updateHeadAims, type AvalanchePointer } from './avalanche-view';
+import { aimOf, createHeadAims, HEAD_VIEWS, MAX_PITCH, MAX_YAW, pickView, updateHeadAims } from './avalanche-view';
 
 const looks = SHAPES.map(skullSize);
 const STEP = 1 / 125;
-const NO_POINTER: AvalanchePointer = { x: 0, y: 0, active: false };
 
 function settled(seed = 3): Avalanche {
   const world = buildAvalanche({ width: 1280, height: 800, looks, rng: seededRng(seed), still: true });
@@ -20,9 +19,9 @@ function settled(seed = 3): Avalanche {
   return world;
 }
 
-function aim(world: Avalanche, b: AvalancheBody, pointer: AvalanchePointer = NO_POINTER): { yaw: number; pitch: number } {
+function aim(world: Avalanche, b: AvalancheBody): { yaw: number; pitch: number } {
   const out = { yaw: 0, pitch: 0 };
-  aimOf(world, b, pointer, out);
+  aimOf(world, b, out);
   return out;
 }
 
@@ -91,16 +90,6 @@ test('a dragged head turns into the drag', () => {
   assert.ok(aim(world, held).yaw < 0, 'turned left with the pointer');
 });
 
-test('a resting head looks at a pointer close by, not at a far one', () => {
-  const world = settled();
-  const b = first(world);
-  const near = aim(world, b, { x: b.x + 60, y: b.y - 60, active: true });
-  assert.ok(near.yaw > 0 && near.pitch < 0, 'up and to the right');
-  const far = aim(world, b, { x: b.x + 2000, y: b.y, active: true });
-  assert.deepEqual(far, { yaw: 0, pitch: 0 });
-  assert.deepEqual(aim(world, b, { x: b.x + 60, y: b.y, active: false }), { yaw: 0, pitch: 0 });
-});
-
 test('a landing nods the head into the heap', () => {
   const world = settled();
   const b = first(world);
@@ -114,7 +103,7 @@ test('reduced motion: every head shows the front', () => {
   scatter(world);
   for (let k = 0; k < 30; k += 1) {
     stepAvalanche(world, STEP);
-    updateHeadAims(world, aims, NO_POINTER, STEP, true);
+    updateHeadAims(world, aims, STEP, true);
   }
   assert.ok(aims.view.every((v) => v === 0));
 });
@@ -126,12 +115,12 @@ test('during the avalanche heads turn, at rest they face front, and the run repl
     let turned = 0;
     for (let t = 0; t < 20 && !isSettled(world); t += STEP) {
       stepAvalanche(world, STEP);
-      updateHeadAims(world, aims, NO_POINTER, STEP, false);
+      updateHeadAims(world, aims, STEP, false);
       for (const v of aims.view) if (v !== 0) turned += 1;
     }
     assert.ok(isSettled(world));
     // A second of rest: every head comes back to the front.
-    for (let k = 0; k < 125; k += 1) updateHeadAims(world, aims, NO_POINTER, STEP, false);
+    for (let k = 0; k < 125; k += 1) updateHeadAims(world, aims, STEP, false);
     return { turned, views: Array.from(aims.view) };
   };
   const a = play();

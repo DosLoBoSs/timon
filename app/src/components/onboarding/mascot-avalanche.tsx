@@ -32,7 +32,7 @@ import {
   avalancheLooks, bodyAt, buildAvalanche, dragTo, drawOrder, grab, release, resizeAvalanche, scatter, stepAvalanche,
   type Avalanche,
 } from './avalanche';
-import { createHeadAims, HEAD_VIEWS, updateHeadAims, type AvalanchePointer, type HeadAims } from './avalanche-view';
+import { createHeadAims, HEAD_VIEWS, updateHeadAims, type HeadAims } from './avalanche-view';
 
 const BITMAP = 360;
 /** Physics substep: small enough that a fast fall never skips through a head. */
@@ -296,17 +296,6 @@ export const MascotAvalanche = forwardRef<MascotAvalancheHandle, { className?: s
       release(world);
       canvas.style.cursor = '';
     };
-    // The pointer anywhere on the page (the welcome's text covers part of the canvas): resting heads near it look at it.
-    const pointer: AvalanchePointer = { x: 0, y: 0, active: false };
-    const onLook = (e: PointerEvent): void => {
-      pointer.x = e.clientX - rect.left;
-      pointer.y = e.clientY - rect.top;
-      pointer.active = true;
-    };
-    const onAway = (): void => { pointer.active = false; };
-    window.addEventListener('pointermove', onLook, { passive: true });
-    document.documentElement.addEventListener('pointerleave', onAway);
-    window.addEventListener('blur', onAway);
     canvas.addEventListener('pointerdown', onDown);
     canvas.addEventListener('pointermove', onMove);
     canvas.addEventListener('pointerup', onUp);
@@ -325,7 +314,7 @@ export const MascotAvalanche = forwardRef<MascotAvalancheHandle, { className?: s
       // A scene laid out again after a resize may hold another number of mascots.
       if (aims.view.length !== world.bodies.length) aims = createHeadAims(world.bodies.length);
       const turn = turning.current;
-      if (turn) updateHeadAims(world, aims, pointer, dt, false);
+      if (turn) updateHeadAims(world, aims, dt, false);
       sprites.fronts = bitmaps.current;
       sprites.views = views.current;
       sprites.turned = turned.current;
@@ -337,9 +326,6 @@ export const MascotAvalanche = forwardRef<MascotAvalancheHandle, { className?: s
       cancelAnimationFrame(raf);
       window.clearTimeout(relayout);
       window.removeEventListener('resize', resize);
-      window.removeEventListener('pointermove', onLook);
-      document.documentElement.removeEventListener('pointerleave', onAway);
-      window.removeEventListener('blur', onAway);
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);

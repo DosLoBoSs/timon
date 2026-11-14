@@ -3,7 +3,8 @@
  * in 3D each look is also rendered under a few head orientations
  * (`HEAD_VIEWS`), and every frame each mascot shows the one closest to where
  * it should face: towards where it flies or rolls, the way it is dragged,
- * nodding into a landing, and, once in the heap, at a pointer close by.
+ * nodding into a landing. A resting head faces front: with a handful of
+ * views, following the pointer would jump from one to the next.
  *
  * Nothing here touches the physics (`avalanche.ts` stays deterministic) nor
  * allocates per frame: the state is a few typed arrays indexed by body.
@@ -32,14 +33,11 @@ export const HEAD_VIEWS: readonly HeadView[] = [
 /** Speeds (CSS pixels a second) at which a head is turned as far as it goes. */
 const FULL_YAW_SPEED = 900;
 const FULL_PITCH_SPEED = 1400;
-/** How far from the pointer (CSS pixels, at scale 1) a resting head still looks at it. */
-const GAZE_RADIUS = 280;
 /** How fast a head turns to its aim, per second: quick, but a view never flickers from one frame to the next. */
 const TURN_RATE = 10;
 /** A view is kept until another is this much closer (in squared, normalised angle): no flicker at a boundary. */
 const HYSTERESIS = 0.06;
 
-export type AvalanchePointer = { x: number; y: number; active: boolean };
 
 /** Per body: the smoothed orientation it faces and the view it shows. */
 export type HeadAims = { yaw: Float32Array; pitch: Float32Array; view: Uint8Array };
@@ -58,7 +56,7 @@ function aimAlong(vx: number, vy: number, out: Aim): void {
 }
 
 /** Where `b`'s face should point now, written into `out`. */
-export function aimOf(world: Avalanche, b: AvalancheBody, pointer: AvalanchePointer, out: Aim): void {
+export function aimOf(world: Avalanche, b: AvalancheBody, out: Aim): void {
   out.yaw = 0;
   out.pitch = 0;
   if (b.state === 'fly' && b.fly) {
@@ -75,18 +73,6 @@ export function aimOf(world: Avalanche, b: AvalancheBody, pointer: AvalanchePoin
     return;
   }
   if (b.state !== 'placed') return;
-  if (pointer.active && world.floor && !world.drag) {
-    const dx = pointer.x - b.x;
-    const dy = pointer.y - b.y;
-    const r = GAZE_RADIUS * world.scale;
-    const d2 = dx * dx + dy * dy;
-    if (d2 < r * r) {
-      // Full attention up close, fading out towards the edge of the circle.
-      const w = 1 - d2 / (r * r);
-      out.yaw = clamp1(dx / (r * 0.5)) * MAX_YAW * w;
-      out.pitch = clamp1(dy / (r * 0.5)) * MAX_PITCH * w;
-    }
-  }
   // A landing squashes the head: it nods into the heap.
   if (b.sq < 1) out.pitch = Math.min(MAX_PITCH, out.pitch + Math.min(1, (1 - b.sq) * 3) * MAX_PITCH);
 }
@@ -114,7 +100,7 @@ const scratch: Aim = { yaw: 0, pitch: 0 };
  * Turns every head towards its aim by `dt` seconds and picks its view.
  * `still` (reduced motion): every head faces the front, nothing turns.
  */
-export function updateHeadAims(world: Avalanche, aims: HeadAims, pointer: AvalanchePointer, dt: number, still: boolean): void {
+export function updateHeadAims(world: Avalanche, aims: HeadAims, dt: number, still: boolean): void {
   const k = 1 - Math.exp(-dt * TURN_RATE);
   for (const b of world.bodies) {
     const i = b.index;
@@ -125,7 +111,7 @@ export function updateHeadAims(world: Avalanche, aims: HeadAims, pointer: Avalan
       aims.view[i] = 0;
       continue;
     }
-    aimOf(world, b, pointer, scratch);
+    aimOf(world, b, scratch);
     const yaw = (aims.yaw[i] ?? 0) + (scratch.yaw - (aims.yaw[i] ?? 0)) * k;
     const pitch = (aims.pitch[i] ?? 0) + (scratch.pitch - (aims.pitch[i] ?? 0)) * k;
     aims.yaw[i] = yaw;
