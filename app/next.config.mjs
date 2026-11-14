@@ -69,6 +69,10 @@ const nextConfig = {
   // under that path: `scripts/build-server.mjs` and the desktop packaging
   // expect `server.js` and `node_modules` at its root.
   outputFileTracingRoot: appDir,
+  // Next 15 installs sharp (and its libvips binaries) for the image optimizer,
+  // which is off (`images.unoptimized` below): a package would carry ~37 MB of
+  // native decoders that nothing loads.
+  outputFileTracingExcludes: { '*': ['node_modules/sharp/**', 'node_modules/@img/**'] },
   // No automatic 308 on URLs with a trailing slash.
   //
   // Next answers `308 Permanent Redirect` to `/path/` to send it to `/path`.
