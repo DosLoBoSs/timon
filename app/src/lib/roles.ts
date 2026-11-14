@@ -77,6 +77,107 @@ const ALIAS: Record<string, RoleKey> = {
   main: 'orchestrator',
 };
 
+/* ── Role icon markup: the daemon's closed grammar, enforced again here ── */
+
+/**
+ * A custom role's icon arrives as markup from the daemon, which already
+ * refuses anything but plain shapes (`roleIconSvgProblem` in
+ * `orchestrator/src/agent-roles.ts`). The client does not take that on trust:
+ * it parses the same grammar into a tree and draws the tree with React or
+ * `createElementNS`, so no string from the server ever reaches the DOM as
+ * HTML. A pure parser rather than `DOMParser`: it runs during server rendering
+ * and in tests, and leaves no gap between what is checked and what is drawn.
+ */
+export const ROLE_SVG_MAX_LENGTH = 4096;
+export type RoleSvgTag = 'path' | 'circle' | 'rect' | 'line' | 'polyline' | 'polygon' | 'ellipse' | 'g';
+export type RoleSvgNode = { tag: RoleSvgTag; attrs: Record<string, string>; children: RoleSvgNode[] };
+
+const SVG_TAGS: ReadonlySet<string> = new Set<RoleSvgTag>(['path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'g']);
+const SVG_ATTRS: ReadonlySet<string> = new Set([
+  'd', 'cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'x1', 'y1', 'x2', 'y2',
+  'width', 'height', 'points', 'transform', 'fill',
+]);
+const SVG_VALUE_RE = /^[0-9a-zA-Z .,\-#()]*$/;
+const SVG_OPEN_RE = /^<([a-zA-Z][a-zA-Z0-9:_-]*)((?:\s+[^\s=/>]+\s*=\s*"[^"]*")*)\s*(\/?)>/;
+const SVG_CLOSE_RE = /^<\/([a-zA-Z][a-zA-Z0-9:_-]*)\s*>/;
+const SVG_ATTR_RE = /\s+([^\s=/>]+)\s*=\s*"([^"]*)"/g;
+const SVG_MAX_DEPTH = 8;
+
+function isRoleSvgTag(tag: string): tag is RoleSvgTag {
+  return SVG_TAGS.has(tag);
+}
+
+/** The shapes of a role icon, or null when the markup leaves the grammar. */
+export function parseRoleSvg(raw: unknown): RoleSvgNode[] | null {
+  if (typeof raw !== 'string' || raw.length > ROLE_SVG_MAX_LENGTH) return null;
+  const root: RoleSvgNode[] = [];
+  const stack: RoleSvgNode[] = [];
+  let rest = raw;
+  while (rest.length > 0) {
+    const lt = rest.indexOf('<');
+    const text = lt < 0 ? rest : rest.slice(0, lt);
+    if (text.trim() !== '') return null;
+    if (lt < 0) break;
+    rest = rest.slice(lt);
+    const close = SVG_CLOSE_RE.exec(rest);
+    if (close) {
+      if (stack.pop()?.tag !== close[1]) return null;
+      rest = rest.slice(close[0].length);
+      continue;
+    }
+    const open = SVG_OPEN_RE.exec(rest);
+    if (!open) return null;
+    const tag = open[1] ?? '';
+    if (!isRoleSvgTag(tag)) return null;
+    const attrs: Record<string, string> = {};
+    for (const attr of (open[2] ?? '').matchAll(SVG_ATTR_RE)) {
+      const name = attr[1] ?? '';
+      const value = attr[2] ?? '';
+      if (!SVG_ATTRS.has(name) || Object.hasOwn(attrs, name) || !SVG_VALUE_RE.test(value)) return null;
+      attrs[name] = value;
+    }
+    const parent = stack[stack.length - 1];
+    if (parent && parent.tag !== 'g') return null;
+    const node: RoleSvgNode = { tag, attrs, children: [] };
+    (parent ? parent.children : root).push(node);
+    if (open[3] !== '/') {
+      if (stack.length >= SVG_MAX_DEPTH) return null;
+      stack.push(node);
+    }
+    rest = rest.slice(open[0].length);
+  }
+  return stack.length === 0 ? root : null;
+}
+
+function serializeRoleSvg(nodes: RoleSvgNode[]): string {
+  return nodes.map((n) => {
+    // Values are limited to a charset without quotes or brackets: no escaping needed.
+    const attrs = Object.entries(n.attrs).map(([k, v]) => ` ${k}="${v}"`).join('');
+    return n.children.length ? `<${n.tag}${attrs}>${serializeRoleSvg(n.children)}</${n.tag}>` : `<${n.tag}${attrs}/>`;
+  }).join('');
+}
+
+/** The role icon rebuilt from its parsed shapes, or '' when it leaves the grammar. */
+export function sanitizeRoleSvg(raw: unknown): string {
+  const nodes = parseRoleSvg(raw);
+  return nodes ? serializeRoleSvg(nodes) : '';
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** Draws a role icon under `parent` (the D3 canvas) without going through HTML. */
+export function appendRoleSvg(parent: Element, raw: string): void {
+  const build = (nodes: RoleSvgNode[], into: Element) => {
+    for (const n of nodes) {
+      const el = into.ownerDocument.createElementNS(SVG_NS, n.tag);
+      for (const [k, v] of Object.entries(n.attrs)) el.setAttribute(k, v);
+      build(n.children, el);
+      into.appendChild(el);
+    }
+  };
+  build(parseRoleSvg(raw) ?? [], parent);
+}
+
 /** Custom roles hydrated at runtime by <RolesProvider> (keyed by lowercased id). */
 const customCache = new Map<string, RoleVisual>();
 
@@ -89,7 +190,7 @@ export function hydrateCustomRoles(
       key: r.id,
       label: r.label,
       color: r.color,
-      iconSvg: r.iconSvg,
+      iconSvg: sanitizeRoleSvg(r.iconSvg),
     });
   }
 }

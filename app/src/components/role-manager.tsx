@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
 import { apiErrorMessage } from '@/lib/api-error';
+import { RoleSvg } from '@/components/role-svg';
 
 export type Role = {
   id: string;
@@ -252,8 +253,9 @@ export function RoleManager({ roles, onChanged }: { roles: Role[]; onChanged: ()
                       <span
                         className="grid size-5 shrink-0 place-items-center"
                         style={{ color: r.color }}
-                        dangerouslySetInnerHTML={{ __html: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${r.iconSvg}</svg>` }}
-                      />
+                      >
+                        <RoleSvg svg={r.iconSvg} size={16} />
+                      </span>
                       <span className="flex-1 text-[12px]">{r.label} <span className="text-muted-foreground/60">({r.id})</span></span>
                       <button type="button" onClick={() => editRole(r)} className="text-[11px] text-muted-foreground hover:text-foreground">{t('roles.edit', { id: r.id })}</button>
                       <button type="button" onClick={() => del(r.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
@@ -267,7 +269,7 @@ export function RoleManager({ roles, onChanged }: { roles: Role[]; onChanged: ()
               <div className="flex flex-wrap gap-1.5">
                 {builtins.map((r) => (
                   <button type="button" key={r.id} onClick={() => editRole(r)} aria-label={t('roles.edit', { id: r.id })} className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10.5px] hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring" style={{ color: r.color, borderColor: `${r.color}66`, background: `${r.color}14` }}>
-                    <span dangerouslySetInnerHTML={{ __html: `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${r.iconSvg}</svg>` }} />
+                    <RoleSvg svg={r.iconSvg} size={12} />
                     {r.id} {r.directives_overridden && <span>· {t('roles.modified')}</span>}
                   </button>
                 ))}

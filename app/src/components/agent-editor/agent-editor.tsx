@@ -64,6 +64,7 @@ import {
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
 import { deleteAgentAfterConfirm } from '@/components/agent-editor/delete-agent';
 import { apiErrorMessage } from '@/lib/api-error';
+import { RoleSvg } from '@/components/role-svg';
 
 type AgentSummary = {
   name: string;
@@ -1104,10 +1105,9 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
                             <span
                               className="grid size-3.5 place-items-center"
                               style={{ color: r.color }}
-                              dangerouslySetInnerHTML={{
-                                __html: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${r.iconSvg}</svg>`,
-                              }}
-                            />
+                            >
+                              <RoleSvg svg={r.iconSvg} size={14} />
+                            </span>
                             {r.label}
                           </span>
                         </SelectItem>
