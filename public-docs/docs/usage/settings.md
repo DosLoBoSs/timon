@@ -67,7 +67,8 @@ detecting RAM does not add systemd confinement to Windows or macOS.
 ## Backend and fallback choices
 
 **Settings → AI models → LLM backends** lists built-in providers, providers installed by
-plugins, and providers you added yourself. Only a superadmin can change them.
+plugins, and providers you added yourself. Only a superadmin, or an account with full
+access to the Providers screen (see [Several accounts](./multi-user.md#access-to-the-providers-screen)), can change them.
 Drag a row's handle to set the order in model selectors. Keyboard users can
 press Space on the handle, move with the arrow keys, then press Space again.
 
@@ -107,7 +108,7 @@ Use the live backend catalogue (`timon backends`) rather than copying model IDs 
 
 ### A provider's program
 
-Open a provider in **Settings → AI models → Providers**: its **Program** section shows the command-line tool Timon runs for it on this computer (`claude`, `codex`, `grok`, `copilot`…). Only a superadmin signed in to the app sees it. A provider reached over the network has no program, and no such section.
+Open a provider in **Settings → AI models → Providers**: its **Program** section shows the command-line tool Timon runs for it on this computer (`claude`, `codex`, `grok`, `copilot`…). Only a superadmin, or an account with full access to the Providers screen, signed in to the app sees it. A provider reached over the network has no program, and no such section.
 
 - Its **version**, a status — **Installed**, **Update available**, **Not found on this computer**, **The path you set cannot be run** — and the one path Timon launches. When that path is a link, **About this path** shows the file it points to.
 - **Install** runs the vendor's official installer when the tool is missing (Claude Code, Codex, Grok, Copilot CLI, Pi, Antigravity; opencode on macOS and Linux); **Update** runs it again when the vendor has published a newer version. The command being run and the installer's own output appear while it works; **Run it yourself** shows the same command to paste into a terminal. Hermes, and opencode on Windows, link to their vendor's installation page instead. Pi's installer needs Node.js 22.19 or newer and npm already installed. Timon supports opencode 1: with opencode 2 installed, it says so and offers neither install nor update, which would replace it.
@@ -139,7 +140,7 @@ Choose a provider in **Settings → AI models → Providers** to open its page. 
 
 ## Subscription accounts
 
-An administrator manages a provider's subscription accounts in the **Connection** section of its page (**Settings → AI models → Providers**, then the provider). Any other user finds theirs in **Settings → AI models → Subscription accounts**. Either way you can use several subscriptions of the same provider, for example a personal and a work Claude plan, or two ChatGPT plans for Codex. Each account appears in every model selector as its own choice (`Claude · Perso`), next to the provider's plain entry.
+Subscription accounts live in the **Connection** section of each provider's page (**Settings → AI models → Providers**, then the provider), for everyone. An account that is not the superadmin sees that screen at the level its role gives (see [Several accounts](./multi-user.md#access-to-the-providers-screen)): with **Own accounts only**, the list of providers and, on a provider's page, the **Connection** section with its own accounts and nothing else. You can use several subscriptions of the same provider, for example a personal and a work Claude plan, or two ChatGPT plans for Codex. Each account appears in every model selector as its own choice (`Claude · Perso`), next to the provider's plain entry.
 
 - **Add an account** asks for the provider and a name (administrators also choose who it is **For**: themselves, a user, or the instance), then starts the sign-in on the Timon machine while you stay in your browser.
 - A row shows the address the account is signed in as and its state: **Signed in**, **Not signed in**, **Sign in again** or **Out of quota**.

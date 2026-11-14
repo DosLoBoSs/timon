@@ -13,7 +13,7 @@ A mission never moves to another subscription on its own. If its account is sign
 
 ## Add an account
 
-Open **Settings → AI models → Subscription accounts** and choose **Add an account**. An administrator does it on the provider's own page instead: **Settings → AI models → Providers**, choose the provider, then **Add an account** in its **Connection** section; the **Provider** field is not asked there, the page already names it.
+Open **Settings → AI models → Providers**, choose the provider, then **Add an account** in its **Connection** section; the **Provider** field is not asked there, the page already names it. On a shared installation, an account that is not the superadmin needs its role to give it at least **Own accounts only** on the Providers screen (see [Several accounts](./multi-user.md#access-to-the-providers-screen)); with **Hidden**, an administrator signs its accounts in for it.
 
 | Field | What it is |
 |---|---|
