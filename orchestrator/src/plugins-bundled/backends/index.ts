@@ -12,6 +12,7 @@ import { migrateBackendKeys } from './backend-keys.js';
 import { registerAccountRoutes } from './account-routes.js';
 import { registerBinaryRoutes } from './binary-routes.js';
 import { registerProviderCliRoutes } from './provider-cli-routes.js';
+import { registerProviderOverviewRoutes } from './provider-overview-routes.js';
 import { startCliVersionSweep } from '../../provider-cli-versions.js';
 import { purgeLoginStaging } from '../../backends/account-login.js';
 import { watchLocalBackends } from '../../backends/local-profiles.js';
@@ -37,6 +38,7 @@ export function apply(ctx: Context): void {
   registerAccountRoutes(router);
   registerBinaryRoutes(router);
   registerProviderCliRoutes(router);
+  registerProviderOverviewRoutes(router);
   // A flow does not outlive the daemon that ran it: its staging is debris.
   purgeLoginStaging();
 

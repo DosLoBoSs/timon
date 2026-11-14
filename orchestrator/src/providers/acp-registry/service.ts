@@ -278,6 +278,23 @@ export class AcpRegistryService {
     return { registryVersion: registry.version, dropped: registry.dropped, stale, agents };
   }
 
+  /**
+   * The installed agents, without asking the network: the registry's last copy, when there is one,
+   * says whether an update exists. For the screens that must answer even when the registry is down.
+   */
+  installedAgents(): AgentView[] {
+    const registry = this.cache?.registry ?? null;
+    return Object.values(readState(this.paths)).map((entry) => {
+      const agent = registry?.agents.find((candidate) => candidate.id === entry.id);
+      if (agent) return this.view(agent, entry);
+      return {
+        id: entry.id, name: entry.name, version: entry.version, description: null, website: null, license: null,
+        supported: false, reason: registry ? 'no longer listed in the registry' : null, integrity: null,
+        installed: this.installedView(entry, null, null),
+      };
+    });
+  }
+
   private installedView(entry: InstalledAgent, latest: string | null, support: AgentSupport | null): NonNullable<AgentView['installed']> {
     return {
       version: entry.version,
