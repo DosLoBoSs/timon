@@ -9,10 +9,11 @@
  * is the name it uses, so a loopback app answers only names that cannot be
  * made to point here from outside.
  *
- * Same rule as the daemon's (`orchestrator/src/http-host.ts`), kept in step by
- * hand: the two packages share no code. The port is not compared — Docker
- * publishes the app on another port than it listens on, and a rebinding page
- * always uses the port it attacks anyway.
+ * Same rule as the daemon's (`orchestrator/src/http-host.ts`), copied: the two
+ * packages share no code. `orchestrator/src/http-host-parity.test.ts` fails
+ * when the copies diverge outside their declared differences. The port is not
+ * compared — Docker publishes the app on another port than it listens on, and
+ * a rebinding page always uses the port it attacks anyway.
  */
 import { statSync, readFileSync } from 'node:fs';
 import { isIP } from 'node:net';
