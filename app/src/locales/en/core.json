@@ -1369,7 +1369,6 @@
       },
       "models": {
         "backends": "Providers",
-        "accounts": "Subscription accounts",
         "fallback": "Auto switch",
         "breaker": "Circuit breaker",
         "quotas": "Quotas"
@@ -1430,8 +1429,7 @@
         "terminal": "shell console pty font"
       },
       "models": {
-        "backends": "claude codex provider llm api model default order",
-        "accounts": "subscription account sign in login connect reconnect several claude codex chatgpt plan device code",
+        "backends": "claude codex provider llm api model default order subscription account sign in login connect reconnect several chatgpt plan device code",
         "fallback": "fallback backup quota switch exhausted cooldown last resort",
         "breaker": "circuit breaker sterile turns sideline",
         "quotas": "usage limits credits subscription plan reset"
@@ -3768,7 +3766,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Several subscriptions of the same provider, each one a choice in the model selectors (\"Claude · Perso\"). You sign in your own accounts; an administrator signs in anyone's. A mission never moves to another subscription on its own.",
     "loading": "Loading accounts…",
     "empty": "No subscription account yet: missions run on the provider's sign-in of this machine.",
     "add": "Add an account",

@@ -7,8 +7,8 @@
  * picker's order in a "Reorder" mode. A row opens the provider's page, where
  * it is also switched on or off: the row stays one target, one status line.
  *
- * The daemon decides what a provider is and its status (the overview, a
- * superadmin session only): this list reads it and paints it.
+ * The daemon decides what a provider is and its status (the overview, at the
+ * viewer's level of the screen): this list reads it and paints it.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { ArrowUpDown, Check, RefreshCw, Search } from 'lucide-react';
@@ -39,11 +39,13 @@ const PREFERRED_KEY = 'TIMON_PREFERRED_BACKEND';
 /** The selector's "let Timon choose" entry; never a backend id (those are slugs). */
 const AUTO = '__auto__';
 
-export function ProvidersList({ onOpen, onVerified }: {
+export function ProvidersList({ onOpen, onVerified, readOnly = false }: {
   /** Opens the page of one provider (`useProviderNavigation().open`). */
   onOpen: (id: string) => void;
   /** After a Check: the blocks still below the list read their sources again. */
   onVerified?: () => void;
+  /** The own-accounts level: the list and its search, without the default provider, Reorder or Check. */
+  readOnly?: boolean;
 }): ReactElement {
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' });
   const [query, setQuery] = useState('');
@@ -83,7 +85,7 @@ export function ProvidersList({ onOpen, onVerified }: {
   const { providers } = loaded.overview;
   return (
     <div className="space-y-6" data-providers-list>
-      <DefaultProvider overview={loaded.overview} onSaved={load} />
+      {readOnly ? null : <DefaultProvider overview={loaded.overview} onSaved={load} />}
 
       <div className="flex flex-wrap items-center gap-2">
         {reordering ? (
@@ -95,17 +97,19 @@ export function ProvidersList({ onOpen, onVerified }: {
               placeholder={t('providerList.search')} aria-label={t('providerList.search')} className="h-8 pl-8 text-[13px]" />
           </div>
         )}
-        <Button type="button" size="sm" variant={reordering ? 'default' : 'ghost'} className="h-8 gap-1.5" onClick={() => setReordering((on) => !on)}>
-          {reordering ? <Check aria-hidden className="size-3.5" /> : <ArrowUpDown aria-hidden className="size-3.5" />}
-          {t(reordering ? 'providerList.reorder.done' : 'providerList.reorder.start')}
-        </Button>
-        <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" disabled={verifying} onClick={() => void verify()}>
-          <RefreshCw aria-hidden className={cn('size-3.5', verifying && 'animate-spin')} />
-          {t('providerList.verify.button')}
-        </Button>
+        {readOnly ? null : <>
+          <Button type="button" size="sm" variant={reordering ? 'default' : 'ghost'} className="h-8 gap-1.5" onClick={() => setReordering((on) => !on)}>
+            {reordering ? <Check aria-hidden className="size-3.5" /> : <ArrowUpDown aria-hidden className="size-3.5" />}
+            {t(reordering ? 'providerList.reorder.done' : 'providerList.reorder.start')}
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" disabled={verifying} onClick={() => void verify()}>
+            <RefreshCw aria-hidden className={cn('size-3.5', verifying && 'animate-spin')} />
+            {t('providerList.verify.button')}
+          </Button>
+        </>}
       </div>
 
-      {reordering ? <ProvidersReorder onChanged={() => void load()} /> : (
+      {reordering && !readOnly ? <ProvidersReorder onChanged={() => void load()} /> : (
         <ProviderGroups providers={providers} query={query} onOpen={onOpen} />
       )}
     </div>

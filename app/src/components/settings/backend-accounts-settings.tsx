@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * Subscription accounts pane of the Models settings (TODO #52, volet 3).
+ * Subscription accounts of a provider (TODO #52), as the Connection section of
+ * its page carries them (`provider-connection-section.tsx`).
  *
  * Lists the accounts the viewer may see, adds one, and signs it in from the
  * browser: the CLI runs on the daemon's machine, so the person opens the
@@ -455,20 +456,6 @@ function AddAccountForm({ backends, users, superadmin, onCreated, onCancel }: {
         <Button type="submit" size="sm" className="h-7 text-[12px]" disabled={busy || !backend || name.trim() === ''}>{t('backendAccounts.form.create')}</Button>
       </div>
     </form>
-  );
-}
-
-/**
- * The pane of Settings › AI models for whoever has no provider page: a plain
- * user signs in their own accounts here. The superadmin manages them on each
- * provider's page (`provider-connection-section.tsx`), the same list filtered.
- */
-export function BackendAccountsSettings(): ReactElement {
-  return (
-    <div className="space-y-4">
-      <p className="max-w-[65ch] text-[13px] leading-snug text-muted-foreground">{t('backendAccounts.description')}</p>
-      <BackendAccountsList />
-    </div>
   );
 }
 

@@ -644,6 +644,8 @@
     }
   },
   "providerList": {
+    "hidden": "Votre compte n’a pas accès aux fournisseurs. Demandez à un administrateur.",
+    "ownAccountsIntro": "Les fournisseurs de ce Timon. Ouvrez-en un pour ajouter et connecter vos propres comptes d’abonnement.",
     "open": "Ouvrir {name}",
     "updateAvailable": "Mise à jour disponible",
     "search": "Rechercher un fournisseur",

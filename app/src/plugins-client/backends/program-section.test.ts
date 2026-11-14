@@ -86,6 +86,8 @@ test('the Program section paints the daemon\'s program and drives its installer 
   const requests: { method: string; url: string; body: unknown }[] = [];
   install('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
+    // The superadmin: the whole page (`lib/provider-access.ts`).
+    if (url === '/api/ui/auth/me') return Response.json({ user: { id: 'u-admin', is_superadmin: true }, can: {} });
     const method = init?.method ?? 'GET';
     const body = init?.body ? JSON.parse(String(init.body)) as unknown : undefined;
     requests.push({ method, url, body });

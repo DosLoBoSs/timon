@@ -1598,7 +1598,6 @@
       },
       "models": {
         "backends": "공급자",
-        "accounts": "구독 계정",
         "fallback": "자동 전환",
         "breaker": "회로 차단기",
         "quotas": "할당량"
@@ -1658,8 +1657,7 @@
         "terminal": "셸 콘솔 터미널 글꼴 shell console pty font"
       },
       "models": {
-        "backends": "claude codex 공급자 LLM API 모델 기본 순서 provider model",
-        "accounts": "구독 계정 로그인 연결 다시 연결 여러 claude codex chatgpt 요금제 기기 코드 subscription account login",
+        "backends": "claude codex 공급자 LLM API 모델 기본 순서 provider model 구독 계정 로그인 연결 다시 연결 여러 chatgpt 요금제 기기 코드 subscription account login",
         "fallback": "대체 백업 할당량 전환 소진 대기 시간 최후 수단 fallback quota",
         "breaker": "회로 차단기 무익한 턴 대기 circuit breaker",
         "quotas": "사용량 한도 크레딧 구독 요금제 초기화 usage limits credits"
@@ -3974,7 +3972,6 @@
     }
   },
   "backendAccounts": {
-    "description": "같은 공급자의 여러 구독으로, 각각 모델 선택기의 선택지가 됩니다(\"Claude · Perso\"). 내 계정은 직접 로그인하며, 관리자는 누구의 계정이든 로그인할 수 있습니다. 미션이 스스로 다른 구독으로 옮겨 가지는 않습니다.",
     "loading": "계정 불러오는 중…",
     "empty": "아직 구독 계정이 없습니다: 미션은 이 컴퓨터의 공급자 로그인으로 실행됩니다.",
     "add": "계정 추가",

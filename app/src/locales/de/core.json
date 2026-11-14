@@ -1598,7 +1598,6 @@
       },
       "models": {
         "backends": "Anbieter",
-        "accounts": "Abo-Konten",
         "fallback": "Auto-Wechsel",
         "breaker": "Schutzschalter",
         "quotas": "Kontingente"
@@ -1658,8 +1657,7 @@
         "terminal": "shell konsole pty schrift"
       },
       "models": {
-        "backends": "claude codex anbieter provider llm api modell standard reihenfolge",
-        "accounts": "abo konto anmelden login verbinden neu verbinden mehrere claude codex chatgpt tarif gerätecode",
+        "backends": "claude codex anbieter provider llm api modell standard reihenfolge abo konto anmelden login verbinden neu verbinden mehrere chatgpt tarif gerätecode",
         "fallback": "fallback ausweich kontingent quota wechsel erschöpft abkühlung letzter ausweg",
         "breaker": "schutzschalter circuit breaker sterile turns aussetzen",
         "quotas": "nutzung limits credits abo tarif zurücksetzen"
@@ -3974,7 +3972,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Mehrere Abos desselben Anbieters, jedes eine Wahl in den Modellauswahlfeldern („Claude · Perso“). Du meldest deine eigenen Konten an; ein Administrator meldet die von allen an. Eine Mission wechselt nie von selbst zu einem anderen Abo.",
     "loading": "Konten werden geladen…",
     "empty": "Noch kein Abo-Konto: Missionen laufen mit der Anbieter-Anmeldung dieses Rechners.",
     "add": "Konto hinzufügen",

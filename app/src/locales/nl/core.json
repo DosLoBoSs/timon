@@ -1598,7 +1598,6 @@
       },
       "models": {
         "backends": "Providers",
-        "accounts": "Abonnementsaccounts",
         "fallback": "Automatisch wisselen",
         "breaker": "Stroomonderbreker",
         "quotas": "Quota"
@@ -1658,8 +1657,7 @@
         "terminal": "shell console pty lettertype"
       },
       "models": {
-        "backends": "claude codex provider llm api model standaard volgorde",
-        "accounts": "abonnement account aanmelden login koppelen opnieuw meerdere claude codex chatgpt plan apparaatcode",
+        "backends": "claude codex provider llm api model standaard volgorde abonnement account aanmelden login koppelen opnieuw meerdere chatgpt plan apparaatcode",
         "fallback": "fallback reserve quotum wisselen uitgeput afkoelen laatste redmiddel",
         "breaker": "stroomonderbreker circuit breaker steriele beurten opzij",
         "quotas": "gebruik limieten credits abonnement plan reset"
@@ -3974,7 +3972,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Meerdere abonnementen van dezelfde provider, elk een keuze in de modelkeuzelijsten (‘Claude · Perso’). Je meldt je eigen accounts aan; een beheerder meldt die van iedereen aan. Een missie stapt nooit vanzelf over naar een ander abonnement.",
     "loading": "Accounts laden…",
     "empty": "Nog geen abonnementsaccount: missies draaien op de aanmelding bij de provider van deze machine.",
     "add": "Account toevoegen",

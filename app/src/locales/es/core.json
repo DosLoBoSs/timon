@@ -1598,7 +1598,6 @@
       },
       "models": {
         "backends": "Proveedores",
-        "accounts": "Cuentas de suscripción",
         "fallback": "Cambio automático",
         "breaker": "Cortacircuitos",
         "quotas": "Cuotas"
@@ -1658,8 +1657,7 @@
         "terminal": "shell consola pty fuente tipografía"
       },
       "models": {
-        "backends": "claude codex proveedor llm api modelo predeterminado orden",
-        "accounts": "suscripción cuenta iniciar sesión login conectar reconectar varias claude codex chatgpt plan dispositivo código",
+        "backends": "claude codex proveedor llm api modelo predeterminado orden suscripción cuenta iniciar sesión login conectar reconectar varias chatgpt plan dispositivo código",
         "fallback": "respaldo reserva cuota cambio agotada enfriamiento último recurso fallback",
         "breaker": "cortacircuitos circuit breaker turnos estériles apartar",
         "quotas": "límites de uso créditos suscripción plan reinicio cuotas"
@@ -3974,7 +3972,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Varias suscripciones del mismo proveedor, cada una como una opción en los selectores de modelo («Claude · Perso»). Tú inicias sesión con tus propias cuentas; un administrador la inicia con las de cualquiera. Una misión nunca pasa sola a otra suscripción.",
     "loading": "Cargando cuentas…",
     "empty": "Aún no hay ninguna cuenta de suscripción: las misiones se ejecutan con el inicio de sesión del proveedor de este equipo.",
     "add": "Añadir una cuenta",

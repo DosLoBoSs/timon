@@ -6,8 +6,9 @@
  * sections of the `settings.provider.section` slot — the product's common ones
  * and those of the plugin that brings this provider (`provider-sections.ts`).
  *
- * The daemon decides what a provider is and what it may show (a superadmin
- * session only): this page reads its overview and paints it.
+ * The daemon decides what a provider is and what it may show, at the viewer's
+ * level of the screen (`lib/provider-access.ts`): this page reads its overview
+ * and paints it; `sections: 'connection'` keeps the Connection section alone.
  */
 import { useCallback, useEffect, useMemo, useState, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
@@ -29,7 +30,7 @@ type Loaded =
 /** Events after which what the daemon says of a provider may have changed. */
 const REFRESH_ON = ['backends_changed', 'plugins_changed'] as const;
 
-export function ProviderPage({ requested, onBack, onCanonical, HeaderAction }: {
+export function ProviderPage({ requested, onBack, onCanonical, HeaderAction, sections = 'all' }: {
   /** What `provider=` names: a provider id, or the plugin or backend id an older link carries. */
   requested: string;
   onBack: () => void;
@@ -37,6 +38,8 @@ export function ProviderPage({ requested, onBack, onCanonical, HeaderAction }: {
   onCanonical?: (id: string) => void;
   /** Painted at the right of the header, inside the page's context (the host's on/off switch). */
   HeaderAction?: ComponentType;
+  /** `connection`: the Connection section alone (the own-accounts level), whoever paints it. */
+  sections?: 'all' | 'connection';
 }): ReactElement {
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' });
 
@@ -75,7 +78,7 @@ export function ProviderPage({ requested, onBack, onCanonical, HeaderAction }: {
       {value ? (
         <ProviderPageProvider value={value}>
           <ProviderHeader value={value} action={HeaderAction ? <HeaderAction /> : null} />
-          <ProviderSections pluginId={value.provider.pluginId} />
+          <ProviderSections pluginId={value.provider.pluginId} only={sections === 'connection' ? 'connection' : null} />
         </ProviderPageProvider>
       ) : null}
     </div>
@@ -120,9 +123,12 @@ function ProviderHeader({ value, action }: { value: ProviderPageValue; action: R
 }
 
 /** The slot's entries for this provider, each in its own boundary: a failing section never takes the page down. */
-function ProviderSections({ pluginId }: { pluginId: string | null }): ReactElement {
+function ProviderSections({ pluginId, only }: { pluginId: string | null; only: string | null }): ReactElement {
   const entries = useSlotEntries(PROVIDER_SECTION_SLOT);
-  const sections = useMemo(() => sectionsFor(entries, pluginId), [entries, pluginId]);
+  const sections = useMemo(
+    () => sectionsFor(entries, pluginId).filter((entry) => only === null || entry.key === only),
+    [entries, pluginId, only],
+  );
   return (
     // A section with nothing to say renders nothing: its empty wrapper leaves no gap.
     <div className="flex flex-col gap-6 [&>:empty]:hidden">

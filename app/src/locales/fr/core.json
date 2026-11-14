@@ -1369,7 +1369,6 @@
       },
       "models": {
         "backends": "Fournisseurs",
-        "accounts": "Comptes d’abonnement",
         "fallback": "Bascule auto",
         "breaker": "Disjoncteur",
         "quotas": "Quotas"
@@ -1430,8 +1429,7 @@
         "terminal": "shell console pty police"
       },
       "models": {
-        "backends": "claude codex fournisseur llm api modèle défaut ordre",
-        "accounts": "abonnement compte connexion connecter reconnecter plusieurs claude codex chatgpt forfait code appareil",
+        "backends": "claude codex fournisseur llm api modèle défaut ordre abonnement compte connexion connecter reconnecter plusieurs chatgpt forfait code appareil",
         "fallback": "secours repli quota bascule épuisé délai dernier recours",
         "breaker": "disjoncteur tours stériles",
         "quotas": "usage limites crédits abonnement forfait réinitialisation"
@@ -3768,7 +3766,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Plusieurs abonnements d’un même fournisseur, chacun choisi dans les sélecteurs de modèle (« Claude · Perso »). Tu connectes tes propres comptes ; un administrateur connecte ceux de n’importe qui. Une mission ne bascule jamais seule sur un autre abonnement.",
     "loading": "Chargement des comptes…",
     "empty": "Aucun compte d’abonnement : les missions tournent sur la connexion du fournisseur de cette machine.",
     "add": "Ajouter un compte",

@@ -106,26 +106,32 @@ test('a mapped plugin pane lands in its category, a third-party one under Plugin
     ],
   }));
   // The fallback tab is a native pane now (it hosts its own model picker),
-  // so it is always present, not dropped when no fallback rows exist. Same
-  // for the subscription accounts pane.
-  assert.deepEqual(tabIds(layout, 'models'), ['backends', 'accounts', 'fallback', 'quotas']);
+  // so it is always present, not dropped when no fallback rows exist.
+  assert.deepEqual(tabIds(layout, 'models'), ['backends', 'fallback', 'quotas']);
   assert.deepEqual(tabIds(layout, 'plugins'), ['@acme/job']);
 });
 
-test('a user with no setting row nor plugin pane still finds the subscription accounts', () => {
-  // A plain user signs in their own accounts: the tab must not hang on rows
-  // or plugin panes only an administrator gets.
-  const layout = buildSettingsLayout(input({ rows: [], plugins: [] }));
-  assert.ok(tabIds(layout, 'models').includes('accounts'));
+test('the subscription accounts are on the provider pages for everyone: no tab of their own', () => {
+  for (const superadmin of [true, false]) {
+    const layout = buildSettingsLayout(input({
+      rows: [],
+      plugins: [{ id: '@timon/backends', origin: 'occupant', label: 'Backends' }],
+      superadmin,
+    }));
+    assert.deepEqual(tabIds(layout, 'models'), ['backends', 'fallback']);
+  }
+  // An old link to the former tab lands on the providers.
+  assert.deepEqual(legacyGroupTarget('accounts'), { category: 'models', tab: 'backends' });
 });
 
-test('the superadmin finds the subscription accounts on each provider page, not in a tab', () => {
-  const layout = buildSettingsLayout(input({
-    rows: [],
-    plugins: [{ id: '@timon/backends', origin: 'occupant', label: 'Backends' }],
-    superadmin: true,
-  }));
-  assert.deepEqual(tabIds(layout, 'models'), ['backends', 'fallback']);
+test('the Providers tab follows the level: shown at full and own accounts, gone when hidden, never under Plugins', () => {
+  const plugins = [{ id: '@timon/backends', origin: 'occupant' as const, label: 'Backends' }, { id: '@acme/job', origin: 'manifest' as const, label: 'Job' }];
+  for (const providers of ['full', 'accounts'] as const) {
+    assert.ok(tabIds(buildSettingsLayout(input({ rows: [], plugins, providers })), 'models').includes('backends'), providers);
+  }
+  const hidden = buildSettingsLayout(input({ rows: [], plugins, providers: 'none' }));
+  assert.deepEqual(tabIds(hidden, 'models'), ['fallback']);
+  assert.deepEqual(tabIds(hidden, 'plugins'), ['@acme/job']);
 });
 
 test('Plugins disappears when nothing lives there', () => {

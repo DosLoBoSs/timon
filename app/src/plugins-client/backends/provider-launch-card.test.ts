@@ -53,6 +53,8 @@ test('the refused launch card lands on the provider page, whose Program section 
   let overviewReads = 0;
   install('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
+    // The superadmin: the whole page (`lib/provider-access.ts`).
+    if (url === '/api/ui/auth/me') return Response.json({ user: { id: 'u-admin', is_superadmin: true }, can: {} });
     if (init?.method === 'POST') {
       posts.push({ url, body: JSON.parse(String(init.body)) });
       acmeAllowed = true;

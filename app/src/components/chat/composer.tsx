@@ -81,8 +81,7 @@ import { Slot, SlotSingle } from '@/lib/plugin-host/render';
 import { declareSlot, register, slotKind } from '@/lib/plugin-host/slots';
 import { contextLimitFor, nextStandardLimit } from './chat-format';
 import { AccountUsageStatus } from '@/components/account-usage-status';
-import { useMe } from '@/hooks/use-me';
-import { actingUser } from '@/lib/auth';
+import { useProviderAccess } from '@/hooks/use-me';
 import { useAfterConversation } from '@/lib/load-priority';
 import { agentGitId, useGit } from '@/lib/git-store';
 import { projectSlugOf } from '@/lib/project-slug';
@@ -1367,7 +1366,7 @@ const UsageStrip = memo(function UsageStrip({
 }) {
   const accountUsage = liveStats.accountUsage;
   const catalog = useBackendCatalog();
-  const superadmin = actingUser(useMe())?.is_superadmin === true;
+  const providers = useProviderAccess();
   if (accountUsage?.kind === 'disconnected' || accountUsage?.kind === 'error') {
     return (
       <div className={cn(
@@ -1377,7 +1376,7 @@ const UsageStrip = memo(function UsageStrip({
         <AccountUsageStatus
           view={accountUsage}
           provider={accountUsage.kind === 'disconnected' ? catalog.backends.find((b) => b.id === accountUsage.backend) : undefined}
-          superadmin={superadmin}
+          providers={providers}
         />
       </div>
     );
