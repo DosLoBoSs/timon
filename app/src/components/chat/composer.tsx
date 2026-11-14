@@ -139,8 +139,8 @@ export type ChatComposerValue = {
    *  `steer` redirects it now, `queue` waits for its end. Absent = the
    *  user's preference. */
   send: (mode?: WorkingEnterMode) => void;
-  taRef: RefObject<HTMLTextAreaElement>;
-  fileRef: RefObject<HTMLInputElement>;
+  taRef: RefObject<HTMLTextAreaElement | null>;
+  fileRef: RefObject<HTMLInputElement | null>;
   pendingImages: PendingImage[];
   setPendingImages: Dispatch<SetStateAction<PendingImage[]>>;
   addImageFiles: (files: File[]) => Promise<void>;

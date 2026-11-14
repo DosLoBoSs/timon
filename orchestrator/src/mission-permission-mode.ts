@@ -27,9 +27,11 @@ const BRIDGE_LADDER = ['plan', 'default', 'acceptEdits', 'auto', 'bypassPermissi
 const SANDBOX_LADDER = ['plan', 'auto', 'bypassPermissions'] as const;
 
 export type MissionPermissionState = {
-  /** The level the next turn really runs in, as its Claude name: a sandbox
-   *  dialect runs `default` and `acceptEdits` in its workspace-write sandbox,
-   *  so it reads `auto` here, not the label the agent's config carries. */
+  /** The level the next turn really runs in, as its Claude name: on a backend
+   *  that declares its supported modes, the one it really runs (`plan` for any
+   *  other); a sandbox dialect runs `default` and `acceptEdits` in its
+   *  workspace-write sandbox, so it reads `auto` here, not the label the
+   *  agent's config carries. */
   mode: string;
   /** The level as written on the mission or the agent, before the backend
    *  had its say. Differs from `mode` only where the backend rounds it. */
@@ -74,8 +76,10 @@ export function missionPermissionState(
   const fromMission = mission.permission_mode_override;
   const configured = canonicalPermissionMode(fromMission || cfg.permission_mode || 'default');
   const source = fromMission ? 'mission' : cfg.permission_mode ? 'agent' : 'default';
-  const sandbox = catalogBackend(backend)?.permissionModel === 'sandbox';
-  const ladder: readonly string[] = sandbox ? SANDBOX_LADDER : BRIDGE_LADDER;
+  const entry = catalogBackend(backend);
+  const ladder: readonly string[] = entry?.permissionModel === 'sandbox' ? SANDBOX_LADDER : BRIDGE_LADDER;
+  // A rung the backend would run as another one is not a choice.
+  const supported = entry?.supportedPermissionModes;
   return {
     // The same rounding the permission ceiling applies: showing the label
     // would name a level the sandbox does not have (a tester read
@@ -85,7 +89,7 @@ export function missionPermissionState(
     source,
     backend,
     switchable: switchableBackend(backend),
-    choices: ladder.filter((m) => permissionModeRefusal(m, authority) === null),
+    choices: ladder.filter((m) => (!supported || supported.includes(m)) && permissionModeRefusal(m, authority, backend) === null),
   };
 }
 

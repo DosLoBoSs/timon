@@ -313,6 +313,7 @@ import { CompactionTrace } from '@/components/chat/compaction-trace';
 import { chatHref } from '@/lib/chat-island-params';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
 import { apiErrorMessage } from '@/lib/api-error';
+import { isFenceRefusal } from '@/lib/mission-isolation';
 
 // Cards a few messages only carry, and the model dialog: fetched when one is
 // drawn, not with every chat (docs/BUNDLE-SIZE.md).
@@ -4885,7 +4886,12 @@ export function ChatClient({
       let detail = '';
       try {
         const text = await res.text();
-        try { detail = String((JSON.parse(text) as { error?: unknown }).error ?? text); } catch { detail = text; }
+        try {
+          const body: unknown = JSON.parse(text);
+          // A refusal the reader can act on is said in their words, not as a failed spawn.
+          if (isFenceRefusal(body)) return apiErrorMessage(body, { status: res.status });
+          detail = String((body as { error?: unknown }).error ?? text);
+        } catch { detail = text; }
       } catch { /* no body */ }
       return `spawn failed: ${res.status}${detail ? ` — ${detail.slice(0, 400)}` : ''}`;
     };
@@ -5032,6 +5038,12 @@ export function ChatClient({
         }
         // Too big for the daemon: a fresh spawn would carry the same body.
         if (res.status === 413) throw new Error(messageOverBudget());
+        // The fence is required and this machine cannot apply it: a fresh
+        // spawn would be refused the same way.
+        if (res.status === 503) {
+          const j: unknown = await res.clone().json().catch(() => null);
+          if (isFenceRefusal(j)) throw new Error(apiErrorMessage(j, { status: res.status }));
+        }
         // The message replied to is not this conversation's: the mission is
         // alive, a fresh spawn would lose it. Nothing was sent.
         if (res.status === 400 || res.status === 422) {

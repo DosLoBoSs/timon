@@ -9292,6 +9292,12 @@ export const dbApi = {
         const user = this.getUserById(ownerId);
         if (user && user.status === 'active') return asMissionActor(user);
       }
+      // No account yet: the loopback is open to the install's owner, and a
+      // mission used to run on the daemon-token. It keeps those rights, read at
+      // every request, but as an agent's token — never a person (no Allow on a
+      // card) nor the operator (no first-account setup). The first account
+      // closes it: an unattributed mission falls back to no grant.
+      if (this.countUsers() === 0) return { token, user: null, actorId, isSuperadmin: true, permissions: ['*'] };
       return { token, user: null, actorId, isSuperadmin: false, permissions: [] };
     }
     return { token, user: null, actorId, isSuperadmin: false };

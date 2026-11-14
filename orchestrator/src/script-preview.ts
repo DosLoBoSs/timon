@@ -324,7 +324,8 @@ function locate(root: string, base: string | null, target: string): Located {
   } catch {
     return { status: 'symlink_outside' };
   }
-  // A dangling link is not followed: `safeResolve` only resolves what exists.
+  // `safeResolve` refuses a broken link (caught above) and re-attaches the
+  // components that do not exist yet, so a path that is not there is missing.
   if (!existsSync(real)) return { status: 'missing', rel };
   return { status: 'ok', real, rel };
 }
