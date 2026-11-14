@@ -36,13 +36,19 @@ const { registerRoutes: registerProjectRoutes } = await import('../plugins-bundl
 const { dbApi } = await import('../db.js');
 const { issueMissionApiToken } = await import('./api-tokens.js');
 const { SESSION_COOKIE, hashSessionToken, issueSessionToken } = await import('./session.js');
-const { agentWideningRefusal } = await import('./privileged-overrides.js');
+const { agentWideningRefusal, skillWideningRefusal } = await import('./privileged-overrides.js');
+const { seedBundledSkills, upsertSkill } = await import('../skills.js');
+const { listSkillAttachments, putSkillAttachment } = await import('../skill-attachments.js');
 const { loadConfig } = await import('../agent-config.js');
 const { getMcp } = await import('../mcp.js');
+
+const { createDelegationHandler } = await import('../mission-delegation.js');
 
 const app = express();
 app.use(createDaemonAuthMiddleware({ token: TOKEN, required: true }));
 app.use(express.json());
+// A mission spawns through delegation; the launcher is never reached by a refusal.
+app.post('/api/missions/delegate', createDelegationHandler(async () => { throw new Error('a refused delegation launched a mission'); }));
 registerUserRoutes(app, { setupPolicy: 'free' });
 registerAgentRoutes(app);
 registerKanbanRoutes(app);
@@ -105,6 +111,10 @@ const mission: Caller = { bearer: issueMissionApiToken(missionId) };
 // A command on the host, declared by a person, and an http server.
 assert.equal((await call('POST', '/api/mcp', operator, { id: 'host-shell', transport: { type: 'stdio', command: 'sh' } })).status, 200);
 assert.equal((await call('POST', '/api/mcp', operator, { id: 'remote-docs', transport: { type: 'http', url: 'https://mcp.example.com/docs' } })).status, 200);
+
+// `git-publish` ships with Timon and pre-authorises `Bash(git *)` and `Bash(gh *)`.
+seedBundledSkills();
+upsertSkill('plain-notes', '# Plain notes\n\nNo tool declared.\n');
 
 let counter = 0;
 const fresh = (): string => `target.agent-${++counter}`;
@@ -193,6 +203,92 @@ test('a relaxed mission cannot hand a task or a role extra tools or a stdio serv
   assertPersonOnly(await call('PATCH', '/api/projects/widen/roles/code', mission, { agent: 'widen.coder', mcp_servers: ['host-shell'] }), /role code mcp_servers attaches host-shell/);
 });
 
+test('a relaxed mission cannot attach a skill that pre-authorises tools, at any scope', async () => {
+  const name = fresh();
+  await seedAgent(name, { reports_to: 'caller.pilot' });
+  assertPersonOnly(
+    await call('POST', '/api/skill-attachments', mission, { skill: 'git-publish', scope: 'agent', target: name }),
+    /skill adds skill git-publish, which pre-authorises Bash\(git \*\).*Agents or Skills page/,
+  );
+  const projectDir = mkdtempSync(join(tmpdir(), 'timon-agent-widening-skills-'));
+  dbApi.upsertProject('skillwiden', { cwd: projectDir });
+  for (const [scope, target] of [['project', 'skillwiden'], ['role', 'coder'], ['global', undefined]] as const) {
+    assertPersonOnly(
+      await call('POST', '/api/skill-attachments', mission, { skill: 'git-publish', scope, ...(target ? { target } : {}) }),
+      /git-publish, which pre-authorises .*the agents of/,
+    );
+  }
+  assert.deepEqual(listSkillAttachments({ skill: 'git-publish' }), []);
+  // A skill that declares no tool passes, at the agent and at a wider scope.
+  const plain = await call('POST', '/api/skill-attachments', mission, { skill: 'plain-notes', scope: 'agent', target: name });
+  assert.equal(plain.status, 200, JSON.stringify(plain.json));
+  const wide = await call('POST', '/api/skill-attachments', mission, { skill: 'plain-notes', scope: 'project', target: 'skillwiden' });
+  assert.equal(wide.status, 200, JSON.stringify(wide.json));
+  // Excluding a skill narrows: accepted.
+  const excluded = await call('POST', '/api/skill-attachments', mission, { skill: 'git-publish', scope: 'agent', target: name, exclude: true });
+  assert.equal(excluded.status, 200, JSON.stringify(excluded.json));
+});
+
+test('a relaxed mission cannot lift an exclusion that held back a skill with tools', async () => {
+  const name = fresh();
+  await seedAgent(name, { reports_to: 'caller.pilot' });
+  const row = putSkillAttachment({ skill: 'git-publish', scope: 'agent', target: name, mode: 'include', exclude: true });
+  assertPersonOnly(await call('DELETE', `/api/skill-attachments/${row.id}`, mission), /git-publish, which pre-authorises/);
+  assert.equal(listSkillAttachments({ scope: 'agent', target: name }).length, 1);
+});
+
+test('a relaxed mission cannot hand an agent a skill with tools through its `skills`', async () => {
+  const name = fresh();
+  await seedAgent(name, { reports_to: 'caller.pilot' });
+  assertPersonOnly(await call('PATCH', `/api/agents/${name}/config`, mission, { skills: ['plain-notes', 'git-publish'] }), /skills adds skill git-publish/);
+  assertPersonOnly(
+    await call('POST', '/api/agents', mission, { name: fresh(), system_prompt: 'p', config: { skills: ['git-publish'] } }),
+    /skills adds skill git-publish/,
+  );
+  const plain = await call('PATCH', `/api/agents/${name}/config`, mission, { skills: ['plain-notes'] });
+  assert.equal(plain.status, 200, JSON.stringify(plain.json));
+  // An agent a person gave the skill keeps it, and a mission may re-send or drop it.
+  const held = fresh();
+  await seedAgent(held, { reports_to: 'caller.pilot', skills: ['git-publish'] });
+  const same = await call('PATCH', `/api/agents/${held}/config`, mission, { skills: ['git-publish', 'plain-notes'] });
+  assert.equal(same.status, 200, JSON.stringify(same.json));
+  const dropped = await call('PATCH', `/api/agents/${held}/config`, mission, { skills: [] });
+  assert.equal(dropped.status, 200, JSON.stringify(dropped.json));
+});
+
+test('a relaxed mission cannot pass a skill with tools as extra_skills', async () => {
+  const before = dbApi.listTasks().length;
+  assertPersonOnly(
+    await call('POST', '/api/tasks', mission, { title: 't', agent_name: 'caller.pilot', extra_skills: ['git-publish'] }),
+    /extra_skills adds skill git-publish/,
+  );
+  assert.equal(dbApi.listTasks().length, before);
+  assertPersonOnly(
+    await call('POST', '/api/missions/delegate', mission, { agent_name: 'caller.pilot', mission: 'go', extra_skills: ['git-publish'] }),
+    /extra_skills adds skill git-publish/,
+  );
+  assertPersonOnly(
+    await call('POST', '/api/pipelines', mission, {
+      name: 'p', definition: { steps: [{ id: 's1', agent: 'caller.pilot', prompt: 'go', extra_skills: ['git-publish'] }] },
+    }),
+    /step s1: extra_skills adds skill git-publish/,
+  );
+  const plain = await call('POST', '/api/tasks', mission, { title: 't', agent_name: 'caller.pilot', extra_skills: ['plain-notes'] });
+  assert.equal(plain.status, 201, JSON.stringify(plain.json));
+});
+
+test('a person attaches a skill with tools from the app', async () => {
+  const name = fresh();
+  await seedAgent(name, {});
+  const attached = await call('POST', '/api/skill-attachments', person, { skill: 'git-publish', scope: 'agent', target: name });
+  assert.equal(attached.status, 200, JSON.stringify(attached.json));
+  const patched = await call('PATCH', `/api/agents/${name}/config`, person, { skills: ['git-publish', 'plain-notes'] });
+  assert.equal(patched.status, 200, JSON.stringify(patched.json));
+  const task = await call('POST', '/api/tasks', person, { title: 't', agent_name: name, extra_skills: ['git-publish'] });
+  assert.equal(task.status, 201, JSON.stringify(task.json));
+  assert.equal((await call('POST', '/api/skill-attachments', null, { skill: 'git-publish', scope: 'agent', target: name })).status, 401);
+});
+
 test('a person does all of it from the app', async () => {
   const name = fresh();
   const created = await call('POST', '/api/agents', person, { name, system_prompt: 'p', config: { allowed_tools: ['Bash'], mcp_servers: ['host-shell'] } });
@@ -232,4 +328,8 @@ test('the pure rule: coverage, lifted denials, transports', () => {
   assert.match(agentWideningRefusal({ mcp_servers: ['host-shell'] }, null) ?? '', /attaches host-shell/);
   assert.match(agentWideningRefusal({ mcp_servers: ['../escape'] }, null) ?? '', /attaches \.\.\/escape/);
   assert.equal(agentWideningRefusal({ allowed_tools: null, mcp_servers: undefined }, null), null);
+  assert.equal(skillWideningRefusal(['git-publish'], ['Bash']), null);
+  assert.equal(skillWideningRefusal(['plain-notes', 'not-a-skill'], []), null);
+  assert.match(skillWideningRefusal(['git-publish'], ['Bash(git *)']) ?? '', /pre-authorises Bash\(gh \*\)/);
+  assert.match(skillWideningRefusal({}, []) ?? '', /array of skill ids/);
 });

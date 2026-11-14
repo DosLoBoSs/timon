@@ -162,8 +162,9 @@ const handleSpawnOnce = async (req: express.Request, res: express.Response) => {
   // (tools, MCP servers, backend). Checked BEFORE any side effect, against
   // that agent's own config — an override that stays inside it is a no-op.
   const agentConfig = (() => { try { return loadConfig(agent); } catch { return null; } })();
-  // Extra tools or a stdio MCP server need a person, whatever an agent's token holds.
-  const widening = spawnWideningDenied(req, body, agentConfig);
+  // Extra tools, a skill that pre-authorises tools or a stdio MCP server need a
+  // person, whatever an agent's token holds.
+  const widening = spawnWideningDenied(req, body, agentConfig, agent);
   if (widening) {
     rejectOverride(req, res, 'spawn.override_denied', `agent:${agent}`, widening);
     return;

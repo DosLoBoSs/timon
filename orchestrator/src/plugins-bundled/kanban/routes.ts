@@ -33,6 +33,7 @@ import { checkScheduledAtPlausibility, validateScheduledAt } from '../../task-gu
 import { delegatingAgent, delegationRefusal } from '../../delegation-guard.js';
 import { agentRequeueDelayMs, agentRequeueRefusal, isCorrection } from '../../crash-loop.js';
 import { loadConfig } from '../../agent-config.js';
+import { readSkillsAllowedTools } from '../../skills.js';
 import { auditRequest } from '../../users/audit-actor.js';
 import {
   canonicalizePermissionMode, isPrivilegedCaller, llmChoiceRefusal, overrideAuthority, rejectOverride, spawnWideningDenied, taskOverrideRefusal,
@@ -462,13 +463,14 @@ function taskOverrideDenied(
   current: TaskRow | null = null,
 ): string | null {
   const target = (() => { try { return loadConfig(agentName); } catch { return null; } })();
-  // Extra tools or a stdio MCP server need a person, whatever an agent's token
-  // holds: before the privileged exemption, which a developer-owner mission passes.
-  // A PUT that re-sends the extras the task already carries grants nothing new.
+  // Extra tools, a skill that pre-authorises tools or a stdio MCP server need a
+  // person, whatever an agent's token holds: before the privileged exemption,
+  // which a developer-owner mission passes. A PUT that re-sends the extras the
+  // task already carries grants nothing new.
   const granted = current && !reassigned ? withTaskExtras(target, current) : target;
-  let widening = spawnWideningDenied(req, body, granted);
+  let widening = spawnWideningDenied(req, body, granted, agentName);
   if (!widening && reassigned) {
-    const kept = spawnWideningDenied(req, overridesAfterUpdate(reassigned, body), target);
+    const kept = spawnWideningDenied(req, overridesAfterUpdate(reassigned, body), target, agentName);
     if (kept) widening = `the task already carries extras agent "${agentName}" may not receive from an agent's token: ${kept}`;
   }
   if (widening) {
@@ -494,7 +496,28 @@ function taskOverrideDenied(
   return refusal;
 }
 
-/** The agent's config plus the extras `task` already carries: what an edit of that task keeps. */
+/**
+ * A pipeline's steps carry the extras a task does: an agent's token that adds a
+ * tool, a skill that pre-authorises one or a stdio MCP server through them is
+ * refused when it writes the pipeline, not only when it runs it (the run takes
+ * `taskOverrideDenied` step by step). Judged against each step's agent.
+ */
+function pipelineWideningDenied(req: express.Request, definition: PipelineDefinition | undefined): string | null {
+  for (const step of definition?.steps ?? []) {
+    const target = (() => { try { return loadConfig(step.agent); } catch { return null; } })();
+    const refusal = spawnWideningDenied(req, step, target, step.agent);
+    if (refusal) {
+      auditRequest(req, 'pipeline.override_denied', `agent:${step.agent} — ${refusal}`);
+      return `step ${step.id}: ${refusal}`;
+    }
+  }
+  return null;
+}
+
+/**
+ * The agent's config plus the extras `task` already carries: what an edit of
+ * that task keeps. Its extra skills count by the tools they pre-authorise.
+ */
 function withTaskExtras(config: AgentConfig | null, task: TaskRow): AgentConfig {
   const stored = (raw: string | null): string[] => {
     try {
@@ -504,7 +527,11 @@ function withTaskExtras(config: AgentConfig | null, task: TaskRow): AgentConfig 
   };
   return {
     ...config,
-    allowed_tools: [...(config?.allowed_tools ?? []), ...stored(task.extra_allowed_tools)],
+    allowed_tools: [
+      ...(config?.allowed_tools ?? []),
+      ...stored(task.extra_allowed_tools),
+      ...readSkillsAllowedTools(stored(task.extra_skills)),
+    ],
     mcp_servers: [...(config?.mcp_servers ?? []), ...stored(task.extra_mcp_servers)],
   };
 }
@@ -530,6 +557,7 @@ function overridesAfterUpdate(task: TaskRow, body: TaskUpdateOverrides): TaskOve
     model_override: body.model_override !== undefined ? body.model_override : task.model_override ?? undefined,
     extra_allowed_tools: list(body.extra_allowed_tools, task.extra_allowed_tools),
     extra_mcp_servers: list(body.extra_mcp_servers, task.extra_mcp_servers),
+    extra_skills: list(body.extra_skills, task.extra_skills),
   };
 }
 
@@ -816,6 +844,8 @@ export function registerRoutes(app: Router): void {
     const parsed = parsePipelineCreateBody(req.body);
     if (!parsed.ok) { res.status(400).json({ error: parsed.error, code: 'pipeline_body_invalid' }); return; }
     const body = parsed.value;
+    const widening = pipelineWideningDenied(req, body.definition as PipelineDefinition);
+    if (widening) { res.status(403).json(forbiddenBody(req, { kind: 'override', reason: widening })); return; }
     try {
       const pipeline = createPipeline({
         name: body.name,
@@ -848,6 +878,8 @@ export function registerRoutes(app: Router): void {
     if (!existing) { res.status(404).json(apiError('pipeline_not_found', 'pipeline not found')); return; }
     if (rejectReadOnlyPipeline(req, res, existing)) return;
     const { definition, ...rest } = parsed.value;
+    const widening = pipelineWideningDenied(req, definition as PipelineDefinition | undefined);
+    if (widening) { res.status(403).json(forbiddenBody(req, { kind: 'override', reason: widening })); return; }
     try {
       const updated = updatePipeline(existing.id, { ...rest, ...(definition ? { definition: definition as PipelineDefinition } : {}) });
       emitAutomationEvent({ kind: 'pipeline_updated', pipeline: updated, origin: automationOriginOf(req) });

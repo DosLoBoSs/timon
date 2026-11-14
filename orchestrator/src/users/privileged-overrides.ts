@@ -17,7 +17,7 @@
  * "let the CLI decide" on an unknown slug.
  */
 import type { Request, Response } from 'express';
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { sep } from 'node:path';
 import { dbApi } from '../db.js';
 import { auditRequest } from './audit-actor.js';
@@ -31,6 +31,10 @@ import { loadConfig, type AgentConfig } from '../agent-config.js';
 import { delegationRefusal } from '../delegation-guard.js';
 import { getMcp } from '../mcp.js';
 import { isInjectedMcpServer } from '../injected-mcp.js';
+import { readSkillsAllowedTools } from '../skills.js';
+import { isSkillId, resolveAgentSkills } from '../skill-attachments.js';
+import { projectFromCwd } from '../task-project.js';
+import { skillFile } from '../paths.js';
 
 /**
  * A caller who is exempt from these checks.
@@ -557,18 +561,102 @@ export function agentWideningDenied(
   return isAgentToken(req) ? agentWideningRefusal(wanted, granted, labels) : null;
 }
 
-/** The spawn and task spelling of the same rule: extras on top of the agent's own config. */
+/**
+ * The spawn and task spelling of the same rule: extras on top of the agent's
+ * own config. `agentName` lets the skills the agent already resolves count as
+ * granted when `extra_skills` is judged (`skillWideningRefusal`).
+ */
 export function spawnWideningDenied(
   req: Pick<Request, 'auth'>,
-  body: { extra_allowed_tools?: unknown; extra_mcp_servers?: unknown },
+  body: { extra_allowed_tools?: unknown; extra_mcp_servers?: unknown; extra_skills?: unknown },
   agentConfig: AgentConfig | null,
+  agentName: string | null,
 ): string | null {
-  return agentWideningDenied(
-    req,
+  if (!isAgentToken(req)) return null;
+  const refusal = agentWideningRefusal(
     { allowed_tools: body.extra_allowed_tools, mcp_servers: body.extra_mcp_servers },
     agentConfig,
     { allowed_tools: 'extra_allowed_tools', mcp_servers: 'extra_mcp_servers' },
   );
+  if (refusal || body.extra_skills === undefined || body.extra_skills === null) return refusal;
+  const granted = agentName === null ? [...(agentConfig?.allowed_tools ?? [])] : agentGrantedTools(agentName, agentConfig);
+  return skillWideningRefusal(body.extra_skills, granted, { label: 'extra_skills' });
+}
+
+/* ── Widening through a skill: a person only ────────────────────────────── */
+
+/**
+ * The tools agent `name` already runs with: its `allowed_tools` plus what
+ * every skill it resolves pre-authorises (attachments of every scope, an
+ * excluded one left out: `resolveSpawnSkills` in agent.ts, which this module
+ * cannot import without a cycle).
+ */
+export function agentGrantedTools(name: string, cfg: AgentConfig | null): string[] {
+  const resolved = resolveAgentSkills({
+    agent: name,
+    project: cfg?.project ?? projectFromCwd(cfg?.cwd),
+    role: cfg?.role ?? null,
+  });
+  return [...(cfg?.allowed_tools ?? []), ...readSkillsAllowedTools(resolved.map((s) => s.id))];
+}
+
+/** What skill `id` pre-authorises; nothing for an id that names no skill on disk. */
+function skillTools(id: string): string[] {
+  if (!isSkillId(id)) return [];
+  let file: string;
+  try { file = skillFile(id); } catch { return []; }
+  return existsSync(file) ? readSkillsAllowedTools([id]) : [];
+}
+
+/**
+ * Same rule as `agentWideningRefusal`, for the tools a skill's `allowed-tools`
+ * pre-authorises: the spawn adds them to the agent's `--allowedTools`, so
+ * attaching such a skill adds tools as surely as `allowed_tools` does. An agent
+ * a prompt injection steers would otherwise attach a skill that declares
+ * `Bash` (a product one like `git-publish`, or any a person wrote) and get a
+ * shell at that agent's next turn.
+ *
+ * `granted` is what the agent already holds (`agentGrantedTools`): a skill
+ * whose tools it covers grants nothing and passes, as does a skill that
+ * declares none. An empty `granted` with `reach` set judges an attachment that
+ * reaches agents nobody named (a project, a role, every agent): any declared
+ * tool is refused. Removing a skill is never judged.
+ */
+export function skillWideningRefusal(
+  skillIds: unknown,
+  granted: readonly string[],
+  opts: { label?: string; reach?: string } = {},
+): string | null {
+  if (skillIds === undefined || skillIds === null) return null;
+  const label = opts.label ?? 'skills';
+  const ids = typeof skillIds === 'string' ? [skillIds] : asStringArray(skillIds);
+  if (!ids) return `${label} must be an array of skill ids`;
+  for (const id of ids) {
+    for (const tool of skillTools(id.trim())) {
+      if (toolCovered(tool, granted)) continue;
+      const whom = opts.reach ? `the agents ${opts.reach}` : 'an agent';
+      return `${label} adds skill ${id}, which pre-authorises ${tool}: an agent's token cannot give ${whom} a tool through a skill, `
+        + 'whatever its account holds. A person attaches it from the Agents or Skills page of the app. '
+        + 'A skill that declares no allowed-tools can be attached; removing a skill, or sending the list unchanged, is accepted';
+    }
+  }
+  return null;
+}
+
+/**
+ * `skillWideningRefusal` for a request: null for anyone but an agent's token.
+ * `skillIds` are the skills the request adds to agent `name` (`cfg` its config,
+ * null for a new agent); what it already resolves counts as granted.
+ */
+export function skillWideningDenied(
+  req: Pick<Request, 'auth'>,
+  skillIds: unknown,
+  name: string,
+  cfg: AgentConfig | null,
+  label?: string,
+): string | null {
+  if (!isAgentToken(req) || skillIds === undefined || skillIds === null) return null;
+  return skillWideningRefusal(skillIds, agentGrantedTools(name, cfg), label === undefined ? {} : { label });
 }
 
 /* ── Agent config (POST /api/agents, PATCH /api/agents/:name/config) ─────── */
@@ -683,6 +771,8 @@ export type TaskOverrides = {
   model_override?: unknown;
   extra_allowed_tools?: unknown;
   extra_mcp_servers?: unknown;
+  /** Judged by `spawnWideningDenied` only: a skill's tools are the widening, not its id. */
+  extra_skills?: unknown;
   fallback_backend_override?: unknown;
   fallback_model_override?: unknown;
 };

@@ -80,7 +80,7 @@ export function createDelegationHandler(launch: typeof spawnAgent = spawnAgent) 
       ...(data.extra_allowed_tools !== undefined ? { extra_allowed_tools: data.extra_allowed_tools } : {}),
     };
     const targetConfig = (() => { try { return loadConfig(target.name); } catch { return null; } })();
-    const overrideRefusal = spawnWideningDenied(req, overrides, targetConfig)
+    const overrideRefusal = spawnWideningDenied(req, { ...overrides, extra_skills: data.extra_skills }, targetConfig, target.name)
       ?? spawnOverrideRefusal(overrides, targetConfig, overrideAuthority(req));
     if (overrideRefusal) {
       rejectOverride(req, res, 'spawn.override_denied', `agent:${target.name}`, overrideRefusal);
