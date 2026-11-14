@@ -3,7 +3,7 @@ title: Example cookbook
 sidebar_position: 18
 ---
 
-39 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
+40 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
 
 Obtain the example tree with your developer distribution. There is no public repository link. Use a licensed test instance and follow [Testing](testing.md) before installing third-party code.
 
@@ -593,6 +593,42 @@ From `examples/plugin-provider-cards/lib/client.js`, line 63 (excerpt):
 ```js
 export function apply(ctx) {
   ctx.slots.register({ slot: 'providers.cli' }, CompactProviderCards)
+}
+```
+
+## A section on its provider's page {#provider-section}
+
+Source: `examples/plugin-provider-section`. Manifest ID: `example-provider-section`. Minimum API: **16**.
+
+API 16. A declarative provider pack, Acme Gateway, with a browser half that registers one section in the settings.provider.section list slot. Timon paints it on the page of the providers this plugin brings only, in Settings › AI models › Providers › Acme Gateway. The component reads useProviderPage(): the provider on screen, its status, refresh() and back(), and draws itself in ProviderSection, the frame of the product's own sections. Registered with key settings, it takes the place of the common own-settings section on that page; without a key, order places it among the common sections (100 to 500).
+
+Permissions: `backends:register`. Read the [related guide](providers.md).
+
+`timon plugin add ./examples/plugin-provider-section` installs this package on the target instance.
+
+From `examples/plugin-provider-section/lib/client.js`, line 49 (excerpt):
+
+```js
+function AcmeGatewaySection() {
+  const page = useProviderPage()
+  if (!page) return null
+  const { provider, refresh } = page
+  return h(ProviderSection, {
+    title: t('title'),
+    description: t('description', { url: GATEWAY }),
+    actions: h('button', {
+      type: 'button',
+      onClick: () => void refresh(),
+      className: 'rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground',
+    }, t('refresh')),
+  },
+  h('div', { className: 'flex items-center justify-between gap-3 text-[13px]' },
+    h('span', { className: 'tabular-nums' }, t('models', { count: provider.modelCount })),
+    h('a', { href: CONSOLE, target: '_blank', rel: 'noreferrer', className: 'text-primary hover:underline' }, t('console'))))
+}
+
+export function apply(ctx) {
+  return ctx.slots.register({ slot: 'settings.provider.section', key: 'settings', order: 400 }, AcmeGatewaySection)
 }
 ```
 

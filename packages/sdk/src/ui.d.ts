@@ -1650,6 +1650,71 @@ declare module '@timon/ui' {
     /** A whole look drawn at random from `choices`, packs included. */
     random(): AgentLook;
   } | null;
+
+  /**
+   * A provider's one status line (client API 16), the same verdict on the list
+   * and on its page: green `connected` / `available`, yellow `not-connected` /
+   * `not-installed` / `needs-authorization`, red `blocked`, grey `disabled`.
+   */
+  export type ProviderStatus =
+    | 'disabled' | 'blocked' | 'not-installed' | 'needs-authorization' | 'connected' | 'not-connected' | 'available';
+  /**
+   * One provider as the daemon groups it (client API 16): a provider plugin
+   * (one per backend when it brings several), a backend added by hand
+   * (`user:<id>`), an agent of the ACP registry (`catalog:<id>`) or a built-in
+   * one. Open-ended: read what you need, a field may be added later. Never a
+   * secret value: `secret.names` are vault entry names only.
+   */
+  export type ProviderOverview = {
+    id: string;
+    /** The name the model picker shows. */
+    name: string;
+    brand: string | null;
+    /** A pictogram or a logo (`data:` URI); wins over `brand`. */
+    icon: string | null;
+    origin: 'built-in' | 'user' | 'catalog' | 'plugin';
+    /** The plugin that brings it: your sections are painted on the pages whose `pluginId` is your plugin's id. */
+    pluginId: string | null;
+    enabled: boolean;
+    /** It holds the instance's default backend. */
+    isDefault: boolean;
+    backends: readonly {
+      id: string; label: string; active: boolean; disabled: boolean; reason: string | null;
+      modelCount: number; defaultModel: string | null; isDefault: boolean; remote: boolean;
+    }[];
+    modelCount: number;
+    /** Agents whose backend is one of its backends; absent from an older daemon. */
+    agentCount?: number;
+    connection: { signedIn: boolean | null; acceptsAccounts: boolean; [field: string]: unknown };
+    secret: { required: boolean; present: boolean; names: readonly string[] };
+    status: ProviderStatus;
+    updateAvailable: boolean;
+    [field: string]: unknown;
+  };
+  /**
+   * The page of one provider a `settings.provider.section` occupant is painted
+   * on (client API 16), in Settings › AI models › Providers. `null` outside it.
+   * A section registered by a plugin is painted on the pages of the providers
+   * that plugin brings only; registered with the `key` of a common section
+   * (`connection`, `apiKey`, `program`, `settings`, `models`) it takes that
+   * section's place there. `order` places it: the common ones are 100 to 500.
+   */
+  export function useProviderPage(): {
+    provider: ProviderOverview;
+    status: ProviderStatus;
+    /** The instance's default backend, `null` when none resolves. */
+    defaultBackend: string | null;
+    /** Reads the provider again: call it after your section changed something. */
+    refresh(): Promise<void>;
+    /** Back to the providers list. */
+    back(): void;
+  } | null;
+  /**
+   * The frame of a provider page's section (client API 16): `title`,
+   * `description`, `actions` (buttons at the right of the title) and the
+   * content as children, on the same surface as the product's sections.
+   */
+  export const ProviderSection: PlatformComponent;
 }
 
 declare module '@timon/api' {

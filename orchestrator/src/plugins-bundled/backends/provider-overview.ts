@@ -33,6 +33,7 @@ import { providerBinaryRequests, type ProviderBinaryRequest } from '../../plugin
 import { canonicalPath } from '../../plugins/policy.js';
 import type { PluginStatus } from '../../plugins/loader.js';
 import { whichBin } from '../../doctor.js';
+import { listAgents } from '../../agent.js';
 import { config } from '../../config/load.js';
 import { ACP_REGISTRY_OWNER, profileIdOf, type AgentView } from '../../providers/acp-registry/service.js';
 import type { DbViewer } from '../../users/identity.js';
@@ -105,6 +106,8 @@ export type ProviderOverview = {
   isDefault: boolean;
   backends: ProviderBackendView[];
   modelCount: number;
+  /** Agents whose backend is one of these, the implicit default counted for the default provider. */
+  agentCount: number;
   connection: {
     signedIn: boolean | null;
     signInCommand: string | null;
@@ -172,7 +175,17 @@ type Snapshot = {
   pins: BinaryPinStatus[];
   cards: Map<string, SetupBackend>;
   defaultBackend: string | null;
+  agentsByBackend: Map<string, number>;
 };
+
+/** Agents per backend id, read once per overview: `listAgents` already resolves the implicit default. */
+function agentsByBackend(): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const agent of listAgents()) {
+    if (agent.backend) counts.set(agent.backend, (counts.get(agent.backend) ?? 0) + 1);
+  }
+  return counts;
+}
 
 function snapshot(): Snapshot {
   const providerOf = new Map(providerClis().map((cli) => [cli.name, cli.provider]));
@@ -191,6 +204,7 @@ function snapshot(): Snapshot {
     pins: binaryPinStatuses(),
     cards,
     defaultBackend: tryDefaultBackendName(),
+    agentsByBackend: agentsByBackend(),
   };
 }
 
@@ -463,6 +477,7 @@ function overviewOf(group: Group, snap: Snapshot, viewer: DbViewer): ProviderOve
     isDefault: backends.some((backend) => backend.isDefault),
     backends,
     modelCount: backends.reduce((sum, backend) => sum + backend.modelCount, 0),
+    agentCount: group.backendIds.reduce((sum, id) => sum + (snap.agentsByBackend.get(id) ?? 0), 0),
     connection: {
       signedIn,
       signInCommand,

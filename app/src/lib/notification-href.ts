@@ -42,9 +42,10 @@ export function notificationHref(n: NotificationLinkFields): string | null {
 const EGRESS_ANCHOR = /^egress:(.+)$/;
 
 /**
- * Refused launch of a third-party provider (`provider-launch:<id>`, TODO #598):
- * the card opens Settings › AI models › Backends on that provider, where the
- * re-authorisation is confirmed (`ProvidersPanel`, `provider` parameter).
+ * Refused launch of a third-party provider (`provider-launch:<plugin>`, TODO #598):
+ * the card opens Settings › AI models › Providers on that provider's page
+ * (`provider` parameter, `ProvidersSettings`), whose Program section offers the
+ * re-authorisation and confirms it (`provider-common-sections.tsx`).
  */
 const PROVIDER_LAUNCH_ANCHOR = /^provider-launch:(.+)$/;
 
