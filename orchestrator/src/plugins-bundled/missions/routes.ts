@@ -1707,6 +1707,20 @@ export function registerRoutes(
       res.status(400).json({ error: 'behavior must be "allow", "deny" or "paste"' });
       return;
     }
+    // A card exists because a person has to decide. An api-token is an agent
+    // (or a plugin job) acting on its own: letting it answer "allow" lets a
+    // prompt-injected mission approve, or rewrite through `updatedInput`, the
+    // very command it was stopped on, or a sibling mission's. Refused before
+    // the card lookup, so the answer says nothing about which cards exist.
+    // Deny stays open: cancelling its own request is always safe.
+    if (req.auth?.kind === 'api-token' && decision.behavior !== 'deny') {
+      forbidden(req, res, {
+        kind: 'scope',
+        reason: 'a mission token cannot approve a permission request; only a person can',
+        hint: 'Wait for the user to answer the card, or answer "deny" to cancel it.',
+      });
+      return;
+    }
     // Resolving someone else's Allow/Deny card would approve a tool use in a
     // mission the caller cannot even read: unknown card and foreign card
     // answer the same 404.
@@ -1723,8 +1737,8 @@ export function registerRoutes(
       return;
     }
     // A wider Allow is a standing grant over the owner's missions: given by the
-    // owner, from their browser. Not by an agent's own token (it would approve
-    // itself for good), nor the daemon token, nor an admin reading the mission.
+    // owner, from their browser. Not by an agent's own token (refused above for
+    // any allow), nor the daemon token, nor an admin reading the mission.
     if (scope) {
       const owner = governed.owner_user_id;
       const viewer = isPersonAuth(req.auth) ? req.auth.user : null;
