@@ -116,9 +116,7 @@ export function ProviderCliCards({ mode, disabled = false, onBackends }: HostPro
   const backends = list?.backends;
   const signIn = useCallback(async (name: string): Promise<ProviderCliSignInOutcome> => {
     const command = backends?.find((cli) => cli.name === name)?.signInCommand;
-    if (!command) return 'failed';
-    if (openTerminalWindow({ insert: command })) return 'terminal';
-    return (await copyToClipboard(command)) ? 'copied' : 'failed';
+    return command ? runSignInCommand(command) : 'failed';
   }, [backends]);
 
   const withBusy = useCallback(async (read: () => Promise<ProviderCliList>) => {
@@ -232,7 +230,15 @@ function ProviderCliCard({ cli, job }: { cli: ProviderCli; job: InstallJob | nul
           {failed.result?.reason ?? t('providerClis.failed')}
         </p>
       )}
-      {(state === 'bundled' || state === 'signIn') && <SignIn cli={cli} bundled={state === 'bundled'} disabled={blocked} />}
+      {(state === 'bundled' || state === 'signIn') && (
+        <ProviderSignIn
+          command={cli.signInCommand}
+          then={cli.signInThen}
+          bundled={state === 'bundled'}
+          disabled={blocked || !host}
+          onSignIn={() => host?.signIn(cli.name) ?? Promise.resolve('failed')}
+        />
+      )}
       {!running && (canInstall || canUpdate) && (failed?.result?.command ?? cli.installCommand) && (
         <details className="text-xs">
           <summary className="cursor-pointer text-muted-foreground">{t('providerClis.manualSummary')}</summary>
@@ -249,24 +255,44 @@ function ProviderCliCard({ cli, job }: { cli: ProviderCli; job: InstallJob | nul
 }
 
 /**
- * "Sign in": the host types the command in Timon's terminal or copies it, and the card says
- * which, with what comes next. The command stays shown below, for a terminal of one's own.
+ * The sign-in gesture shared by every screen that offers one: the line typed, without Enter, in
+ * Timon's own terminal when the view has one (the terminal "Paste into a terminal" opens), else
+ * copied for a terminal of the person's choice.
  */
-function SignIn({ cli, bundled, disabled }: { cli: ProviderCli; bundled: boolean; disabled: boolean }): ReactElement {
-  const host = useProviderCliCards();
+export async function runSignInCommand(command: string): Promise<ProviderCliSignInOutcome> {
+  if (openTerminalWindow({ insert: command })) return 'terminal';
+  return (await copyToClipboard(command)) ? 'copied' : 'failed';
+}
+
+/**
+ * "Sign in": `onSignIn` types the command in Timon's terminal or copies it, and the button says
+ * which, with what comes next. The command stays shown below, for a terminal of one's own. The
+ * provider cards and the Connection section of a provider page both draw it.
+ */
+export function ProviderSignIn({ command, then, bundled = false, disabled = false, label, onSignIn }: {
+  command: string;
+  /** What to type once the CLI runs, when it needs it. */
+  then: string | null;
+  /** The copy Timon ships: its hint says so. */
+  bundled?: boolean;
+  disabled?: boolean;
+  /** The button's words; "Sign in" by default. */
+  label?: string;
+  onSignIn: () => Promise<ProviderCliSignInOutcome>;
+}): ReactElement {
   const [outcome, setOutcome] = useState<ProviderCliSignInOutcome | null>(null);
   return (
     <div className="space-y-1">
       <Button
-        type="button" size="sm" variant="outline" className="gap-1.5" disabled={disabled || !host}
-        onClick={() => { void host?.signIn(cli.name).then(setOutcome); }}
+        type="button" size="sm" variant="outline" className="gap-1.5" disabled={disabled}
+        onClick={() => { void onSignIn().then(setOutcome); }}
       >
-        <LogIn className="size-4" aria-hidden />{t('providerClis.signIn')}
+        <LogIn className="size-4" aria-hidden />{label ?? t('providerClis.signIn')}
       </Button>
       {outcome && (
-        <p role="status" className="text-xs text-muted-foreground">{signInLabel(`providerClis.signInOutcome.${outcome}`, cli.signInThen)}</p>
+        <p role="status" className="text-xs text-muted-foreground">{signInLabel(`providerClis.signInOutcome.${outcome}`, then)}</p>
       )}
-      <CommandToRun command={cli.signInCommand} label={signInLabel(bundled ? 'providerClis.bundledSignInHint' : 'providerClis.signInHint', cli.signInThen)} />
+      <CommandToRun command={command} label={signInLabel(bundled ? 'providerClis.bundledSignInHint' : 'providerClis.signInHint', then)} />
     </div>
   );
 }
