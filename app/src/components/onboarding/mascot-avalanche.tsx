@@ -7,8 +7,9 @@
  *
  * The mascots are the `agent.mascot` slot's drawing: each look is mounted once
  * through `AgentMascotHost` (so a plugin that replaces the mascot replaces it
- * here too), serialised, and rasterised into a bitmap — a hundred live SVGs
- * with noise filters would not hold sixty frames a second.
+ * here too) and copied into a bitmap — a hundred live heads would not hold
+ * sixty frames a second. A 2D head is an SVG, serialised and rasterised; a 3D
+ * head is a canvas, copied once the engine has drawn the modelled head on it.
  */
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactElement } from 'react';
 import { AgentMascotHost, usePrefersReducedMotion } from '@/components/mascot/agent-mascot';
@@ -28,6 +29,26 @@ export type MascotAvalancheHandle = {
   /** "Continue": everyone is flung off screen. */
   scatter: () => void;
 };
+
+/** How long a 3D head may take to come (models loading on a slow machine) before its cell is left empty. */
+const HEAD_WAIT_MS = 8000;
+
+/** A 3D head's canvas copied into a bitmap, once the engine has drawn the modelled head (`data-drawn`). */
+async function copyHead(head: HTMLCanvasElement): Promise<HTMLCanvasElement | null> {
+  const start = performance.now();
+  while (head.dataset.drawn !== '3d') {
+    if (performance.now() - start > HEAD_WAIT_MS) break;
+    await new Promise<void>((resolve) => { setTimeout(resolve, 50); });
+  }
+  if (!head.width || !head.height) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = BITMAP;
+  canvas.height = BITMAP;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.drawImage(head, 0, 0, BITMAP, BITMAP);
+  return canvas;
+}
 
 async function rasterize(svg: SVGSVGElement): Promise<HTMLCanvasElement | null> {
   const clone = svg.cloneNode(true) as SVGSVGElement;
@@ -84,8 +105,11 @@ export const MascotAvalanche = forwardRef<MascotAvalancheHandle, { className?: s
     const frame = requestAnimationFrame(() => {
       const cells = Array.from(castRef.current?.querySelectorAll<HTMLElement>('[data-avalanche-look]') ?? []);
       void Promise.all(cells.map(async (cell, i) => {
+        const head = cell.querySelector('canvas');
         const svg = cell.querySelector('svg');
-        bitmaps.current[i] = svg ? await rasterize(svg).catch(() => null) : null;
+        bitmaps.current[i] = head
+          ? await copyHead(head).catch(() => null)
+          : svg ? await rasterize(svg).catch(() => null) : null;
       })).finally(() => { if (alive) setReady(true); });
     });
     return () => { alive = false; cancelAnimationFrame(frame); };
