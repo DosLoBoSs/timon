@@ -31,6 +31,7 @@ import { isDeviceToken, lookupDevice } from '../../users/devices.js';
 import { rejectConversionRoute } from '../../users/conversion-mission.js';
 import { auditDeadDeviceUse, deviceTransportAllowed, noteDeviceUse, sendDeviceRequiresTls } from '../../users/devices-http.js';
 import { apiError } from '../../api-error.js';
+import { daemonHostPolicy, hostAllowed, type HostPolicy } from '../../http-host.js';
 
 export { DAEMON_TOKEN_FILE };
 
@@ -220,7 +221,9 @@ function isPublicPath(req: Request): boolean {
  * instead — never this daemon-token.
  *
  * `/api/health` and the endpoints of `PUBLIC_ENDPOINTS` stay public in
- * every case.
+ * every case — for a request whose `Host` the daemon's policy admits
+ * (`http-host.ts`): without a bearer credential, a loopback daemon answers
+ * 421 to any other name.
  */
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -254,7 +257,10 @@ export function isCrossSiteMutation(req: Request): boolean {
 export function createDaemonAuthMiddleware(opts: {
   token: string;
   required: boolean;
+  /** Tests inject it; the daemon reads its config at every request. */
+  hostPolicy?: () => HostPolicy;
 }): RequestHandler {
+  const hostPolicy = opts.hostPolicy ?? (() => daemonHostPolicy(config()));
   return (req: Request, res: Response, next: NextFunction): void => {
     // The remote MCP endpoint takes its own restricted token and nothing else
     // (`remote-mcp/auth.ts`): decided before any other credential is read.
@@ -301,6 +307,13 @@ export function createDaemonAuthMiddleware(opts: {
         res.status(401).json({ error: 'unauthorized' });
         return;
       }
+    }
+    // Past this point the caller holds no bearer credential: what it gets, it
+    // gets for reaching this address (first-run setup, public paths). A page
+    // that rebound its own domain onto the loopback must not be that caller.
+    if (!hostAllowed(req.headers.host, hostPolicy())) {
+      res.status(421).json({ error: 'misdirected request' });
+      return;
     }
     const raw = readCookie(
       typeof req.headers.cookie === 'string' ? req.headers.cookie : undefined,
