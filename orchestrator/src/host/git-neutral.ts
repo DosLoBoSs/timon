@@ -58,6 +58,15 @@ const LFS_FILTER_VALUES: Readonly<Record<string, string>> = Object.freeze({
  *  driver is replaced by the merge it stands in for, not by a conflict. */
 const NEUTRAL_MERGE_DRIVER = 'git merge-file --marker-size=%L %A %O %B';
 
+/** What git runs for `core.alternateRefsCommand` when it is unset, as a shell
+ *  command: git appends the alternate's path, which `#` drops after `$1`. */
+const NEUTRAL_ALTERNATE_REFS_COMMAND = `git --git-dir="$1" for-each-ref --format='%(objectname)' #`;
+
+/** Keys naming a program Git LFS starts. git never reads them: `git-lfs`
+ *  does, as a filter, from the same configuration. A filter that keeps them
+ *  cannot be trusted, wherever the filter itself is set. */
+const LFS_PROGRAM_KEY = /^lfs\.(customtransfer\..+\.path|extension\..+\.(clean|smudge))$/;
+
 type KeyRule = {
   match: RegExp;
   /** The value to pass when no trusted scope sets one. */
@@ -66,11 +75,51 @@ type KeyRule = {
   keep?: (key: string, value: string | null) => boolean;
   /** Multi-valued key: an empty value resets the list, trusted values follow. */
   list?: true;
+  /** No value is known to be harmless: a scope a mission writes setting it
+   *  refuses the call. */
+  refuse?: true;
 };
 
+/**
+ * Every key a repository configuration can use to make git run a program, as
+ * of git 2.43, and how the daemon's git handles it.
+ *
+ * Scanned here (`KEY_RULES`, then the special cases of `scannedGitConfig`):
+ * `core.sshCommand`, `core.askPass`, `core.alternateRefsCommand`,
+ * `core.gitProxy`, `filter.*.{clean,smudge,process}`, `merge.*.driver`,
+ * `credential.helper`, `credential.<url>.helper`, `gpg.program`,
+ * `gpg.{openpgp,x509,ssh}.program`, `gpg.ssh.defaultKeyCommand`,
+ * `submodule.*.update`, `remote.*.{uploadpack,receivepack}`,
+ * `lfs.customtransfer.*.path`, `lfs.extension.*.{clean,smudge}`, and `hook.*`
+ * (hooks declared in the configuration by later gits: refused).
+ *
+ * Fixed for every call (`fixedGitConfig`, `neutralGitCall`): `core.fsmonitor`,
+ * `core.hooksPath`, `core.editor`, `sequence.editor`, `core.pager` and
+ * `pager.*` (`--no-pager`), `diff.external`, `diff.*.command` and
+ * `diff.*.textconv` (`--no-ext-diff --no-textconv` on the only commands that
+ * honour them), `url.*.insteadOf` and `remote.*.vcs` (they only pick a
+ * transport, and the protocol policy refuses `ext`).
+ *
+ * Not covered, on purpose:
+ * - `uploadpack.packObjectsHook`, `safe.directory`, `trace2.*`: git reads them
+ *   from system and global configuration only.
+ * - `alias.*`: an alias never shadows a built-in command, and the daemon runs
+ *   built-in commands only.
+ * - `gc.*`, `maintenance.*`: the automatic housekeeping they start is git's
+ *   own commands, which inherit the overrides of the call.
+ * - `diff.tool`, `difftool.*`, `merge.tool`, `mergetool.*`, `sendemail.*`,
+ *   `imap.tunnel`, `instaweb.*`, `web.browser`, `browser.*.cmd`, `man.*.cmd`,
+ *   `interactive.diffFilter`: read only by commands the daemon never runs.
+ * - `receive.*`, `uploadpack.*`: the remote side's (a local remote runs its
+ *   own: a known gap, above).
+ * - `.lfsconfig` in the worktree: Git LFS reads only a safe list of keys from
+ *   it, none naming a program.
+ */
 const KEY_RULES: readonly KeyRule[] = [
   { match: /^core\.sshcommand$/, neutral: () => 'ssh' },
   { match: /^core\.askpass$/, neutral: () => '' },
+  { match: /^core\.alternaterefscommand$/, neutral: () => NEUTRAL_ALTERNATE_REFS_COMMAND },
+  { match: /^hook\./, neutral: () => '', refuse: true },
   {
     match: /^filter\..+\.(clean|smudge|process)$/,
     neutral: () => '',
@@ -238,7 +287,7 @@ export function scannedGitConfig(entries: readonly GitConfigEntry[]): ScannedGit
     if (!rule) continue;
     const untrusted = list.filter((e) => !TRUSTED_SCOPES.has(e.scope) && !rule.keep?.(key, e.value));
     if (untrusted.length === 0) continue;
-    if (key.includes('=')) return { config: [], env: {}, refused: key };
+    if (rule.refuse || key.includes('=')) return { config: [], env: {}, refused: key };
     const trusted = list.filter((e) => TRUSTED_SCOPES.has(e.scope));
     if (rule.list) {
       config.push(`${key}=`, ...trusted.map((e) => `${key}=${e.value ?? ''}`));
@@ -248,6 +297,12 @@ export function scannedGitConfig(entries: readonly GitConfigEntry[]): ScannedGit
     }
     const filter = /^filter\.(.+)\.(clean|smudge|process)$/.exec(key);
     if (filter) neutralizedFilters.add(filter[1]!);
+  }
+  // Git LFS reads the program a mission named, whoever set the filter: the
+  // filter goes, and LFS files read as their pointers for this call.
+  if (entries.some((e) => !TRUSTED_SCOPES.has(e.scope) && LFS_PROGRAM_KEY.test(e.key))) {
+    config.push('filter.lfs.clean=', 'filter.lfs.smudge=', 'filter.lfs.process=');
+    neutralizedFilters.add('lfs');
   }
   // A filter left without a command must not fail the checkout it guards.
   for (const name of neutralizedFilters) config.push(`filter.${name}.required=false`);
