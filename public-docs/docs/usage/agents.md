@@ -227,6 +227,8 @@ Every agent also gets Timon's own tools without any setup — the Kanban, missio
 
 Permission behaviour depends on the backend's capabilities. Some support interactive tool approval; others receive a sandbox policy fixed when the mission starts. Read the editor's explanation for the selected backend instead of assuming every model can show the same permission dialog.
 
+A permission card names the tool the agent asks to use in your language: Timon's own tools and other MCP tools by their server and action (**Timon · Kanban Add**), with its identifier below, as allow rules and logs name it. When the call says what it does, the card adds it: the agent's own description of a shell command, otherwise a short sentence such as **Writes stats.py**. The call's full input follows.
+
 ### Allow for this session, always allow
 
 On a Claude Code mission, a permission card offers two wider answers next to **Allow**:
