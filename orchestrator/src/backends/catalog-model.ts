@@ -37,7 +37,7 @@ export type CatalogModel = {
   label: string;
   /** Context window size in tokens, if known from a reliable source. */
   contextWindow?: number;
-  /** The user typed `contextWindow` by hand (Settings → Backends, or the file
+  /** The user typed `contextWindow` by hand (the provider's page in Settings › AI models › Providers, or the file
    *  of a provider they added). The context gauge then trusts it over the
    *  window the runtime reports: the hand-typed figure exists precisely
    *  because the reported one was wrong (TODO #175). */

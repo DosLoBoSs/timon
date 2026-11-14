@@ -14,7 +14,7 @@ export function normalizeClaudeToken(raw) {
 }
 export function runsOutsideGuiSession(env = process.env) { return env.TIMON_SERVICE_KIND === 'launchd-system'; }
 export const MISSING_TOKEN_MESSAGE = 'Timon runs as a macOS background service, which cannot read the login keychain where `claude` keeps its sign-in. '
-  + 'Run `claude setup-token`, then `timon auth claude-token set` (or Settings → Backends), '
+  + 'Run `claude setup-token`, then `timon auth claude-token set` (or Settings › AI models › Providers › Claude), '
   + 'or run `timon service install` to go back to a service that only runs while you are logged in.';
 export function claudeAccountEnv(configDir) {
   return { CLAUDE_CONFIG_DIR: configDir, [CLAUDE_TOKEN_ENV]: '', ANTHROPIC_API_KEY: '', ANTHROPIC_AUTH_TOKEN: '' };
