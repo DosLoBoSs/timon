@@ -9,7 +9,7 @@
  * resolves to. What this module adds is the check a path alone cannot carry —
  * that the git directory a worktree names is one that names it back.
  */
-import { lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { lstatSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 export type GitDirsFs = {
@@ -140,4 +140,44 @@ export function pluginPackageDirs(paths: readonly string[], timonHome: string): 
     }
   }
   return [...out];
+}
+
+/** A folder with no mission row (an aborted launch) may still serve a CLI: it waits this long. */
+const UNKNOWN_MISSION_TMP_GRACE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Removes the temporary folders (`tmp/missions/<id>`, the `TMPDIR` of a fenced
+ * mission) of missions that are over. Temporary files serve one run: unlike a
+ * session store, nothing in them is needed to resume, so a mission over is
+ * enough, without a retention. A running mission — a resumed one included —
+ * is never touched; a folder with no mission row falls back on its own date.
+ */
+export function purgeMissionTmpDirs(
+  timonHome: string,
+  lifetimeOf: (missionId: string) => { live: boolean } | null,
+  now: number = Date.now(),
+): string[] {
+  const root = join(timonHome, 'tmp', 'missions');
+  let names: string[];
+  try {
+    names = readdirSync(root);
+  } catch {
+    return [];
+  }
+  const removed: string[] = [];
+  for (const name of names) {
+    const dir = join(root, name);
+    try {
+      const stat = statSync(dir);
+      if (!stat.isDirectory()) continue;
+      const life = lifetimeOf(name);
+      if (life?.live) continue;
+      if (!life && now - stat.mtimeMs < UNKNOWN_MISSION_TMP_GRACE_MS) continue;
+      rmSync(dir, { recursive: true, force: true });
+      removed.push(name);
+    } catch (error) {
+      console.warn(`[fence] could not remove the temporary folder ${dir}: ${(error as Error).message}`);
+    }
+  }
+  return removed;
 }

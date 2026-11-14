@@ -6,10 +6,10 @@
 import './test-home.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pluginPackageDirs, worktreeGitDirs } from './mission-fence-target.js';
+import { pluginPackageDirs, purgeMissionTmpDirs, worktreeGitDirs } from './mission-fence-target.js';
 
 /** A home holding a main checkout, a linked worktree of it, and a folder a mission could aim at. */
 function layout() {
@@ -110,4 +110,19 @@ test('an MCP command line opens its plugin package, and only that', () => {
     join(th, 'daemon-token'),
     '/usr/bin/python3',
   ], th), [join(modules, 'acme-mcp'), join(modules, '@acme', 'tools')]);
+});
+
+test('a finished mission\'s temporary folder goes; a running one, and a recent orphan, stay', () => {
+  const th = realpathSync(mkdtempSync(join(tmpdir(), 'fence-tmp-')));
+  const root = join(th, 'tmp', 'missions');
+  for (const id of ['running', 'finished', 'orphan', 'old-orphan']) mkdirSync(join(root, id), { recursive: true });
+  writeFileSync(join(root, 'finished', 'scratch.txt'), 'x');
+  const lifetimes: Record<string, { live: boolean }> = { running: { live: true }, finished: { live: false } };
+  const now = Date.now();
+  const old = new Date(now - 2 * 24 * 60 * 60 * 1000);
+  utimesSync(join(root, 'old-orphan'), old, old);
+  const removed = purgeMissionTmpDirs(th, (id) => lifetimes[id] ?? null, now);
+  assert.deepEqual(removed.sort(), ['finished', 'old-orphan']);
+  assert.ok(existsSync(join(root, 'running')) && existsSync(join(root, 'orphan')));
+  assert.deepEqual(purgeMissionTmpDirs(join(th, 'absent'), () => null), []);
 });

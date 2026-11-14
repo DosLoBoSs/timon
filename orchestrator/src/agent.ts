@@ -87,7 +87,7 @@ import {
 import { backendStillDry } from './backend-recheck.js';
 import { resolvedPermissionModeFor } from './backends/catalog.js';
 import { settingBool, settingNum } from './settings.js';
-import { profileLimits, wrapMissionLaunch } from './resources.js';
+import { profileLimits, watchFencedLaunch, wrapMissionLaunch } from './resources.js';
 import { getHost, type Host } from './host/index.js';
 import {
   backgroundDescendants, cliBaseline, cliProcessPid, readProcessTable, type ProcessEntry,
@@ -1971,6 +1971,13 @@ async function spawnMissionProcess(
     // Only Electron's binary is no `node`: a daemon run from sources IS on the right one.
     selfExecutable: process.versions.electron ? process.execPath : undefined,
   });
+  if (launch.fence?.state === 'fenced') {
+    // A `mktemp` lands in the mission's own folder, not in a /tmp every other
+    // mission shares. And a CLI that updates itself writes where the fence
+    // keeps the home read-only: the update is the user's, outside a mission.
+    if (launch.fence.tmpDir) procEnv.TMPDIR = launch.fence.tmpDir;
+    procEnv.DISABLE_AUTOUPDATER = '1';
+  }
   // Issued once: a second call would revoke the row the first one handed out.
   const missionToken = seal ? seal.token() : procEnv.TIMON_API_TOKEN ?? '';
   // Nothing awaited since: a third party's program is still the file checked for this launch.
@@ -1991,6 +1998,8 @@ async function spawnMissionProcess(
       process.stderr.write(`[${backend.name}:${missionId.slice(0, 8)}] ${name}: ${err.message}\n`);
     });
   }
+  // A launcher that cannot fence on this machine after all switches the fence off for the next launches.
+  watchFencedLaunch(proc, launch.fence);
   journalInjectedSecrets({ missionId, agent: agentName, injected: vault?.injected ?? [] });
   requested?.consume();
   // On disk, for whoever comes after a daemon that dies without ending it.
