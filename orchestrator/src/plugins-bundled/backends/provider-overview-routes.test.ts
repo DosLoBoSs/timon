@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -21,6 +21,7 @@ import type { RequestAuth } from '../../users/identity.js';
 import type { AgentView } from '../../providers/acp-registry/service.js';
 
 const { dbApi } = await import('../../db.js');
+const { agentDir } = await import('../../paths.js');
 const { createDaemonAuthMiddleware } = await import('../http/auth.js');
 const { createBodyParser } = await import('../../kernel/body-parser.js');
 const { attachPluginLoader } = await import('../../plugins/runtime.js');
@@ -83,6 +84,12 @@ registerFileProfile('local-file', {
   env: { OPENAI_API_KEY: { secret: 'MY_ENDPOINT_KEY' } },
 });
 
+// Two agents run on the hand-added backend: the page header says so.
+for (const name of ['overview-one', 'overview-two']) {
+  mkdirSync(agentDir(name), { recursive: true });
+  writeFileSync(join(agentDir(name), 'config.json'), JSON.stringify({ backend: 'my-endpoint' }));
+}
+
 const tampered: AgentView = {
   id: 'acme-acp', name: 'Acme ACP', version: '2.0.0', description: null, website: null, license: null, supported: true, reason: null,
   integrity: 'sha256', installed: { version: '1.0.0', integrity: 'sha256', updateAvailable: true, verifiedUpdate: false, state: 'tampered', profileId: 'acp-acme-acp' },
@@ -107,6 +114,7 @@ type Provider = {
   id: string; name: string; origin: string; status: string; enabled: boolean; pluginId: string | null; updateAvailable: boolean;
   backends: { id: string }[]; programs: { name: string; path: string | null; authorization: string | null }[];
   secret: { required: boolean; present: boolean; names: string[] };
+  agentCount: number;
 };
 async function call(path: string, as: Caller = 'admin') {
   const headers: Record<string, string> = {};
@@ -157,6 +165,8 @@ test('one record per provider: plugins, split multi-backend plugins, hand-added 
   const mine = byId.get('user:my-endpoint')!;
   assert.equal(mine.origin, 'user');
   assert.deepEqual(mine.secret, { required: true, present: false, names: ['MY_ENDPOINT_KEY'] });
+  assert.equal(mine.agentCount, 2, 'the agents whose backend it brings');
+  assert.equal(off.agentCount, 0);
 
   const agent = byId.get('catalog:acme-acp')!;
   assert.equal(agent.origin, 'catalog');
