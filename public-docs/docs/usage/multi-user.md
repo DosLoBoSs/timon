@@ -10,11 +10,16 @@ Once your pro licence is active and Multi-user is installed and on, its **Team**
 
 Each person keeps their own missions, projects and settings; what they may see beyond their own work is what their groups allow.
 
-### What permissions do not cover yet
+### What permissions do not cover
 
-Every mission runs under the same operating-system account as Timon itself, whoever started it. Permissions decide what a person may do through Timon's screens, commands and tools; they do not wall off the files on the machine. A mission an account starts can read the files in Timon's data directory, including the operator's credentials and the key of the secrets vault. On an installation with several accounts, anyone who may start missions can therefore reach more than their own permissions allow.
+Every mission runs under the same operating-system account as Timon itself, whoever started it. Permissions decide what a person may do through Timon's screens, commands and tools; against the files of the machine, what protects Timon is the [mission isolation](mission-isolation.md), and it depends on the system:
 
-Until Timon can run each account's missions under a separate operating-system account, give the **Spawn missions** permission (`missions:spawn`) only to people you would trust with the whole installation.
+- **Linux with Landlock (kernel 5.19 or later) and macOS**: each mission runs inside a fence the operating system enforces. It cannot read Timon's private files, such as the operator's credentials or the key of the secrets vault, nor the folders of other agents and missions.
+- **Windows, and Linux without Landlock**: there is no fence. A mission an account starts can read Timon's data folder, including the operator's credentials and the key of the secrets vault, so anyone who may start missions can reach more than their own permissions allow.
+
+On an installation with several accounts, set the isolation mode to **Required** (**Settings › System › Security**, or `host.isolation.filesystem` set to `enforce`): a computer that cannot fence a mission then refuses to start it, instead of starting it unfenced. Where missions cannot be fenced, give the **Spawn missions** permission (`missions:spawn`) only to people you would trust with the whole installation.
+
+Even fenced, a mission writes the projects it works on: what it leaves there runs later with the rights of whoever runs it. Review the changes of missions started by other accounts before you run them, and give missions their own backend accounts rather than the one you use yourself.
 
 ## Without it
 

@@ -69,6 +69,12 @@
 
 ***
 
+### nestedSandbox?
+
+> `readonly` `optional` **nestedSandbox?**: [`NestedSandboxDeclaration`](../type-aliases/NestedSandboxDeclaration.md)
+
+***
+
 ### permissionModel
 
 > `readonly` **permissionModel**: `"none"` \| `"mcp-bridge"` \| `"sandbox"` \| `"protocol"`
