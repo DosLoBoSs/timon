@@ -11,11 +11,11 @@
  * hidden or nothing is live.
  */
 import * as THREE from 'three';
-import { buildEyeAtlas, COLS, D_IN, D_RANGE, ROWS } from './eyes';
+import { baseExpression, buildEyeAtlas, COLS, D_IN, D_RANGE, ROWS } from './eyes';
 import { base64Bytes, decodeArray, decodeFloats, shapeData, type BodyData, type ModelData, type ShapeData } from './model-data';
 import { CENTER_Y, FRAME, MAX_PIECES, piecesFor, placePiece, skullLift, skullMetrics, skullScale, standsUp, type Piece, type SkullMetrics } from './place';
-import { shellsFor, stepSim, supersampleFor, type Sim } from './sim';
-import { MAX_PX, type Tile } from './tile';
+import { createSim, settle, shellsFor, stepSim, supersampleFor, type Sim } from './sim';
+import { createTile, MAX_PX, type Tile } from './tile';
 
 const SH_MAX = 22;
 const FOV = 18;
@@ -47,7 +47,24 @@ export type Mascot3DEngine = {
   touch(t: Tile): void;
   /** What the mascots cost on this page since the last call. */
   stats(): EngineStats;
+  /**
+   * Renders one still head, turned as `pose` says, into the whole of `out`'s
+   * bitmap, at once and outside the tiles' round robin: a screen that copies
+   * heads as bitmaps (the onboarding's avalanche) keeps a few views of each.
+   * `css` is the size the copy will show at, which picks the fur detail.
+   * False while the GL context is lost: nothing was drawn.
+   */
+  snapshot(look: SnapshotLook, pose: SnapshotPose, out: CanvasRenderingContext2D, css: number): boolean;
 };
+
+/** The character a snapshot draws: the props of a still 3D head. */
+export type SnapshotLook = { shape: string; acc: string; hex: string; eyes: string };
+/**
+ * Where a snapshot's head faces, in radians: positive yaw towards the
+ * viewer's right, positive pitch downwards. The whole head turns, the face a
+ * little further than the skull, as when a live head follows the pointer.
+ */
+export type SnapshotPose = { yaw: number; pitch: number };
 
 type Model = {
   sk: SkullMetrics;
@@ -637,7 +654,32 @@ export function createEngine(data: ModelData): Mascot3DEngine {
     if (changed) wake();
   }, 500);
 
+  function snapshot(look: SnapshotLook, pose: SnapshotPose, out: CanvasRenderingContext2D, css: number): boolean {
+    if (lost) return false;
+    const t0 = performance.now();
+    const px = Math.max(8, Math.min(MAX_PX, out.canvas.width));
+    // A throwaway tile, never registered: the round robin never sees it, and its sim is the still idle head.
+    const t = createTile(out.canvas, out, createSim());
+    t.hex = look.hex;
+    t.shape = look.shape;
+    t.acc = look.acc;
+    t.cssSize = css;
+    t.baseExpr = baseExpression(look.eyes);
+    settle(t.sim, 'idle', t.baseExpr);
+    // The split a live head uses when it follows the pointer: the skull turns some of the way, the face the rest.
+    t.sim.yaw = pose.yaw * 0.5;
+    t.sim.pitch = pose.pitch * 0.5;
+    t.sim.head = [pose.yaw * 0.6, pose.pitch * 0.6, 0];
+    render(t, css, px);
+    const ms = performance.now() - t0;
+    perf.draws += 1;
+    perf.drawMs += ms;
+    if (ms > perf.maxDrawMs) perf.maxDrawMs = ms;
+    return true;
+  }
+
   return {
+    snapshot,
     add(t) { tiles.add(t); t.dirty = true; wake(); },
     remove(t) { tiles.delete(t); },
     touch(t) { t.dirty = true; wake(); },
