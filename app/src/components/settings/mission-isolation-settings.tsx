@@ -273,6 +273,7 @@ function ExceptionsDialog({ exceptions, onCancel, onSave }: {
                   rows={2}
                   spellCheck={false}
                   value={draft.writable}
+                  // i18n-exempt: sample filesystem path, spelled the same in every language
                   placeholder="~/.npm"
                   onChange={(event) => update(index, { writable: event.target.value })}
                 />
