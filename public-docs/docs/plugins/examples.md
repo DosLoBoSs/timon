@@ -588,7 +588,7 @@ Permissions: none. Read the [related guide](slots.md).
 
 `timon plugin add ./examples/plugin-provider-cards` installs this package on the target instance.
 
-From `examples/plugin-provider-cards/lib/client.js`, line 63 (excerpt):
+From `examples/plugin-provider-cards/lib/client.js`, line 62 (excerpt):
 
 ```js
 export function apply(ctx) {
