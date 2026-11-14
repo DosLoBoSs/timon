@@ -51,6 +51,7 @@ To read it, Timon starts `agy` for about a second, asks it for the figures, then
 
 - **Not signed in**: `agy` has no sign-in Timon can use. Run `agy acp --login` under the OS account that runs Timon. `agy` keeps its sign-in in the system keychain, which Timon cannot reach when it runs outside your desktop session (started over SSH, as a Windows service or as a macOS launch daemon): the gauge then says Antigravity is not signed in, even though `agy` works in your terminal.
 - **Unknown**: `agy` did not answer in time, or answered in a way Timon does not recognise. Timon shows no figure rather than a zero. An `agy` too old to report its quota asks you to update it.
+- **Server left running**: `agy` exited and left its local server running, and Timon could not stop it. That server answers any program on your machine without a password, so Timon stops reading the quota on its own: end the remaining `agy` process (Task Manager, Activity Monitor or `kill`), then press ↻.
 
 ## What agents can do
 
