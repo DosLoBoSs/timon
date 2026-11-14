@@ -2,6 +2,7 @@ import type { TimonConfig } from '../config/schema.js';
 import { config } from '../config/load.js';
 import { createDarwinHost } from './darwin.js';
 import { createGenericHost } from './generic.js';
+import { createLandlockFence } from './landlock.js';
 import { createLinuxHost } from './linux.js';
 import { hasSystemd } from './systemd.js';
 import { fenceWritableRoots, setMissionWritableRootsSource } from './mission-writable.js';
@@ -30,7 +31,11 @@ export function createHost(cfg: TimonConfig): Host {
     ? createLinuxHost(cfg, pins)
     : process.platform === 'darwin'
       ? createDarwinHost(cfg, pins)
-      : createGenericHost(cfg, {}, pins);
+      // Linux without systemd (a container, WSL without it, a minimal server)
+      // has no resource scope, and the fence does not need one.
+      : process.platform === 'linux'
+        ? { ...createGenericHost(cfg, {}, pins), fence: createLandlockFence() }
+        : createGenericHost(cfg, {}, pins);
   current = host;
   // On stderr, not stdout: `getHost()` is lazy, so this line also comes out
   // from the CLI (`timon doctor --json`, `timon module list --json`) where it would

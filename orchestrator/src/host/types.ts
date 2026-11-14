@@ -45,6 +45,14 @@ export type HostFenceProbe = {
   available: boolean;
   /** Why missions cannot be fenced here, in English, for doctor and the logs. */
   reason?: string;
+  /** The kernel interface version, where the mechanism has one (Landlock ABI). */
+  abi?: number;
+  /**
+   * The release ships a fence that is no longer usable (launcher missing,
+   * replaced, not executable): a sign the package was altered, worded apart
+   * from a machine that lacks the mechanism (`host/fence.ts`).
+   */
+  tampered?: boolean;
 };
 
 /**
@@ -54,7 +62,11 @@ export type HostFenceProbe = {
  */
 export interface HostFence {
   readonly mechanism: FenceMechanism;
-  /** Asked once per daemon: the answer does not change while it runs. */
+  /**
+   * Asked before every fenced launch. An adapter whose answer cannot change
+   * while the daemon runs caches it (Seatbelt); one whose launcher ships with
+   * the package asks again, so an alteration shows at the next launch (Landlock).
+   */
   probe(): HostFenceProbe;
   /**
    * Writes what the launcher reads to `policyFile` — a path no mission can
