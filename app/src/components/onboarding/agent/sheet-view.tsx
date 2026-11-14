@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { ModelPickerPanel } from '@/components/model-picker';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { modeRunsReadOnly } from '@/lib/read-only-modes';
 import {
   DEV_ROLES, DEV_TABS, PERMISSION_MODES, toggled,
   type AgentDraft, type ModelChoice,
@@ -136,6 +137,12 @@ export function SheetView({ draft, update, shownModel, skills, mcp, onPickFolder
               <p role="alert" data-bypass-warning className="mx-0.5 mt-2 flex items-center gap-1.5 text-xs text-amber-500">
                 <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
                 {t('onboarding.agent.sheet.bypassWarning')}
+              </p>
+            )}
+            {modeRunsReadOnly(shownModel?.backend, draft.permission) && (
+              <p role="note" data-read-only-warning className="mx-0.5 mt-2 flex items-center gap-1.5 text-xs text-amber-500">
+                <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+                {t('editPage.permissionModeReadOnly')}
               </p>
             )}
           </section>

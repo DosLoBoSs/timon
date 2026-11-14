@@ -47,6 +47,18 @@ test('the mode is frozen with a warning only when the backend ignores it', async
     // The saved choice stays visible, so switching backend restores it.
     const checked = document.querySelector('[aria-checked="true"]');
     assert.equal(checked?.textContent, 'auto');
+
+    // A backend that runs the picked mode read-only keeps the choice open and says so.
+    await React.act(async () => {
+      root.render(React.createElement(PermissionModeField, { value: 'auto', onChange: (m: string) => picked.push(m), ignored: false, readOnly: true }));
+    });
+    const readOnly = document.querySelector('[data-permission-mode-read-only]');
+    assert.ok(readOnly, 'the read-only warning is shown');
+    assert.match(readOnly.textContent ?? '', /read-only/);
+    assert.match(readOnly.textContent ?? '', /bypassPermissions/);
+    assert.ok(Array.from(document.querySelectorAll('button')).every((b) => !b.disabled), 'every mode stays selectable');
+    await render(false);
+    assert.ok(!document.querySelector('[data-permission-mode-read-only]'), 'no warning by default');
   } finally {
     await React.act(async () => { root.unmount(); });
     for (const [key, descriptor] of saved) {

@@ -178,3 +178,29 @@ test('confirming bypassPermissions posts it', async () => {
     await ui.unmount();
   }
 });
+
+test('on a backend that runs guarded modes read-only, those entries say so', async () => {
+  const { parsePermissionModeState } = await loadMenu();
+  assert.equal(parsePermissionModeState({ ...GUARDED, backend: 'grok' })?.backend, 'grok');
+  assert.equal(parsePermissionModeState(GUARDED)?.backend, undefined);
+  const SANDBOX = { mode: 'auto', switchable: true, choices: ['plan', 'auto', 'bypassPermissions'] };
+  for (const [backend, warned] of [['grok', ['auto']], ['grok@acct1', ['auto']], ['claude', []]] as const) {
+    const ui = await mount();
+    try {
+      const { PermissionModeMenu } = await loadMenu();
+      await ui.render(ui.React.createElement(PermissionModeMenu, { missionId: 'm1', fetchImpl: fakeFetch({ ...SANDBOX, backend }, []) }));
+      await ui.until(() => !!trigger(), 'the trigger to be painted');
+      const button = trigger()!;
+      button.focus();
+      await ui.key(button, 'Enter');
+      await ui.until(() => menuItems().length === SANDBOX.choices.length, 'the menu to open');
+      const flagged = menuItems().filter((n) => n.querySelector('[data-read-only]')).map((n) => n.dataset.mode);
+      assert.deepEqual(flagged, [...warned], `backend ${backend}`);
+      for (const node of menuItems().filter((n) => n.querySelector('[data-read-only]'))) {
+        assert.match(node.textContent ?? '', /read-only/);
+      }
+    } finally {
+      await ui.unmount();
+    }
+  }
+});
