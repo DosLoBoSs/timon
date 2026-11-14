@@ -689,5 +689,23 @@
     "legacy": {
       "title": "Edit a provider's models and connection"
     }
+  },
+  "providerAdd": {
+    "title": "Add a provider",
+    "intro": "Install an agent from the catalog, or connect a service that speaks a protocol Timon runs. The new provider joins the list, and its page is where you sign in and pick its models.",
+    "choices": {
+      "catalog": {
+        "title": "From the catalog",
+        "body": "Agents of the official Agent Client Protocol registry. Timon downloads the program, checks its checksum when one is published, and runs it."
+      },
+      "endpoint": {
+        "title": "Compatible endpoint",
+        "body": "A service reached at an address you give, speaking the Anthropic or OpenAI Responses protocol: a hosted model, a proxy, a server on your network."
+      }
+    },
+    "endpoint": {
+      "hint": "Test checks the address and the key, and lists the models the endpoint serves. Each provider is a file in ~/.timon/backends/, its key stays in the vault.",
+      "submit": "Add this provider"
+    }
   }
 }

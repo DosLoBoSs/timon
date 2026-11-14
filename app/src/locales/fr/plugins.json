@@ -679,5 +679,23 @@
     "legacy": {
       "title": "Modifier les modèles et la connexion d'un fournisseur"
     }
+  },
+  "providerAdd": {
+    "title": "Ajouter un fournisseur",
+    "intro": "Installez un agent du catalogue, ou connectez un service qui parle un protocole que Timon sait lancer. Le nouveau fournisseur rejoint la liste, et c'est sur sa page que vous le connectez et choisissez ses modèles.",
+    "choices": {
+      "catalog": {
+        "title": "Depuis le catalogue",
+        "body": "Les agents du registre officiel Agent Client Protocol. Timon télécharge le programme, vérifie sa somme de contrôle quand elle est publiée, et le lance."
+      },
+      "endpoint": {
+        "title": "Endpoint compatible",
+        "body": "Un service joint à une adresse que vous donnez, qui parle le protocole Anthropic ou OpenAI Responses : un modèle hébergé, un proxy, un serveur de votre réseau."
+      }
+    },
+    "endpoint": {
+      "hint": "Tester vérifie l'adresse et la clé, et liste les modèles que sert l'endpoint. Chaque fournisseur est un fichier de ~/.timon/backends/, sa clé reste dans le coffre.",
+      "submit": "Ajouter ce fournisseur"
+    }
   }
 }

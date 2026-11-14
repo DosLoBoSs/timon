@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, GripVertical, Pencil, Trash2 } from 'lucide-react';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -22,9 +22,8 @@ import { t } from '@/lib/i18n';
 import { sseOn } from '@/lib/sse-stream';
 import { cn } from '@/lib/utils';
 import { BrandMark } from '@/components/brand-mark';
-import { blankForm, formOf, type CustomBackend } from './form';
+import { formOf, type CustomBackend } from './form';
 import { API, EndpointFields, MANAGE_API, VerdictLine, connectionEditable, errorText, useEndpointDraft, type ProtocolOption } from './endpoint-form';
-import { ProviderCatalog } from './provider-catalog';
 import { ProvidersList } from './providers-list';
 import { SidePanel } from './side-panel';
 import { HINT } from './type-scale';
@@ -63,7 +62,11 @@ function ActionSlot({ className, children }: { className: string; children?: Rea
   return <span className={cn('flex shrink-0 items-center justify-center', className)}>{children}</span>;
 }
 
-export function BackendsSettings({ onOpenProvider }: { onOpenProvider: (id: string) => void }): ReactElement {
+export function BackendsSettings({ onOpenProvider, onAddProvider }: {
+  onOpenProvider: (id: string) => void;
+  /** Opens the "Add a provider" page: the catalog, or a compatible endpoint. */
+  onAddProvider?: () => void;
+}): ReactElement {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const mutating = useRef(false);
@@ -172,7 +175,7 @@ export function BackendsSettings({ onOpenProvider }: { onOpenProvider: (id: stri
       <p className="max-w-3xl text-[13px] leading-relaxed text-muted-foreground">{t('backendsSettings.intro')}</p>
 
       <div className="mt-5 max-w-3xl">
-        <ProvidersList onOpen={onOpenProvider} onVerified={() => setGeneration((current) => current + 1)} />
+        <ProvidersList onOpen={onOpenProvider} onAdd={onAddProvider} onVerified={() => setGeneration((current) => current + 1)} />
       </div>
 
       {/* Edited here until the provider page's Models and Add sections take these rows over. */}
@@ -271,14 +274,9 @@ export function BackendsSettings({ onOpenProvider }: { onOpenProvider: (id: stri
         </DialogContent>
       </Dialog>
 
-      <Button size="sm" className="mt-4" onClick={() => draft.open(blankForm())}>
-        <Plus className="mr-1.5 h-3.5 w-3.5" />
-        {t('backendsSettings.add')}
-      </Button>
-
       <SidePanel
         open={form !== null}
-        title={t(form?.id ? 'backendsSettings.editTitle' : 'backendsSettings.add')}
+        title={t('backendsSettings.editTitle')}
         onClose={draft.close}
         onSubmit={() => void draft.save()}
         footer={<>
@@ -304,10 +302,6 @@ export function BackendsSettings({ onOpenProvider }: { onOpenProvider: (id: stri
       </SidePanel>
 
       <p className="mt-6 max-w-3xl text-xs leading-relaxed text-muted-foreground">{t('backendsSettings.reorderHint')}</p>
-
-      <div key={generation}>
-        <ProviderCatalog onOpen={onOpenProvider} />
-      </div>
     </div>
   );
 }

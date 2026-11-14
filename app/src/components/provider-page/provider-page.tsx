@@ -82,7 +82,8 @@ export function ProviderPage({ requested, onBack, onCanonical, HeaderAction }: {
   );
 }
 
-function Breadcrumb({ name, onBack }: { name: string | null; onBack: () => void }): ReactElement {
+/** "Providers › <where you are>": the way back to the list, shared by the pages under it. */
+export function Breadcrumb({ name, onBack }: { name: string | null; onBack: () => void }): ReactElement {
   return (
     <nav aria-label={t('providerPage.breadcrumb')} className="flex min-w-0 items-center gap-1 text-[13px]">
       <button type="button" onClick={onBack}

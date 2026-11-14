@@ -140,6 +140,18 @@ export function needsAuthorization(provider: ProviderPlugin): boolean {
  */
 export const PROVIDER_PARAM = 'provider';
 
+/**
+ * The query parameter of the "Add a provider" page: present (even empty) on
+ * that page, naming the way chosen once there is one.
+ */
+export const ADD_PROVIDER_PARAM = 'add-provider';
+export type AddProviderChoice = 'catalog' | 'endpoint';
+
+/** The way an `add-provider=` value names; anything else is the page before a choice. */
+export function addProviderChoice(value: string | null): AddProviderChoice | null {
+  return value === 'catalog' || value === 'endpoint' ? value : null;
+}
+
 /** The provider the card names, when it has something to authorize; `null` leaves the panel as is. */
 export function providerToAuthorize(providers: readonly ProviderPlugin[], id: string | null): ProviderPlugin | null {
   const provider = id ? providers.find((p) => p.id === id) : undefined;
