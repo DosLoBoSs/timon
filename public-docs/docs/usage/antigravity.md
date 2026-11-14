@@ -11,7 +11,7 @@ A **personal Google account** signed in to `agy`: the free plan works, and a Goo
 
 ## Set it up
 
-1. Install `agy` with Google's installer, or click **Install** on the **Antigravity** card in **Settings → AI models → Providers**, which runs the same command:
+1. Install `agy` with Google's installer, or open **Antigravity (Google)** in **Settings → AI models → Providers** and click **Install** in its **Program** section, which runs the same command:
 
    ```bash
    # macOS and Linux
@@ -31,7 +31,7 @@ A **personal Google account** signed in to `agy`: the free plan works, and a Goo
 
    It prints a Google sign-in link: open it, choose your personal account, then paste the code the page gives you back into the terminal. Running `agy` once and following its first-run screens signs you in too.
 
-3. Restart Timon. **Antigravity (Google)** then appears among the LLM backends.
+3. Restart Timon. **Antigravity (Google)** then appears in the model selectors.
 
 Timon looks for `agy` on the service's PATH, in `~/.local/bin` on Linux and macOS, and in `%LOCALAPPDATA%\agy\bin` on Windows, which is where Google's installers put it.
 
