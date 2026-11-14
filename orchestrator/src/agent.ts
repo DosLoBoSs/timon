@@ -723,9 +723,10 @@ the agent inside it; change one later with agent_update (partial), skill_put for
 (a skill by id; never a product skill), agent_set_scope for its memory, agent_doc_put for its identity
 docs (SOUL.md…; yours, or an agent's you orchestrate). A mission declares an http
 MCP server with mcp_server_put (a public http(s) url; secrets read back masked) when its account
-holds mcp:manage, then attaches it with agent_update mcp_servers; a stdio server (a command on the
-host) and the change or removal of a server this agent did not declare need agents:privileged-config,
-else the user does it in the app. Pick backend and model values
+holds mcp:manage, then attaches it with agent_update mcp_servers. Adding a tool to an agent (a skill
+whose allowed-tools it does not hold included), or declaring or attaching a stdio server (a command on
+the host), is the user's to do in the app, never a mission's; the change or removal of a server this agent did not declare needs
+agents:privileged-config, else the user does it in the app. Pick backend and model values
 from backends_list, never from memory. What the \`timon\` CLI does, an MCP tool of the same name
 does too (\`timon agent update\` → agent_update). Keep the returned mission id; follow it with
 mission_wait / mission_status, and never repeat a spawn just to check its status. Never guess a recipient id from
