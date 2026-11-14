@@ -8,6 +8,7 @@
       "connectCli": "Connectez-vous à {name} depuis le CLI : lancez {command}.",
       "connect": "Connectez-vous depuis le CLI de ce fournisseur.",
       "connectAccount": "Reconnectez ce compte depuis {settingsPath}.",
+      "connectAccountAsk": "Demandez à un administrateur de reconnecter ce compte.",
       "error": "Usage indisponible"
     },
     "board": {

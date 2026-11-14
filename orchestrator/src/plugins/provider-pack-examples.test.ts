@@ -25,7 +25,7 @@ const { mountOfficialProviders } = await import('../../tests/helpers/official-pr
 await mountOfficialProviders();
 
 const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../../examples');
-const PACKS = ['plugin-provider-pack', 'plugin-provider-openrouter'];
+const PACKS = ['plugin-provider-pack', 'plugin-provider-openrouter', 'plugin-provider-section'];
 
 function readPackage(folder: string): { name: string; timon: Record<string, unknown> } {
   return JSON.parse(readFileSync(join(EXAMPLES, folder, 'package.json'), 'utf8')) as { name: string; timon: Record<string, unknown> };

@@ -44,7 +44,7 @@
     "loadOlder": "Charger les connexions plus anciennes",
     "loadingOlder": "Chargement…",
     "empty": "Aucune connexion journalisée pour cette mission pour l'instant.",
-    "limit": "Seuls les programmes qui respectent HTTP(S)_PROXY passent par le journal. Ceux qui l'ignorent, dont le fetch natif de Node, atteignent le réseau sans apparaître ici.",
+    "limit": "Seuls les programmes qui respectent HTTP(S)_PROXY passent par le journal. Ceux qui l'ignorent, dont le fetch natif de Node, ou à qui on demande de le contourner, atteignent le réseau sans apparaître ici.",
     "offTitle": "Journal des connexions désactivé",
     "offBody": "Les connexions de cette mission ne sont pas enregistrées : cette vue ne dit donc rien de ce qu'elle a contacté. Pour activer le journal, mettez host.isolation.egress.mode à « log » dans timon.config.json, puis redémarrez Timon.",
     "offHistory": "Les connexions ci-dessous datent d'avant sa désactivation.",

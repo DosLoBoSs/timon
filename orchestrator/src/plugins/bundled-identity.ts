@@ -77,6 +77,8 @@ const LAYOUT_DECLARES: Record<string, SlotMode> = {
   'chat.message.action': 'list',
   'settings.section': 'keyed',
   'settings.connection.form': 'keyed',
+  // Sections of the page of one provider (client API 16).
+  'settings.provider.section': 'list',
   ...SETTINGS_GRAFT_DECLARES,
   'kanban.column': 'list',
   'kanban.todo.detail': 'list',
@@ -141,7 +143,7 @@ export const BUNDLED_IDENTITY: Readonly<Record<string, BundledIdentity>> = Objec
   // The layout also paints the cockpit clock.
   '@timon/ui-layout': identity(['layout', 'widget'], { slots: ['root', 'cockpit.widget'], declares: LAYOUT_DECLARES }),
   '@timon/ui-theme': identity('theme', { slots: ['theme', 'settings.section'] }),
-  '@timon/backends': identity('behavior', { slots: ['settings.section', 'model.picker', 'providers.cli'] }),
+  '@timon/backends': identity('behavior', { slots: ['settings.section', 'settings.provider.section', 'model.picker', 'providers.cli', 'providers.row'] }),
   // No chat card left: Files, Skills and MCP are `@timon/files-widget`,
   // `@timon/skills-widget` and `@timon/mcp-widget` (TODO #356, #357), which
   // still read the routes served here.

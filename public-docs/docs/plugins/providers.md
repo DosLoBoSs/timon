@@ -210,7 +210,7 @@ the install sheet shows:
 - a tick-box, off by default, to allow Timon to run those exact programs.
 
 Without the tick the plugin installs but its program stays unauthorized; the same
-sheet is available later in **Settings → AI models → LLM backends → Providers**.
+review is available later on your provider's page in **Settings → AI models → Providers**, in its **Program** section.
 Only the path Timon found is ever allowed, and if it changes between the sheet
 and the click, nothing is installed and the sheet is shown again. `claude`,
 `codex`, `timon`, shells, interpreters and package runners can never be
@@ -223,9 +223,9 @@ What is authorized is the **file** the name leads to, links followed, and Timon 
 it again every time a mission starts your program — a first turn, a resumed
 conversation, a relaunch. If the name now leads to another file (the program moved,
 an update replaced the file a link points to) or the authorization was removed, the
-mission is refused and says which file it found; a notification card opens the same
-Providers sheet on your plugin, with the authorization dialog ready, and the person
-authorizes it again there. A path your `launch` returns that was not authorized is
+mission is refused and says which file it found; a notification card opens your
+provider's page, whose **Program** section offers **Review and authorize**, and the
+person authorizes it again there. A path your `launch` returns that was not authorized is
 refused the same way, even when its file name matches. The file checked is also the
 file started: replacing it, or retargeting a link to it, while a mission is starting
 refuses that start.
@@ -293,31 +293,105 @@ mission already running keeps working. Two rules protect missions:
   stored), it is refused while Timon runs, and the current version stays. Restart
   the missions, or Timon, to apply it.
 
+## Add a section to your provider's page
+
+In **Settings → AI models → Providers**, each provider has its own page: a header
+(logo, name, status, how many agents use it), then sections in this order —
+Connection, API key, Program, its own settings, Models. A section with nothing to
+say is not shown. The page's address names the provider
+(`?settings=models/backends&provider=<id>`), so a link can open it directly.
+
+Your provider plugin can add sections there, with a browser half that registers in
+the `settings.provider.section` list slot (client API 16). A section you register
+is painted on the pages of the providers your plugin brings, and nowhere else.
+
+```json
+"timon": {
+  "apiVersion": 16,
+  "kind": "provider",
+  "client": { "slots": ["settings.provider.section"], "external": ["react", "@timon/ui"], "mode": "esm" }
+}
+```
+
+```js
+import React from 'react'
+import { useProviderPage, ProviderSection, ProviderSettingRow } from '@timon/ui'
+
+function UsageSection() {
+  const page = useProviderPage()
+  if (!page) return null
+  return React.createElement(ProviderSection, { title: 'Usage' },
+    React.createElement(ProviderSettingRow, {
+      title: 'Models offered',
+      status: `${page.provider.modelCount} models`,
+    }))
+}
+
+export function apply(ctx) {
+  return ctx.slots.register({ slot: 'settings.provider.section', order: 450 }, UsageSection)
+}
+```
+
+- The component receives no props. `useProviderPage()` returns the provider on
+  screen (`provider`: its id, name, origin, backends, models, status, whether a
+  vault entry it needs is present — names only, never a value), `status`,
+  `defaultBackend`, `refresh()` and `back()`. Call `refresh()` after a change your
+  section made, so the header and the other sections read the provider again.
+- Draw your section as Timon draws its own, so the page reads as one.
+  `ProviderSection` is a short `title` over a card; its children are
+  `ProviderSettingRow`s: a `title` and one `status` line at the left (`leading`
+  before them, for a logo), ONE main `action` at the right (a button, a switch),
+  and the other actions as `DropdownMenuItem`s in `menu`, shown in a "…" menu.
+  No paragraph of explanation under the title (a `description` folds behind an
+  information mark), and no field shown in permanence: a form opens after a
+  click, in a dialog or under its row (the row's `children`).
+- `order` places the section: the common ones are at 100 (Connection), 200 (API
+  key), 300 (Program), 400 (own settings) and 500 (Models). Without `order`, it
+  comes after Models.
+- With the `key` of a common section (`connection`, `apiKey`, `program`,
+  `settings`, `models`), your section takes that section's place on your
+  provider's page only. `settings` is the one meant for a provider's own
+  settings.
+- Render nothing (`return null`) when your section does not apply: the page
+  leaves no gap for it.
+
+A plugin that brings several backends gets one page per backend; your section is
+painted on each of them, and `provider.backends` tells you which one is on screen.
+The complete template is `examples/plugin-provider-section`.
+
 ## Agents from the ACP registry
 
 Timon can install any program-based agent of the official
 [Agent Client Protocol registry](https://agentclientprotocol.com): open
-**Settings → AI models → LLM backends → Providers → ACP registry**, pick an
-agent, and Timon downloads it, checks it, and offers it as the backend
-`acp-<agent>`. Only agents distributed as a downloadable program for your
-operating system can be installed; those that need a package runner (`npx`,
-`uvx`) or an archive format Timon cannot open are listed with the reason.
+**Settings → AI models → Providers**, choose **Add a provider**, then
+**From the catalog**. Search the list by name or description, pick an agent,
+and Timon downloads it, checks it, and offers it as the backend
+`acp-<agent>`. The installed agent joins the list of providers, and **Open its
+page** leads to its provider page. Only agents distributed as a downloadable
+program for your operating system can be installed; those that need a package
+runner (`npx`, `uvx`) or an archive format Timon cannot open are listed with
+the reason.
+
+Each agent of the catalog reads in one line: what is installed on this
+computer and what the registry offers, for example *Installed 1.4.1 without a
+published checksum · verified 1.5.0 available to replace it*.
 
 - **Checked download.** The registry publishes a `sha256` for some agents. When it
   does, a file that does not match is deleted and nothing is installed. When it
-  does not (the row says *No published hash*), Timon asks you to confirm before
-  downloading, and records the install as unverified.
+  does not (the line says *no published checksum*), Timon asks you to confirm
+  before downloading, and records the install as unverified.
 - **Checked on every start.** Timon keeps a digest of the installed files and
   compares it each time it registers the agent. A file changed afterwards is
-  never launched; the row shows *Files changed* and **Reinstall** repairs it.
-- **Updates.** A newer version appears on the row; installing it keeps the
+  never launched; the line says its files changed and **Reinstall** repairs it.
+- **Updates.** A newer version appears on the line; installing it keeps the
   working version until the new one is verified, then swaps them. The previous
   version is kept until the next update.
 - **From unverified to verified.** An agent installed without a published hash
-  is marked *Unverified*. When the registry later publishes a `sha256` for your
-  machine's build, the row says so and offers **Install verified version**,
-  even when the version number did not change. Nothing is replaced until you
-  click it, and the swap is the same as for any update.
+  is marked *without a published checksum*. When the registry later publishes a
+  `sha256` for your machine's build, the line says so and the row offers
+  **Install verified version**, even when the version number did not change.
+  Nothing is replaced until you click it, and the swap is the same as for any
+  update.
 - **Signing in.** Timon never signs an agent in for you. **Sign-in methods** on
   an installed agent asks the agent how it signs in and lists its methods. The
   suggested one comes first, with the command to run in a terminal when the

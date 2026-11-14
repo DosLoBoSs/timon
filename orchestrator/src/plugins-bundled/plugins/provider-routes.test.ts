@@ -60,6 +60,11 @@ const loader = {
   list: () => [
     { id: 'acme-route', pkg: '@acme/route', version: '1.0.0', state: 'failed', reason: 'failed', error: 'not allowed', signed: true, manifest },
     { id: 'plain-widget', pkg: '@acme/w', version: '1.0.0', state: 'active', reason: null, error: null, signed: true, manifest: { id: 'plain-widget', kind: ['widget' as const] } },
+    // Shipped in the release: its CLI is one the plugin policy refuses to any third party.
+    {
+      id: 'provider-shipped', pkg: '@timon/provider-shipped', version: '1.0.0', state: 'active', reason: null, error: null, signed: true, builtin: true,
+      manifest: { id: 'provider-shipped', kind: ['provider' as const], label: 'Shipped', provider: { binaries: [{ name: 'claude', aliases: [] }] } },
+    },
   ],
   update: async () => { updates += 1; return []; },
 };
@@ -130,9 +135,16 @@ test('the list shows providers only, with the path this host resolves', { skip: 
   const res = await call('GET', '');
   assert.equal(res.status, 200, res.text);
   const providers = res.json.providers as Array<{ id: string; binaries: Array<{ resolved: string | null; allowed: boolean }> }>;
-  assert.deepEqual(providers.map((p) => p.id), ['acme-route']);
+  assert.deepEqual(providers.map((p) => p.id), ['acme-route', 'provider-shipped']);
   assert.equal(providers[0]!.binaries[0]!.resolved, AGENT);
   assert.equal(providers[0]!.binaries[0]!.allowed, false);
+});
+
+test('a provider shipped in the release lists no program to authorize, never a refused one', async () => {
+  const res = await call('GET', '');
+  assert.equal(res.status, 200, res.text);
+  const providers = res.json.providers as Array<{ id: string; binaries: Array<{ refused: string | null }> }>;
+  assert.deepEqual(providers.find((p) => p.id === 'provider-shipped')?.binaries, []);
 });
 
 test('authorize: a program without the declared identity is a 409 saying why; nothing written, no remount, the card stays', { skip: !posix }, async () => {

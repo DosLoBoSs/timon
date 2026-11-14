@@ -33,14 +33,14 @@ import { ThinkingPanel, reasoningText } from './thinking-panel';
 import { HINT, LABEL } from './type-scale';
 
 /** Same handle and keyboard behaviour as a row of the backend list. */
-function SortableModelRow({ id, children, below }: { id: string; children: ReactNode; below: ReactNode }): ReactElement {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+function SortableModelRow({ id, children, below, locked }: { id: string; children: ReactNode; below: ReactNode; locked: boolean }): ReactElement {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id, disabled: locked });
   return (
     <li ref={setNodeRef} data-model-row style={{ transform: CSS.Transform.toString(transform), transition }}
       className="rounded-md border border-border bg-background/60 p-1">
       <div className="flex flex-nowrap items-center gap-1">
-        <button type="button" {...attributes} {...listeners} aria-label={t('backendsSettings.models.reorder')}
-          className="shrink-0 touch-none rounded p-0.5 text-muted-foreground hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+        <button type="button" {...attributes} {...listeners} aria-label={t('backendsSettings.models.reorder')} disabled={locked}
+          className="shrink-0 touch-none rounded p-0.5 text-muted-foreground hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
           <GripVertical className="size-3.5" />
         </button>
         {children}
@@ -50,7 +50,14 @@ function SortableModelRow({ id, children, below }: { id: string; children: React
   );
 }
 
-export function ModelEditor({ models, defaultModel, onChange, thinkingControls = null, savedSlugs = [] }: {
+/** A row the search keeps: a slug or label holding the text, or a row still being typed. */
+export function modelMatches(model: ModelDraft, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle || !model.slug.trim()) return true;
+  return model.slug.toLowerCase().includes(needle) || model.label.toLowerCase().includes(needle);
+}
+
+export function ModelEditor({ models, defaultModel, onChange, thinkingControls = null, savedSlugs = [], query = '', label }: {
   models: ModelDraft[];
   defaultModel: string | null;
   onChange: (next: { models: ModelDraft[]; defaultModel: string | null }) => void;
@@ -59,6 +66,10 @@ export function ModelEditor({ models, defaultModel, onChange, thinkingControls =
   thinkingControls?: readonly ReasoningControl['type'][] | null;
   /** Models the daemon already holds, hence has run its detection on. */
   savedSlugs?: readonly string[];
+  /** Only the rows matching it are shown; dragging waits for an empty search, the order being the whole list's. */
+  query?: string;
+  /** The heading above the list; `null` leaves the Add button alone (a page section already titles it). */
+  label?: string | null;
 }): ReactElement {
   /** Index of the row whose picture is being picked, if any. */
   const [picking, setPicking] = useState<number | null>(null);
@@ -111,6 +122,8 @@ export function ModelEditor({ models, defaultModel, onChange, thinkingControls =
     setThinking(null);
     onChange({ models: arrayMove(models, from, to), defaultModel });
   };
+  const searching = query.trim() !== '';
+  const shown = models.flatMap((model, index) => (modelMatches(model, query) ? [index] : []));
   const toggleHidden = (index: number) => {
     const next = models.map((model, at) => at === index ? { ...model, hidden: !model.hidden } : model);
     const selected = next.find((model) => model.slug === defaultModel && !model.hidden);
@@ -120,7 +133,7 @@ export function ModelEditor({ models, defaultModel, onChange, thinkingControls =
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <span className={LABEL}>{t('backendsSettings.fields.models')}</span>
+        <span className={LABEL}>{label === undefined ? t('backendsSettings.fields.models') : label}</span>
         <Button type="button" size="sm" variant="ghost" onClick={add}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           {t('backendsSettings.models.add')}
@@ -151,10 +164,11 @@ export function ModelEditor({ models, defaultModel, onChange, thinkingControls =
           </span>
           <span aria-hidden="true" className="size-7 shrink-0" />
         </div>
-        <SortableContext items={[...ids.current]} strategy={verticalListSortingStrategy}>
+        <SortableContext items={shown.map((index) => ids.current[index]!)} strategy={verticalListSortingStrategy}>
         <ul className="flex flex-col gap-1">
-          {models.map((model, index) => (
-            <SortableModelRow key={ids.current[index]} id={ids.current[index]!} below={<>
+          {shown.length === 0 ? <li className={cn(HINT, 'px-2 py-3 text-center')}>{t('backendsSettings.models.noMatch')}</li> : null}
+          {shown.map((index) => { const model = models[index]!; return (
+            <SortableModelRow key={ids.current[index]} id={ids.current[index]!} locked={searching} below={<>
               {picking === index ? (
                 <PictoPanel
                   className="mt-1"
@@ -265,7 +279,7 @@ export function ModelEditor({ models, defaultModel, onChange, thinkingControls =
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </SortableModelRow>
-          ))}
+          ); })}
         </ul>
         </SortableContext>
         </DndContext>

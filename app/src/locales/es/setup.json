@@ -202,7 +202,6 @@
     "loading": "Buscando las CLI de IA en esta máquina…",
     "unavailable": "No se pueden listar ahora las CLI de IA de esta máquina.",
     "retry": "Vuelve a intentarlo",
-    "checkUpdates": "Buscar actualizaciones",
     "updateCheckOff": "La búsqueda de actualizaciones está desactivada (ajuste «Check for CLI updates»).",
     "install": "Instalar",
     "installing": "Instalando…",
@@ -241,10 +240,6 @@
       "continue": "Continuar",
       "needOne": "Instala Claude, Codex, Grok o Copilot e inicia sesión para continuar.",
       "anyway": "Continuar de todos modos"
-    },
-    "settings": {
-      "title": "Herramientas de IA de esta máquina",
-      "description": "Instala una CLI de IA con el instalador oficial de su fabricante, inicia sesión y actualízala cuando salga una nueva versión. Timon busca actualizaciones al arrancar y luego cada pocas horas."
     }
   }
 }

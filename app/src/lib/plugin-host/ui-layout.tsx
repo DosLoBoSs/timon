@@ -55,6 +55,11 @@ export const UI_LAYOUT_CHILD_SLOTS: SlotChildren = {
   // qualified type id (`<plugin>:<name>@<version>`); `useConnectionForm()`
   // hands it the type and `submit`. Absent: the generic form.
   'settings.connection.form': 'keyed',
+  // Sections of the page of one provider (Settings › AI models › Providers ›
+  // <name>), client API 16: the product's common ones are defaults of
+  // `@timon/backends`; a provider plugin adds its own, painted on the pages of
+  // the providers it brings only, and reads `useProviderPage()`.
+  'settings.provider.section': 'list',
   // Graft into a native category. Exact admission — a widget cannot land
   // here, and declaring `settings.missions` does not open `settings.resources`.
   // Declared at boot (same reason as `kanban.column` / `settings.section`): a

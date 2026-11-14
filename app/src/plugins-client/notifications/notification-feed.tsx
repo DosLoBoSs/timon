@@ -9,6 +9,7 @@ import { plainPreview } from '@/lib/plain-preview';
 import { t } from '@/lib/i18n';
 import { sseOn } from '@/lib/sse-stream';
 import { notificationHref } from '@/lib/notification-href';
+import { useProviderAccess } from '@/hooks/use-me';
 import { reltime } from '@/app/agents/notification-rail';
 import { NotificationIconBadge, UrgentPill } from './notification-icon';
 import { AgentAvatar, useAgentIdentities } from '@/components/agent-avatar';
@@ -191,6 +192,7 @@ export function NotificationFeed({
   className?: string;
 }) {
   const { identityOf } = useAgentIdentities();
+  const providers = useProviderAccess();
   if (items.length === 0) {
     return (
       <div className={cn('flex flex-col items-center justify-center gap-2 py-6 text-center text-muted-foreground', className)}>
@@ -206,7 +208,7 @@ export function NotificationFeed({
     // Rows are set apart by space and their own hover surface, never by a rule.
     <ul className={cn('flex flex-col gap-0.5', className)}>
       {items.map((n) => {
-        const href = notificationHref(n);
+        const href = notificationHref(n, { providers });
         const display = systemNotificationText(n);
         const text = (
           <>
