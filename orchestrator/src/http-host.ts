@@ -20,9 +20,14 @@ export type HostPolicy = { open: true } | { open: false; names: ReadonlySet<stri
 
 /**
  * Names that resolve on this machine only, whatever a public DNS answers:
- * `.localhost` (RFC 6761) is mapped to the loopback by the browser itself,
- * `.internal` is reserved and never delegated (Docker's `host.docker.internal`),
- * and a `.ts.net` name is published by Tailscale alone, onto tailnet addresses.
+ * `.localhost` (RFC 6761) is mapped to the loopback by the browser itself, and
+ * a `.ts.net` name is published by Tailscale alone, onto tailnet addresses.
+ * `.internal` is not among them: it is reserved for private networks, so a
+ * LAN or corporate resolver may answer it. Docker's `host.docker.internal` is
+ * admitted by name instead (`daemonHostPolicy`).
+ *
+ * Copied in `app/src/lib/host-guard.ts`; `http-host-parity.test.ts` keeps the
+ * two in step.
  */
 function reservedName(name: string): boolean {
   return name === 'localhost' || name.endsWith('.localhost') || name.endsWith('.ts.net');
