@@ -4,8 +4,10 @@
  * The agent's mascot: a plush meerkat head whose face is a black screen where
  * the eyes are light (docs/AGENT-MASCOT.md).
  *
- * - `AgentMascot` paints it from props — the product's drawing, and the
- *   default occupant of the `agent.mascot` slot.
+ * - `AgentMascot` paints it from props — the product's 2D drawing.
+ * - `ProductAgentMascot`, the default occupant of the `agent.mascot` slot,
+ *   draws the 3D head (`three/agent-mascot-3d.tsx`) unless the user picked
+ *   the 2D style or the browser has no WebGL2; then `AgentMascot`.
  * - `AgentMascotHost` is what a screen mounts: it normalises the request,
  *   hands it to the slot's occupant through `useAgentMascot()`, and paints
  *   `AgentMascot` itself while no occupant is registered (module off, a page
@@ -24,6 +26,8 @@ import { exprPoints, furOf, headLayout, isDrawableEyes, luma, mix, ptsPath, shad
 import { startMascotMotion, type MascotMotion } from './mascot-motion';
 import { isMascotState, stateExpression, type MascotState } from './mascot-states';
 import { usePrefersReducedMotion } from './reduced-motion';
+import { useMascot3D } from './mascot-style-pref';
+import { AgentMascot3D } from './three/agent-mascot-3d';
 
 // Screens import it from here, beside the mascot it drives.
 export { usePrefersReducedMotion };
@@ -249,6 +253,23 @@ export function ProductAgentMascot(): ReactElement | null {
 }
 
 function AgentMascotFromValue({ value: v, part = null }: { value: AgentMascotValue; part?: MascotDrawnPart | null }): ReactElement {
+  const threeD = useMascot3D();
+  // The eyes' screen alone is a flat glyph on black: the 2D drawing frames it
+  // tight. An accessory's cell shows the 3D head wearing it, the camera
+  // stepping back so that the tool fits.
+  if (threeD && part !== 'screen') {
+    return (
+      <AgentMascot3D
+        {...v.look}
+        color={v.fur}
+        size={v.size}
+        live={v.live}
+        state={v.state}
+        shadow={v.shadow}
+        label={v.label}
+      />
+    );
+  }
   return (
     <AgentMascot
       part={part}

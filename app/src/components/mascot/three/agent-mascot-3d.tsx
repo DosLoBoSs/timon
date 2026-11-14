@@ -1,15 +1,16 @@
 'use client';
 
 /**
- * The 3D plush head: the same props as the 2D `AgentMascot`, so a screen (or
- * the `agent.mascot` slot's default occupant) can swap one for the other.
+ * The 3D plush head: the same props as the 2D `AgentMascot`, so the
+ * `agent.mascot` slot's default occupant swaps one for the other, but always
+ * the whole head: a part drawn alone (`part`) stays the 2D drawing's job.
  * Each instance is a plain 2D canvas fed by one engine shared by the page
  * (`engine.ts`); the engine, three.js and the model data load on demand, and
  * until they are here, or without WebGL2, the canvas shows a flat head.
  */
 import { useEffect, useRef, type ReactElement } from 'react';
 import { DEFAULT_LOOK, lookFurHex } from '../agent-look';
-import { AgentMascot, type AgentMascotProps } from '../agent-mascot';
+import type { AgentMascotProps } from '../agent-mascot';
 import { usePrefersReducedMotion } from '../reduced-motion';
 import { isMascotState, STATES, type MascotState } from '../mascot-states';
 import { baseExpression } from './eyes';
@@ -17,11 +18,13 @@ import type { Mascot3DEngine } from './engine';
 import { createSim, fpsFor, settle } from './sim';
 import { createTile, drawFlat, mascot3DEngine, mascot3DEngineNow, tilePixels, type Tile } from './tile';
 
-export function AgentMascot3D(props: AgentMascotProps): ReactElement {
-  const {
-    shape = DEFAULT_LOOK.shape, color = DEFAULT_LOOK.color, eyes = DEFAULT_LOOK.eyes, acc = 'none',
-    size = 96, live = false, state = null, shadow = true, label = null, className, part = null,
-  } = props;
+/** The whole head only; `fit` is ignored too: the camera always frames the head with its accessory. */
+export type AgentMascot3DProps = Omit<AgentMascotProps, 'part'>;
+
+export function AgentMascot3D({
+  shape = DEFAULT_LOOK.shape, color = DEFAULT_LOOK.color, eyes = DEFAULT_LOOK.eyes, acc = 'none',
+  size = 96, live = false, state = null, shadow = true, label = null, className,
+}: AgentMascot3DProps): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tileRef = useRef<Tile | null>(null);
   const engineRef = useRef<Mascot3DEngine | null>(null);
@@ -32,7 +35,6 @@ export function AgentMascot3D(props: AgentMascotProps): ReactElement {
   const current: MascotState = isMascotState(state) ? state : 'idle';
   const animated = live && !reduced;
   const base = baseExpression(eyes);
-  const whole = part === null;
 
   // Everything the engine reads from the props, applied to the tile. A ref so the mount effect, which may
   // finish after a prop change (the engine loads asynchronously), applies the latest ones.
@@ -66,9 +68,8 @@ export function AgentMascot3D(props: AgentMascotProps): ReactElement {
   const flat = useRef(paintFlat);
   flat.current = paintFlat;
 
-  // Mount: one tile per canvas, registered with the engine for its lifetime. A part drawn alone mounts no canvas.
+  // Mount: one tile per canvas, registered with the engine for its lifetime.
   useEffect(() => {
-    if (!whole) return undefined;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return undefined;
@@ -93,7 +94,7 @@ export function AgentMascot3D(props: AgentMascotProps): ReactElement {
       engineRef.current = null;
       tileRef.current = null;
     };
-  }, [whole]);
+  }, []);
 
   // Every prop change lands on the tile; the engine redraws it on its next frame.
   useEffect(() => {
@@ -103,9 +104,6 @@ export function AgentMascot3D(props: AgentMascotProps): ReactElement {
     if (engineRef.current) engineRef.current.touch(t);
     else flat.current(t);
   }, [cssSize, hex, shape, acc, shadow, base, current, animated]);
-
-  // One part alone (the configurator's cells) has no 3D counterpart: the 2D drawing shows it.
-  if (!whole) return <AgentMascot {...props} />;
 
   return (
     <canvas

@@ -75,6 +75,11 @@ let webgl2: boolean | null = null;
 /** Whether this browser can run the engine: WebGL2. Probed once per page. */
 export function hasWebGL2(): boolean {
   if (webgl2 !== null) return webgl2;
+  // No WebGL2 API at all (an old engine, a test DOM): nothing to probe, and no context to create.
+  if (typeof WebGL2RenderingContext === 'undefined') {
+    webgl2 = false;
+    return webgl2;
+  }
   try {
     const probe = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('webgl2');
     webgl2 = !!probe;
@@ -84,6 +89,11 @@ export function hasWebGL2(): boolean {
     webgl2 = false;
   }
   return webgl2;
+}
+
+/** Forgets the probe's answer, so that a test can draw with and without WebGL2. */
+export function resetWebGL2ProbeForTests(): void {
+  webgl2 = null;
 }
 
 let engine: Promise<Mascot3DEngine | null> | null = null;

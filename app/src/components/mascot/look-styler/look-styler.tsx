@@ -293,7 +293,7 @@ function LookStylerFromValue({ value: v }: { value: LookStylerValue }): ReactEle
             <Pick key={acc} data-acc={acc} on={look.acc === acc} label={cellLabel('acc', acc)} onClick={() => set({ acc: acc as AgentLook['acc'] })}>
               {acc === 'none'
                 ? <span className="grid place-items-center text-muted-foreground" style={{ width: cellSize, height: cellSize }}><Ban className="size-1/2" aria-hidden /></span>
-                // The tool alone, enlarged: on the whole head it is a few pixels in a corner.
+                // In 2D the tool alone, enlarged (on the flat head it is a few pixels in a corner); in 3D the head wearing it.
                 : <AgentMascotHost look={{ ...look, acc: acc as AgentLook['acc'] }} size={cellSize} shadow={false} part="acc" />}
               {caption('acc', acc)}
             </Pick>
