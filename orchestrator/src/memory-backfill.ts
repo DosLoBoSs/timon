@@ -28,7 +28,7 @@ import { oneShotTarget } from './backends/index.js';
 const MAX_RULES_PER_SCOPE = 80; // bounds the prompt; beyond that, processed in batches
 
 type BackfillAction = 'update' | 'merge' | 'archive' | 'keep';
-type BackfillDecision = {
+export type BackfillDecision = {
   id: number;
   action: BackfillAction;
   tier?: 'core' | 'normal';
@@ -144,6 +144,20 @@ export async function backfillScope(
   }
 
   const runId = opts.runId ?? randomUUID();
+  const stats = applyBackfillDecisions(decisions, rules, scope, slug, validSlugs, runId);
+  return { ...empty, decisions: withText, applied: true, stats };
+}
+
+/** Applies the backfill decisions of one scope; logs each in memory_audit. */
+export function applyBackfillDecisions(
+  decisions: BackfillDecision[],
+  rules: MemoryRuleRow[],
+  scope: 'project' | 'global',
+  slug: string | null,
+  validSlugs: ReadonlySet<string>,
+  runId: string,
+): BackfillScopeResult['stats'] {
+  const byId = new Map(rules.map((r) => [r.id, r]));
   let coreActive = rules.filter((r) => r.tier === 'core').length;
   const stats = { updated: 0, merged: 0, archived: 0, kept: 0 };
   for (const d of decisions) {
@@ -192,7 +206,7 @@ export async function backfillScope(
     dbApi.logMemoryAudit({ ...audit, action: act, ruleId: d.id, candidateText: rule.text, rationale: d.rationale ?? null });
     stats.updated++;
   }
-  return { ...empty, decisions: withText, applied: true, stats };
+  return stats;
 }
 
 /**
