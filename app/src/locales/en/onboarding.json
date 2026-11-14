@@ -31,7 +31,7 @@
         "title": "Even when I'm logged out",
         "description": "Routines, night tasks and webhooks keep running with nobody at the screen, as long as the computer is on. On a Mac, this asks for your administrator password."
       },
-      "later": "You can change this at any time in Settings › System › Installation."
+      "later": "You can change this at any time in {settingsPath}."
     },
     "account": {
       "title": "Create your local account",

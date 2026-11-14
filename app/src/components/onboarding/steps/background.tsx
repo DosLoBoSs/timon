@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { ChevronRight, Moon, Sun } from 'lucide-react';
 import { t } from '@/lib/i18n';
+import { settingsPath } from '@/lib/settings-path';
 import { cn } from '@/lib/utils';
 import { machineSessionStorage } from '@/lib/machines/machine-storage';
 import type { ServiceSessionMode } from '@/lib/system-info';
@@ -110,7 +111,7 @@ export function BackgroundStep(): ReactElement | null {
           </button>
         ))}
       </div>
-      <p className="mt-3 text-[12.5px] text-muted-foreground">{t('onboarding.background.later')}</p>
+      <p className="mt-3 text-[12.5px] text-muted-foreground">{t('onboarding.background.later', { settingsPath: settingsPath('system', 'installation') })}</p>
     </section>
   );
 }
