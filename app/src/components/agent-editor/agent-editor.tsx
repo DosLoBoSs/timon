@@ -1106,7 +1106,7 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
                               className="grid size-3.5 place-items-center"
                               style={{ color: r.color }}
                             >
-                              <RoleSvg svg={r.iconSvg} size={14} />
+                              <RoleSvg svg={r.iconSvg} iconName={r.iconName} size={14} />
                             </span>
                             {r.label}
                           </span>

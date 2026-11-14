@@ -18,8 +18,9 @@ import {
  * CUSTOM roles (defined by the user via the UI, persisted server-side) are
  * hydrated into a module cache by <RolesProvider> at runtime — still resolved
  * synchronously, just from data. No async resolveRole (would flicker / break
- * hydration). Custom roles carry only `iconSvg` (captured at icon-pick time),
- * which both the React badge and the D3 canvas render identically.
+ * hydration). Custom roles carry a lucide `iconName`, drawn with its component
+ * once the icon set has loaded, and an `iconSvg` captured at pick time, kept
+ * to plain shapes and used as the fallback and by the D3 canvas.
  */
 
 export type RoleKey =
@@ -35,10 +36,11 @@ export type RoleVisual = {
   key: string;
   label: string;
   color: string;
-  /** React component — built-ins only (tree-shaken). */
+  /** React component: built-ins, and custom roles whose lucide `iconName`
+   *  is known once the icon set has loaded. */
   icon?: LucideIcon;
-  /** Inner SVG (24×24, stroke-based). Built-ins + custom. Used by the canvas
-   *  and by custom-role badges (no React component available for those). */
+  /** Inner SVG (24×24, stroke-based). Built-ins + custom. Used by the canvas,
+   *  and by custom-role badges whose icon name is not a known lucide icon. */
   iconSvg?: string;
 };
 
@@ -95,7 +97,7 @@ export type RoleSvgNode = { tag: RoleSvgTag; attrs: Record<string, string>; chil
 const SVG_TAGS: ReadonlySet<string> = new Set<RoleSvgTag>(['path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'g']);
 const SVG_ATTRS: ReadonlySet<string> = new Set([
   'd', 'cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'x1', 'y1', 'x2', 'y2',
-  'width', 'height', 'points', 'transform', 'fill',
+  'width', 'height', 'points', 'transform',
 ]);
 const SVG_VALUE_RE = /^[0-9a-zA-Z .,\-#()]*$/;
 const SVG_OPEN_RE = /^<([a-zA-Z][a-zA-Z0-9:_-]*)((?:\s+[^\s=/>]+\s*=\s*"[^"]*")*)\s*(\/?)>/;
@@ -107,8 +109,13 @@ function isRoleSvgTag(tag: string): tag is RoleSvgTag {
   return SVG_TAGS.has(tag);
 }
 
-/** The shapes of a role icon, or null when the markup leaves the grammar. */
-export function parseRoleSvg(raw: unknown): RoleSvgNode[] | null {
+/**
+ * The shapes of a role icon, or null when the markup leaves the grammar.
+ * `dropOtherAttributes` is for markup this page rendered itself (the icon
+ * picker): an attribute outside the list is left out instead of failing, so
+ * the daemon receives geometry only. Elements and values stay strict.
+ */
+export function parseRoleSvg(raw: unknown, { dropOtherAttributes = false } = {}): RoleSvgNode[] | null {
   if (typeof raw !== 'string' || raw.length > ROLE_SVG_MAX_LENGTH) return null;
   const root: RoleSvgNode[] = [];
   const stack: RoleSvgNode[] = [];
@@ -133,7 +140,11 @@ export function parseRoleSvg(raw: unknown): RoleSvgNode[] | null {
     for (const attr of (open[2] ?? '').matchAll(SVG_ATTR_RE)) {
       const name = attr[1] ?? '';
       const value = attr[2] ?? '';
-      if (!SVG_ATTRS.has(name) || Object.hasOwn(attrs, name) || !SVG_VALUE_RE.test(value)) return null;
+      if (!SVG_ATTRS.has(name)) {
+        if (dropOtherAttributes) continue;
+        return null;
+      }
+      if (Object.hasOwn(attrs, name) || !SVG_VALUE_RE.test(value)) return null;
       attrs[name] = value;
     }
     const parent = stack[stack.length - 1];
@@ -163,6 +174,36 @@ export function sanitizeRoleSvg(raw: unknown): string {
   return nodes ? serializeRoleSvg(nodes) : '';
 }
 
+/** The picker's rendered icon reduced to the geometry the daemon accepts. */
+export function roleSvgFromRenderedIcon(markup: string): string {
+  const nodes = parseRoleSvg(markup, { dropOtherAttributes: true });
+  return nodes ? serializeRoleSvg(nodes) : '';
+}
+
+/* ── Lucide icons by name, for custom roles ── */
+
+export type LucideIconSet = Readonly<Record<string, LucideIcon>>;
+
+/**
+ * The whole lucide set, fetched on demand. A static `import { icons }` defeats
+ * the per-icon import Next applies to lucide-react and puts all ~1 500 icons
+ * (1.4 MB of source) in the root layout (docs/BUNDLE-SIZE.md).
+ */
+let lucideSet: LucideIconSet | null = null;
+let lucideSetLoad: Promise<LucideIconSet> | null = null;
+export function loadLucideIconSet(): Promise<LucideIconSet> {
+  lucideSetLoad ??= import('lucide-react').then((m) => {
+    lucideSet = m.icons as LucideIconSet;
+    return lucideSet;
+  });
+  return lucideSetLoad;
+}
+
+/** The lucide component named `name`, once the set has loaded. */
+export function lucideIconByName(name: string | null | undefined, set: LucideIconSet | null = lucideSet): LucideIcon | undefined {
+  return name && set && Object.hasOwn(set, name) ? set[name] : undefined;
+}
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /** Draws a role icon under `parent` (the D3 canvas) without going through HTML. */
@@ -181,15 +222,21 @@ export function appendRoleSvg(parent: Element, raw: string): void {
 /** Custom roles hydrated at runtime by <RolesProvider> (keyed by lowercased id). */
 const customCache = new Map<string, RoleVisual>();
 
-/** Populate the custom-role cache from GET /api/agent-roles (custom entries only). */
+/**
+ * Populate the custom-role cache from GET /api/agent-roles (custom entries
+ * only). A known lucide `iconName` gives the role its real component; the
+ * stored markup is only a fallback, kept to the shape grammar.
+ */
 export function hydrateCustomRoles(
-  roles: Array<{ id: string; label: string; color: string; iconSvg: string }>,
+  roles: Array<{ id: string; label: string; color: string; iconName?: string; iconSvg?: string }>,
+  icons: LucideIconSet | null = lucideSet,
 ): void {
   for (const r of roles) {
     customCache.set(r.id.toLowerCase(), {
       key: r.id,
       label: r.label,
       color: r.color,
+      icon: lucideIconByName(r.iconName, icons),
       iconSvg: sanitizeRoleSvg(r.iconSvg),
     });
   }

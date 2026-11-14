@@ -8,20 +8,34 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { JSDOM } from 'jsdom';
-import { appendRoleSvg, hydrateCustomRoles, resolveRole, roleIconSvg, sanitizeRoleSvg } from './roles';
+import {
+  appendRoleSvg,
+  hydrateCustomRoles,
+  loadLucideIconSet,
+  lucideIconByName,
+  resolveRole,
+  roleIconSvg,
+  roleSvgFromRenderedIcon,
+  sanitizeRoleSvg,
+} from './roles';
 import { RoleSvg } from '../components/role-svg';
 
 // The tests compile JSX with the classic runtime (tsconfig keeps `preserve`).
 Object.defineProperty(globalThis, 'React', { value: React, configurable: true, writable: true });
 
 const LUCIDE_DOM =
-  '<path d="M12 7v14"></path><circle cx="12" cy="12" r="3" fill="currentColor"></circle><g transform="translate(1 1)"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect></g>';
+  '<path d="M12 7v14"></path><circle cx="12" cy="12" r="3"></circle><g transform="translate(1 1)"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect></g>';
+const CANONICAL =
+  '<path d="M12 7v14"/><circle cx="12" cy="12" r="3"/><g transform="translate(1 1)"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/></g>';
 
 const TRAPPED = [
   '<image href="x" onerror="alert(1)"/>',
   '<script>alert(1)</script>',
   '<path d="M1 1" onload="alert(1)"/>',
   '<path d="M1 1" style="fill:red"/>',
+  '<path fill="currentColor"/>',
+  '<path d="M1 1" fill="url(#x)"/>',
+  '<circle r="3" stroke="url(evil)"/>',
   '<path xlink:href="#a"/>',
   '<foreignObject><div>x</div></foreignObject>',
   '<use href="#a"/>',
@@ -41,10 +55,16 @@ test('built-in and picker-captured lucide icons survive sanitizeRoleSvg', () => 
     assert.ok(svg, key);
     assert.equal(sanitizeRoleSvg(svg), svg, `${key} is already canonical`);
   }
-  assert.equal(
-    sanitizeRoleSvg(LUCIDE_DOM),
-    '<path d="M12 7v14"/><circle cx="12" cy="12" r="3" fill="currentColor"/><g transform="translate(1 1)"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/></g>',
-  );
+  assert.equal(sanitizeRoleSvg(LUCIDE_DOM), CANONICAL);
+});
+
+test('the picker keeps only geometry from the icon it rendered', () => {
+  const rendered = LUCIDE_DOM.replace('r="3"', 'r="3" fill="currentColor" class="x"');
+  assert.equal(sanitizeRoleSvg(rendered), '', 'stored markup with paint attributes is refused');
+  assert.equal(roleSvgFromRenderedIcon(rendered), CANONICAL);
+  for (const svg of ['<image href="x"/>', '<script>alert(1)</script>', '<path d="url(javascript:alert(1))"/>', '<path d="&#97;"/>']) {
+    assert.equal(roleSvgFromRenderedIcon(svg), '', svg);
+  }
 });
 
 test('sanitizeRoleSvg empties any icon outside the shape grammar', () => {
@@ -59,7 +79,26 @@ test('hydrated custom roles carry a sanitized icon only', () => {
     { id: 'svg-clean', label: 'Clean', color: '#123456', iconSvg: LUCIDE_DOM },
   ]);
   assert.equal(resolveRole('svg-armed')?.iconSvg, '');
-  assert.equal(resolveRole('svg-clean')?.iconSvg, sanitizeRoleSvg(LUCIDE_DOM));
+  assert.equal(resolveRole('svg-clean')?.iconSvg, CANONICAL);
+});
+
+test('a known lucide icon name draws its component, anything else falls back to shapes', async () => {
+  const icons = await loadLucideIconSet();
+  hydrateCustomRoles([
+    { id: 'named', label: 'Named', color: '#123456', iconName: 'BookOpen', iconSvg: LUCIDE_DOM },
+    { id: 'unknown', label: 'Unknown', color: '#123456', iconName: 'NoSuchIcon', iconSvg: LUCIDE_DOM },
+    { id: 'proto', label: 'Proto', color: '#123456', iconName: '__proto__', iconSvg: LUCIDE_DOM },
+  ], icons);
+  assert.equal(resolveRole('named')?.icon, icons.BookOpen);
+  assert.equal(resolveRole('named')?.iconSvg, CANONICAL);
+  assert.equal(resolveRole('unknown')?.icon, undefined);
+  assert.equal(resolveRole('proto')?.icon, undefined);
+  assert.equal(lucideIconByName('constructor'), undefined);
+
+  const named = renderToStaticMarkup(React.createElement(RoleSvg, { svg: '', iconName: 'BookOpen', size: 12 }));
+  assert.match(named, /lucide-book-open/);
+  const fallback = renderToStaticMarkup(React.createElement(RoleSvg, { svg: LUCIDE_DOM, iconName: 'NoSuchIcon' }));
+  assert.match(fallback, /<circle cx="12" cy="12" r="3"><\/circle>/);
 });
 
 test('RoleSvg draws parsed shapes and nothing from rejected markup', () => {
