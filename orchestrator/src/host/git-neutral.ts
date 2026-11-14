@@ -15,7 +15,8 @@
  *
  * - **Fixed overrides**, whatever the configuration says: no fsmonitor, a hooks
  *   folder that never holds anything, no editor, no pager, no `ext::` transport,
- *   no signature check in `log`. The daemon never needs any of them.
+ *   no local transport, no signature check in `log`. The daemon never needs any
+ *   of them.
  * - **Diff drivers**: `--no-ext-diff --no-textconv` on `diff`, `log` and `show`,
  *   the only porcelain commands of the daemon that render a diff.
  * - **Scanned overrides**: the configuration is read once per call, with the
@@ -29,9 +30,7 @@
  *   the `ssh`, `gpg` or `git-lfs` git starts cannot be one a mission planted.
  *
  * Known gaps, kept for the fence (V3, V4) to close: the configuration of a
- * submodule is not scanned; the hooks and configuration of a local remote
- * (`file://`) run on its side of a push; a value can change between the scan
- * and the call.
+ * submodule is not scanned; a value can change between the scan and the call.
  */
 import { lstatSync, rmSync } from 'node:fs';
 import { delimiter, join, win32 } from 'node:path';
@@ -98,7 +97,7 @@ type KeyRule = {
  * `pager.*` (`--no-pager`), `diff.external`, `diff.*.command` and
  * `diff.*.textconv` (`--no-ext-diff --no-textconv` on the only commands that
  * honour them), `url.*.insteadOf` and `remote.*.vcs` (they only pick a
- * transport, and the protocol policy refuses `ext`).
+ * transport, and the protocol policy refuses `ext` and `file`).
  *
  * Not covered, on purpose:
  * - `uploadpack.packObjectsHook`, `safe.directory`, `trace2.*`: git reads them
@@ -110,8 +109,8 @@ type KeyRule = {
  * - `diff.tool`, `difftool.*`, `merge.tool`, `mergetool.*`, `sendemail.*`,
  *   `imap.tunnel`, `instaweb.*`, `web.browser`, `browser.*.cmd`, `man.*.cmd`,
  *   `interactive.diffFilter`: read only by commands the daemon never runs.
- * - `receive.*`, `uploadpack.*`: the remote side's (a local remote runs its
- *   own: a known gap, above).
+ * - `receive.*`, `uploadpack.*`: the remote side's, unreachable now that the
+ *   local transport is refused.
  * - `.lfsconfig` in the worktree: Git LFS reads only a safe list of keys from
  *   it, none naming a program.
  */
@@ -188,6 +187,14 @@ export function fixedGitConfig(home = TIMON_HOME): string[] {
     'sequence.editor=:',
     'core.pager=cat',
     'protocol.ext.allow=never',
+    // A local remote runs ITS hooks and configuration on the receiving side,
+    // where git drops the daemon's `-c`: a bare repository a mission prepared
+    // (a temporary folder stays writable) would run its `pre-receive`. Allowing
+    // a target no mission writes would need the URL git ends up using, which a
+    // mission rewrites (`remote.*.url`, `url.*.insteadOf`) between that check
+    // and the transport. The price: a remote that is a local path or a
+    // `file://` URL is out of reach of the daemon's push, fetch and check.
+    'protocol.file.allow=never',
     'log.showSignature=false',
   ];
 }
@@ -361,6 +368,10 @@ export function neutralGitCall(
   }
   out.splice(commandIndex + 1, 0, ...flags);
   const env = neutralGitEnv(baseEnv, options);
+  // It would replace the protocol policy above with its own list.
+  for (const key of Object.keys(env)) {
+    if ((options.platform ?? process.platform) === 'win32' ? key.toUpperCase() === 'GIT_ALLOW_PROTOCOL' : key === 'GIT_ALLOW_PROTOCOL') delete env[key];
+  }
   for (const [key, value] of Object.entries(scanned.env)) {
     if (env[key] === undefined) env[key] = value;
   }

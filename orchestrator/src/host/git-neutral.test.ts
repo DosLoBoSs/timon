@@ -97,6 +97,16 @@ test('alternate refs, configured hooks and Git LFS programs a mission named are 
   assert.deepEqual(scannedGitConfig([{ scope: 'global', key: 'lfs.customtransfer.t.path', value: 'mine' }]).config, []);
 });
 
+test('the local transport is refused, whatever the environment says', () => {
+  const fixed = neutralGitCall(['rev-parse', 'HEAD'], null, {});
+  assert.ok(!('refused' in fixed) && fixed.args.includes('protocol.file.allow=never'));
+  // It would replace the protocol policy with its own list.
+  const call = neutralGitCall(['push'], [], { GIT_ALLOW_PROTOCOL: 'file:ext', PATH: '/usr/bin' }, { platform: 'linux' });
+  assert.ok(!('refused' in call) && call.env.GIT_ALLOW_PROTOCOL === undefined);
+  const win = neutralGitCall(['push'], [], { Git_Allow_Protocol: 'file' }, { platform: 'win32' });
+  assert.ok(!('refused' in win) && !Object.keys(win.env).some((k) => k.toUpperCase() === 'GIT_ALLOW_PROTOCOL'));
+});
+
 test('neutralGitCall fixes hooks, fsmonitor, pager, and diff drivers', () => {
   const call = neutralGitCall(['-C', '/r', 'diff', '--numstat', 'HEAD'], null, { PATH: '/usr/bin' });
   assert.ok(!('refused' in call));
@@ -122,11 +132,11 @@ test('the PATH git gets loses every folder a mission can write', () => {
 /** Every witness `trappedRepo` plants. */
 const WITNESSES = [
   'alternate-refs', 'filter', 'fsmonitor', 'gpg', 'hook-post-checkout', 'hook-pre-commit',
-  'hook-reference-transaction', 'merge-driver', 'planted-helper', 'uploadpack',
+  'hook-reference-transaction', 'merge-driver', 'planted-helper', 'pre-receive', 'uploadpack',
 ];
 
 /** A repository whose configuration runs a witness for every hook, driver and
- *  helper git can be asked to run, and a local remote. */
+ *  helper git can be asked to run, and two local remotes. */
 function trappedRepo(): { root: string; repo: string; env: NodeJS.ProcessEnv; witnesses: () => string[] } {
   const root = mkdtempSync(join(tmpdir(), 'timon-git-trap-'));
   const seen = join(root, 'seen');
@@ -166,6 +176,11 @@ function trappedRepo(): { root: string; repo: string; env: NodeJS.ProcessEnv; wi
   run(upstream, 'update-ref', 'refs/heads/extra', extra);
   const other = join(root, 'other');
   run(root, 'clone', '-q', '--bare', repo, other);
+  // A bare repository a mission prepared where it can write (a temporary
+  // folder), to receive the daemon's push.
+  const drop = join(root, 'drop');
+  run(root, 'init', '-q', '--bare', drop);
+  writeFileSync(join(drop, 'hooks', 'pre-receive'), `#!/bin/sh\n${touch('pre-receive')}\n`, { mode: 0o755 });
 
   // What a mission writes into the repository it works in.
   writeFileSync(join(repo, '.gitattributes'), '* filter=trap merge=trap\n');
@@ -177,6 +192,7 @@ function trappedRepo(): { root: string; repo: string; env: NodeJS.ProcessEnv; wi
   git('config', 'credential.helper', `!${touch('planted-helper')}; :`);
   git('remote', 'add', 'origin', upstream);
   git('config', 'remote.origin.uploadpack', `${touch('uploadpack')}; git-upload-pack`);
+  git('remote', 'add', 'drop', drop);
   git('config', 'commit.gpgSign', 'true');
   // git starts `gpg.program` without a shell: a script stands in for it.
   const gpg = join(root, 'gpg-trap');
@@ -205,6 +221,7 @@ async function gestures(t: ReturnType<typeof trappedRepo>, git: (args: string[],
     commit: await r(['commit', '-qam', 'x', '--allow-empty']),
     fill: await r(['credential', 'fill'], 'protocol=https\nhost=example.com\n\n'),
     fetch: await r(['fetch', '-q', 'origin']),
+    push: await r(['push', '-q', 'drop', 'main']),
   };
 }
 
@@ -215,11 +232,12 @@ test('the trap fires under a plain git: every witness is real', { skip: !hasGit 
     return { code: r.status ?? 1, stderr: r.stderr };
   });
   assert.equal(done.fetch.code, 0, done.fetch.stderr);
+  assert.equal(done.push.code, 0, done.push.stderr);
   assert.deepEqual(t.witnesses().filter((w) => w !== 'trusted-helper'), WITNESSES);
   rmSync(t.root, { recursive: true, force: true });
 });
 
-test('the daemon git runs nothing a mission wrote: status, diff, checkout, merge, commit, credentials, fetch',
+test('the daemon git runs nothing a mission wrote: status, diff, checkout, merge, commit, credentials, fetch, push',
   { skip: !hasGit || process.platform === 'win32' }, async () => {
     const t = trappedRepo();
     const opts = { env: t.env, timeout: 30_000 };
@@ -232,7 +250,9 @@ test('the daemon git runs nothing a mission wrote: status, diff, checkout, merge
     // The planted driver gives way to a plain text merge, which conflicts on
     // the line both sides changed.
     assert.notEqual(done.merge.code, 0);
-    assert.equal(done.fetch.code, 0, done.fetch.stderr);
+    // The local transport is refused: a local remote runs ITS hooks.
+    assert.match(done.fetch.stderr, /transport 'file' not allowed/);
+    assert.match(done.push.stderr, /transport 'file' not allowed/);
     const seen = t.witnesses();
     assert.deepEqual(seen.filter((w) => w !== 'trusted-helper'), [], `ran: ${seen.join(', ')}`);
     assert.ok(seen.includes('trusted-helper'), 'the credential helper of the global configuration still runs');
