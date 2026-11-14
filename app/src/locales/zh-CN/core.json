@@ -3574,10 +3574,7 @@
       }
     },
     "intro": "管理所有大语言模型提供商及其模型。更改无需重启 Timon 即可生效。",
-    "edit": "编辑",
-    "editTitle": "编辑提供商",
     "saved": "提供商已更新。",
-    "modelCount": "{count} 个模型",
     "keyHintEdit": "留空可保留已保存的密钥。输入新密钥将替换保险库中的旧密钥；保存后不会再显示。",
     "picto": {
       "choose": "选择图标",
@@ -3607,18 +3604,12 @@
       "contextWindowDetected": "自动 · {window}",
       "contextWindowAuto": "上下文"
     },
-    "empty": "尚未添加提供商。",
     "added": "提供商已添加。",
     "save": "保存",
-    "remove": "移除",
     "confirmRemove": "要移除提供商「{name}」吗？其密钥也将从保险库中删除。",
-    "active": "已启用",
-    "notDetected": "未检测到",
-    "inactive": "未激活",
     "testButton": "测试",
     "destinationNotice": "使用此提供商运行任务会话时，所有提示词都会发送到 {host}。",
     "keyHint": "密钥存放在密钥保险库中，不会写入文件，保存后也不会再显示。如果本地服务器不需要密钥，请留空。",
-    "fileHint": "每个提供商对应 ~/.timon/backends/ 中的一个文件。也可以手动将 JSON 文件放入此目录，Timon 会在一秒内识别。",
     "fields": {
       "name": "名称",
       "protocol": "协议",
@@ -3653,7 +3644,6 @@
       "protocolUnavailable": "此协议未安装。",
       "unconfirmed": "未能确认更改。请重新加载页面查看保存结果。"
     },
-    "disabled": "已禁用",
     "reorder": "拖动以调整此提供商的顺序",
     "claudeToken": {
       "title": "Claude 长期令牌",
@@ -3672,11 +3662,6 @@
     "disableHint": "禁用后，此提供商不会出现在选择器中。明确指定使用它的新运行请求将被拒绝，不会自动改用其他提供商。下方已有的选项会保留。",
     "disable": "禁用提供商",
     "managedHint": "你可以重命名、添加、删除或隐藏模型，也可以更改名称、图标和默认模型。连接设置由 Timon 或提供商插件管理。",
-    "origins": {
-      "builtin": "内置",
-      "plugin": "插件",
-      "file": "手动添加"
-    },
     "usages": {
       "agents": "智能体",
       "routines": "例行任务",

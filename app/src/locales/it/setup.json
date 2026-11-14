@@ -202,7 +202,6 @@
     "loading": "Ricerca delle CLI di IA su questa macchina…",
     "unavailable": "Al momento non è possibile elencare le CLI di IA di questa macchina.",
     "retry": "Riprova",
-    "checkUpdates": "Cerca aggiornamenti",
     "updateCheckOff": "Il controllo degli aggiornamenti è disattivato (impostazione « Check for CLI updates »).",
     "install": "Installa",
     "installing": "Installazione…",

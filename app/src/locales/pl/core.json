@@ -3503,10 +3503,7 @@
       }
     },
     "intro": "Zarządzaj wszystkimi dostawcami LLM i ich modelami. Zmiany działają bez ponownego uruchamiania Timon.",
-    "edit": "Edytuj",
-    "editTitle": "Edytuj dostawcę",
     "saved": "Dostawca zaktualizowany.",
-    "modelCount": "{count} {count, plural, one {model} few {modele} many {modeli} other {modelu}}",
     "keyHintEdit": "Zostaw puste, aby zachować zapisany klucz. Wpisanie nowego zastępuje go w sejfie — nigdy nie zostanie pokazany ponownie.",
     "picto": {
       "choose": "Wybierz obrazek",
@@ -3536,18 +3533,12 @@
       "contextWindowDetected": "auto · {window}",
       "contextWindowAuto": "kontekst"
     },
-    "empty": "Nie dodano jeszcze dostawców.",
     "added": "Dostawca dodany.",
     "save": "Zapisz",
-    "remove": "Usuń",
     "confirmRemove": "Usunąć dostawcę „{name}”? Jego klucz zostanie też usunięty z sejfu.",
-    "active": "Aktywny",
-    "notDetected": "Niewykryty",
-    "inactive": "Nieaktywny",
     "testButton": "Testuj",
     "destinationNotice": "Każdy prompt misji uruchomionej u tego dostawcy jest wysyłany do {host}.",
     "keyHint": "Przechowywany w sejfie sekretów, nigdy w pliku, i nigdy więcej niepokazywany. Zostaw puste dla lokalnego serwera, który go nie wymaga.",
-    "fileHint": "Każdy dostawca to plik w ~/.timon/backends/. Możesz też ręcznie wrzucić tam plik JSON: zostanie wykryty w ciągu sekundy.",
     "fields": {
       "name": "Nazwa",
       "protocol": "Protokół",
@@ -3582,7 +3573,6 @@
       "protocolUnavailable": "Ten protokół nie jest zainstalowany.",
       "unconfirmed": "Zmiana niepotwierdzona. Odśwież stronę, aby sprawdzić zapisany stan."
     },
-    "disabled": "Wyłączony",
     "reorder": "Przeciągnij, aby zmienić kolejność tego dostawcy",
     "claudeToken": {
       "title": "Długotrwały token Claude",
@@ -3601,11 +3591,6 @@
     "disableHint": "Zniknie z selektorów. Nowe uruchomienia, które jawnie go używają, zostaną odrzucone, bez automatycznego przełączenia. Istniejące wybory poniżej zostaną zachowane.",
     "disable": "Wyłącz dostawcę",
     "managedHint": "Możesz zmieniać nazwy, dodawać, usuwać i ukrywać modele oraz zmieniać nazwy, obrazki i model domyślny. Ustawieniami połączenia zarządza Timon lub wtyczka dostawcy.",
-    "origins": {
-      "builtin": "Wbudowany",
-      "plugin": "Wtyczka",
-      "file": "Dodany przez ciebie"
-    },
     "usages": {
       "agents": "Agenci",
       "routines": "Rutyny",

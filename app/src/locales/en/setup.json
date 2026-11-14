@@ -202,7 +202,6 @@
     "loading": "Looking for the AI CLIs on this machine…",
     "unavailable": "The AI CLIs of this machine cannot be listed right now.",
     "retry": "Try again",
-    "checkUpdates": "Check for updates",
     "updateCheckOff": "Update checks are switched off (setting « Check for CLI updates »).",
     "install": "Install",
     "installing": "Installing…",

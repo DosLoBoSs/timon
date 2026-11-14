@@ -202,7 +202,6 @@
     "loading": "KI-CLIs auf diesem Rechner werden gesucht…",
     "unavailable": "Die KI-CLIs dieses Rechners können gerade nicht aufgelistet werden.",
     "retry": "Wiederholen",
-    "checkUpdates": "Nach Updates suchen",
     "updateCheckOff": "Die Update-Prüfung ist ausgeschaltet (Einstellung « Nach CLI-Updates suchen »).",
     "install": "Installieren",
     "installing": "Wird installiert…",

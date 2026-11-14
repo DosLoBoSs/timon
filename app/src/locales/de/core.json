@@ -3503,10 +3503,7 @@
       }
     },
     "intro": "Verwalte alle deine LLM-Anbieter und ihre Modelle. Änderungen gelten ohne Neustart von Timon.",
-    "edit": "Bearbeiten",
-    "editTitle": "Anbieter bearbeiten",
     "saved": "Anbieter aktualisiert.",
-    "modelCount": "{count} Modelle",
     "keyHintEdit": "Leer lassen, um den gespeicherten Schlüssel zu behalten. Ein eingegebener ersetzt ihn im Tresor — er wird nie wieder angezeigt.",
     "picto": {
       "choose": "Bild wählen",
@@ -3536,18 +3533,12 @@
       "contextWindowDetected": "auto · {window}",
       "contextWindowAuto": "Kontext"
     },
-    "empty": "Noch kein Anbieter hinzugefügt.",
     "added": "Anbieter hinzugefügt.",
     "save": "Speichern",
-    "remove": "Entfernen",
     "confirmRemove": "Den Anbieter „{name}“ entfernen? Sein Schlüssel wird auch aus dem Tresor gelöscht.",
-    "active": "Aktiv",
-    "notDetected": "Nicht erkannt",
-    "inactive": "Inaktiv",
     "testButton": "Testen",
     "destinationNotice": "Jeder Prompt einer Mission auf diesem Anbieter wird an {host} gesendet.",
     "keyHint": "Im Geheimnistresor gespeichert, nie in der Datei, und nie wieder angezeigt. Leer lassen für einen lokalen Server, der keinen verlangt.",
-    "fileHint": "Jeder Anbieter ist eine Datei in ~/.timon/backends/. Du kannst dort auch von Hand eine JSON-Datei ablegen: Sie wird innerhalb einer Sekunde übernommen.",
     "fields": {
       "name": "Name",
       "protocol": "Protokoll",
@@ -3582,7 +3573,6 @@
       "protocolUnavailable": "Dieses Protokoll ist nicht installiert.",
       "unconfirmed": "Änderung nicht bestätigt. Lade diese Seite neu, um den gespeicherten Zustand zu prüfen."
     },
-    "disabled": "Deaktiviert",
     "reorder": "Ziehen, um diesen Anbieter neu einzuordnen",
     "claudeToken": {
       "title": "Langlebiges Claude-Token",
@@ -3601,11 +3591,6 @@
     "disableHint": "Er verschwindet aus den Auswahlfeldern. Neue Starts, die ihn ausdrücklich nutzen, werden abgelehnt, ohne automatischen Fallback. Bestehende Auswahlen unten bleiben erhalten.",
     "disable": "Anbieter deaktivieren",
     "managedHint": "Du kannst Modelle umbenennen, hinzufügen, löschen und ausblenden sowie Namen, Bilder und das Standardmodell ändern. Die Verbindungseinstellungen verwaltet Timon oder das Anbieter-Plugin.",
-    "origins": {
-      "builtin": "Eingebaut",
-      "plugin": "Plugin",
-      "file": "Von dir hinzugefügt"
-    },
     "usages": {
       "agents": "Agenten",
       "routines": "Routinen",
