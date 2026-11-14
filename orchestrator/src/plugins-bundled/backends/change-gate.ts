@@ -1,5 +1,5 @@
 /**
- * Who may CHANGE the backends of this install, past the superadmin check of
+ * Who may CHANGE the backends of this install, past the `full` level check of
  * `/api/backends/custom` and `/api/backends/manage` (TODO #571).
  *
  * A human only: a session in the app, a paired device, or the operator's
