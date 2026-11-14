@@ -31,7 +31,7 @@
       "mismatch": "The two passwords don't match.",
       "tooShort": "At least {min} characters.",
       "create": "Create my account",
-      "privacy": "We only collect your email in case you want to reset your password. The account you create stays local."
+      "privacy": "Your account and password stay on this computer. Your email address and its codes go through our server, which emails them to you. Anonymous usage statistics are shared by default; you can turn them off in Settings."
     },
     "legacy": {
       "opening": "Opening the next screen…"
