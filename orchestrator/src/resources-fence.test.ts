@@ -203,7 +203,7 @@ test('only the launcher\'s own words, with its "cannot fence here" codes, count 
   assert.equal(fenceLaunchFailure('seatbelt', 71, 'sandbox-exec: sandbox_apply: Operation not permitted'), 'sandbox-exec: sandbox_apply: Operation not permitted');
 });
 
-test('a launcher that could not fence turns the fence off for the next launches, and its policy goes', () => {
+test('a launcher that could not fence turns the fence off for the next launches, and its policy goes', async () => {
   const policyFile = join(TH, 'run', 'fence', 'watched.policy');
   mkdirSync(join(TH, 'run', 'fence'), { recursive: true });
   writeFileSync(policyFile, 'x');
@@ -212,8 +212,12 @@ test('a launcher that could not fence turns the fence off for the next launches,
   const outcome: MissionFenceOutcome = { state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: null };
   try {
     watchFencedLaunch(proc, outcome);
+    let read = '';
+    stderr.on('data', (chunk: Buffer) => { read += chunk.toString(); }); // the mission's own reader
     stderr.write('timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n');
+    await new Promise((resolve) => setImmediate(resolve));
     proc.emit('close', 71);
+    assert.match(read, /Operation not permitted/, 'the mission\'s reader still gets every byte');
     assert.equal(existsSync(policyFile), false);
     const status = hostFenceStatus(fakeFence({ available: true, abi: 6 }));
     assert.equal(status.state, 'unsupported');
@@ -226,11 +230,13 @@ test('a launcher that could not fence turns the fence off for the next launches,
   }
 });
 
-test('a CLI that fails on its own leaves the fence on', () => {
+test('a CLI that fails on its own leaves the fence on', async () => {
   const stderr = new PassThrough();
   const proc = Object.assign(new EventEmitter(), { stderr });
   watchFencedLaunch(proc, { state: 'fenced', mechanism: 'landlock', policyFile: join(TH, 'run', 'fence', 'other.policy'), tmpDir: null });
+  stderr.on('data', () => {});
   stderr.write('Error: invalid API key\n');
+  await new Promise((resolve) => setImmediate(resolve));
   proc.emit('close', 1);
   assert.equal(hostFenceStatus(fakeFence({ available: true, abi: 6 })).state, 'ready');
 });
@@ -311,4 +317,33 @@ test('the real chain: nice, ionice and timon-fence exec down to the CLI, which k
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('what the CLI says before the mission reads its stderr waits for the mission\'s reader', async () => {
+  const stderr = new PassThrough();
+  const proc = Object.assign(new EventEmitter(), { stderr });
+  watchFencedLaunch(proc, { state: 'fenced', mechanism: 'landlock', policyFile: join(TH, 'run', 'fence', 'early.policy'), tmpDir: null });
+  stderr.write('early line\n');
+  await new Promise((resolve) => setImmediate(resolve));
+  let read = '';
+  stderr.on('data', (chunk: Buffer) => { read += chunk.toString(); });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(read, 'early line\n');
+  proc.emit('close', 0);
+});
+
+test('the log says a missing fence once per cause, an altered package at every launch', () => {
+  const lines: string[] = [];
+  const original = console.warn;
+  console.warn = (line: string) => { lines.push(line); };
+  try {
+    const missing = fakeFence({ available: false, reason: 'kernel without Landlock (once)', abi: 0 });
+    const altered = fakeFence({ available: false, reason: 'the launcher is missing (every time)', abi: 0, tampered: true });
+    for (let i = 0; i < 3; i += 1) fenceMissionCommand('/usr/bin/claude', [], 'u', TARGET, { mode: 'auto', fence: missing });
+    for (let i = 0; i < 2; i += 1) fenceMissionCommand('/usr/bin/claude', [], 'u', TARGET, { mode: 'auto', fence: altered });
+  } finally {
+    console.warn = original;
+  }
+  assert.equal(lines.filter((l) => l.includes('(once)')).length, 1);
+  assert.equal(lines.filter((l) => l.includes('(every time)')).length, 2);
 });

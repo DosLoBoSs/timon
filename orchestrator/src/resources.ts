@@ -498,6 +498,9 @@ export function releaseFencePolicy(outcome: MissionFenceOutcome | null): void {
 /** Last fence state told to the log: a working fence is said once, not at every turn. */
 let reportedFence: string | null = null;
 
+/** Causes of an unfenced launch already told to the log in this daemon life. */
+const warnedUnfenced = new Set<string>();
+
 function reportFenceReady(mechanism: FenceMechanism, abi: number): void {
   const key = `${mechanism}:${abi}`;
   if (reportedFence === key) return;
@@ -571,7 +574,12 @@ export function fenceMissionCommand(
     const decision = fenceLaunchDecision(mode, status);
     if (decision.action === 'refuse') throw new MissionFenceRefusedError(decision.error);
     if (decision.action === 'fence') throw new Error('a fence that cannot be applied was reported ready');
-    if (decision.warning) warn(`${label} ${decision.warning}`);
+    // Once per cause in the log (a machine without the mechanism would say it
+    // at every turn of every mission); an altered package, at every launch.
+    if (decision.warning && (options.warn || decision.tampered || !warnedUnfenced.has(decision.warning))) {
+      warnedUnfenced.add(decision.warning);
+      warn(`${label} ${decision.warning}`);
+    }
     return { cmd, args, fence: { state: 'unfenced', warning: decision.warning, tampered: decision.tampered } };
   };
 
@@ -629,14 +637,24 @@ export function watchFencedLaunch(
   outcome: MissionFenceOutcome | null,
 ): void {
   if (outcome?.state !== 'fenced') return;
+  const stderr = proc.stderr;
   let head = '';
   const peek = (chunk: Buffer | string): void => {
     head += chunk.toString();
-    if (head.length >= FENCE_STDERR_PEEK) proc.stderr?.removeListener('data', peek);
+    if (head.length >= FENCE_STDERR_PEEK) stderr?.removeListener('data', peek);
   };
-  proc.stderr?.on('data', peek);
+  // Read alongside the mission's own reader, never before it: a `data`
+  // listener switches the stream to flowing, and what is emitted before the
+  // backend attaches its reader (after an await) would be lost to it.
+  const arm = (event: string | symbol): void => {
+    if (event !== 'data') return;
+    stderr?.removeListener('newListener', arm);
+    stderr?.on('data', peek);
+  };
+  stderr?.on('newListener', arm);
   proc.once('close', (code) => {
-    proc.stderr?.removeListener('data', peek);
+    stderr?.removeListener('newListener', arm);
+    stderr?.removeListener('data', peek);
     releaseFencePolicy(outcome);
     const failure = fenceLaunchFailure(outcome.mechanism, code, head.slice(0, FENCE_STDERR_PEEK));
     if (failure) noteFenceLaunchFailure(failure);
