@@ -1,8 +1,8 @@
 import { strict as assert } from 'node:assert';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { test } from 'node:test';
 
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-git-neutral-'));
@@ -308,7 +308,6 @@ test('the daemon git runs nothing a mission wrote: status, diff, checkout, merge
     const seen = t.witnesses();
     assert.deepEqual(seen.filter((w) => w !== 'trusted-helper'), [], `ran: ${seen.join(', ')}`);
     assert.ok(seen.includes('trusted-helper'), 'the credential helper of the global configuration still runs');
-    assert.equal(existsSync(gitHooksNoneDir()), false);
     rmSync(t.root, { recursive: true, force: true });
   });
 
@@ -326,15 +325,9 @@ test('the neutral alternate-refs command still lets a fetch through', { skip: !h
   rmSync(t.root, { recursive: true, force: true });
 });
 
-test('something planted in the empty hooks folder is removed before git runs', { skip: !hasGit || process.platform === 'win32' }, () => {
-  const t = trappedRepo();
-  const planted = gitHooksNoneDir();
-  mkdirSync(planted, { recursive: true });
-  writeFileSync(join(planted, 'pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
-  const r = host.exec('git', ['-C', t.repo, 'rev-parse', 'HEAD'], { env: t.env });
-  assert.equal(r.code, 0, r.stderr);
-  assert.equal(existsSync(planted), false);
-  rmSync(t.root, { recursive: true, force: true });
+test('the hooks folder cannot exist: it lies under a regular file', () => {
+  assert.ok(statSync(process.execPath).isFile());
+  assert.equal(dirname(gitHooksNoneDir()), process.execPath);
 });
 
 test('a configuration scan that fails stops the call', { skip: !hasGit }, async () => {

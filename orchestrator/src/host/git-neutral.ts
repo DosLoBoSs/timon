@@ -14,9 +14,9 @@
  * Every git call of the adapter therefore goes through `neutralGitCall`:
  *
  * - **Fixed overrides**, whatever the configuration says: no fsmonitor, a hooks
- *   folder that never holds anything, no editor, no pager, no `ext::` transport,
- *   no local transport, no descent into submodules, no signature check in
- *   `log`. The daemon never needs any of them.
+ *   folder that cannot exist, no editor, no pager, no `ext::` transport, no
+ *   local transport, no descent into submodules, no signature check in `log`.
+ *   The daemon never needs any of them.
  * - **Diff drivers**: `--no-ext-diff --no-textconv` on `diff`, `log` and `show`,
  *   the only porcelain commands of the daemon that render a diff.
  * - **Scanned overrides**: the configuration is read once per call, with the
@@ -49,9 +49,7 @@
  * - Code the remote side of a transport runs: only `ssh`, `https`, `git` and
  *   installed remote helpers are reachable, the local transport is refused.
  */
-import { lstatSync, rmSync } from 'node:fs';
 import { delimiter, join, win32 } from 'node:path';
-import { TIMON_HOME } from '../paths.js';
 import { missionWritableProblem } from './mission-writable.js';
 
 /** A configuration value and the scope git read it from. `value` is null for
@@ -217,26 +215,21 @@ const UPLOAD_PACK_COMMANDS: ReadonlySet<string> = new Set(['fetch', 'pull', 'ls-
 const RECEIVE_PACK_COMMANDS: ReadonlySet<string> = new Set(['push']);
 const OTHER_TRANSPORT_COMMANDS: ReadonlySet<string> = new Set(['remote', 'submodule', 'archive', 'fetch-pack', 'send-pack']);
 
-/** Never created: a hooks folder that does not exist holds no hook. Removed
- *  when something appears there, the daemon being its only user. */
-export function gitHooksNoneDir(home = TIMON_HOME): string {
-  return join(home, 'run', 'git-hooks-none');
-}
-
-function emptyHooksDir(dir: string): void {
-  try {
-    lstatSync(dir);
-  } catch {
-    return;
-  }
-  rmSync(dir, { recursive: true, force: true });
+/**
+ * A hooks folder that cannot exist: it lies under the daemon's own runtime, a
+ * regular file. Nothing can be created there, so there is nothing to remove
+ * before a call and no window between a removal and git's lookup. Whoever can
+ * turn that file into a folder has replaced the daemon's runtime already.
+ */
+export function gitHooksNoneDir(runtime = process.execPath): string {
+  return join(runtime, 'git-hooks-none');
 }
 
 /** `-c` pairs applied to every call of the daemon. */
-export function fixedGitConfig(home = TIMON_HOME): string[] {
+export function fixedGitConfig(): string[] {
   return [
     'core.fsmonitor=false',
-    `core.hooksPath=${gitHooksNoneDir(home)}`,
+    `core.hooksPath=${gitHooksNoneDir()}`,
     'core.editor=:',
     'sequence.editor=:',
     'core.pager=cat',
@@ -450,8 +443,6 @@ export function neutralGitCall(
   baseEnv: NodeJS.ProcessEnv,
   options: { platform?: NodeJS.Platform; timonHome?: string; submodules?: readonly string[] } = {},
 ): { args: string[]; env: NodeJS.ProcessEnv } | { refused: string } {
-  const home = options.timonHome ?? TIMON_HOME;
-  emptyHooksDir(gitHooksNoneDir(home));
   const scanned: ScannedGitConfig = entries ? scannedGitConfig(entries) : { config: [], env: {} };
   if (scanned.refused) {
     return { refused: `git refused: the repository configuration sets "${scanned.refused}", which Timon cannot neutralize` };
@@ -463,7 +454,7 @@ export function neutralGitCall(
     return { refused: `git refused: the submodule "${unreachable}" cannot be kept from running git inside it` };
   }
   const config = [
-    ...fixedGitConfig(home),
+    ...fixedGitConfig(),
     ...scanned.config,
     ...submodules.map((name) => `submodule.${name}.ignore=dirty`),
   ].flatMap((pair) => ['-c', pair]);
