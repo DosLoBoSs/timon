@@ -4,10 +4,11 @@
  * The common sections of a provider page, as the default entries of
  * `settings.provider.section` (`components/provider-page/provider-sections.ts`).
  *
- * Mostly empty for now: each paints nothing until the step of the providers
- * redesign that fills it (Connection and API key, Program, own settings and
- * Models). Registered already so the page's order, and a plugin's way of
- * taking the place of one of them, are fixed before their content lands.
+ * Connection (`provider-connection-section.tsx`) is filled. The others paint
+ * nothing until the step of the providers redesign that fills them (API key,
+ * Program, own settings and Models). Registered already so the page's order,
+ * and a plugin's way of taking the place of one of them, are fixed before
+ * their content lands.
  *
  * One exception: a refused launch's card opens the page of its provider, and
  * the program that provider waits to run must be authorizable from there. So
@@ -24,6 +25,7 @@ import type { ProviderSectionKey } from '@/components/provider-page/provider-sec
 import { fetchProviders, providerToAuthorize, type ProviderPlugin } from '@/lib/providers';
 import { t } from '@/lib/i18n';
 import { ProviderAuthorizeDialog } from './provider-authorize-dialog';
+import { ConnectionSection } from './provider-connection-section';
 
 const Empty: ComponentType = () => null;
 
@@ -69,7 +71,7 @@ function ProgramSection(): ReactElement | null {
 }
 
 export const COMMON_PROVIDER_SECTIONS: Readonly<Record<ProviderSectionKey, ComponentType>> = {
-  connection: Empty,
+  connection: ConnectionSection,
   apiKey: Empty,
   program: ProgramSection,
   settings: Empty,

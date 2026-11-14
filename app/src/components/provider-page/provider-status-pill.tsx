@@ -13,11 +13,16 @@ const DOT: Readonly<Record<StatusTone, string>> = {
   off: 'bg-muted-foreground/50',
 };
 
+/** One pastille of that family, for a state line that is not the provider's own status. */
+export function ToneDot({ tone }: { tone: StatusTone }): ReactElement {
+  return <span aria-hidden className={cn('inline-block size-2 shrink-0 rounded-full', DOT[tone])} />;
+}
+
 /** A provider's status line: its pastille and its words, the same on the list and on its page. */
 export function ProviderStatusPill({ status, className }: { status: ProviderStatus; className?: string }): ReactElement {
   return (
     <span className={cn('inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground', className)} data-provider-status={status}>
-      <span aria-hidden className={cn('inline-block size-2 shrink-0 rounded-full', DOT[statusTone(status)])} />
+      <ToneDot tone={statusTone(status)} />
       <span className="truncate">{t(`providerStatus.${status}`)}</span>
     </span>
   );

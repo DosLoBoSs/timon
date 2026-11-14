@@ -556,6 +556,18 @@
     "root": "Fournisseurs",
     "default": "Fournisseur par défaut",
     "agents": "{count, plural, =0 {Aucun agent ne l'utilise} one {# agent l'utilise} other {# agents l'utilisent}}",
+    "connection": {
+      "title": "Connexion",
+      "description": "Comment Timon se connecte à ce fournisseur : la connexion de cet ordinateur, et vos comptes d’abonnement quand vous en avez plusieurs.",
+      "signedIn": "Connecté sur cet ordinateur",
+      "signedOut": "Pas connecté sur cet ordinateur",
+      "connect": "Connecter",
+      "checkAgain": "Réessayer",
+      "accounts": {
+        "title": "Comptes d’abonnement",
+        "description": "Plusieurs abonnements de ce fournisseur, chacun choisi dans les sélecteurs de modèle. Une mission ne bascule jamais seule sur un autre abonnement : l’ordre dans lequel ils sont essayés se règle dans Bascule auto."
+      }
+    },
     "program": {
       "title": "Programme",
       "waiting": "Le programme de ce fournisseur attend votre autorisation : Timon ne lance rien avant que vous l'ayez permis."
