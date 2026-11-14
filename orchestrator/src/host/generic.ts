@@ -15,7 +15,10 @@ import { inspectListenPort } from './listen-port.js';
 import { detectDesktopSession, type DesktopSession } from './desktop-session.js';
 import { opensAsFolder, revealInFileManager } from './reveal.js';
 import { windowsDirectLaunch, windowsShimLaunch } from './windows-shell.js';
-import { fixedGitConfig, gitScanArgs, neutralGitCall, neutralGitEnv, parseGitConfigList, type GitConfigEntry } from './git-neutral.js';
+import {
+  fixedGitConfig, gitmodulesScanArgs, gitScanArgs, gitToplevelArgs, neutralGitCall, neutralGitEnv, parseGitConfigList,
+  parseSubmoduleNames, type GitConfigEntry,
+} from './git-neutral.js';
 
 /** Where the adapter reads `host.binaries` at each resolution. */
 export type BinaryPins = () => Record<string, string | null>;
@@ -90,8 +93,8 @@ export function createGenericHost(
     maxBuffer: 8 * 1024 * 1024,
     windowsHide: true,
   });
-  const finishGitCall = (args: string[], opts: ExecOpts, entries: GitConfigEntry[] | null): GitCall => {
-    const call = neutralGitCall(args, entries, opts.env ?? process.env);
+  const finishGitCall = (args: string[], opts: ExecOpts, entries: GitConfigEntry[] | null, submodules: string[] = []): GitCall => {
+    const call = neutralGitCall(args, entries, opts.env ?? process.env, { submodules });
     if ('refused' in call) return { failed: { code: 1, stdout: '', stderr: call.refused } };
     return { args: call.args, opts: { ...opts, env: call.env } };
   };
@@ -107,7 +110,12 @@ export function createGenericHost(
     let r = run(scan.scoped);
     if (r.code !== 0 && !r.timedOut) { scoped = false; r = run(scan.plain); }
     if (r.code !== 0) return { failed: r };
-    return finishGitCall(args, opts, parseGitConfigList(r.stdout, scoped));
+    const toplevel = gitToplevelArgs(args);
+    if (!toplevel) return finishGitCall(args, opts, parseGitConfigList(r.stdout, scoped));
+    const top = run(toplevel);
+    if (top.code !== 0) return { failed: top };
+    const names = parseSubmoduleNames(gitmodulesScanArgs(args, top.stdout.trim()).map((a) => run(a).stdout));
+    return finishGitCall(args, opts, parseGitConfigList(r.stdout, scoped), names);
   };
   const gitCallAsync = async (file: string, args: string[], opts: ExecOpts): Promise<GitCall> => {
     const scan = gitScanArgs(args);
@@ -120,7 +128,12 @@ export function createGenericHost(
     let r = await run(scan.scoped);
     if (r.code !== 0 && !r.timedOut) { scoped = false; r = await run(scan.plain); }
     if (r.code !== 0) return { failed: r };
-    return finishGitCall(args, opts, parseGitConfigList(r.stdout, scoped));
+    const toplevel = gitToplevelArgs(args);
+    if (!toplevel) return finishGitCall(args, opts, parseGitConfigList(r.stdout, scoped));
+    const top = await run(toplevel);
+    if (top.code !== 0) return { failed: top };
+    const outputs = await Promise.all(gitmodulesScanArgs(args, top.stdout.trim()).map(async (a) => (await run(a)).stdout));
+    return finishGitCall(args, opts, parseGitConfigList(r.stdout, scoped), parseSubmoduleNames(outputs));
   };
 
   const exec = (name: string, args: string[], opts: ExecOpts = {}) => {

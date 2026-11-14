@@ -15,8 +15,8 @@
  *
  * - **Fixed overrides**, whatever the configuration says: no fsmonitor, a hooks
  *   folder that never holds anything, no editor, no pager, no `ext::` transport,
- *   no local transport, no signature check in `log`. The daemon never needs any
- *   of them.
+ *   no local transport, no descent into submodules, no signature check in
+ *   `log`. The daemon never needs any of them.
  * - **Diff drivers**: `--no-ext-diff --no-textconv` on `diff`, `log` and `show`,
  *   the only porcelain commands of the daemon that render a diff.
  * - **Scanned overrides**: the configuration is read once per call, with the
@@ -29,8 +29,25 @@
  * - **PATH** loses every entry a mission can write (`mission-writable.ts`), so
  *   the `ssh`, `gpg` or `git-lfs` git starts cannot be one a mission planted.
  *
- * Known gaps, kept for the fence (V3, V4) to close: the configuration of a
- * submodule is not scanned; a value can change between the scan and the call.
+ * The fence (V3, V4) wraps missions only, never the daemon's own git: what
+ * this module leaves open stays open. Three things are left, on purpose:
+ *
+ * - `add`, and `commit` while it builds the editor's template, run git inside
+ *   an initialized submodule, whose own configuration is never scanned, and
+ *   nothing set from here stops them (git 2.43). The daemon runs `add` only in
+ *   the demo project it has just created, and a commit without its message is
+ *   refused. Every other command that would is kept out: by option (`status`,
+ *   `diff`, `diff-index`, `diff-files`, `checkout`, `switch`, the transports),
+ *   or by naming each submodule (`merge` and the commands that stash).
+ * - A value can change between the scan and the call: a mission rewriting
+ *   `filter.*` or `merge.*.driver`, or adding a submodule, in a loop may win
+ *   that race. Residual risk, recorded in `docs/SECURITY.md`.
+ *   `--attr-source=<empty tree>` would close it for filters and drivers, but
+ *   it also drops the attributes Git LFS, line endings and the user's own
+ *   drivers need, on exactly the gestures that run them (status, merge); the
+ *   others run no filter or driver at all.
+ * - Code the remote side of a transport runs: only `ssh`, `https`, `git` and
+ *   installed remote helpers are reachable, the local transport is refused.
  */
 import { lstatSync, rmSync } from 'node:fs';
 import { delimiter, join, win32 } from 'node:path';
@@ -97,7 +114,10 @@ type KeyRule = {
  * `pager.*` (`--no-pager`), `diff.external`, `diff.*.command` and
  * `diff.*.textconv` (`--no-ext-diff --no-textconv` on the only commands that
  * honour them), `url.*.insteadOf` and `remote.*.vcs` (they only pick a
- * transport, and the protocol policy refuses `ext` and `file`).
+ * transport, and the protocol policy refuses `ext` and `file`),
+ * `submodule.*.ignore`, `submodule.*.fetchRecurseSubmodules`,
+ * `submodule.recurse` (the configuration of a submodule is never scanned, so
+ * git must not run inside one: options on the commands that would).
  *
  * Not covered, on purpose:
  * - `uploadpack.packObjectsHook`, `safe.directory`, `trace2.*`: git reads them
@@ -156,6 +176,40 @@ const SCAN_FREE: ReadonlySet<string> = new Set([
 /** Porcelain commands that may render a diff through a configured driver. */
 const DIFF_COMMANDS: ReadonlySet<string> = new Set(['diff', 'log', 'show']);
 
+/**
+ * Commands that run `status` inside a submodule to find edited files, with
+ * the submodule's own configuration (a `filter.<x>.clean` there runs). Only
+ * the option stops them: `submodule.<name>.ignore`, which a mission writes in
+ * `.gitmodules` or `.git/config`, outranks `diff.ignoreSubmodules` even at
+ * command scope (tested). `dirty` and not `all`: git then never runs inside the
+ * submodule, and a submodule moved to another commit still shows, so the code
+ * gate does not call a worktree clean while its submodule pointer changed.
+ */
+const SUBMODULE_STATUS_COMMANDS: ReadonlySet<string> = new Set(['status', 'diff', 'diff-index', 'diff-files']);
+
+/**
+ * Commands that run a `status` inside a submodule through `git stash create`
+ * (a real `merge` always does, to restore the worktree if it fails) or a check
+ * of their own, and take no option to stop it. `submodule.<name>.ignore` set
+ * at command scope outranks the value of `.gitmodules` and `.git/config`: it is
+ * set for every name git will read, which `gitmodulesScanArgs` asks git for.
+ */
+const NAMED_SUBMODULE_COMMANDS: ReadonlySet<string> = new Set(['merge', 'pull', 'rebase', 'cherry-pick', 'revert', 'stash', 'am', 'describe']);
+
+/** Their closing report of local changes runs the same `status` inside a
+ *  submodule, whatever `diff.ignoreSubmodules` says; `--quiet` skips it. */
+const QUIET_COMMANDS: ReadonlySet<string> = new Set(['checkout', 'switch']);
+
+/** `submodule.<name>.fetchRecurseSubmodules` outranks the fixed settings: only
+ *  the option keeps a transport from running again inside a submodule. */
+const NO_RECURSE_COMMANDS: ReadonlySet<string> = new Set(['fetch', 'pull', 'push']);
+
+/** `commit` has no `--ignore-submodules`. With its message on the command
+ *  line it never looks inside a submodule; without one it builds the editor's
+ *  template from a `status` that does, before failing on the empty message
+ *  (`core.editor=:`). The daemon always passes its message. */
+const COMMIT_MESSAGE = /^(-m|--message|-F|--file|-C|--reuse-message|--no-edit)(=|$)|^-[^-]*[mFC]/;
+
 /** `remote.<name>.uploadpack` and `receivepack` keep the FIRST value read, so
  *  `-c` cannot outrank a planted one: the command-line option can, on the
  *  commands that take it. The others that may start a transport are refused. */
@@ -195,8 +249,19 @@ export function fixedGitConfig(home = TIMON_HOME): string[] {
     // and the transport. The price: a remote that is a local path or a
     // `file://` URL is out of reach of the daemon's push, fetch and check.
     'protocol.file.allow=never',
+    // A submodule's configuration is never scanned: git must not run in it.
+    // `dirty` still reports a changed submodule commit, without the `status`
+    // git would run inside the submodule to find edited files.
+    'submodule.recurse=false',
+    'diff.ignoreSubmodules=dirty',
+    'fetch.recurseSubmodules=false',
+    'push.recurseSubmodules=no',
     'log.showSignature=false',
   ];
+}
+
+function fixedGitArgs(): string[] {
+  return ['--no-pager', ...fixedGitConfig().flatMap((pair) => ['-c', pair])];
 }
 
 type ParsedCall = {
@@ -232,6 +297,42 @@ export function gitScanArgs(args: readonly string[]): { scoped: string[]; plain:
   if (commandIndex < 0 || SCAN_FREE.has(args[commandIndex]!)) return null;
   const base = [...location, '--no-pager', 'config', '--list', '-z'];
   return { scoped: [...base, '--show-scope'], plain: base };
+}
+
+/** Where the call works, for a call whose submodules need naming. */
+export function gitToplevelArgs(args: readonly string[]): string[] | null {
+  const { location, commandIndex } = parseCall(args);
+  if (commandIndex < 0 || !NAMED_SUBMODULE_COMMANDS.has(args[commandIndex]!)) return null;
+  return [...location, ...fixedGitArgs(), 'rev-parse', '--show-toplevel'];
+}
+
+/**
+ * The reads of every `.gitmodules` git may take submodule names from: the
+ * worktree's, else the index's, else HEAD's. All three are read, by git's own
+ * parser: a name too many costs nothing, a name missed would leave a submodule
+ * git still runs in. A source that does not exist fails and names nothing.
+ */
+export function gitmodulesScanArgs(args: readonly string[], toplevel: string): string[][] {
+  // Reading `:.gitmodules` loads the index, which may start `core.fsmonitor`.
+  const base = [...parseCall(args).location, ...fixedGitArgs(), 'config', '--list', '-z', '--name-only'];
+  return [
+    [...base, '--file', join(toplevel, '.gitmodules')],
+    [...base, '--blob', ':.gitmodules'],
+    [...base, '--blob', 'HEAD:.gitmodules'],
+  ];
+}
+
+/** Submodule names in `git config --list -z --name-only` outputs, read as far
+ *  as they go: a parse error further down still leaves git the names above. */
+export function parseSubmoduleNames(outputs: readonly string[]): string[] {
+  const names = new Set<string>();
+  for (const out of outputs) {
+    for (const key of out.split('\0')) {
+      const last = key.lastIndexOf('.');
+      if (key.startsWith('submodule.') && last > 'submodule.'.length) names.add(key.slice('submodule.'.length, last));
+    }
+  }
+  return [...names];
 }
 
 /** `git config --list -z [--show-scope]`: `[scope NUL] key LF value NUL`, or
@@ -347,7 +448,7 @@ export function neutralGitCall(
   args: readonly string[],
   entries: readonly GitConfigEntry[] | null,
   baseEnv: NodeJS.ProcessEnv,
-  options: { platform?: NodeJS.Platform; timonHome?: string } = {},
+  options: { platform?: NodeJS.Platform; timonHome?: string; submodules?: readonly string[] } = {},
 ): { args: string[]; env: NodeJS.ProcessEnv } | { refused: string } {
   const home = options.timonHome ?? TIMON_HOME;
   emptyHooksDir(gitHooksNoneDir(home));
@@ -355,12 +456,28 @@ export function neutralGitCall(
   if (scanned.refused) {
     return { refused: `git refused: the repository configuration sets "${scanned.refused}", which Timon cannot neutralize` };
   }
-  const config = [...fixedGitConfig(home), ...scanned.config].flatMap((pair) => ['-c', pair]);
+  const submodules = options.submodules ?? [];
+  // `-c` splits at the first `=`: such a name cannot be reached.
+  const unreachable = submodules.find((name) => name.includes('='));
+  if (unreachable !== undefined) {
+    return { refused: `git refused: the submodule "${unreachable}" cannot be kept from running git inside it` };
+  }
+  const config = [
+    ...fixedGitConfig(home),
+    ...scanned.config,
+    ...submodules.map((name) => `submodule.${name}.ignore=dirty`),
+  ].flatMap((pair) => ['-c', pair]);
   const out = [...args];
   const { commandIndex } = parseCall(args);
   const command = commandIndex >= 0 ? args[commandIndex]! : '';
   const flags: string[] = [];
   if (DIFF_COMMANDS.has(command)) flags.push(...['--no-ext-diff', '--no-textconv'].filter((flag) => !args.includes(flag)));
+  if (SUBMODULE_STATUS_COMMANDS.has(command)) flags.push('--ignore-submodules=dirty');
+  if (QUIET_COMMANDS.has(command) && !args.includes('--quiet') && !args.includes('-q')) flags.push('--quiet');
+  if (NO_RECURSE_COMMANDS.has(command)) flags.push('--no-recurse-submodules');
+  if (command === 'commit' && !args.slice(commandIndex + 1).some((a) => COMMIT_MESSAGE.test(a))) {
+    return { refused: 'git refused: a commit by Timon carries its message on the command line' };
+  }
   if (scanned.plantedUploadPack && UPLOAD_PACK_COMMANDS.has(command)) flags.push('--upload-pack=git-upload-pack');
   if (scanned.plantedReceivePack && RECEIVE_PACK_COMMANDS.has(command)) flags.push('--receive-pack=git-receive-pack');
   if ((scanned.plantedUploadPack || scanned.plantedReceivePack) && OTHER_TRANSPORT_COMMANDS.has(command)) {

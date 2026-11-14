@@ -11,7 +11,8 @@ const HOME = process.env.TIMON_HOME;
 const { TimonConfigSchema } = await import('../config/schema.js');
 const { createGenericHost } = await import('./generic.js');
 const {
-  gitHooksNoneDir, gitScanArgs, neutralGitCall, neutralGitEnv, parseGitConfigList, scannedGitConfig,
+  gitHooksNoneDir, gitmodulesScanArgs, gitScanArgs, gitToplevelArgs, neutralGitCall, neutralGitEnv, parseGitConfigList,
+  parseSubmoduleNames, scannedGitConfig,
 } = await import('./git-neutral.js');
 
 const host = createGenericHost(TimonConfigSchema.parse({}));
@@ -70,9 +71,9 @@ test('a planted upload-pack or receive-pack is overridden on the command line', 
     { scope: 'local', key: 'remote.origin.receivepack', value: 'evil' },
   ];
   const fetch = neutralGitCall(['-C', '/r', 'fetch', 'origin'], entries, {});
-  assert.ok(!('refused' in fetch) && fetch.args.join(' ').endsWith('fetch --upload-pack=git-upload-pack origin'));
+  assert.ok(!('refused' in fetch) && fetch.args.join(' ').endsWith('fetch --no-recurse-submodules --upload-pack=git-upload-pack origin'));
   const push = neutralGitCall(['push', 'origin', 'main'], entries, {});
-  assert.ok(!('refused' in push) && push.args.join(' ').endsWith('push --receive-pack=git-receive-pack origin main'));
+  assert.ok(!('refused' in push) && push.args.join(' ').endsWith('push --no-recurse-submodules --receive-pack=git-receive-pack origin main'));
   assert.ok('refused' in neutralGitCall(['remote', 'update'], entries, {}));
   const status = neutralGitCall(['status'], entries, {});
   assert.ok(!('refused' in status) && !status.args.some((a) => a.startsWith('--upload-pack')));
@@ -97,14 +98,47 @@ test('alternate refs, configured hooks and Git LFS programs a mission named are 
   assert.deepEqual(scannedGitConfig([{ scope: 'global', key: 'lfs.customtransfer.t.path', value: 'mine' }]).config, []);
 });
 
-test('the local transport is refused, whatever the environment says', () => {
-  const fixed = neutralGitCall(['rev-parse', 'HEAD'], null, {});
-  assert.ok(!('refused' in fixed) && fixed.args.includes('protocol.file.allow=never'));
+test('git never runs inside a submodule, and the local transport is refused', () => {
+  const args = (call: ReturnType<typeof neutralGitCall>) => ('refused' in call ? [] : call.args);
+  const fixed = args(neutralGitCall(['rev-parse', 'HEAD'], null, {}));
+  for (const pair of ['protocol.file.allow=never', 'protocol.ext.allow=never', 'submodule.recurse=false']) {
+    assert.ok(fixed.includes(pair), pair);
+  }
+  assert.ok(args(neutralGitCall(['status', '--porcelain'], [], {})).includes('--ignore-submodules=dirty'));
+  assert.ok(args(neutralGitCall(['diff-index', 'HEAD'], [], {})).includes('--ignore-submodules=dirty'));
+  assert.ok(args(neutralGitCall(['checkout', 'main'], [], {})).includes('--quiet'));
+  assert.equal(args(neutralGitCall(['checkout', '-q', 'main'], [], {})).filter((a) => a === '--quiet' || a === '-q').length, 1);
+  assert.ok(args(neutralGitCall(['fetch', 'origin'], [], {})).includes('--no-recurse-submodules'));
   // It would replace the protocol policy with its own list.
   const call = neutralGitCall(['push'], [], { GIT_ALLOW_PROTOCOL: 'file:ext', PATH: '/usr/bin' }, { platform: 'linux' });
   assert.ok(!('refused' in call) && call.env.GIT_ALLOW_PROTOCOL === undefined);
   const win = neutralGitCall(['push'], [], { Git_Allow_Protocol: 'file' }, { platform: 'win32' });
   assert.ok(!('refused' in win) && !Object.keys(win.env).some((k) => k.toUpperCase() === 'GIT_ALLOW_PROTOCOL'));
+});
+
+test('a merge names every submodule git may read, so git never runs inside one', () => {
+  assert.equal(gitToplevelArgs(['-C', '/r', 'status']), null);
+  const top = gitToplevelArgs(['-C', '/r', 'merge', '--no-edit', 'x']);
+  assert.deepEqual([top?.slice(0, 3), top?.slice(-2)], [['-C', '/r', '--no-pager'], ['rev-parse', '--show-toplevel']]);
+  assert.ok(top?.includes('core.fsmonitor=false'));
+  const reads = gitmodulesScanArgs(['-C', '/r', 'merge', 'x'], '/r');
+  assert.deepEqual(reads.map((a) => a.slice(-2)), [['--file', join('/r', '.gitmodules')], ['--blob', ':.gitmodules'], ['--blob', 'HEAD:.gitmodules']]);
+  assert.deepEqual(
+    parseSubmoduleNames(['submodule.a.path\0submodule.a.url\0submodule.x.y.path\0', 'submodule.b.ignore\0core.bare\0submodule.\0', '']),
+    ['a', 'x.y', 'b'],
+  );
+  const call = neutralGitCall(['merge', 'x'], [], {}, { submodules: ['a', 'x.y'] });
+  assert.ok(!('refused' in call) && call.args.includes('submodule.a.ignore=dirty') && call.args.includes('submodule.x.y.ignore=dirty'));
+  assert.ok('refused' in neutralGitCall(['merge', 'x'], [], {}, { submodules: ['a=b'] }));
+});
+
+test('a commit must carry its message: without one git builds a status of the submodules', () => {
+  assert.ok('refused' in neutralGitCall(['-C', '/r', 'commit', '-a'], [], {}));
+  assert.ok('refused' in neutralGitCall(['commit', '--amend'], [], {}));
+  for (const ok of [['commit', '--quiet', '-m', 'x'], ['commit', '-qam', 'x'], ['commit', '--message=x'], ['commit', '-F', 'f'], ['commit', '--no-edit', '--amend']]) {
+    assert.ok(!('refused' in neutralGitCall(ok, [], {})), ok.join(' '));
+  }
+  assert.ok(!('refused' in neutralGitCall(['-c', 'user.name=T', 'commit', '--quiet', '-m', 'Demo project'], [], {})));
 });
 
 test('neutralGitCall fixes hooks, fsmonitor, pager, and diff drivers', () => {
@@ -115,7 +149,7 @@ test('neutralGitCall fixes hooks, fsmonitor, pager, and diff drivers', () => {
   assert.ok(call.args.includes('core.fsmonitor=false'));
   assert.ok(call.args.includes(`core.hooksPath=${gitHooksNoneDir()}`));
   const diff = call.args.indexOf('diff');
-  assert.deepEqual(call.args.slice(diff, diff + 4), ['diff', '--no-ext-diff', '--no-textconv', '--numstat']);
+  assert.deepEqual(call.args.slice(diff, diff + 5), ['diff', '--no-ext-diff', '--no-textconv', '--ignore-submodules=dirty', '--numstat']);
   const status = neutralGitCall(['status'], null, {});
   assert.ok(!('refused' in status) && !status.args.includes('--no-ext-diff'));
 });
@@ -132,11 +166,11 @@ test('the PATH git gets loses every folder a mission can write', () => {
 /** Every witness `trappedRepo` plants. */
 const WITNESSES = [
   'alternate-refs', 'filter', 'fsmonitor', 'gpg', 'hook-post-checkout', 'hook-pre-commit',
-  'hook-reference-transaction', 'merge-driver', 'planted-helper', 'pre-receive', 'uploadpack',
+  'hook-reference-transaction', 'merge-driver', 'planted-helper', 'pre-receive', 'subfilter', 'uploadpack',
 ];
 
 /** A repository whose configuration runs a witness for every hook, driver and
- *  helper git can be asked to run, and two local remotes. */
+ *  helper git can be asked to run, a submodule and two local remotes. */
 function trappedRepo(): { root: string; repo: string; env: NodeJS.ProcessEnv; witnesses: () => string[] } {
   const root = mkdtempSync(join(tmpdir(), 'timon-git-trap-'));
   const seen = join(root, 'seen');
@@ -157,10 +191,17 @@ function trappedRepo(): { root: string; repo: string; env: NodeJS.ProcessEnv; wi
   };
   const repo = join(root, 'repo');
   const git = (...args: string[]) => run(repo, ...args);
+  const subsrc = join(root, 'subsrc');
+  mkdirSync(subsrc);
+  run(subsrc, 'init', '-q');
+  writeFileSync(join(subsrc, 'a.txt'), 'a\n');
+  run(subsrc, 'add', 'a.txt');
+  run(subsrc, 'commit', '-qm', 'sub');
   mkdirSync(repo);
   git('init', '-q');
   writeFileSync(join(repo, 'f.txt'), 'base\n');
   git('add', 'f.txt');
+  git('-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', subsrc, 'sub');
   git('commit', '-qm', 'base');
   git('branch', 'side');
   writeFileSync(join(repo, 'f.txt'), 'main\n');
@@ -203,7 +244,18 @@ function trappedRepo(): { root: string; repo: string; env: NodeJS.ProcessEnv; wi
   for (const hook of ['pre-commit', 'pre-merge-commit', 'post-merge', 'reference-transaction', 'post-checkout']) {
     writeFileSync(join(repo, '.git', 'hooks', hook), `#!/bin/sh\n${touch(`hook-${hook}`)}\n`, { mode: 0o755 });
   }
-  writeFileSync(join(repo, 'f.txt'), 'main\n'); // a stat change: status must hash the file
+  // The submodule's own configuration, never scanned, and the setting that
+  // outranks `diff.ignoreSubmodules`.
+  const sub = join(repo, 'sub');
+  // Its own filter name: the daemon's `-c filter.trap.clean=` reaches a git
+  // started inside the submodule and would blank a filter of the same name.
+  writeFileSync(join(sub, '.gitattributes'), '* filter=subtrap\n');
+  run(sub, 'config', 'filter.subtrap.clean', `${touch('subfilter')}; cat`);
+  git('config', 'submodule.sub.ignore', 'none');
+  git('config', '-f', '.gitmodules', 'submodule.sub.ignore', 'none');
+  // Same size, new stat: git must hash the file, through the clean filter.
+  writeFileSync(join(sub, 'a.txt'), 'z\n');
+  writeFileSync(join(repo, 'f.txt'), 'main\n');
   return { root, repo, env, witnesses: () => readdirSync(seen).sort() };
 }
 
