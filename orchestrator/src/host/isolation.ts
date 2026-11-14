@@ -43,9 +43,17 @@
  * OS account, a namespace: `Host.isolation.runAs`), the policy is already
  * written, tested and configurable. Until then the scope path is byte-for-byte
  * what it was, and `docs/SECURITY.md` §9.1 says so out loud.
+ *
+ * THE FENCE
+ * ---------
+ * The second half of the module (`resolveFence`) needs no systemd at all: it
+ * is the projection a native launcher hands the kernel (Landlock and a seccomp
+ * socket filter on Linux, Seatbelt on macOS) right before it `exec`s the CLI,
+ * so the pid and every kill path stay as they are. Unlike the masking, it is
+ * an allow-list inside the Timon home and keeps the user's home read-only.
  */
 import { homedir } from 'node:os';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import type { TimonConfig } from '../config/schema.js';
 import { PROTECTED_HOME_DIRS } from '../backends/credential-home-dirs.js';
 import { BACKEND_HOME_DIRS } from '../backends/builtin-declarations.js';
@@ -98,6 +106,66 @@ export const DEFAULT_DENY_HOME_DIRS: readonly string[] = Object.freeze([
   ...Object.values(BACKEND_HOME_DIRS).flat(),
 ]);
 
+/**
+ * What a mission may reach under `TIMON_HOME` (inventory of the fence
+ * framing, §1). The fence treats the Timon home as an allow-list: it is
+ * invisible to a mission except the folders `resolveFence` grants inside
+ * `writable` and `readable`, so a private file added tomorrow is protected
+ * without anyone remembering to list it.
+ *
+ * `refused` is still spelled out, for three reasons: a launcher that can only
+ * mask (`resolveIsolation`, a systemd unit) needs the names; a grant computed
+ * from a caller or from the configuration must never land on one; and the
+ * tests prove each of them stays out of the projection. The prefixes catch the
+ * copies the daemon and the operator leave next to a file (`timon.db-wal`,
+ * `timon.config.json.bak-…`, `license.state.json.tmp-…`).
+ */
+export const MISSION_TIMON_ZONES = Object.freeze({
+  /** Top-level folders holding one sub-folder per mission, agent, account or
+   *  plugin. Only that sub-folder is granted, never the whole folder. */
+  writable: Object.freeze([
+    'worktrees', 'tmp', 'backend-accounts', 'provider-runs', 'provider-cache', 'codex-runs', 'grok-runs',
+    'workflows', 'workspace',
+  ]),
+  /** Readable on a declared need (identity docs, skills, project memory,
+   *  attachments, the code of a plugin's MCP server), never writable — except
+   *  the mission's own agent memory. */
+  readable: Object.freeze(['agents', 'skills', 'projects', 'uploads', 'plugins']),
+  /** Never granted, read or write: secrets, the database, the configuration
+   *  the daemon executes, sessions and other tenants' state. */
+  refused: Object.freeze([
+    'daemon-token', 'plugin-token-key', 'setup-token', 'update-token', 'remote-key', 'remote.db',
+    'secrets.env', 'secret-key', 'secret-key.next', 'secret-key.location',
+    'license.jwt', 'license.key', 'license.state.json', 'license.enrollment-secret',
+    'device-id', 'install-id', 'cli-daemons.json', 'legacy-account-tables.json',
+    'timon.db', 'timon.db-wal', 'timon.db-shm', 'integrations.db', 'integrations.db-wal', 'integrations.db-shm',
+    'timon.config.json', 'daemon.lock', 'daemon.lock.json',
+    'plugins-data', 'browser-profiles', 'browser-native', 'desktop-profile', 'mcp', 'run', 'backups', 'archive',
+  ]),
+  refusedPrefixes: Object.freeze([
+    'secret-key', 'license.', 'timon.db', 'integrations.db', 'timon.config.json', 'remote.db', 'daemon.lock',
+  ]),
+});
+
+/** `name`, a top-level entry of the Timon home, is one a mission never reaches. */
+export function isRefusedTimonEntry(name: string): boolean {
+  return MISSION_TIMON_ZONES.refused.includes(name)
+    || MISSION_TIMON_ZONES.refusedPrefixes.some((prefix) => name.startsWith(prefix));
+}
+
+/**
+ * The refused entries of `timonHome` as absolute paths: the fixed names, plus
+ * every listed entry a prefix catches. Pure — the caller lists the folder when
+ * it wants the copies (`timon.config.json.bak-…`) included.
+ */
+export function timonRefusedPaths(timonHome: string, entries: readonly string[] = []): string[] {
+  const names = [...MISSION_TIMON_ZONES.refused];
+  for (const entry of entries) {
+    if (!names.includes(entry) && isRefusedTimonEntry(entry)) names.push(entry);
+  }
+  return names.map((name) => join(timonHome, name));
+}
+
 export type IsolationTarget = {
   /** Working directory of the mission. Never masked, ancestors included. */
   cwd?: string | undefined;
@@ -142,8 +210,12 @@ function contains(parent: string, child: string): boolean {
  *  1. never mask the mission's `cwd`, nor any ancestor of it (a worktree under
  *     a masked home folder is exactly that case);
  *  2. never mask the credential directory of the backend actually in use;
- *  3. never mask `TIMON_HOME` nor any ancestor of it.
- * `host.isolation.allow` is applied last and wins over everything.
+ *  3. never mask `TIMON_HOME` nor any ancestor of it — but the private files
+ *     it holds (`MISSION_TIMON_ZONES.refused`) are masked whatever the target
+ *     or the configuration says: sparing the folder must not spare the
+ *     operator token, the vault key or the database inside it.
+ * `host.isolation.allow` is applied last and wins over everything but those
+ * private files.
  */
 export function resolveIsolation(config: TimonConfig, target: IsolationTarget = {}): IsolationPolicy {
   const iso = config.host.isolation;
@@ -190,7 +262,16 @@ export function resolveIsolation(config: TimonConfig, target: IsolationTarget = 
     readOnly.push(path);
   }
 
-  return { deny, readOnly, enabled: true };
+  // Guard 3 spares the Timon home, never what a mission must not read in it.
+  // Added after every spared path on purpose: neither the cwd nor `allow` can
+  // reopen them.
+  if (target.timonHome) {
+    for (const path of timonRefusedPaths(resolve(target.timonHome))) {
+      if (!deny.includes(path)) deny.push(path);
+    }
+  }
+
+  return { deny, readOnly: readOnly.filter((path) => !deny.includes(path)), enabled: true };
 }
 
 /** systemd takes a space-separated path list; a path holding a space must be
@@ -224,4 +305,295 @@ export function isolationArgsFor(
 ): string[] {
   if (!sandboxSupported(kind)) return [];
   return isolationProperties(resolveIsolation(config, target));
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   THE FENCE — what the kernel lets a mission reach (Landlock, Seatbelt)
+
+   The masking above needs systemd to execute the payload, which a `--scope`
+   never does. The fence does not: a launcher that `exec`s the backend CLI
+   asks the kernel to confine it, from inside the launch chain, and the pid
+   stays the CLI's. This section is the policy that launcher applies, as pure
+   data: the OS adapters render it (`host/linux.ts`, `host/darwin.ts`).
+
+   Semantics, shared by every renderer and spelled out by `fenceAccess`:
+   - each listed path carries a level — none (`deny`, `denyUnderTimonHome`),
+     read (`ro`) or read-write (`rw`) — and a file gets the level of its
+     DEEPEST listed ancestor; on the very same path, none beats read, which
+     beats read-write;
+   - a file is executable when it is readable and the deepest ancestor among
+     `exec`, `deny` and `denyUnderTimonHome` is an `exec` root.
+   So the system root is readable, the Timon home is not (it is in `deny`),
+   and the mission's own folders inside it are reopened one by one. Landlock
+   renders "deeper refusal" by granting the siblings at each level instead of
+   the parent; Seatbelt by emitting the rules shallow first, last match wins.
+   ────────────────────────────────────────────────────────────────────────── */
+
+export type FenceMode = TimonConfig['host']['isolation']['filesystem'];
+
+export type FenceTarget = {
+  /** Timon's home: invisible to the mission except its own folders. */
+  timonHome: string;
+  /** Working directory of the mission: writable wherever it is. */
+  cwd?: string | undefined;
+  /** Backend the mission runs on; its own state folders stay writable when no account is given. */
+  backend?: string | undefined;
+  /** Overridable for tests; defaults to the daemon user's home. */
+  home?: string | undefined;
+  /** Overridable for tests; picks the system folders every program writes to. */
+  platform?: NodeJS.Platform | undefined;
+  missionId?: string | undefined;
+  /** Agent running the mission: its identity docs readable, its memory writable. */
+  agent?: string | undefined;
+  /** Project slug: its shared memory and attachments readable. */
+  project?: string | undefined;
+  /** Backend account of the mission (`backend-accounts/<id>`): the only account it sees. */
+  account?: string | undefined;
+  /** Provider plugin holding the mission's scratch folder (`provider-runs/<plugin>/<mission>`). */
+  providerPlugin?: string | undefined;
+  /** Git directories the worktree commits into (the main repository's `.git`). */
+  gitDirs?: readonly string[] | undefined;
+  /** Install folders of the plugins whose MCP servers the mission runs: readable and executable. */
+  pluginDirs?: readonly string[] | undefined;
+  /** Further paths under the Timon home the daemon hands the mission (chat attachments): readable. */
+  timonRead?: readonly string[] | undefined;
+  /** Top-level entries of the Timon home, as listed by the caller: refused copies get named. */
+  timonHomeEntries?: readonly string[] | undefined;
+};
+
+export type FencePolicy = {
+  mode: FenceMode;
+  /** `false` when `host.isolation.filesystem` is `off`: nothing is confined. */
+  enabled: boolean;
+  /** Readable subtrees: the system root, and what is reopened under a refused one. */
+  ro: readonly string[];
+  /** Readable and writable subtrees. */
+  rw: readonly string[];
+  /** Roots under which files may be executed (see the semantics above). */
+  exec: readonly string[];
+  /** Subtrees the mission cannot reach at all: the Timon home, other credentials, `host.isolation.deny`. */
+  deny: readonly string[];
+  /** The refused entries of the Timon home, named, for renderers that can only mask. */
+  denyUnderTimonHome: readonly string[];
+  unixSockets: 'deny' | 'allow';
+  /** Grants dropped because they would open what a mission never reaches, with the reason. */
+  ignored: ReadonlyArray<{ path: string; reason: string }>;
+};
+
+/** Folders every program of the platform writes to (`/dev/null`, a temporary file). */
+const SYSTEM_WRITABLE: Readonly<Partial<Record<NodeJS.Platform, readonly string[]>>> = Object.freeze({
+  linux: Object.freeze(['/tmp', '/var/tmp', '/dev']), // portability: Linux table, read only for platform 'linux'
+  // Seatbelt matches resolved paths: `/tmp` is `/private/tmp`, and the per-user
+  // temporary folder of `confstr(_CS_DARWIN_USER_TEMP_DIR)` lives in `/private/var/folders`.
+  darwin: Object.freeze(['/private/tmp', '/private/var/tmp', '/private/var/folders', '/dev']),
+});
+
+const FENCE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+type GrantSource = 'mission' | 'own-memory' | 'config';
+
+/** Why a grant must be dropped, or `null` when it may stand. */
+function timonGrantProblem(timonHome: string, path: string, access: 'ro' | 'rw', source: GrantSource): string | null {
+  if (path === timonHome) return 'the Timon home itself is never granted, only the mission\'s folders in it';
+  // An ancestor of the Timon home may be granted: the home stays refused, deeper.
+  if (!contains(timonHome, path)) return null;
+  if (source === 'config') return 'the configuration cannot open a folder of the Timon home';
+  const first = relative(timonHome, path).split(sep)[0] ?? '';
+  if (isRefusedTimonEntry(first)) return `"${first}" holds private state a mission never reaches`;
+  const writable = MISSION_TIMON_ZONES.writable.includes(first);
+  if (access === 'rw' && !writable && source !== 'own-memory') return `"${first}" is never writable from a mission`;
+  if (!writable && !MISSION_TIMON_ZONES.readable.includes(first)) return `"${first}" is not one of the mission zones`;
+  return null;
+}
+
+/** The global fence values, relaxed by the project's then the agent's exception. */
+function fenceExceptions(iso: TimonConfig['host']['isolation'], target: FenceTarget): {
+  unixSockets: 'deny' | 'allow';
+  writable: readonly string[];
+} {
+  const { agents, projects } = iso.exceptions;
+  const project = target.project && Object.hasOwn(projects, target.project) ? projects[target.project] : undefined;
+  const agent = target.agent && Object.hasOwn(agents, target.agent) ? agents[target.agent] : undefined;
+  return {
+    unixSockets: agent?.unixSockets ?? project?.unixSockets ?? iso.unixSockets,
+    writable: [...iso.writable, ...(project?.writable ?? []), ...(agent?.writable ?? [])],
+  };
+}
+
+const NO_FENCE: FencePolicy = Object.freeze({
+  mode: 'off', enabled: false, ro: [], rw: [], exec: [], deny: [], denyUnderTimonHome: [], unixSockets: 'allow', ignored: [],
+});
+
+/**
+ * The fence of one mission launch. Pure: same inputs, same output.
+ *
+ * - The system is readable and executable; the user's home is read-only but
+ *   for the mission's own working folders, the backend's state when the
+ *   mission runs on the host's own sign-in, and `host.isolation.writable`.
+ *   A writable home is how a mission escapes: the daemon later runs what it
+ *   finds in `~/.gitconfig` or `~/.local/bin`.
+ * - The Timon home is refused as a whole, then the mission's folders are
+ *   reopened from `MISSION_TIMON_ZONES` — an allow-list, never a deny-list.
+ * - The masking candidates of `resolveIsolation` (other backends' credentials,
+ *   `~/.ssh`, `host.isolation.deny`) are refused too; the running backend's
+ *   own folders are not.
+ * - No grant, whatever its origin, lands on a refused entry of the Timon home
+ *   or on the home itself; the configuration grants nothing inside it.
+ */
+export function resolveFence(config: TimonConfig, target: FenceTarget): FencePolicy {
+  const iso = config.host.isolation;
+  if (iso.filesystem === 'off') return NO_FENCE;
+
+  const home = resolve(target.home ?? homedir());
+  const timonHome = resolve(target.timonHome);
+  const platform = target.platform ?? process.platform;
+  const exceptions = fenceExceptions(iso, target);
+  const ignored: Array<{ path: string; reason: string }> = [];
+  const ro = new Set<string>([parse(home).root]);
+  const rw = new Set<string>(SYSTEM_WRITABLE[platform] ?? []);
+  const exec = new Set<string>([parse(home).root]);
+
+  const grant = (path: string, access: 'ro' | 'rw', source: GrantSource): boolean => {
+    const problem = timonGrantProblem(timonHome, path, access, source);
+    if (problem) {
+      ignored.push({ path, reason: problem });
+      return false;
+    }
+    (access === 'rw' ? rw : ro).add(path);
+    return true;
+  };
+  const segment = (kind: string, value: string | undefined): string | null => {
+    if (value === undefined || value === '') return null;
+    if (FENCE_SEGMENT.test(value)) return value;
+    ignored.push({ path: value, reason: `${kind} is not a plain folder name` });
+    return null;
+  };
+  const inTimon = (...parts: string[]) => join(timonHome, ...parts);
+
+  if (target.cwd) grant(resolve(target.cwd), 'rw', 'mission');
+  for (const dir of target.gitDirs ?? []) grant(resolve(dir), 'rw', 'mission');
+
+  const missionId = segment('mission id', target.missionId);
+  const agent = segment('agent name', target.agent);
+  const project = segment('project slug', target.project);
+  const account = segment('account id', target.account);
+  const plugin = segment('provider plugin id', target.providerPlugin);
+
+  if (missionId) {
+    // `tmp/missions/<id>` becomes the mission's TMPDIR: a `mktemp` must not
+    // land in a folder the mission can list, nor in another mission's.
+    grant(inTimon('tmp', 'missions', missionId), 'rw', 'mission');
+    grant(inTimon('codex-runs', missionId), 'rw', 'mission');
+    grant(inTimon('grok-runs', missionId), 'rw', 'mission');
+    if (plugin) grant(inTimon('provider-runs', plugin, missionId), 'rw', 'mission');
+  }
+  if (plugin) grant(inTimon('provider-cache', plugin), 'rw', 'mission');
+  if (account) grant(inTimon('backend-accounts', account), 'rw', 'mission');
+  if (agent) {
+    grant(inTimon('agents', agent), 'ro', 'mission');
+    grant(inTimon('agents', agent, 'memory'), 'rw', 'own-memory');
+    if (missionId) grant(inTimon('agents', agent, 'missions', missionId, 'memory'), 'rw', 'own-memory');
+  }
+  grant(inTimon('skills'), 'ro', 'mission');
+  if (project) {
+    grant(inTimon('projects', project, 'memory'), 'ro', 'mission');
+    grant(inTimon('uploads', 'projects', project), 'ro', 'mission');
+  }
+  for (const raw of target.timonRead ?? []) {
+    const path = resolve(raw);
+    // Handed-over files come from a read-only zone; a writable one holds other missions' folders.
+    const first = relative(timonHome, path).split(sep)[0] ?? '';
+    if (contains(timonHome, path) && !MISSION_TIMON_ZONES.readable.includes(first)) {
+      ignored.push({ path, reason: `"${first}" is not a zone the daemon hands files from` });
+      continue;
+    }
+    grant(path, 'ro', 'mission');
+  }
+  for (const dir of target.pluginDirs ?? []) {
+    const path = resolve(dir);
+    // Executable code from the Timon home comes from one plugin's folder, nowhere else.
+    if (!contains(inTimon('plugins'), path) || path === inTimon('plugins')) {
+      ignored.push({ path, reason: 'a plugin folder lives under the plugins folder of the Timon home' });
+      continue;
+    }
+    if (grant(path, 'ro', 'mission')) exec.add(path);
+  }
+
+  // The backend's own state. With an account, the CLI is pointed at the
+  // account's folder: the host's own sign-in stays read-only, so a mission
+  // cannot plant a hook the user's interactive CLI would run.
+  const declared = declaredDirsSource();
+  const ownBuiltIn = BACKEND_HOME_DIRS[target.backend ?? ''] ?? [];
+  const neverSpared = [...DEFAULT_DENY_HOME_DIRS, ...PROTECTED_HOME_DIRS]
+    .filter((d) => !ownBuiltIn.includes(d))
+    .map((d) => expand(`~/${d}`, home));
+  const ownDeclared = (declared[target.backend ?? ''] ?? [])
+    .map((dir) => expand(`~/${dir}`, home))
+    .filter((path) => !neverSpared.some((n) => contains(n, path) || contains(path, n)));
+  const ownDirs = [...ownBuiltIn.map((d) => expand(`~/${d}`, home)), ...ownDeclared];
+  if (!account) for (const path of ownDirs) grant(path, 'rw', 'mission');
+
+  for (const path of exceptions.writable) grant(expand(path, home), 'rw', 'config');
+  const allowed = iso.allow.map((p) => expand(p, home)).filter((path) => grant(path, 'ro', 'config'));
+  for (const path of iso.readOnly) grant(expand(path, home), 'ro', 'config');
+
+  // Read-only wins over read-write on the very same path: `readOnly` is a restriction.
+  for (const path of ro) rw.delete(path);
+
+  const deny = new Set<string>();
+  const candidates = [
+    ...DEFAULT_DENY_HOME_DIRS.map((d) => expand(`~/${d}`, home)),
+    ...Object.values(declared).flat().map((d) => expand(`~/${d}`, home)),
+    ...iso.deny.map((p) => expand(p, home)),
+  ];
+  for (const path of candidates) {
+    if (ownDirs.includes(path)) continue;
+    if (allowed.some((a) => contains(a, path))) continue;
+    // A grant on the very same path wins (a cwd under `~/.ssh` is the user's
+    // choice); a grant deeper down reopens only itself.
+    if (rw.has(path) || ro.has(path)) continue;
+    deny.add(path);
+  }
+  deny.add(timonHome);
+
+  for (const path of rw) exec.add(path);
+
+  return {
+    mode: iso.filesystem,
+    enabled: true,
+    ro: [...ro],
+    rw: [...rw],
+    exec: [...exec],
+    deny: [...deny],
+    denyUnderTimonHome: timonRefusedPaths(timonHome, target.timonHomeEntries ?? []),
+    unixSockets: exceptions.unixSockets,
+    ignored,
+  };
+}
+
+/**
+ * What a fence lets a mission do with `path` — the reference semantics every
+ * renderer must reproduce (see the section header). Pure path arithmetic.
+ */
+export function fenceAccess(policy: FencePolicy, path: string): { read: boolean; write: boolean; exec: boolean } {
+  if (!policy.enabled) return { read: true, write: true, exec: true };
+  const target = resolve(path);
+  const refused = [...policy.deny, ...policy.denyUnderTimonHome];
+  // Lists in order of precedence on an equal path: the first one listed wins a tie.
+  const deepest = <T>(lists: ReadonlyArray<readonly [readonly string[], T]>, fallback: T): T => {
+    let length = -1;
+    let found = fallback;
+    for (const [paths, value] of lists) {
+      for (const p of paths) {
+        if (p.length > length && contains(p, target)) {
+          length = p.length;
+          found = value;
+        }
+      }
+    }
+    return found;
+  };
+  const level = deepest<'none' | 'ro' | 'rw'>([[refused, 'none'], [policy.ro, 'ro'], [policy.rw, 'rw']], 'none');
+  const executable = deepest<boolean>([[refused, false], [policy.exec, true]], false);
+  return { read: level !== 'none', write: level === 'rw', exec: level !== 'none' && executable };
 }

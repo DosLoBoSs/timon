@@ -115,7 +115,7 @@ export type DoctorReport = {
    */
   missionIsolation: {
     /** `host.isolation.filesystem`, verbatim. */
-    configured: 'auto' | 'off';
+    configured: 'auto' | 'enforce' | 'off';
     /** `true` only when the masking directives actually reach the launcher. */
     enforced: boolean;
     /** Unit kind missions are wrapped in; `null` when the host declares none. */
