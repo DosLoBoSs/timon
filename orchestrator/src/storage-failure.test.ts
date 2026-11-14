@@ -12,7 +12,7 @@ function coded(message: string, code: string): Error {
 const files = { home: '/data/timon', dbPath: '/data/timon/timon.db' };
 
 test('SQLite storage codes and disk errno are storage failures; data errors are not', () => {
-  for (const code of ['SQLITE_IOERR', 'SQLITE_IOERR_WRITE', 'SQLITE_IOERR_SHORT_READ', 'SQLITE_FULL', 'SQLITE_CANTOPEN', 'ENOSPC', 'EIO', 'EDQUOT', 'EROFS']) {
+  for (const code of ['SQLITE_IOERR', 'SQLITE_IOERR_WRITE', 'SQLITE_IOERR_SHORT_READ', 'SQLITE_FULL', 'SQLITE_CANTOPEN', 'SQLITE_NOTADB', 'ENOSPC', 'EIO', 'EDQUOT', 'EROFS']) {
     assert.deepEqual(storageFailure(coded('x', code)), { code, message: 'x' }, code);
   }
   for (const code of ['SQLITE_CONSTRAINT', 'SQLITE_CORRUPT', 'SQLITE_BUSY', 'EADDRINUSE', 'ENOENT']) {
@@ -75,6 +75,16 @@ test('after the boot, an uncaught storage failure is logged and waited on once; 
   assert.match(log.join('\n'), /\[storage\].*SQLITE_FULL.*retries in 4 s/);
   // A second failure on the way down does not wait again.
   monitor(coded('disk I/O error', 'SQLITE_IOERR'));
+  assert.deepEqual(sleeps, [4321]);
+});
+
+test('a database file replaced while the daemon runs (SQLITE_NOTADB) is waited on, not a tight restart', () => {
+  assert.notEqual(storageFailure(coded('file is not a database', 'SQLITE_NOTADB')), null);
+  const sleeps: number[] = [];
+  const monitor = storageFailureMonitor(files, {
+    delayMs: 4321, log: () => {}, sleep: (ms) => { sleeps.push(ms); }, free: () => null,
+  });
+  monitor(coded('file is not a database', 'SQLITE_NOTADB'));
   assert.deepEqual(sleeps, [4321]);
 });
 
