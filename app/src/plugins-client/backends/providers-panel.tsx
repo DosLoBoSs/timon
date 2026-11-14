@@ -13,28 +13,26 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from 'rea
 import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, Copy, Download, KeyRound, RefreshCw, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { ConsentLines } from '@/components/provider-consent';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  acpAction, authorizeProvider, binaryAction, fetchAcpAuthMethods, fetchAcpRegistry, fetchProviders, installAcpAgent, needsAuthorization,
-  orderAuthMethods, pathsToAuthorize, PROVIDER_PARAM, providerToAuthorize, removeAcpAgent,
+  acpAction, binaryAction, fetchAcpAuthMethods, fetchAcpRegistry, fetchProviders, installAcpAgent, needsAuthorization,
+  orderAuthMethods, PROVIDER_PARAM, providerToAuthorize, removeAcpAgent,
   type AcpAgent, type AcpAuthMethod, type AcpRegistry, type ProviderPlugin,
 } from '@/lib/providers';
 import { sseOn } from '@/lib/sse-stream';
 import { t } from '@/lib/i18n';
-
-type Pending =
-  | { kind: 'authorize'; provider: ProviderPlugin }
-  | { kind: 'unverified'; agent: AcpAgent };
+import { ProviderAuthorizeDialog } from './provider-authorize-dialog';
 
 export function ProvidersPanel(): ReactElement | null {
   const [providers, setProviders] = useState<ProviderPlugin[] | null>(null);
   const [registry, setRegistry] = useState<AcpRegistry | null>(null);
   const [registryError, setRegistryError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [pending, setPending] = useState<Pending | null>(null);
+  const [authorizing, setAuthorizing] = useState<ProviderPlugin | null>(null);
+  // An ACP agent whose build carries no checksum, waiting for the person's explicit go.
+  const [unverified, setUnverified] = useState<AcpAgent | null>(null);
   // Sign-in methods by agent, read on a click: asking starts the agent's program on the daemon.
   const [signIns, setSignIns] = useState<Record<string, AcpAuthMethod[]>>({});
 
@@ -62,7 +60,7 @@ export function ProvidersPanel(): ReactElement | null {
     if (!requested || providers === null || handled.current === requested) return;
     handled.current = requested;
     const target = providerToAuthorize(providers, requested);
-    if (target) setPending({ kind: 'authorize', provider: target });
+    if (target) setAuthorizing(target);
     setHighlighted(requested);
     // Replaced, not pushed: Back closes Settings, it does not reopen the dialog. Next keeps
     // `useSearchParams` in step with `history` (`openSettingsFromAnywhere` relies on the same).
@@ -76,17 +74,10 @@ export function ProvidersPanel(): ReactElement | null {
     try { await work(); } catch (err) { toast.error((err as Error).message); } finally { setBusy(null); }
   };
 
-  const authorize = (provider: ProviderPlugin): Promise<void> => run(`authorize:${provider.id}`, async () => {
-    await authorizeProvider(provider.id, pathsToAuthorize(provider.binaries));
-    setPending(null);
-    toast.success(t('providersSettings.plugins.authorized', { name: provider.label }));
-    await loadProviders();
-  });
-
   const install = (agent: AcpAgent, acceptUnverified: boolean): Promise<void> => run(`install:${agent.id}`, async () => {
     const wasInstalled = agent.installed !== null;
     await installAcpAgent(agent.id, acceptUnverified);
-    setPending(null);
+    setUnverified(null);
     toast.success(t(wasInstalled ? 'providersSettings.acp.updated' : 'providersSettings.acp.installed', { name: agent.name }));
     await loadRegistry();
   });
@@ -131,8 +122,7 @@ export function ProvidersPanel(): ReactElement | null {
                     key={provider.id}
                     provider={provider}
                     highlighted={highlighted === provider.id}
-                    busy={busy === `authorize:${provider.id}`}
-                    onAuthorize={() => setPending({ kind: 'authorize', provider })}
+                    onAuthorize={() => setAuthorizing(provider)}
                   />
                 ))}
               </ul>
@@ -166,7 +156,7 @@ export function ProvidersPanel(): ReactElement | null {
                 agent={agent}
                 busy={busy}
                 signIn={signIns[agent.id] ?? null}
-                onInstall={() => (agent.integrity === 'none' ? setPending({ kind: 'unverified', agent }) : void install(agent, false))}
+                onInstall={() => (agent.integrity === 'none' ? setUnverified(agent) : void install(agent, false))}
                 onSignIn={() => void toggleSignIn(agent)}
                 onRemove={() => void remove(agent)}
               />
@@ -175,30 +165,19 @@ export function ProvidersPanel(): ReactElement | null {
         )}
       </div>
 
-      <Dialog open={pending !== null} onOpenChange={(open) => { if (!open && busy === null) setPending(null); }}>
+      <ProviderAuthorizeDialog provider={authorizing} onClose={() => setAuthorizing(null)} onAuthorized={loadProviders} />
+
+      <Dialog open={unverified !== null} onOpenChange={(open) => { if (!open && busy === null) setUnverified(null); }}>
         <DialogContent className="sm:max-w-lg">
-          {pending?.kind === 'authorize' && (
+          {unverified && (
             <>
               <DialogHeader>
-                <DialogTitle>{t('providersSettings.plugins.authorizeTitle', { name: pending.provider.label })}</DialogTitle>
-                <DialogDescription>{t('providersSettings.plugins.authorizeBody')}</DialogDescription>
-              </DialogHeader>
-              <ConsentLines binaries={pathsToAuthorize(pending.provider.binaries)} osCredentials={pending.provider.osCredentials ?? []} credentialDirs={pending.provider.credentialDirs ?? []} />
-              <DialogFooter>
-                <Button variant="ghost" disabled={busy !== null} onClick={() => setPending(null)}>{t('providersSettings.cancel')}</Button>
-                <Button disabled={busy !== null} onClick={() => void authorize(pending.provider)}>{t('providersSettings.plugins.authorizeConfirm')}</Button>
-              </DialogFooter>
-            </>
-          )}
-          {pending?.kind === 'unverified' && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{t('providersSettings.acp.confirmTitle', { name: pending.agent.name })}</DialogTitle>
+                <DialogTitle>{t('providersSettings.acp.confirmTitle', { name: unverified.name })}</DialogTitle>
                 <DialogDescription>{t('providersSettings.acp.confirmBody')}</DialogDescription>
               </DialogHeader>
               <DialogFooter>
-                <Button variant="ghost" disabled={busy !== null} onClick={() => setPending(null)}>{t('providersSettings.cancel')}</Button>
-                <Button variant="destructive" disabled={busy !== null} onClick={() => void install(pending.agent, true)}>
+                <Button variant="ghost" disabled={busy !== null} onClick={() => setUnverified(null)}>{t('providersSettings.cancel')}</Button>
+                <Button variant="destructive" disabled={busy !== null} onClick={() => void install(unverified, true)}>
                   {t('providersSettings.acp.confirmAction')}
                 </Button>
               </DialogFooter>
@@ -211,8 +190,8 @@ export function ProvidersPanel(): ReactElement | null {
 }
 
 function ProviderRow({
-  provider, busy, highlighted, onAuthorize,
-}: { provider: ProviderPlugin; busy: boolean; highlighted: boolean; onAuthorize: () => void }): ReactElement {
+  provider, highlighted, onAuthorize,
+}: { provider: ProviderPlugin; highlighted: boolean; onAuthorize: () => void }): ReactElement {
   const toAuthorize = needsAuthorization(provider);
   return (
     <li
@@ -227,7 +206,7 @@ function ProviderRow({
           <span className="text-[11px] text-muted-foreground">{t('providersSettings.plugins.backends', { list: provider.backends.join(', ') })}</span>
         )}
         {toAuthorize && (
-          <Button size="sm" className="ml-auto h-7 gap-1.5 text-xs" disabled={busy} onClick={onAuthorize}>
+          <Button size="sm" className="ml-auto h-7 gap-1.5 text-xs" onClick={onAuthorize}>
             <ShieldAlert className="h-3.5 w-3.5" aria-hidden />
             {t('providersSettings.plugins.authorize')}
           </Button>
