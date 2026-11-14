@@ -8,8 +8,9 @@
  * "Subscription accounts" tab — add, sign in, rename, assign, delete.
  *
  * Painted only when there is something to say: a sign-in command, a known
- * sign-in state, or backends that take accounts. The order accounts are tried
- * in stays where it is set, Settings › AI models › Auto switch.
+ * sign-in state, or backends that take accounts. Accounts are listed in the
+ * daemon's order: a mission is never moved from one to another, so there is
+ * no order to set.
  */
 import { useState, type ReactElement } from 'react';
 import { RefreshCw } from 'lucide-react';

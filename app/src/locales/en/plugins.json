@@ -575,7 +575,7 @@
       "checkAgain": "Try again",
       "accounts": {
         "title": "Subscription accounts",
-        "description": "Several subscriptions of this provider, each one a choice in the model selectors. A mission never moves to another subscription on its own: the order they are tried in is set in Auto switch."
+        "description": "Several subscriptions of this provider, each one a choice in the model selectors. A mission never moves to another subscription on its own."
       }
     },
     "apiKey": {

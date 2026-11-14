@@ -565,7 +565,7 @@
       "checkAgain": "Réessayer",
       "accounts": {
         "title": "Comptes d’abonnement",
-        "description": "Plusieurs abonnements de ce fournisseur, chacun choisi dans les sélecteurs de modèle. Une mission ne bascule jamais seule sur un autre abonnement : l’ordre dans lequel ils sont essayés se règle dans Bascule auto."
+        "description": "Plusieurs abonnements de ce fournisseur, chacun choisi dans les sélecteurs de modèle. Une mission ne bascule jamais seule sur un autre abonnement."
       }
     },
     "apiKey": {
