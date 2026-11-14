@@ -85,6 +85,17 @@ control. An exact model ID is sent unchanged; a display label does not create
 an alias. Newly added models appear first and carry a **New** badge for seven
 days. Renaming one does not restart that period.
 
+Each provider also has its own page, **Settings → AI models → Providers →
+_its name_**. Its **Models** section lists what the provider serves, with a
+search field and a line such as *3 of 12 models appear in the selector*; the
+eye of a row shows or hides that model in every model selector, and **Save**
+keeps the change. Its **Settings** section holds the name and picture the
+selectors show. For a provider you added yourself, **Advanced** holds its
+protocol, address and API key: the key field stays empty, typing one replaces
+the stored key, and **Test** checks the saved address with the stored key
+while you change nothing. The Claude page adds the **Claude long-lived token**
+section (see [macOS](../installation/macos.md#keep-timon-running-when-you-are-logged-out)).
+
 Each model row also has a **context window** field. Its placeholder shows the
 window Timon detected (for example `auto · 400k`). If the context gauge in the
 chat (the ring beside the send button, with the maximum in its centre)
