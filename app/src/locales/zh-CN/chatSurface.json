@@ -39,6 +39,26 @@
       "pasted": "已粘贴"
     },
     "unexpectedReaderResult": "文件读取结果异常",
-    "readFailed": "无法读取文件"
+    "readFailed": "无法读取文件",
+    "scriptPreview": {
+      "warning": "此命令会运行项目中的文件。允许之前请先阅读：克隆的仓库可以在熟悉的名字背后藏任何东西。",
+      "kind": {
+        "npm_script": "npm 脚本 {name}",
+        "make_target": "make 目标 {name}"
+      },
+      "status": {
+        "outside_cwd": "位于项目文件夹之外：未读取。允许之前请自行检查。",
+        "symlink_outside": "指向项目文件夹之外的链接：未读取。允许之前请自行检查其目标。",
+        "missing": "未找到文件。",
+        "not_file": "不是普通文件：未读取。",
+        "unresolved": "路径取决于 shell（变量、主目录、通配符）：未读取。",
+        "not_found": "package.json 中没有该脚本。",
+        "binary": "二进制文件：无摘录。"
+      },
+      "unfold": "显示全部 {count} 行",
+      "fold": "折叠",
+      "truncated": "仅显示前几行：文件还有更多内容。",
+      "changed": "未运行：此卡片显示后 {paths} 已更改。已要求代理重新请求。"
+    }
   }
 }

@@ -98,6 +98,8 @@ import {
   type CommandDecision,
   type CommandRequestView,
 } from '@/lib/command-requests';
+import { scriptChangedOf, scriptPreviewsOf, type ScriptPreview } from '@/lib/script-preview';
+import { ScriptChangedNotice, ScriptPreviewList } from '@/components/chat/script-preview-list';
 import { scopeOfView, type TerminalScope } from '@/lib/terminal-web';
 import { CommandRequestCard } from '@/components/chat/command-request-card';
 import { ChatSecretRequestSlot } from '@/components/chat/secret-request-card';
@@ -522,6 +524,10 @@ type Msg = {
     choices?: CommandDecision[];
     /** When an autonomous mission's card is auto-resolved (ms epoch); absent = never. */
     expires_at?: number;
+    /** The local files the shell command would run, read by the daemon. */
+    script_previews?: ScriptPreview[];
+    /** Files that changed between the card and the Allow, which was refused for it. */
+    script_changed?: string[];
   };
   /** A command the agent asks the user to decide (role === 'command'). */
   cmd?: CommandRequestView;
@@ -3819,11 +3825,12 @@ export function ChatClient({
     // Permission prompt: orchestrator emits these out-of-band when claude's
     // permission-prompt-tool MCP is invoked. We render a card with Allow/Deny.
     if (meta.type === 'permission_request') {
-      const p = payload as { id?: string; tool_name?: string; input?: unknown; scopes?: unknown; approval_motif?: unknown; shell_command?: unknown; choices?: unknown; expires_at?: unknown };
+      const p = payload as { id?: string; tool_name?: string; input?: unknown; scopes?: unknown; approval_motif?: unknown; shell_command?: unknown; choices?: unknown; expires_at?: unknown; script_previews?: unknown };
       if (!p.id || !p.tool_name) return;
       const scopes = approvalScopesOf(p.scopes);
       const motif = scopes.length && typeof p.approval_motif === 'string' ? p.approval_motif : null;
       const shell = shellCardOf(p);
+      const scripts = scriptPreviewsOf(p.script_previews);
       setMessages((m) => {
         // Replay-safe: don't duplicate if we already have this card.
         if (m.some((x) => x.perm?.request_id === p.id)) return m;
@@ -3840,6 +3847,7 @@ export function ChatClient({
               ...(motif ? { motif } : {}),
               ...(shell ?? {}),
               ...(typeof p.expires_at === 'number' ? { expires_at: p.expires_at } : {}),
+              ...(scripts.length ? { script_previews: scripts } : {}),
             },
           },
         ];
@@ -3852,13 +3860,14 @@ export function ChatClient({
     }
     if (meta.type === 'permission_resolved') {
       // A paste keeps `behavior: 'deny'` for older readers; `choice` says what was clicked.
-      const p = payload as { id?: string; behavior?: 'allow' | 'deny'; choice?: string };
+      const p = payload as { id?: string; behavior?: 'allow' | 'deny'; choice?: string; script_changed?: unknown };
       if (!p.id) return;
+      const changed = scriptChangedOf(p.script_changed);
       setMessages((m) =>
         m.map((x) => {
           if (!x.perm || x.perm.request_id !== p.id) return x;
           const state: PermissionState = p.choice === 'paste' ? 'pasted' : p.behavior === 'allow' ? 'allowed' : 'denied';
-          return { ...x, perm: { ...x.perm, state } };
+          return { ...x, perm: { ...x.perm, state, ...(changed.length ? { script_changed: changed } : {}) } };
         }),
       );
       // Clear the "action requise" badge in the sidebar as soon as the
@@ -7605,6 +7614,8 @@ function PermissionCard({
                   {inputPreview}
                 </pre>
               )}
+              {perm.script_previews && <ScriptPreviewList previews={perm.script_previews} />}
+              {perm.script_changed && <ScriptChangedNotice paths={perm.script_changed} />}
               <div className="mt-3 flex items-center gap-2">
                 {effectiveState === 'pending' ? (
                   <>
