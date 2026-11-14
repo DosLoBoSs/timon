@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import { BrandMark } from '@/components/brand-mark';
 import { blankForm, formOf, type CustomBackend } from './form';
 import { API, EndpointFields, MANAGE_API, VerdictLine, connectionEditable, errorText, useEndpointDraft, type ProtocolOption } from './endpoint-form';
-import { ProvidersPanel } from './provider-catalog';
+import { ProviderCatalog } from './provider-catalog';
 import { ProvidersList } from './providers-list';
 import { SidePanel } from './side-panel';
 import { HINT } from './type-scale';
@@ -306,7 +306,7 @@ export function BackendsSettings({ onOpenProvider }: { onOpenProvider: (id: stri
       <p className="mt-6 max-w-3xl text-xs leading-relaxed text-muted-foreground">{t('backendsSettings.reorderHint')}</p>
 
       <div key={generation}>
-        <ProvidersPanel />
+        <ProviderCatalog onOpen={onOpenProvider} />
       </div>
     </div>
   );

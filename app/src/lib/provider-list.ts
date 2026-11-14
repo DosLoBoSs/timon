@@ -5,7 +5,7 @@
  */
 import { checkProviderClis } from '@/lib/provider-clis';
 import { recheckBinaries } from '@/lib/backend-binaries';
-import { fetchAcpRegistry } from '@/lib/providers';
+import { fetchAcpRegistry, type AcpAgent } from '@/lib/providers';
 import { t } from '@/lib/i18n';
 import { statusTone, type ProviderOverview } from '@/lib/provider-overview';
 
@@ -34,6 +34,13 @@ export function groupProviders(providers: readonly ProviderOverview[], query = '
     connected: kept.filter((provider) => statusTone(provider.status) === 'ready'),
     others: kept.filter((provider) => statusTone(provider.status) !== 'ready'),
   };
+}
+
+/** The catalogue's search: the agent's name, id and description, case and accents ignored. */
+export function filterAcpAgents(agents: readonly AcpAgent[], query = ''): AcpAgent[] {
+  const needle = fold(query.trim());
+  if (!needle) return [...agents];
+  return agents.filter((agent) => [agent.name, agent.id, agent.description ?? ''].some((text) => fold(text).includes(needle)));
 }
 
 export type DefaultChoice = { backend: string; label: string; brand: string | null; icon: string | null };

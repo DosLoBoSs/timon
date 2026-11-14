@@ -1,31 +1,44 @@
 'use client';
 
 /**
- * Settings → AI models → Providers: the agents of the official ACP registry.
- * What a provider plugin may run is reviewed on that provider's own page
- * (its Program section), not here.
+ * Settings › AI models › Providers › Add a provider › Catalog: the agents of
+ * the official ACP registry, with a search and one state line each. An agent
+ * installed here becomes a provider of the list, with its page. What a
+ * provider plugin may run is reviewed on that page (its Program section).
  *
- * Superadmin only, and the daemon is what enforces it: this panel renders
- * nothing when the provider plugins' list, which only a superadmin reads, is
- * refused. Nothing is downloaded before a click on a confirmation that names it.
+ * Superadmin only, and the daemon is what enforces it: a refused read shows
+ * its reason. The registry is a third-party CDN: it is read when the catalog
+ * is chosen, and nothing is downloaded before a click that names it.
  */
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
-import { AlertTriangle, CheckCircle2, Copy, Download, KeyRound, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
+import { AlertTriangle, CheckCircle2, ChevronRight, Copy, Download, KeyRound, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { TonePill } from '@/components/provider-page/provider-status-pill';
 import {
-  acpAction, fetchAcpAuthMethods, fetchAcpRegistry, fetchProviders, installAcpAgent, orderAuthMethods, removeAcpAgent,
+  acpAction, acpStateLine, fetchAcpAuthMethods, fetchAcpRegistry, installAcpAgent, orderAuthMethods, removeAcpAgent,
   type AcpAgent, type AcpAuthMethod, type AcpRegistry,
 } from '@/lib/providers';
+import { filterAcpAgents } from '@/lib/provider-list';
 import { t } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 
-export function ProvidersPanel(): ReactElement | null {
-  // `null` until the daemon answered: only a superadmin signed in to the app reads the provider plugins.
-  const [allowed, setAllowed] = useState<boolean | null>(null);
+/** The provider id the daemon's overview gives an installed catalogue agent (`provider-overview.ts`). */
+export function catalogProviderId(agentId: string): string {
+  return `catalog:${agentId}`;
+}
+
+export function ProviderCatalog({ onOpen }: {
+  /** Opens the page of the provider an installed agent became. */
+  onOpen: (providerId: string) => void;
+}): ReactElement {
   const [registry, setRegistry] = useState<AcpRegistry | null>(null);
   const [registryError, setRegistryError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   // An ACP agent whose build carries no checksum, waiting for the person's explicit go.
   const [unverified, setUnverified] = useState<AcpAgent | null>(null);
@@ -34,15 +47,13 @@ export function ProvidersPanel(): ReactElement | null {
 
   const loadRegistry = useCallback(async (refresh = false) => {
     setRegistryError(null);
-    try { setRegistry(await fetchAcpRegistry(refresh)); } catch (err) { setRegistryError((err as Error).message); }
+    setRefreshing(refresh);
+    try { setRegistry(await fetchAcpRegistry(refresh)); } catch (err) { setRegistryError((err as Error).message); } finally { setRefreshing(false); }
   }, []);
 
-  useEffect(() => {
-    // The registry is a third-party CDN: it is read when asked, never on open.
-    let gone = false;
-    fetchProviders().then(() => { if (!gone) setAllowed(true); }, () => { if (!gone) setAllowed(false); });
-    return () => { gone = true; };
-  }, []);
+  useEffect(() => { void loadRegistry(); }, [loadRegistry]);
+
+  const agents = useMemo(() => filterAcpAgents(registry?.agents ?? [], query), [registry, query]);
 
   const run = async (key: string, work: () => Promise<void>): Promise<void> => {
     setBusy(key);
@@ -75,45 +86,46 @@ export function ProvidersPanel(): ReactElement | null {
     await loadRegistry();
   });
 
-  // Not a superadmin, or an older daemon: nothing to offer.
-  if (allowed !== true) return null;
-
   return (
-    <section className="mt-8 max-w-3xl space-y-6" aria-labelledby="providers-acp-title">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 id="providers-acp-title" className="m-0 text-sm font-semibold">{t('providersSettings.acp.title')}</h3>
-          {registry && (
-            <Button size="sm" variant="ghost" className="h-7 gap-1.5 px-2 text-xs" disabled={busy !== null} onClick={() => void loadRegistry(true)}>
-              <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-              {t('providersSettings.acp.refresh')}
-            </Button>
-          )}
-        </div>
-        <p className="m-0 text-xs leading-relaxed text-muted-foreground">{t('providersSettings.acp.description')}</p>
-        {!registry && !registryError && (
-          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy !== null} onClick={() => void loadRegistry()}>
-            {t('providersSettings.acp.browse')}
-          </Button>
-        )}
-        {registry?.stale && <p className="m-0 text-xs text-amber-700 dark:text-amber-300">{t('providersSettings.acp.stale')}</p>}
-        {registryError && <p className="m-0 text-xs text-destructive" role="alert">{registryError}</p>}
-        {registry && (
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {registry.agents.map((agent) => (
-              <AcpRow
-                key={agent.id}
-                agent={agent}
-                busy={busy}
-                signIn={signIns[agent.id] ?? null}
-                onInstall={() => (agent.integrity === 'none' ? setUnverified(agent) : void install(agent, false))}
-                onSignIn={() => void toggleSignIn(agent)}
-                onRemove={() => void remove(agent)}
-              />
-            ))}
-          </ul>
-        )}
+    <section className="space-y-3" aria-labelledby="providers-catalog-title" data-provider-catalog>
+      <div className="space-y-1">
+        <h4 id="providers-catalog-title" className="m-0 text-sm font-semibold">{t('providersSettings.acp.title')}</h4>
+        <p className="m-0 max-w-[70ch] text-xs leading-relaxed text-muted-foreground">{t('providersSettings.acp.description')}</p>
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-48 max-w-sm flex-1">
+          <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)}
+            placeholder={t('providersSettings.acp.search')} aria-label={t('providersSettings.acp.search')} className="h-8 pl-8 text-[13px]" />
+        </div>
+        <Button type="button" size="sm" variant="ghost" className="h-8 gap-1.5" disabled={busy !== null || refreshing} onClick={() => void loadRegistry(true)}>
+          <RefreshCw aria-hidden className={cn('size-3.5', refreshing && 'animate-spin')} />
+          {t('providersSettings.acp.refresh')}
+        </Button>
+      </div>
+      {registry?.stale && <p className="m-0 text-xs text-amber-700 dark:text-amber-300">{t('providersSettings.acp.stale')}</p>}
+      {registryError && <p className="m-0 text-xs text-destructive" role="alert">{registryError}</p>}
+      {!registry && !registryError && <p className="m-0 text-[13px] text-muted-foreground">{t('common.loading')}</p>}
+      {registry && registry.agents.length === 0 && <p className="m-0 text-[13px] text-muted-foreground">{t('providersSettings.acp.empty')}</p>}
+      {registry && registry.agents.length > 0 && agents.length === 0 && (
+        <p className="m-0 text-[13px] text-muted-foreground">{t('providersSettings.acp.noMatch', { query: query.trim() })}</p>
+      )}
+      {agents.length > 0 && (
+        <ul className="m-0 flex list-none flex-col gap-0.5 rounded-xl bg-card p-1 shadow-elev-1">
+          {agents.map((agent) => (
+            <CatalogRow
+              key={agent.id}
+              agent={agent}
+              busy={busy}
+              signIn={signIns[agent.id] ?? null}
+              onInstall={() => (agent.integrity === 'none' ? setUnverified(agent) : void install(agent, false))}
+              onOpen={() => onOpen(catalogProviderId(agent.id))}
+              onSignIn={() => void toggleSignIn(agent)}
+              onRemove={() => void remove(agent)}
+            />
+          ))}
+        </ul>
+      )}
 
       <Dialog open={unverified !== null} onOpenChange={(open) => { if (!open && busy === null) setUnverified(null); }}>
         <DialogContent className="sm:max-w-lg">
@@ -137,71 +149,52 @@ export function ProvidersPanel(): ReactElement | null {
   );
 }
 
-function AcpRow({
-  agent, busy, signIn, onInstall, onSignIn, onRemove,
+function CatalogRow({
+  agent, busy, signIn, onInstall, onOpen, onSignIn, onRemove,
 }: {
-  agent: AcpAgent; busy: string | null; signIn: AcpAuthMethod[] | null; onInstall: () => void; onSignIn: () => void; onRemove: () => void;
+  agent: AcpAgent; busy: string | null; signIn: AcpAuthMethod[] | null;
+  onInstall: () => void; onOpen: () => void; onSignIn: () => void; onRemove: () => void;
 }): ReactElement {
   const action = acpAction(agent);
+  const line = acpStateLine(agent);
   const working = busy === `install:${agent.id}`;
   const asking = busy === `auth:${agent.id}`;
   const runnable = agent.installed !== null && agent.installed.state === 'ok';
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-muted/30 px-3 py-2">
-      <div className="min-w-0 flex-1">
-        <p className="m-0 flex flex-wrap items-center gap-2 text-[13px] font-medium">
-          {agent.name}
-          <span className="text-[11px] font-normal tabular-nums text-muted-foreground">{agent.version}</span>
-          {agent.supported && agent.integrity === 'sha256' && (
-            <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-800 dark:text-emerald-300">
-              <CheckCircle2 className="h-3 w-3" aria-hidden />{t('providersSettings.acp.verified')}
-            </Badge>
-          )}
-          {agent.supported && agent.integrity === 'none' && (
-            <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-800 dark:text-amber-300">
-              <AlertTriangle className="h-3 w-3" aria-hidden />{t('providersSettings.acp.noHash')}
-            </Badge>
-          )}
-          {agent.installed && (
-            <Badge variant={agent.installed.state === 'ok' ? 'default' : 'destructive'}>
-              {t(`providersSettings.acp.state.${agent.installed.state}`, { version: agent.installed.version })}
-            </Badge>
-          )}
-          {agent.installed?.integrity === 'unverified' && (
-            <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-800 dark:text-amber-300">
-              <AlertTriangle className="h-3 w-3" aria-hidden />{t('providersSettings.acp.unverified')}
-            </Badge>
-          )}
-        </p>
-        <p className="m-0 truncate text-[11px] text-muted-foreground">
-          {agent.supported ? agent.description ?? '' : t('providersSettings.acp.unsupported', { reason: agent.reason ?? '' })}
-        </p>
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2.5" data-catalog-agent={agent.id}>
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <p className="m-0 truncate text-[13px] font-medium">{agent.name}</p>
+        <TonePill tone={line.tone} className="flex" data-catalog-state={line.key.split('.').pop() ?? ''}>{t(line.key, line.vars)}</TonePill>
+        {agent.supported && agent.description ? <p className="m-0 truncate text-[11px] text-muted-foreground">{agent.description}</p> : null}
       </div>
-      {action !== 'none' && (
-        <Button size="sm" className="h-7 gap-1.5 text-xs" disabled={busy !== null} onClick={onInstall}>
-          {action === 'verify' ? <ShieldCheck className="h-3.5 w-3.5" aria-hidden /> : <Download className="h-3.5 w-3.5" aria-hidden />}
-          {working ? t('providersSettings.acp.installing') : t(`providersSettings.acp.${action}`)}
-        </Button>
-      )}
-      {runnable && (
-        <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" disabled={busy !== null} aria-expanded={signIn !== null} onClick={onSignIn}>
-          <KeyRound className="h-3.5 w-3.5" aria-hidden />
-          {asking
-            ? t('providersSettings.acp.signIn.loading', { name: agent.name })
-            : t(signIn ? 'providersSettings.acp.signIn.hide' : 'providersSettings.acp.signIn.show')}
-        </Button>
-      )}
-      {agent.installed && (
-        <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" disabled={busy !== null} onClick={onRemove}>
-          <Trash2 className="h-3.5 w-3.5" aria-hidden />
-          {t('providersSettings.acp.remove')}
-        </Button>
-      )}
-      {action === 'verify' && agent.installed && (
-        <p className="m-0 basis-full text-xs leading-relaxed text-amber-800 dark:text-amber-300">
-          {t('providersSettings.acp.verifiedUpdate', { installed: agent.installed.version, version: agent.version })}
-        </p>
-      )}
+      <div className="flex shrink-0 flex-wrap items-center gap-1">
+        {action !== 'none' && (
+          <Button size="sm" className="h-7 gap-1.5 text-xs" disabled={busy !== null} onClick={onInstall}>
+            {action === 'verify' ? <ShieldCheck className="h-3.5 w-3.5" aria-hidden /> : <Download className="h-3.5 w-3.5" aria-hidden />}
+            {working ? t('providersSettings.acp.installing') : t(`providersSettings.acp.${action}`)}
+          </Button>
+        )}
+        {runnable && (
+          <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" disabled={busy !== null} aria-expanded={signIn !== null} onClick={onSignIn}>
+            <KeyRound className="h-3.5 w-3.5" aria-hidden />
+            {asking
+              ? t('providersSettings.acp.signIn.loading', { name: agent.name })
+              : t(signIn ? 'providersSettings.acp.signIn.hide' : 'providersSettings.acp.signIn.show')}
+          </Button>
+        )}
+        {agent.installed && (
+          <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" disabled={busy !== null} onClick={onRemove}>
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+            {t('providersSettings.acp.remove')}
+          </Button>
+        )}
+        {runnable && (
+          <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" disabled={busy !== null} onClick={onOpen}>
+            {t('providersSettings.acp.open')}
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+          </Button>
+        )}
+      </div>
       {signIn && <SignInMethods agentName={agent.name} methods={signIn} />}
     </li>
   );
@@ -221,7 +214,7 @@ function SignInMethods({ agentName, methods }: { agentName: string; methods: Acp
     <div className="basis-full space-y-2 pt-1">
       <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
         {methods.map((method) => (
-          <li key={method.id} className="space-y-1 rounded-md bg-background/60 px-2.5 py-2 text-xs">
+          <li key={method.id} className="space-y-1 rounded-md bg-muted/50 px-2.5 py-2 text-xs">
             <p className="m-0 flex flex-wrap items-center gap-2">
               <span className="font-medium">{method.name}</span>
               {method.recommended && (

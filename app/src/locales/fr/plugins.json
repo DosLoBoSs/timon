@@ -427,14 +427,10 @@
       }
     },
     "acp": {
-      "title": "Registre ACP",
-      "description": "Agents publiés dans le registre officiel Agent Client Protocol. Timon télécharge le programme, le vérifie et le lance comme un backend.",
-      "browse": "Parcourir le registre",
+      "title": "Catalogue",
+      "description": "Agents publiés dans le registre officiel Agent Client Protocol. Timon télécharge le programme, le vérifie et le lance comme un fournisseur.",
       "refresh": "Actualiser",
       "stale": "Le registre est injoignable ; voici la dernière liste lue par Timon.",
-      "verified": "sha256 vérifié",
-      "noHash": "Pas de hash publié",
-      "unsupported": "Indisponible ici : {reason}",
       "install": "Installer",
       "update": "Mettre à jour",
       "repair": "Réinstaller",
@@ -443,18 +439,10 @@
       "installed": "{name} est installé.",
       "updated": "{name} est à jour.",
       "removed": "{name} a été retiré.",
-      "state": {
-        "ok": "Installé {version}",
-        "tampered": "Fichiers modifiés — non utilisé",
-        "missing": "Fichiers manquants",
-        "pending": "Vérification de {version}…"
-      },
       "confirmTitle": "Installer {name} sans hash publié ?",
       "confirmBody": "Le registre ne donne aucune somme de contrôle pour ce programme. Son intégrité repose sur le seul téléchargement https. N'installez que si vous faites confiance à son éditeur.",
       "confirmAction": "Installer quand même",
       "verify": "Installer la version vérifiée",
-      "unverified": "Non vérifié",
-      "verifiedUpdate": "{installed} a été installé sans hash publié. Le registre publie maintenant un sha256 pour {version} : installez-la pour remplacer la version non vérifiée.",
       "signIn": {
         "show": "Méthodes de connexion",
         "hide": "Masquer les méthodes de connexion",
@@ -468,6 +456,25 @@
         "agentStep": "{name} mène cette étape lui-même quand un client ACP la lui demande, et Timon ne la lance pas. Faites-la une fois depuis un client qui la propose, ou utilisez le fournisseur de sa propre CLI si Timon en a un.",
         "copy": "Copier",
         "copied": "Commande copiée."
+      },
+      "search": "Rechercher dans le catalogue",
+      "noMatch": "Aucun agent ne correspond à « {query} ».",
+      "empty": "Le registre ne liste aucun agent.",
+      "open": "Ouvrir sa page",
+      "line": {
+        "available": "Version {version}, somme de contrôle vérifiée",
+        "availableUnverified": "Version {version}, aucune somme de contrôle publiée",
+        "unsupported": "Indisponible sur cet ordinateur : {reason}",
+        "installed": "{installed} installée, somme de contrôle vérifiée",
+        "unverified": "{installed} installée, aucune somme de contrôle publiée",
+        "installedUpdate": "{installed} installée · {version} vérifiée disponible",
+        "installedUpdateUnverified": "{installed} installée · {version} disponible, sans somme de contrôle publiée",
+        "unverifiedUpdate": "{installed} installée sans somme de contrôle publiée · {version} vérifiée disponible",
+        "unverifiedUpdateUnverified": "{installed} installée sans somme de contrôle publiée · {version} disponible, sans somme de contrôle non plus",
+        "unverifiedVerifiedUpdate": "{installed} installée sans somme de contrôle publiée · {version} vérifiée disponible pour la remplacer",
+        "tampered": "{installed} installée : ses fichiers ont changé, Timon ne l'utilise pas",
+        "missing": "{installed} installée : ses fichiers manquent",
+        "pending": "Vérification de {installed}…"
       }
     },
     "errors": {

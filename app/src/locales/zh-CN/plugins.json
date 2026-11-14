@@ -410,12 +410,8 @@
     "acp": {
       "title": "ACP 注册表",
       "description": "浏览官方 Agent Client Protocol 注册表中发布的智能体。Timon 会下载并检查程序，然后将其作为后端运行。",
-      "browse": "浏览注册表",
       "refresh": "刷新",
       "stale": "无法连接注册表，当前显示 Timon 上次读取的列表。",
-      "verified": "SHA-256 已验证",
-      "noHash": "未发布哈希值",
-      "unsupported": "此处不可用：{reason}",
       "install": "安装",
       "update": "更新",
       "repair": "重新安装",
@@ -424,12 +420,6 @@
       "installed": "已安装 {name}。",
       "updated": "{name} 已是最新版本。",
       "removed": "已移除 {name}。",
-      "state": {
-        "ok": "已安装 {version}",
-        "tampered": "文件已被修改，不会使用",
-        "missing": "文件缺失",
-        "pending": "正在检查 {version}…"
-      },
       "confirmTitle": "要安装未发布哈希值的 {name} 吗？",
       "confirmBody": "注册表未提供此程序的校验和。文件完整性仅由 HTTPS 下载保障。请仅在信任其发布者时安装。",
       "confirmAction": "仍然安装"

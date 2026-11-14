@@ -400,12 +400,8 @@
     "acp": {
       "title": "ACP-Registry",
       "description": "Agenten aus der offiziellen Registry des Agent Client Protocol. Timon lädt das Programm herunter, prüft es und führt es als Backend aus.",
-      "browse": "Registry durchsuchen",
       "refresh": "Aktualisieren",
       "stale": "Die Registry war nicht erreichbar; dies ist die letzte Liste, die Timon gelesen hat.",
-      "verified": "sha256 verifiziert",
-      "noHash": "Kein veröffentlichter Hash",
-      "unsupported": "Hier nicht verfügbar: {reason}",
       "install": "Installieren",
       "update": "Aktualisieren",
       "repair": "Neu installieren",
@@ -414,12 +410,6 @@
       "installed": "{name} ist installiert.",
       "updated": "{name} ist aktuell.",
       "removed": "{name} wurde entfernt.",
-      "state": {
-        "ok": "Installiert {version}",
-        "tampered": "Dateien geändert — nicht verwendet",
-        "missing": "Dateien fehlen",
-        "pending": "{version} wird geprüft…"
-      },
       "confirmTitle": "{name} ohne veröffentlichten Hash installieren?",
       "confirmBody": "Die Registry gibt für dieses Programm keine Prüfsumme an. Seine Integrität beruht allein auf dem https-Download. Installiere es nur, wenn du seinem Herausgeber vertraust.",
       "confirmAction": "Trotzdem installieren"

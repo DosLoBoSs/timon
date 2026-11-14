@@ -400,12 +400,8 @@
     "acp": {
       "title": "ACP-register",
       "description": "Agents uit het officiële register van het Agent Client Protocol. Timon downloadt het programma, controleert het en draait het als backend.",
-      "browse": "Register doorbladeren",
       "refresh": "Vernieuwen",
       "stale": "Het register was niet bereikbaar; dit is de laatste lijst die Timon las.",
-      "verified": "sha256 geverifieerd",
-      "noHash": "Geen gepubliceerde hash",
-      "unsupported": "Hier niet beschikbaar: {reason}",
       "install": "Installeren",
       "update": "Bijwerken",
       "repair": "Opnieuw installeren",
@@ -414,12 +410,6 @@
       "installed": "{name} is geïnstalleerd.",
       "updated": "{name} is bijgewerkt.",
       "removed": "{name} is verwijderd.",
-      "state": {
-        "ok": "Geïnstalleerd {version}",
-        "tampered": "Bestanden gewijzigd — niet gebruikt",
-        "missing": "Bestanden ontbreken",
-        "pending": "{version} controleren…"
-      },
       "confirmTitle": "{name} installeren zonder gepubliceerde hash?",
       "confirmBody": "Het register geeft geen controlesom voor dit programma. De integriteit berust alleen op de https-download. Installeer het alleen als je de uitgever vertrouwt.",
       "confirmAction": "Toch installeren"

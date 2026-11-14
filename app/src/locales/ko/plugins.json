@@ -400,12 +400,8 @@
     "acp": {
       "title": "ACP 레지스트리",
       "description": "공식 Agent Client Protocol 레지스트리에 게시된 에이전트. Timon이 프로그램을 다운로드하고 확인한 뒤 백엔드로 실행합니다.",
-      "browse": "레지스트리 둘러보기",
       "refresh": "새로 고침",
       "stale": "레지스트리에 연결할 수 없습니다. 이것은 Timon이 마지막으로 읽은 목록입니다.",
-      "verified": "sha256 확인됨",
-      "noHash": "게시된 해시 없음",
-      "unsupported": "여기서는 사용할 수 없음: {reason}",
       "install": "설치",
       "update": "업데이트",
       "repair": "다시 설치",
@@ -414,12 +410,6 @@
       "installed": "{name}이(가) 설치되었습니다.",
       "updated": "{name}은(는) 최신 상태입니다.",
       "removed": "{name}이(가) 제거되었습니다.",
-      "state": {
-        "ok": "{version} 설치됨",
-        "tampered": "파일이 바뀜 — 사용 안 함",
-        "missing": "파일 없음",
-        "pending": "{version} 확인 중…"
-      },
       "confirmTitle": "게시된 해시 없이 {name}을(를) 설치하시겠습니까?",
       "confirmBody": "레지스트리가 이 프로그램의 체크섬을 제공하지 않습니다. 무결성은 https 다운로드에만 의존합니다. 게시자를 신뢰할 때만 설치하세요.",
       "confirmAction": "그래도 설치"
