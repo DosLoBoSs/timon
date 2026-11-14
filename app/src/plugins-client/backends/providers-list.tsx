@@ -40,13 +40,11 @@ const PREFERRED_KEY = 'TIMON_PREFERRED_BACKEND';
 /** The selector's "let Timon choose" entry; never a backend id (those are slugs). */
 const AUTO = '__auto__';
 
-export function ProvidersList({ onOpen, onAdd, onVerified, readOnly = false }: {
+export function ProvidersList({ onOpen, onAdd, readOnly = false }: {
   /** Opens the page of one provider (`useProviderNavigation().open`). */
   onOpen: (id: string) => void;
   /** Opens the "Add a provider" page (`useProviderNavigation().add`). */
   onAdd?: () => void;
-  /** After a Check: the blocks still below the list read their sources again. */
-  onVerified?: () => void;
   /** The own-accounts level: the list and its search, without the default provider, Reorder or Check. */
   readOnly?: boolean;
 }): ReactElement {
@@ -78,9 +76,8 @@ export function ProvidersList({ onOpen, onAdd, onVerified, readOnly = false }: {
     } finally {
       setVerifying(false);
       await load();
-      onVerified?.();
     }
-  }, [load, onVerified]);
+  }, [load]);
 
   if (loaded.kind === 'loading') return <p className="m-0 text-[13px] text-muted-foreground">{t('common.loading')}</p>;
   if (loaded.kind === 'failed') return <p role="alert" className="m-0 text-[13px] text-destructive">{loaded.message}</p>;

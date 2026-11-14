@@ -8,9 +8,10 @@
  * launch's card opens Settings with, so that card lands on its provider's page.
  *
  * Painted at the viewer's level (`lib/provider-access.ts`): `full` gets every
- * section, the on/off switch and the editing below the list; `accounts` the
- * list read only and, on a page, the Connection section alone, with its own
- * subscription accounts; `none` has no tab, and a pasted link reads a refusal.
+ * section and the on/off switch of a page, the default provider, Reorder,
+ * Check and "Add a provider" on the list; `accounts` the list read only and,
+ * on a page, the Connection section alone, with its own subscription
+ * accounts; `none` has no tab, and a pasted link reads a refusal.
  */
 import type { ReactElement } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -20,7 +21,6 @@ import { ADD_PROVIDER_PARAM, PROVIDER_PARAM, addProviderChoice } from '@/lib/pro
 import { useProviderNavigation } from '@/lib/settings-navigation';
 import { t } from '@/lib/i18n';
 import { AddProvider } from './add-provider';
-import { BackendsSettings } from './backends-settings';
 import { ProviderActivation } from './provider-activation';
 import { ProvidersList } from './providers-list';
 
@@ -44,12 +44,11 @@ export function ProvidersSettings(): ReactElement {
   if (full && adding !== null) {
     return <AddProvider choice={addProviderChoice(adding)} onChoose={navigation.choose} onBack={navigation.back} onAdded={navigation.show} />;
   }
-  if (full) return <BackendsSettings onOpenProvider={navigation.open} onAddProvider={navigation.add} />;
   return (
     <div className="pt-4">
-      <p className="max-w-3xl text-[13px] leading-relaxed text-muted-foreground">{t('providerList.ownAccountsIntro')}</p>
+      <p className="max-w-3xl text-[13px] leading-relaxed text-muted-foreground">{t(full ? 'backendsSettings.intro' : 'providerList.ownAccountsIntro')}</p>
       <div className="mt-5 max-w-3xl">
-        <ProvidersList onOpen={navigation.open} readOnly />
+        {full ? <ProvidersList onOpen={navigation.open} onAdd={navigation.add} /> : <ProvidersList onOpen={navigation.open} readOnly />}
       </div>
     </div>
   );

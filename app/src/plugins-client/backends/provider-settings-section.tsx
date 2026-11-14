@@ -9,10 +9,11 @@
  * sections, registered right after this one (`order` 400 to 500).
  *
  * The key is write-only, as everywhere: the daemon never sends it back, so the
- * field is empty and typing one replaces the stored key.
+ * field is empty and typing one replaces the stored key. What the daemon warns
+ * about the backend's file (a credential written in clear text) heads it.
  */
 import { useId, useState, type ReactElement } from 'react';
-import { CheckCircle2, ChevronRight, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronRight, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -136,6 +137,12 @@ function BackendSettings({ backend, protocols, titled, onSaved, onRemoved }: {
   return (
     <div className="space-y-4" data-provider-settings={backend.id}>
       {titled ? <p className={cn(LABEL, 'm-0')}>{backend.label}</p> : null}
+      {backend.warnings.map((warning) => (
+        <p key={warning} className="m-0 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400" data-backend-warning>
+          <AlertTriangle aria-hidden className="mt-px size-3.5 shrink-0" />
+          <span>{warning}</span>
+        </p>
+      ))}
       <div className="space-y-1.5">
         <Label className={LABEL} htmlFor={`${id}-name`}>{t('providerPage.settings.name')}</Label>
         <Input className={cn(FIELD, 'max-w-sm')} id={`${id}-name`} value={draft.name} autoComplete="off"

@@ -193,22 +193,22 @@ test('the list paints the default provider, both groups and the rows; the search
   }
 });
 
-test('one Check asks every source again, reads the list again and tells the blocks below', async () => {
+test('one Check asks every source again, then reads the list again', async () => {
   const s = server();
   s.fail.add('/api/ui/backends/binaries/recheck');
   const m = await mount(s);
   try {
-    let verified = 0;
-    await m.render(m.React.createElement(m.list.ProvidersList, { onOpen: () => {}, onVerified: () => { verified += 1; } }));
+    await m.render(m.React.createElement(m.list.ProvidersList, { onOpen: () => {} }));
     await m.until(() => document.querySelector('[data-provider-row]') !== null, 'the rows');
-    const before = s.calls.filter((call) => call === 'GET /api/ui/providers/overview').length;
+    const reads = () => s.calls.filter((call) => call === 'GET /api/ui/providers/overview').length;
+    const before = reads();
     const check = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Check');
     await m.click(check);
-    await m.until(() => verified === 1, 'the check to end');
+    await m.until(() => reads() === before + 1, 'the check to end');
     assert.ok(s.calls.includes('POST /api/ui/backends/provider-clis/check'));
     assert.ok(s.calls.includes('POST /api/ui/backends/binaries/recheck'));
     assert.ok(s.calls.includes('GET /api/ui/providers/acp-registry?refresh=1'));
-    assert.equal(s.calls.filter((call) => call === 'GET /api/ui/providers/overview').length, before + 1, 'the overview is read again');
+    assert.equal(reads(), before + 1, 'the overview is read again');
   } finally {
     await m.unmount();
   }
