@@ -43,7 +43,7 @@ timon service status
 timon doctor
 ```
 
-The user service is named `timon-orchestrator`. Installation requests user lingering so it starts at boot and survives logout; see [Running in the background](background.md). On Linux without systemd, setup reports portable mode: closing the application also stops the embedded daemon and the programs of its running missions.
+The user service is named `timon-orchestrator`. It runs while you are logged in; to keep it running at boot and after logout, run `timon service session-mode always`, which turns on user lingering (`loginctl enable-linger`). Setup asks the same question; see [Running in the background](background.md#choose-whether-timon-keeps-running-when-you-log-out). On Linux without systemd, setup reports portable mode: closing the application also stops the embedded daemon and the programs of its running missions.
 
 Open the configured web-app address (for the configuration example, `http://127.0.0.1:3100`) and complete [First run](first-run.md); if the web app listens on something other than the loopback, the form asks for the token printed by `timon setup-token` on the server. On a server without a screen, that address only answers on the server itself: see [Remote access to the web interface](remote-access.md).
 
