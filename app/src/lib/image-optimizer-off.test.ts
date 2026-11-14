@@ -45,13 +45,18 @@ function shippedImageHandler(server: object): ImageHandler {
   const source = readFileSync(file, 'utf8');
   const start = source.indexOf('this.handleNextImageRequest = async (req, res, parsedUrl)=>{');
   const end = source.indexOf('this.handleCatchallRenderRequest =', start);
-  assert.ok(start > 0 && end > start, 'handleNextImageRequest not found where Next 14.2 defines it');
-  const body = source.slice(start, end).replace('this.handleNextImageRequest =', '').trim().replace(/;$/, '');
-  const factory = new Function('require', 'process', `return function () { return ${body}; };`) as (
+  assert.ok(start > 0 && end > start, 'handleNextImageRequest not found where Next 15.5 defines it');
+  // Next 15 chains the constructor's assignments with commas: the slice ends
+  // on `},` there, and on `};` in the older layout.
+  const body = source.slice(start, end).replace('this.handleNextImageRequest =', '').trim().replace(/[;,]$/, '');
+  const fileRequire = createRequire(file);
+  // The handler reads one module binding of `next-server.js` (`getRequestMeta`).
+  const factory = new Function('require', 'process', '_requestmeta', `return function () { return ${body}; };`) as (
     req: NodeRequire,
     proc: NodeJS.Process,
+    requestMeta: unknown,
   ) => () => ImageHandler;
-  return factory(createRequire(file), process).call(server);
+  return factory(fileRequire, process, fileRequire('./request-meta')).call(server);
 }
 
 test('next.config.mjs switches the image optimizer off', () => {
@@ -88,4 +93,7 @@ test('/_next/image answers 404 before any fetch or decoding', async () => {
   );
   assert.equal(handled, true);
   assert.equal(notFound, 1);
+  // Next 15 installs sharp as an optional dependency: the refusal must come
+  // before the decoder is even loaded.
+  assert.equal(Object.keys(require.cache).some((k) => /[\\/]node_modules[\\/]sharp[\\/]/.test(k)), false);
 });
