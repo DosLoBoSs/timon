@@ -180,6 +180,8 @@ type Snapshot = {
   cards: Map<string, SetupBackend>;
   defaultBackend: string | null;
   agentsByBackend: Map<string, number>;
+  /** The subscription accounts the viewer may see, every backend at once. */
+  accounts: ReturnType<typeof listBackendAccountsFor>;
 };
 
 /** Agents per backend id, read once per overview: `listAgents` already resolves the implicit default. */
@@ -191,7 +193,7 @@ function agentsByBackend(): Map<string, number> {
   return counts;
 }
 
-function snapshot(): Snapshot {
+function snapshot(viewer: DbViewer): Snapshot {
   const providerOf = new Map(providerClis().map((cli) => [cli.name, cli.provider]));
   const cards = new Map<string, SetupBackend>();
   for (const card of setupBackends(process.platform, undefined, (provider) => providerSignedIn(provider))) {
@@ -209,6 +211,7 @@ function snapshot(): Snapshot {
     cards,
     defaultBackend: tryDefaultBackendName(),
     agentsByBackend: agentsByBackend(),
+    accounts: listBackendAccountsFor(viewer),
   };
 }
 
@@ -435,7 +438,7 @@ function overviewOf(group: Group, snap: Snapshot, viewer: DbViewer): ProviderOve
   const card = group.backendIds.map((id) => snap.cards.get(id)).find((entry) => entry !== undefined);
   const looks = first ? looksOf(first, snap) : { brand: null, icon: null };
   const name = (first ? pickerName(first, snap) : null) ?? group.agent?.name ?? group.plugin?.manifest?.label ?? group.id;
-  const accounts = listBackendAccountsFor(viewer).filter((row) => group.backendIds.includes(row.backend)).map((row) => publicAccount(row, viewer));
+  const accounts = snap.accounts.filter((row) => group.backendIds.includes(row.backend)).map((row) => publicAccount(row, viewer));
   const secret = secretOf(group.backendIds, snap);
   const progs = programs(group, snap);
   const plugin = group.plugin;
@@ -502,7 +505,7 @@ function overviewOf(group: Group, snap: Snapshot, viewer: DbViewer): ProviderOve
 
 /** Every provider, the default one first, then in the order of the backends' ranks. */
 export function providersOverview(sources: OverviewSources): ProvidersOverview {
-  const snap = snapshot();
+  const snap = snapshot(sources.viewer);
   const list = groups(sources, snap).map((group) => ({ group, rank: rankOf(group, snap) }));
   const providers = list
     .map(({ group, rank }) => ({ rank, view: overviewOf(group, snap, sources.viewer) }))
