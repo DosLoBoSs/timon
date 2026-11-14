@@ -85,6 +85,17 @@ control. An exact model ID is sent unchanged; a display label does not create
 an alias. Newly added models appear first and carry a **New** badge for seven
 days. Renaming one does not restart that period.
 
+Each provider also has its own page, **Settings → AI models → Providers →
+_its name_**. Its **Models** section lists what the provider serves, with a
+search field and a line such as *3 of 12 models appear in the selector*; the
+eye of a row shows or hides that model in every model selector, and **Save**
+keeps the change. Its **Settings** section holds the name and picture the
+selectors show. For a provider you added yourself, **Advanced** holds its
+protocol, address and API key: the key field stays empty, typing one replaces
+the stored key, and **Test** checks the saved address with the stored key
+while you change nothing. The Claude page adds the **Claude long-lived token**
+section (see [macOS](../installation/macos.md#keep-timon-running-when-you-are-logged-out)).
+
 Each model row also has a **context window** field. Its placeholder shows the
 window Timon detected (for example `auto · 400k`). If the context gauge in the
 chat (the ring beside the send button, with the maximum in its centre)
@@ -115,9 +126,16 @@ If a tool is missing or installed somewhere unusual, type its full path (for exa
 
 **Settings → AI models → Auto switch** controls global fallback behaviour. The **Fallback model** control shows the last-resort backend and model currently set; click it to open the same [model picker](missions.md#choosing-a-model) as the chat and pick both together. **Remove** leaves no last resort (the switch stops at the model-equivalence step), and **Default** restores the shipped pair. The **Circuit breaker** tab next to it sidelines a backend after repeated sterile turns, and sets how many times Timon retries the turn of an unattended mission whose provider dropped the connection (3 by default, 0 turns it off). A series can override it by scope, and a task can carry an even more specific override. Unknown quota reset times are displayed as unknown; the cooldown is a fallback estimate, not a provider guarantee.
 
+### Connection and API key on a provider's page
+
+Choose a provider in **Settings → AI models → Providers** to open its page. Two sections deal with how Timon reaches it, each shown only when it applies:
+
+- **Connection** says whether this computer is signed in to the provider (**Signed in on this computer** or **Not signed in on this computer**). **Connect** types the provider's sign-in command in Timon's terminal, or copies it when no terminal is open; sign in through your browser, then click **Try again**. When the provider takes several subscriptions, its accounts are listed below, with the same gestures as described in [Subscription accounts](#subscription-accounts).
+- **API key** says whether the key the provider expects is in the vault (**Key saved** or **No key yet**) and lets you paste it. The key is reserved to that provider and never shown again: a saved key can only be replaced. **Open Secrets** leads to the vault for anything else, such as sharing the key or deleting it.
+
 ## Subscription accounts
 
-**Settings → AI models → Subscription accounts** lets you use several subscriptions of the same provider, for example a personal and a work Claude plan, or two ChatGPT plans for Codex. Each account appears in every model selector as its own choice (`Claude · Perso`), next to the provider's plain entry.
+An administrator manages a provider's subscription accounts in the **Connection** section of its page (**Settings → AI models → Providers**, then the provider). Any other user finds theirs in **Settings → AI models → Subscription accounts**. Either way you can use several subscriptions of the same provider, for example a personal and a work Claude plan, or two ChatGPT plans for Codex. Each account appears in every model selector as its own choice (`Claude · Perso`), next to the provider's plain entry.
 
 - **Add an account** asks for the provider and a name (administrators also choose who it is **For**: themselves, a user, or the instance), then starts the sign-in on the Timon machine while you stay in your browser.
 - A row shows the address the account is signed in as and its state: **Signed in**, **Not signed in**, **Sign in again** or **Out of quota**.

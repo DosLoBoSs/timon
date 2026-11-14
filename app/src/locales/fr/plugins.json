@@ -552,10 +552,52 @@
     "disabled": "Désactivé"
   },
   "providerPage": {
+    "models": {
+      "title": "Modèles",
+      "description": "Ce que sert ce fournisseur, et lesquels de ses modèles les sélecteurs de modèle proposent.",
+      "search": "Rechercher un modèle",
+      "count": "{shown} sur {total, plural, one {# modèle apparaît} other {# modèles apparaissent}} dans le sélecteur",
+      "saved": "Modèles enregistrés."
+    },
+    "settings": {
+      "title": "Réglages",
+      "description": "Comment ce fournisseur apparaît dans les sélecteurs de modèle.",
+      "name": "Nom dans les sélecteurs",
+      "advanced": "Avancé",
+      "advancedHint": "Où joindre ce fournisseur et avec quelle clé. À changer seulement s'il a déménagé ou si sa clé a changé.",
+      "remove": "Supprimer ce fournisseur",
+      "saved": "Réglages enregistrés."
+    },
     "breadcrumb": "Où vous êtes",
     "root": "Fournisseurs",
     "default": "Fournisseur par défaut",
     "agents": "{count, plural, =0 {Aucun agent ne l'utilise} one {# agent l'utilise} other {# agents l'utilisent}}",
+    "connection": {
+      "title": "Connexion",
+      "description": "Comment Timon se connecte à ce fournisseur : la connexion de cet ordinateur, et vos comptes d’abonnement quand vous en avez plusieurs.",
+      "signedIn": "Connecté sur cet ordinateur",
+      "signedOut": "Pas connecté sur cet ordinateur",
+      "connect": "Connecter",
+      "checkAgain": "Réessayer",
+      "accounts": {
+        "title": "Comptes d’abonnement",
+        "description": "Plusieurs abonnements de ce fournisseur, chacun choisi dans les sélecteurs de modèle. Une mission ne bascule jamais seule sur un autre abonnement."
+      }
+    },
+    "apiKey": {
+      "title": "Clé API",
+      "description": "La clé qu’attend ce fournisseur, gardée dans le coffre de Timon et réservée à ce fournisseur. Timon ne la réaffiche jamais : vous pouvez seulement la remplacer.",
+      "present": "Clé enregistrée",
+      "absent": "Aucune clé pour l’instant",
+      "environment": "Ce fournisseur lit sa clé dans une variable d’environnement de l’ordinateur où tourne Timon.",
+      "placeholder": "Collez la clé",
+      "replacePlaceholder": "Collez une nouvelle clé pour remplacer celle enregistrée",
+      "save": "Enregistrer",
+      "replace": "Remplacer",
+      "saved": "{name} enregistrée dans le coffre",
+      "openSecrets": "Ouvrir Secrets",
+      "errorGeneric": "La clé n’a pas pu être enregistrée. Réessayez."
+    },
     "program": {
       "title": "Programme",
       "waiting": "Le programme de ce fournisseur attend votre autorisation : Timon ne lance rien avant que vous l'ayez permis."
