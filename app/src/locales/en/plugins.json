@@ -544,10 +544,19 @@
   "providerPage": {
     "models": {
       "title": "Models",
-      "description": "What this provider serves, and which of its models the model selectors offer.",
       "search": "Search models",
       "count": "{shown} of {total, plural, one {# model appears} other {# models appear}} in the selector",
-      "saved": "Models saved."
+      "saved": "Models saved.",
+      "hideAll": "Hide all",
+      "showAll": "Show all",
+      "more": "More actions on the models",
+      "editList": "Edit or reorder the list",
+      "empty": "No model yet. Add the ones this provider serves.",
+      "default": "Default",
+      "setDefault": "Make it the default",
+      "edit": "Edit",
+      "editTitle": "Edit {name}",
+      "modelMore": "More actions for {name}"
     },
     "settings": {
       "title": "Settings",

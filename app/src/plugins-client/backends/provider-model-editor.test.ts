@@ -122,6 +122,8 @@ async function mount(backend: CustomBackend = BACKEND, protocols: unknown[] = []
   const patched = () => sent.find((call) => call.url === '/api/ui/backends/manage/deepseek');
   const unmount = async () => {
     await act(async () => { root.unmount(); });
+    // A dialog's focus trap lets go on a timer: let it run before the window goes.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
     slots.resetSlotsForTests();
     setLocale(previousLocale);
     dom.window.close();
@@ -130,7 +132,17 @@ async function mount(backend: CustomBackend = BACKEND, protocols: unknown[] = []
       else delete (globalThis as Record<string, unknown>)[name];
     }
   };
-  return { section, patched, until, key, click, type, unmount, act };
+  // The full editor is a mode, opened from the count row's "…" menu (from the keyboard: jsdom has no pointer events).
+  const editList = async () => {
+    const trigger = section('models')!.querySelector<HTMLElement>('button[data-row-menu]')!;
+    await act(async () => { trigger.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+    await until(() => document.querySelector('[role="menu"]') !== null, 'the models menu');
+    const item = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((el) => el.textContent === 'Edit or reorder the list');
+    if (!item) assert.fail('no "Edit or reorder the list" item');
+    await act(async () => { item.click(); });
+    await until(() => !!section('models')?.querySelector('[data-models-editor] [data-model-row]'), 'the list editor');
+  };
+  return { section, patched, until, key, click, type, unmount, act, editList };
 }
 
 function findText<T extends HTMLElement>(selector: string, text: string, scope: ParentNode = document): T | undefined {
@@ -148,6 +160,7 @@ function byText<T extends HTMLElement>(selector: string, text: string, scope: Pa
 test('models reorder from the keyboard with their handle, and the eye toggles their visibility', async () => {
   const ui = await mount();
   try {
+    await ui.editList();
     const models = ui.section('models')!;
     const slugs = () => Array.from(models.querySelectorAll<HTMLInputElement>('input[aria-label="deepseek-chat"]')).map((input) => input.value);
     assert.deepEqual(slugs(), ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder']);
@@ -231,6 +244,7 @@ test('a model\'s thinking shows what was detected, and a budget picked by hand i
   };
   const ui = await mount(backend, [{ protocol: 'anthropic', dialect: 'claude', installed: true, thinkingControls: ['levels', 'budget', 'toggle'] }]);
   try {
+    await ui.editList();
     const models = ui.section('models')!;
     const brains = Array.from(models.querySelectorAll<HTMLButtonElement>('button[aria-label="Thinking setting of this model"]'));
     assert.equal(brains.length, 3, 'one thinking button per model');
@@ -260,6 +274,7 @@ test('a model\'s thinking shows what was detected, and a budget picked by hand i
 test('without a dialect that sends a budget, only levels, as detected and "does not think" are offered', async () => {
   const ui = await mount();
   try {
+    await ui.editList();
     const models = ui.section('models')!;
     await ui.click(models.querySelector<HTMLButtonElement>('button[aria-label="Thinking setting of this model"]')!);
     await ui.until(() => /Detected:/.test(models.textContent ?? ''), 'the thinking setting to open');

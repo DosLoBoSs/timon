@@ -117,7 +117,7 @@ test('a provider page edits its models and its own settings, each saved apart', 
   });
   const count = () => section('models')?.querySelector('[data-models-count]')?.textContent;
   const rows = () => Array.from(section('models')?.querySelectorAll('[data-model-row]') ?? [])
-    .map((row) => (row.querySelector('input') as HTMLInputElement).value);
+    .map((row) => row.getAttribute('data-model-row'));
 
   try {
     await show('provider-claude');
@@ -127,11 +127,11 @@ test('a provider page edits its models and its own settings, each saved apart', 
 
     await type(section('models')!.querySelector('input[type="search"]') as HTMLInputElement, 'hai');
     assert.deepEqual(rows(), ['haiku']);
-    assert.equal(buttonIn(section('models'), 'Save'), undefined, 'nothing to save yet');
+    assert.equal(section('models')!.querySelectorAll('input:not([type="search"])').length, 0, 'the list reads, it is not a grid of fields');
+    assert.equal(buttonIn(section('models'), 'Save'), undefined, 'a switch saves by itself');
     await click(buttonIn(section('models'), 'Hidden from model selectors. Click to show it')!);
     assert.equal(count(), '3 of 3 models appear in the selector');
-    await click(buttonIn(section('models'), 'Save')!);
-    await until(() => sent.length === 1, 'the models save');
+    await until(() => sent.length === 1, 'the switch to save the models');
     assert.equal(sent[0]!.url, '/api/ui/backends/manage/claude');
     assert.deepEqual(Object.keys(sent[0]!.body).sort(), ['defaultModel', 'models'], 'a models save never resends the name');
     assert.equal((sent[0]!.body.models as { hidden?: boolean }[])[1]!.hidden, false);
@@ -179,4 +179,14 @@ test('a provider page edits its models and its own settings, each saved apart', 
       else delete (globalThis as Record<string, unknown>)[key];
     }
   }
+});
+
+test('a hidden default hands its place to the first model still offered; Hide all keeps it for when one comes back', async () => {
+  const { withVisibility, withAllVisibility } = await import('./provider-models-section');
+  const list = { models: [{ slug: 'opus', label: 'Opus' }, { slug: 'haiku', label: 'Haiku' }], defaultModel: 'opus' };
+  assert.deepEqual(withVisibility(list, 'opus', true), { models: [{ slug: 'opus', label: 'Opus', hidden: true }, { slug: 'haiku', label: 'Haiku' }], defaultModel: 'haiku' });
+  assert.equal(withVisibility(list, 'haiku', true).defaultModel, 'opus');
+  assert.deepEqual(withAllVisibility(list, true).models.map((model) => model.hidden), [true, true]);
+  assert.equal(withAllVisibility(list, true).defaultModel, 'opus');
+  assert.equal(withAllVisibility({ ...list, defaultModel: null }, false).defaultModel, 'opus');
 });

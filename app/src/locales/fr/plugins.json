@@ -534,10 +534,19 @@
   "providerPage": {
     "models": {
       "title": "Modèles",
-      "description": "Ce que sert ce fournisseur, et lesquels de ses modèles les sélecteurs de modèle proposent.",
       "search": "Rechercher un modèle",
       "count": "{shown} sur {total, plural, one {# modèle apparaît} other {# modèles apparaissent}} dans le sélecteur",
-      "saved": "Modèles enregistrés."
+      "saved": "Modèles enregistrés.",
+      "hideAll": "Tout masquer",
+      "showAll": "Tout afficher",
+      "more": "Plus d’actions sur les modèles",
+      "editList": "Modifier ou réorganiser la liste",
+      "empty": "Aucun modèle pour l’instant. Ajoutez ceux que sert ce fournisseur.",
+      "default": "Par défaut",
+      "setDefault": "En faire le modèle par défaut",
+      "edit": "Modifier",
+      "editTitle": "Modifier {name}",
+      "modelMore": "Plus d’actions pour {name}"
     },
     "settings": {
       "title": "Réglages",
