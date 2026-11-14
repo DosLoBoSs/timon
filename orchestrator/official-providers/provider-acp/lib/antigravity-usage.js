@@ -4,7 +4,8 @@
  * account `agy` is signed in to, as `agy` itself reports it.
  *
  * Why this path. Google's quota endpoint refuses any client but Antigravity's own (403 on a direct
- * call with the account's token), and the token sits in the OS keychain. `agy acp` starts a local
+ * call with the account's token), and the token sits in the OS keychain (in `agy`'s own folder on Linux,
+ * `agents.js`). `agy acp` starts a local
  * language server at `session/new`, in its own process, and that server answers
  * `RetrieveUserQuotaSummary` (Connect protocol, JSON over HTTP) with the figures it fetched under ITS
  * identity. So Timon reads no token, calls no Google host, and only asks the program the operator
@@ -22,7 +23,8 @@
  *    the account's name and e-mail) is never called;
  *  - neither the log nor the raw answer is logged or echoed in an error: only the kind of failure is.
  *  - the environment is a mission's own (`profile.env`, then the row's `env`: the two switches that would
- *    move `agy` to per-token billing, emptied), nothing more;
+ *    move `agy` to per-token billing, emptied, and on Linux the keychain's bus switched off, so that the
+ *    reading sees the sign-in a mission sees), nothing more;
  *  - no server outlives the probe, even when `agy` exited first and `stop()` had nothing left to kill:
  *    the port is tried once `agy` is gone, a server still listening is killed by the pid the same log
  *    gives (`Starting language server process with pid N`), and one that cannot be killed fails the

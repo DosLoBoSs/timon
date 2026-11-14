@@ -32,7 +32,38 @@ const ANTIGRAVITY = manifestBackend('antigravity');
  * `agent-platform`) or tie it to an organisation's project (`oauth-business`), and Timon runs CLI
  * subscriptions only.
  */
-const ANTIGRAVITY_SIGN_IN = 'run `agy acp --login` in a terminal on this machine and sign in with your personal Google account, then retry';
+/**
+ * Where `agy` keeps its sign-in, on each OS, when Timon starts it. It saves it in the system keychain and,
+ * when the keychain cannot be reached, in its own folder (`~/.gemini/antigravity-cli/antigravity-oauth-token`,
+ * mode 0600, verified on 1.5.9). On Linux the keychain is the Secret Service, reached over the D-Bus session
+ * bus, a Unix socket the mission fence refuses: a fenced `agy` then finds no sign-in. Pointing it at no bus
+ * (`disabled:` is no transport D-Bus knows) makes every `agy` Timon starts on Linux, fenced or not, mission or
+ * quota reading, use that file, which sits in the folder this provider declares (`credentialDirs`): writable by
+ * an Antigravity mission, masked from the others. The sign-in command carries the same variable so that it
+ * writes the file. macOS keeps the keychain, which its fence leaves reachable.
+ *
+ * @param {NodeJS.Platform} platform
+ */
+export function antigravityKeychainEnv(platform) {
+  return platform === 'linux' ? { DBUS_SESSION_BUS_ADDRESS: 'disabled:' } : {};
+}
+
+/**
+ * The command that signs `agy` in where Timon will look for it (`antigravityKeychainEnv`).
+ *
+ * @param {NodeJS.Platform} platform
+ */
+export function antigravitySignInCommand(platform) {
+  const prefix = Object.entries(antigravityKeychainEnv(platform)).map(([name, value]) => `${name}=${value} `).join('');
+  return `${prefix}agy acp --login`;
+}
+
+/** @param {NodeJS.Platform} platform */
+export function antigravitySignIn(platform) {
+  return `run \`${antigravitySignInCommand(platform)}\` in a terminal on this machine and sign in with your personal Google account, then retry`;
+}
+
+const ANTIGRAVITY_SIGN_IN = antigravitySignIn(process.platform);
 
 /**
  * Emptied in the agent's environment, over the vault and the daemon's own (`secrets.inheritEnv`):
@@ -42,6 +73,9 @@ const ANTIGRAVITY_SIGN_IN = 'run `agy acp --login` in a terminal on this machine
  * API key, and an empty one falls back to the saved sign-in (its 1.5.9 release notes).
  */
 const ANTIGRAVITY_BILLED_SWITCHES = Object.freeze({ AGY_ADC_AUTH: '', GEMINI_API_KEY: '' });
+
+/** What every `agy` Timon starts gets: the billing switches emptied, the keychain this OS reaches. */
+const ANTIGRAVITY_ENV = Object.freeze({ ...ANTIGRAVITY_BILLED_SWITCHES, ...antigravityKeychainEnv(process.platform) });
 
 /**
  * What opencode may do in a daemon one-shot (summary, title, memory pass): it decides its tool uses
@@ -108,7 +142,7 @@ export function antigravityUsage(services) {
   const { getUsage } = createAntigravityUsage({
     services,
     names: ANTIGRAVITY.binary?.names ?? [],
-    env: ANTIGRAVITY_BILLED_SWITCHES,
+    env: ANTIGRAVITY_ENV,
     authenticateWith: ANTIGRAVITY_AUTH_METHOD,
     signIn: ANTIGRAVITY_SIGN_IN,
   });
@@ -166,7 +200,7 @@ export const ACP_AGENTS = Object.freeze([
     // about). `AcpAgentSpec` has no hook to pick another of agy's session modes from `permission_mode`.
     args: ['acp'],
     permissionsByAgent: false,
-    env: () => ({ ...ANTIGRAVITY_BILLED_SWITCHES }),
+    env: () => ({ ...ANTIGRAVITY_ENV }),
     modelProbe: 'session-new',
     authenticateWith: ANTIGRAVITY_AUTH_METHOD,
     signIn: {
