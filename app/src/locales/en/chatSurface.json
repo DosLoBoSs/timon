@@ -30,7 +30,7 @@
       "routine": "routine"
     },
     "permission": "permission",
-    "permissionToRun": "The agent is requesting permission to run:",
+    "permissionToUse": "The agent asks permission to use {tool}",
     "permissionState": {
       "pending": "pending",
       "allowed": "allowed",
