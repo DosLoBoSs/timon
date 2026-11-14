@@ -244,13 +244,7 @@
     },
     "rows": {
       "searching": "正在查找…",
-      "connected": "已连接",
-      "state": {
-        "missing": "未安装",
-        "bundled": "桌面应用自带，尚未登录",
-        "signIn": "已安装，尚未登录",
-        "ready": "已登录"
-      },
+      "installAndSignIn": "安装并登录",
       "signInOutcome": {
         "terminal": "命令已输入到 Timon 的终端。请在终端按 Enter，并在浏览器中完成登录。返回此页面时，Timon 会重新检查。",
         "copied": "命令已复制。请将其粘贴到此设备上的终端，按 Enter，并在浏览器中完成登录。返回此页面时，Timon 会重新检查。",
