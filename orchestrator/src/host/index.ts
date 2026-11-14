@@ -1,15 +1,19 @@
 import type { TimonConfig } from '../config/schema.js';
 import { config } from '../config/load.js';
+import { createDarwinHost } from './darwin.js';
 import { createGenericHost } from './generic.js';
 import { createLinuxHost } from './linux.js';
 import { hasSystemd } from './systemd.js';
 import { fenceWritableRoots, setMissionWritableRootsSource } from './mission-writable.js';
 import type { ExecOpts, Host } from './types.js';
 
-export type { Capability, ExecOpts, ExecResult, Host, RevealVia, SpawnOpts } from './types.js';
+export type {
+  Capability, ExecOpts, ExecResult, FenceMechanism, Host, HostFence, HostFenceProbe, RevealVia, SpawnOpts,
+} from './types.js';
 export { chooseRevealLane, type RevealLane } from './reveal.js';
 export type { DesktopSession } from './desktop-session.js';
 export { isDirectoryLink, linkDirectory, removeDirectoryLink } from './directory-link.js';
+export { createDarwinHost } from './darwin.js';
 export { createGenericHost } from './generic.js';
 export { createLinuxHost } from './linux.js';
 export { hasSystemd, systemctlCallCount } from './systemd.js';
@@ -24,7 +28,9 @@ export function createHost(cfg: TimonConfig): Host {
   setMissionWritableRootsSource(() => fenceWritableRoots(config()));
   const host = process.platform === 'linux' && hasSystemd()
     ? createLinuxHost(cfg, pins)
-    : createGenericHost(cfg, {}, pins);
+    : process.platform === 'darwin'
+      ? createDarwinHost(cfg, pins)
+      : createGenericHost(cfg, {}, pins);
   current = host;
   // On stderr, not stdout: `getHost()` is lazy, so this line also comes out
   // from the CLI (`timon doctor --json`, `timon module list --json`) where it would
