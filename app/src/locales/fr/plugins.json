@@ -635,6 +635,42 @@
     "errors": {
       "forbidden": "Seul un administrateur peut voir les fournisseurs.",
       "generic": "Impossible de lire les fournisseurs (erreur {status})."
+    },
+    "activation": {
+      "on": "Activé",
+      "off": "Désactivé",
+      "readOnly": "Le fichier de ce fournisseur ne peut pas être modifié d'ici : corrigez-le d'abord dans son dossier.",
+      "pluginOff": "Son plugin est désactivé : activez-le dans {settingsPath}."
+    }
+  },
+  "providerList": {
+    "open": "Ouvrir {name}",
+    "updateAvailable": "Mise à jour disponible",
+    "search": "Rechercher un fournisseur",
+    "empty": "Aucun fournisseur n'est encore installé.",
+    "noMatch": "Aucun fournisseur ne correspond à « {query} ».",
+    "groups": {
+      "connected": "Connectés",
+      "others": "Autres fournisseurs"
+    },
+    "default": {
+      "title": "Fournisseur par défaut",
+      "hint": "Le fournisseur sur lequel tourne une mission quand rien n'en désigne un.",
+      "auto": "Automatique",
+      "autoNamed": "Automatique ({name})"
+    },
+    "reorder": {
+      "start": "Réorganiser",
+      "done": "Terminé",
+      "title": "Ordre dans le sélecteur de modèle"
+    },
+    "verify": {
+      "button": "Vérifier",
+      "done": "Fournisseurs vérifiés : programmes, mises à jour et catalogue sont à jour.",
+      "partial": "{count, plural, one {Une vérification a échoué} other {# vérifications ont échoué}} : le reste est à jour."
+    },
+    "legacy": {
+      "title": "Modifier les modèles et la connexion d'un fournisseur"
     }
   }
 }

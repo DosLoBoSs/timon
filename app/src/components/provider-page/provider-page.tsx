@@ -9,7 +9,7 @@
  * The daemon decides what a provider is and what it may show (a superadmin
  * session only): this page reads its overview and paints it.
  */
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { BrandMark } from '@/components/brand-mark';
 import { PluginBoundary } from '@/lib/plugin-host/plugin-boundary';
@@ -29,12 +29,14 @@ type Loaded =
 /** Events after which what the daemon says of a provider may have changed. */
 const REFRESH_ON = ['backends_changed', 'plugins_changed'] as const;
 
-export function ProviderPage({ requested, onBack, onCanonical }: {
+export function ProviderPage({ requested, onBack, onCanonical, HeaderAction }: {
   /** What `provider=` names: a provider id, or the plugin or backend id an older link carries. */
   requested: string;
   onBack: () => void;
   /** The provider's own id, when `requested` named it otherwise: the host rewrites the address. */
   onCanonical?: (id: string) => void;
+  /** Painted at the right of the header, inside the page's context (the host's on/off switch). */
+  HeaderAction?: ComponentType;
 }): ReactElement {
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' });
 
@@ -72,7 +74,7 @@ export function ProviderPage({ requested, onBack, onCanonical }: {
       {loaded.kind === 'ready' && !value ? <p className="m-0 text-[13px] text-muted-foreground">{t('providerPage.notFound')}</p> : null}
       {value ? (
         <ProviderPageProvider value={value}>
-          <ProviderHeader value={value} />
+          <ProviderHeader value={value} action={HeaderAction ? <HeaderAction /> : null} />
           <ProviderSections pluginId={value.provider.pluginId} />
         </ProviderPageProvider>
       ) : null}
@@ -95,7 +97,7 @@ function Breadcrumb({ name, onBack }: { name: string | null; onBack: () => void 
   );
 }
 
-function ProviderHeader({ value }: { value: ProviderPageValue }): ReactElement {
+function ProviderHeader({ value, action }: { value: ProviderPageValue; action: ReactNode }): ReactElement {
   const { provider } = value;
   return (
     <header className="flex items-center gap-4">
@@ -112,6 +114,7 @@ function ProviderHeader({ value }: { value: ProviderPageValue }): ReactElement {
             : null}
         </div>
       </div>
+      {action}
     </header>
   );
 }

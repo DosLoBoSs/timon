@@ -158,26 +158,21 @@ export function ProductProviderCliCards(): ReactElement | null {
       </p>
     );
   }
-  const anyRunning = Object.values(host.jobs).some((job) => job.state === 'running');
   return (
     <div className="space-y-3">
       <div className={cn('grid gap-3', host.mode !== 'recovery' && 'md:grid-cols-2')}>
         {host.backends.map((cli) => <ProviderCliCard key={cli.name} cli={cli} job={host.jobs[cli.name] ?? null} />)}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      {/* In Settings, the providers list's one Check reads the cards and their updates again. */}
+      {host.mode === 'recovery' ? (
         <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={host.busy || host.disabled} onClick={() => void host.refresh()}>
           <RefreshCw className={cn('size-3.5', host.busy && 'animate-spin')} aria-hidden />
           {t('providerClis.retry')}
         </Button>
-        {host.mode === 'settings' && host.updateCheck && (
-          <Button type="button" size="sm" variant="ghost" disabled={host.busy || anyRunning} onClick={() => void host.checkUpdates()}>
-            {t('providerClis.checkUpdates')}
-          </Button>
-        )}
-        {host.mode === 'settings' && !host.updateCheck && (
-          <p className="m-0 text-xs text-muted-foreground">{t('providerClis.updateCheckOff')}</p>
-        )}
-      </div>
+      ) : null}
+      {host.mode === 'settings' && !host.updateCheck ? (
+        <p className="m-0 text-xs text-muted-foreground">{t('providerClis.updateCheckOff')}</p>
+      ) : null}
     </div>
   );
 }

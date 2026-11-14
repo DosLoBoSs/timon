@@ -12,11 +12,12 @@ import { ProviderPage } from '@/components/provider-page/provider-page';
 import { PROVIDER_PARAM } from '@/lib/providers';
 import { useProviderNavigation } from '@/lib/settings-navigation';
 import { BackendsSettings } from './backends-settings';
+import { ProviderActivation } from './provider-activation';
 
 export function ProvidersSettings(): ReactElement {
   // Null outside the App Router (a test, a surface mounted elsewhere): the list.
   const requested = useSearchParams()?.get(PROVIDER_PARAM) ?? null;
   const navigation = useProviderNavigation();
-  if (requested) return <ProviderPage requested={requested} onBack={navigation.back} onCanonical={navigation.show} />;
-  return <BackendsSettings />;
+  if (requested) return <ProviderPage requested={requested} onBack={navigation.back} onCanonical={navigation.show} HeaderAction={ProviderActivation} />;
+  return <BackendsSettings onOpenProvider={navigation.open} />;
 }

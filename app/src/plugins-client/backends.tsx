@@ -3,7 +3,8 @@
 import dynamic from 'next/dynamic';
 import { ProductModelPicker } from '@/components/model-picker';
 import { ProductProviderCliCards } from '@/components/provider-cli/provider-cli-cards';
-import { MODEL_PICKER_SLOT, PROVIDER_CLI_SLOT } from '@/lib/plugin-host/slots';
+import { MODEL_PICKER_SLOT, PROVIDER_CLI_SLOT, PROVIDER_ROW_SLOT } from '@/lib/plugin-host/slots';
+import { ProductProviderRow } from '@/components/provider-list/provider-row';
 import { PROVIDER_SECTION_KEYS, PROVIDER_SECTION_ORDER, PROVIDER_SECTION_SLOT } from '@/components/provider-page/provider-sections';
 import { COMMON_PROVIDER_SECTIONS } from './backends/provider-common-sections';
 import type { BundledClientPlugin } from './types';
@@ -28,5 +29,8 @@ export const coreBackendsClient: BundledClientPlugin = {
     // Default occupant of `providers.cli` (a boot slot): the provider cards of the onboarding
     // and of Settings › AI models. A plugin that takes the slot replaces them on every screen.
     ctx.register({ slot: PROVIDER_CLI_SLOT, fallback: true }, ProductProviderCliCards);
+    // Default occupant of `providers.row` (a boot slot): one provider's row, on the providers
+    // list and in the onboarding. A plugin that takes the slot replaces it on both.
+    ctx.register({ slot: PROVIDER_ROW_SLOT, fallback: true }, ProductProviderRow);
   },
 };

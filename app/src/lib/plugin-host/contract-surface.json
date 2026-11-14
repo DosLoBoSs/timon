@@ -641,6 +641,14 @@
       "useProviderPage": {
         "type": "export",
         "since": 16
+      },
+      "ProviderRow": {
+        "type": "export",
+        "since": 16
+      },
+      "useProviderRow": {
+        "type": "export",
+        "since": 16
       }
     },
     "api.js": {

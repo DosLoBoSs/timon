@@ -43,6 +43,7 @@ import {
 import { ModelEditor } from './model-editor';
 import { PictoPanel } from './picto-panel';
 import { ProvidersPanel } from './providers-panel';
+import { ProvidersList } from './providers-list';
 import { SidePanel } from './side-panel';
 import { FIELD, HINT, LABEL } from './type-scale';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
@@ -112,7 +113,7 @@ function ActionSlot({ className, children }: { className: string; children?: Rea
   return <span className={cn('flex shrink-0 items-center justify-center', className)}>{children}</span>;
 }
 
-export function BackendsSettings(): ReactElement {
+export function BackendsSettings({ onOpenProvider }: { onOpenProvider: (id: string) => void }): ReactElement {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const mutating = useRef(false);
@@ -126,6 +127,8 @@ export function BackendsSettings(): ReactElement {
   // The panel's own: a Test running in it never locks the list, nor the reverse.
   const [panelBusy, setPanelBusy] = useState(false);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
+  // Bumped by the list's Check: the blocks below read their sources again.
+  const [generation, setGeneration] = useState(0);
 
   const load = useCallback(async () => {
     if (mutating.current) return;
@@ -145,7 +148,7 @@ export function BackendsSettings(): ReactElement {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, generation]);
   // A file dropped by hand in the folder shows up here too.
   useEffect(() => sseOn('backends_changed', () => { void load(); }), [load]);
 
@@ -293,6 +296,12 @@ export function BackendsSettings(): ReactElement {
     <div className="pt-4">
       <p className="max-w-3xl text-[13px] leading-relaxed text-muted-foreground">{t('backendsSettings.intro')}</p>
 
+      <div className="mt-5 max-w-3xl">
+        <ProvidersList onOpen={onOpenProvider} onVerified={() => setGeneration((current) => current + 1)} />
+      </div>
+
+      {/* Edited here until the provider page's Models and Add sections take these rows over. */}
+      <h3 className="m-0 mt-10 text-sm font-semibold">{t('providerList.legacy.title')}</h3>
       {loading ? (
         <div className="mt-6 text-[13px] text-muted-foreground">{t('common.loading')}</div>
       ) : backends.length === 0 ? (
@@ -484,7 +493,9 @@ export function BackendsSettings(): ReactElement {
 
       <p className="mt-6 max-w-3xl text-xs leading-relaxed text-muted-foreground">{t('backendsSettings.reorderHint')}</p>
 
-      <ProvidersPanel />
+      <div key={generation}>
+        <ProvidersPanel />
+      </div>
     </div>
   );
 }
