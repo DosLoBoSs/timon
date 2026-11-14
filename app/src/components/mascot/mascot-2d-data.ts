@@ -10,7 +10,7 @@
 import type { MascotShape } from './agent-look';
 
 export type Skull2D = {
-  /** The body's outline, a closed path of cubic Béziers. */
+  /** The body's outline, a closed path of cubic Beziers. */
   body: string;
   earL: string;
   earR: string;

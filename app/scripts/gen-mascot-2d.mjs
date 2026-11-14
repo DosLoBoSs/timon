@@ -43,7 +43,7 @@ const FUR_SHOWN = 0.55;
 const STEP = 0.2;
 const GRID = Math.round(120 / STEP);
 const ORIGIN = -10;
-/** Points of a traced outline before it is smoothed into Bézier curves. */
+/** Points of a traced outline before it is smoothed into Bezier curves. */
 const BODY_POINTS = 44;
 const EAR_POINTS = 20;
 
@@ -177,7 +177,7 @@ function resample(poly, n) {
 
 const f = (v) => (Math.round(v * 10) / 10).toString();
 
-/** A closed Catmull-Rom spline through the points, as cubic Bézier segments: a smooth path from a few points. */
+/** A closed Catmull-Rom spline through the points, as cubic Bezier segments: a smooth path from a few points. */
 function smoothPath(pts) {
   const n = pts.length;
   let d = `M${f(pts[0][0])} ${f(pts[0][1])}`;
@@ -297,7 +297,7 @@ const out = `/**
 import type { MascotShape } from './agent-look';
 
 export type Skull2D = {
-  /** The body's outline, a closed path of cubic Béziers. */
+  /** The body's outline, a closed path of cubic Beziers. */
   body: string;
   earL: string;
   earR: string;
