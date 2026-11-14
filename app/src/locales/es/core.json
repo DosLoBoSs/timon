@@ -1106,6 +1106,7 @@
     "mascotsStyle2d": "2D",
     "mascotsStyle2dHint": "El dibujo plano, más ligero para ordenadores antiguos.",
     "mascotsStyleNoWebgl": "Este navegador no puede dibujar en 3D (WebGL2 está desactivado o no existe): las mascotas se dibujan en 2D.",
+    "mascotsStyleShared": "Se aplica a todas las mascotas. Puedes cambiarlo más tarde en Configuración → Apariencia.",
     "variants": {
       "coral": {
         "name": "Coral",

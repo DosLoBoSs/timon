@@ -1106,6 +1106,7 @@
     "mascotsStyle2d": "2D",
     "mascotsStyle2dHint": "Die flache Zeichnung, leichter für ältere Computer.",
     "mascotsStyleNoWebgl": "Dieser Browser kann nicht in 3D zeichnen (WebGL2 ist deaktiviert oder fehlt): Maskottchen werden in 2D gezeichnet.",
+    "mascotsStyleShared": "Gilt für alle Maskottchen. Du kannst es später unter Einstellungen → Darstellung ändern.",
     "variants": {
       "coral": {
         "name": "Koralle",

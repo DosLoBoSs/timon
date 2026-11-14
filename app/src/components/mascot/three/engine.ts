@@ -32,6 +32,8 @@ const BUDGET_MIN = 8;
 const MIN_FRAME_MS = 15.5;
 /** Reading a rectangle forces layout: a tile's is kept this long. */
 const RECT_TTL_MS = 330;
+/** A size change smaller than this share keeps a tile's canvas: the mascots' squash-and-stretch animations stay cheap. */
+const RESIZE_SLACK = 0.2;
 
 export type EngineStats = {
   seconds: number; tiles: number; onPage: number; live: number; models: number;
@@ -443,9 +445,15 @@ export function createEngine(data: ModelData): Mascot3DEngine {
   }
   function measure(t: Tile): { css: number; px: number } {
     const r = rectOf(t);
-    const css = r.width > 0 ? r.width : t.cssSize;
+    // A transform only ever enlarges the drawing: a hop or a drop-in squashes a head below its own size for a
+    // moment, and following it would reallocate the canvas (and redraw it from blank) several times a second.
+    const css = Math.max(t.cssSize, r.width > 0 ? r.width : 0);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    return { css, px: Math.max(8, Math.min(MAX_PX, Math.round(css * dpr))) };
+    const px = Math.max(8, Math.min(MAX_PX, Math.round(css * dpr)));
+    // Hysteresis: a squash and stretch of a few percent keeps the canvas it has; a real zoom still resizes it.
+    const had = t.canvas.width;
+    if (had > 0 && Math.abs(px - had) / had < RESIZE_SLACK) return { css: had / dpr, px: had };
+    return { css, px };
   }
 
   const perf = { since: performance.now(), frames: 0, draws: 0, drawMs: 0, maxDrawMs: 0, simMs: 0 };

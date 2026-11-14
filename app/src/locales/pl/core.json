@@ -1106,6 +1106,7 @@
     "mascotsStyle2d": "2D",
     "mascotsStyle2dHint": "Płaski rysunek, lżejszy dla starszych komputerów.",
     "mascotsStyleNoWebgl": "Ta przeglądarka nie potrafi rysować w 3D (WebGL2 jest wyłączony lub niedostępny): maskotki są rysowane w 2D.",
+    "mascotsStyleShared": "Dotyczy wszystkich maskotek. Możesz to później zmienić w Ustawienia → Wygląd.",
     "variants": {
       "coral": {
         "name": "Koral",

@@ -1106,6 +1106,7 @@
     "mascotsStyle2d": "2D",
     "mascotsStyle2dHint": "O desenho plano, mais leve para computadores antigos.",
     "mascotsStyleNoWebgl": "Este navegador não consegue desenhar em 3D (o WebGL2 está desativado ou ausente): os mascotes são desenhados em 2D.",
+    "mascotsStyleShared": "Vale para todos os mascotes. Você pode mudar isso depois em Configurações → Aparência.",
     "variants": {
       "coral": {
         "name": "Coral",
