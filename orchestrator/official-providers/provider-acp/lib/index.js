@@ -10,7 +10,7 @@
  * provider are the product's own (`opencode`, `hermes`, `antigravity`); the
  * profiles themselves are in `profiles.js`. Pi has a plugin of its own (`provider-pi`).
  */
-import { ACP_AGENTS } from './agents.js'
+import { ACP_AGENTS, antigravityUsage } from './agents.js'
 import { ANTIGRAVITY_PROFILE, HERMES_PROFILE, OPENCODE_PROFILE } from './profiles.js'
 
 export const name = 'provider-acp'
@@ -18,6 +18,10 @@ export const name = 'provider-acp'
 /** @param {import('@timon-ai/sdk/provider').ProviderPluginContext} ctx */
 export function apply(ctx) {
   const { acp } = ctx.provider.runtime
-  for (const agent of ACP_AGENTS) ctx.provider.registerProvider(acp.defineProvider(ctx.provider, agent))
+  for (const agent of ACP_AGENTS) {
+    const definition = acp.defineProvider(ctx.provider, agent)
+    // Only Antigravity reports a quota; the row has no field for it (`agents.js`).
+    ctx.provider.registerProvider(agent.id === 'antigravity' ? { ...definition, usage: antigravityUsage(ctx.provider) } : definition)
+  }
   for (const profile of [OPENCODE_PROFILE, HERMES_PROFILE, ANTIGRAVITY_PROFILE]) ctx.provider.registerProductProfile(profile)
 }

@@ -20,6 +20,7 @@
 import { randomBytes } from 'node:crypto';
 import { manifestBackend } from './manifest.js';
 import { oneShotOverlay } from './opencode-config.js';
+import { createAntigravityUsage } from './antigravity-usage.js';
 
 const OPENCODE = manifestBackend('opencode');
 const HERMES = manifestBackend('hermes');
@@ -91,6 +92,32 @@ function opencodeOneShotConfig(cwd) {
   });
 }
 
+/** Tried once, only when `session/new` answers `auth_required`: it reuses the sign-in `agy` saved. */
+const ANTIGRAVITY_AUTH_METHOD = 'oauth-personal';
+
+/**
+ * The weekly quota of each of the account's model groups, asked of `agy` itself
+ * (`antigravity-usage.js`). `AcpAgentSpec` carries no usage hook, so the plugin adds this strategy to
+ * the definition the runtime built for the row (`index.js`): the definition is the SDK's contract, the
+ * row is only a shorthand for most of it.
+ *
+ * @param {Pick<import('@timon-ai/sdk/provider').ProviderServices, 'binary' | 'runtime'>} services
+ * @returns {import('@timon-ai/sdk/provider').UsageStrategy}
+ */
+export function antigravityUsage(services) {
+  const { getUsage } = createAntigravityUsage({
+    services,
+    names: ANTIGRAVITY.binary?.names ?? [],
+    env: ANTIGRAVITY_BILLED_SWITCHES,
+    authenticateWith: ANTIGRAVITY_AUTH_METHOD,
+    signIn: ANTIGRAVITY_SIGN_IN,
+  });
+  return {
+    // `options.force`: a person's ↻, already spaced by the daemon's floor.
+    probe: (profile, options) => getUsage(profile, { force: options?.force === true }),
+  };
+}
+
 /** @type {readonly AcpAgentSpec[]} */
 export const ACP_AGENTS = Object.freeze([
   {
@@ -141,10 +168,9 @@ export const ACP_AGENTS = Object.freeze([
     permissionsByAgent: false,
     env: () => ({ ...ANTIGRAVITY_BILLED_SWITCHES }),
     modelProbe: 'session-new',
-    // Tried once, only when `session/new` answers `auth_required`: it reuses the sign-in `agy` saved.
-    authenticateWith: 'oauth-personal',
+    authenticateWith: ANTIGRAVITY_AUTH_METHOD,
     signIn: {
-      byMethod: { 'oauth-personal': ANTIGRAVITY_SIGN_IN },
+      byMethod: { [ANTIGRAVITY_AUTH_METHOD]: ANTIGRAVITY_SIGN_IN },
       fallback: ANTIGRAVITY_SIGN_IN,
     },
     binary: ANTIGRAVITY.binary,
