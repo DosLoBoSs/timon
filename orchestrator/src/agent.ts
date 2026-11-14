@@ -88,7 +88,6 @@ import { getHost, type Host } from './host/index.js';
 import {
   backgroundDescendants, cliBaseline, cliProcessPid, readProcessTable, type ProcessEntry,
 } from './host/process-tree.js';
-import { ensureDaemonToken } from './plugins-bundled/http/auth.js';
 import { MissionSession, permissionHost, questionHost, type PermissionGate } from './mission-session.js';
 import { processHandle, remoteHandle, type MissionHandle, type RemoteMissionHandle } from './mission-handle.js';
 import { parseResumeState, serializeResumeState } from './backends/remote-session.js';
@@ -200,11 +199,13 @@ export function missionEnv(opts: {
   };
 }
 
-/** The mission's own credential: its `api_tokens` row, or the daemon-token on a
- *  machine with no account yet. Issuing revokes the previous row, so call it once
- *  per launch. */
+/** The mission's own credential: always its `api_tokens` row, never the
+ *  daemon-token — not even on a machine with no account yet, where the operator's
+ *  token would let the agent answer its own permission cards and create the first
+ *  account (`getLiveApiToken` keeps the install's rights for it until then).
+ *  Issuing revokes the previous row, so call it once per launch. */
 export function missionApiToken(missionId: string): string {
-  return dbApi.countUsers() === 0 ? ensureDaemonToken() : issueMissionApiToken(missionId);
+  return issueMissionApiToken(missionId);
 }
 
 /** What identifies the run, with no credential in it. */
