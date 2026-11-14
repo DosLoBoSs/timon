@@ -610,7 +610,6 @@
       "recheck": "Check again",
       "rechecked": "Program checked again.",
       "plugin": "Brought by the plugin {name}, version {version}.",
-      "version": "Version {version}",
       "path": "Runs",
       "pathDetails": "About this path",
       "link": "This path is a link. The file it points to: {target}",

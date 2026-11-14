@@ -600,7 +600,6 @@
       "recheck": "Vérifier à nouveau",
       "rechecked": "Programme vérifié à nouveau.",
       "plugin": "Apporté par le plugin {name}, version {version}.",
-      "version": "Version {version}",
       "path": "Lance",
       "pathDetails": "À propos de ce chemin",
       "link": "Ce chemin est un lien. Le fichier vers lequel il pointe : {target}",
