@@ -12,7 +12,7 @@ You can add a language-model provider yourself — no plugin, no restart. It wor
 
 If your provider speaks neither, there are three ways forward:
 
-- **It is an agent of the [ACP registry](../plugins/providers.md#agents-from-the-acp-registry)** (opencode, Hermes, Cursor… as listed there): open **Settings → AI models → LLM backends → Providers**, pick it, and Timon downloads, checks and runs it for you. No plugin to write.
+- **It is an agent of the [ACP registry](../plugins/providers.md#agents-from-the-acp-registry)** (opencode, Hermes, Cursor… as listed there): open **Settings → AI models → Providers**, choose **Add a provider**, then **From the catalog**, pick it, and Timon downloads, checks and runs it for you. No plugin to write.
 - **Someone already wrote a provider plugin for it**: install it from the Plugins gallery. The install sheet shows the program it will launch, with the path Timon found on your machine, and one tick allows exactly that program.
 - **You want to share your endpoint, or write a provider yourself**: [Write a provider](../plugins/providers.md) covers sharing a declarative pack with no code, and writing a provider for a CLI, an ACP agent or a remote service.
 
@@ -20,7 +20,7 @@ Adding or removing a backend is reserved to a superadmin, and to a person: a bac
 
 ## From Settings
 
-Open **Settings → AI models → LLM backends** and choose **Add a backend**.
+Open **Settings → AI models → Providers**, choose **Add a provider**, then **Compatible endpoint**.
 
 | Field | What to enter |
 |---|---|
@@ -36,13 +36,13 @@ Open **Settings → AI models → LLM backends** and choose **Add a backend**.
 - nothing answers at this address;
 - the endpoint answers with another status (often `404`: it has no model listing). The key could not be checked, which does not mean it is wrong.
 
-Once saved, the backend is selectable immediately, in every place where you choose a model. Choose **Edit** to change its key, address, models or picture. Leave the key field empty to keep the saved key. Removing a backend also deletes its key from the vault.
+**Add this provider** saves it and opens its page in the list of providers. It is selectable immediately, in every place where you choose a model. On that page, **Models** changes its models, and **Settings** its name, picture and, under **Advanced**, its address and key. Leave the key field empty to keep the saved key. **Remove this provider**, in **Settings**, also deletes its key from the vault.
 
 The key is reserved to this backend: on the **Secrets** page it shows the grant *backend only*. Only the process of this backend receives it — not the other agents, whatever backend they run on, and not plugins. To limit it to some projects or agents, add those grants next to it: a mission then needs both, the right backend **and** one of those projects or agents. A model picker that chooses for an agent or a project (the composer, a task, an agent's sheet, a workflow node) does not offer a backend whose key that agent or project cannot use, and shows a model already set on one as unavailable. The series plan and the instance-wide settings list every backend: there, a mission that cannot use the key is refused when it starts. Removing *backend only* while other grants remain shares the key with those projects or agents on every backend, so only a superadmin can do it.
 
 Keys saved by an earlier version were shared with every agent. Timon reserves them to their backend when it starts, as long as you had not changed their grants. If you had (for example, shared the key with a project), Timon leaves it as it is and shows a card with the two choices: reserve it to the backend, or keep sharing it.
 
-You can also add models manually when the provider has no model listing. Enter the exact model ID, give it a label and choose which model should be the default. See [backend management](./settings.md#backend-and-fallback-choices) for disabling, reordering and editing built-in providers.
+You can also add models manually when the provider has no model listing. Enter the exact model ID, give it a label and choose which model should be the default. See [the providers list](./settings.md#the-providers-list) for reordering, and [a provider's page](./settings.md#a-providers-page) for turning off and editing built-in providers.
 
 ### Thinking setting of each model
 
@@ -53,7 +53,7 @@ Models do not all set their thinking the same way: some take **levels** (`low`, 
 
 The thinking control in the agent editor, the chat bar and the model menu follows what was detected: a level slider, **low / medium / high** budget steps, or **off / on** buttons. A model with nothing to set shows none.
 
-The catalogue describes the model, not your provider: a gateway may ignore a setting the model supports. To correct the detection, open **Edit**, then the brain button of the model. It shows what was detected and lets you choose instead:
+The catalogue describes the model, not your provider: a gateway may ignore a setting the model supports. To correct the detection, open the provider's page, then the brain button of the model in its **Models** section. It shows what was detected and lets you choose instead:
 
 | Choice | What the selectors show |
 |---|---|
@@ -109,7 +109,7 @@ Each one takes `--json`. `test` exits with `0` only when the endpoint answers an
 
 Run from an agent, `add`, `test` and `rm` are refused with `operator_only`.
 
-To change a saved key or address, use **Edit** in Settings.
+To change a saved key or address, open the provider's page in **Settings → AI models → Providers**: **Settings**, then **Advanced**.
 
 ### Checking your backends with `timon doctor`
 
@@ -177,7 +177,7 @@ An OpenAI Responses provider also declares how the Codex CLI reaches it:
 | `env` | Environment of the mission process. A value is either a plain, non-secret string or a reference to a vault entry: `{ "secret": "NAME" }`. |
 | `providerConfig` | `codex` dialect only. Choose an `id` that is not one of Codex's built-in providers (`openai`, `ollama`, …). `envKey` names the variable of `env` that holds the key. |
 | `defaultModel`, `models` | Models offered in the selectors. `models` may be empty: the model field is then free text. |
-| `models[].contextWindow` | Optional. The model's context window in tokens, used by the chat's context gauge. It wins over the window the CLI reports. You can also set it in the model's row in **Edit**. |
+| `models[].contextWindow` | Optional. The model's context window in tokens, used by the chat's context gauge. It wins over the window the CLI reports. You can also set it in the model's row, in the **Models** section of the provider's page. |
 | `models[].supportedReasoningLevels` | Optional. The thinking levels the model accepts, lowest first, e.g. `["low", "medium", "high"]`. |
 | `models[].reasoningControl` | Optional. A thinking setting that levels cannot express: `{ "type": "budget", "max": 16000 }` (`min` and `max` optional), `{ "type": "toggle" }` or `{ "type": "none" }`. Levels win if a model has both. |
 | `modelsEndpoint` | Optional. A public, OpenAI-style model listing that replaces `models` while it answers. |
@@ -237,13 +237,13 @@ If your provider genuinely needs a variable this leaves out, tell us the
 provider and the variable: the list is part of the product, and it grows with
 real ones.
 
-A file that is refused, malformed, or named differently from its `id` is listed in **Settings → AI models → LLM backends** with the reason. It never prevents Timon from starting.
+A file that is refused, malformed, or named differently from its `id` is listed in **Settings → AI models → Providers** as **Blocked**; its page says why. It never prevents Timon from starting.
 
 ## Through a LiteLLM proxy
 
 [LiteLLM](https://docs.litellm.ai/) is a proxy you host yourself: it puts many providers behind one address and one key. Timon reaches it like any other provider, in either protocol, so you can keep the CLI you prefer and let the proxy route each model to its provider.
 
-Because the address is your own, there is no pack to install: add the proxy from **Settings → AI models → LLM backends → Add a backend**, or write the file below. Use the address of the proxy as seen from the computer where Timon runs (`http://localhost:4000` when both are on the same computer, its `https://` address otherwise). Store a LiteLLM key — a virtual key, or the master key — in the vault as for any provider; leave the key empty only if your proxy asks for none.
+Because the address is your own, there is no pack to install: add the proxy from **Settings → AI models → Providers → Add a provider → Compatible endpoint**, or write the file below. Use the address of the proxy as seen from the computer where Timon runs (`http://localhost:4000` when both are on the same computer, its `https://` address otherwise). Store a LiteLLM key — a virtual key, or the master key — in the vault as for any provider; leave the key empty only if your proxy asks for none.
 
 Your LiteLLM version must serve the endpoint the protocol uses: `/v1/messages` for Anthropic, `/v1/responses` for OpenAI Responses. Check the LiteLLM documentation of the version you run.
 

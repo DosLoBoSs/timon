@@ -6,8 +6,11 @@
  */
 import { statfsSync } from 'node:fs';
 
-/** SQLite result codes (better-sqlite3 `SqliteError.code`) that name the storage, not the data. */
-const SQLITE_STORAGE = /^SQLITE_(IOERR(_[A-Z_]+)?|FULL|CANTOPEN)$/;
+/**
+ * SQLite result codes (better-sqlite3 `SqliteError.code`) that name the storage, not the data.
+ * NOTADB is the file itself being replaced under a running daemon; CORRUPT concerns the data and stays out.
+ */
+const SQLITE_STORAGE = /^SQLITE_(IOERR(_[A-Z_]+)?|FULL|CANTOPEN|NOTADB)$/;
 /** errno codes of a disk that is full, read-only or failing. */
 const ERRNO_STORAGE = new Set(['ENOSPC', 'EIO', 'EDQUOT', 'EROFS']);
 

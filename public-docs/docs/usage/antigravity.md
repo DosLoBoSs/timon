@@ -11,7 +11,7 @@ A **personal Google account** signed in to `agy`: the free plan works, and a Goo
 
 ## Set it up
 
-1. Install `agy` with Google's installer, or click **Install** on the **Antigravity** card in **Settings → AI models → Providers**, which runs the same command:
+1. Install `agy` with Google's installer, or open **Antigravity (Google)** in **Settings → AI models → Providers** and click **Install** in its **Program** section, which runs the same command:
 
    ```bash
    # macOS and Linux
@@ -31,7 +31,7 @@ A **personal Google account** signed in to `agy`: the free plan works, and a Goo
 
    It prints a Google sign-in link: open it, choose your personal account, then paste the code the page gives you back into the terminal. Running `agy` once and following its first-run screens signs you in too.
 
-3. Restart Timon. **Antigravity (Google)** then appears among the LLM backends.
+3. Restart Timon. **Antigravity (Google)** then appears in the model selectors.
 
 Timon looks for `agy` on the service's PATH, in `~/.local/bin` on Linux and macOS, and in `%LOCALAPPDATA%\agy\bin` on Windows, which is where Google's installers put it.
 
@@ -43,6 +43,16 @@ Antigravity is also listed in the [ACP registry](../plugins/providers.md#agents-
 
 Timon does not pick a model for Antigravity: the default is `agy`'s own. The model picker lists what your plan offers (Gemini Flash at three thinking levels, and Claude and GPT-OSS models on the tested account). The list is asked from `agy` and refreshed at most every 12 hours; asking starts `agy` briefly, which leaves one empty conversation in its own history. A Gemini model also offers a **Thinking level**.
 
+## Quota
+
+The LLM quotas widget and the strip under the chat composer show Antigravity's quota: one gauge per model group of your plan (for example **Gemini Models** and **Claude and GPT models**), each with the share of its weekly limit already used and when it resets. The models of a group share one weekly limit.
+
+To read it, Timon starts `agy` for about a second, asks it for the figures, then stops it. `agy` fetches them with its own sign-in: Timon reads no token and contacts no Google server itself. Reading the quota uses none of it and leaves no conversation in `agy`'s history. A reading is reused for 5 minutes; the widget's ↻ button asks again.
+
+- **Not signed in**: `agy` has no sign-in Timon can use. Run `agy acp --login` under the OS account that runs Timon. `agy` keeps its sign-in in the system keychain, which Timon cannot reach when it runs outside your desktop session (started over SSH, as a Windows service or as a macOS launch daemon): the gauge then says Antigravity is not signed in, even though `agy` works in your terminal.
+- **Unknown**: `agy` did not answer in time, or answered in a way Timon does not recognise. Timon shows no figure rather than a zero. An `agy` too old to report its quota asks you to update it.
+- **Server left running**: `agy` exited and left its local server running, and Timon could not stop it. That server answers any program on your machine without a password, so Timon stops reading the quota on its own: end the remaining `agy` process (Task Manager, Activity Monitor or `kill`), then press ↻.
+
 ## What agents can do
 
 Antigravity **asks before it edits a file, runs a command or uses an MCP tool**. The request appears as an **Allow / Deny** card: **Allow** lets that one action through, **Deny** refuses it and Antigravity carries on without it. On an autonomous mission with nobody to answer, a card left open ends in a refusal after the usual delay. Rules you set in `agy` itself (commands it may always run) still apply, and what they allow does not reach a card.
@@ -53,5 +63,5 @@ Replies stream into the chat and tool calls appear with their results. **Stop** 
 
 - **The permission mode does not switch Antigravity's modes.** Whatever the agent's permission mode, `agy` runs in its default mode, which asks; Timon's cards and classifier decide each request.
 - **HTTP MCP servers are not passed on.** MCP servers you added over HTTP do not reach Antigravity agents.
-- **No quota gauge.** Timon does not display your remaining usage.
+- **The quota gauge relies on an internal interface of `agy`.** It was checked with `agy` 1.5.9; a later version may change it, and the gauge then shows the quota as unknown until Timon follows.
 - **Checked on Linux only.** Google's installers cover macOS and Windows, but Timon was not tried there yet. Report what you see.

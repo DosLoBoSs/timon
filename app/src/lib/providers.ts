@@ -5,6 +5,7 @@
  * types its answers and turns them into the sentences and states the panel shows.
  */
 import { t } from '@/lib/i18n';
+import type { StatusTone } from '@/lib/provider-overview';
 
 export type ProviderBinary = {
   name: string;
@@ -139,6 +140,18 @@ export function needsAuthorization(provider: ProviderPlugin): boolean {
  */
 export const PROVIDER_PARAM = 'provider';
 
+/**
+ * The query parameter of the "Add a provider" page: present (even empty) on
+ * that page, naming the way chosen once there is one.
+ */
+export const ADD_PROVIDER_PARAM = 'add-provider';
+export type AddProviderChoice = 'catalog' | 'endpoint';
+
+/** The way an `add-provider=` value names; anything else is the page before a choice. */
+export function addProviderChoice(value: string | null): AddProviderChoice | null {
+  return value === 'catalog' || value === 'endpoint' ? value : null;
+}
+
 /** The provider the card names, when it has something to authorize; `null` leaves the panel as is. */
 export function providerToAuthorize(providers: readonly ProviderPlugin[], id: string | null): ProviderPlugin | null {
   const provider = id ? providers.find((p) => p.id === id) : undefined;
@@ -161,4 +174,32 @@ export function acpAction(agent: AcpAgent): AcpAgentAction {
     return agent.installed.updateAvailable && agent.supported ? 'update' : 'none';
   }
   return agent.supported ? 'install' : 'none';
+}
+
+/** A catalogue agent's one state line: its pastille, and a sentence that says what is installed and what is offered. */
+export type AcpStateLine = { tone: StatusTone; key: string; vars: Record<string, string> };
+
+/**
+ * What the registry offers and what this computer runs, read in one line —
+ * never a "verified" badge for one version beside an "unverified" one for
+ * another. Yellow when a click is waited for (an update, a build to confirm
+ * without a checksum), red when the installed files cannot be used.
+ */
+export function acpStateLine(agent: AcpAgent): AcpStateLine {
+  const line = (tone: StatusTone, key: string, vars: Record<string, string> = {}): AcpStateLine =>
+    ({ tone, key: `providersSettings.acp.line.${key}`, vars: { version: agent.version, ...vars } });
+  if (!agent.supported) return line('off', 'unsupported', { reason: agent.reason ?? '' });
+  const installed = agent.installed;
+  if (!installed) return agent.integrity === 'none' ? line('action', 'availableUnverified') : line('ready', 'available');
+  const vars = { installed: installed.version };
+  if (installed.state === 'tampered') return line('blocked', 'tampered', vars);
+  if (installed.state === 'missing') return line('blocked', 'missing', vars);
+  if (installed.state === 'pending') return line('off', 'pending', vars);
+  if (installed.verifiedUpdate === true) return line('action', 'unverifiedVerifiedUpdate', vars);
+  const unverified = installed.integrity === 'unverified';
+  if (installed.updateAvailable) {
+    const offered = agent.integrity === 'none' ? 'UpdateUnverified' : 'Update';
+    return line('action', `${unverified ? 'unverified' : 'installed'}${offered}`, vars);
+  }
+  return line('ready', unverified ? 'unverified' : 'installed', vars);
 }

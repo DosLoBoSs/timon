@@ -1,8 +1,7 @@
 # plugin-provider-cards
 
 Replaces the AI CLI cards (slot `providers.cli`) — the onboarding's « Your
-AIs » step, its « cannot start » screen and Settings › AI models — with one
-compact list. The product's cards come back as soon as the plugin is removed.
+AIs » step and its « cannot start » screen — with one compact list. The product's cards come back as soon as the plugin is removed.
 
 The component takes no props: it reads `useProviderCliCards()` from
 `@timon/ui`. The host owns the data and the gestures: `install(name)` starts

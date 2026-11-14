@@ -3,7 +3,9 @@ title: What your agents connect to
 sidebar_position: 4.72
 ---
 
-An agent works with the network: its backend's API, git, package registries, the web pages a task needs. Timon can record, mission by mission, the outbound connections that go through its local network proxy, and tell you when a mission reaches a host its project has never contacted. It is a record so you can see what left the machine. **Nothing is blocked.**
+**The record is a witness, not a boundary.**
+
+An agent works with the network: its backend's API, git, package registries, the web pages a task needs. Timon can keep, mission by mission, a record of the connections that go through Timon's proxy, and tell you when a mission reaches a host its project has never contacted. It is a record so you can see what left the machine. **Nothing is blocked.**
 
 **This record is off by default.** Until you turn it on, no proxy runs, missions connect directly and nothing is recorded.
 
@@ -72,6 +74,7 @@ With the record on, when a mission reaches a host that no mission of the same pr
 
 With the record on, it covers what goes through the proxy, and only that. Do not read an empty list as proof that a mission sent nothing.
 
+- **A mission can also skip the proxy on purpose**: the variables are a convention, not a barrier. Any process can unset them or tell a tool to bypass them (for example `curl --noproxy`), and that connection is not recorded. An agent steered by content it read can do the same.
 - **A program that ignores the proxy variables connects directly**, and leaves no line. Many tools follow them (curl, git over HTTPS, npm, pip), but not all: Node.js scripts using the built-in `fetch`, connections over SSH (`git@` remotes), and protocols other than HTTP are not recorded. Recent Node.js versions follow the variables when `NODE_USE_ENV_PROXY=1` is set in the environment Timon starts with; Timon does not set it for this record, because Node.js then prints a warning at the start of every script.
 - **Plain `ws://` WebSockets do not work through the proxy.** Secure `wss://` WebSockets work and are recorded.
 - **If your environment already sets a proxy** (`HTTP_PROXY` or `HTTPS_PROXY`, usually a company proxy), Timon leaves it in place so your missions keep working: their connections go through your proxy, and Timon records nothing for them. Timon also turns on `NODE_USE_ENV_PROXY=1` for itself and its missions (unless you set it), so Node.js programs use that proxy too, and adds the machine itself (`127.0.0.1`, `localhost`) to `NO_PROXY`; Node.js scripts then print a warning about an experimental proxy agent when they start.

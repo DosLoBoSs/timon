@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AccountLoginPrompt, AccountRow, GrantsPanel, RenamePanel } from '../components/settings/backend-accounts-settings';
+import { AccountLoginPrompt, AccountRow, accountGestures, GrantsPanel, RenamePanel } from '../components/settings/backend-accounts-settings';
 import { accountStatus, cleanPastedCode, isLoginOver, loginFailureText, type AccountLogin, type BackendAccount } from './backend-accounts';
 
 Object.defineProperty(globalThis, 'React', { value: React, configurable: true, writable: true });
@@ -72,8 +72,15 @@ test('an account reads as what it needs', () => {
   assert.match(row(account), />Sign in</);
   const signedIn = row({ ...account, connected: true, identity: 'ada@example.com' });
   assert.match(signedIn, /Signed in as ada@example\.com/);
-  assert.match(signedIn, />Sign in again</);
+  assert.doesNotMatch(signedIn, />Sign in again</, 'a signed-in account keeps signing in again in its menu');
+  assert.match(signedIn, /aria-label="More actions for Perso"/);
   assert.doesNotMatch(row(account, false), /<button/, 'a granted account is used, not signed in');
+  assert.deepEqual(accountGestures('connected', { canManage: true, panelOpen: false, rename: false, assign: false }),
+    { primary: null, menu: ['reconnect', 'delete'] });
+  assert.deepEqual(accountGestures('reauth', { canManage: true, panelOpen: false, rename: false, assign: false }),
+    { primary: 'reconnect', menu: ['delete'] });
+  assert.deepEqual(accountGestures('cooldown', { canManage: true, panelOpen: false, rename: false, assign: false }).primary, null,
+    'a resting account needs nothing from anyone');
 });
 
 test('the pasted text goes out on one line; a flow is over once settled or gone', () => {
@@ -88,11 +95,11 @@ test('the superadmin assigns an account from its row; anyone who manages it rena
     account, ownerName: null, canManage: true, panelOpen: false, icon: React.createElement('span'),
     onSignIn: () => {}, onDelete: () => {}, ...props,
   }));
-  const owner = row({ onRename: () => {} });
-  assert.match(owner, />Rename</);
-  assert.doesNotMatch(owner, />Assign</, 'only the superadmin assigns');
+  const menu = (options: { rename: boolean; assign: boolean }) =>
+    accountGestures('notConnected', { canManage: true, panelOpen: false, ...options }).menu;
+  assert.deepEqual(menu({ rename: true, assign: false }), ['rename', 'delete'], 'only the superadmin assigns');
+  assert.deepEqual(menu({ rename: true, assign: true }), ['rename', 'assign', 'delete']);
   const admin = row({ onRename: () => {}, onAssign: () => {}, grantees: ['ada', 'bob'] });
-  assert.match(admin, />Assign</);
   assert.match(admin, /Assigned to ada, bob/);
   assert.doesNotMatch(row({ onRename: () => {}, onAssign: () => {}, panelOpen: true }), /<button/, 'an open panel holds the row');
 });

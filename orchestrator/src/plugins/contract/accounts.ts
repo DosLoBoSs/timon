@@ -136,10 +136,27 @@ export type PluginPermissionAction = {
   pluginId?: string;
 };
 
+/**
+ * API 16 — actions that are levels of one thing (the Providers screen): an
+ * editor offers ONE choice instead of a checkbox per action. Options go from
+ * the widest to the narrowest; the current one is the first whose `grants`
+ * the role holds, the last (no grant) otherwise. Picking one removes the
+ * grants of the others and adds its own. Its actions are in `actions` too.
+ */
+export type PluginPermissionChoice = {
+  /** Stable: an editor may key its translations on it (`providers`). */
+  key: string;
+  label: string;
+  description: string;
+  options: { key: string; label: string; description: string; grants: string[] }[];
+};
+
 /** Every right of this install: the core's checks, then the surfaces and plugins that are active. */
 export type PluginPermissionCatalog = {
   actions: PluginPermissionAction[];
   plugins: { id: string; name: string; kind: string[]; tier: string | null }[];
+  /** API 16. Absent from an older host: an editor then shows the actions as checkboxes. */
+  choices: PluginPermissionChoice[];
 };
 
 export type PluginPermissionSourceHandle = {

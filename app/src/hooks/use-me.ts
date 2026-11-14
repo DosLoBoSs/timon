@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { fetchMe, meCan, type AuthMe, type MePermission } from '@/lib/auth';
 import { permissionAccess, type PermissionAccess } from '@/lib/permission-refusal';
+import { providerAccess, type ProviderAccess } from '@/lib/provider-access';
 
 /**
  * The signed-in account, shared between the surfaces that show it.
@@ -58,4 +59,9 @@ export function useCan(permission: MePermission): boolean | null {
 /** `useCan` for a control: whether to enable it, and why it is not. */
 export function useAccess(permission: MePermission): PermissionAccess {
   return permissionAccess(useCan(permission), permission);
+}
+
+/** The level of the Providers screen (`lib/provider-access.ts`); `null` until known. */
+export function useProviderAccess(): ProviderAccess | null {
+  return providerAccess(useMe());
 }

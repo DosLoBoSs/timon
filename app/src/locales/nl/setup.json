@@ -202,7 +202,6 @@
     "loading": "De AI-CLI's op deze machine zoeken…",
     "unavailable": "De AI-CLI's van deze machine kunnen nu niet worden opgesomd.",
     "retry": "Opnieuw proberen",
-    "checkUpdates": "Op updates controleren",
     "updateCheckOff": "Updatecontroles staan uit (instelling « Op CLI-updates controleren »).",
     "install": "Installeren",
     "installing": "Installeren…",
@@ -241,10 +240,6 @@
       "continue": "Doorgaan",
       "needOne": "Installeer Claude, Codex, Grok of Copilot en meld je aan om door te gaan.",
       "anyway": "Toch doorgaan"
-    },
-    "settings": {
-      "title": "AI-tools op deze machine",
-      "description": "Installeer een AI-CLI met het officiële installatieprogramma van de leverancier, meld haar aan en werk haar bij als er een nieuwe versie is. Timon controleert bij het starten en daarna om de paar uur op updates."
     }
   }
 }

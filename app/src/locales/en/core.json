@@ -1369,7 +1369,6 @@
       },
       "models": {
         "backends": "Providers",
-        "accounts": "Subscription accounts",
         "fallback": "Auto switch",
         "breaker": "Circuit breaker",
         "quotas": "Quotas"
@@ -1430,8 +1429,7 @@
         "terminal": "shell console pty font"
       },
       "models": {
-        "backends": "claude codex provider llm api model default order",
-        "accounts": "subscription account sign in login connect reconnect several claude codex chatgpt plan device code",
+        "backends": "claude codex provider llm api model default order subscription account sign in login connect reconnect several chatgpt plan device code add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "fallback backup quota switch exhausted cooldown last resort",
         "breaker": "circuit breaker sterile turns sideline",
         "quotas": "usage limits credits subscription plan reset"
@@ -3310,10 +3308,7 @@
       }
     },
     "intro": "Manage all your LLM providers and their models. Changes apply without restarting Timon.",
-    "edit": "Edit",
-    "editTitle": "Edit the provider",
     "saved": "Provider updated.",
-    "modelCount": "{count} models",
     "keyHintEdit": "Leave empty to keep the stored key. Typing one replaces it in the vault — it is never shown again.",
     "picto": {
       "choose": "Choose a picture",
@@ -3334,6 +3329,7 @@
       "slugPlaceholder": "deepseek-chat",
       "labelPlaceholder": "DeepSeek Chat",
       "default": "Default model",
+      "noMatch": "No model matches this search.",
       "noDefault": "No default model: the selector will leave the field free.",
       "reorder": "Drag to reorder this model",
       "hide": "Shown in model selectors. Click to hide it",
@@ -3343,19 +3339,12 @@
       "contextWindowDetected": "auto · {window}",
       "contextWindowAuto": "context"
     },
-    "empty": "No provider added yet.",
-    "add": "Add a provider",
     "added": "Provider added.",
     "save": "Save",
-    "remove": "Remove",
     "confirmRemove": "Remove the provider \"{name}\"? Its key is deleted from the vault too.",
-    "active": "Active",
-    "notDetected": "Not detected",
-    "inactive": "Inactive",
     "testButton": "Test",
     "destinationNotice": "Every prompt of a mission run on this provider is sent to {host}.",
     "keyHint": "Stored in the secrets vault, never in the file, and never shown again. Leave empty for a local server that asks for none.",
-    "fileHint": "Each provider is a file in ~/.timon/backends/. You can also drop a JSON file there by hand: it is picked up within a second.",
     "fields": {
       "name": "Name",
       "protocol": "Protocol",
@@ -3390,7 +3379,6 @@
       "protocolUnavailable": "This protocol is not installed.",
       "unconfirmed": "Change not confirmed. Reload this page to check the saved state."
     },
-    "disabled": "Disabled",
     "reorder": "Drag to reorder this provider",
     "claudeToken": {
       "title": "Claude long-lived token",
@@ -3409,11 +3397,6 @@
     "disableHint": "It will disappear from selectors. New launches that explicitly use it will be refused, with no automatic fallback. Existing choices below will be kept.",
     "disable": "Disable provider",
     "managedHint": "You can rename, add, delete and hide models, and change names, pictures and the default model. Connection settings are managed by Timon or the provider plugin.",
-    "origins": {
-      "builtin": "Built in",
-      "plugin": "Plugin",
-      "file": "Added by you"
-    },
     "usages": {
       "agents": "Agents",
       "routines": "Routines",
@@ -3779,7 +3762,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Several subscriptions of the same provider, each one a choice in the model selectors (\"Claude · Perso\"). You sign in your own accounts; an administrator signs in anyone's. A mission never moves to another subscription on its own.",
     "loading": "Loading accounts…",
     "empty": "No subscription account yet: missions run on the provider's sign-in of this machine.",
     "add": "Add an account",

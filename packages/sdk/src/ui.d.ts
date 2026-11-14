@@ -988,8 +988,9 @@ declare module '@timon/ui' {
   };
   /**
    * The host a `providers.cli` occupant is painted for (client API 14): the
-   * onboarding's "Your AIs" step (`mode: 'onboarding'`), its "cannot start"
-   * screen (`recovery`) and Settings › AI models (`settings`). `null` outside
+   * onboarding's "Your AIs" step (`mode: 'onboarding'`) and its "cannot start"
+   * screen (`recovery`); `settings` is no longer painted, each provider's page
+   * shows its program instead, and stays for older plugins. `null` outside
    * that slot. The host owns the data and the gestures: it starts an install,
    * follows its console and reads the cards again when it ends.
    */
@@ -1650,6 +1651,105 @@ declare module '@timon/ui' {
     /** A whole look drawn at random from `choices`, packs included. */
     random(): AgentLook;
   } | null;
+
+  /**
+   * A provider's one status line (client API 16), the same verdict on the list
+   * and on its page: green `connected` / `available`, yellow `not-connected` /
+   * `not-installed` / `needs-authorization`, red `blocked`, grey `disabled`.
+   */
+  export type ProviderStatus =
+    | 'disabled' | 'blocked' | 'not-installed' | 'needs-authorization' | 'connected' | 'not-connected' | 'available';
+  /**
+   * One provider as the daemon groups it (client API 16): a provider plugin
+   * (one per backend when it brings several), a backend added by hand
+   * (`user:<id>`), an agent of the ACP registry (`catalog:<id>`) or a built-in
+   * one. Open-ended: read what you need, a field may be added later. Never a
+   * secret value: `secret.names` are vault entry names only.
+   */
+  export type ProviderOverview = {
+    id: string;
+    /** The name the model picker shows. */
+    name: string;
+    brand: string | null;
+    /** A pictogram or a logo (`data:` URI); wins over `brand`. */
+    icon: string | null;
+    origin: 'built-in' | 'user' | 'catalog' | 'plugin';
+    /** The plugin that brings it: your sections are painted on the pages whose `pluginId` is your plugin's id. */
+    pluginId: string | null;
+    enabled: boolean;
+    /** It holds the instance's default backend. */
+    isDefault: boolean;
+    backends: readonly {
+      id: string; label: string; active: boolean; disabled: boolean; reason: string | null;
+      modelCount: number; defaultModel: string | null; isDefault: boolean; remote: boolean;
+    }[];
+    modelCount: number;
+    /** Agents whose backend is one of its backends; absent from an older daemon. */
+    agentCount?: number;
+    connection: { signedIn: boolean | null; acceptsAccounts: boolean; [field: string]: unknown };
+    secret: { required: boolean; present: boolean; names: readonly string[] };
+    status: ProviderStatus;
+    updateAvailable: boolean;
+    [field: string]: unknown;
+  };
+  /**
+   * The page of one provider a `settings.provider.section` occupant is painted
+   * on (client API 16), in Settings › AI models › Providers. `null` outside it.
+   * A section registered by a plugin is painted on the pages of the providers
+   * that plugin brings only; registered with the `key` of a common section
+   * (`connection`, `apiKey`, `program`, `settings`, `models`) it takes that
+   * section's place there. `order` places it: the common ones are 100 to 500.
+   */
+  export function useProviderPage(): {
+    provider: ProviderOverview;
+    status: ProviderStatus;
+    /** The instance's default backend, `null` when none resolves. */
+    defaultBackend: string | null;
+    /** Reads the provider again: call it after your section changed something. */
+    refresh(): Promise<void>;
+    /** Back to the providers list. */
+    back(): void;
+  } | null;
+  /**
+   * The frame of a provider page's section (client API 16): a short `title`
+   * above a card raised over the page, whose children are rows
+   * (`ProviderSettingRow`). `description` folds behind an information mark
+   * (no paragraph under the title); `actions` are small controls at the right
+   * of the title.
+   */
+  export const ProviderSection: PlatformComponent;
+  /**
+   * One row of a `ProviderSection` card (client API 16): `title` and one
+   * `status` line at the left (`leading` before them: a logo), ONE main
+   * `action` at the right (a button, a switch), the secondary actions as
+   * `DropdownMenuItem`s in `menu`, painted in a "…" menu (`menuLabel` names
+   * it). `children` unfold under the row: what a gesture opens, never a form
+   * shown in permanence. `data-*` attributes are passed through.
+   */
+  export const ProviderSettingRow: PlatformComponent;
+  /**
+   * The row a `providers.row` occupant is painted for (client API 16): one
+   * provider in the providers list of Settings › AI models (`mode: 'settings'`)
+   * or in the first-run "Your AIs" step (`mode: 'onboarding'`). `null` outside
+   * a row. Show the provider's logo, name and one status line; offer `open`
+   * when it is set (the list: the provider's page) and paint `action` at the
+   * end when the surface hands one (the onboarding's install button).
+   */
+  export function useProviderRow(): {
+    mode: 'settings' | 'onboarding';
+    provider: ProviderOverview;
+    status: ProviderStatus;
+    /** Opens the provider's page; `null` where the row leads nowhere. */
+    open: (() => void) | null;
+    /** The surface's own control for this row, or `null`. */
+    action: unknown;
+  } | null;
+  /**
+   * The host of one provider's row (client API 16): paints the `providers.row`
+   * occupant for `provider`, with `onOpen`, `action` and `mode` as
+   * `useProviderRow()` reads them.
+   */
+  export const ProviderRow: PlatformComponent;
 }
 
 declare module '@timon/api' {

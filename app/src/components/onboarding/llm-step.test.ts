@@ -1,7 +1,7 @@
 /**
  * « Choose your LLM » (docs/ONBOARDING-LLM.md): the header stays, only the
- * block under it changes; the subscription block shows the product's provider
- * cards as rows and opens « Continue » on the same rule as `/setup/agent`;
+ * block under it changes; the subscription block shows the providers list's
+ * own rows and opens « Continue » on the same rule as `/setup/agent`;
  * the local block shows Ollama; « Back » first returns to the two choices.
  * And the pure parts: what « Back » does, what the status line says, how the
  * legal sentence is cut around its links.
@@ -216,12 +216,17 @@ test('the subscription: rows, « Continue anyway » until an AI is ready, then �
     assert.equal(ui.$('section[aria-label="Claude Code"]')?.getAttribute('data-state'), 'signIn');
     assert.equal(ui.$('section[aria-label="Codex"]')?.getAttribute('data-state'), 'missing');
     assert.ok(ui.$('section[aria-label="Claude Code"] button')?.textContent?.includes(t('providerClis.signIn')));
-    assert.ok(ui.$('section[aria-label="Codex"] button')?.textContent?.includes(t('providerClis.install')));
+    assert.equal(ui.$('section[aria-label="Codex"] button')?.textContent, t('providerClis.rows.installAndSignIn'));
+    // The providers list's own row: one status line, no path, no version.
+    assert.ok(ui.$('section[aria-label="Claude Code"] [data-provider-row]'), 'the shared provider row');
+    assert.equal(ui.$('section[aria-label="Claude Code"] [data-provider-status]')?.getAttribute('data-provider-status'), 'not-connected');
+    assert.equal(ui.$('section[aria-label="Codex"] [data-provider-status]')?.getAttribute('data-provider-status'), 'not-installed');
+    assert.equal(ui.text().includes('/bin/claude'), false, 'no path on the onboarding');
     assert.equal((ui.$('[data-continue]') as HTMLButtonElement | null)?.disabled, true);
     assert.ok(ui.$('[data-anyway]'), '« Continue anyway » while no AI is connected');
     assert.ok(ui.text().includes(t('onboarding.llm.plan.none')));
 
-    // Install starts the vendor's installer from its row.
+    // One click starts the vendor's installer from its row.
     await ui.click(ui.$('section[aria-label="Codex"] button'));
     await ui.until(() => ui.$('section[aria-label="Codex"]')?.getAttribute('data-state') === 'installing', 'the install running');
 
@@ -230,7 +235,8 @@ test('the subscription: rows, « Continue anyway » until an AI is ready, then �
     const retry = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes(t('providerClis.retry')));
     await ui.click(retry);
     await ui.until(() => ui.$('section[aria-label="Claude Code"]')?.getAttribute('data-state') === 'ready', 'Claude connected');
-    assert.ok(ui.$('section[aria-label="Claude Code"]')?.textContent?.includes(t('providerClis.rows.connected')));
+    assert.equal(ui.$('section[aria-label="Claude Code"] [data-provider-status]')?.getAttribute('data-provider-status'), 'connected');
+    assert.ok(!ui.$('section[aria-label="Claude Code"] button'), 'nothing left to do on a connected row');
     assert.equal(ui.$('[data-plan-status]')?.getAttribute('data-plan-status'), 'ready');
     assert.ok(ui.text().includes(t('onboarding.llm.plan.ready', { names: 'Claude Code' })));
     assert.equal(ui.$('[data-anyway]'), null, '« Continue anyway » is gone once an AI is connected');

@@ -195,11 +195,16 @@ export function mergeDiscovered(models: readonly ModelDraft[], discovered: reado
   });
 }
 
-/** i18n key of what keeps the form from being sent, or null. */
-export function formErrorKey(form: BackendForm): string | null {
+/** i18n key of what keeps the name and connection from being sent, or null. */
+export function settingsErrorKey(form: BackendForm): string | null {
   if (!form.name.trim()) return 'backendsSettings.errors.nameRequired';
   if ((!form.origin || form.origin === 'file') && form.connectionEditable !== false && !isHttpUrl(form.baseUrl.trim())) return 'backendsSettings.errors.urlInvalid';
-  return modelsErrorKey(form.models);
+  return null;
+}
+
+/** i18n key of what keeps the form from being sent, or null. */
+export function formErrorKey(form: BackendForm): string | null {
+  return settingsErrorKey(form) ?? modelsErrorKey(form.models);
 }
 
 /** Host the prompts will be sent to, for the notice under the address field. */
@@ -254,27 +259,39 @@ export function createPayload(form: BackendForm): Record<string, unknown> {
 }
 
 /**
- * What an edit sends. Everything the form holds goes, EXCEPT an empty key:
- * the field cannot be prefilled with a secret we never receive, so "empty"
- * can only mean "keep the one you have".
+ * What the Models section of a provider page sends: the list, its default and,
+ * for a provider that is not a file, the slugs the user deleted. Nothing else,
+ * so a save there never touches the name or the connection.
  */
-export function updatePayload(form: BackendForm): Record<string, unknown> {
+export function modelsPayload(form: BackendForm): Record<string, unknown> {
   if (form.origin && form.origin !== 'file') {
     const listed = new Set(form.models.map((model) => model.slug.trim()));
     const removedModels = (form.savedSlugs ?? []).filter((slug) => !listed.has(slug));
-    return { label: form.name.trim(), models: cleanModels(form.models, true),
-      ...(removedModels.length ? { removedModels } : {}),
-      defaultModel: form.defaultModel, icon: form.icon, brand: form.brand };
+    return { models: cleanModels(form.models, true), ...(removedModels.length ? { removedModels } : {}), defaultModel: form.defaultModel };
   }
+  return { models: cleanModels(form.models, true, true), defaultModel: form.defaultModel };
+}
+
+/**
+ * What the own-settings section sends: the name and picture, and for a
+ * provider added by hand its connection. An empty key is left out: the field
+ * cannot be prefilled with a secret we never receive, so "empty" can only
+ * mean "keep the one you have".
+ */
+export function settingsPayload(form: BackendForm): Record<string, unknown> {
+  if (form.origin && form.origin !== 'file') return { label: form.name.trim(), icon: form.icon, brand: form.brand };
   const key = form.key.trim();
   return {
     name: form.name.trim(),
     ...(form.connectionEditable !== false ? { baseUrl: form.baseUrl.trim(), protocol: form.protocol, ...(key ? { key } : {}) } : {}),
-    models: cleanModels(form.models, true, true),
-    defaultModel: form.defaultModel,
     icon: form.icon,
     brand: form.brand,
   };
+}
+
+/** What an edit of the whole form sends: both halves above. */
+export function updatePayload(form: BackendForm): Record<string, unknown> {
+  return { ...settingsPayload(form), ...modelsPayload(form) };
 }
 
 export function testPayload(form: BackendForm): Record<string, unknown> {
