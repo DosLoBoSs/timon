@@ -311,6 +311,40 @@ test('onboarding: a failed install ends the chain, and shows the reason and the 
   }
 });
 
+test('onboarding: an install that succeeded but left no program to find gives the row its button back, with why', async () => {
+  // Windows: the installer ended well, but the daemon's PATH was not refreshed, so the program stays unfound.
+  const server: Server = { list: [cli('claude', { label: 'Claude' })], job: null, posts: [] };
+  const m = await mount(server);
+  const typed: string[] = [];
+  const terminal = (event: Event) => {
+    typed.push((event as CustomEvent<{ insert?: string }>).detail.insert ?? '');
+  };
+  const row = () => document.querySelector('section[aria-label="Claude"]');
+  try {
+    window.addEventListener('timon:terminal-open', terminal);
+    await m.render(m.React.createElement(m.cards.ProviderCliCards, { mode: 'onboarding' }));
+    await m.until(() => row()?.querySelector('button') !== null, 'the row');
+    await m.click(row()?.querySelector('button'));
+    await m.until(() => row()?.getAttribute('data-state') === 'installing', 'the install running');
+
+    server.job = { ...server.job!, state: 'succeeded', finishedAt: 2, result: { ok: true, command: null, reason: null } };
+    await m.until(() => row()?.querySelector('button')?.textContent === 'Install and sign in', 'the button back', 5_000);
+    assert.doesNotMatch(row()?.textContent ?? '', /Installing/, 'no spinner left');
+    assert.match(row()?.textContent ?? '', /Installed, but Timon cannot find the program/);
+    assert.deepEqual(typed, [], 'no sign-in without a program');
+
+    // The program shows up on a later read: the reason goes, the sign-in is the next gesture.
+    server.list = [cli('claude', { label: 'Claude', path: 'C:\\Users\\ann\\.local\\bin\\claude.exe', signedIn: false })];
+    const retry = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Try again');
+    await m.click(retry);
+    await m.until(() => row()?.querySelector('button')?.textContent === 'Sign in', 'sign in offered');
+    assert.doesNotMatch(row()?.textContent ?? '', /cannot find the program/);
+  } finally {
+    window.removeEventListener('timon:terminal-open', terminal);
+    await m.unmount();
+  }
+});
+
 test('opencode 2 found: the card says why it is left alone, and offers no button that would replace it', async () => {
   const server: Server = {
     // What the daemon answers for a 2.x: not installable, no update, even with a newer 1.x published.

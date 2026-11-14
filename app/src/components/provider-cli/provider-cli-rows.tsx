@@ -10,7 +10,7 @@
  * did not go through (an install that failed, a command Timon could not copy)
  * opens a line under its row, with what to run by hand.
  */
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import { ExternalLink, Loader2, LogIn, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CommandToRun } from '@/components/command-to-run';
@@ -32,6 +32,10 @@ export function ProviderCliRows(): ReactElement | null {
   const [outcomes, setOutcomes] = useState<Outcomes>({});
   // The CLIs whose install was started with "Install and sign in": their sign-in follows the install.
   const [chained, setChained] = useState<ReadonlySet<string>>(() => new Set());
+  // The CLIs whose installer succeeded while the list read after it still shows no program.
+  const [unfound, setUnfound] = useState<ReadonlySet<string>>(() => new Set());
+  // The list last seen while each chained install ran: a different one was read after it ended.
+  const listWhileRunning = useRef(new Map<string, ProviderCli[]>());
   const refresh = host?.refresh;
   const hostSignIn = host?.signIn;
   const hostInstall = host?.install;
@@ -58,6 +62,7 @@ export function ProviderCliRows(): ReactElement | null {
 
   const installThenSignIn = useCallback(async (name: string): Promise<void> => {
     if (!hostInstall) return;
+    setUnfound((prev) => without(prev, [name]));
     await hostInstall(name);
     // Marked once the new job is in the host: an earlier failed job must not end the chain at once.
     setChained((prev) => new Set(prev).add(name));
@@ -68,23 +73,28 @@ export function ProviderCliRows(): ReactElement | null {
   useEffect(() => {
     if (!backends || !jobs || chained.size === 0) return;
     const done: string[] = [];
+    const lost: string[] = [];
     for (const name of chained) {
       const job = jobs[name];
-      if (job?.state === 'running') continue;
+      if (job?.state === 'running') { listWhileRunning.current.set(name, backends); continue; }
       if (job?.state === 'failed') { done.push(name); continue; }
       const cli = backends.find((entry) => entry.name === name);
-      // The installer ended; the list is read again just after: wait until it shows the program.
-      if (!cli?.path) continue;
+      if (cli?.path) {
+        done.push(name);
+        if (providerCliState(cli) !== 'ready') signIn(name);
+        continue;
+      }
+      // The host reads the list again once the installer ended: until then, the old list proves nothing.
+      if (listWhileRunning.current.get(name) === backends) continue;
+      // Read after the end and still no program (a PATH not refreshed): the row gets its button back.
       done.push(name);
-      if (providerCliState(cli) !== 'ready') signIn(name);
+      lost.push(name);
     }
     if (done.length > 0) {
-      setChained((prev) => {
-        const next = new Set(prev);
-        for (const name of done) next.delete(name);
-        return next;
-      });
+      for (const name of done) listWhileRunning.current.delete(name);
+      setChained((prev) => without(prev, done));
     }
+    if (lost.length > 0) setUnfound((prev) => new Set([...prev, ...lost]));
   }, [backends, jobs, chained, signIn]);
 
   if (!host) return null;
@@ -99,6 +109,7 @@ export function ProviderCliRows(): ReactElement | null {
               cli={cli}
               job={host.jobs[cli.name] ?? null}
               chained={chained.has(cli.name)}
+              unfound={unfound.has(cli.name)}
               outcome={outcomes[cli.name] ?? null}
               onInstall={() => void installThenSignIn(cli.name)}
               onSignIn={() => signIn(cli.name)}
@@ -116,6 +127,13 @@ export function ProviderCliRows(): ReactElement | null {
   );
 }
 
+function without(set: ReadonlySet<string>, names: readonly string[]): ReadonlySet<string> {
+  if (!names.some((name) => set.has(name))) return set;
+  const next = new Set(set);
+  for (const name of names) next.delete(name);
+  return next;
+}
+
 function SearchRow(): ReactElement {
   return (
     <div className="flex items-center gap-3 rounded-xl p-2.5" aria-hidden>
@@ -128,11 +146,13 @@ function SearchRow(): ReactElement {
   );
 }
 
-function OnboardingProviderRow({ cli, job, chained, outcome, onInstall, onSignIn }: {
+function OnboardingProviderRow({ cli, job, chained, unfound, outcome, onInstall, onSignIn }: {
   cli: ProviderCli;
   job: InstallJob | null;
   /** Its sign-in starts once the install ends. */
   chained: boolean;
+  /** Its installer succeeded, yet the daemon still finds no program. */
+  unfound: boolean;
   outcome: ProviderCliSignInOutcome | null;
   onInstall: () => void;
   onSignIn: () => void;
@@ -178,6 +198,9 @@ function OnboardingProviderRow({ cli, job, chained, outcome, onInstall, onSignIn
       <ProviderRow provider={onboardingProvider(cli)} mode="onboarding" action={action} />
       {cli.unsupportedVersion && (
         <p className="pb-2 pl-[52px] pr-2 text-xs text-amber-700 dark:text-amber-300">{t('providerClis.unsupportedVersion', { name: cli.label, version: cli.version ?? '' })}</p>
+      )}
+      {unfound && state === 'missing' && !running && (
+        <p role="alert" className="pb-2 pl-[52px] pr-2 text-xs text-amber-700 dark:text-amber-300">{t('providerClis.rows.installedNotFound')}</p>
       )}
       {failed && (
         <div className="space-y-1 pb-2 pl-[52px] pr-2">

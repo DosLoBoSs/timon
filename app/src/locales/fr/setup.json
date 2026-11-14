@@ -245,6 +245,7 @@
     "rows": {
       "searching": "Recherche…",
       "installAndSignIn": "Installer et se connecter",
+      "installedNotFound": "Installé, mais Timon ne trouve pas le programme : relancez Timon ou imposez son chemin dans la page du fournisseur.",
       "signInOutcome": {
         "terminal": "Tapée dans le terminal de Timon : appuyez sur Entrée et terminez dans votre navigateur. Timon vérifie de nouveau à votre retour.",
         "copied": "Commande copiée : collez-la dans un terminal de cette machine, appuyez sur Entrée et terminez dans votre navigateur. Timon vérifie de nouveau à votre retour.",
