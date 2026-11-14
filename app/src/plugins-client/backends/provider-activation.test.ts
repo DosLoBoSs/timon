@@ -113,7 +113,7 @@ test('off lists what uses the provider and writes nothing before the confirm; on
     assert.match(document.body.textContent ?? '', /Disable Acme\?/);
     assert.match(document.querySelector('[data-usage="agents"]')?.textContent ?? '', /Scout/);
     assert.match(document.querySelector('[data-usage="tasks"]')?.textContent ?? '', /Nightly digest/);
-    assert.equal(document.querySelector('[data-usage="routines"]'), null);
+    assert.ok(!document.querySelector('[data-usage="routines"]'));
     assert.deepEqual(server.patches, [], 'nothing written before the confirm');
 
     const reads = server.overviewReads;
@@ -143,7 +143,7 @@ test('a provider whose plugin is off elsewhere cannot be turned on here; one wit
   const bare = await mount({ provider: provider('bare', { backends: [] }), patches: [], overviewReads: 0 });
   try {
     await bare.until(() => document.querySelector('h3')?.textContent === 'bare', 'the page');
-    assert.equal(toggle(), null);
+    assert.ok(!toggle());
   } finally {
     await bare.unmount();
   }

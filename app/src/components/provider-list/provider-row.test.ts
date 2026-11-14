@@ -88,9 +88,9 @@ test('the product row paints the name, the status line, the update chip, and ope
     await m.render(React.createElement(row.ProviderRow, {
       provider: provider('acme', { name: 'Acme AI' }), mode: 'onboarding', action: React.createElement('button', { 'data-install': '' }, 'Install'),
     }));
-    assert.equal(document.querySelector('[data-provider-row] > button'), null);
+    assert.ok(!document.querySelector('[data-provider-row] > button'));
     assert.ok(document.querySelector('[data-install]'));
-    assert.equal(document.querySelector('[data-provider-update]'), null);
+    assert.ok(!document.querySelector('[data-provider-update]'));
   } finally {
     await m.unmount();
   }
@@ -109,7 +109,7 @@ test('a plugin that takes `providers.row` replaces the row and reads its provide
     await m.render(React.createElement(row.ProviderRow, { provider: provider('beta', { name: 'Beta', status: 'connected' }), onOpen: () => {} }));
     await m.until(() => document.querySelector('[data-compact]') !== null, 'the plugin row');
     assert.equal(document.querySelector('[data-compact]')?.textContent, 'Beta');
-    assert.equal(document.querySelector('[data-provider-row]'), null);
+    assert.ok(!document.querySelector('[data-provider-row]'));
     assert.deepEqual([...new Set(seen)], ['settings:beta:connected']);
 
     await React.act(async () => { off(); });

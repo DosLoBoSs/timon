@@ -579,7 +579,7 @@
       "on": "On",
       "off": "Off",
       "readOnly": "This provider's file cannot be changed from here: fix it in its folder first.",
-      "pluginOff": "Its plugin is turned off: turn it on in Settings › Plugins."
+      "pluginOff": "Its plugin is turned off: turn it on in {settingsPath}."
     }
   },
   "providerList": {

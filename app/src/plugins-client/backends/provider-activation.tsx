@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useProviderPage } from '@/components/provider-page/provider-page-context';
 import { t } from '@/lib/i18n';
+import { settingsPath } from '@/lib/settings-path';
 import type { CustomBackend } from './form';
 import { editableBackend } from './providers-reorder';
 
@@ -94,7 +95,7 @@ export function ProviderActivation(): ReactElement | null {
 
   return (
     <>
-      <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground" title={pluginOff ? t('providerPage.activation.pluginOff') : undefined}>
+      <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground" title={pluginOff ? t('providerPage.activation.pluginOff', { settingsPath: settingsPath('plugins') }) : undefined}>
         {t(on ? 'providerPage.activation.on' : 'providerPage.activation.off')}
         <Switch checked={on && !pluginOff} disabled={busy || pluginOff} data-provider-activation
           aria-label={t('backendsSettings.toggle', { name: provider.name })} onCheckedChange={() => void toggle()} />

@@ -569,7 +569,7 @@
       "on": "Activé",
       "off": "Désactivé",
       "readOnly": "Le fichier de ce fournisseur ne peut pas être modifié d'ici : corrigez-le d'abord dans son dossier.",
-      "pluginOff": "Son plugin est désactivé : activez-le dans Réglages › Plugins."
+      "pluginOff": "Son plugin est désactivé : activez-le dans {settingsPath}."
     }
   },
   "providerList": {

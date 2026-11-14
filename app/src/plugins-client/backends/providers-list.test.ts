@@ -171,7 +171,7 @@ test('the list paints the default provider, both groups and the rows; the search
     assert.match(document.querySelector('[data-provider-group="others"] h4')?.textContent ?? '', /Other providers\s*1/);
     assert.match(document.querySelector('[data-provider-row="codex"]')?.textContent ?? '', /Not downloaded/);
     assert.ok(document.querySelector('[data-provider-row="claude"] [data-provider-update]'), 'the update chip');
-    assert.equal(document.querySelector('[data-provider-row="codex"] [data-provider-update]'), null);
+    assert.ok(!document.querySelector('[data-provider-row="codex"] [data-provider-update]'));
     await m.until(() => /Automatic \(Claude\)/.test(document.querySelector('[data-default-provider]')?.textContent ?? ''), 'the resolved default');
 
     const search = document.querySelector('input[type="search"]') as HTMLInputElement;
@@ -182,7 +182,7 @@ test('the list paints the default provider, both groups and the rows; the search
     });
     assert.deepEqual(rowIds('connected'), []);
     assert.deepEqual(rowIds('others'), ['codex']);
-    assert.equal(document.querySelector('[data-provider-group="connected"]'), null, 'an empty group is not shown');
+    assert.ok(!document.querySelector('[data-provider-group="connected"]'), 'an empty group is not shown');
     await m.React.act(async () => {
       setValue.call(search, 'zzz');
       search.dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -223,8 +223,8 @@ test('Reorder shows the picker\'s order flat; Done brings the groups back', asyn
     await m.click(Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Reorder'));
     await m.until(() => document.querySelector('[data-reorder-row]') !== null, 'the reorder rows');
     assert.deepEqual(Array.from(document.querySelectorAll('[data-reorder-row]')).map((row) => row.getAttribute('data-reorder-row')), ['claude', 'codex']);
-    assert.equal(document.querySelector('[data-provider-group]'), null);
-    assert.equal(document.querySelector('input[type="search"]'), null);
+    assert.ok(!document.querySelector('[data-provider-group]'));
+    assert.ok(!document.querySelector('input[type="search"]'));
     await m.click(Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Done'));
     assert.deepEqual(rowIds('connected'), ['claude', 'user:local']);
   } finally {
