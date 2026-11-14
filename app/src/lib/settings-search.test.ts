@@ -137,3 +137,15 @@ test('every locale carries the same hidden keywords and they point at real tabs'
   });
   assert.deepEqual(keysOf(fr), keysOf(en));
 });
+
+test('the Providers tab answers to the sections of a provider page and to the Add a provider page', () => {
+  const words = {
+    en: ['catalog', 'endpoint', 'api key', 'program', 'binary', 'path', 'version', 'update', 'token', 'authorize', 'subscription', 'thinking'],
+    fr: ['catalogue', 'endpoint', 'clé api', 'programme', 'binaire', 'chemin', 'version', 'mise à jour', 'jeton', 'autoriser', 'abonnement', 'reflexion'],
+  };
+  for (const [name, dict] of [['en', en], ['fr', fr]] as const) {
+    const keywords = { 'models/backends': dict.settingsSearch.tabKeywords.models.backends };
+    const over = { plugins: [{ id: '@timon/backends', origin: 'occupant' as const, label: 'Providers' }] };
+    for (const query of words[name]) assert.ok(tabIds(query, over, keywords).includes('models/backends'), `${name}: "${query}"`);
+  }
+});

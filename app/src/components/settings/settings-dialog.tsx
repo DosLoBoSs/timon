@@ -15,7 +15,6 @@ import { DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { DesktopUninstallSettings } from '@/components/desktop-uninstall-settings';
 import { SystemInstallationSettings } from '@/components/settings/system-installation-settings';
 import { FallbackSettings } from '@/components/fallback-settings';
-import { BackendAccountsSettings } from '@/components/settings/backend-accounts-settings';
 import { GlobalInstructionsSettings } from '@/plugins-client/settings/global-instructions-settings';
 import { TimonPreambleSettings } from '@/plugins-client/settings/timon-preamble-settings';
 import { PluginSettingsPane } from '@/components/plugin-settings-sections';
@@ -39,6 +38,7 @@ import { SettingsRow, type Setting } from '@/components/settings/settings-row';
 import { isPageSurfaceAllowed, isZoneVisible, useCapabilities } from '@/lib/capabilities';
 import { useMe } from '@/hooks/use-me';
 import { actingUser } from '@/lib/auth';
+import { providerAccess } from '@/lib/provider-access';
 import { desktopBridge } from '@/lib/desktop';
 import { t } from '@/lib/i18n';
 import { SlotKeyed, useSlotEntries } from '@/lib/plugin-host/render';
@@ -211,6 +211,9 @@ function SettingsPanel({ onClose, unsavedRef }: { onClose: () => void; unsavedRe
     desktop,
     secrets: hasSecrets,
     superadmin: actingUser(me)?.is_superadmin === true,
+    // While the account is read, the tab stays: a link to a provider's page must not land on another tab.
+    // The pane itself waits for the level (`providers-settings.tsx`).
+    providers: providerAccess(me) ?? undefined,
   }), [settings, includeAdvanced, pluginStates, catalog, sectionEntries, graftedGroups, desktop, hasSecrets, me]);
 
   const resolved = resolveSettingsTarget(target, layout);
@@ -535,8 +538,6 @@ function TabContent({
         return <TimonPreambleSettings />;
       case 'fallback':
         return <><FallbackSettings />{grafts}</>;
-      case 'accounts':
-        return <BackendAccountsSettings />;
       case 'secrets':
         return <SecretsClient />;
       case 'connections':

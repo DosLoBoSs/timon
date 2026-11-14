@@ -11,7 +11,7 @@
     "apiVersion": 14,
     "kind": "behavior",
     "label": "Compact provider cards",
-    "description": "Replaces the AI CLI cards of the onboarding and of Settings with one compact list.",
+    "description": "Replaces the AI CLI cards of the onboarding with one compact list.",
     "permissions": [],
     "client": {
       "slots": ["providers.cli"],

@@ -18,7 +18,7 @@ If your Hermes runs as a gateway, possibly on another machine, see [Hermes Gatew
 
    (or sign in to Nous, if that is how you use Hermes).
 
-3. Restart Timon. **Hermes** then appears among the LLM backends.
+3. Restart Timon. **Hermes** then appears in the model selectors.
 
 Timon looks for `hermes-acp` on the service's PATH, in `~/.local/bin` on Linux and macOS, and in `%LOCALAPPDATA%\hermes\bin` on Windows, which is where Hermes' installer puts it.
 

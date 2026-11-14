@@ -10,7 +10,8 @@ import { modelPreferences, mergeModelPreferences } from '../../backends/model-pr
 import { discoveredModels } from '../../backends/model-discovery.js';
 import { reloadLocalBackends } from '../../backends/local-profiles.js';
 import { scopedDb } from '../../users/scoped-db.js';
-import { requireSuperadmin, viewerFromRequest } from '../../users/identity.js';
+import { viewerFromRequest } from '../../users/identity.js';
+import { requireProviderAccess } from '../../users/provider-access.js';
 import { refuseBackendChange } from './change-gate.js';
 
 type FileView = {
@@ -37,7 +38,8 @@ function references(id: string, req: Request) {
 
 export function registerManagedBackendRoutes(router: Router, files: () => FileListing, updateCustom: RequestHandler): void {
   router.use('/api/backends/manage', (req, res, next) => {
-    if (!requireSuperadmin(req, res)) return;
+    // Models, names, pictures, switching on and off: the `full` level (`users/provider-access.ts`).
+    if (!requireProviderAccess(req, res, 'full')) return;
     if (refuseBackendChange(req, res)) return;
     next();
   });

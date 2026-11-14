@@ -1369,7 +1369,6 @@
       },
       "models": {
         "backends": "Fournisseurs",
-        "accounts": "Comptes d’abonnement",
         "fallback": "Bascule auto",
         "breaker": "Disjoncteur",
         "quotas": "Quotas"
@@ -1430,8 +1429,7 @@
         "terminal": "shell console pty police"
       },
       "models": {
-        "backends": "claude codex fournisseur llm api modèle défaut ordre",
-        "accounts": "abonnement compte connexion connecter reconnecter plusieurs claude codex chatgpt forfait code appareil",
+        "backends": "claude codex fournisseur llm api modèle défaut ordre abonnement compte connexion connecter reconnecter plusieurs chatgpt forfait code appareil ajouter catalogue registre acp endpoint compatible openai anthropic url clé secret coffre programme binaire cli chemin version mise à jour installer autoriser autorisation sécurité jeton activer désactiver réflexion fenêtre de contexte",
         "fallback": "secours repli quota bascule épuisé délai dernier recours",
         "breaker": "disjoncteur tours stériles",
         "quotas": "usage limites crédits abonnement forfait réinitialisation"
@@ -3298,10 +3296,7 @@
       }
     },
     "intro": "Gérez tous vos fournisseurs LLM et leurs modèles. Les changements s’appliquent sans redémarrer Timon.",
-    "edit": "Modifier",
-    "editTitle": "Modifier le fournisseur",
     "saved": "Fournisseur mis à jour.",
-    "modelCount": "{count} modèles",
     "keyHintEdit": "Laisser vide conserve la clé enregistrée. En saisir une la remplace dans le coffre — elle n'est jamais réaffichée.",
     "picto": {
       "choose": "Choisir un picto",
@@ -3322,6 +3317,7 @@
       "slugPlaceholder": "deepseek-chat",
       "labelPlaceholder": "DeepSeek Chat",
       "default": "Modèle par défaut",
+      "noMatch": "Aucun modèle ne correspond à cette recherche.",
       "noDefault": "Aucun modèle par défaut : le sélecteur laissera le champ libre.",
       "reorder": "Glisser pour réordonner ce modèle",
       "hide": "Affiché dans les sélecteurs de modèle. Cliquer pour le masquer",
@@ -3331,19 +3327,12 @@
       "contextWindowDetected": "auto · {window}",
       "contextWindowAuto": "contexte"
     },
-    "empty": "Aucun fournisseur ajouté pour l'instant.",
-    "add": "Ajouter un fournisseur",
     "added": "Fournisseur ajouté.",
     "save": "Enregistrer",
-    "remove": "Supprimer",
     "confirmRemove": "Supprimer le fournisseur « {name} » ? Sa clé est aussi retirée du coffre.",
-    "active": "Actif",
-    "notDetected": "Non détecté",
-    "inactive": "Inactif",
     "testButton": "Tester",
     "destinationNotice": "Chaque prompt d'une mission lancée sur ce fournisseur est envoyé à {host}.",
     "keyHint": "Conservée dans le coffre à secrets, jamais dans le fichier, et plus jamais affichée. Laissez vide pour un serveur local qui n'en demande pas.",
-    "fileHint": "Chaque fournisseur est un fichier de ~/.timon/backends/. Vous pouvez aussi y déposer un fichier JSON à la main : il est pris en compte dans la seconde.",
     "fields": {
       "name": "Nom",
       "protocol": "Protocole",
@@ -3378,7 +3367,6 @@
       "protocolUnavailable": "Ce protocole n’est pas installé.",
       "unconfirmed": "Modification non confirmée. Rechargez cette page pour vérifier l’état enregistré."
     },
-    "disabled": "Désactivé",
     "reorder": "Glisser pour déplacer ce fournisseur",
     "claudeToken": {
       "title": "Jeton Claude longue durée",
@@ -3397,11 +3385,6 @@
     "disableHint": "Il disparaîtra des sélecteurs. Les nouveaux lancements qui le demandent seront refusés, sans repli automatique. Les choix existants ci-dessous seront conservés.",
     "disable": "Désactiver le fournisseur",
     "managedHint": "Vous pouvez renommer, ajouter, supprimer et masquer des modèles, et changer noms, pictos et modèle par défaut. La connexion est gérée par Timon ou le plugin fournisseur.",
-    "origins": {
-      "builtin": "Livré avec Timon",
-      "plugin": "Plugin",
-      "file": "Ajouté par vous"
-    },
     "usages": {
       "agents": "Agents",
       "routines": "Routines",
@@ -3767,7 +3750,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Plusieurs abonnements d’un même fournisseur, chacun choisi dans les sélecteurs de modèle (« Claude · Perso »). Tu connectes tes propres comptes ; un administrateur connecte ceux de n’importe qui. Une mission ne bascule jamais seule sur un autre abonnement.",
     "loading": "Chargement des comptes…",
     "empty": "Aucun compte d’abonnement : les missions tournent sur la connexion du fournisseur de cette machine.",
     "add": "Ajouter un compte",

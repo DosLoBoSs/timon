@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { blankForm, createPayload, destinationHost, effectiveReasoning, formErrorKey, formOf, mergeDiscovered, modelsErrorKey, outcomeMessage, parseLevels, testPayload, thinkingChoiceOf, updatePayload, withThinkingChoice } from '@/plugins-client/backends/form';
+import { blankForm, createPayload, destinationHost, effectiveReasoning, formErrorKey, formOf, mergeDiscovered, modelsErrorKey, modelsPayload, outcomeMessage, parseLevels, settingsErrorKey, settingsPayload, testPayload, thinkingChoiceOf, updatePayload, withThinkingChoice } from '@/plugins-client/backends/form';
 import type { CustomBackend } from '@/plugins-client/backends/form';
 
 const filled = { ...blankForm(), name: ' DeepSeek ', baseUrl: ' https://api.deepseek.com/anthropic ', key: ' sk-x ' };
@@ -140,4 +140,25 @@ test('the levels a Test reported travel with the models and count as detected un
   assert.deepEqual(effectiveReasoning(withThinkingChoice(merged[0]!, 'none')), { source: 'declared', thinks: false, controls: [] });
   const sent = createPayload({ ...blankForm(), name: 'X', baseUrl: 'https://x.example', models: merged }).models as Record<string, unknown>[];
   assert.deepEqual(sent[0]!.reportedReasoningLevels, ['low', 'max']);
+});
+
+test('a provider page saves its models and its own settings apart', () => {
+  const managed = { ...blankForm(), id: 'claude', origin: 'builtin' as const, name: 'Claude', icon: null, brand: 'claude',
+    models: [{ slug: 'opus', label: 'Opus', hidden: true }], savedSlugs: ['opus', 'gone'], defaultModel: null };
+  assert.deepEqual(Object.keys(modelsPayload(managed)).sort(), ['defaultModel', 'models', 'removedModels']);
+  assert.deepEqual(modelsPayload(managed).removedModels, ['gone']);
+  assert.deepEqual(settingsPayload(managed), { label: 'Claude', icon: null, brand: 'claude' });
+
+  const own = { ...filled, id: 'deepseek', origin: 'file' as const, connectionEditable: true, models: [{ slug: 'chat', label: '' }], defaultModel: 'chat' };
+  assert.deepEqual(Object.keys(modelsPayload(own)).sort(), ['defaultModel', 'models']);
+  const settings = settingsPayload(own);
+  for (const field of ['models', 'defaultModel', 'removedModels']) assert.equal(field in settings, false);
+  assert.equal(settings.baseUrl, 'https://api.deepseek.com/anthropic');
+  assert.equal(settings.key, 'sk-x');
+  assert.equal('key' in settingsPayload({ ...own, key: ' ' }), false, 'an empty key keeps the stored one');
+  // The whole form is still both halves.
+  assert.deepEqual(updatePayload(own), { ...settingsPayload(own), ...modelsPayload(own) });
+  // A models save is not held back by the connection, nor the reverse.
+  assert.equal(settingsErrorKey({ ...own, models: [{ slug: '', label: '' }] }), null);
+  assert.equal(settingsErrorKey({ ...own, baseUrl: 'nope' }), 'backendsSettings.errors.urlInvalid');
 });

@@ -10,6 +10,20 @@ Once your pro licence is active and Multi-user is installed and on, its **Team**
 
 Each person keeps their own missions, projects and settings; what they may see beyond their own work is what their groups allow.
 
+## Access to the Providers screen
+
+**Settings → AI models → Providers** is offered to the other accounts at one of three levels, chosen for each permission set on the Team page (**Permissions**, then **Providers screen**):
+
+| Level | What the account sees and does |
+|---|---|
+| **Full access** | Like the superadmin: every section of a provider's page (Connection, API key, Program, its own settings, Models), adding and removing providers, switching them on and off. The Program section decides which program Timon runs on this machine: give this level only to people you would let do that. |
+| **Own accounts only** | The list of providers, read only, and on a provider's page the **Connection** section with **its own** [subscription accounts](./subscription-accounts.md): add one, sign it in, rename it, delete it. Nothing else: no program, API key, settings, models, on/off switch or new provider. |
+| **Hidden** | The screen does not appear: no tab, no settings search result, no link from a notification. |
+
+The superadmin always has full access. An account in several groups gets the widest level any of them gives. The **Employee** permission set a new installation starts with gives **Own accounts only**, the level we recommend for a new account; a permission set you create gives **Hidden** until you pick another level.
+
+When you update an installation whose accounts managed their own subscription accounts before these levels existed, every permission set that said nothing about providers is given **Own accounts only** once, so nobody loses what they had. Change it afterwards as you wish.
+
 ## Without it
 
 If the licence ends, or Multi-user is removed or turned off, **only the administrator keeps access**. The other accounts are suspended, never deleted: they cannot sign in, but their missions, settings and data stay where they are. The administrator sees a card explaining why. Access comes back, unchanged, as soon as the pro licence and Multi-user are both there again.

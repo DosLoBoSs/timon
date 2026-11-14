@@ -11,6 +11,7 @@ import { plainPreview } from '@/lib/plain-preview';
 import { sseOn } from '@/lib/sse-stream';
 import { useActiveNotificationCount } from '@/lib/use-notification-count';
 import { notificationHref } from '@/lib/notification-href';
+import { useProviderAccess } from '@/hooks/use-me';
 import { t } from '@/lib/i18n';
 import { BRAND } from '@/lib/brand';
 import { isZoneVisible, useCapabilities } from '@/lib/capabilities';
@@ -68,7 +69,7 @@ export function NotifCard({
   const isUrgent = n.urgent === 1;
 
   // Built the same way as the Web Push payload — see lib/notification-href.
-  const missionHref = notificationHref(n);
+  const missionHref = notificationHref(n, { providers: useProviderAccess() });
   const [expanded, setExpanded] = useState(false);
   const display = systemNotificationText(n);
   const expandable = isLongNotification(display);

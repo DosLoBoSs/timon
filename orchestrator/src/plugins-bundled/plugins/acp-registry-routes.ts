@@ -7,16 +7,18 @@
  *   DELETE /api/plugins/-/providers/acp-registry/:agentId      uninstall
  *
  * Downloading a program the daemon will launch is the strongest thing a
- * browser can ask for here, so: a superadmin SIGNED IN TO THE APP, nobody else
- * (not the daemon token, not a mission token — an agent must not install the
- * program it will then be run by). Reading the sign-in methods starts the
+ * browser can ask for here, so: a person SIGNED IN TO THE APP with full access
+ * to the Providers screen (the superadmin, or `providers:manage`,
+ * `users/provider-access.ts`), nobody else (not the daemon token, not a
+ * mission token — an agent must not install the program it will then be run
+ * by). Reading the sign-in methods starts the
  * agent's program, so it is a POST behind the same gate, with an empty body.
  */
 import type { Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { acpRegistryService } from '../../providers/acp-registry/index.js';
 import { AcpRegistryError } from '../../providers/acp-registry/service.js';
-import { requireAppSuperadmin } from './install-routes.js';
+import { requireProviderAccess } from '../../users/provider-access.js';
 
 const PREFIX = '/api/plugins/-/providers/acp-registry';
 const agentId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/);
@@ -33,9 +35,16 @@ function send(res: Response, err: unknown, context: string): void {
   res.status(500).json({ error: 'failed', message: 'the operation failed — the daemon log has the details' });
 }
 
+function requireManager(req: Request, res: Response): boolean {
+  return requireProviderAccess(req, res, 'full', {
+    session: true,
+    sessionReason: 'only a person signed in to the app may install a provider from the catalogue',
+  }) !== null;
+}
+
 export function registerAcpRegistryRoutes(router: Router): void {
   router.get(PREFIX, async (req: Request, res: Response) => {
-    if (!requireAppSuperadmin(req, res)) return;
+    if (!requireManager(req, res)) return;
     try {
       res.setHeader('Cache-Control', 'no-store');
       res.json(await acpRegistryService().list({ refresh: req.query.refresh === '1' }));
@@ -43,7 +52,7 @@ export function registerAcpRegistryRoutes(router: Router): void {
   });
 
   router.post(`${PREFIX}/install`, async (req: Request, res: Response) => {
-    if (!requireAppSuperadmin(req, res)) return;
+    if (!requireManager(req, res)) return;
     const body = installBody.safeParse(req.body ?? {});
     if (!body.success) return void res.status(400).json({ error: 'invalid-body', message: 'expected `{ agentId, acceptUnverified? }`' });
     try {
@@ -52,7 +61,7 @@ export function registerAcpRegistryRoutes(router: Router): void {
   });
 
   router.post(`${PREFIX}/:agentId/auth-methods`, async (req: Request, res: Response) => {
-    if (!requireAppSuperadmin(req, res)) return;
+    if (!requireManager(req, res)) return;
     const id = agentId.safeParse(req.params.agentId);
     if (!id.success) return void res.status(400).json({ error: 'invalid-id' });
     if (!emptyBody.safeParse(req.body ?? {}).success) return void res.status(400).json({ error: 'invalid-body', message: 'expected an empty body' });
@@ -63,7 +72,7 @@ export function registerAcpRegistryRoutes(router: Router): void {
   });
 
   router.delete(`${PREFIX}/:agentId`, async (req: Request, res: Response) => {
-    if (!requireAppSuperadmin(req, res)) return;
+    if (!requireManager(req, res)) return;
     const id = agentId.safeParse(req.params.agentId);
     if (!id.success) return void res.status(400).json({ error: 'invalid-id' });
     try {

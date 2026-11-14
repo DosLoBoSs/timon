@@ -30,6 +30,12 @@ test('a refused provider launch opens the providers settings on that plugin', ()
     '/?settings=models%2Fbackends&provider=%40acme%2Fx',
   );
   assert.equal(notificationHref({ ...none, anchor: 'provider-launch:' }), null);
+  // The Program section is the full level's: no link for anyone else.
+  const launch = { ...none, anchor: 'provider-launch:acme-provider' };
+  assert.equal(notificationHref(launch, { providers: 'full' }), '/?settings=models%2Fbackends&provider=acme-provider');
+  assert.equal(notificationHref(launch, { providers: 'accounts' }), null);
+  assert.equal(notificationHref(launch, { providers: 'none' }), null);
+  assert.equal(notificationHref(launch, { providers: null }), null, 'not a link while the level is being read');
 });
 
 test("a new outbound host opens the mission's chat on its Network view", () => {

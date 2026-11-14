@@ -241,6 +241,7 @@ contexts are distinct; import these contracts as types in plugin code.
 - [PluginPermission](type-aliases/PluginPermission.md)
 - [PluginPermissionAction](type-aliases/PluginPermissionAction.md)
 - [PluginPermissionCatalog](type-aliases/PluginPermissionCatalog.md)
+- [PluginPermissionChoice](type-aliases/PluginPermissionChoice.md)
 - [PluginPermissionSource](type-aliases/PluginPermissionSource.md)
 - [PluginPermissionSourceHandle](type-aliases/PluginPermissionSourceHandle.md)
 - [PluginPipeline](type-aliases/PluginPipeline.md)
