@@ -191,3 +191,33 @@ test('a folder a plugin declared for the running backend is spared, but never on
     setDeclaredCredentialDirsSource(() => ({}));
   }
 });
+
+test('the fence settings default to auto, no extra writable path, Unix sockets denied', () => {
+  const iso = cfg().host.isolation;
+  assert.equal(iso.filesystem, 'auto');
+  assert.deepEqual(iso.writable, []);
+  assert.equal(iso.unixSockets, 'deny');
+  assert.deepEqual(iso.exceptions, { agents: {}, projects: {} });
+  assert.equal(cfg({ filesystem: 'enforce' }).host.isolation.filesystem, 'enforce');
+  const parsed = cfg({ exceptions: { agents: { 'timon.coder': { unixSockets: 'allow' } } } }).host.isolation;
+  assert.deepEqual(parsed.exceptions.agents['timon.coder'], { unixSockets: 'allow', writable: [] });
+});
+
+test('an invalid fence setting is refused, not silently defaulted', () => {
+  const invalid: Array<Record<string, unknown>> = [
+    { filesystem: 'strict' },
+    { filesystem: true },
+    { unixSockets: 'maybe' },
+    { writable: ['relative/path'] },
+    { writable: '~/.cache' },
+    { exceptions: { agents: { coder: { unixSockets: 'yes' } } } },
+    { exceptions: { projects: { app: { writable: ['./build'] } } } },
+  ];
+  for (const isolation of invalid) {
+    assert.equal(
+      TimonConfigSchema.safeParse({ host: { isolation } }).success,
+      false,
+      `${JSON.stringify(isolation)} must be refused`,
+    );
+  }
+});
