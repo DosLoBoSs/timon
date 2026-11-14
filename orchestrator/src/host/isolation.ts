@@ -424,6 +424,11 @@ const SYSTEM_WRITABLE: Readonly<Partial<Record<NodeJS.Platform, readonly string[
   darwin: Object.freeze(['/private/tmp', '/private/var/tmp', '/private/var/folders', '/dev']),
 });
 
+/** The system folders the fence leaves every mission writing on `platform`. */
+export function systemWritableFolders(platform: NodeJS.Platform): readonly string[] {
+  return SYSTEM_WRITABLE[platform] ?? [];
+}
+
 const FENCE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 /** A mission id, agent name or account id the fence may turn into a folder name. */

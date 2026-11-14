@@ -5,7 +5,8 @@ import { createGenericHost } from './generic.js';
 import { createLandlockFence } from './landlock.js';
 import { createLinuxHost } from './linux.js';
 import { hasSystemd } from './systemd.js';
-import { fenceWritableRoots, setMissionWritableRootsSource } from './mission-writable.js';
+import { fenceWritableRoots, setFencedSystemFoldersSource, setMissionWritableRootsSource } from './mission-writable.js';
+import { systemWritableFolders } from './isolation.js';
 import type { ExecOpts, Host } from './types.js';
 
 export type {
@@ -27,6 +28,8 @@ export function createHost(cfg: TimonConfig): Host {
   const pins = () => config().host.binaries;
   // A folder the fence lets missions write never yields a binary the daemon runs.
   setMissionWritableRootsSource(() => fenceWritableRoots(config()));
+  // Nor a local git remote the daemon pushes to: its hooks would run unfenced.
+  setFencedSystemFoldersSource(() => (config().host.isolation.filesystem === 'off' ? [] : systemWritableFolders(process.platform)));
   const host = process.platform === 'linux' && hasSystemd()
     ? createLinuxHost(cfg, pins)
     : process.platform === 'darwin'
