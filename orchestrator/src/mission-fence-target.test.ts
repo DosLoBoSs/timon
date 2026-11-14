@@ -9,7 +9,9 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pluginPackageDirs, purgeMissionTmpDirs, worktreeGitDirs } from './mission-fence-target.js';
+import {
+  pluginPackageDirs, purgeMissionTmpDirs, purgeOrphanAgentPackageCaches, removeAgentPackageCache, worktreeGitDirs,
+} from './mission-fence-target.js';
 
 /** A home holding a main checkout, a linked worktree of it, and a folder a mission could aim at. */
 function layout() {
@@ -125,4 +127,28 @@ test('a finished mission\'s temporary folder goes; a running one, and a recent o
   assert.deepEqual(removed.sort(), ['finished', 'old-orphan']);
   assert.ok(existsSync(join(root, 'running')) && existsSync(join(root, 'orphan')));
   assert.deepEqual(purgeMissionTmpDirs(join(th, 'absent'), () => null), []);
+});
+
+test('an agent\'s package cache goes with it, and only its own', () => {
+  const th = realpathSync(mkdtempSync(join(tmpdir(), 'fence-cache-')));
+  const caches = join(th, 'provider-cache', '.agents');
+  for (const agent of ['leaving', 'staying']) mkdirSync(join(caches, agent, 'npm', '_npx'), { recursive: true });
+  mkdirSync(join(th, 'provider-cache', 'provider-codex', 'cache'), { recursive: true });
+  removeAgentPackageCache(th, 'leaving');
+  assert.equal(existsSync(join(caches, 'leaving')), false);
+  assert.ok(existsSync(join(caches, 'staying', 'npm', '_npx')));
+  // A name that is not a plain folder name removes nothing above it.
+  removeAgentPackageCache(th, '..');
+  removeAgentPackageCache(th, '');
+  assert.ok(existsSync(caches) && existsSync(join(th, 'provider-cache', 'provider-codex', 'cache')));
+});
+
+test('the package caches of agents that no longer exist are swept, the others kept', () => {
+  const th = realpathSync(mkdtempSync(join(tmpdir(), 'fence-cache-')));
+  const caches = join(th, 'provider-cache', '.agents');
+  for (const agent of ['alive', 'gone']) mkdirSync(join(caches, agent, 'npm'), { recursive: true });
+  const removed = purgeOrphanAgentPackageCaches(th, (agent) => agent === 'alive');
+  assert.deepEqual(removed, ['gone']);
+  assert.ok(existsSync(join(caches, 'alive', 'npm')));
+  assert.deepEqual(purgeOrphanAgentPackageCaches(join(th, 'absent'), () => false), []);
 });

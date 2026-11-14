@@ -350,6 +350,38 @@ test('fence: the mission writes its worktree, its repository, its TMPDIR and its
   assert.equal(access(policy, '/dev/null'), 'rw');
 });
 
+test('fence: the agent\'s package cache is writable and executable, nothing above it nor beside it', () => {
+  const policy = resolveFence(cfg(), fullTarget());
+  const own = `${TH}/provider-cache/.agents/timon.coder`;
+  assert.equal(access(policy, `${own}/npm/_cacache/index-v5/ab`), 'rw');
+  assert.equal(fenceAccess(policy, `${own}/npm/_npx/0f3a/node_modules/.bin/server`).exec, true, 'npx runs what it installed');
+  assert.equal(policy.rw.filter((p) => p.startsWith(`${TH}/provider-cache/.agents`)).length, 1, 'one grant, the agent\'s folder');
+  for (const above of [`${TH}/provider-cache/.agents`, `${TH}/provider-cache`, `${TH}/provider-cache/.agents/x`]) {
+    assert.equal(access(policy, above), 'none', `${above} lists other agents' caches`);
+  }
+  assert.equal(access(policy, `${TH}/provider-cache/.agents/timon.main/npm/_npx/x`), 'none', 'another agent\'s cache');
+  // A mission of another agent, on the same provider, does not reach it.
+  const other = resolveFence(cfg(), fullTarget({ agent: 'timon.main', missionId: 'bbbbbbbb-0000-4000-8000-000000000002' }));
+  assert.equal(access(other, `${own}/npm/_npx/x`), 'none');
+  assert.equal(access(other, `${TH}/provider-cache/.agents/timon.main/npm/x`), 'rw');
+  // No agent, no cache; a name that is not a plain folder name, no cache either.
+  assert.ok(!resolveFence(cfg(), fullTarget({ agent: undefined })).rw.some((p) => p.includes('/.agents')));
+  const odd = resolveFence(cfg(), fullTarget({ agent: '../timon.main' }));
+  assert.ok(!odd.rw.some((p) => p.includes('/.agents')));
+  assert.ok(odd.ignored.some((i) => i.path === '../timon.main'));
+});
+
+test('fence: no provider plugin id reaches the agents\' caches, nor does a handed-over path', () => {
+  // A provider plugin id starts with a letter or a digit: `.agents` is never one.
+  const plugin = resolveFence(cfg(), fullTarget({ providerPlugin: '.agents' }));
+  assert.equal(access(plugin, `${TH}/provider-cache/.agents/timon.main/npm/x`), 'none');
+  assert.ok(plugin.ignored.some((i) => i.path === '.agents'));
+  for (const path of [`${TH}/provider-cache/.agents`, `${TH}/provider-cache/.agents/timon.main`]) {
+    const handed = resolveFence(cfg(), fullTarget({ cwd: path, gitDirs: [path] }));
+    assert.equal(handed.ignored.filter((i) => i.path === path).length, 2, `${path} must be dropped twice`);
+  }
+});
+
 test('fence: the mission\'s own account is writable, every other account is refused', () => {
   const policy = resolveFence(cfg(), fullTarget());
   assert.equal(access(policy, `${TH}/backend-accounts/acc-mine/.credentials.json`), 'rw');
@@ -585,6 +617,15 @@ test('fence: the mission\'s own folder is refused when a link leads it elsewhere
   const policy = resolveFence(cfg(), linkTarget({ account: 'acc-linked' }));
   assert.ok(policy.ignored.some((i) => i.path === own && i.reason.includes('a link leads it elsewhere')));
   assert.equal(access(policy, join(LTH, 'backend-accounts', 'acc-other', '.credentials.json')), 'none');
+});
+
+test('fence: an agent\'s package cache is refused when a link leads it to another agent\'s', { skip: linkSkip }, () => {
+  const caches = join(LTH, 'provider-cache', '.agents');
+  mkdirSync(join(caches, 'victim'), { recursive: true });
+  symlinkSync(join(caches, 'victim'), join(caches, 'planter'), 'dir');
+  const policy = resolveFence(cfg(), linkTarget({ agent: 'planter' }));
+  assert.ok(policy.ignored.some((i) => i.path === join(caches, 'planter') && i.reason.includes('a link leads it elsewhere')));
+  assert.equal(access(policy, join(caches, 'victim', 'npm', 'x')), 'none');
 });
 
 test('fence: a Timon home reached through a link is refused under its real name', { skip: linkSkip }, () => {

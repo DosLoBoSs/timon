@@ -114,7 +114,7 @@ test('a mission on codex starts the CLI with the default policy, its own token a
     // The file names the token's variable, never the token: codex hands it to its MCP servers by name (`env_vars`).
     assert.equal(toml.includes('timon-seal-'), false, 'no reference left in the file');
     assert.equal(toml.includes(run.env.TIMON_API_TOKEN), false, 'the token is not in the file');
-    assert.match(toml, /env_vars = \["TIMON_API_TOKEN"\]/);
+    assert.match(toml, /env_vars = \["TIMON_API_TOKEN", "npm_config_cache"/);
     assert.match(toml, /\[mcp_servers\.timon\]/);
     assert.equal(readFileSync(join(home, 'auth.json'), 'utf8'), readFileSync(join(AUTH, 'auth.json'), 'utf8'), 'the sign-in is exposed to the mission');
     assert.equal(run.args.join(' ').includes(run.env.TIMON_API_TOKEN!), false, 'never in argv');
