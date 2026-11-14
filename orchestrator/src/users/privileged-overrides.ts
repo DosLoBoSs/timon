@@ -150,7 +150,7 @@ function levelOf(mode: string | null | undefined): number | null {
  * it runs in, and refuse every mode it asks for. `plan`/`read-only` stay as they
  * are: those sandboxes really are read-only.
  */
-function effectiveLevel(mode: string | null | undefined, backend: string): string {
+export function effectiveLevel(mode: string | null | undefined, backend: string): string {
   const label = mode ?? 'default';
   const rank = levelOf(label);
   if (rank === null || rank === 0) return label;
