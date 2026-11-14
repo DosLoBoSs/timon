@@ -13,6 +13,13 @@
  * "May have reached" mirrors the recall's visibility filter (`searchRules`):
  * the agent itself for an agent rule, the agents of the project, of the role
  * (across projects or in the rule's project), every agent for a global rule.
+ *
+ * Every change of a stored rule goes through the doors below
+ * (`reviseMemoryRule`, `supersedeMemoryRule`, `deleteMemoryRuleAndFence`),
+ * whoever makes it: a person, a plugin, the nightly synthesis or the backfill.
+ * A direct `dbApi.updateRule` / `supersedeRule` / `deleteRule` elsewhere would
+ * change what the agents are told without fencing what they were told before;
+ * `memory-session-fence.test.ts` keeps them here.
  */
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -80,4 +87,44 @@ export function ruleEditRevokes(before: MemoryRuleRow, after: MemoryRuleRow): bo
   if (before.scope !== after.scope || before.project !== after.project
     || before.agent !== after.agent || before.role !== after.role) return true;
   return before.status === 'active' && after.status !== 'active';
+}
+
+type RulePatch = Parameters<typeof dbApi.updateRule>[1];
+type RuleChange = { rule: MemoryRuleRow; freshConversation: string[] };
+
+/**
+ * Changes a stored rule. An edit that takes something away from the agents
+ * (`ruleEditRevokes`) fences the agents the OLD rule reached; a re-tier or a
+ * support bump fences nobody. `undefined` when the rule does not exist.
+ */
+export function reviseMemoryRule(id: number, patch: RulePatch, at: number = Date.now()): RuleChange | undefined {
+  const before = dbApi.getRule(id);
+  if (!before) return undefined;
+  const rule = dbApi.updateRule(id, patch);
+  if (!rule) return undefined;
+  return { rule, freshConversation: ruleEditRevokes(before, rule) ? fenceSessionsForRule(before, at) : [] };
+}
+
+/**
+ * Marks a rule replaced by `byNewId`. The replacement only adds what it says:
+ * the old wording stays in every session that saw it, so the agents it reached
+ * are fenced. Returns their names.
+ */
+export function supersedeMemoryRule(oldId: number, byNewId: number | null = null, at: number = Date.now()): string[] {
+  const before = dbApi.getRule(oldId);
+  if (!before) return [];
+  dbApi.supersedeRule(oldId, byNewId);
+  return before.status === 'active' ? fenceSessionsForRule(before, at) : [];
+}
+
+/**
+ * Deletes a rule and fences the agents it may have reached, whatever its
+ * status: a superseded or archived rule may still sit in a session that
+ * predates the fences. `undefined` when the rule does not exist.
+ */
+export function deleteMemoryRuleAndFence(id: number, at: number = Date.now()): RuleChange | undefined {
+  const rule = dbApi.getRule(id);
+  if (!rule) return undefined;
+  dbApi.deleteRule(id);
+  return { rule, freshConversation: fenceSessionsForRule(rule, at) };
 }

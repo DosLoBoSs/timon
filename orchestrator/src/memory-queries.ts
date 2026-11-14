@@ -5,7 +5,7 @@
  */
 import { dbApi, type DbViewer, type MemoryRuleRow } from './db.js';
 import { emitMemoryRuleEvent, type PluginMemoryActor } from './memory-rule-events.js';
-import { fenceSessionsForRule, ruleEditRevokes } from './memory-session-fence.js';
+import { deleteMemoryRuleAndFence, reviseMemoryRule } from './memory-session-fence.js';
 import { listProjects } from './projects.js';
 import { settingNum } from './settings.js';
 import { scopedDb } from './users/scoped-db.js';
@@ -55,16 +55,15 @@ export function removeMemoryRule(
   id: number,
   actor: PluginMemoryActor = { kind: 'manual', id: null },
 ): { rule: MemoryRuleRow; freshConversation: string[] } | undefined {
-  const cur = dbApi.getRule(id);
-  if (!cur) return undefined;
-  dbApi.deleteRule(id);
+  const removed = deleteMemoryRuleAndFence(id);
+  if (!removed) return undefined;
+  const cur = removed.rule;
   dbApi.logMemoryAudit({
     scope: cur.scope, project: cur.project, agent: cur.agent,
     action: 'manual_delete', ruleId: id, candidateText: cur.text,
   });
-  const freshConversation = fenceSessionsForRule(cur);
   emitMemoryRuleEvent('memory_rule_removed', cur, actor);
-  return { rule: cur, freshConversation };
+  return removed;
 }
 
 /** `removeMemoryRule` for the callers that only need the deleted row. */
@@ -82,10 +81,5 @@ export function editMemoryRule(
   id: number,
   patch: Parameters<typeof dbApi.updateRule>[1],
 ): { rule: MemoryRuleRow; freshConversation: string[] } | undefined {
-  const before = dbApi.getRule(id);
-  if (!before) return undefined;
-  const rule = dbApi.updateRule(id, patch);
-  if (!rule) return undefined;
-  const freshConversation = ruleEditRevokes(before, rule) ? fenceSessionsForRule(before) : [];
-  return { rule, freshConversation };
+  return reviseMemoryRule(id, patch);
 }
