@@ -36,6 +36,8 @@ On Linux the service is a systemd **user** service, with user lingering requeste
 
 A server must not sleep: nothing runs while it does, and Timon does not wake it. On a machine without a desktop, `sudo systemctl mask sleep.target suspend.target` disables suspend.
 
+**Behind a company proxy**, give the service the standard variables: `systemctl --user edit <unit>` (`systemctl --user list-unit-files 'timon-*'` lists the name), then add `Environment=HTTPS_PROXY=http://proxy.example:3128` and `Environment=HTTP_PROXY=http://proxy.example:3128` under `[Service]`, and restart the service. Timon then sends its own requests and its missions' requests through that proxy, and keeps connections to the machine itself (`127.0.0.1`, `localhost`) direct; you do not need to set `NODE_USE_ENV_PROXY` yourself, Timon turns it on when it sees a proxy.
+
 The AI providers' command-line tools (`claude`, `codex`…) and their sign-in live on the server too: sign them in there, from an SSH session under the same account, once. A machine you drive from elsewhere keeps the providers it was configured with; nothing about them travels between machines.
 
 ## 2. Create your account first
