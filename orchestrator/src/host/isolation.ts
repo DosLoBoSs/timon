@@ -354,8 +354,16 @@ export type FenceMode = TimonConfig['host']['isolation']['filesystem'];
 export type FenceTarget = {
   /** Timon's home: invisible to the mission except its own folders. */
   timonHome: string;
-  /** Working directory of the mission: writable wherever it is. */
+  /** Working directory of the mission: writable wherever it is, unless `workspace` is `ro`. */
   cwd?: string | undefined;
+  /**
+   * `ro` when the level the mission runs at writes nothing (a CLI whose own
+   * read-only sandbox the fence replaces): the working directory and its git
+   * directories are granted read-only. The CLI's own state (its scratch
+   * folder, its account, `TMPDIR`) stays writable: the CLI itself, not the
+   * commands it runs, writes there. Default `rw`.
+   */
+  workspace?: 'rw' | 'ro' | undefined;
   /** Backend the mission runs on; its own state folders stay writable when no account is given. */
   backend?: string | undefined;
   /** Overridable for tests; defaults to the daemon user's home. */
@@ -607,8 +615,15 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
   };
   const inTimon = (...parts: string[]) => join(timonHome, ...parts);
 
-  if (target.cwd) grant(resolve(target.cwd), 'rw', 'mission');
-  for (const dir of target.gitDirs ?? []) grant(resolve(dir), 'rw', 'mission');
+  const workspace = target.workspace === 'ro' ? 'ro' : 'rw';
+  // A read-only level still runs the project's commands, as the CLI's own
+  // read-only sandbox did: the workspace stays executable, every write refused.
+  const workspaceGrant = (path: string): void => {
+    const granted = grant(resolve(path), workspace, 'mission');
+    if (granted && workspace === 'ro') exec.add(granted);
+  };
+  if (target.cwd) workspaceGrant(target.cwd);
+  for (const dir of target.gitDirs ?? []) workspaceGrant(dir);
 
   const missionId = segment('mission id', target.missionId);
   const agent = segment('agent name', target.agent);

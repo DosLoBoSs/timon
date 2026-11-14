@@ -55,11 +55,74 @@ test('a fence that answers wraps the CLI, with the policy under the folder no mi
   assert.deepEqual(launch, {
     cmd: '/opt/timon/timon-fence',
     args: ['--policy', policyFile, '--', '/usr/bin/claude', '-p'],
-    fence: { state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: join(TH, 'tmp', 'missions', MISSION) },
+    fence: { state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: join(TH, 'tmp', 'missions', MISSION), workspace: 'rw' },
   });
   assert.equal(fence.policies[0]?.enabled, true);
   assert.ok(fence.policies[0]?.rw.includes(TARGET.cwd), 'the policy is the daemon\'s own projection of the target');
   assert.deepEqual(warnings, []);
+});
+
+/* ── A CLI's own sandbox under the fence (`PermissionStrategy.nestedSandbox`) ── */
+
+const NESTED = { level: { flag: '--sandbox', off: 'danger-full-access', readOnly: ['read-only'] } } as const;
+
+test('fenced, the CLI\'s own sandbox is turned off and the fence keeps a writing level\'s workspace writable', () => {
+  const fence = fakeFence({ available: true, abi: 6 });
+  const launch = fenceMissionCommand('/usr/bin/codex', ['exec', '--sandbox', 'workspace-write', '-'], 'unit-n1', TARGET, {
+    mode: 'auto', fence, warn: () => {}, nestedSandbox: NESTED,
+  });
+  assert.deepEqual(launch.args.slice(launch.args.indexOf('--') + 1), ['/usr/bin/codex', 'exec', '--sandbox', 'danger-full-access', '-']);
+  assert.equal(launch.fence?.state === 'fenced' && launch.fence.workspace, 'rw');
+  assert.ok(fence.policies[0]?.rw.includes(TARGET.cwd));
+});
+
+test('fenced, a read-only level becomes a read-only working tree in the policy', () => {
+  const fence = fakeFence({ available: true, abi: 6 });
+  const launch = fenceMissionCommand('/usr/bin/codex', ['exec', '--sandbox', 'read-only', '-'], 'unit-n2', TARGET, {
+    mode: 'enforce', fence, warn: () => {}, nestedSandbox: NESTED,
+  });
+  assert.ok(launch.args.includes('danger-full-access') && !launch.args.includes('read-only'));
+  assert.equal(launch.fence?.state === 'fenced' && launch.fence.workspace, 'ro');
+  const policy = fence.policies[0];
+  assert.ok(policy?.ro.includes(TARGET.cwd), 'the working tree is readable');
+  assert.ok(!policy?.rw.includes(TARGET.cwd), 'and not writable');
+  // The CLI's own state stays writable: the CLI writes there, not the commands it runs.
+  assert.ok(policy?.rw.includes(join(TH, 'tmp', 'missions', MISSION)));
+});
+
+test('unfenced, the launch keeps the CLI\'s own sandbox exactly as the provider built it', () => {
+  const args = ['exec', '--sandbox', 'workspace-write', '-'];
+  for (const [mode, fence] of [
+    ['auto', fakeFence({ available: false, reason: 'kernel without Landlock', abi: 0 })],
+    ['off', fakeFence({ available: true, abi: 6 })],
+  ] as const) {
+    const launch = fenceMissionCommand('/usr/bin/codex', args, 'unit-n3', TARGET, { mode, fence, warn: () => {}, nestedSandbox: NESTED });
+    assert.deepEqual([launch.cmd, launch.args], ['/usr/bin/codex', args], mode);
+    assert.equal(launch.fence?.state, 'unfenced', mode);
+  }
+  // A policy the fence cannot render falls back to unfenced: the CLI's sandbox comes back with it.
+  const broken = fakeFence({ available: true, abi: 6 }, () => { throw new Error('unrenderable'); });
+  const fallback = fenceMissionCommand('/usr/bin/codex', args, 'unit-n4', TARGET, { mode: 'auto', fence: broken, warn: () => {}, nestedSandbox: NESTED });
+  assert.deepEqual([fallback.cmd, fallback.args], ['/usr/bin/codex', args]);
+});
+
+test('fenced, a declared level missing from the launch is said, and the arguments are left alone', () => {
+  const warnings: string[] = [];
+  const launch = fenceMissionCommand('/usr/bin/codex', ['exec', '-'], 'unit-n5', TARGET, {
+    mode: 'auto', fence: fakeFence({ available: true, abi: 6 }), warn: (l) => warnings.push(l), nestedSandbox: NESTED,
+  });
+  assert.deepEqual(launch.args.slice(launch.args.indexOf('--') + 1), ['/usr/bin/codex', 'exec', '-']);
+  assert.match(warnings.join('\n'), /sandbox level option \(--sandbox\) is not in its launch/);
+});
+
+test('fenced, offArgs keep a CLI\'s settings-driven sandbox off, in front of its own arguments', () => {
+  const launch = fenceMissionCommand('/usr/bin/claude', ['--input-format', 'stream-json'], 'unit-n6', TARGET, {
+    mode: 'auto', fence: fakeFence({ available: true, abi: 6 }), warn: () => {},
+    nestedSandbox: { offArgs: ['--settings', '{"sandbox":{"enabled":false}}'] },
+  });
+  assert.deepEqual(launch.args.slice(launch.args.indexOf('--') + 1),
+    ['/usr/bin/claude', '--settings', '{"sandbox":{"enabled":false}}', '--input-format', 'stream-json']);
+  assert.equal(launch.fence?.state === 'fenced' && launch.fence.workspace, 'rw');
 });
 
 test('auto launches an unfenceable mission unfenced, and says why', () => {
@@ -209,7 +272,7 @@ test('a launcher that could not fence turns the fence off for the next launches,
   writeFileSync(policyFile, 'x');
   const stderr = new PassThrough();
   const proc = Object.assign(new EventEmitter(), { stderr });
-  const outcome: MissionFenceOutcome = { state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: null };
+  const outcome: MissionFenceOutcome = { state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: null, workspace: 'rw' };
   try {
     watchFencedLaunch(proc, outcome);
     let read = '';
@@ -233,7 +296,7 @@ test('a launcher that could not fence turns the fence off for the next launches,
 test('a CLI that fails on its own leaves the fence on', async () => {
   const stderr = new PassThrough();
   const proc = Object.assign(new EventEmitter(), { stderr });
-  watchFencedLaunch(proc, { state: 'fenced', mechanism: 'landlock', policyFile: join(TH, 'run', 'fence', 'other.policy'), tmpDir: null });
+  watchFencedLaunch(proc, { state: 'fenced', mechanism: 'landlock', policyFile: join(TH, 'run', 'fence', 'other.policy'), tmpDir: null, workspace: 'rw' });
   stderr.on('data', () => {});
   stderr.write('Error: invalid API key\n');
   await new Promise((resolve) => setImmediate(resolve));
@@ -319,10 +382,68 @@ test('the real chain: nice, ionice and timon-fence exec down to the CLI, which k
   }
 });
 
+/**
+ * A stand-in for a CLI whose own sandbox the fence replaces: it reports the
+ * level it was handed and what a command of a `workspace-write` turn could
+ * do — write in its working tree, write elsewhere in the home.
+ */
+const NESTED_SCRIPT = String.raw`
+const fs = require('node:fs'), path = require('node:path');
+const args = process.argv.slice(1);
+const [cwd, home] = args.slice(-2);
+const out = { level: args[args.indexOf('--sandbox') + 1] };
+const t = (name, fn) => { try { fn(); out[name] = 'ok'; } catch (e) { out[name] = e.code || String(e.message); } };
+t('readCwd', () => fs.readdirSync(cwd));
+t('writeCwd', () => fs.writeFileSync(path.join(cwd, 'patch.txt'), 'x'));
+t('writeHome', () => fs.writeFileSync(path.join(home, '.bashrc'), 'x'));
+t('writeOutside', () => fs.writeFileSync(path.join(home, 'elsewhere', 'f'), 'x'));
+process.stdout.write(JSON.stringify(out));
+`;
+
+test('the real fence applies the level of the CLI sandbox it replaces: a writing level writes only its working tree, a read-only one nothing', { skip: realSkip }, async () => {
+  const runtime = process.env.XDG_RUNTIME_DIR;
+  const base = runtime && existsSync(runtime) ? runtime : tmpdir();
+  const root = realpathSync(mkdtempSync(join(base, 'fence-nested-')));
+  try {
+    const home = join(root, 'home');
+    const th = join(home, '.timon');
+    const cwd = join(th, 'worktrees', 'task-n');
+    mkdirSync(cwd, { recursive: true });
+    mkdirSync(join(home, 'elsewhere'), { recursive: true });
+    const fence = createLandlockFence({ status: () => ({ state: 'ready', binary: REAL as string, abi: REAL_PROBE?.abi ?? 0, seccomp: true }) });
+    const run = async (level: string): Promise<Record<string, string>> => {
+      const launch = fenceMissionCommand(process.execPath, ['-e', NESTED_SCRIPT, '--', '--sandbox', level, cwd, home], `unit-nested-${level}`, {
+        timonHome: th, home, cwd, missionId: MISSION, platform: 'linux',
+      }, { mode: 'enforce', fence, warn: () => {}, nestedSandbox: NESTED });
+      assert.equal(launch.fence?.state, 'fenced');
+      const child = spawn(launch.cmd, launch.args, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8'); });
+      child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+      const code = await new Promise<number | null>((resolve) => child.on('close', resolve));
+      assert.equal(code, 0, stderr);
+      return JSON.parse(stdout) as Record<string, string>;
+    };
+    const writing = await run('workspace-write');
+    assert.equal(writing.level, 'danger-full-access', 'the CLI\'s own sandbox is off');
+    assert.equal(writing.writeCwd, 'ok');
+    assert.equal(writing.writeHome, 'EACCES', 'a write outside the working tree is the fence\'s to refuse');
+    assert.equal(writing.writeOutside, 'EACCES');
+    const reading = await run('read-only');
+    assert.equal(reading.level, 'danger-full-access');
+    assert.equal(reading.readCwd, 'ok');
+    assert.equal(reading.writeCwd, 'EACCES', 'a read-only level writes nothing, its working tree included');
+    assert.equal(reading.writeHome, 'EACCES');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('what the CLI says before the mission reads its stderr waits for the mission\'s reader', async () => {
   const stderr = new PassThrough();
   const proc = Object.assign(new EventEmitter(), { stderr });
-  watchFencedLaunch(proc, { state: 'fenced', mechanism: 'landlock', policyFile: join(TH, 'run', 'fence', 'early.policy'), tmpDir: null });
+  watchFencedLaunch(proc, { state: 'fenced', mechanism: 'landlock', policyFile: join(TH, 'run', 'fence', 'early.policy'), tmpDir: null, workspace: 'rw' });
   stderr.write('early line\n');
   await new Promise((resolve) => setImmediate(resolve));
   let read = '';
