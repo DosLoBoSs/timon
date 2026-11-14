@@ -61,6 +61,8 @@ import {
   windowsServiceNotes,
   applySessionMode,
   sessionModeNeedsReinstall,
+  windowsSessionTaskArguments,
+  windowsTaskOffSession,
   type ServiceOpts,
 } from './service-install.js';
 import { readServiceSessionMode, writeServiceSessionMode } from './service-session-mode.js';
@@ -140,17 +142,75 @@ test('linux: the shipped template is rendered, linger is enabled on the user\'s 
   assert.deepEqual(calls[2], ['systemctl', '--user', 'enable', '--now', LINUX_UNIT]);
 });
 
-test('linux: without the user\'s answer, or on "session", lingering is never touched (audit F2)', () => {
-  for (const sessionMode of [null, 'session'] as const) {
-    const calls: string[][] = [];
-    const opts = fixture('linux', (n, a) => {
-      calls.push([n, ...a]);
-      return { code: 0, stdout: '', stderr: '' };
-    });
-    assert.equal(installService({ ...opts, sessionMode }).ok, true);
-    assert.ok(!calls.some((c) => c[0] === 'loginctl'), `${String(sessionMode)}: ${JSON.stringify(calls)}`);
-    assert.deepEqual(calls[0], ['systemctl', '--user', 'daemon-reload']);
-  }
+test('linux: without the user\'s answer, lingering is never touched (audit F2)', () => {
+  const calls: string[][] = [];
+  const opts = fixture('linux', (n, a) => {
+    calls.push([n, ...a]);
+    return { code: 0, stdout: n === 'loginctl' ? 'yes\n' : '', stderr: '' };
+  });
+  assert.equal(installService({ ...opts, sessionMode: null }).ok, true);
+  assert.ok(!calls.some((c) => c[0] === 'loginctl'), JSON.stringify(calls));
+  assert.deepEqual(calls[0], ['systemctl', '--user', 'daemon-reload']);
+});
+
+/**
+ * The onboarding's "only while I'm logged in" on an account whose lingering
+ * was already on: left on, the daemon would outlive the logout the user just
+ * declined. Turned off, and the result says what else that stops.
+ */
+test('linux: an explicit "session" turns an existing lingering off and says what else stops (audit F2)', () => {
+  let linger = 'yes';
+  const calls: string[][] = [];
+  const opts = fixture('linux', (n, a) => {
+    calls.push([n, ...a]);
+    if (n === 'loginctl' && a[0] === 'disable-linger') linger = 'no';
+    return { code: 0, stdout: n === 'loginctl' && a[0] === 'show-user' ? `${linger}\n` : '', stderr: '' };
+  });
+  assert.equal(statusService(opts).lingering, true, 'the onboarding reads it before the question');
+  calls.length = 0;
+  const res = installService({ ...opts, sessionMode: 'session' });
+  assert.equal(res.ok, true, res.lines.join('\n'));
+  assert.deepEqual(calls.filter((c) => c[0] === 'loginctl'), [
+    ['loginctl', 'show-user', 'tester', '--property=Linger', '--value'],
+    ['loginctl', 'disable-linger', 'tester'],
+  ]);
+  assert.match(res.lines.join('\n'), /other user services also stop when you log out/);
+  const after = statusService(opts);
+  assert.equal(after.offSession, false, 'the machine now stops Timon at logout');
+  assert.equal(after.lingering, false);
+});
+
+test('linux: an explicit "session" with lingering already off changes nothing', () => {
+  const calls: string[][] = [];
+  const opts = fixture('linux', (n, a) => {
+    calls.push([n, ...a]);
+    return { code: 0, stdout: n === 'loginctl' ? 'no\n' : '', stderr: '' };
+  });
+  const res = installService({ ...opts, sessionMode: 'session' });
+  assert.equal(res.ok, true);
+  assert.ok(!calls.some((c) => c[1] === 'disable-linger' || c[1] === 'enable-linger'), JSON.stringify(calls));
+  assert.doesNotMatch(res.lines.join('\n'), /other user services/);
+});
+
+test('linux: a "session" only read from the file (a later reinstall) leaves a lingering switched on since', () => {
+  const calls: string[][] = [];
+  const opts = fixture('linux', (n, a) => {
+    calls.push([n, ...a]);
+    return { code: 0, stdout: n === 'loginctl' ? 'yes\n' : '', stderr: '' };
+  });
+  writeServiceSessionMode(opts.timonHome, 'session');
+  assert.equal(installService(opts).ok, true);
+  assert.ok(!calls.some((c) => c[0] === 'loginctl'), JSON.stringify(calls));
+});
+
+test('linux: a lingering that will not go off is said, and the install still stands', () => {
+  const opts = fixture('linux', (n, a) => {
+    if (n === 'loginctl' && a[0] === 'disable-linger') return { code: 1, stdout: '', stderr: 'Access denied' };
+    return { code: 0, stdout: n === 'loginctl' ? 'yes\n' : '', stderr: '' };
+  });
+  const res = installService({ ...opts, sessionMode: 'session' });
+  assert.equal(res.ok, true);
+  assert.match(res.lines.join('\n'), /lingering could not be turned off \(Access denied\): Timon keeps running after you log out/);
 });
 
 test('linux: the recorded answer is what an install with no explicit one follows', () => {
@@ -189,11 +249,21 @@ test('linux: a refused loginctl is a failure that says why', () => {
   assert.equal(res.reason, 'Access denied');
 });
 
-test('the answer is refused where it would change nothing (Windows), and nothing is recorded', () => {
-  const opts = fixture('win32');
+test('the answer is refused where it would change nothing (FreeBSD), and nothing is recorded', () => {
+  const opts = fixture('freebsd');
   const res = applySessionMode(opts, 'session');
   assert.equal(res.ok, false);
   assert.equal(readServiceSessionMode(opts.timonHome), null);
+});
+
+test('windows: changing the answer records it and asks for the task to be registered again', () => {
+  const calls: string[][] = [];
+  const opts = fixture('win32', (n, a) => { calls.push([n, ...a]); return { code: 0, stdout: '', stderr: '' }; });
+  const res = applySessionMode(opts, 'always');
+  assert.equal(res.ok, true);
+  assert.equal(readServiceSessionMode(opts.timonHome), 'always');
+  assert.equal(sessionModeNeedsReinstall('win32'), true);
+  assert.deepEqual(calls, [], 'nothing runs before the reinstall, which elevates once');
 });
 
 test('linux status reads lingering from loginctl: "not logged in or lingering" is a no', () => {
@@ -368,11 +438,13 @@ test('windows: la tâche planifiée est créée depuis un XML, au boot, en S4U',
   });
   const res = installService({
     ...opts,
+    sessionMode: 'always',
     nodePath: 'C:\\Program Files\\Timon\\Timon.exe',
     readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: 0 }),
   });
   assert.equal(res.ok, true);
   assert.equal(res.code, 0);
+  assert.match(res.lines.join('\n'), /starts at boot and keeps running after logoff/);
 
   const files = windowsServiceFiles(opts.timonHome, join);
   assert.equal(readFileSync(files.launcher, 'utf8'), renderWindowsLauncher({
@@ -435,6 +507,94 @@ test('windows: la tâche planifiée est créée depuis un XML, au boot, en S4U',
   // Jamais de droits admin : c'est ce qui distingue une tâche d'un vrai service.
   assert.match(xml, /<RunLevel>LeastPrivilege<\/RunLevel>/);
   assert.doesNotMatch(xml, /HighestAvailable/);
+});
+
+/**
+ * "Only while I'm logged in" on Windows (audit F2): a task started at logon
+ * with the user's interactive token, which Windows ends at logoff
+ * (SERVICE-HORS-SESSION W3) — never the boot task under S4U.
+ */
+test('windows: "session" registers a logon task under the interactive token, its console hidden', () => {
+  const calls: string[][] = [];
+  const opts = fixture('win32', (n, a) => { calls.push([n, ...a]); return { code: 0, stdout: '', stderr: '' }; });
+  const res = installService({ ...opts, sessionMode: 'session', readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: 0 }) });
+  assert.equal(res.ok, true, res.lines.join('\n'));
+  assert.match(res.lines.join('\n'), /starts at logon and stops when you log off/);
+  assert.ok(!calls.some((c) => c[0] === 'schtasks'), 'an answer given needs no look at the task in place');
+  const xml = readFileSync(taskXmlPath(), 'utf16le');
+  assert.match(xml, /<LogonTrigger><Enabled>true<\/Enabled><UserId>tester<\/UserId><\/LogonTrigger>/);
+  assert.match(xml, /<LogonType>InteractiveToken<\/LogonType>/);
+  assert.doesNotMatch(xml, /BootTrigger|S4U|<Password>/);
+  // Same supervisor as the boot task, and never more rights.
+  assert.match(xml, /<TimeTrigger>[\s\S]*<Interval>PT5M<\/Interval>/);
+  assert.match(xml, /<MultipleInstancesPolicy>IgnoreNew<\/MultipleInstancesPolicy>/);
+  assert.match(xml, /<RunLevel>LeastPrivilege<\/RunLevel>/);
+  // In the user's session cmd would open a console window: PowerShell hides
+  // itself and starts the same launcher with none.
+  assert.match(xml, /<Command>powershell\.exe<\/Command>/);
+  const args = windowsSessionTaskArguments(opts);
+  assert.ok(args.startsWith('-NoProfile -NonInteractive -WindowStyle Hidden -Command "'), args);
+  assert.match(args, /CreateNoWindow = \$true/);
+  assert.match(args, /WaitForExit\(\)/);
+  assert.doesNotMatch(args, /Start-Process|-EncodedCommand|wscript|\.vbs/i);
+  assert.ok(args.includes(`'${windowsLauncherPath(opts.timonHome)}'`), 'the launcher stopLauncherStep looks for');
+  // Only the two quotes that open and close the -Command value: a path between
+  // double quotes would go through Windows' argument splitting.
+  assert.equal(args.split('"').length - 1, 2, args);
+  assert.ok(xml.includes(args.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'))
+    || xml.includes(args.replace(/&/g, '&amp;')), 'the arguments are the action\'s, escaped for XML');
+  // The same launcher file, so stop, restart and uninstall find its cmd.exe.
+  assert.equal(readFileSync(windowsServiceFiles(opts.timonHome, join).launcher, 'utf8'), renderWindowsLauncher(opts));
+});
+
+test('windows: a quote in the home stays inside the PowerShell literal', () => {
+  const args = windowsSessionTaskArguments({ timonHome: "C:\\Users\\o'neil\\.timon" });
+  assert.ok(args.includes("'C:\\Users\\o''neil\\.timon\\run\\timon-service.cmd'"), args);
+});
+
+test('windows: with no answer, the task in place is kept as found; a first install stops with the session', () => {
+  const task = (logonType: string | null) => (n: string, a: string[]): ExecResult => {
+    if (n === 'schtasks' && a[0] === '/Query') {
+      return logonType ? { code: 0, stdout: `<Task><Principals><Principal><LogonType>${logonType}</LogonType></Principal></Principals></Task>`, stderr: '' }
+        : { code: 1, stdout: '', stderr: 'ERROR: The system cannot find the file specified.' };
+    }
+    return { code: 0, stdout: '', stderr: '' };
+  };
+  const unreadable = (n: string, a: string[]): ExecResult => (n === 'schtasks' && a.includes('/XML')
+    ? { code: 1, stdout: '', stderr: 'ERROR: Access is denied.' }
+    : { code: 0, stdout: '', stderr: '' });
+  for (const [exec, expected, label] of [
+    [task('S4U'), 'S4U', 'boot task in place'],
+    [task('InteractiveToken'), 'InteractiveToken', 'logon task in place'],
+    [task(null), 'InteractiveToken', 'no task'],
+    // Every release before the question registered the boot task.
+    [unreadable, 'S4U', 'registered, definition unreadable'],
+  ] as const) {
+    const found = label;
+    const opts = fixture('win32', exec);
+    const res = installService({ ...opts, sessionMode: null, readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: 0 }) });
+    assert.equal(res.ok, true, res.lines.join('\n'));
+    assert.match(readFileSync(taskXmlPath(), 'utf16le'), new RegExp(`<LogonType>${expected}</LogonType>`), String(found));
+  }
+});
+
+test('windows: status reads what the registered task does at logoff from its logon type', () => {
+  const read = (stdout: string, code = 0) => windowsTaskOffSession({ exec: () => ({ code, stdout, stderr: '' }) });
+  assert.equal(read('<LogonType>S4U</LogonType>'), true);
+  assert.equal(read('<LogonType>Password</LogonType>'), true);
+  assert.equal(read('<LogonType>InteractiveToken</LogonType>'), false);
+  assert.equal(read('', 1), null, 'no task: unknown, never a guess');
+  assert.equal(read('<Task/>'), null);
+  assert.equal(windowsTaskOffSession({ exec: () => { throw new Error('ENOENT'); } }), null);
+
+  const opts = fixture('win32', (n, a) => {
+    if (n === 'schtasks' && a.includes('LIST')) return { code: 0, stdout: 'Status: Running\r\n', stderr: '' };
+    if (n === 'schtasks' && a.includes('/XML')) return { code: 0, stdout: '<LogonType>InteractiveToken</LogonType>', stderr: '' };
+    return { code: 0, stdout: '', stderr: '' };
+  });
+  const status = statusService(opts);
+  assert.equal(status.offSession, false);
+  assert.match(status.lines.join('\n'), /logged out: stops when you log out/);
 });
 
 test('windows: sans témoin de session scellé, rien n\'est élevé ni enregistré', () => {
@@ -532,11 +692,15 @@ test('windows: le principal de la tâche est le SID du compte, sinon DOMAINE\\us
   assert.equal(windowsTaskUserId({ userName: 'guilldu', exec: () => { throw new Error('ENOENT'); } }), 'guilldu');
 
   const opts = fixture('win32', whoami(`"europe\\guilldu","${sid}"\r\n`));
-  const res = installService({ ...opts, readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: 0 }) });
-  assert.equal(res.ok, true, res.lines.join('\n'));
-  const xml = readFileSync(taskXmlPath(), 'utf16le');
-  assert.match(xml, new RegExp(`<UserId>${sid}</UserId>`));
-  assert.match(xml, /<LogonType>S4U<\/LogonType>/);
+  for (const sessionMode of ['always', 'session'] as const) {
+    const res = installService({ ...opts, sessionMode, readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: 0 }) });
+    assert.equal(res.ok, true, res.lines.join('\n'));
+    const xml = readFileSync(taskXmlPath(), 'utf16le');
+    assert.match(xml, new RegExp(`<UserId>${sid}</UserId>`));
+    assert.match(xml, sessionMode === 'always' ? /<LogonType>S4U<\/LogonType>/ : /<LogonType>InteractiveToken<\/LogonType>/);
+    // The logon trigger names the account too: without it, any user's logon would start Timon's task.
+    if (sessionMode === 'session') assert.match(xml, new RegExp(`<LogonTrigger><Enabled>true</Enabled><UserId>${sid}</UserId></LogonTrigger>`));
+  }
 });
 
 /**

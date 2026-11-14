@@ -78,6 +78,8 @@ export type OnboardingResult = {
   reason: string | null;
   /** `service-status`: the registered service keeps running once the user logs out (`ServiceResult.offSession`). */
   offSession?: boolean | null;
+  /** `service-status`, Linux: lingering is on for the account, service or not (`ServiceResult.lingering`). */
+  lingering?: boolean | null;
   /** `service-status`: the recorded answer, `null` when the user was never asked. */
   sessionMode?: ServiceSessionMode | null;
   /** `service-status`: the answer changes something on this OS (`sessionModeSupported`). */
@@ -436,17 +438,18 @@ let installInFlight: Promise<OnboardingResult> | undefined;
 async function installOnboardingService(mode?: ServiceSessionMode): Promise<OnboardingResult> {
   try {
     const opts = serviceOptsFromEnvironment();
-    // Recorded first: `installService` reads it to decide lingering (Linux)
-    // or the LaunchDaemon (macOS), and the desktop's upgrade runner reads it
-    // again at every update.
+    // Recorded first: the desktop's upgrade runner reads it again at every
+    // update. Also passed with the install: an answer given now is applied
+    // even where it undoes what the machine had (Linux lingering already on).
     if (mode && sessionModeSupported(opts.platform)) writeServiceSessionMode(opts.timonHome, mode);
+    const install: ServiceOpts = mode && sessionModeSupported(opts.platform) ? { ...opts, sessionMode: mode } : opts;
     // Not refused here: a release-candidate test on a throwaway home has to get
     // through onboarding. Its script removes the service at the end (#464).
     const temporary = temporaryHomeNotice(opts.timonHome, true);
     if (temporary) console.warn(`[onboarding] ${temporary.lines.join(' ')}`);
-    const refused = foreignServiceRefusal(opts, config().daemon.installDir);
+    const refused = foreignServiceRefusal(install, config().daemon.installDir);
     if (refused) return refused;
-    return await installWithRuntime(opts, config().daemon.installDir, (o) => runInstallService(o));
+    return await installWithRuntime(install, config().daemon.installDir, (o) => runInstallService(o));
   } catch (error) {
     return { ok: false, installed: false, lines: [], command: null, reason: (error as Error).message };
   }
@@ -470,6 +473,7 @@ export async function runOnboardingAction(action: OnboardingAction): Promise<Onb
       command: null,
       reason: res.reason ?? null,
       offSession: res.offSession ?? null,
+      lingering: res.lingering ?? null,
       sessionMode: readServiceSessionMode(opts.timonHome),
       // A Linux without systemd runs portable: no service, nothing to choose.
       sessionModeSupported: sessionModeSupported(opts.platform)
@@ -482,10 +486,12 @@ export async function runOnboardingAction(action: OnboardingAction): Promise<Onb
 
 /**
  * Settings › System: the answer to "keep running when logged out?" changed
- * after the onboarding. Linux applies it in place (lingering). macOS changes
- * the supervisor itself: the service is reinstalled through the onboarding's
- * install path, except from the service's own daemon, which that reinstall
- * would stop mid-request: the answer is recorded and the command shown.
+ * after the onboarding. Linux applies it in place (lingering). macOS and
+ * Windows change the supervisor itself: the service is reinstalled through the
+ * onboarding's install path, except from the service's own daemon, which that
+ * reinstall would stop mid-request (and which, in Windows session 0, could
+ * not even show the elevation prompt): the answer is recorded and the command
+ * shown.
  */
 export async function changeServiceSessionMode(
   mode: ServiceSessionMode,

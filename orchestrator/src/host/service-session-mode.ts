@@ -3,9 +3,12 @@
  *
  * - `session`: only while a session of the user is open. Linux: no lingering,
  *   so systemd stops the user manager, and the daemon with it, at logout.
- *   macOS: the LaunchAgent, which lives in the login session.
+ *   macOS: the LaunchAgent, which lives in the login session. Windows: a task
+ *   started at logon with the user's interactive token, which Windows ends
+ *   with the session.
  * - `always`: also with no session open (routines, night tasks, webhooks).
- *   Linux: `loginctl enable-linger`. macOS: the LaunchDaemon.
+ *   Linux: `loginctl enable-linger`. macOS: the LaunchDaemon. Windows: the
+ *   task started at boot under an S4U logon.
  *
  * The choice is the user's, asked by the onboarding and changed in Settings ›
  * System. It lives in a file under `run/`, like the claude token marker: the
@@ -13,9 +16,6 @@
  * open the database (I7 of the packaging audit). No file means nobody chose:
  * an install made before the choice existed. Its supervisor is left as it was
  * rather than changed behind the user's back.
- *
- * Windows is not covered yet: its scheduled task keeps running after logoff
- * once the user has signed in since boot, whatever is recorded here.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -51,5 +51,5 @@ export function writeServiceSessionMode(timonHome: string, mode: ServiceSessionM
 
 /** Where the choice changes what the supervisor does. */
 export function sessionModeSupported(platform: NodeJS.Platform): boolean {
-  return platform === 'linux' || platform === 'darwin';
+  return platform === 'linux' || platform === 'darwin' || platform === 'win32';
 }
