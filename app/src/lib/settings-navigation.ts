@@ -9,7 +9,7 @@
 import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatSettingsParam, type SettingsAccountView, type SettingsTarget } from './settings-layout';
-import { PROVIDER_PARAM } from './providers';
+import { ADD_PROVIDER_PARAM, PROVIDER_PARAM, type AddProviderChoice } from './providers';
 
 export const SETTINGS_PARAM = 'settings';
 
@@ -34,6 +34,7 @@ export function settingsHref(target: SettingsTarget = DEFAULT_TARGET): string {
   const url = currentUrl();
   url.searchParams.set(SETTINGS_PARAM, formatSettingsParam(target));
   url.searchParams.delete(PROVIDER_PARAM);
+  url.searchParams.delete(ADD_PROVIDER_PARAM);
   return relative(url);
 }
 
@@ -42,6 +43,16 @@ export function providerPageHref(id: string): string {
   const url = currentUrl();
   url.searchParams.set(SETTINGS_PARAM, formatSettingsParam(PROVIDERS_TARGET));
   url.searchParams.set(PROVIDER_PARAM, id);
+  url.searchParams.delete(ADD_PROVIDER_PARAM);
+  return relative(url);
+}
+
+/** Href of the "Add a provider" page, on the way chosen or before a choice. */
+export function addProviderHref(choice: AddProviderChoice | null): string {
+  const url = currentUrl();
+  url.searchParams.set(SETTINGS_PARAM, formatSettingsParam(PROVIDERS_TARGET));
+  url.searchParams.delete(PROVIDER_PARAM);
+  url.searchParams.set(ADD_PROVIDER_PARAM, choice ?? '');
   return relative(url);
 }
 
@@ -49,6 +60,7 @@ export function providerPageHref(id: string): string {
 export function providersListHref(): string {
   const url = currentUrl();
   url.searchParams.delete(PROVIDER_PARAM);
+  url.searchParams.delete(ADD_PROVIDER_PARAM);
   return relative(url);
 }
 
@@ -81,23 +93,32 @@ export function useSettingsNavigation(): {
     const url = currentUrl();
     url.searchParams.set(SETTINGS_PARAM, view);
     url.searchParams.delete(PROVIDER_PARAM);
+    url.searchParams.delete(ADD_PROVIDER_PARAM);
     router.replace(relative(url), { scroll: false });
   }, [router]);
   const close = useCallback(() => {
     const url = currentUrl();
     url.searchParams.delete(SETTINGS_PARAM);
     url.searchParams.delete(PROVIDER_PARAM);
+    url.searchParams.delete(ADD_PROVIDER_PARAM);
     router.replace(relative(url), { scroll: false });
   }, [router]);
   return { open, select, selectAccount, close };
 }
 
 /**
- * List ↔ page of one provider. Opening pushes, so Back returns to the list;
- * the breadcrumb's way back replaces, like a tab switch, and so does `show`,
- * which only rewrites the address of the page on screen.
+ * List ↔ page of one provider, and list ↔ "Add a provider". Opening pushes,
+ * so Back returns to the list; the breadcrumb's way back replaces, like a tab
+ * switch, and so do `show`, which only rewrites the address of the page on
+ * screen, and `choose`, which switches the way of adding.
  */
-export function useProviderNavigation(): { open: (id: string) => void; show: (id: string) => void; back: () => void } {
+export function useProviderNavigation(): {
+  open: (id: string) => void;
+  show: (id: string) => void;
+  back: () => void;
+  add: () => void;
+  choose: (choice: AddProviderChoice | null) => void;
+} {
   const router = useRouter();
   const open = useCallback((id: string) => {
     router.push(providerPageHref(id), { scroll: false });
@@ -108,5 +129,11 @@ export function useProviderNavigation(): { open: (id: string) => void; show: (id
   const back = useCallback(() => {
     router.replace(providersListHref(), { scroll: false });
   }, [router]);
-  return { open, show, back };
+  const add = useCallback(() => {
+    router.push(addProviderHref(null), { scroll: false });
+  }, [router]);
+  const choose = useCallback((choice: AddProviderChoice | null) => {
+    router.replace(addProviderHref(choice), { scroll: false });
+  }, [router]);
+  return { open, show, back, add, choose };
 }

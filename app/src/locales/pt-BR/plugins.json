@@ -400,12 +400,8 @@
     "acp": {
       "title": "Registro ACP",
       "description": "Agentes publicados no registro oficial do Agent Client Protocol. O Timon baixa o programa, o verifica e o executa como um backend.",
-      "browse": "Explorar o registro",
       "refresh": "Atualizar",
       "stale": "Não foi possível acessar o registro; esta é a última lista que o Timon leu.",
-      "verified": "sha256 verificado",
-      "noHash": "Sem hash publicado",
-      "unsupported": "Indisponível aqui: {reason}",
       "install": "Instalar",
       "update": "Atualizar",
       "repair": "Reinstalar",
@@ -414,12 +410,6 @@
       "installed": "{name} está instalado.",
       "updated": "{name} está atualizado.",
       "removed": "{name} foi removido.",
-      "state": {
-        "ok": "{version} instalado",
-        "tampered": "Arquivos alterados — não utilizado",
-        "missing": "Arquivos ausentes",
-        "pending": "Verificando {version}…"
-      },
       "confirmTitle": "Instalar {name} sem hash publicado?",
       "confirmBody": "O registro não fornece checksum para este programa. A integridade dele depende apenas do download via https. Instale somente se confiar no editor.",
       "confirmAction": "Instalar mesmo assim"

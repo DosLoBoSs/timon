@@ -6,12 +6,13 @@
  * "Other providers" — with a search, one "Check" for every source, and the
  * picker's order in a "Reorder" mode. A row opens the provider's page, where
  * it is also switched on or off: the row stays one target, one status line.
+ * "Add a provider" opens the page that offers the catalog or an endpoint.
  *
  * The daemon decides what a provider is and its status (the overview, a
  * superadmin session only): this list reads it and paints it.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
-import { ArrowUpDown, Check, RefreshCw, Search } from 'lucide-react';
+import { ArrowUpDown, Check, Plus, RefreshCw, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,9 +40,11 @@ const PREFERRED_KEY = 'TIMON_PREFERRED_BACKEND';
 /** The selector's "let Timon choose" entry; never a backend id (those are slugs). */
 const AUTO = '__auto__';
 
-export function ProvidersList({ onOpen, onVerified }: {
+export function ProvidersList({ onOpen, onAdd, onVerified }: {
   /** Opens the page of one provider (`useProviderNavigation().open`). */
   onOpen: (id: string) => void;
+  /** Opens the "Add a provider" page (`useProviderNavigation().add`). */
+  onAdd?: () => void;
   /** After a Check: the blocks still below the list read their sources again. */
   onVerified?: () => void;
 }): ReactElement {
@@ -103,6 +106,12 @@ export function ProvidersList({ onOpen, onVerified }: {
           <RefreshCw aria-hidden className={cn('size-3.5', verifying && 'animate-spin')} />
           {t('providerList.verify.button')}
         </Button>
+        {onAdd && !reordering ? (
+          <Button type="button" size="sm" className="h-8 gap-1.5" onClick={onAdd} data-add-provider-button>
+            <Plus aria-hidden className="size-3.5" />
+            {t('providerAdd.title')}
+          </Button>
+        ) : null}
       </div>
 
       {reordering ? <ProvidersReorder onChanged={() => void load()} /> : (

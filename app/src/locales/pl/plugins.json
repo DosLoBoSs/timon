@@ -400,12 +400,8 @@
     "acp": {
       "title": "Rejestr ACP",
       "description": "Agenci opublikowani w oficjalnym rejestrze Agent Client Protocol. Timon pobiera program, sprawdza go i uruchamia jako backend.",
-      "browse": "Przeglądaj rejestr",
       "refresh": "Odśwież",
       "stale": "Nie udało się połączyć z rejestrem; to ostatnia lista odczytana przez Timon.",
-      "verified": "Zweryfikowany sha256",
-      "noHash": "Brak opublikowanego skrótu",
-      "unsupported": "Niedostępny tutaj: {reason}",
       "install": "Zainstaluj",
       "update": "Aktualizuj",
       "repair": "Zainstaluj ponownie",
@@ -414,12 +410,6 @@
       "installed": "Zainstalowano {name}.",
       "updated": "{name} jest aktualny.",
       "removed": "Usunięto {name}.",
-      "state": {
-        "ok": "Zainstalowano {version}",
-        "tampered": "Pliki zmienione — nieużywany",
-        "missing": "Brak plików",
-        "pending": "Sprawdzanie {version}…"
-      },
       "confirmTitle": "Zainstalować {name} bez opublikowanego skrótu?",
       "confirmBody": "Rejestr nie podaje sumy kontrolnej dla tego programu. Jego integralność opiera się wyłącznie na pobraniu przez https. Instaluj tylko, jeśli ufasz wydawcy.",
       "confirmAction": "Mimo to zainstaluj"

@@ -437,14 +437,10 @@
       }
     },
     "acp": {
-      "title": "ACP registry",
-      "description": "Agents published in the official Agent Client Protocol registry. Timon downloads the program, checks it, and runs it as a backend.",
-      "browse": "Browse the registry",
+      "title": "Catalog",
+      "description": "Agents published in the official Agent Client Protocol registry. Timon downloads the program, checks it, and runs it as a provider.",
       "refresh": "Refresh",
       "stale": "The registry could not be reached; this is the last list Timon read.",
-      "verified": "Verified sha256",
-      "noHash": "No published hash",
-      "unsupported": "Not available here: {reason}",
       "install": "Install",
       "update": "Update",
       "repair": "Reinstall",
@@ -453,18 +449,10 @@
       "installed": "{name} is installed.",
       "updated": "{name} is up to date.",
       "removed": "{name} was removed.",
-      "state": {
-        "ok": "Installed {version}",
-        "tampered": "Files changed — not used",
-        "missing": "Files missing",
-        "pending": "Checking {version}…"
-      },
       "confirmTitle": "Install {name} without a published hash?",
       "confirmBody": "The registry gives no checksum for this program. Its integrity rests on the https download alone. Install only if you trust its publisher.",
       "confirmAction": "Install anyway",
       "verify": "Install verified version",
-      "unverified": "Unverified",
-      "verifiedUpdate": "{installed} was installed without a published hash. The registry now publishes a sha256 for {version}: install it to replace the unverified build.",
       "signIn": {
         "show": "Sign-in methods",
         "hide": "Hide sign-in methods",
@@ -478,6 +466,25 @@
         "agentStep": "{name} runs this step itself when an ACP client asks for it, and Timon does not start it. Complete it once from a client that offers it, or use the provider of its own CLI if Timon has one.",
         "copy": "Copy",
         "copied": "Command copied."
+      },
+      "search": "Search the catalog",
+      "noMatch": "No agent matches “{query}”.",
+      "empty": "The registry lists no agent.",
+      "open": "Open its page",
+      "line": {
+        "available": "Version {version}, checksum verified",
+        "availableUnverified": "Version {version}, no published checksum",
+        "unsupported": "Not available on this computer: {reason}",
+        "installed": "Installed {installed}, checksum verified",
+        "unverified": "Installed {installed}, no published checksum",
+        "installedUpdate": "Installed {installed} · verified {version} available",
+        "installedUpdateUnverified": "Installed {installed} · {version} available, without a published checksum",
+        "unverifiedUpdate": "Installed {installed} without a published checksum · verified {version} available",
+        "unverifiedUpdateUnverified": "Installed {installed} without a published checksum · {version} available, without one either",
+        "unverifiedVerifiedUpdate": "Installed {installed} without a published checksum · verified {version} available to replace it",
+        "tampered": "Installed {installed}: its files changed, so Timon does not use it",
+        "missing": "Installed {installed}: its files are missing",
+        "pending": "Checking {installed}…"
       }
     },
     "errors": {
@@ -681,6 +688,24 @@
     },
     "legacy": {
       "title": "Edit a provider's models and connection"
+    }
+  },
+  "providerAdd": {
+    "title": "Add a provider",
+    "intro": "Install an agent from the catalog, or connect a service that speaks a protocol Timon runs. The new provider joins the list, and its page is where you sign in and pick its models.",
+    "choices": {
+      "catalog": {
+        "title": "From the catalog",
+        "body": "Agents of the official Agent Client Protocol registry. Timon downloads the program, checks its checksum when one is published, and runs it."
+      },
+      "endpoint": {
+        "title": "Compatible endpoint",
+        "body": "A service reached at an address you give, speaking the Anthropic or OpenAI Responses protocol: a hosted model, a proxy, a server on your network."
+      }
+    },
+    "endpoint": {
+      "hint": "Test checks the address and the key, and lists the models the endpoint serves. Each provider is a file in ~/.timon/backends/, its key stays in the vault.",
+      "submit": "Add this provider"
     }
   }
 }

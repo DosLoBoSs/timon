@@ -136,14 +136,12 @@ test('the pencil opens the editor in a side panel inside Settings; Escape closes
     assert.equal(ui.settings.open, true, 'and only the panel: Settings stays open');
     assert.ok(document.activeElement === pencil, 'the focus is back on the pencil');
 
-    // Cancel does the same, and "Add a provider" goes through the same panel.
-    const add = byText<HTMLButtonElement>('button', 'Add a provider');
-    await ui.openEditor(add);
-    assert.equal(ui.panel()?.querySelector('h2')?.textContent, 'Add a provider');
+    // Cancel does the same. "Add a provider" opens its own page, no longer this panel.
+    await ui.openEditor(pencil);
     await ui.click(byText<HTMLButtonElement>('button', 'Cancel', ui.panel()!));
-    await ui.until(() => ui.panel() === null && document.activeElement === add, 'Cancel to close the panel and give the focus back');
+    await ui.until(() => ui.panel() === null && document.activeElement === pencil, 'Cancel to close the panel and give the focus back');
     assert.ok(ui.panel() === null, 'Cancel closed the panel');
-    assert.ok(document.activeElement === add, 'the focus is back on "Add a backend"');
+    assert.ok(document.activeElement === pencil, 'the focus is back on the pencil');
   } finally {
     await ui.unmount();
   }
