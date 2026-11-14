@@ -595,7 +595,6 @@
     },
     "program": {
       "title": "Program",
-      "description": "What Timon runs on this computer for this provider.",
       "recheck": "Check again",
       "rechecked": "Program checked again.",
       "plugin": "Brought by the plugin {name}, version {version}.",
@@ -616,7 +615,6 @@
         "updateTo": "Update available: {latest}",
         "unsupported": "Version {version} is not supported"
       },
-      "advanced": "Advanced",
       "pin": {
         "title": "Set the path",
         "description": "If the program is somewhere Timon does not look, give its full path. It applies to the next mission, without restarting Timon."
@@ -651,7 +649,12 @@
           "tampered": "Its files changed: not used",
           "missing": "Its files are missing"
         }
-      }
+      },
+      "versionTitle": "Version",
+      "versionLine": "v{version}",
+      "versionUpdate": "v{version} · {latest} available",
+      "showAdvanced": "Advanced settings",
+      "hideAdvanced": "Hide advanced settings"
     },
     "notFound": "This provider is no longer on this computer.",
     "errors": {

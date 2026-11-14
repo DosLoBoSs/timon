@@ -585,7 +585,6 @@
     },
     "program": {
       "title": "Programme",
-      "description": "Ce que Timon lance sur cet ordinateur pour ce fournisseur.",
       "recheck": "Vérifier à nouveau",
       "rechecked": "Programme vérifié à nouveau.",
       "plugin": "Apporté par le plugin {name}, version {version}.",
@@ -606,7 +605,6 @@
         "updateTo": "Mise à jour disponible : {latest}",
         "unsupported": "La version {version} n'est pas prise en charge"
       },
-      "advanced": "Avancé",
       "pin": {
         "title": "Chemin imposé",
         "description": "Si le programme se trouve là où Timon ne cherche pas, donnez son chemin complet. Il s'applique dès la prochaine mission, sans redémarrer Timon."
@@ -641,7 +639,12 @@
           "tampered": "Ses fichiers ont changé : non utilisé",
           "missing": "Ses fichiers sont manquants"
         }
-      }
+      },
+      "versionTitle": "Version",
+      "versionLine": "v{version}",
+      "versionUpdate": "v{version} · {latest} disponible",
+      "showAdvanced": "Réglages avancés",
+      "hideAdvanced": "Masquer les réglages avancés"
     },
     "notFound": "Ce fournisseur n'est plus sur cet ordinateur.",
     "errors": {

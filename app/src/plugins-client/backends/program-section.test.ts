@@ -159,6 +159,16 @@ test('the Program section paints the daemon\'s program and drives its installer 
   const text = () => section()?.textContent ?? '';
   const button = (label: RegExp) => Array.from(section()?.querySelectorAll('button') ?? []).find((b) => label.test(b.textContent ?? ''));
   const click = (el: HTMLElement) => React.act(async () => { el.click(); });
+  // A row's "…" menu: opened from the keyboard (jsdom has no pointer events), then one item chosen.
+  const choose = async (row: Element, item: string) => {
+    const trigger = row.querySelector<HTMLElement>('button[data-row-menu]')!;
+    await React.act(async () => { trigger.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+    await until(() => document.querySelector('[role="menu"]') !== null, 'the row menu');
+    const entry = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((el) => el.textContent === item);
+    assert.ok(entry, `menu item ${item}`);
+    await React.act(async () => { entry.click(); });
+    await until(() => document.querySelector('[role="menu"]') === null, 'the menu closed');
+  };
   const type = async (field: HTMLInputElement, value: string) => {
     const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value')!.set!;
     await React.act(async () => {
@@ -170,7 +180,10 @@ test('the Program section paints the daemon\'s program and drives its installer 
   try {
     await suite.test('a provider shipped in the release: one path, its link folded away, no authorization', async () => {
       await render('provider-claude');
-      await until(() => text().includes('Version 2.0.14'), 'the Program section');
+      await until(() => text().includes('v2.0.14'), 'the Program section');
+      assert.equal(section()!.querySelector('[data-program-path]'), null, 'the path waits under Advanced');
+      await choose(section()!.querySelector('[data-program="claude"]')!, 'Advanced settings');
+      await until(() => section()?.querySelector('[data-program-advanced]') != null, 'Advanced unfolded');
       assert.equal(section()!.querySelectorAll('[data-program-path]').length, 1, 'one path shown');
       assert.equal(section()!.querySelector('[data-program-path]')!.textContent, '/home/u/.local/bin/claude');
       const link = section()!.querySelector('[data-program-link]')!;
@@ -178,7 +191,7 @@ test('the Program section paints the daemon\'s program and drives its installer 
       assert.match(link.textContent!, /versions\/2\.0\.14/);
       assert.ok(!section()!.querySelector('[data-program-authorization]'), 'no authorization for a shipped provider');
       assert.doesNotMatch(text(), /Blocked|never/);
-      assert.match(section()!.querySelector('[data-program-state]')!.textContent!, /Installed/);
+      assert.equal(section()!.querySelector('[data-program-state]')!.getAttribute('data-program-state'), 'installed');
     });
 
     await suite.test('a third party whose program is refused reads as blocked, with why', async () => {
@@ -200,15 +213,17 @@ test('the Program section paints the daemon\'s program and drives its installer 
       await click(button(/^Install$/)!);
       assert.ok(requests.some((r) => r.method === 'POST' && r.url === '/api/ui/backends/provider-clis/codex/install'));
       await until(() => text().includes('added 1 package'), 'the installer\'s console');
-      await until(() => overviewReads > readsBefore && text().includes('Version 0.50.0'), 'the provider read again once installed');
+      await until(() => overviewReads > readsBefore && text().includes('v0.50.0'), 'the provider read again once installed');
       assert.equal(button(/^Install$/), undefined);
     });
 
     await suite.test('a path pinned under Advanced: a refusal is a sentence of the locale, a save is trimmed', async () => {
       await render('provider-claude');
+      await until(() => section()?.querySelector('[data-program="claude"]') != null, 'the Claude program row');
+      await choose(section()!.querySelector('[data-program="claude"]')!, 'Advanced settings');
       await until(() => document.getElementById('program-pin-claude') !== null, 'the pinned path field');
       const field = document.getElementById('program-pin-claude') as HTMLInputElement;
-      assert.ok(field.closest('details'), 'under Advanced');
+      assert.ok(field.closest('[data-program-advanced]'), 'under Advanced');
 
       refusePin = 'path_not_executable';
       await type(field, '/secret/place/claude');
