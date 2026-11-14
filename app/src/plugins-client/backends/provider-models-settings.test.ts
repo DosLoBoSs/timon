@@ -147,8 +147,8 @@ test('a provider page edits its models and its own settings, each saved apart', 
     // A provider added by hand: its connection under Advanced, saved without its models.
     await show('user:deepseek');
     await until(() => buttonIn(section('settings'), 'Advanced') !== undefined, 'the Advanced fold');
-    assert.equal(document.querySelector('[data-provider-section="provider-claude"]'), null, 'the Claude token lands on the Claude page only');
-    assert.equal(document.querySelector('input[type="url"]'), null, 'folded by default');
+    assert.ok(!document.querySelector('[data-provider-section="provider-claude"]'), 'the Claude token lands on the Claude page only');
+    assert.ok(!document.querySelector('input[type="url"]'), 'folded by default');
     await click(buttonIn(section('settings'), 'Advanced')!);
     assert.equal((document.querySelector('input[type="url"]') as HTMLInputElement).value, 'https://api.deepseek.com/anthropic');
 
