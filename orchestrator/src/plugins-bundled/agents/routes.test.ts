@@ -523,8 +523,8 @@ test('a custom role icon is a closed set of shapes: script-bearing markup is ref
   const { ROLE_REGISTRY, getRole, deleteRole, createRole, updateRole, roleIconSvgProblem } = await import('../../agent-roles.js');
   const { CUSTOM_ROLES_FILE } = await import('../../paths.js');
   for (const role of ROLE_REGISTRY) assert.equal(roleIconSvgProblem(role.iconSvg), null, `built-in ${role.id} icon stays valid`);
-  // As captured by the picker from the rendered DOM (end tags, `fill`).
-  const lucide = '<path d="M12 7v14"></path><circle cx="12" cy="12" r="3" fill="currentColor"></circle><g transform="translate(1 1)"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/></g>';
+  // As captured by the picker from the rendered DOM (end tags, a group).
+  const lucide = '<path d="M12 7v14"></path><circle cx="12" cy="12" r="3"></circle><g transform="translate(1 1)"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/></g>';
   const role = { id: 'icon-role', label: 'Icon', iconName: 'BookOpen', iconSvg: lucide, color: '#123456' };
   const createdRole = await call('POST', '/api/agent-roles', { cookie: adminCookie, body: role });
   assert.equal(createdRole.status, 201);
@@ -535,6 +535,9 @@ test('a custom role icon is a closed set of shapes: script-bearing markup is ref
     '<script>alert(1)</script>',
     '<path d="M1 1" onload="alert(1)"/>',
     '<path d="M1 1" style="fill:red"/>',
+    '<path fill="currentColor"/>',
+    '<path d="M1 1" fill="url(#x)"/>',
+    '<circle r="3" stroke="url(evil)"/>',
     '<path xlink:href="#a"/>',
     '<foreignObject><div>x</div></foreignObject>',
     '<use href="#a"/>',

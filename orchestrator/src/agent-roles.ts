@@ -191,11 +191,12 @@ export function withCurrentCloseFlags(text: string): string {
  */
 export const ROLE_ICON_SVG_MAX_LENGTH = 4096;
 const ROLE_ICON_ELEMENTS = new Set(['path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'g']);
-// `fill` is outside the original list but 17 lucide icons (0.460) set it on a
-// shape; its value obeys the same charset, which cannot name a URL or a script.
+// Geometry only: a paint attribute such as `fill` would accept `url(#id)` and
+// let the icon reach other parts of the page. Clients draw a known lucide icon
+// from its `iconName`, so this markup is only a stroke-drawn fallback.
 const ROLE_ICON_ATTRIBUTES = new Set([
   'd', 'cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'x1', 'y1', 'x2', 'y2',
-  'width', 'height', 'points', 'transform', 'fill',
+  'width', 'height', 'points', 'transform',
 ]);
 const ROLE_ICON_VALUE_RE = /^[0-9a-zA-Z .,\-#()]*$/;
 const ROLE_ICON_OPEN_RE = /^<([a-zA-Z][a-zA-Z0-9:_-]*)((?:\s+[^\s=/>]+\s*=\s*"[^"]*")*)\s*(\/?)>/;
