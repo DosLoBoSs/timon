@@ -85,6 +85,7 @@ import { copyButtonHtml, currentHighlighterVersion, highlightCode } from '@/lib/
 import { agentTextHtml, createObjectHtmlCache, useAgentTextHtml, useHighlighterVersion } from '@/components/chat/bubble-html';
 import { hljsLanguageFor } from '@/lib/file-icons';
 import { humanizeTool } from '@/lib/humanize-tool';
+import { permissionRequestText } from '@/lib/permission-request';
 import { toolDisplayTitle, toolLabel } from '@/lib/tool-label';
 import { approvalScopesOf, type ApprovalScope } from '@/lib/approval-scopes';
 import {
@@ -7481,6 +7482,7 @@ function PermissionCard({
   const inputPreview = (() => {
     try { return JSON.stringify(perm.input, null, 2); } catch { return String(perm.input); }
   })();
+  const request = permissionRequestText(perm.tool_name, perm.input);
   return (
     <div
       // Trailing 34px column: no avatar on this side, but the message rows
@@ -7603,11 +7605,14 @@ function PermissionCard({
             />
           ) : (
             <>
-              <div className="font-medium">{i18n('chatSurface.permissionToRun')}</div>
-              {/* code-font: the tool id */}
-              <code className="mt-1.5 inline-block break-all rounded border border-border bg-muted/40 px-2 py-1 font-mono text-[11.5px]">
-                {perm.tool_name}
-              </code>
+              <div className="font-medium">{request.heading}</div>
+              {request.intent && <div className="mt-1 text-muted-foreground">{request.intent}</div>}
+              {request.rawName && (
+                // code-font: the tool id, as allow rules and logs name it
+                <code className="mt-1.5 inline-block break-all rounded border border-border bg-muted/40 px-2 py-1 font-mono text-[11.5px]">
+                  {request.rawName}
+                </code>
+              )}
               {inputPreview && inputPreview !== '{}' && (
                 // code-font: the call input, JSON
                 <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-border bg-muted/30 p-2 font-mono text-[11px] leading-relaxed text-foreground/85">

@@ -227,6 +227,8 @@ Every agent also gets Timon's own tools without any setup — the Kanban, missio
 
 Permission behaviour depends on the backend's capabilities. Some support interactive tool approval; others receive a sandbox policy fixed when the mission starts. Read the editor's explanation for the selected backend instead of assuming every model can show the same permission dialog.
 
+A permission card names the tool the agent asks to use in your language: Timon's own tools and other MCP tools by their server and action (**Timon · Kanban Add**), with its identifier below, as allow rules and logs name it. When the call says what it does, the card adds it: the agent's own description of a shell command, otherwise a short sentence such as **Writes stats.py**. The call's full input follows.
+
 ### A command that runs a project file
 
 When a shell command runs a file from the mission's folder, the permission card shows that file under a warning, so you approve what it contains and not only its name. It covers a script run by its path (`./run_tests.sh`), a script handed to an interpreter (`bash`, `sh`, `python`, `node`…) or to `source`, an npm script (`npm test`, `npm run build`: its line in `package.json`, and the file it runs) and a make target (its rule in the `Makefile`). For each file the card gives its path, its size, its first 40 lines (4 KB at most; a long excerpt starts folded) and the beginning of its SHA-256 fingerprint. Timon only reads the file: it never runs it to find out what it does.
