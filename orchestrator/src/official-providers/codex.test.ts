@@ -78,7 +78,7 @@ test('the sandbox is opened to the git folders the daemon computed, and the toke
   else assert.match(toml, new RegExp(`writable_roots = \\["${join(REPO, '.git').replace(/\\/g, '\\\\\\\\')}"\\]`));
   assert.match(toml, /network_access = true/);
   assert.equal(toml.includes(kit.FAKE_TOKEN_REFERENCE), false, 'the reference of the token is not in the file');
-  assert.match(toml, /env_vars = \["TIMON_API_TOKEN"\]/);
+  assert.match(toml, /env_vars = \["TIMON_API_TOKEN", "npm_config_cache"/);
   assert.deepEqual(spec.args.slice(0, 5), ['exec', '--json', '--skip-git-repo-check', '--sandbox', 'workspace-write']);
   assert.equal(spec.initialStdin, '# Instructions\nsp\n\n# Task\nm');
 });
