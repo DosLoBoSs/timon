@@ -76,14 +76,15 @@ function loadAgentCwd(agentName: string): string {
 }
 
 /** Verify the requested relative path stays inside the sandboxed root.
- *  Returns the resolved absolute path on success.
+ *  Returns the resolved absolute path on success. `root` must already be a
+ *  real path. Shared with the script preview of permission cards.
  *
  *  The path need not exist (a write or a mkdir creates it): the deepest
  *  ancestor that does exist is resolved through its symlinks and the missing
  *  components are re-attached to it. Resolving only an existing target let
  *  `link/new.txt`, with `link` pointing outside, pass as an inside path, and
  *  the write then followed the link out of the root. */
-function safeResolve(root: string, rel: string): string {
+export function safeResolve(root: string, rel: string): string {
   const abs = lexicalResolve(root, rel);
   const missing: string[] = [];
   let existing = abs;
@@ -132,7 +133,7 @@ function isHidden(name: string): boolean {
   return HIDDEN_PREFIXES.includes(name) || name.startsWith('.DS_Store');
 }
 
-function sniffBinary(buf: Buffer): boolean {
+export function sniffBinary(buf: Buffer): boolean {
   // First 8 KB sample — NUL byte is a strong signal.
   const sample = buf.subarray(0, Math.min(buf.length, 8192));
   for (let i = 0; i < sample.length; i++) {
