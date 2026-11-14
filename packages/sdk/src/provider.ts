@@ -116,4 +116,4 @@ export {
   CLAUDE_PERMISSION_PROMPT_TOOL,
 } from '../../../orchestrator/src/ask-mcp.js';
 export { PERMISSION_MODEL_OBLIGATIONS, PERMISSION_MODES } from '../../../orchestrator/src/backends/permission-models.js';
-export type { PermissionMode } from '../../../orchestrator/src/backends/permission-models.js';
+export type { NestedSandboxDeclaration, PermissionMode } from '../../../orchestrator/src/backends/permission-models.js';

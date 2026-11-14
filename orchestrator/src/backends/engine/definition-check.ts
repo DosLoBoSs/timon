@@ -18,7 +18,7 @@
  */
 
 import { PERMISSION_MODELS, RATE_LIMIT_REPORTINGS, SESSION_STORES } from '../types.js';
-import { PERMISSION_MODEL_OBLIGATIONS, PERMISSION_MODES, UNSUPPORTED_MODE_FALLBACK } from '../permission-models.js';
+import { nestedSandboxProblems, PERMISSION_MODEL_OBLIGATIONS, PERMISSION_MODES, UNSUPPORTED_MODE_FALLBACK } from '../permission-models.js';
 import { declarationProblems } from '../provider-declarations.js';
 import { PROVIDER_TRANSPORTS } from './definition.js';
 
@@ -150,6 +150,10 @@ export function definitionProblems(definition: unknown): string[] {
           problems.push(`\`permission.supportedModes\` must include '${UNSUPPORTED_MODE_FALLBACK}': every mode left out runs in it`);
         }
       }
+    }
+    if (permission.nestedSandbox !== undefined) {
+      if (remote) problems.push('`permission.nestedSandbox` turns off the sandbox of a CLI the daemon launches: a `remote` provider has no process');
+      else problems.push(...nestedSandboxProblems(permission.nestedSandbox));
     }
   }
 
