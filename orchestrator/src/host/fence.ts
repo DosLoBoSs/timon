@@ -7,12 +7,13 @@
  * isolation policy; this module only speaks the launcher's wire format, so
  * that the C reader and the TypeScript writer change together.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifiedRelease, type VerifiedRelease } from '../plugins/builtin.js';
+import type { HostFenceWitness } from './types.js';
 
 /** Exit codes of the launcher before the command runs (sysexits values). */
 export const FENCE_EXIT = Object.freeze({
@@ -120,6 +121,57 @@ export function probeFence(binary: string): FenceProbe {
   const result = spawnSync(binary, ['--probe'], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
   if (result.error) return { available: false, answered: false, abi: 0, seccomp: false, reason: `the fence launcher cannot run (${result.error.message})` };
   return parseFenceProbe(result.stdout, result.status);
+}
+
+/**
+ * The payload of a witness run on Linux. Absent (NixOS), the launcher exits
+ * 127 after every fence step succeeded, which still proves the fence applies.
+ */
+export const WITNESS_PAYLOAD = '/bin/true'; // portability: Linux system binary, used with the Linux launcher only
+
+/** The launcher's words fit in this much; a witness payload prints nothing. */
+const WITNESS_STDERR_MAX = 4096;
+
+/** A witness that could not be started, with the errno code that says why. */
+function spawnFailure(err: unknown): HostFenceWitness {
+  const code = (err as NodeJS.ErrnoException | null)?.code;
+  return { ran: false, reason: err instanceof Error ? err.message : String(err), timedOut: false, ...(typeof code === 'string' ? { code } : {}) };
+}
+
+/**
+ * Runs a fence launcher once with a trivial payload, without blocking the
+ * daemon: what it exits with and writes on stderr is the launcher's alone.
+ */
+export function runFenceWitness(file: string, args: readonly string[], timeoutMs = 5_000): Promise<HostFenceWitness> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (result: HostFenceWitness): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(file, [...args], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+    } catch (err) {
+      resolve(spawnFailure(err));
+      return;
+    }
+    let stderr = '';
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGKILL');
+    }, timeoutMs);
+    child.stderr?.on('data', (chunk: Buffer) => {
+      if (stderr.length < WITNESS_STDERR_MAX) stderr += chunk.toString('utf8');
+    });
+    child.once('error', (err) => settle(spawnFailure(err)));
+    child.once('close', (status) => settle(timedOut
+      ? { ran: false, reason: `no answer within ${timeoutMs} ms`, timedOut: true }
+      : { ran: true, status, stderr: stderr.slice(0, WITNESS_STDERR_MAX) }));
+  });
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

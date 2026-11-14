@@ -74,6 +74,7 @@ async function launch(agent = 'fence.witness'): Promise<{ cmd: string; args: str
       policies.push(policy);
       return { cmd: LAUNCHER, args: ['--policy', policyFile, '--', cmd, ...args] };
     },
+    witness: async () => ({ ran: true, status: 0, stderr: '' }),
   };
   const child = Object.assign(new EventEmitter(), {
     pid: 4247, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(), killed: false,
@@ -150,7 +151,7 @@ test('without a fence on the machine, auto launches the bare CLI with the plain 
     pid: 4248, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(), killed: false,
     kill() { this.killed = true; return true; },
   });
-  host.fence = { mechanism: 'landlock', probe: () => ({ available: false, reason: 'kernel without Landlock', abi: 0 }), wrap: () => { throw new Error('never'); } };
+  host.fence = { mechanism: 'landlock', probe: () => ({ available: false, reason: 'kernel without Landlock', abi: 0 }), wrap: () => { throw new Error('never'); }, witness: async () => ({ ran: true, status: 0, stderr: '' }) };
   host.spawn = ((cmd: string, args: string[], opts?: { env?: NodeJS.ProcessEnv }) => {
     seen.cmd = cmd; seen.args = args; seen.env = (opts?.env ?? {}) as NodeJS.ProcessEnv;
     return child as unknown as ChildProcessWithoutNullStreams;

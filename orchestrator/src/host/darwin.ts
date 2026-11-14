@@ -14,11 +14,12 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { TimonConfig } from '../config/schema.js';
+import { runFenceWitness } from './fence.js';
 import { createGenericHost, type BinaryPins } from './generic.js';
 import {
   canonicalPaths, parseSeatbeltProbe, renderSeatbeltProfile, SANDBOX_EXEC, SEATBELT_PROBE_PROFILE, seatbeltLaunch,
 } from './seatbelt.js';
-import type { Host, HostFence, HostFenceProbe } from './types.js';
+import type { Host, HostFence, HostFenceProbe, HostFenceWitness } from './types.js';
 
 /** `/usr/bin/true`, the payload of the probe. */
 const TRUE_BINARY = '/usr/bin/true'; // portability: macOS system binary, used on darwin only
@@ -32,6 +33,8 @@ export type SeatbeltFenceDeps = {
   writeProfile?: (file: string, text: string) => void;
   /** Where a dropped grant is reported. */
   warn?: (line: string) => void;
+  /** Runs the witness; `runFenceWitness` by default. */
+  runWitness?: (file: string, args: readonly string[]) => Promise<HostFenceWitness>;
 };
 
 function runProbe(file: string, args: string[]): { status: number | null; stderr: string; error?: Error } {
@@ -51,6 +54,7 @@ export function createSeatbeltFence(deps: SeatbeltFenceDeps = {}): HostFence {
   const realpath = deps.realpath ?? ((path: string) => realpathSync.native(path));
   const writeProfile = deps.writeProfile ?? writeProfileFile;
   const warn = deps.warn ?? ((line: string) => console.warn(line));
+  const runWitness = deps.runWitness ?? ((file: string, args: readonly string[]) => runFenceWitness(file, args));
   let probed: HostFenceProbe | undefined;
   return {
     mechanism: 'seatbelt',
@@ -66,6 +70,11 @@ export function createSeatbeltFence(deps: SeatbeltFenceDeps = {}): HostFence {
       for (const { path, reason } of profile.dropped) warn(`[host] mission fence: grant on ${path} dropped: ${reason}`);
       writeProfile(policyFile, profile.text);
       return seatbeltLaunch(policyFile, cmd, args);
+    },
+    witness(policyFile) {
+      // The launch's own profile, so that one this macOS cannot compile fails here too.
+      const launch = seatbeltLaunch(policyFile, TRUE_BINARY, []);
+      return runWitness(launch.cmd, launch.args);
     },
   };
 }
