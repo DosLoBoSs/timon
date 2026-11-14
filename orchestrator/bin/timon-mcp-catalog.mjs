@@ -170,11 +170,11 @@ const TOOLS = [
         },
         extra_mcp_servers: {
           type: 'array', items: { type: 'string' },
-          description: 'MCP server ids injected for THIS task only (see mcp_server_list).',
+          description: 'MCP server ids injected for THIS task only (see mcp_server_list). From a mission, no stdio server the agent does not already hold.',
         },
         extra_allowed_tools: {
           type: 'array', items: { type: 'string' },
-          description: 'Tool patterns pre-allowed for THIS task, e.g. `Bash(timon:*)`.',
+          description: 'Tool patterns pre-allowed for THIS task, e.g. `Bash(timon:*)`. From a mission, only tools the agent already holds: adding one takes the user.',
         },
         fallback_backend_override: {
           type: 'string',
@@ -1134,8 +1134,8 @@ const TOOLS = [
         model: { type: 'string', description: 'Model slug for THIS mission only (see backends_list).' },
         backend: { type: 'string', description: 'Backend id for THIS mission only (see backends_list).' },
         extra_skills: { type: 'array', items: { type: 'string' }, description: 'Skill ids injected for this mission only.' },
-        extra_mcp_servers: { type: 'array', items: { type: 'string' }, description: 'MCP server ids injected for this mission only.' },
-        extra_allowed_tools: { type: 'array', items: { type: 'string' }, description: 'Tool patterns pre-allowed for this mission, e.g. `Bash(timon:*)`.' },
+        extra_mcp_servers: { type: 'array', items: { type: 'string' }, description: 'MCP server ids injected for this mission only. From a mission, no stdio server the agent does not already hold.' },
+        extra_allowed_tools: { type: 'array', items: { type: 'string' }, description: 'Tool patterns pre-allowed for this mission, e.g. `Bash(timon:*)`. From a mission, only tools the agent already holds: adding one takes the user.' },
         idempotency_key: { type: 'string', description: 'Replays the same mission_id if the key repeats within a few minutes.' },
         title: { type: 'string', description: 'Short display name of the mission in the missions list (≤ 200 characters). Absent: the mission is listed by its brief.' },
       },
