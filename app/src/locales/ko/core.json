@@ -1657,7 +1657,7 @@
         "terminal": "셸 콘솔 터미널 글꼴 shell console pty font"
       },
       "models": {
-        "backends": "claude codex 공급자 LLM API 모델 기본 순서 provider model 구독 계정 로그인 연결 다시 연결 여러 chatgpt 요금제 기기 코드 subscription account login",
+        "backends": "claude codex 공급자 LLM API 모델 기본 순서 provider model 구독 계정 로그인 연결 다시 연결 여러 chatgpt 요금제 기기 코드 subscription account login add catalog registry acp endpoint compatible openai anthropic url api key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "대체 백업 할당량 전환 소진 대기 시간 최후 수단 fallback quota",
         "breaker": "회로 차단기 무익한 턴 대기 circuit breaker",
         "quotas": "사용량 한도 크레딧 구독 요금제 초기화 usage limits credits"

@@ -1657,7 +1657,7 @@
         "terminal": "シェル コンソール ターミナル フォント shell console pty font"
       },
       "models": {
-        "backends": "claude codex プロバイダー LLM API モデル 既定 順序 provider model サブスクリプション アカウント サインイン ログイン 接続 再接続 複数 chatgpt プラン デバイスコード subscription account login",
+        "backends": "claude codex プロバイダー LLM API モデル 既定 順序 provider model サブスクリプション アカウント サインイン ログイン 接続 再接続 複数 chatgpt プラン デバイスコード subscription account login add catalog registry acp endpoint compatible openai anthropic url api key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "フォールバック 予備 クォータ 切り替え 枯渇 クールダウン 最終手段 fallback quota",
         "breaker": "サーキットブレーカー 無益なターン 待機 circuit breaker",
         "quotas": "使用量 上限 クレジット サブスクリプション プラン リセット usage limits credits"

@@ -1657,7 +1657,7 @@
         "terminal": "shell consola pty fuente tipografía"
       },
       "models": {
-        "backends": "claude codex proveedor llm api modelo predeterminado orden suscripción cuenta iniciar sesión login conectar reconectar varias chatgpt plan dispositivo código",
+        "backends": "claude codex proveedor llm api modelo predeterminado orden suscripción cuenta iniciar sesión login conectar reconectar varias chatgpt plan dispositivo código add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "respaldo reserva cuota cambio agotada enfriamiento último recurso fallback",
         "breaker": "cortacircuitos circuit breaker turnos estériles apartar",
         "quotas": "límites de uso créditos suscripción plan reinicio cuotas"

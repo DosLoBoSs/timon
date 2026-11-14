@@ -1429,7 +1429,7 @@
         "terminal": "shell console pty font"
       },
       "models": {
-        "backends": "claude codex provider llm api model default order subscription account sign in login connect reconnect several chatgpt plan device code",
+        "backends": "claude codex provider llm api model default order subscription account sign in login connect reconnect several chatgpt plan device code add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "fallback backup quota switch exhausted cooldown last resort",
         "breaker": "circuit breaker sterile turns sideline",
         "quotas": "usage limits credits subscription plan reset"

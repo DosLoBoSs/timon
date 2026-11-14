@@ -1657,7 +1657,7 @@
         "terminal": "shell console pty lettertype"
       },
       "models": {
-        "backends": "claude codex provider llm api model standaard volgorde abonnement account aanmelden login koppelen opnieuw meerdere chatgpt plan apparaatcode",
+        "backends": "claude codex provider llm api model standaard volgorde abonnement account aanmelden login koppelen opnieuw meerdere chatgpt plan apparaatcode add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "fallback reserve quotum wisselen uitgeput afkoelen laatste redmiddel",
         "breaker": "stroomonderbreker circuit breaker steriele beurten opzij",
         "quotas": "gebruik limieten credits abonnement plan reset"

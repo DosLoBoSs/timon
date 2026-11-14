@@ -1691,7 +1691,7 @@
         "terminal": "shell 控制台 pty 字体"
       },
       "models": {
-        "backends": "claude codex 提供商 llm api 模型 默认 顺序 订阅 账号 登录 连接 重连 多账号 chatgpt 套餐 设备代码",
+        "backends": "claude codex 提供商 llm api 模型 默认 顺序 订阅 账号 登录 连接 重连 多账号 chatgpt 套餐 设备代码 add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "回退 备用 配额 切换 耗尽 冷却 兜底",
         "breaker": "熔断 无效轮次 暂停使用",
         "quotas": "用量 限额 点数 订阅 套餐 重置"

@@ -1657,7 +1657,7 @@
         "terminal": "powłoka konsola pty czcionka shell"
       },
       "models": {
-        "backends": "claude codex dostawca llm api model domyślny kolejność subskrypcja konto logowanie zaloguj połącz ponownie kilka chatgpt plan kod urządzenia",
+        "backends": "claude codex dostawca llm api model domyślny kolejność subskrypcja konto logowanie zaloguj połącz ponownie kilka chatgpt plan kod urządzenia add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "awaryjny zapasowy limit przełączanie wyczerpany przerwa ostatnia deska ratunku fallback",
         "breaker": "bezpiecznik jałowe tury odsunięcie circuit breaker",
         "quotas": "użycie limity kredyty subskrypcja plan reset"

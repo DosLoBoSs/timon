@@ -1429,7 +1429,7 @@
         "terminal": "shell console pty police"
       },
       "models": {
-        "backends": "claude codex fournisseur llm api modèle défaut ordre abonnement compte connexion connecter reconnecter plusieurs chatgpt forfait code appareil",
+        "backends": "claude codex fournisseur llm api modèle défaut ordre abonnement compte connexion connecter reconnecter plusieurs chatgpt forfait code appareil ajouter catalogue registre acp endpoint compatible openai anthropic url clé secret coffre programme binaire cli chemin version mise à jour installer autoriser autorisation sécurité jeton activer désactiver réflexion fenêtre de contexte",
         "fallback": "secours repli quota bascule épuisé délai dernier recours",
         "breaker": "disjoncteur tours stériles",
         "quotas": "usage limites crédits abonnement forfait réinitialisation"

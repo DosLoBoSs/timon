@@ -1657,7 +1657,7 @@
         "terminal": "shell konsole pty schrift"
       },
       "models": {
-        "backends": "claude codex anbieter provider llm api modell standard reihenfolge abo konto anmelden login verbinden neu verbinden mehrere chatgpt tarif gerätecode",
+        "backends": "claude codex anbieter provider llm api modell standard reihenfolge abo konto anmelden login verbinden neu verbinden mehrere chatgpt tarif gerätecode add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "fallback ausweich kontingent quota wechsel erschöpft abkühlung letzter ausweg",
         "breaker": "schutzschalter circuit breaker sterile turns aussetzen",
         "quotas": "nutzung limits credits abo tarif zurücksetzen"

@@ -1657,7 +1657,7 @@
         "terminal": "shell console pty font terminale"
       },
       "models": {
-        "backends": "claude codex provider llm api modello predefinito ordine model default order abbonamento account accesso login connetti riconnetti più chatgpt piano codice dispositivo subscription sign in plan device code",
+        "backends": "claude codex provider llm api modello predefinito ordine model default order abbonamento account accesso login connetti riconnetti più chatgpt piano codice dispositivo subscription sign in plan device code add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "fallback riserva quota cambio esaurito attesa ultima risorsa backup switch exhausted cooldown last resort",
         "breaker": "circuit breaker turni sterili escludi sterile turns sideline",
         "quotas": "limiti di utilizzo crediti abbonamento piano reset usage limits credits subscription plan"
