@@ -410,7 +410,53 @@ const SYSTEM_WRITABLE: Readonly<Partial<Record<NodeJS.Platform, readonly string[
 
 const FENCE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
-type GrantSource = 'mission' | 'own-memory' | 'config';
+/**
+ * Where a grant comes from, which decides how far it may reach into the Timon home:
+ * - `own`: a folder the fence builds itself from the mission's identity (its
+ *   account, its scratch folders), each segment checked by `FENCE_SEGMENT`;
+ * - `own-memory`: the same, for the agent's memory, the one writable folder
+ *   of a read-only zone;
+ * - `mission`: a path the caller hands over (the working directory, a git
+ *   directory, a file or a plugin folder), which a mission may have chosen:
+ *   an agent's `cwd` is only checked for existence, and a mission holding
+ *   `agents:manage` sets it;
+ * - `config`: `host.isolation`, which grants nothing inside the Timon home.
+ */
+type GrantSource = 'own' | 'own-memory' | 'mission' | 'config';
+
+/**
+ * Zones of the Timon home where a handed-over path never lands, by their
+ * leading segments. Each holds one folder per account or per mission, and
+ * the fence grants the mission's own one itself, from its identity. A depth
+ * would not be enough there: `backend-accounts/<other>/.credentials.json`
+ * sits two segments down and is still another account's sign-in, and
+ * `tmp/missions/<other>` is still another mission's TMPDIR.
+ */
+const OWNER_ZONES: readonly (readonly string[])[] = Object.freeze([
+  ['backend-accounts'], // backend-accounts/<account>: a sign-in, credentials included
+  ['provider-runs'], // provider-runs/<plugin>/<mission>: a mission's provider home
+  ['provider-cache'], // provider-cache/<plugin>: shared by every mission of that provider
+  ['codex-runs'], // codex-runs/<mission>: CODEX_HOME of one mission
+  ['grok-runs'], // grok-runs/<mission>: GROK_HOME of one mission
+  ['tmp', 'missions'], // tmp/missions/<mission>: TMPDIR of one mission
+]);
+
+/**
+ * How many segments below its zone root a handed-over path must sit, at
+ * least. A zone root lists every task's, agent's or plugin's folder: handing
+ * it over grants all of them, so depth 0 is never enough.
+ */
+const HANDED_DEPTH: Readonly<Record<string, number>> = Object.freeze({
+  worktrees: 1, // worktrees/<task>: one task's checkout
+  workflows: 1, // workflows/<slug>: one workflow's fallback working directory
+  workspace: 1, // workspace/<name>: one shared working folder
+  tmp: 1, // tmp/<folder>: a scratch folder; tmp itself holds the daemon's logs
+  agents: 1, // agents/<name>: one agent's identity docs and memory
+  projects: 1, // projects/<slug>: one project's memory
+  skills: 1, // skills/<id>: one skill
+  uploads: 2, // uploads/<kind>/<owner>: chat/<conversation>, projects/<slug>
+  plugins: 2, // plugins/node_modules/<package>: one installed plugin
+});
 
 /** Why a grant must be dropped, or `null` when it may stand. */
 function timonGrantProblem(timonHome: string, path: string, access: 'ro' | 'rw', source: GrantSource): string | null {
@@ -418,11 +464,17 @@ function timonGrantProblem(timonHome: string, path: string, access: 'ro' | 'rw',
   // An ancestor of the Timon home may be granted: the home stays refused, deeper.
   if (!contains(timonHome, path)) return null;
   if (source === 'config') return 'the configuration cannot open a folder of the Timon home';
-  const first = relative(timonHome, path).split(sep)[0] ?? '';
+  const segments = relative(timonHome, path).split(sep);
+  const first = segments[0] ?? '';
   if (isRefusedTimonEntry(first)) return `"${first}" holds private state a mission never reaches`;
   const writable = MISSION_TIMON_ZONES.writable.includes(first);
   if (access === 'rw' && !writable && source !== 'own-memory') return `"${first}" is never writable from a mission`;
   if (!writable && !MISSION_TIMON_ZONES.readable.includes(first)) return `"${first}" is not one of the mission zones`;
+  if (source !== 'mission') return null;
+  const owner = OWNER_ZONES.find((zone) => zone.every((name, i) => segments[i] === name));
+  if (owner) return `"${owner.join('/')}" holds other accounts' or missions' folders; the fence grants the mission's own one`;
+  const depth = HANDED_DEPTH[first] ?? Number.POSITIVE_INFINITY;
+  if (segments.length - 1 < depth) return `"${segments.join('/')}" lists other missions' folders; only a folder ${depth} level(s) inside "${first}" is handed over`;
   return null;
 }
 
@@ -459,6 +511,9 @@ const NO_FENCE: FencePolicy = Object.freeze({
  *   own folders are not.
  * - No grant, whatever its origin, lands on a refused entry of the Timon home
  *   or on the home itself; the configuration grants nothing inside it.
+ * - A path the caller hands over (working directory, git directory, file,
+ *   plugin folder) never opens a zone root, nor a zone of per-account or
+ *   per-mission folders (`HANDED_DEPTH`, `OWNER_ZONES`).
  */
 export function resolveFence(config: TimonConfig, target: FenceTarget): FencePolicy {
   const iso = config.host.isolation;
@@ -502,22 +557,22 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
   if (missionId) {
     // `tmp/missions/<id>` becomes the mission's TMPDIR: a `mktemp` must not
     // land in a folder the mission can list, nor in another mission's.
-    grant(inTimon('tmp', 'missions', missionId), 'rw', 'mission');
-    grant(inTimon('codex-runs', missionId), 'rw', 'mission');
-    grant(inTimon('grok-runs', missionId), 'rw', 'mission');
-    if (plugin) grant(inTimon('provider-runs', plugin, missionId), 'rw', 'mission');
+    grant(inTimon('tmp', 'missions', missionId), 'rw', 'own');
+    grant(inTimon('codex-runs', missionId), 'rw', 'own');
+    grant(inTimon('grok-runs', missionId), 'rw', 'own');
+    if (plugin) grant(inTimon('provider-runs', plugin, missionId), 'rw', 'own');
   }
-  if (plugin) grant(inTimon('provider-cache', plugin), 'rw', 'mission');
-  if (account) grant(inTimon('backend-accounts', account), 'rw', 'mission');
+  if (plugin) grant(inTimon('provider-cache', plugin), 'rw', 'own');
+  if (account) grant(inTimon('backend-accounts', account), 'rw', 'own');
   if (agent) {
-    grant(inTimon('agents', agent), 'ro', 'mission');
+    grant(inTimon('agents', agent), 'ro', 'own');
     grant(inTimon('agents', agent, 'memory'), 'rw', 'own-memory');
     if (missionId) grant(inTimon('agents', agent, 'missions', missionId, 'memory'), 'rw', 'own-memory');
   }
-  grant(inTimon('skills'), 'ro', 'mission');
+  grant(inTimon('skills'), 'ro', 'own');
   if (project) {
-    grant(inTimon('projects', project, 'memory'), 'ro', 'mission');
-    grant(inTimon('uploads', 'projects', project), 'ro', 'mission');
+    grant(inTimon('projects', project, 'memory'), 'ro', 'own');
+    grant(inTimon('uploads', 'projects', project), 'ro', 'own');
   }
   for (const raw of target.timonRead ?? []) {
     const path = resolve(raw);
@@ -551,7 +606,7 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
     .map((dir) => expand(`~/${dir}`, home))
     .filter((path) => !neverSpared.some((n) => contains(n, path) || contains(path, n)));
   const ownDirs = [...ownBuiltIn.map((d) => expand(`~/${d}`, home)), ...ownDeclared];
-  if (!account) for (const path of ownDirs) grant(path, 'rw', 'mission');
+  if (!account) for (const path of ownDirs) grant(path, 'rw', 'own');
 
   for (const path of exceptions.writable) grant(expand(path, home), 'rw', 'config');
   const allowed = iso.allow.map((p) => expand(p, home)).filter((path) => grant(path, 'ro', 'config'));

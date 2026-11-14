@@ -431,3 +431,60 @@ test('fence: macOS writes go to the resolved temporary folders', () => {
   assert.equal(access(policy, '/Users/tester/.zshrc'), 'rx');
   assert.equal(access(policy, '/Users/tester/.timon/daemon-token'), 'none');
 });
+
+test('fence: a handed-over path never opens a whole zone of the Timon home', () => {
+  // The four measured exposures: each zone root handed over as it is.
+  const cases: Array<[Record<string, unknown>, string]> = [
+    [{ cwd: `${TH}/backend-accounts` }, `${TH}/backend-accounts/acc-other/.credentials.json`],
+    [{ cwd: `${TH}/tmp` }, `${TH}/tmp/missions/other/x`],
+    [{ cwd: `${TH}/worktrees` }, `${TH}/worktrees/task-2/src/a.ts`],
+    [{ timonRead: [`${TH}/agents`] }, `${TH}/agents/timon.main/memory/learnings.jsonl`],
+  ];
+  for (const [over, victim] of cases) {
+    const policy = resolveFence(cfg(), fullTarget(over));
+    assert.equal(access(policy, victim), 'none', `${JSON.stringify(over)} must not reach ${victim}`);
+  }
+  // Every zone root, handed over as a working directory (writable zones) or a file (readable zones).
+  for (const zone of MISSION_TIMON_ZONES.writable) {
+    const policy = resolveFence(cfg(), fullTarget({ cwd: `${TH}/${zone}` }));
+    assert.ok(policy.ignored.some((i) => i.path === `${TH}/${zone}`), `cwd ${zone} must be dropped`);
+    assert.equal(access(policy, `${TH}/${zone}/someone-else/x`), 'none', `${zone}/… must stay refused`);
+  }
+  for (const zone of MISSION_TIMON_ZONES.readable) {
+    const policy = resolveFence(cfg(), fullTarget({ timonRead: [`${TH}/${zone}`], pluginDirs: [`${TH}/${zone}`] }));
+    assert.ok(policy.ignored.some((i) => i.path === `${TH}/${zone}`), `${zone} must be dropped`);
+    // Every skill is readable by design: the fence grants the skills folder itself.
+    if (zone !== 'skills') assert.equal(access(policy, `${TH}/${zone}/someone-else/x`), 'none', `${zone}/… must stay refused`);
+  }
+  // A folder that lists a kind of entry is no better than the zone root.
+  for (const path of [`${TH}/uploads/chat`, `${TH}/plugins/node_modules`]) {
+    const policy = resolveFence(cfg(), fullTarget({ timonRead: [path], pluginDirs: [path] }));
+    assert.ok(policy.ignored.some((i) => i.path === path), `${path} must be dropped`);
+  }
+});
+
+test('fence: a handed-over path never lands in another account\'s or mission\'s folder', () => {
+  const other = 'bbbbbbbb-0000-4000-8000-000000000002';
+  for (const path of [
+    `${TH}/backend-accounts/acc-other`,
+    `${TH}/backend-accounts/acc-other/.credentials.json`,
+    `${TH}/backend-accounts/acc-mine/projects`,
+    `${TH}/tmp/missions`,
+    `${TH}/tmp/missions/${other}`,
+    `${TH}/provider-runs/provider-codex/${other}`,
+    `${TH}/provider-cache/provider-codex`,
+    `${TH}/codex-runs/${other}`,
+    `${TH}/grok-runs/${other}/x`,
+  ]) {
+    const policy = resolveFence(cfg(), fullTarget({ cwd: path, gitDirs: [path] }));
+    assert.equal(policy.ignored.filter((i) => i.path === path).length, 2, `${path} must be dropped twice`);
+  }
+  // The mission's own folders are still granted, from its identity.
+  const policy = resolveFence(cfg(), fullTarget());
+  assert.equal(access(policy, `${TH}/backend-accounts/acc-mine/.credentials.json`), 'rw');
+  assert.equal(access(policy, `${TH}/tmp/missions/${MISSION}/x`), 'rw');
+  // A folder one level inside the other zones is what a working directory is.
+  for (const path of [`${TH}/worktrees/task-9`, `${TH}/tmp/scratch-1`, `${TH}/workflows/nightly`]) {
+    assert.equal(access(resolveFence(cfg(), fullTarget({ cwd: path })), `${path}/a`), 'rw', `${path} is a working directory`);
+  }
+});
