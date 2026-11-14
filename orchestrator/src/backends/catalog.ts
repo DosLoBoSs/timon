@@ -29,7 +29,7 @@ import { isSecretRef } from './credentials.js';
 import { discoveredModels, refreshAll, type DiscoverySource } from './model-discovery.js';
 import { profileBaseUrl, resolveModelReasoning, type DeclaredReasoningControl, type ModelReasoning, type ReasoningControl } from './reasoning.js';
 import type { ProviderModelCache, UnverifiedSubject } from './provider-declarations.js';
-import { BUILTIN_DECLARATIONS } from './builtin-declarations.js';
+import { BUILTIN_DECLARATIONS, signInLine } from './builtin-declarations.js';
 import { baseBackendId } from './instance-id.js';
 import { resolveCapabilities } from './capabilities.js';
 import { resolveSupportedPermissionMode } from './permission-models.js';
@@ -331,7 +331,7 @@ function unverifiedOf(dialect: string): Pick<CatalogBackend, 'unverified'> {
 function productHints(id: string): Pick<CatalogBackend, 'signInCommand' | 'signInThen'> {
   const declared = BUILTIN_DECLARATIONS[baseBackendId(id)];
   return {
-    ...(declared?.signInCommand ? { signInCommand: declared.signInCommand } : {}),
+    ...(declared?.signInCommand ? { signInCommand: signInLine(declared.signInCommand, declared.signInEnv, process.platform) } : {}),
     ...(declared?.signInThen ? { signInThen: declared.signInThen } : {}),
   };
 }
