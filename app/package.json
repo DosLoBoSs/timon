@@ -19,7 +19,8 @@
   "timonTests": {
     "imports": [
       "tsx",
-      "../scripts/test-tmp-preload.mjs"
+      "../scripts/test-tmp-preload.mjs",
+      "./scripts/test-codemirror-preload.mjs"
     ],
     "files": [
       "src/**/*.test.ts"

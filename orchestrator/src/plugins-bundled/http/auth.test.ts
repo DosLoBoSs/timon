@@ -244,7 +244,7 @@ test('loopback with users: anonymous is 401, daemon-token Bearer still works, he
   createTestAccount(dbApi, {
     email: 'admin@example.com',
     name: 'Admin',
-    passwordHash: hashPassword('admin-secret'),
+    passwordHash: await hashPassword('admin-secret'),
     isSuperadmin: true,
   });
   const token = ensureDaemonToken();
