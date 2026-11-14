@@ -191,19 +191,7 @@ export function diagnose(): DoctorReport {
   const capabilities: string[] = getHost().capabilities();
   const modules = moduleNotes(capabilities);
 
-  // Read off the host adapter, never off `host/linux.ts`: `doctor` runs on
-  // every platform, and a host that declares no fence fences nothing.
-  const host = getHost();
-  const configured = cfg.host.isolation.filesystem;
-  const { report: missionIsolation, blocker: isolationBlocker } = missionIsolationReport({
-    configured,
-    status: configured === 'off' ? null : hostFenceStatus(host.fence),
-    mechanism: host.fence?.mechanism ?? null,
-    platform: process.platform,
-    isolation: cfg.host.isolation,
-    launcher: host.isolation?.launcher ?? null,
-    maskedPaths: configured === 'off' ? 0 : resolveIsolation(cfg, { timonHome: TIMON_HOME }).deny.length,
-  });
+  const { report: missionIsolation, blocker: isolationBlocker } = missionIsolationNow(cfg);
 
   const free = freeBytes(TIMON_HOME);
   const storage = { path: TIMON_HOME, freeBytes: free, low: free !== null && free < LOW_DISK_BYTES };
@@ -255,6 +243,25 @@ export function diagnose(): DoctorReport {
     blockers,
     ok: blockers.length === 0,
   };
+}
+
+/**
+ * The isolation report of this daemon, now. Read off the host adapter, never
+ * off `host/linux.ts`: `doctor` runs on every platform, and a host that
+ * declares no fence fences nothing.
+ */
+export function missionIsolationNow(cfg: TimonConfig = config()): ReturnType<typeof missionIsolationReport> {
+  const host = getHost();
+  const configured = cfg.host.isolation.filesystem;
+  return missionIsolationReport({
+    configured,
+    status: configured === 'off' ? null : hostFenceStatus(host.fence),
+    mechanism: host.fence?.mechanism ?? null,
+    platform: process.platform,
+    isolation: cfg.host.isolation,
+    launcher: host.isolation?.launcher ?? null,
+    maskedPaths: configured === 'off' ? 0 : resolveIsolation(cfg, { timonHome: TIMON_HOME }).deny.length,
+  });
 }
 
 /** What the missing capabilities cost, module by module (see `DoctorReport.modules`). */

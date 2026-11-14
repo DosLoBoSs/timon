@@ -122,7 +122,7 @@ export const EgressSchema = z.object({
 }).strict();
 
 /** A path the fence grants: absolute or `~/…`, never relative to whatever cwd the daemon has. */
-const FencePathSchema = z.string().refine((p) => p.startsWith('~/') || isAbsolute(p), {
+export const FencePathSchema = z.string().refine((p) => p.startsWith('~/') || isAbsolute(p), {
   message: 'must be an absolute path or start with ~/',
 });
 
@@ -132,7 +132,7 @@ const FencePathSchema = z.string().refine((p) => p.startsWith('~/') || isAbsolut
  * the global values. Kept in the configuration file on purpose — a mission
  * can read neither this file nor write it, so it cannot grant itself one.
  */
-const FenceExceptionSchema = z.object({
+export const FenceExceptionSchema = z.object({
   unixSockets: z.enum(['deny', 'allow']).optional().describe("Overrides `host.isolation.unixSockets` for these missions."),
   writable: z.array(FencePathSchema).default([]).describe("Extra writable paths for these missions, added to `host.isolation.writable`."),
 }).strict();
