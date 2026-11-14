@@ -31,6 +31,7 @@ import { getHost } from './host/index.js';
 import { hasSystemd } from './host/systemd.js';
 import { windowsServiceFiles } from './host/service-install.js';
 import { resolveIsolation, sandboxSupported } from './host/isolation.js';
+import { fenceLaunchDecision, fenceStatus, type FenceStatus } from './host/fence.js';
 import { TIMON_HOME } from './paths.js';
 import { formatBytes, freeBytes, LOW_DISK_BYTES } from './storage-failure.js';
 import { CATALOG } from './kernel/catalog.js';
@@ -198,6 +199,8 @@ export function diagnose(): DoctorReport {
     maskedPaths: configured === 'off' ? 0 : resolveIsolation(cfg, { timonHome: TIMON_HOME }).deny.length,
   };
 
+  const missionFence = missionFenceReport(configured, configured === 'off' ? null : fenceStatus());
+
   const free = freeBytes(TIMON_HOME);
   const storage = { path: TIMON_HOME, freeBytes: free, low: free !== null && free < LOW_DISK_BYTES };
 
@@ -212,6 +215,9 @@ export function diagnose(): DoctorReport {
   if (!remoteBackend && !backends.some((n) => found(n)) && usableProviders().length === 0) {
     blockers.push(`no LLM backend installed (${backends.join(', ')})`);
   }
+  // `enforce` refuses every mission it cannot fence: nothing works until fixed.
+  // In `auto` it is a warning line, never a blocker.
+  if (missionFence.launch === 'refused' && missionFence.message) blockers.push(missionFence.message);
   if (cfg.host.docker === 'required' && !docker.usable) {
     blockers.push(`host.docker is "required" but Docker is unusable (${docker.detail})`);
   }
@@ -238,6 +244,7 @@ export function diagnose(): DoctorReport {
     docker,
     display,
     missionIsolation,
+    missionFence,
     storage,
     mainSeat: doctorMainSeat(),
     capabilities,
@@ -280,6 +287,36 @@ function isolationLine(iso: DoctorReport['missionIsolation']): string {
     + `(${where}; docs/SECURITY.md §9.1)`;
 }
 
+/** The fence part of the report, from the configured mode and the status `fenceStatus` gave. */
+export function missionFenceReport(
+  configured: 'auto' | 'enforce' | 'off',
+  status: FenceStatus | null,
+): NonNullable<DoctorReport['missionFence']> {
+  if (configured === 'off' || status === null) {
+    return { configured, state: 'off', launch: 'unfenced', mechanism: 'none', abi: 0, message: null };
+  }
+  const decision = fenceLaunchDecision(configured, status);
+  return {
+    configured,
+    state: status.state,
+    launch: decision.action === 'fence' ? 'fenced' : decision.action === 'refuse' ? 'refused' : 'unfenced',
+    mechanism: status.state === 'ready' ? 'landlock' : 'none',
+    abi: status.abi,
+    message: decision.action === 'refuse' ? decision.error : decision.action === 'unfenced' ? decision.warning : null,
+  };
+}
+
+/**
+ * The fence, in one line. An altered launcher reads ALTERED, never like a
+ * machine that lacks the mechanism.
+ */
+function fenceLine(fence: DoctorReport['missionFence']): string {
+  if (!fence || fence.state === 'off') return 'off (host.isolation.filesystem: "off")';
+  if (fence.launch === 'fenced') return `active — Landlock ABI ${fence.abi} (${fence.configured})`;
+  const label = fence.state === 'tampered' ? 'ALTERED' : fence.launch === 'refused' ? 'REFUSING MISSIONS' : 'NOT ACTIVE';
+  return `${label} — ${fence.message ?? 'missions are not fenced'}`;
+}
+
 /** Text rendering of the diagnostic — the output of `timon doctor` without `--json`. */
 export function formatDoctor(r: DoctorReport): string {
   const width = Math.max(...r.binaries.map((b) => b.name.length));
@@ -310,6 +347,7 @@ export function formatDoctor(r: DoctorReport): string {
     `docker           ${r.docker.usable ? `usable — ${r.docker.detail}` : `unusable — ${r.docker.detail}`}`,
     `graphical session ${r.display ?? 'none (DISPLAY/WAYLAND_DISPLAY empty)'}`,
     `mission FS masking ${isolationLine(r.missionIsolation)}`,
+    `mission fence    ${fenceLine(r.missionFence)}`,
     `free disk space  ${r.storage.freeBytes === null ? 'unknown' : formatBytes(r.storage.freeBytes)}${r.storage.low ? ' — LOW: the database may fail to write' : ''}`,
     '',
     `capabilities     ${r.capabilities.join(', ') || 'none'}`,

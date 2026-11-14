@@ -124,6 +124,25 @@ export type DoctorReport = {
     maskedPaths: number;
   };
   /**
+   * The mission fence (`host/fence.ts`): whether the kernel confines a mission
+   * launched now, and what a launch does when it cannot. `tampered` is apart
+   * from `unsupported` on purpose: the release ships a launcher that is gone,
+   * not executable, replaced or unable to run, a sign the package was
+   * altered. Optional: reports built before it existed lack it.
+   */
+  missionFence?: {
+    /** `host.isolation.filesystem`, verbatim. */
+    configured: 'auto' | 'enforce' | 'off';
+    state: 'ready' | 'unsupported' | 'tampered' | 'off';
+    /** What a mission launch does today: `unfenced` warns, `refused` is `enforce` without a fence. */
+    launch: 'fenced' | 'unfenced' | 'refused';
+    mechanism: 'landlock' | 'none';
+    /** Landlock ABI of the kernel, 0 when unknown or absent. */
+    abi: number;
+    /** The warning or refusal a launch gives, in English; null when fenced or off. */
+    message: string | null;
+  };
+  /**
    * Free space on the filesystem of `timonHome` (TIM-0109): a full or failing
    * disk stops the database, and the daemon with it. `null` when the OS
    * cannot tell. A warning, never a blocker.

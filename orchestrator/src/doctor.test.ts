@@ -94,6 +94,50 @@ test('the diagnostic says whether mission FS masking is actually enforced', () =
   }
 });
 
+/**
+ * The fence line: a launcher the release ships but that was altered must read
+ * apart from a machine without Landlock, warn in `auto`, and block in `enforce`.
+ */
+test('the diagnostic tells an altered fence launcher from a machine without one', async () => {
+  const { missionFenceReport } = await import('./doctor.js');
+  const tampered = { state: 'tampered', reason: 'the fence launcher this release ships (/x/native/timon-fence) is not executable', abi: 0 } as const;
+  const kernel = { state: 'unsupported', reason: 'kernel without Landlock', abi: 0 } as const;
+
+  const altered = missionFenceReport('auto', tampered);
+  assert.deepEqual({ state: altered.state, launch: altered.launch }, { state: 'tampered', launch: 'unfenced' });
+  assert.match(altered.message ?? '', /UNFENCED: .*not executable.*altered/);
+  const base = diagnose();
+  const auto = formatDoctor({ ...base, missionFence: altered, blockers: [] });
+  assert.match(auto, /mission fence +ALTERED — .*not executable/);
+
+  const plain = missionFenceReport('auto', kernel);
+  assert.equal(plain.launch, 'unfenced');
+  assert.doesNotMatch(plain.message ?? '', /altered/);
+  assert.match(formatDoctor({ ...base, missionFence: plain }), /mission fence +NOT ACTIVE — Mission launched unfenced: kernel without Landlock/);
+
+  const refused = missionFenceReport('enforce', tampered);
+  assert.equal(refused.launch, 'refused');
+  assert.match(refused.message ?? '', /Mission refused.*"enforce".*altered/);
+
+  assert.deepEqual(missionFenceReport('enforce', { state: 'ready', binary: '/x', abi: 6, seccomp: true }),
+    { configured: 'enforce', state: 'ready', launch: 'fenced', mechanism: 'landlock', abi: 6, message: null });
+  assert.equal(missionFenceReport('off', null).state, 'off');
+
+  // The live report: `enforce` on a machine that cannot fence is a blocker, `auto` never is.
+  try {
+    const live = diagnose().missionFence!;
+    assert.equal(live.configured, 'auto');
+    assert.ok(!diagnose().blockers.some((b) => b.startsWith('Mission refused')));
+    setConfig(TimonConfigSchema.parse({ host: { isolation: { filesystem: 'enforce' } } }));
+    const strict = diagnose();
+    assert.equal(strict.blockers.some((b) => b.startsWith('Mission refused')), strict.missionFence!.launch === 'refused');
+    setConfig(TimonConfigSchema.parse({ host: { isolation: { filesystem: 'off' } } }));
+    assert.match(formatDoctor(diagnose()), /mission fence +off/);
+  } finally {
+    resetConfig();
+  }
+});
+
 test('doctor explains an invalid backend pin even when another backend works', async () => {
   const { join } = await import('node:path');
   const { TIMON_HOME } = await import('./paths.js');
