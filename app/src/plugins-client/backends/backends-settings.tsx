@@ -42,7 +42,6 @@ import {
 } from './form';
 import { ModelEditor } from './model-editor';
 import { PictoPanel } from './picto-panel';
-import { ClaudeTokenPanel } from './claude-token';
 import { BinariesPanel } from './binaries-panel';
 import { ProviderCliPanel } from './provider-cli-panel';
 import { ProvidersPanel } from './providers-panel';
@@ -487,7 +486,6 @@ export function BackendsSettings(): ReactElement {
 
       <p className="mt-6 max-w-3xl text-xs leading-relaxed text-muted-foreground">{t('backendsSettings.reorderHint')}</p>
 
-      <ClaudeTokenPanel />
       <ProviderCliPanel />
       <BinariesPanel />
       <ProvidersPanel />

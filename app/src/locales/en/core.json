@@ -3322,6 +3322,7 @@
       "slugPlaceholder": "deepseek-chat",
       "labelPlaceholder": "DeepSeek Chat",
       "default": "Default model",
+      "noMatch": "No model matches this search.",
       "noDefault": "No default model: the selector will leave the field free.",
       "reorder": "Drag to reorder this model",
       "hide": "Shown in model selectors. Click to hide it",

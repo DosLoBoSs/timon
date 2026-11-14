@@ -552,6 +552,22 @@
     "disabled": "Désactivé"
   },
   "providerPage": {
+    "models": {
+      "title": "Modèles",
+      "description": "Ce que sert ce fournisseur, et lesquels de ses modèles les sélecteurs de modèle proposent.",
+      "search": "Rechercher un modèle",
+      "count": "{shown} sur {total, plural, one {# modèle apparaît} other {# modèles apparaissent}} dans le sélecteur",
+      "saved": "Modèles enregistrés."
+    },
+    "settings": {
+      "title": "Réglages",
+      "description": "Comment ce fournisseur apparaît dans les sélecteurs de modèle.",
+      "name": "Nom dans les sélecteurs",
+      "advanced": "Avancé",
+      "advancedHint": "Où joindre ce fournisseur et avec quelle clé. À changer seulement s'il a déménagé ou si sa clé a changé.",
+      "remove": "Supprimer ce fournisseur",
+      "saved": "Réglages enregistrés."
+    },
     "breadcrumb": "Où vous êtes",
     "root": "Fournisseurs",
     "default": "Fournisseur par défaut",

@@ -562,6 +562,22 @@
     "disabled": "Turned off"
   },
   "providerPage": {
+    "models": {
+      "title": "Models",
+      "description": "What this provider serves, and which of its models the model selectors offer.",
+      "search": "Search models",
+      "count": "{shown} of {total, plural, one {# model appears} other {# models appear}} in the selector",
+      "saved": "Models saved."
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "How this provider reads in the model selectors.",
+      "name": "Name in the selectors",
+      "advanced": "Advanced",
+      "advancedHint": "Where this provider is reached and with which key. Change them only if the provider moved or its key changed.",
+      "remove": "Remove this provider",
+      "saved": "Settings saved."
+    },
     "breadcrumb": "Where you are",
     "root": "Providers",
     "default": "Default provider",

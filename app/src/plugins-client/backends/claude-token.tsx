@@ -1,7 +1,9 @@
 'use client';
 
 /**
- * Settings → AI models → Providers: the long-lived claude token (`claude setup-token`).
+ * The long-lived claude token (`claude setup-token`), a section of the Claude
+ * provider's page only: the client half of that provider registers it
+ * (`plugins-client/provider-claude.tsx`), since the token is its own setting.
  * Write-only like the vault: the daemon never sends the value back, so the
  * field is always empty and only says whether a token is stored.
  */
@@ -9,10 +11,11 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { ProviderSection } from '@/components/provider-page/provider-section';
+import { ToneDot } from '@/components/provider-page/provider-status-pill';
+import type { StatusTone } from '@/lib/provider-overview';
 import { t } from '@/lib/i18n';
 import { apiErrorMessage } from '@/lib/api-error';
 
@@ -24,6 +27,12 @@ export type ClaudeTokenState = { configured: boolean; readable: boolean; service
 export function claudeTokenStateKey(state: ClaudeTokenState): string {
   if (!state.configured) return 'backendsSettings.claudeToken.none';
   return state.readable ? 'backendsSettings.claudeToken.set' : 'backendsSettings.claudeToken.unreadable';
+}
+
+/** Its pastille: stored and readable is ready, unreadable is blocked, missing asks for action only where missions need it. */
+export function claudeTokenTone(state: ClaudeTokenState): StatusTone {
+  if (state.configured) return state.readable ? 'ready' : 'blocked';
+  return state.serviceOutsideSession ? 'action' : 'off';
 }
 
 async function errorOf(res: Response): Promise<string> {
@@ -64,33 +73,32 @@ export function ClaudeTokenPanel(): ReactElement | null {
   // Not a superadmin, or an older daemon: nothing to offer.
   if (!state) return null;
   return (
-    <form
-      className="mt-6 max-w-xl space-y-2 rounded-md border border-border bg-card p-4"
-      onSubmit={(event) => { event.preventDefault(); if (value.trim()) void send('PUT'); }}
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <Label htmlFor="claude-token" className="text-sm font-medium">{t('backendsSettings.claudeToken.title')}</Label>
-        <Badge variant={state.configured && state.readable ? 'default' : 'outline'}>{t(claudeTokenStateKey(state))}</Badge>
-      </div>
-      <p className="text-xs leading-relaxed text-muted-foreground">{t('backendsSettings.claudeToken.hint')}</p>
-      {state.serviceOutsideSession && !state.readable ? (
-        <p className="flex items-start gap-1.5 text-xs text-destructive">
-          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
-          <span>{t('backendsSettings.claudeToken.required')}</span>
+    <ProviderSection title={t('backendsSettings.claudeToken.title')} description={t('backendsSettings.claudeToken.hint')}>
+      <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); if (value.trim()) void send('PUT'); }}>
+        <p className="m-0 flex items-center gap-1.5 text-xs text-muted-foreground" data-claude-token={claudeTokenTone(state)}>
+          <ToneDot tone={claudeTokenTone(state)} />
+          {t(claudeTokenStateKey(state))}
         </p>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          id="claude-token" type="password" autoComplete="off" spellCheck={false} className="max-w-sm flex-1"
-          value={value} placeholder="sk-ant-oat01-…" onChange={(e) => setValue(e.target.value)}
-        />
-        <Button type="submit" size="sm" disabled={busy || !value.trim()}>{t('backendsSettings.save')}</Button>
-        {state.configured ? (
-          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void send('DELETE')}>
-            {t('backendsSettings.claudeToken.clear')}
-          </Button>
+        {state.serviceOutsideSession && !state.readable ? (
+          <p className="m-0 flex items-start gap-1.5 text-xs text-destructive">
+            <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>{t('backendsSettings.claudeToken.required')}</span>
+          </p>
         ) : null}
-      </div>
-    </form>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            id="claude-token" type="password" autoComplete="off" spellCheck={false} className="h-8 max-w-sm flex-1 text-[13px] md:text-[13px]"
+            aria-label={t('backendsSettings.claudeToken.title')}
+            value={value} placeholder="sk-ant-oat01-…" onChange={(e) => setValue(e.target.value)}
+          />
+          <Button type="submit" size="sm" disabled={busy || !value.trim()}>{t('backendsSettings.save')}</Button>
+          {state.configured ? (
+            <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void send('DELETE')}>
+              {t('backendsSettings.claudeToken.clear')}
+            </Button>
+          ) : null}
+        </div>
+      </form>
+    </ProviderSection>
   );
 }

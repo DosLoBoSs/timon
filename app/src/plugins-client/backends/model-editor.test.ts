@@ -20,11 +20,12 @@ test('model editor renders aligned persistent column headings only for model row
   const { createRoot } = await import('react-dom/client');
   const { ModelEditor } = await import('./model-editor');
   const root = createRoot(document.getElementById('root')!);
-  const render = async (models: { slug: string; label: string }[]) => {
+  const render = async (models: { slug: string; label: string }[], extra: { query?: string; label?: string | null } = {}) => {
     await React.act(async () => root.render(React.createElement(ModelEditor, {
       models,
       defaultModel: null,
       onChange: () => undefined,
+      ...extra,
     })));
   };
 
@@ -40,6 +41,16 @@ test('model editor renders aligned persistent column headings only for model row
     assert.ok(headings.querySelector('.flex-\\[2\\]'));
     assert.ok(headings.querySelector('.flex-\\[3\\]'));
     assert.ok(headings.querySelector('.flex-\\[1\\.4\\]'));
+
+    // The search keeps matching rows and a row still being typed; dragging waits for it to be cleared.
+    const list = [{ slug: 'claude-opus', label: 'Opus' }, { slug: 'claude-haiku', label: 'Haiku' }, { slug: '', label: '' }];
+    await render(list, { query: 'OPUS', label: null });
+    const rows = Array.from(document.querySelectorAll('[data-model-row]'));
+    assert.deepEqual(rows.map((row) => (row.querySelector('input') as HTMLInputElement).value), ['claude-opus', '']);
+    assert.equal(rows[0]!.querySelector('[aria-label="Drag to reorder this model"]')?.hasAttribute('disabled'), true);
+    assert.equal(document.body.textContent?.includes('Models'), false, 'a null label leaves the heading out');
+    await render(list.slice(0, 2), { query: 'gpt' });
+    assert.match(document.body.textContent ?? '', /No model matches this search/);
 
     setLocale('fr');
     await render([{ slug: 'deepseek-chat', label: 'DeepSeek Chat' }]);
