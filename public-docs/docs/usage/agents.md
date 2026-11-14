@@ -150,6 +150,10 @@ The project's `AGENTS.md` and `CLAUDE.md`, when they exist in the working folder
 
 Select a row to read it. Items you can change carry an **editable** badge: **Edit** opens an editor and **Save** writes to the real source (the agent's file, its directives, the role, the memory rule or the skill), then the list is read again. Editing a role changes it for every agent that has it. Preamble, backend description and digest are written by Timon and cannot be edited.
 
+### Removing or rewriting a memory rule
+
+A new mission normally picks up the agent's previous conversation, and that conversation still holds every rule the agent was given. So when you remove a memory rule (`timon memory rule rm`, the `memory_rule_rm` tool, or a plugin), or change its text, who it applies to, or switch it off, every agent the rule could have reached starts a **fresh conversation** at its next mission: the agent itself for an agent rule, the agents of the project or the role, every agent for a global rule. The command, the tool and the injections widget name those agents. A conversation still open in a chat keeps its context until it ends; start a new one if the old rule must stop at once. Changing only a rule's tier or kind does not reset anything.
+
 A secret from the vault appears masked on this screen, and the item says what the agent receives: **masked here** means the agent gets the value in clear, **masked when sent** means it does not (a skill pasted for a backend that reaches neither the skill's folder nor Timon's tools). An item that contains a secret cannot be edited from the list, because saving the masked text would replace the real one. Next to a chat, the widget follows the open mission: its backend and model, and the skills it adds to the agent's own (a Kanban task adds `timon-task`, and `timon-worktree` when it works in a worktree), are listed as that mission received them. Elsewhere, the list shows the agent's start-up in general. Tools a task adds and the mission's own text are never part of it.
 
 ## Who can hand work to whom
