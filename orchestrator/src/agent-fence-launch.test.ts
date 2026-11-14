@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -32,7 +32,7 @@ process.on('exit', () => {
 
 const { mountOfficialProviders } = await import('../tests/helpers/official-providers.js');
 const { getHost } = await import('./host/index.js');
-const { spawnAgent, upsertAgent } = await import('./agent.js');
+const { deleteAgent, renameAgent, spawnAgent, upsertAgent } = await import('./agent.js');
 const { config, setConfig } = await import('./config/load.js');
 const { TIMON_HOME } = await import('./paths.js');
 
@@ -176,4 +176,21 @@ test('enforce refuses a mission it cannot fence, before any process starts', asy
     setConfig(previous);
   }
   assert.equal(spawned, false);
+});
+
+test('deleting or renaming an agent removes its package cache', () => {
+  const cache = (agent: string) => join(TIMON_HOME, 'provider-cache', '.agents', agent);
+  for (const name of ['fence.leaving', 'fence.old']) {
+    upsertAgent({ name, system_prompt: 'witness', config: { backend: 'codex', cwd: WT, skills: [], memory_scope: 'NONE' } });
+    mkdirSync(join(cache(name), 'npm', '_npx'), { recursive: true });
+  }
+  // A stale cache under the new name is not the renamed agent's to inherit.
+  mkdirSync(join(cache('fence.new'), 'npm'), { recursive: true });
+  mkdirSync(cache('fence.witness'), { recursive: true });
+  assert.equal(deleteAgent('fence.leaving'), true);
+  assert.equal(existsSync(cache('fence.leaving')), false);
+  assert.equal(renameAgent('fence.old', 'fence.new').ok, true);
+  assert.equal(existsSync(cache('fence.old')), false);
+  assert.equal(existsSync(cache('fence.new')), false);
+  assert.ok(existsSync(cache('fence.witness')), 'the other agents keep theirs');
 });

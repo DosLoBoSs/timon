@@ -50,7 +50,7 @@ import {
 } from './skill-attachments.js';
 import { getMcp, refreshToolsCacheFromInit, listMcp } from './mcp.js';
 import { chatAttachmentsRoot } from './chat-attachments.js';
-import { pluginPackageDirs, worktreeGitDirs } from './mission-fence-target.js';
+import { pluginPackageDirs, removeAgentPackageCache, worktreeGitDirs } from './mission-fence-target.js';
 import type { FenceTarget } from './host/isolation.js';
 import { journalDirectSkillReads } from './skill-reads.js';
 import {
@@ -5011,6 +5011,9 @@ export function deleteAgent(name: string, opts: { purge?: boolean; deletedBy?: s
     ? trashAgentDir(name, { deletedBy: opts.deletedBy ?? null, skills: heldAgentSkillAttachments(name) })
     : null;
   if (!trashed) rmSync(dir, { recursive: true, force: true });
+  // Its package cache goes even with a trashed folder: what its missions
+  // downloaded is fetched again, and an agent of the same name must not run it.
+  removeAgentPackageCache(TIMON_HOME, name);
   // Its skill attachments leave the table (TODO #623): an agent recreated
   // under the same name starts without them. A trashed agent carries them in
   // its entry, written above before this removal.
@@ -5252,6 +5255,10 @@ function renameAgentLocked(oldName: string, newName: string): RenameResult {
       console.warn(`[agent] rename ${oldName}→${newName}: failed to update project ${slug}'s roles.json: ${(err as Error).message}`);
     }
   }
+  // A cache is not worth moving: the renamed agent fetches its packages
+  // again, and a stale one under the new name is not its to inherit.
+  removeAgentPackageCache(TIMON_HOME, oldName);
+  removeAgentPackageCache(TIMON_HOME, newName);
   console.log(`[agent] renamed ${oldName} → ${newName} (directory + DB refs + roles.json + ${written.length} config reference(s))`);
   const warnings = [
     ...rewrites.unreadable.map((a) => `${a}: config.json unreadable, its hierarchy references were not checked`),
