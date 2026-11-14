@@ -50,6 +50,36 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
+/**
+ * The browser half of a provider package (`exports["./client"]`) runs in the page, where the
+ * host provides what `timon.client.external` names (React, `@timon/ui`): those are its SDK.
+ */
+function clientExternals(dir: string): { file: string; external: Set<string> } | null {
+  try {
+    const json = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+      exports?: Record<string, unknown>;
+      timon?: { client?: { external?: unknown } };
+    };
+    const entry = json.exports?.['./client'];
+    const external = json.timon?.client?.external;
+    if (typeof entry !== 'string' || !Array.isArray(external)) return null;
+    return { file: resolve(dir, entry), external: new Set(external.filter((name): name is string => typeof name === 'string')) };
+  } catch {
+    return null;
+  }
+}
+
+/** What the files of the package at `dir` import that they may not. */
+function packageProblems(dir: string): string[] {
+  const client = clientExternals(dir);
+  return sourceFiles(dir).flatMap((file) =>
+    importSpecifiers(readFileSync(file, 'utf8')).flatMap((specifier) => {
+      if (client && file === client.file && client.external.has(specifier)) return [];
+      const problem = importProblem(specifier, file, dir);
+      return problem ? [`${relative(dir, file)}: ${problem}`] : [];
+    }));
+}
+
 function isProviderPackage(dir: string): boolean {
   try {
     const json = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { timon?: { kind?: string | string[] } };
@@ -90,14 +120,9 @@ function exampleProviders(): Array<{ name: string; dir: string }> {
 test('the provider templates of examples/ import only Node built-ins and the SDK, and Cursor is one of them', () => {
   const found = exampleProviders();
   assert.ok(found.some(({ name }) => name === 'plugin-provider-cursor'), 'the Cursor template is covered');
-  for (const { name, dir } of found) {
-    const problems = sourceFiles(dir).flatMap((file) =>
-      importSpecifiers(readFileSync(file, 'utf8')).flatMap((specifier) => {
-        const problem = importProblem(specifier, file, dir);
-        return problem ? [`${relative(dir, file)}: ${problem}`] : [];
-      }));
-    assert.deepEqual(problems, [], `${name} reaches around the SDK`);
-  }
+  // Its browser half imports what the host gives the page, nothing more.
+  assert.ok(found.some(({ name }) => name === 'plugin-provider-section'), 'a template with a browser half is covered');
+  for (const { name, dir } of found) assert.deepEqual(packageProblems(dir), [], `${name} reaches around the SDK`);
 });
 
 test('every official provider imports only Node built-ins and the SDK', () => {
@@ -107,11 +132,6 @@ test('every official provider imports only Node built-ins and the SDK', () => {
   for (const { pkg, source } of providers) {
     const dir = resolve(ROOT, source);
     assert.ok(existsSync(dir), `${pkg}: ${dir} is missing`);
-    const problems = sourceFiles(dir).flatMap((file) =>
-      importSpecifiers(readFileSync(file, 'utf8')).flatMap((specifier) => {
-        const problem = importProblem(specifier, file, dir);
-        return problem ? [`${relative(dir, file)}: ${problem}`] : [];
-      }));
-    assert.deepEqual(problems, [], `${pkg} reaches around the SDK`);
+    assert.deepEqual(packageProblems(dir), [], `${pkg} reaches around the SDK`);
   }
 });
