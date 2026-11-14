@@ -6,9 +6,11 @@ import type { CustomBackend } from './form';
 
 /**
  * The Models and own-settings sections of a provider page, mounted on the real
- * page with the common sections of `@timon/backends`: the count of models the selector offers, the search, a save
+ * page with the common sections of `@timon/backends` and the client half of the
+ * Claude provider: the count of models the selector offers, the search, a save
  * that sends the models alone; the name and, for a provider added by hand, its
- * connection under Advanced, saved apart, its Test reusing the stored key. The daemon's refusal of
+ * connection under Advanced, saved apart, its Test reusing the stored key; and
+ * the long-lived Claude token on the Claude page only. The daemon's refusal of
  * anyone but a superadmin is covered by the routes' own tests.
  */
 function overview(id: string, name: string, backend: string, over: Partial<ProviderOverview> = {}): ProviderOverview {
@@ -84,7 +86,8 @@ test('a provider page edits its models and its own settings, each saved apart', 
   slots.resetSlotsForTests();
   slots.declareSlot('settings.provider.section', 'list');
   const { coreBackendsClient } = await import('@/plugins-client/backends');
-  for (const plugin of [coreBackendsClient]) {
+  const { providerClaudeClient } = await import('@/plugins-client/provider-claude');
+  for (const plugin of [coreBackendsClient, providerClaudeClient]) {
     plugin.apply({
       id: plugin.module,
       realtime: { subscribe: () => () => {} } as never,
@@ -136,10 +139,15 @@ test('a provider page edits its models and its own settings, each saved apart', 
     // Own settings of a plugin's provider: its name, no connection to change.
     assert.equal((section('settings')?.querySelector('input') as HTMLInputElement | null)?.value, 'Claude');
     assert.equal(buttonIn(section('settings'), 'Advanced'), undefined);
+    // The Claude provider's own section: the long-lived token, right after the common settings.
+    await until(() => document.querySelector('[data-provider-section="provider-claude"] form') !== null, 'the Claude token section');
+    const order = Array.from(document.querySelectorAll('[data-provider-section]')).map((el) => el.getAttribute('data-provider-section'));
+    assert.deepEqual(order.slice(-3), ['settings', 'provider-claude', 'models']);
 
     // A provider added by hand: its connection under Advanced, saved without its models.
     await show('user:deepseek');
     await until(() => buttonIn(section('settings'), 'Advanced') !== undefined, 'the Advanced fold');
+    assert.equal(document.querySelector('[data-provider-section="provider-claude"]'), null, 'the Claude token lands on the Claude page only');
     assert.equal(document.querySelector('input[type="url"]'), null, 'folded by default');
     await click(buttonIn(section('settings'), 'Advanced')!);
     assert.equal((document.querySelector('input[type="url"]') as HTMLInputElement).value, 'https://api.deepseek.com/anthropic');

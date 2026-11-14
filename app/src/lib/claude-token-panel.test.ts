@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { claudeTokenStateKey } from '../plugins-client/backends/claude-token';
+import { claudeTokenStateKey, claudeTokenTone } from '../plugins-client/backends/claude-token';
 import en from '../locales/en/core.json';
 import fr from '../locales/fr/core.json';
 
@@ -17,4 +17,13 @@ test('the claude token panel names each state, in both locales', () => {
       assert.equal(typeof value, 'string', key);
     }
   }
+});
+
+test('the claude token pastille: ready, blocked, action only where missions need it, else off', () => {
+  assert.deepEqual([
+    claudeTokenTone({ configured: true, readable: true, serviceOutsideSession: true }),
+    claudeTokenTone({ configured: true, readable: false, serviceOutsideSession: false }),
+    claudeTokenTone({ configured: false, readable: false, serviceOutsideSession: true }),
+    claudeTokenTone({ configured: false, readable: false, serviceOutsideSession: false }),
+  ], ['ready', 'blocked', 'action', 'off']);
 });
