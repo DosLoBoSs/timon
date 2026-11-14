@@ -657,7 +657,13 @@
       "readOnly": "Le fichier de ce fournisseur ne peut pas être modifié d'ici : corrigez-le d'abord dans son dossier.",
       "pluginOff": "Son plugin est désactivé : activez-le dans {settingsPath}."
     },
-    "more": "Plus d’actions"
+    "more": "Plus d’actions",
+    "claudeToken": {
+      "title": "Jeton longue durée",
+      "set": "Définir",
+      "replace": "Remplacer",
+      "field": "Jeton"
+    }
   },
   "providerList": {
     "hidden": "Votre compte n’a pas accès aux fournisseurs. Demandez à un administrateur.",

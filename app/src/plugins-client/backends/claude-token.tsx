@@ -4,20 +4,21 @@
  * The long-lived claude token (`claude setup-token`), a section of the Claude
  * provider's page only: the client half of that provider registers it
  * (`plugins-client/provider-claude.tsx`), since the token is its own setting.
- * Write-only like the vault: the daemon never sends the value back, so the
- * field is always empty and only says whether a token is stored.
+ * One row — whether a token is stored — and "Set" or "Replace" opening a
+ * dialog that carries the field and the explanation. Write-only like the
+ * vault: the daemon never sends the value back.
  */
 
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ProviderSection } from '@/components/provider-page/provider-section';
-import { ToneDot } from '@/components/provider-page/provider-status-pill';
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { ProviderSection, ProviderSettingRow } from '@/components/provider-page/provider-section';
+import { TonePill } from '@/components/provider-page/provider-status-pill';
 import type { StatusTone } from '@/lib/provider-overview';
 import { t } from '@/lib/i18n';
 import { apiErrorMessage } from '@/lib/api-error';
+import { SecretValueDialog } from './secret-value-dialog';
 
 const API = '/api/ui/backends/claude-token';
 
@@ -41,9 +42,14 @@ async function errorOf(res: Response): Promise<string> {
   return apiErrorMessage(body, { status: res.status });
 }
 
+/** Its one line: what blocks Claude missions first, then whether a token is stored. */
+export function claudeTokenStatusKey(state: ClaudeTokenState): string {
+  return state.serviceOutsideSession && !state.readable ? 'backendsSettings.claudeToken.required' : claudeTokenStateKey(state);
+}
+
 export function ClaudeTokenPanel(): ReactElement | null {
   const [state, setState] = useState<ClaudeTokenState | null>(null);
-  const [value, setValue] = useState('');
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -52,19 +58,19 @@ export function ClaudeTokenPanel(): ReactElement | null {
   }, []);
   useEffect(() => { void load(); }, [load]);
 
-  async function send(method: 'PUT' | 'DELETE') {
+  async function send(method: 'PUT' | 'DELETE', token?: string): Promise<void> {
     setBusy(true);
     try {
       const res = await fetch(API, {
         method, cache: 'no-store',
-        ...(method === 'PUT' ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: value }) } : {}),
+        ...(method === 'PUT' ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }) } : {}),
       });
       if (!res.ok) throw new Error(await errorOf(res));
       setState(await res.json() as ClaudeTokenState);
-      setValue('');
       toast.success(t(method === 'PUT' ? 'backendsSettings.claudeToken.saved' : 'backendsSettings.claudeToken.cleared'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
+      throw err;
     } finally {
       setBusy(false);
     }
@@ -73,32 +79,33 @@ export function ClaudeTokenPanel(): ReactElement | null {
   // Not a superadmin, or an older daemon: nothing to offer.
   if (!state) return null;
   return (
-    <ProviderSection title={t('backendsSettings.claudeToken.title')} description={t('backendsSettings.claudeToken.hint')}>
-      <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); if (value.trim()) void send('PUT'); }}>
-        <p className="m-0 flex items-center gap-1.5 text-xs text-muted-foreground" data-claude-token={claudeTokenTone(state)}>
-          <ToneDot tone={claudeTokenTone(state)} />
-          {t(claudeTokenStateKey(state))}
-        </p>
-        {state.serviceOutsideSession && !state.readable ? (
-          <p className="m-0 flex items-start gap-1.5 text-xs text-destructive">
-            <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-            <span>{t('backendsSettings.claudeToken.required')}</span>
-          </p>
+    <ProviderSection title={t('providerPage.settings.title')}>
+      <ProviderSettingRow
+        data-claude-token={claudeTokenTone(state)}
+        title={t('providerPage.claudeToken.title')}
+        status={<TonePill tone={claudeTokenTone(state)} className="flex">{t(claudeTokenStatusKey(state))}</TonePill>}
+        action={(
+          <Button type="button" size="sm" variant="outline" className="h-8" disabled={busy} onClick={() => setEditing(true)}>
+            {t(state.configured ? 'providerPage.claudeToken.replace' : 'providerPage.claudeToken.set')}
+          </Button>
+        )}
+        menu={state.configured ? (
+          <DropdownMenuItem className="text-destructive focus:text-destructive" disabled={busy}
+            onSelect={() => { void send('DELETE').catch(() => {}); }}>
+            {t('backendsSettings.claudeToken.clear')}
+          </DropdownMenuItem>
         ) : null}
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            id="claude-token" type="password" autoComplete="off" spellCheck={false} className="h-8 max-w-sm flex-1 text-[13px] md:text-[13px]"
-            aria-label={t('backendsSettings.claudeToken.title')}
-            value={value} placeholder="sk-ant-oat01-…" onChange={(e) => setValue(e.target.value)}
-          />
-          <Button type="submit" size="sm" disabled={busy || !value.trim()}>{t('backendsSettings.save')}</Button>
-          {state.configured ? (
-            <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void send('DELETE')}>
-              {t('backendsSettings.claudeToken.clear')}
-            </Button>
-          ) : null}
-        </div>
-      </form>
+      />
+      <SecretValueDialog
+        open={editing}
+        onOpenChange={setEditing}
+        title={t('backendsSettings.claudeToken.title')}
+        description={t('backendsSettings.claudeToken.hint')}
+        label={t('providerPage.claudeToken.field')}
+        placeholder="sk-ant-oat01-…"
+        submitLabel={t('backendsSettings.save')}
+        onSubmit={(token) => send('PUT', token)}
+      />
     </ProviderSection>
   );
 }

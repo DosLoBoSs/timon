@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { claudeTokenStateKey, claudeTokenTone } from '../plugins-client/backends/claude-token';
+import { claudeTokenStateKey, claudeTokenStatusKey, claudeTokenTone } from '../plugins-client/backends/claude-token';
 import en from '../locales/en/core.json';
 import fr from '../locales/fr/core.json';
 
@@ -26,4 +26,10 @@ test('the claude token pastille: ready, blocked, action only where missions need
     claudeTokenTone({ configured: false, readable: false, serviceOutsideSession: true }),
     claudeTokenTone({ configured: false, readable: false, serviceOutsideSession: false }),
   ], ['ready', 'blocked', 'action', 'off']);
+});
+
+test('the claude token row says first what stops Claude missions', () => {
+  assert.equal(claudeTokenStatusKey({ configured: false, readable: false, serviceOutsideSession: true }), 'backendsSettings.claudeToken.required');
+  assert.equal(claudeTokenStatusKey({ configured: true, readable: false, serviceOutsideSession: false }), 'backendsSettings.claudeToken.unreadable');
+  assert.equal(claudeTokenStatusKey({ configured: true, readable: true, serviceOutsideSession: true }), 'backendsSettings.claudeToken.set');
 });
