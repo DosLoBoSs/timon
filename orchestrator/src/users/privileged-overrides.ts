@@ -211,25 +211,38 @@ export function overrideAuthority(req: Request): OverrideAuthority {
 /**
  * Mode check shared by agents, spawns, tasks and live missions.
  *
- * `backend` is the one the mode will run on: a provider that declares its
- * supported modes runs any other one in `plan`, so the grid judges that
- * resolved mode, the level the agent really gets. A name nobody knows is still
- * refused as such: once stored, it would reach the next backend the agent is
- * moved to.
+ * It judges the HIGHER of the mode asked for and the mode it resolves to on
+ * `backend` (a provider that declares its supported modes runs any other one
+ * in `plan`). Resolution never raises a mode, so in practice this is the mode
+ * as asked; the resolved one only names, in the message, what the agent would
+ * really get.
+ *
+ * Why not the resolved mode alone: spawns, tasks and agent configs store the
+ * mode as asked, and a stored mode is not judged again when the backend it runs
+ * on changes (a task or a mission falling back to another backend when its
+ * quota runs dry). Judged as `plan`, an `auto` asked for on grok by a caller
+ * capped at `plan` would run as `auto` the day the task fell back to claude.
+ * The live-mission route stores the resolved mode instead, so what it judges
+ * is what it keeps.
+ *
+ * A name nobody knows is refused as such: once stored, it would reach the next
+ * backend the agent is moved to.
  */
 function modeRefusal(mode: unknown, authority: OverrideAuthority, label: string, backend?: string): string | null {
   if (typeof mode !== 'string') return `${label} is not allowed: ${String(mode)}`;
   const runs = backend === undefined ? mode : resolvedPermissionModeFor(backend, mode) ?? mode;
   const shown = runs === mode ? mode : `${mode} (runs as ${runs} on backend ${backend})`;
   if (!authority.relaxed) {
-    return PERMISSION_RANK.has(mode) && SAFE_PERMISSION_MODES.includes(runs as never)
+    return SAFE_PERMISSION_MODES.includes(mode as never) && SAFE_PERMISSION_MODES.includes(runs as never)
       ? null
       : `${label} is not allowed: ${shown} (allowed: ${SAFE_PERMISSION_MODES.join(', ')}; any other level needs the ${PRIVILEGED_CONFIG_PERMISSION} permission)`;
   }
-  const wanted = levelOf(runs);
-  if (wanted === null || levelOf(mode) === null) {
+  const asked = levelOf(mode);
+  const resolved = levelOf(runs);
+  if (asked === null || resolved === null) {
     return `${label} is not a known permission mode: ${mode} (known: ${[...PERMISSION_RANK.keys()].join(', ')})`;
   }
+  const wanted = Math.max(asked, resolved);
   if (authority.ceiling !== null) {
     const own = levelOf(authority.ceiling);
     if (own === null || wanted > own) {

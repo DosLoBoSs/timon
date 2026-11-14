@@ -63,23 +63,28 @@ test('supportedModes: a backend that declares them runs every other mode in plan
   }
 });
 
-test('supportedModes: the ceiling judges the mode grok really runs, never the one it was asked for', () => {
+test('supportedModes: the ceiling judges the mode asked for, never lowered by the backend that resolves it', () => {
   const onGrok = { backend: 'grok' } as const;
-  // Without the bypass right: a guarded mode passes, since it runs read-only…
-  for (const mode of ['default', 'acceptEdits', 'auto', 'dontAsk']) {
+  // Without the bypass right: a guarded mode passes, as on any backend…
+  for (const mode of ['default', 'acceptEdits', 'auto']) {
     assert.equal(agentConfigRefusal({ permission_mode: mode }, onGrok, RESTRICTED), null, mode);
     assert.equal(spawnOverrideRefusal({ permission_mode: mode }, onGrok, RESTRICTED), null, mode);
     assert.equal(taskOverrideRefusal({ permission_mode_override: mode }, onGrok, RESTRICTED), null, mode);
     assert.equal(permissionModeRefusal(mode, RESTRICTED, 'grok'), null, mode);
   }
-  // …and bypassPermissions stays refused, on every path.
-  assert.match(agentConfigRefusal({ permission_mode: 'bypassPermissions' }, onGrok, RESTRICTED) ?? '', /not allowed/);
-  assert.match(spawnOverrideRefusal({ permission_mode: 'bypassPermissions' }, onGrok, RESTRICTED) ?? '', /not allowed/);
-  assert.match(taskOverrideRefusal({ permission_mode_override: 'bypassPermissions' }, onGrok, RESTRICTED) ?? '', /not allowed/);
-  assert.match(permissionModeRefusal('bypassPermissions', RESTRICTED, 'grok') ?? '', /not allowed/);
-  // A caller that runs read-only may hand out what runs read-only, nothing more.
-  assert.equal(agentConfigRefusal({ permission_mode: 'default' }, onGrok, relaxed('plan')), null);
+  // …and what it would refuse elsewhere stays refused, even though grok runs it read-only.
+  for (const mode of ['dontAsk', 'bypassPermissions']) {
+    assert.match(agentConfigRefusal({ permission_mode: mode }, onGrok, RESTRICTED) ?? '', /not allowed/, mode);
+    assert.match(spawnOverrideRefusal({ permission_mode: mode }, onGrok, RESTRICTED) ?? '', /not allowed/, mode);
+    assert.match(taskOverrideRefusal({ permission_mode_override: mode }, onGrok, RESTRICTED) ?? '', /not allowed/, mode);
+    assert.match(permissionModeRefusal(mode, RESTRICTED, 'grok') ?? '', /not allowed/, mode);
+  }
+  // The message still says what the agent would really get.
+  assert.match(agentConfigRefusal({ permission_mode: 'dontAsk' }, onGrok, RESTRICTED) ?? '', /dontAsk \(runs as plan on backend grok\)/);
+  // A caller that runs read-only hands out read-only, whatever the backend makes of more.
+  assert.match(agentConfigRefusal({ permission_mode: 'default' }, onGrok, relaxed('plan')) ?? '', /above/);
   assert.match(agentConfigRefusal({ permission_mode: 'default' }, { backend: 'claude' }, relaxed('plan')) ?? '', /above/);
+  assert.equal(agentConfigRefusal({ permission_mode: 'plan' }, onGrok, relaxed('plan')), null);
   assert.match(agentConfigRefusal({ permission_mode: 'bypassPermissions' }, onGrok, relaxed('default')) ?? '', /above/);
   assert.match(spawnOverrideRefusal({ permission_mode: 'bypassPermissions', backend_override: 'grok' }, null, relaxed('auto')) ?? '', /above/);
   // The right holder gets it.
@@ -88,6 +93,15 @@ test('supportedModes: the ceiling judges the mode grok really runs, never the on
   // A name nobody knows is still refused: once stored it would reach the next backend.
   assert.match(agentConfigRefusal({ permission_mode: 'typo' }, onGrok, relaxed(null)) ?? '', /not a known permission mode/);
   assert.match(agentConfigRefusal({ permission_mode: 'typo' }, onGrok, RESTRICTED) ?? '', /not allowed/);
+});
+
+test('supportedModes: a stored override is judged as asked, since a backend fallback runs it unjudged', () => {
+  // A spawn or task override is stored as asked, and the mission or task can
+  // later fall back to another backend (quota run dry) without a new judgement:
+  // judged as the `plan` grok would run it, this `auto` would run as `auto` on claude.
+  const onGrok = { backend: 'grok' } as const;
+  assert.match(spawnOverrideRefusal({ permission_mode: 'auto' }, onGrok, relaxed('plan')) ?? '', /above/);
+  assert.match(taskOverrideRefusal({ permission_mode_override: 'auto' }, onGrok, relaxed('plan')) ?? '', /above/);
 });
 
 test('supportedModes: moving an agent off grok judges the mode it will then run as written', () => {
