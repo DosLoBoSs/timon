@@ -382,8 +382,6 @@
     }
   },
   "providersSettings": {
-    "title": "提供商",
-    "description": "提供商插件将 AI 服务接入 Timon。提供商要启动的每个程序，必须先在此处按解析后的路径获得授权，才能运行。",
     "cancel": "取消",
     "consent": {
       "prompts": "接收其所服务任务会话中的所有指令和回复。",
@@ -398,37 +396,22 @@
       "allowHint": "若不勾选，提供商插件仍会安装，但需在 {settingsPath} 中授权后才会启用。"
     },
     "plugins": {
-      "title": "提供商插件",
-      "none": "尚未安装提供商插件。",
-      "backends": "后端：{list}",
       "notFound": "未在此设备上安装",
-      "authorize": "核对并授权",
       "authorizeTitle": "授权 {name}",
       "authorizeBody": "Timon 已在此设备上找到以下程序。请仅授权你认识的路径。",
       "authorizeConfirm": "允许运行这些程序",
       "authorized": "已授权 {name}。",
-      "state": {
-        "active": "已启用",
-        "failed": "需要处理",
-        "disabled": "已停用",
-        "skipped": "已拒绝"
-      },
       "binary": {
         "authorize": "待授权",
         "ready": "已授权",
-        "install": "请先安装",
-        "refused": "禁止运行"
+        "install": "请先安装"
       }
     },
     "acp": {
       "title": "ACP 注册表",
       "description": "浏览官方 Agent Client Protocol 注册表中发布的智能体。Timon 会下载并检查程序，然后将其作为后端运行。",
-      "browse": "浏览注册表",
       "refresh": "刷新",
       "stale": "无法连接注册表，当前显示 Timon 上次读取的列表。",
-      "verified": "SHA-256 已验证",
-      "noHash": "未发布哈希值",
-      "unsupported": "此处不可用：{reason}",
       "install": "安装",
       "update": "更新",
       "repair": "重新安装",
@@ -437,12 +420,6 @@
       "installed": "已安装 {name}。",
       "updated": "{name} 已是最新版本。",
       "removed": "已移除 {name}。",
-      "state": {
-        "ok": "已安装 {version}",
-        "tampered": "文件已被修改，不会使用",
-        "missing": "文件缺失",
-        "pending": "正在检查 {version}…"
-      },
       "confirmTitle": "要安装未发布哈希值的 {name} 吗？",
       "confirmBody": "注册表未提供此程序的校验和。文件完整性仅由 HTTPS 下载保障。请仅在信任其发布者时安装。",
       "confirmAction": "仍然安装"
@@ -468,15 +445,7 @@
     }
   },
   "binariesSettings": {
-    "title": "命令行可执行文件",
-    "description": "查看 Timon 在此设备上找到的各 AI 提供商命令行工具的位置。如果工具找不到或不在常用位置，可以指定其完整路径。无需重启 Timon，新路径将从下一次任务会话起生效。",
-    "recheck": "重新检查",
-    "rechecked": "已重新检查可执行文件。",
-    "none": "没有本地提供商使用命令行工具。",
-    "backends": "使用方：{list}",
-    "resolved": "运行 {path}",
     "brokenPin": "无法运行指定路径下的文件：{path}",
-    "notFound": "在此设备上找不到该工具。请安装工具，或在下方指定其路径。",
     "pathLabel": "{name} 可执行文件的路径",
     "placeholder": "完整路径，例如 /usr/local/bin/claude 或 C:\\Users\\you\\AppData\\Roaming\\npm\\claude.cmd",
     "browse": "浏览…",
@@ -484,12 +453,6 @@
     "clear": "取消指定路径",
     "saved": "{name}：路径已保存，新任务会话将使用此路径。",
     "cleared": "{name}：已取消指定路径，Timon 将恢复自动查找。",
-    "state": {
-      "found": "已找到",
-      "pinned": "已指定路径",
-      "brokenPin": "指定路径不可用",
-      "missing": "未找到"
-    },
     "errors": {
       "forbidden": "只有已登录应用的超级管理员才能更改这些路径。",
       "unknown_binary": "这不是本地提供商的命令行工具。",

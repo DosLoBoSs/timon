@@ -1,20 +1,21 @@
 'use client';
 
 /**
- * The provider cards in the onboarding (`mode: 'onboarding'`): one row per AI
- * CLI in a single card — its mark, its name, where it stands, and the one
- * gesture that moves it on (Connected, Sign in, Install). The same host and
- * the same data as the full cards (`provider-cli-cards.tsx`); only the
- * drawing is tighter, so the "Choose your LLM" step holds on a 1366×768
- * screen. What a gesture needs to say (the sign-in command, an installer's
- * console, a failure) opens under its row.
+ * The provider cards in the onboarding (`mode: 'onboarding'`): each AI CLI is
+ * the providers list's own row (`ProviderRow`, slot `providers.row`) — logo,
+ * name, one status line — with ONE gesture at its end. A CLI not on the
+ * machine gets "Install and sign in": the vendor's installer runs, and its
+ * sign-in starts by itself once the daemon finds the new program. Nothing
+ * else: no path, no authorization, no token, no version. Only a gesture that
+ * did not go through (an install that failed, a command Timon could not copy)
+ * opens a line under its row, with what to run by hand.
  */
-import { useEffect, useState, type ReactElement } from 'react';
-import { Check, ExternalLink, Loader2, LogIn, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { ExternalLink, Loader2, LogIn, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { BrandMark } from '@/components/brand-mark';
 import { CommandToRun } from '@/components/command-to-run';
-import { providerCliState, type InstallJob, type ProviderCli } from '@/lib/provider-clis';
+import { ProviderRow } from '@/components/provider-list/provider-row';
+import { onboardingProvider, providerCliState, type InstallJob, type ProviderCli } from '@/lib/provider-clis';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useProviderCliCards, type ProviderCliSignInOutcome } from './provider-cli-context';
@@ -22,11 +23,23 @@ import { useProviderCliCards, type ProviderCliSignInOutcome } from './provider-c
 /** Rows drawn while the daemon looks: the list's length is not known yet. */
 const SEARCH_ROWS = 3;
 
+type Outcomes = Readonly<Record<string, ProviderCliSignInOutcome>>;
+
 export function ProviderCliRows(): ReactElement | null {
   const host = useProviderCliCards();
   // A sign-in happens in a terminal and a browser: coming back to this window is the moment to look again.
   const [awaiting, setAwaiting] = useState(false);
+  const [outcomes, setOutcomes] = useState<Outcomes>({});
+  // The CLIs whose install was started with "Install and sign in": their sign-in follows the install.
+  const [chained, setChained] = useState<ReadonlySet<string>>(() => new Set());
+  // The CLIs whose installer succeeded while the list read after it still shows no program.
+  const [unfound, setUnfound] = useState<ReadonlySet<string>>(() => new Set());
+  // The list last seen while each chained install ran: a different one was read after it ended.
+  const listWhileRunning = useRef(new Map<string, ProviderCli[]>());
   const refresh = host?.refresh;
+  const hostSignIn = host?.signIn;
+  const hostInstall = host?.install;
+
   useEffect(() => {
     if (!awaiting || !refresh) return;
     const again = (): void => {
@@ -41,6 +54,49 @@ export function ProviderCliRows(): ReactElement | null {
     };
   }, [awaiting, refresh]);
 
+  const signIn = useCallback((name: string): void => {
+    if (!hostSignIn) return;
+    setAwaiting(true);
+    void hostSignIn(name).then((outcome) => setOutcomes((prev) => ({ ...prev, [name]: outcome })));
+  }, [hostSignIn]);
+
+  const installThenSignIn = useCallback(async (name: string): Promise<void> => {
+    if (!hostInstall) return;
+    setUnfound((prev) => without(prev, [name]));
+    await hostInstall(name);
+    // Marked once the new job is in the host: an earlier failed job must not end the chain at once.
+    setChained((prev) => new Set(prev).add(name));
+  }, [hostInstall]);
+
+  const backends = host?.backends ?? null;
+  const jobs = host?.jobs;
+  useEffect(() => {
+    if (!backends || !jobs || chained.size === 0) return;
+    const done: string[] = [];
+    const lost: string[] = [];
+    for (const name of chained) {
+      const job = jobs[name];
+      if (job?.state === 'running') { listWhileRunning.current.set(name, backends); continue; }
+      if (job?.state === 'failed') { done.push(name); continue; }
+      const cli = backends.find((entry) => entry.name === name);
+      if (cli?.path) {
+        done.push(name);
+        if (providerCliState(cli) !== 'ready') signIn(name);
+        continue;
+      }
+      // The host reads the list again once the installer ended: until then, the old list proves nothing.
+      if (listWhileRunning.current.get(name) === backends) continue;
+      // Read after the end and still no program (a PATH not refreshed): the row gets its button back.
+      done.push(name);
+      lost.push(name);
+    }
+    if (done.length > 0) {
+      for (const name of done) listWhileRunning.current.delete(name);
+      setChained((prev) => without(prev, done));
+    }
+    if (lost.length > 0) setUnfound((prev) => new Set([...prev, ...lost]));
+  }, [backends, jobs, chained, signIn]);
+
   if (!host) return null;
   if (host.unavailable) return <p className="text-center text-sm text-muted-foreground">{t('providerClis.unavailable')}</p>;
   return (
@@ -48,7 +104,16 @@ export function ProviderCliRows(): ReactElement | null {
       <div className="w-full min-h-0 overflow-y-auto rounded-2xl bg-card p-1.5 text-left shadow-elev-2" data-provider-rows>
         {host.backends
           ? host.backends.map((cli) => (
-            <ProviderCliRow key={cli.name} cli={cli} job={host.jobs[cli.name] ?? null} onSignIn={() => setAwaiting(true)} />
+            <OnboardingProviderRow
+              key={cli.name}
+              cli={cli}
+              job={host.jobs[cli.name] ?? null}
+              chained={chained.has(cli.name)}
+              unfound={unfound.has(cli.name)}
+              outcome={outcomes[cli.name] ?? null}
+              onInstall={() => void installThenSignIn(cli.name)}
+              onSignIn={() => signIn(cli.name)}
+            />
           ))
           : Array.from({ length: SEARCH_ROWS }, (_, i) => <SearchRow key={i} />)}
       </div>
@@ -62,10 +127,17 @@ export function ProviderCliRows(): ReactElement | null {
   );
 }
 
+function without(set: ReadonlySet<string>, names: readonly string[]): ReadonlySet<string> {
+  if (!names.some((name) => set.has(name))) return set;
+  const next = new Set(set);
+  for (const name of names) next.delete(name);
+  return next;
+}
+
 function SearchRow(): ReactElement {
   return (
     <div className="flex items-center gap-3 rounded-xl p-2.5" aria-hidden>
-      <span className="size-8 shrink-0 animate-pulse rounded-[10px] bg-muted" />
+      <span className="size-8 shrink-0 animate-pulse rounded-lg bg-muted" />
       <span className="h-2.5 w-28 animate-pulse rounded-full bg-muted" />
       <span className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-full bg-muted px-3 text-xs font-medium text-muted-foreground">
         <Loader2 className="size-3.5 animate-spin" />{t('providerClis.rows.searching')}
@@ -74,45 +146,43 @@ function SearchRow(): ReactElement {
   );
 }
 
-function ProviderCliRow({ cli, job, onSignIn }: { cli: ProviderCli; job: InstallJob | null; onSignIn: () => void }): ReactElement {
+function OnboardingProviderRow({ cli, job, chained, unfound, outcome, onInstall, onSignIn }: {
+  cli: ProviderCli;
+  job: InstallJob | null;
+  /** Its sign-in starts once the install ends. */
+  chained: boolean;
+  /** Its installer succeeded, yet the daemon still finds no program. */
+  unfound: boolean;
+  outcome: ProviderCliSignInOutcome | null;
+  onInstall: () => void;
+  onSignIn: () => void;
+}): ReactElement {
   const host = useProviderCliCards();
-  const [outcome, setOutcome] = useState<ProviderCliSignInOutcome | null>(null);
   const state = providerCliState(cli);
   const running = job?.state === 'running';
   const failed = job?.state === 'failed' ? job : null;
   const canInstall = cli.installable && !cli.unsupportedVersion && state === 'missing';
   const blocked = !host || host.disabled || running;
   const manual = failed?.result?.command ?? cli.installCommand;
-
-  const signIn = (): void => {
-    if (!host) return;
-    onSignIn();
-    void host.signIn(cli.name).then(setOutcome);
-  };
+  const signingIn = state === 'signIn' || state === 'bundled';
 
   let action: ReactElement | null = null;
-  if (state === 'ready') {
-    action = (
-      <span className="inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-500/15 px-3 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-        <Check className="size-3.5" aria-hidden />{t('providerClis.rows.connected')}
-      </span>
-    );
-  } else if (running) {
+  if (running || (chained && state === 'missing')) {
     action = (
       <span role="status" className="inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full bg-muted px-3 text-xs font-medium text-muted-foreground">
         <Loader2 className="size-3.5 animate-spin" aria-hidden />{t('providerClis.installing')}
       </span>
     );
-  } else if (state === 'signIn' || state === 'bundled') {
+  } else if (signingIn) {
     action = (
-      <Button type="button" size="sm" variant="secondary" className="gap-1.5" disabled={blocked} onClick={signIn}>
+      <Button type="button" size="sm" variant="secondary" className="gap-1.5" disabled={blocked} onClick={onSignIn}>
         <LogIn className="size-3.5" aria-hidden />{t('providerClis.signIn')}
       </Button>
     );
   } else if (canInstall) {
     action = (
-      <Button type="button" size="sm" variant="secondary" disabled={blocked} onClick={() => void host?.install(cli.name)}>
-        {t('providerClis.install')}
+      <Button type="button" size="sm" variant="secondary" disabled={blocked} onClick={onInstall}>
+        {t('providerClis.rows.installAndSignIn')}
       </Button>
     );
   } else if (state === 'missing' && cli.installDocs) {
@@ -124,37 +194,30 @@ function ProviderCliRow({ cli, job, onSignIn }: { cli: ProviderCli; job: Install
   }
 
   return (
-    <section aria-label={cli.label} data-state={running ? 'installing' : state} className="rounded-xl p-2.5 transition-colors hover:bg-muted/50">
-      <div className="flex items-center gap-3">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-muted">
-          <BrandMark brand={cli.brand ?? ''} className="size-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{cli.label}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {running ? t('providerClis.installing') : t(`providerClis.rows.state.${state}`)}
-            {cli.version && state !== 'missing' ? <span className="tabular-nums"> · {t('providerClis.version', { version: cli.version })}</span> : null}
-          </p>
-        </div>
-        {action}
-      </div>
+    <section aria-label={cli.label} data-state={running ? 'installing' : state} className="rounded-xl transition-colors hover:bg-muted/50">
+      <ProviderRow provider={onboardingProvider(cli)} mode="onboarding" action={action} />
       {cli.unsupportedVersion && (
-        <p className="mt-1.5 pl-11 text-xs text-amber-700 dark:text-amber-300">{t('providerClis.unsupportedVersion', { name: cli.label, version: cli.version ?? '' })}</p>
+        <p className="pb-2 pl-[52px] pr-2 text-xs text-amber-700 dark:text-amber-300">{t('providerClis.unsupportedVersion', { name: cli.label, version: cli.version ?? '' })}</p>
       )}
-      {running && job && job.lines.length > 0 && (
-        // code-font: the installer's last console line
-        <p className="mt-1.5 truncate pl-11 font-mono text-[11px] text-muted-foreground" aria-live="polite">{job.lines[job.lines.length - 1]}</p>
+      {unfound && state === 'missing' && !running && (
+        <p role="alert" className="pb-2 pl-[52px] pr-2 text-xs text-amber-700 dark:text-amber-300">{t('providerClis.rows.installedNotFound')}</p>
       )}
       {failed && (
-        <div className="mt-1.5 space-y-1 pl-11">
+        <div className="space-y-1 pb-2 pl-[52px] pr-2">
           <p role="alert" className="whitespace-pre-wrap break-words text-xs text-destructive">{failed.result?.reason ?? t('providerClis.failed')}</p>
           {manual && <CommandToRun command={manual} label={t('providerClis.manual')} />}
         </div>
       )}
-      {outcome && (state === 'signIn' || state === 'bundled') && (
-        <div className="mt-1.5 pl-11">
-          <p role="status" className="text-xs text-muted-foreground">{t(`providerClis.rows.signInOutcome.${outcome}`)}</p>
-          <CommandToRun command={cli.signInCommand} label={cli.signInThen ? t('providerClis.signInThen', { command: cli.signInThen }) : t('providerClis.rows.signInCommand')} />
+      {outcome && signingIn && (
+        <div className="space-y-1 pb-2 pl-[52px] pr-2">
+          <p role="status" className="text-xs text-muted-foreground">
+            {t(`providerClis.rows.signInOutcome.${outcome}`)}
+            {cli.signInThen && outcome !== 'failed' ? ` ${t('providerClis.signInThen', { command: cli.signInThen })}` : null}
+          </p>
+          {/* Shown only when Timon could not hand the command over: the person runs it by hand. */}
+          {outcome === 'failed' && (
+            <CommandToRun command={cli.signInCommand} label={cli.signInThen ? t('providerClis.signInThen', { command: cli.signInThen }) : t('providerClis.rows.signInCommand')} />
+          )}
         </div>
       )}
     </section>

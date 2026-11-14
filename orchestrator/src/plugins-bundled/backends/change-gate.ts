@@ -1,5 +1,5 @@
 /**
- * Who may CHANGE the backends of this install, past the superadmin check of
+ * Who may CHANGE the backends of this install, past the `full` level check of
  * `/api/backends/custom` and `/api/backends/manage` (TODO #571).
  *
  * A human only: a session in the app, a paired device, or the operator's
@@ -46,7 +46,7 @@ export function refuseBackendChange(req: Request, res: Response): boolean {
     return forbidden(req, res, {
       kind: 'operator',
       reason: 'backends are added, tested and removed by a person, never by an agent',
-      hint: 'Ask the user to do it in Settings → Backends, or with `timon backend` from a terminal outside any mission.',
+      hint: 'Ask the user to do it in Settings › AI models › Providers (Add a provider, or the provider\'s page), or with `timon backend` from a terminal outside any mission.',
     });
   }
   if (req.originalUrl.includes('?')) {

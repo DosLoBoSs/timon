@@ -27,6 +27,8 @@ const PATTERNS = [/\bmodelsFor\(/, /\.models\.(?:map|flatMap)\(/, /\bmodels\.(?:
 const EXCEPTIONS: Record<string, string> = {
   'plugins-client/backends/model-editor.tsx':
     'Settings › AI models › Providers: edits the list a provider declares (slug, label, window, default, hidden) — it is the catalogue, not a choice from it.',
+  'plugins-client/backends/provider-models-section.tsx':
+    'Settings › AI models › Providers: reads the list a provider declares and shows or hides each model — the catalogue itself, not a choice from it.',
 };
 
 function isAllowedDir(rel: string): boolean {

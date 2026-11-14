@@ -36,6 +36,26 @@ function lifetime(v: Verdict): number {
 }
 
 const verdicts = new Map<string, Verdict>();
+const listeners = new Set<() => void>();
+
+/**
+ * Called when a provider's sign-in flips (or becomes known): the screens that show it read it
+ * again. Not on every turn that merely confirms it.
+ */
+export function onProviderSignInChanged(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+
+function record(key: string, verdict: Verdict): void {
+  const before = verdicts.get(key);
+  verdicts.set(key, verdict);
+  if (before?.signedIn === verdict.signedIn) return;
+  for (const listener of listeners) {
+    try { listener(); } catch { /* a listener's failure must not change a verdict */ }
+  }
+}
+
 const inFlight = new Map<string, Promise<boolean | null>>();
 /** Null until the boot wires it: before that (unit tests, a CLI command) no provider is asked. */
 let envOf: (() => Readonly<Record<string, string | undefined>>) | null = null;
@@ -79,7 +99,7 @@ export function refreshProviderSignIn(backend: string, explicit = false): Promis
       if (!status) return null;
       const current = verdicts.get(key);
       const turnStillRules = !explicit && current?.from === 'turn' && Date.now() - current.at < lifetime(current);
-      if (!turnStillRules) verdicts.set(key, { signedIn: status.ok, at: Date.now(), from: 'check' });
+      if (!turnStillRules) record(key, { signedIn: status.ok, at: Date.now(), from: 'check' });
       return status.ok;
     } catch {
       return null;
@@ -111,13 +131,13 @@ export function providerSignedOut(backend: string | null | undefined): boolean {
 /** A turn on `backend` produced something: its sign-in works. */
 export function noteProviderSignedIn(backend: string | null | undefined): void {
   const key = keyOf(backend);
-  if (key) verdicts.set(key, { signedIn: true, at: Date.now(), from: 'turn' });
+  if (key) record(key, { signedIn: true, at: Date.now(), from: 'turn' });
 }
 
 /** The CLI of `backend` refused to authenticate a turn. */
 export function noteProviderSignedOut(backend: string | null | undefined): void {
   const key = keyOf(backend);
-  if (key) verdicts.set(key, { signedIn: false, at: Date.now(), from: 'turn' });
+  if (key) record(key, { signedIn: false, at: Date.now(), from: 'turn' });
 }
 
 /**

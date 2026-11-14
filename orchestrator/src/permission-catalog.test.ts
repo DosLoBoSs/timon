@@ -140,3 +140,24 @@ test('the Skills and MCP cards have their own checkboxes, owned by their -widget
     assert.equal(off.includes(`widget:${short}`), false, 'switched off, the module offers no grant');
   }
 });
+
+test('the Providers screen is offered as one choice of three levels, widest first', async () => {
+  const { grantsAllow } = await import('./users/permissions.js');
+  const { providerAccessFrom } = await import('./users/provider-access.js');
+  const catalog = permissionCatalog();
+  const offered = new Set(catalog.actions.map((a) => a.permission));
+  assert.ok(offered.has('providers:manage'));
+  assert.ok(offered.has('providers:accounts'));
+  const choice = catalog.choices.find((c) => c.key === 'providers');
+  assert.ok(choice);
+  assert.deepEqual(choice!.options.map((o) => o.key), ['full', 'accounts', 'none']);
+  // Every option grants exactly the level it names, through the evaluator itself.
+  const levels = choice!.options.map((o) => providerAccessFrom((p) => grantsAllow(o.grants, p)));
+  assert.deepEqual(levels, ['full', 'accounts', 'none']);
+  for (const option of choice!.options) {
+    for (const grant of option.grants) assert.ok(offered.has(grant), `${grant} must be a catalogued action`);
+  }
+  // A copy: an editor mutating its catalogue does not change the next one.
+  choice!.options[0]!.grants.push('*');
+  assert.deepEqual(permissionCatalog().choices[0]!.options[0]!.grants, ['providers:manage']);
+});

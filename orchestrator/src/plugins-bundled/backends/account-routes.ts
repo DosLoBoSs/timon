@@ -5,10 +5,16 @@
  * before anything is read. What leaves here is a name, a backend, a state and
  * an owner — never the account's directory, never what the CLI keeps in it.
  *
+ * Every verb first wants a level of the Providers screen
+ * (`users/provider-access.ts`): `accounts` at least, so an account the screen
+ * is hidden from is refused here too. Only exception, the read by a mission
+ * token: its launcher's accounts, which the backend catalogue lists anyway.
+ *
  * Who does what:
- * - read: the superadmin sees every account; anyone else sees their own and
- *   the ones granted to them. Anything else answers 404, not 403: an account
- *   one may not see does not exist for them.
+ * - read: the superadmin sees every account; at the `full` level, one's own
+ *   and the ones granted to them; at the `accounts` level, one's own only.
+ *   Anything else answers 404, not 403: an account one may not see does not
+ *   exist for them.
  * - create, rename, delete: a signed-in user for their own accounts, the
  *   superadmin for anyone's and for the instance accounts (no owner). A
  *   mission token never manages accounts: an agent does not pick who pays.
@@ -24,6 +30,7 @@ import { z } from 'zod';
 import { dbApi } from '../../db.js';
 import { auditRequest } from '../../users/audit-actor.js';
 import { requireAuth, viewerFromRequest, forbidden, type DbViewer } from '../../users/identity.js';
+import { requireProviderAccess } from '../../users/provider-access.js';
 import {
   BackendAccountConflictError, accountInstance, createBackendAccount, deleteBackendAccount, getBackendAccountFor,
   grantBackendAccount, listBackendAccountGrants, listBackendAccountsFor, renameBackendAccount,
@@ -69,7 +76,7 @@ export function accountState(row: BackendAccountRow): AccountState {
   return isBackendCoolingDown(accountInstance(row)) ? 'cooldown' : 'active';
 }
 
-function publicAccount(row: BackendAccountRow, viewer: DbViewer) {
+export function publicAccount(row: BackendAccountRow, viewer: DbViewer) {
   return {
     id: row.id,
     instance: accountInstance(row),
@@ -94,6 +101,7 @@ function manager(req: Request, res: Response): DbViewer | null {
     forbidden(req, res, { kind: 'operator', reason: 'a mission token cannot manage subscription accounts' });
     return null;
   }
+  if (!requireProviderAccess(req, res, 'accounts')) return null;
   const viewer = viewerFromRequest(req);
   if (!viewer) {
     res.status(401).json({ error: 'unauthorized' });
@@ -138,10 +146,16 @@ function invalid(res: Response, error: z.ZodError): void {
 export function registerAccountRoutes(router: Router): void {
   router.get('/api/backends/accounts', (req, res) => {
     if (!requireAuth(req, res)) return;
+    // A mission reads its launcher's accounts, as the backend catalogue already lists them;
+    // a person reads them at their level of the Providers screen.
+    const access = req.auth!.kind === 'api-token' ? 'full' : requireProviderAccess(req, res, 'accounts');
+    if (!access) return;
     const viewer = viewerFromRequest(req);
     if (!viewer) return void res.status(401).json({ error: 'unauthorized' });
+    // At the `accounts` level, one's own: an account granted by the superadmin is used, not shown here.
+    const rows = listBackendAccountsFor(viewer).filter((row) => access === 'full' || row.owner_user_id === viewer.id);
     res.json({
-      accounts: listBackendAccountsFor(viewer).map((row) => publicAccount(row, viewer)),
+      accounts: rows.map((row) => publicAccount(row, viewer)),
       // Where an account can be added: the UI offers these, never a guess.
       backends: backendCatalog().filter((entry) => !entry.account && backendTakesAccounts(entry.id)).map((entry) => entry.id),
     });

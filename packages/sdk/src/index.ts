@@ -329,6 +329,7 @@ export type {
   PluginLegacyAccountTable,
   PluginPermissionAction,
   PluginPermissionCatalog,
+  PluginPermissionChoice,
   PluginPermissionSource,
   PluginPermissionSourceHandle,
   PluginProviderAccount,

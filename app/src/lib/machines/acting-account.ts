@@ -40,7 +40,9 @@ export type ActingAccount = {
   scheme?: ColorScheme;
 };
 
-const PERMISSIONS: readonly MePermission[] = ['projects:manage', 'agents:manage', 'agents:privileged-config'];
+const PERMISSIONS: readonly MePermission[] = [
+  'projects:manage', 'agents:manage', 'agents:privileged-config', 'providers:manage', 'providers:accounts',
+];
 const ID_MAX = 128;
 const TEXT_MAX = 320;
 const AVATAR_MAX = 2048;

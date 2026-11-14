@@ -8,6 +8,7 @@ import { PushToggle } from '@/components/push-toggle';
 import { NotificationFeedSettings } from '@/plugins-client/notifications/notification-feed-settings';
 import { cn } from '@/lib/utils';
 import { notificationHref } from '@/lib/notification-href';
+import { useProviderAccess } from '@/hooks/use-me';
 import { t } from '@/lib/i18n';
 import { formatDateTime } from '@/lib/intl';
 import { BRAND } from '@/lib/brand';
@@ -46,6 +47,7 @@ function fmtDate(ts: number): string {
 
 export default function NotificationsPage() {
   const caps = useCapabilities();
+  const providers = useProviderAccess();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const on = caps !== null && isPageSurfaceAllowed(caps, '/notifications') && isModuleOn(caps, '@timon/notifications');
@@ -114,7 +116,7 @@ export default function NotificationsPage() {
             ) : (
               <div className="flex flex-col gap-2">
                 {notifications.map((n) => {
-                  const href = notificationHref(n);
+                  const href = notificationHref(n, { providers });
                   const display = systemNotificationText(n);
 
                   const card = (
