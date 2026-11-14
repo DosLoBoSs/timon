@@ -119,11 +119,11 @@ function ProviderHeader({ value, action }: { value: ProviderPageValue; action: R
   return (
     <>
     <header className="flex items-center gap-4">
-      <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-muted/60">
+      <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-muted">
         <BrandMark icon={provider.icon ?? undefined} brand={provider.brand ?? undefined} className="size-7" />
       </span>
       <div className="min-w-0 flex-1 space-y-1">
-        <h3 className="m-0 truncate text-base font-semibold">{provider.name}</h3>
+        <h3 className="m-0 truncate text-lg font-semibold">{provider.name}</h3>
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <ProviderStatusPill status={value.status} />
           {provider.isDefault ? <span className="text-xs text-muted-foreground">{t('providerPage.default')}</span> : null}
@@ -153,7 +153,7 @@ function ProviderSections({ pluginId, only }: { pluginId: string | null; only: s
   );
   return (
     // A section with nothing to say renders nothing: its empty wrapper leaves no gap.
-    <div className="flex flex-col gap-6 [&>:empty]:hidden">
+    <div className="flex flex-col gap-7 [&>:empty]:hidden">
       {sections.map(({ id, pluginId: owner, key, Component }) => (
         <div key={id} data-provider-section={key ?? owner}>
           <PluginBoundary pluginId={owner}><Component /></PluginBoundary>
