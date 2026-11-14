@@ -23,7 +23,7 @@ const cfg = (isolation: Record<string, unknown> = {}) =>
 function fencePolicy(home: string, unixSockets: 'deny' | 'allow' = 'deny'): FencePolicy {
   const timonHome = join(home, '.timon');
   return resolveFence(cfg({ unixSockets }), {
-    timonHome, cwd: join(timonHome, 'worktrees', 'm1'), home, platform: 'darwin', missionId: 'm1',
+    timonHome, cwd: join(timonHome, 'worktrees', 'm1'), home, platform: 'darwin', missionId: 'm1', realpath: (path) => path,
   });
 }
 
@@ -74,7 +74,9 @@ test('wrap renders the resolved spelling of each path, which is what Seatbelt ma
 test('a dropped grant is reported, and the profile is still written without it', () => {
   const warnings: string[] = [];
   const timonHome = '/Users/tester/.timon';
-  const policy = resolveFence(cfg(), { timonHome, cwd: '/Users/tester/project', home: '/Users/tester', platform: 'darwin' });
+  const policy = resolveFence(cfg(), {
+    timonHome, cwd: '/Users/tester/project', home: '/Users/tester', platform: 'darwin', realpath: (path) => path,
+  });
   let text = '';
   const fence = createSeatbeltFence({
     realpath: (path) => (path === '/Users/tester/project' ? `${timonHome}/secrets.env` : path),
