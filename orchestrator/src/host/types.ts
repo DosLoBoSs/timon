@@ -87,8 +87,12 @@ export interface HostFence {
 /** One witness run of the fence launcher (`HostFence.witness`). */
 export type HostFenceWitness =
   | { readonly ran: true; readonly status: number | null; readonly stderr: string }
-  /** The launcher could not be started, or gave no answer in time. */
-  | { readonly ran: false; readonly reason: string; readonly timedOut: boolean };
+  /**
+   * The launcher could not be started, or gave no answer in time. `code` is
+   * the spawn error's errno code (`ENOENT`, `EAGAIN`…) when there was one: it
+   * tells a launcher that is not there from a machine short of resources.
+   */
+  | { readonly ran: false; readonly reason: string; readonly timedOut: boolean; readonly code?: string };
 
 export interface Host {
   inspectPort?: (address: string, port: number) => ListenPortState | Promise<ListenPortState>;

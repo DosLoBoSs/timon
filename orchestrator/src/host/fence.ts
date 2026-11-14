@@ -132,6 +132,12 @@ export const WITNESS_PAYLOAD = '/bin/true'; // portability: Linux system binary,
 /** The launcher's words fit in this much; a witness payload prints nothing. */
 const WITNESS_STDERR_MAX = 4096;
 
+/** A witness that could not be started, with the errno code that says why. */
+function spawnFailure(err: unknown): HostFenceWitness {
+  const code = (err as NodeJS.ErrnoException | null)?.code;
+  return { ran: false, reason: err instanceof Error ? err.message : String(err), timedOut: false, ...(typeof code === 'string' ? { code } : {}) };
+}
+
 /**
  * Runs a fence launcher once with a trivial payload, without blocking the
  * daemon: what it exits with and writes on stderr is the launcher's alone.
@@ -149,7 +155,7 @@ export function runFenceWitness(file: string, args: readonly string[], timeoutMs
     try {
       child = spawn(file, [...args], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     } catch (err) {
-      resolve({ ran: false, reason: (err as Error).message, timedOut: false });
+      resolve(spawnFailure(err));
       return;
     }
     let stderr = '';
@@ -161,7 +167,7 @@ export function runFenceWitness(file: string, args: readonly string[], timeoutMs
     child.stderr?.on('data', (chunk: Buffer) => {
       if (stderr.length < WITNESS_STDERR_MAX) stderr += chunk.toString('utf8');
     });
-    child.once('error', (err) => settle({ ran: false, reason: err.message, timedOut: false }));
+    child.once('error', (err) => settle(spawnFailure(err)));
     child.once('close', (status) => settle(timedOut
       ? { ran: false, reason: `no answer within ${timeoutMs} ms`, timedOut: true }
       : { ran: true, status, stderr: stderr.slice(0, WITNESS_STDERR_MAX) }));
