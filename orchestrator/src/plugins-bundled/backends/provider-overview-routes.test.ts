@@ -15,7 +15,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from '
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
-import { delimiter, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import express from 'express';
 import type { RequestAuth } from '../../users/identity.js';
 import type { AgentView } from '../../providers/acp-registry/service.js';
@@ -28,6 +28,7 @@ const { attachPluginLoader } = await import('../../plugins/runtime.js');
 const { orchestratorRoot, readBuiltinList } = await import('../../plugins/builtin.js');
 const { readManifest } = await import('../../plugins/manifest.js');
 const { registerFileProfile } = await import('../../backends/registry.js');
+const { localBackendFile, reloadLocalBackends } = await import('../../backends/local-profiles.js');
 const { registerProviderOverviewRoutes } = await import('./provider-overview-routes.js');
 const { mountOfficialProviders } = await import('../../../tests/helpers/official-providers.js');
 await mountOfficialProviders();
@@ -96,6 +97,11 @@ registerFileProfile('local-file', {
   env: { OPENAI_API_KEY: { secret: 'MY_ENDPOINT_KEY' } },
 });
 
+// A file of the backends folder that does not even parse: still the person's provider, blocked, with the reason.
+mkdirSync(dirname(localBackendFile('broken-endpoint')), { recursive: true });
+writeFileSync(localBackendFile('broken-endpoint'), '{ not json');
+reloadLocalBackends();
+
 // Two agents run on the hand-added backend: the page header says so.
 for (const name of ['overview-one', 'overview-two']) {
   mkdirSync(agentDir(name), { recursive: true });
@@ -124,7 +130,7 @@ test.after(() => { server.closeAllConnections(); server.close(); process.env.PAT
 type Caller = 'admin' | 'bob' | 'mission' | 'daemon' | null;
 type Provider = {
   id: string; name: string; origin: string; status: string; enabled: boolean; pluginId: string | null; updateAvailable: boolean;
-  backends: { id: string }[]; programs: { name: string; path: string | null; authorization: string | null; pinKey: string | null }[];
+  backends: { id: string; reason: string | null }[]; programs: { name: string; path: string | null; authorization: string | null; pinKey: string | null }[];
   secret: { required: boolean; present: boolean; names: string[] };
   agentCount: number;
 };
@@ -185,6 +191,12 @@ test('one record per provider: plugins, split multi-backend plugins, hand-added 
   assert.deepEqual(mine.secret, { required: true, present: false, names: ['MY_ENDPOINT_KEY'] });
   assert.equal(mine.agentCount, 2, 'the agents whose backend it brings');
   assert.equal(off.agentCount, 0);
+
+  const broken = byId.get('user:broken-endpoint');
+  assert.ok(broken, 'a file Timon could not read is listed');
+  assert.equal(broken.name, 'broken-endpoint', 'under its file name');
+  assert.equal(broken.status, 'blocked');
+  assert.deepEqual(broken.backends.map((b) => [b.id, b.reason]), [['broken-endpoint', 'not valid JSON']]);
 
   const agent = byId.get('catalog:acme-acp')!;
   assert.equal(agent.origin, 'catalog');

@@ -42,7 +42,7 @@ The key is reserved to this backend: on the **Secrets** page it shows the grant 
 
 Keys saved by an earlier version were shared with every agent. Timon reserves them to their backend when it starts, as long as you had not changed their grants. If you had (for example, shared the key with a project), Timon leaves it as it is and shows a card with the two choices: reserve it to the backend, or keep sharing it.
 
-You can also add models manually when the provider has no model listing. Enter the exact model ID, give it a label and choose which model should be the default. See [backend management](./settings.md#backend-and-fallback-choices) for disabling, reordering and editing built-in providers.
+You can also add models manually when the provider has no model listing. Enter the exact model ID, give it a label and choose which model should be the default. See [the providers list](./settings.md#the-providers-list) for reordering, and [a provider's page](./settings.md#a-providers-page) for turning off and editing built-in providers.
 
 ### Thinking setting of each model
 

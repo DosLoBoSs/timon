@@ -11,7 +11,8 @@
  *   several backends (the ACP agents plugin: opencode, Hermes…) is one
  *   provider per backend: each is a distinct program the person installs and
  *   signs in to on its own, under the name the model picker shows for it;
- * - a backend the person added by hand (a file under `~/.timon/backends/`);
+ * - a backend the person added by hand (a file under `~/.timon/backends/`),
+ *   a file Timon could not read included: blocked, with the reason why;
  * - an agent installed from the ACP registry;
  * - a profile nobody registered (a built-in kept by the product itself).
  */
@@ -25,7 +26,7 @@ import { backendCatalog, tryDefaultBackendName, type CatalogBackend } from '../.
 import { binaryPinStatuses, type BinaryPinStatus } from '../../backends/binary-pins.js';
 import { providerSignedIn } from '../../backends/sign-in-state.js';
 import { listBackendAccountsFor } from '../../backends/accounts.js';
-import { secretNamesOf } from '../../backends/local-profiles.js';
+import { listLocalBackends, secretNamesOf } from '../../backends/local-profiles.js';
 import { probeProfileEnv } from '../../backends/credentials.js';
 import { dbApi, type BackendOverlayRow } from '../../db.js';
 import { providerClis, setupBackends, type SetupBackend } from '../../onboarding.js';
@@ -182,6 +183,8 @@ type Snapshot = {
   agentsByBackend: Map<string, number>;
   /** The subscription accounts the viewer may see, every backend at once. */
   accounts: ReturnType<typeof listBackendAccountsFor>;
+  /** Files of `~/.timon/backends/` that could not be read, by id: the reason, which names keys, never values. */
+  unreadable: Map<string, string>;
 };
 
 /** Agents per backend id, read once per overview: `listAgents` already resolves the implicit default. */
@@ -212,6 +215,7 @@ function snapshot(viewer: DbViewer): Snapshot {
     defaultBackend: tryDefaultBackendName(),
     agentsByBackend: agentsByBackend(),
     accounts: listBackendAccountsFor(viewer),
+    unreadable: new Map(listLocalBackends().flatMap((entry) => (entry.profile === null && entry.issue ? [[entry.id, entry.issue] as const] : []))),
   };
 }
 
@@ -264,6 +268,11 @@ function groups(sources: OverviewSources, snap: Snapshot): Group[] {
       result.push({ id: `builtin:${id}`, origin: 'built-in', backendIds: [id], plugin: null, pluginId: null, agent: null, declaredNames: new Map(), declaredRanks: new Map(), alone: true });
     }
   }
+  // A file nobody could read is still the person's provider: listed, so its reason is seen and fixed.
+  for (const id of snap.unreadable.keys()) {
+    if (claimed.has(id) || snap.profiles.has(id)) continue;
+    result.push({ id: `user:${id}`, origin: 'user', backendIds: [id], plugin: null, pluginId: null, agent: null, declaredNames: new Map(), declaredRanks: new Map(), alone: true });
+  }
   return result;
 }
 
@@ -277,7 +286,7 @@ function backendView(id: string, snap: Snapshot): ProviderBackendView {
     label: entry?.label ?? overlay?.label ?? profile?.label ?? id,
     active: entry !== undefined,
     disabled: !!(overlay?.disabled ?? profile?.disabled),
-    reason: entry ? null : snap.reasons.get(id) ?? (profile ? null : 'not registered'),
+    reason: entry ? null : snap.reasons.get(id) ?? snap.unreadable.get(id) ?? (profile ? null : 'not registered'),
     modelCount: entry ? entry.models.length : (profile?.models.filter((model) => !model.hidden).length ?? 0),
     defaultModel: entry ? entry.defaultModel : profile?.defaultModel ?? null,
     isDefault: snap.defaultBackend === id,
@@ -437,7 +446,8 @@ function overviewOf(group: Group, snap: Snapshot, viewer: DbViewer): ProviderOve
   const first = group.backendIds[0];
   const card = group.backendIds.map((id) => snap.cards.get(id)).find((entry) => entry !== undefined);
   const looks = first ? looksOf(first, snap) : { brand: null, icon: null };
-  const name = (first ? pickerName(first, snap) : null) ?? group.agent?.name ?? group.plugin?.manifest?.label ?? group.id;
+  const name = (first ? pickerName(first, snap) : null) ?? group.agent?.name ?? group.plugin?.manifest?.label
+    ?? (group.origin === 'user' ? first : undefined) ?? group.id;
   const accounts = snap.accounts.filter((row) => group.backendIds.includes(row.backend)).map((row) => publicAccount(row, viewer));
   const secret = secretOf(group.backendIds, snap);
   const progs = programs(group, snap);
@@ -452,7 +462,7 @@ function overviewOf(group: Group, snap: Snapshot, viewer: DbViewer): ProviderOve
     refused: progs.some((program) => program.authorization === 'refused') || installed?.state === 'tampered',
     programMissing: progs.some((program) => program.path === null && program.authorization !== 'refused') || installed?.state === 'missing',
     needsAuthorization: progs.some((program) => program.authorization === 'authorize'),
-    failed: plugin?.state === 'failed' || plugin?.state === 'skipped'
+    failed: plugin?.state === 'failed' || plugin?.state === 'skipped' || group.backendIds.some((id) => snap.unreadable.has(id))
       || backends.some((backend) => !backend.active && !backend.disabled && backend.reason?.startsWith('dialect ') === true),
     signedIn,
     accountConnected: accounts.some((account) => account.connected && account.state !== 'reauth'),
