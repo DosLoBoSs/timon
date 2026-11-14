@@ -3030,6 +3030,7 @@
     "save": "保存",
     "cancel": "取消",
     "editor": "编辑此注入项",
+    "freshConversation": "该代理将在下一次任务中开始新的对话：之前的对话仍包含这条规则（{agents}）。",
     "skillMode": {
       "include": "目录",
       "import": "已导入"

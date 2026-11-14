@@ -2964,6 +2964,7 @@
     "save": "Zapisz",
     "cancel": "Anuluj",
     "editor": "Edytuj to wstrzyknięcie",
+    "freshConversation": "Agent rozpocznie nową rozmowę przy następnej misji: poprzednia wciąż zawierała tę regułę ({agents}).",
     "skillMode": {
       "include": "katalog",
       "import": "importowana"

@@ -2755,6 +2755,7 @@
     "save": "Save",
     "cancel": "Cancel",
     "editor": "Edit this injection",
+    "freshConversation": "The agent will start a fresh conversation at its next mission: its earlier one still held this rule ({agents}).",
     "skillMode": { "include": "catalogue", "import": "imported" },
     "skillVia": {
       "global": "all agents",

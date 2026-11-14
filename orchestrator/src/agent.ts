@@ -1612,6 +1612,16 @@ function resumeSessionIfSameBackend(
   if (!owner) return null;
   const targetOwner = ownerUserId ?? dbApi.getMission(missionId)?.owner_user_id ?? null;
   if (owner.ownerUserId !== targetOwner) return null;
+  // A memory rule this session saw was removed or rewritten since it began:
+  // its history still carries the rule, so the new mission starts fresh
+  // (memory-session-fence.ts). Checked here, where every new mission's resume
+  // passes, whatever the backend.
+  if (dbApi.sessionFenced(sessionId, agentName)) {
+    console.log(
+      `[resume] session ${sessionId.slice(0, 8)} predates a memory rule removal for ${agentName} — fresh conversation`,
+    );
+    return null;
+  }
   // Compared as ACCOUNTS too (TODO #52): a session lives in its account's
   // config directory, the same backend on another account has never seen it.
   // The source mission was frozen on its account (`backend_override`).
