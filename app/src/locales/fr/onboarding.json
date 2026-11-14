@@ -31,7 +31,7 @@
         "title": "Même quand ma session est fermée",
         "description": "Les routines, les tâches de nuit et les webhooks continuent sans personne devant l’écran, tant que l’ordinateur est allumé. Sur Mac, votre mot de passe administrateur est demandé."
       },
-      "later": "Vous pourrez changer ce choix à tout moment dans Paramètres › Système › Installation."
+      "later": "Vous pourrez changer ce choix à tout moment dans {settingsPath}."
     },
     "account": {
       "title": "Créez votre compte local",

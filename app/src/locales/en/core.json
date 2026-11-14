@@ -3394,7 +3394,7 @@
     "reorder": "Drag to reorder this provider",
     "claudeToken": {
       "title": "Claude long-lived token",
-      "hint": "Optional. Run `claude setup-token` in a terminal and paste the token here: every Claude mission then uses it instead of the CLI's own sign-in. On macOS Claude missions need it when Timon keeps running logged out (Settings › System › Installation). The token is stored encrypted and never shown again.",
+      "hint": "Optional. Run `claude setup-token` in a terminal and paste the token here: every Claude mission then uses it instead of the CLI's own sign-in. On macOS Claude missions need it when Timon keeps running logged out ({settingsPath}). The token is stored encrypted and never shown again.",
       "none": "Not set",
       "set": "Set",
       "unreadable": "Set, but unreadable — paste it again",

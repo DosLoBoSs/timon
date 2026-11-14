@@ -3394,7 +3394,7 @@
     "reorder": "Glisser pour déplacer ce fournisseur",
     "claudeToken": {
       "title": "Jeton Claude longue durée",
-      "hint": "Facultatif. Lancez `claude setup-token` dans un terminal et collez le jeton ici : chaque mission Claude l'utilise alors à la place de la connexion du CLI. Sous macOS, les missions Claude en ont besoin quand Timon continue session fermée (Paramètres › Système › Installation). Le jeton est stocké chiffré et n'est plus jamais affiché.",
+      "hint": "Facultatif. Lancez `claude setup-token` dans un terminal et collez le jeton ici : chaque mission Claude l'utilise alors à la place de la connexion du CLI. Sous macOS, les missions Claude en ont besoin quand Timon continue session fermée ({settingsPath}). Le jeton est stocké chiffré et n'est plus jamais affiché.",
       "none": "Non défini",
       "set": "Défini",
       "unreadable": "Défini mais illisible — collez-le de nouveau",
