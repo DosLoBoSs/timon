@@ -1975,6 +1975,12 @@ async function spawnMissionProcess(
     // A `mktemp` lands in the mission's own folder, not in a /tmp every other
     // mission shares. And a CLI that updates itself writes where the fence
     // keeps the home read-only: the update is the user's, outside a mission.
+    // Traced under the fence (`strace -f -e trace=%file`, claude, codex and
+    // grok answering a turn and writing in their worktree): the only refusals
+    // left were caches and locks a CLI does without (`~/.cache/claude-cli-nodejs`,
+    // `~/.local/state/claude/locks`, `~/.npm/_logs`) and, on the host's own
+    // claude sign-in, the rewrite of `~/.claude.json`, which the CLI survives;
+    // none of them earned a place on the write list.
     if (launch.fence.tmpDir) procEnv.TMPDIR = launch.fence.tmpDir;
     procEnv.DISABLE_AUTOUPDATER = '1';
   }
