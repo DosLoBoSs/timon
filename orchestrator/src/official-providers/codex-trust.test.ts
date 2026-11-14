@@ -137,6 +137,11 @@ test('the per-mission folder lives under the daemon\'s provider-runs, not in the
 test('Codex profile belongs to its plugin and keeps its historical catalogue position', async () => {
   const { installedProfiles, activeProfiles } = await import('../backends/registry.js');
   assert.equal(registeredBackendOwners().profiles['codex'], 'provider-codex');
+  // The fence opens that plugin's scratch and caches, an account's instance included.
+  const { backendOwnerPlugin } = await import('../backends/registry.js');
+  assert.equal(backendOwnerPlugin('codex'), 'provider-codex');
+  assert.equal(backendOwnerPlugin('codex@abcdef12'), 'provider-codex');
+  assert.equal(backendOwnerPlugin('no-such-backend'), null);
   assert.deepEqual(installedProfiles().slice(0, 2).map((profile) => profile.id), ['claude', 'codex']);
   assert.deepEqual(activeProfiles().slice(0, 2).map(({ profile }) => profile.id), ['claude', 'codex']);
 });
