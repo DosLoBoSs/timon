@@ -569,6 +569,7 @@ export function createEngine(data: ModelData): Mascot3DEngine {
     // Read by a screen that copies the head as a bitmap (the onboarding's avalanche): the modelled head is
     // on the canvas now, not the flat one painted while the models load.
     if (t.canvas.dataset.drawn !== '3d') t.canvas.dataset.drawn = '3d';
+    if (t.onDrawn) { const done = t.onDrawn; t.onDrawn = null; done(); }
     const ms = t.drawnAt - t0;
     perf.draws += 1;
     perf.drawMs += ms;

@@ -113,9 +113,12 @@ test('the host draws the 3D head by default, the 2D drawing once the user picks 
   await w.render(React.createElement(AgentMascotHost, { look: { shape: 'gem', color: '#ff5fbf', acc: 'globe' }, size: 40, state: 'thinking', label: 'Nova' }));
   await w.act(settle);
   const canvas = () => w.document.querySelector('canvas[data-mascot]');
-  const svg = () => w.document.querySelector('svg[data-mascot]');
+  // The 2D drawing that stands in while the models load is not the 2D style: leave it out.
+  const svg = () => Array.from(w.document.querySelectorAll('svg[data-mascot]')).find((el) => !el.closest('[data-mascot-fallback]')) ?? null;
+  const standIn = () => w.document.querySelector('[data-mascot-fallback] svg[data-mascot]');
   assert.ok(canvas(), 'a 3D head');
   assert.ok(!svg());
+  assert.equal(standIn()?.getAttribute('data-shape'), 'gem', 'its 2D drawing stands in until the models are drawn');
   assert.equal(canvas()?.getAttribute('data-shape'), 'gem');
   assert.equal(canvas()?.getAttribute('data-acc'), 'globe');
   assert.equal(canvas()?.getAttribute('data-mascot-3d'), 'thinking');
@@ -158,7 +161,7 @@ test('the configurator\'s cells: the eyes\' screen stays 2D, an accessory\'s cel
     React.createElement(AgentMascotHost, { look: { eyes: 'heart' }, size: 40, part: 'screen', shadow: false }),
     React.createElement(AgentMascotHost, { look: { acc: 'rocket' }, size: 40, part: 'acc', shadow: false })));
   assert.equal(w.document.querySelector('svg[data-mascot]')?.getAttribute('data-mascot-part'), 'screen');
-  assert.equal(w.document.querySelectorAll('svg[data-mascot]').length, 1);
+  assert.equal(Array.from(w.document.querySelectorAll('svg[data-mascot]')).filter((el) => !el.closest('[data-mascot-fallback]')).length, 1);
   assert.equal(w.document.querySelector('canvas[data-mascot]')?.getAttribute('data-acc'), 'rocket');
 });
 

@@ -258,8 +258,11 @@ function AgentMascotFromValue({ value: v, part = null }: { value: AgentMascotVal
   // tight. An accessory's cell shows the 3D head wearing it, the camera
   // stepping back so that the tool fits.
   if (threeD && part !== 'screen') {
+    // The 2D drawing of the same character stands in while three.js and the models load.
+    const flat = <AgentMascot {...v.look} color={v.fur} size={v.size} state={v.state} shadow={v.shadow} />;
     return (
       <AgentMascot3D
+        fallback={flat}
         {...v.look}
         color={v.fur}
         size={v.size}

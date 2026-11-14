@@ -32,12 +32,14 @@ export type Tile = {
   drawnAt: number;
   rect: DOMRect | null;
   rectAt: number;
+  /** Called once, when the engine has drawn the modelled head on the canvas for the first time. */
+  onDrawn: (() => void) | null;
 };
 
 export function createTile(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, sim: Sim): Tile {
   return {
     canvas, ctx, sim, hex: '#7a4f35', cssSize: 96, fps: fpsFor(96), shape: 'squircle', acc: 'none', shadow: false,
-    baseExpr: 'pill', state: 'idle', live: false, dirty: true, drawnAt: 0, rect: null, rectAt: 0,
+    baseExpr: 'pill', state: 'idle', live: false, dirty: true, drawnAt: 0, rect: null, rectAt: 0, onDrawn: null,
   };
 }
 

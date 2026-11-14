@@ -5,10 +5,12 @@
  * `agent.mascot` slot's default occupant swaps one for the other, but always
  * the whole head: a part drawn alone (`part`) stays the 2D drawing's job.
  * Each instance is a plain 2D canvas fed by one engine shared by the page
- * (`engine.ts`); the engine, three.js and the model data load on demand, and
- * until they are here, or without WebGL2, the canvas shows a flat head.
+ * (`engine.ts`); the engine, three.js and the model data load on demand.
+ * Until the modelled head is drawn, `fallback` (the 2D drawing of the same
+ * character) stands in its place, so a slow first load never shows a blank
+ * or a placeholder; without one, the canvas shows a flat head.
  */
-import { useEffect, useRef, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { DEFAULT_LOOK, lookFurHex } from '../agent-look';
 import type { AgentMascotProps } from '../agent-mascot';
 import { usePrefersReducedMotion } from '../reduced-motion';
@@ -19,13 +21,17 @@ import { createSim, fpsFor, settle } from './sim';
 import { createTile, drawFlat, mascot3DEngine, mascot3DEngineNow, tilePixels, type Tile } from './tile';
 
 /** The whole head only; `fit` is ignored too: the camera always frames the head with its accessory. */
-export type AgentMascot3DProps = Omit<AgentMascotProps, 'part'>;
+export type AgentMascot3DProps = Omit<AgentMascotProps, 'part'> & {
+  /** Painted over the canvas until the engine has drawn the modelled head (it may never: no engine). */
+  fallback?: ReactNode;
+};
 
 export function AgentMascot3D({
   shape = DEFAULT_LOOK.shape, color = DEFAULT_LOOK.color, eyes = DEFAULT_LOOK.eyes, acc = 'none',
-  size = 96, live = false, state = null, shadow = true, label = null, className,
+  size = 96, live = false, state = null, shadow = true, label = null, className, fallback = null,
 }: AgentMascot3DProps): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [drawn, setDrawn] = useState(false);
   const tileRef = useRef<Tile | null>(null);
   const engineRef = useRef<Mascot3DEngine | null>(null);
   const reduced = usePrefersReducedMotion();
@@ -61,6 +67,7 @@ export function AgentMascot3D({
   };
 
   function paintFlat(t: Tile): void {
+    if (fallback) return;
     const px = tilePixels(cssSize, typeof window === 'undefined' ? 1 : window.devicePixelRatio);
     if (t.canvas.width !== px) { t.canvas.width = px; t.canvas.height = px; }
     drawFlat(t.ctx, px, hex, current === 'sleeping');
@@ -74,6 +81,7 @@ export function AgentMascot3D({
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return undefined;
     const t = createTile(canvas, ctx, createSim());
+    t.onDrawn = () => { setDrawn(true); };
     tileRef.current = t;
     apply.current(t, true);
     let gone = false;
@@ -105,7 +113,7 @@ export function AgentMascot3D({
     else flat.current(t);
   }, [cssSize, hex, shape, acc, shadow, base, current, animated]);
 
-  return (
+  const head = (
     <canvas
       // No width / height attributes: the engine sizes the bitmap to what the tile really takes on screen.
       ref={canvasRef}
@@ -119,5 +127,12 @@ export function AgentMascot3D({
       data-motion={reduced ? 'reduced' : 'full'}
       {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
     />
+  );
+  if (!fallback) return head;
+  return (
+    <span className="relative block" style={{ width: cssSize, height: cssSize }}>
+      {head}
+      {!drawn && <span aria-hidden className="pointer-events-none absolute inset-0" data-mascot-fallback="">{fallback}</span>}
+    </span>
   );
 }

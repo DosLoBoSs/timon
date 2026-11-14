@@ -8,8 +8,9 @@
  * The mascots are the `agent.mascot` slot's drawing: each look is mounted once
  * through `AgentMascotHost` (so a plugin that replaces the mascot replaces it
  * here too) and copied into a bitmap — a hundred live heads would not hold
- * sixty frames a second. A 2D head is an SVG, serialised and rasterised; a 3D
- * head is a canvas, copied once the engine has drawn the modelled head on it.
+ * sixty frames a second. Each head starts as its 2D drawing (an SVG,
+ * serialised and rasterised), so the scene falls at once; a 3D head's bitmap
+ * is then swapped for its canvas once the engine has drawn the modelled head.
  */
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactElement } from 'react';
 import { AgentMascotHost, usePrefersReducedMotion } from '@/components/mascot/agent-mascot';
@@ -30,15 +31,15 @@ export type MascotAvalancheHandle = {
   scatter: () => void;
 };
 
-/** How long a 3D head may take to come (models loading on a slow machine) before its cell is left empty. */
-const HEAD_WAIT_MS = 8000;
+/** How long a 3D head may take to come (models loading on a slow machine): past it, the 2D head stays. */
+const HEAD_WAIT_MS = 30000;
 
-/** A 3D head's canvas copied into a bitmap, once the engine has drawn the modelled head (`data-drawn`). */
+/** A 3D head's canvas copied into a bitmap once the engine has drawn the modelled head (`data-drawn`), else null. */
 async function copyHead(head: HTMLCanvasElement): Promise<HTMLCanvasElement | null> {
   const start = performance.now();
   while (head.dataset.drawn !== '3d') {
-    if (performance.now() - start > HEAD_WAIT_MS) break;
-    await new Promise<void>((resolve) => { setTimeout(resolve, 50); });
+    if (performance.now() - start > HEAD_WAIT_MS || !head.isConnected) return null;
+    await new Promise<void>((resolve) => { setTimeout(resolve, 100); });
   }
   if (!head.width || !head.height) return null;
   const canvas = document.createElement('canvas');
@@ -107,9 +108,9 @@ export const MascotAvalanche = forwardRef<MascotAvalancheHandle, { className?: s
       void Promise.all(cells.map(async (cell, i) => {
         const head = cell.querySelector('canvas');
         const svg = cell.querySelector('svg');
-        bitmaps.current[i] = head
-          ? await copyHead(head).catch(() => null)
-          : svg ? await rasterize(svg).catch(() => null) : null;
+        bitmaps.current[i] = svg ? await rasterize(svg).catch(() => null) : null;
+        // The 3D head replaces it when it comes; the frame loop reads the array, so the swap shows by itself.
+        if (head) void copyHead(head).then((bitmap) => { if (alive && bitmap) bitmaps.current[i] = bitmap; }).catch(() => undefined);
       })).finally(() => { if (alive) setReady(true); });
     });
     return () => { alive = false; cancelAnimationFrame(frame); };
