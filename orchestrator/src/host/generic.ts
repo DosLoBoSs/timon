@@ -5,7 +5,7 @@ import {
   type ChildProcess,
 } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import type { TimonConfig } from '../config/schema.js';
 import { TIMON_HOME } from '../paths.js';
 import type { Capability, ExecOpts, ExecResult, Host, SpawnOpts } from './types.js';
@@ -15,7 +15,10 @@ import { inspectListenPort } from './listen-port.js';
 import { detectDesktopSession, type DesktopSession } from './desktop-session.js';
 import { opensAsFolder, revealInFileManager } from './reveal.js';
 import { windowsDirectLaunch, windowsShimLaunch } from './windows-shell.js';
-import { fixedGitConfig, gitScanArgs, neutralGitCall, neutralGitEnv, parseGitConfigList, type GitConfigEntry } from './git-neutral.js';
+import {
+  fixedGitConfig, gitmodulesScanArgs, gitScanArgs, gitToplevelArgs, neutralGitCall, neutralGitEnv, parseGitConfigList,
+  parseSubmoduleNames, type GitConfigEntry,
+} from './git-neutral.js';
 
 /** Where the adapter reads `host.binaries` at each resolution. */
 export type BinaryPins = () => Record<string, string | null>;
@@ -30,6 +33,27 @@ function resolveBin(pins: BinaryPins, name: string, options: BinarySearchOptions
   const resolved = findExecutableBinary(name, options);
   if (resolved) return resolved;
   throw new Error(`binary "${name}" not found in PATH`);
+}
+
+/**
+ * What `spawn` starts for a binary that does not resolve: an absolute path
+ * that cannot exist, so node still reports ENOENT through the `error` event.
+ * The bare name would be looked up by the OS: on Windows in the child's cwd
+ * BEFORE the PATH, and a daemon spawn whose cwd is a mission's worktree would
+ * start the `<name>.exe` planted there; on every system through a relative
+ * PATH entry. Windows: under the daemon's runtime, a regular file nothing can
+ * be created under (libuv answers ENOENT for any path it does not find).
+ * Elsewhere: under the root, which only root writes (a path under a file
+ * would answer ENOTDIR, which callers read as "unknown" instead of "missing").
+ */
+export function unresolvedBinaryPath(name: string, platform: NodeJS.Platform, runtime = process.execPath): string {
+  // An absolute name is looked up nowhere: node reports what is wrong with it
+  // (missing, not executable) as before.
+  if (platform === 'win32' ? win32.isAbsolute(name) : posix.isAbsolute(name)) return name;
+  const file = platform === 'win32' ? win32.basename(name) : posix.basename(name);
+  return platform === 'win32'
+    ? win32.join(runtime, 'unresolved-binary', file)
+    : posix.join('/', '.timon-unresolved-binary', file);
 }
 
 function resultOf(r: ReturnType<typeof spawnSync>): ExecResult {
@@ -90,8 +114,8 @@ export function createGenericHost(
     maxBuffer: 8 * 1024 * 1024,
     windowsHide: true,
   });
-  const finishGitCall = (args: string[], opts: ExecOpts, entries: GitConfigEntry[] | null): GitCall => {
-    const call = neutralGitCall(args, entries, opts.env ?? process.env);
+  const finishGitCall = (args: string[], opts: ExecOpts, entries: GitConfigEntry[] | null, submodules: string[] = []): GitCall => {
+    const call = neutralGitCall(args, entries, opts.env ?? process.env, { submodules });
     if ('refused' in call) return { failed: { code: 1, stdout: '', stderr: call.refused } };
     return { args: call.args, opts: { ...opts, env: call.env } };
   };
@@ -107,7 +131,12 @@ export function createGenericHost(
     let r = run(scan.scoped);
     if (r.code !== 0 && !r.timedOut) { scoped = false; r = run(scan.plain); }
     if (r.code !== 0) return { failed: r };
-    return finishGitCall(args, opts, parseGitConfigList(r.stdout, scoped));
+    const toplevel = gitToplevelArgs(args);
+    if (!toplevel) return finishGitCall(args, opts, parseGitConfigList(r.stdout, scoped));
+    const top = run(toplevel);
+    if (top.code !== 0) return { failed: top };
+    const names = parseSubmoduleNames(gitmodulesScanArgs(args, top.stdout.trim()).map((a) => run(a).stdout));
+    return finishGitCall(args, opts, parseGitConfigList(r.stdout, scoped), names);
   };
   const gitCallAsync = async (file: string, args: string[], opts: ExecOpts): Promise<GitCall> => {
     const scan = gitScanArgs(args);
@@ -120,7 +149,12 @@ export function createGenericHost(
     let r = await run(scan.scoped);
     if (r.code !== 0 && !r.timedOut) { scoped = false; r = await run(scan.plain); }
     if (r.code !== 0) return { failed: r };
-    return finishGitCall(args, opts, parseGitConfigList(r.stdout, scoped));
+    const toplevel = gitToplevelArgs(args);
+    if (!toplevel) return finishGitCall(args, opts, parseGitConfigList(r.stdout, scoped));
+    const top = await run(toplevel);
+    if (top.code !== 0) return { failed: top };
+    const outputs = await Promise.all(gitmodulesScanArgs(args, top.stdout.trim()).map(async (a) => (await run(a)).stdout));
+    return finishGitCall(args, opts, parseGitConfigList(r.stdout, scoped), parseSubmoduleNames(outputs));
   };
 
   const exec = (name: string, args: string[], opts: ExecOpts = {}) => {
@@ -139,17 +173,20 @@ export function createGenericHost(
   };
   // A spawn must NEVER fail with a synchronous exception: the callers
   // (agent.ts first of all) rely on the child's `error` event to
-  // finalise cleanly. Unresolved binary → the bare name is passed and node
-  // reports the ENOENT through that channel, as before the adapter.
+  // finalise cleanly. Unresolved binary → a path that cannot exist is passed
+  // and node reports the ENOENT through that channel.
   const spawn = (name: string, args: string[], opts: SpawnOpts = {}): ChildProcess => {
-    let resolved = name;
-    try { resolved = bin(name); } catch { /* ENOENT fallback through the `error` event */ }
+    let resolved: string | null = null;
+    try { resolved = bin(name); } catch { /* ENOENT through the `error` event */ }
+    if (resolved === null) {
+      return nodeSpawn(unresolvedBinaryPath(name, binaryOptions.platform ?? process.platform), args, opts.env ? { ...opts, env: opts.env } : opts);
+    }
     // `opts.env` set = COMPLETE environment, passed verbatim. Merging it
     // with `process.env` would void the allowlist of `missionEnv`
     // (SECRETS-VAULT.md §6.1): the daemon's secrets would come back this way,
     // and the absence tests would pass for the wrong reasons. Without
     // `opts.env`, inheritance stays node's default.
-    if (name === 'git' && resolved !== name) {
+    if (name === 'git') {
       const { stdio: _stdio, detached: _detached, ...scanOpts } = opts;
       const call = gitCallSync(resolved, args, scanOpts as ExecOpts);
       if ('failed' in call) {

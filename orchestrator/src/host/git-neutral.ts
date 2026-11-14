@@ -14,8 +14,9 @@
  * Every git call of the adapter therefore goes through `neutralGitCall`:
  *
  * - **Fixed overrides**, whatever the configuration says: no fsmonitor, a hooks
- *   folder that never holds anything, no editor, no pager, no `ext::` transport,
- *   no signature check in `log`. The daemon never needs any of them.
+ *   folder that cannot exist, no editor, no pager, no `ext::` transport, no
+ *   local transport, no descent into submodules, no signature check in `log`.
+ *   The daemon never needs any of them.
  * - **Diff drivers**: `--no-ext-diff --no-textconv` on `diff`, `log` and `show`,
  *   the only porcelain commands of the daemon that render a diff.
  * - **Scanned overrides**: the configuration is read once per call, with the
@@ -28,14 +29,27 @@
  * - **PATH** loses every entry a mission can write (`mission-writable.ts`), so
  *   the `ssh`, `gpg` or `git-lfs` git starts cannot be one a mission planted.
  *
- * Known gaps, kept for the fence (V3, V4) to close: the configuration of a
- * submodule is not scanned; the hooks and configuration of a local remote
- * (`file://`) run on its side of a push; a value can change between the scan
- * and the call.
+ * The fence (V3, V4) wraps missions only, never the daemon's own git: what
+ * this module leaves open stays open. Three things are left, on purpose:
+ *
+ * - `add`, and `commit` while it builds the editor's template, run git inside
+ *   an initialized submodule, whose own configuration is never scanned, and
+ *   nothing set from here stops them (git 2.43). The daemon runs `add` only in
+ *   the demo project it has just created, and a commit without its message is
+ *   refused. Every other command that would is kept out: by option (`status`,
+ *   `diff`, `diff-index`, `diff-files`, `checkout`, `switch`, the transports),
+ *   or by naming each submodule (`merge` and the commands that stash).
+ * - A value can change between the scan and the call: a mission rewriting
+ *   `filter.*` or `merge.*.driver`, or adding a submodule, in a loop may win
+ *   that race. Residual risk, recorded in `docs/SECURITY.md`.
+ *   `--attr-source=<empty tree>` would close it for filters and drivers, but
+ *   it also drops the attributes Git LFS, line endings and the user's own
+ *   drivers need, on exactly the gestures that run them (status, merge); the
+ *   others run no filter or driver at all.
+ * - Code the remote side of a transport runs: only `ssh`, `https`, `git` and
+ *   installed remote helpers are reachable, the local transport is refused.
  */
-import { lstatSync, rmSync } from 'node:fs';
 import { delimiter, join, win32 } from 'node:path';
-import { TIMON_HOME } from '../paths.js';
 import { missionWritableProblem } from './mission-writable.js';
 
 /** A configuration value and the scope git read it from. `value` is null for
@@ -58,6 +72,15 @@ const LFS_FILTER_VALUES: Readonly<Record<string, string>> = Object.freeze({
  *  driver is replaced by the merge it stands in for, not by a conflict. */
 const NEUTRAL_MERGE_DRIVER = 'git merge-file --marker-size=%L %A %O %B';
 
+/** What git runs for `core.alternateRefsCommand` when it is unset, as a shell
+ *  command: git appends the alternate's path, which `#` drops after `$1`. */
+const NEUTRAL_ALTERNATE_REFS_COMMAND = `git --git-dir="$1" for-each-ref --format='%(objectname)' #`;
+
+/** Keys naming a program Git LFS starts. git never reads them: `git-lfs`
+ *  does, as a filter, from the same configuration. A filter that keeps them
+ *  cannot be trusted, wherever the filter itself is set. */
+const LFS_PROGRAM_KEY = /^lfs\.(customtransfer\..+\.path|extension\..+\.(clean|smudge))$/;
+
 type KeyRule = {
   match: RegExp;
   /** The value to pass when no trusted scope sets one. */
@@ -66,11 +89,54 @@ type KeyRule = {
   keep?: (key: string, value: string | null) => boolean;
   /** Multi-valued key: an empty value resets the list, trusted values follow. */
   list?: true;
+  /** No value is known to be harmless: a scope a mission writes setting it
+   *  refuses the call. */
+  refuse?: true;
 };
 
+/**
+ * Every key a repository configuration can use to make git run a program, as
+ * of git 2.43, and how the daemon's git handles it.
+ *
+ * Scanned here (`KEY_RULES`, then the special cases of `scannedGitConfig`):
+ * `core.sshCommand`, `core.askPass`, `core.alternateRefsCommand`,
+ * `core.gitProxy`, `filter.*.{clean,smudge,process}`, `merge.*.driver`,
+ * `credential.helper`, `credential.<url>.helper`, `gpg.program`,
+ * `gpg.{openpgp,x509,ssh}.program`, `gpg.ssh.defaultKeyCommand`,
+ * `submodule.*.update`, `remote.*.{uploadpack,receivepack}`,
+ * `lfs.customtransfer.*.path`, `lfs.extension.*.{clean,smudge}`, and `hook.*`
+ * (hooks declared in the configuration by later gits: refused).
+ *
+ * Fixed for every call (`fixedGitConfig`, `neutralGitCall`): `core.fsmonitor`,
+ * `core.hooksPath`, `core.editor`, `sequence.editor`, `core.pager` and
+ * `pager.*` (`--no-pager`), `diff.external`, `diff.*.command` and
+ * `diff.*.textconv` (`--no-ext-diff --no-textconv` on the only commands that
+ * honour them), `url.*.insteadOf` and `remote.*.vcs` (they only pick a
+ * transport, and the protocol policy refuses `ext` and `file`),
+ * `submodule.*.ignore`, `submodule.*.fetchRecurseSubmodules`,
+ * `submodule.recurse` (the configuration of a submodule is never scanned, so
+ * git must not run inside one: options on the commands that would).
+ *
+ * Not covered, on purpose:
+ * - `uploadpack.packObjectsHook`, `safe.directory`, `trace2.*`: git reads them
+ *   from system and global configuration only.
+ * - `alias.*`: an alias never shadows a built-in command, and the daemon runs
+ *   built-in commands only.
+ * - `gc.*`, `maintenance.*`: the automatic housekeeping they start is git's
+ *   own commands, which inherit the overrides of the call.
+ * - `diff.tool`, `difftool.*`, `merge.tool`, `mergetool.*`, `sendemail.*`,
+ *   `imap.tunnel`, `instaweb.*`, `web.browser`, `browser.*.cmd`, `man.*.cmd`,
+ *   `interactive.diffFilter`: read only by commands the daemon never runs.
+ * - `receive.*`, `uploadpack.*`: the remote side's, unreachable now that the
+ *   local transport is refused.
+ * - `.lfsconfig` in the worktree: Git LFS reads only a safe list of keys from
+ *   it, none naming a program.
+ */
 const KEY_RULES: readonly KeyRule[] = [
   { match: /^core\.sshcommand$/, neutral: () => 'ssh' },
   { match: /^core\.askpass$/, neutral: () => '' },
+  { match: /^core\.alternaterefscommand$/, neutral: () => NEUTRAL_ALTERNATE_REFS_COMMAND },
+  { match: /^hook\./, neutral: () => '', refuse: true },
   {
     match: /^filter\..+\.(clean|smudge|process)$/,
     neutral: () => '',
@@ -108,6 +174,40 @@ const SCAN_FREE: ReadonlySet<string> = new Set([
 /** Porcelain commands that may render a diff through a configured driver. */
 const DIFF_COMMANDS: ReadonlySet<string> = new Set(['diff', 'log', 'show']);
 
+/**
+ * Commands that run `status` inside a submodule to find edited files, with
+ * the submodule's own configuration (a `filter.<x>.clean` there runs). Only
+ * the option stops them: `submodule.<name>.ignore`, which a mission writes in
+ * `.gitmodules` or `.git/config`, outranks `diff.ignoreSubmodules` even at
+ * command scope (tested). `dirty` and not `all`: git then never runs inside the
+ * submodule, and a submodule moved to another commit still shows, so the code
+ * gate does not call a worktree clean while its submodule pointer changed.
+ */
+const SUBMODULE_STATUS_COMMANDS: ReadonlySet<string> = new Set(['status', 'diff', 'diff-index', 'diff-files']);
+
+/**
+ * Commands that run a `status` inside a submodule through `git stash create`
+ * (a real `merge` always does, to restore the worktree if it fails) or a check
+ * of their own, and take no option to stop it. `submodule.<name>.ignore` set
+ * at command scope outranks the value of `.gitmodules` and `.git/config`: it is
+ * set for every name git will read, which `gitmodulesScanArgs` asks git for.
+ */
+const NAMED_SUBMODULE_COMMANDS: ReadonlySet<string> = new Set(['merge', 'pull', 'rebase', 'cherry-pick', 'revert', 'stash', 'am', 'describe']);
+
+/** Their closing report of local changes runs the same `status` inside a
+ *  submodule, whatever `diff.ignoreSubmodules` says; `--quiet` skips it. */
+const QUIET_COMMANDS: ReadonlySet<string> = new Set(['checkout', 'switch']);
+
+/** `submodule.<name>.fetchRecurseSubmodules` outranks the fixed settings: only
+ *  the option keeps a transport from running again inside a submodule. */
+const NO_RECURSE_COMMANDS: ReadonlySet<string> = new Set(['fetch', 'pull', 'push']);
+
+/** `commit` has no `--ignore-submodules`. With its message on the command
+ *  line it never looks inside a submodule; without one it builds the editor's
+ *  template from a `status` that does, before failing on the empty message
+ *  (`core.editor=:`). The daemon always passes its message. */
+const COMMIT_MESSAGE = /^(-m|--message|-F|--file|-C|--reuse-message|--no-edit)(=|$)|^-[^-]*[mFC]/;
+
 /** `remote.<name>.uploadpack` and `receivepack` keep the FIRST value read, so
  *  `-c` cannot outrank a planted one: the command-line option can, on the
  *  commands that take it. The others that may start a transport are refused. */
@@ -115,32 +215,46 @@ const UPLOAD_PACK_COMMANDS: ReadonlySet<string> = new Set(['fetch', 'pull', 'ls-
 const RECEIVE_PACK_COMMANDS: ReadonlySet<string> = new Set(['push']);
 const OTHER_TRANSPORT_COMMANDS: ReadonlySet<string> = new Set(['remote', 'submodule', 'archive', 'fetch-pack', 'send-pack']);
 
-/** Never created: a hooks folder that does not exist holds no hook. Removed
- *  when something appears there, the daemon being its only user. */
-export function gitHooksNoneDir(home = TIMON_HOME): string {
-  return join(home, 'run', 'git-hooks-none');
-}
-
-function emptyHooksDir(dir: string): void {
-  try {
-    lstatSync(dir);
-  } catch {
-    return;
-  }
-  rmSync(dir, { recursive: true, force: true });
+/**
+ * A hooks folder that cannot exist: it lies under the daemon's own runtime, a
+ * regular file. Nothing can be created there, so there is nothing to remove
+ * before a call and no window between a removal and git's lookup. Whoever can
+ * turn that file into a folder has replaced the daemon's runtime already.
+ */
+export function gitHooksNoneDir(runtime = process.execPath): string {
+  return join(runtime, 'git-hooks-none');
 }
 
 /** `-c` pairs applied to every call of the daemon. */
-export function fixedGitConfig(home = TIMON_HOME): string[] {
+export function fixedGitConfig(): string[] {
   return [
     'core.fsmonitor=false',
-    `core.hooksPath=${gitHooksNoneDir(home)}`,
+    `core.hooksPath=${gitHooksNoneDir()}`,
     'core.editor=:',
     'sequence.editor=:',
     'core.pager=cat',
     'protocol.ext.allow=never',
+    // A local remote runs ITS hooks and configuration on the receiving side,
+    // where git drops the daemon's `-c`: a bare repository a mission prepared
+    // (a temporary folder stays writable) would run its `pre-receive`. Allowing
+    // a target no mission writes would need the URL git ends up using, which a
+    // mission rewrites (`remote.*.url`, `url.*.insteadOf`) between that check
+    // and the transport. The price: a remote that is a local path or a
+    // `file://` URL is out of reach of the daemon's push, fetch and check.
+    'protocol.file.allow=never',
+    // A submodule's configuration is never scanned: git must not run in it.
+    // `dirty` still reports a changed submodule commit, without the `status`
+    // git would run inside the submodule to find edited files.
+    'submodule.recurse=false',
+    'diff.ignoreSubmodules=dirty',
+    'fetch.recurseSubmodules=false',
+    'push.recurseSubmodules=no',
     'log.showSignature=false',
   ];
+}
+
+function fixedGitArgs(): string[] {
+  return ['--no-pager', ...fixedGitConfig().flatMap((pair) => ['-c', pair])];
 }
 
 type ParsedCall = {
@@ -176,6 +290,42 @@ export function gitScanArgs(args: readonly string[]): { scoped: string[]; plain:
   if (commandIndex < 0 || SCAN_FREE.has(args[commandIndex]!)) return null;
   const base = [...location, '--no-pager', 'config', '--list', '-z'];
   return { scoped: [...base, '--show-scope'], plain: base };
+}
+
+/** Where the call works, for a call whose submodules need naming. */
+export function gitToplevelArgs(args: readonly string[]): string[] | null {
+  const { location, commandIndex } = parseCall(args);
+  if (commandIndex < 0 || !NAMED_SUBMODULE_COMMANDS.has(args[commandIndex]!)) return null;
+  return [...location, ...fixedGitArgs(), 'rev-parse', '--show-toplevel'];
+}
+
+/**
+ * The reads of every `.gitmodules` git may take submodule names from: the
+ * worktree's, else the index's, else HEAD's. All three are read, by git's own
+ * parser: a name too many costs nothing, a name missed would leave a submodule
+ * git still runs in. A source that does not exist fails and names nothing.
+ */
+export function gitmodulesScanArgs(args: readonly string[], toplevel: string): string[][] {
+  // Reading `:.gitmodules` loads the index, which may start `core.fsmonitor`.
+  const base = [...parseCall(args).location, ...fixedGitArgs(), 'config', '--list', '-z', '--name-only'];
+  return [
+    [...base, '--file', join(toplevel, '.gitmodules')],
+    [...base, '--blob', ':.gitmodules'],
+    [...base, '--blob', 'HEAD:.gitmodules'],
+  ];
+}
+
+/** Submodule names in `git config --list -z --name-only` outputs, read as far
+ *  as they go: a parse error further down still leaves git the names above. */
+export function parseSubmoduleNames(outputs: readonly string[]): string[] {
+  const names = new Set<string>();
+  for (const out of outputs) {
+    for (const key of out.split('\0')) {
+      const last = key.lastIndexOf('.');
+      if (key.startsWith('submodule.') && last > 'submodule.'.length) names.add(key.slice('submodule.'.length, last));
+    }
+  }
+  return [...names];
 }
 
 /** `git config --list -z [--show-scope]`: `[scope NUL] key LF value NUL`, or
@@ -238,7 +388,7 @@ export function scannedGitConfig(entries: readonly GitConfigEntry[]): ScannedGit
     if (!rule) continue;
     const untrusted = list.filter((e) => !TRUSTED_SCOPES.has(e.scope) && !rule.keep?.(key, e.value));
     if (untrusted.length === 0) continue;
-    if (key.includes('=')) return { config: [], env: {}, refused: key };
+    if (rule.refuse || key.includes('=')) return { config: [], env: {}, refused: key };
     const trusted = list.filter((e) => TRUSTED_SCOPES.has(e.scope));
     if (rule.list) {
       config.push(`${key}=`, ...trusted.map((e) => `${key}=${e.value ?? ''}`));
@@ -248,6 +398,12 @@ export function scannedGitConfig(entries: readonly GitConfigEntry[]): ScannedGit
     }
     const filter = /^filter\.(.+)\.(clean|smudge|process)$/.exec(key);
     if (filter) neutralizedFilters.add(filter[1]!);
+  }
+  // Git LFS reads the program a mission named, whoever set the filter: the
+  // filter goes, and LFS files read as their pointers for this call.
+  if (entries.some((e) => !TRUSTED_SCOPES.has(e.scope) && LFS_PROGRAM_KEY.test(e.key))) {
+    config.push('filter.lfs.clean=', 'filter.lfs.smudge=', 'filter.lfs.process=');
+    neutralizedFilters.add('lfs');
   }
   // A filter left without a command must not fail the checkout it guards.
   for (const name of neutralizedFilters) config.push(`filter.${name}.required=false`);
@@ -285,20 +441,34 @@ export function neutralGitCall(
   args: readonly string[],
   entries: readonly GitConfigEntry[] | null,
   baseEnv: NodeJS.ProcessEnv,
-  options: { platform?: NodeJS.Platform; timonHome?: string } = {},
+  options: { platform?: NodeJS.Platform; timonHome?: string; submodules?: readonly string[] } = {},
 ): { args: string[]; env: NodeJS.ProcessEnv } | { refused: string } {
-  const home = options.timonHome ?? TIMON_HOME;
-  emptyHooksDir(gitHooksNoneDir(home));
   const scanned: ScannedGitConfig = entries ? scannedGitConfig(entries) : { config: [], env: {} };
   if (scanned.refused) {
     return { refused: `git refused: the repository configuration sets "${scanned.refused}", which Timon cannot neutralize` };
   }
-  const config = [...fixedGitConfig(home), ...scanned.config].flatMap((pair) => ['-c', pair]);
+  const submodules = options.submodules ?? [];
+  // `-c` splits at the first `=`: such a name cannot be reached.
+  const unreachable = submodules.find((name) => name.includes('='));
+  if (unreachable !== undefined) {
+    return { refused: `git refused: the submodule "${unreachable}" cannot be kept from running git inside it` };
+  }
+  const config = [
+    ...fixedGitConfig(),
+    ...scanned.config,
+    ...submodules.map((name) => `submodule.${name}.ignore=dirty`),
+  ].flatMap((pair) => ['-c', pair]);
   const out = [...args];
   const { commandIndex } = parseCall(args);
   const command = commandIndex >= 0 ? args[commandIndex]! : '';
   const flags: string[] = [];
   if (DIFF_COMMANDS.has(command)) flags.push(...['--no-ext-diff', '--no-textconv'].filter((flag) => !args.includes(flag)));
+  if (SUBMODULE_STATUS_COMMANDS.has(command)) flags.push('--ignore-submodules=dirty');
+  if (QUIET_COMMANDS.has(command) && !args.includes('--quiet') && !args.includes('-q')) flags.push('--quiet');
+  if (NO_RECURSE_COMMANDS.has(command)) flags.push('--no-recurse-submodules');
+  if (command === 'commit' && !args.slice(commandIndex + 1).some((a) => COMMIT_MESSAGE.test(a))) {
+    return { refused: 'git refused: a commit by Timon carries its message on the command line' };
+  }
   if (scanned.plantedUploadPack && UPLOAD_PACK_COMMANDS.has(command)) flags.push('--upload-pack=git-upload-pack');
   if (scanned.plantedReceivePack && RECEIVE_PACK_COMMANDS.has(command)) flags.push('--receive-pack=git-receive-pack');
   if ((scanned.plantedUploadPack || scanned.plantedReceivePack) && OTHER_TRANSPORT_COMMANDS.has(command)) {
@@ -306,6 +476,10 @@ export function neutralGitCall(
   }
   out.splice(commandIndex + 1, 0, ...flags);
   const env = neutralGitEnv(baseEnv, options);
+  // It would replace the protocol policy above with its own list.
+  for (const key of Object.keys(env)) {
+    if ((options.platform ?? process.platform) === 'win32' ? key.toUpperCase() === 'GIT_ALLOW_PROTOCOL' : key === 'GIT_ALLOW_PROTOCOL') delete env[key];
+  }
   for (const [key, value] of Object.entries(scanned.env)) {
     if (env[key] === undefined) env[key] = value;
   }

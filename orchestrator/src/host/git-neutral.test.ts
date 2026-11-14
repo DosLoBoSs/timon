@@ -1,8 +1,8 @@
 import { strict as assert } from 'node:assert';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { test } from 'node:test';
 
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-git-neutral-'));
@@ -11,7 +11,8 @@ const HOME = process.env.TIMON_HOME;
 const { TimonConfigSchema } = await import('../config/schema.js');
 const { createGenericHost } = await import('./generic.js');
 const {
-  gitHooksNoneDir, gitScanArgs, neutralGitCall, neutralGitEnv, parseGitConfigList, scannedGitConfig,
+  gitHooksNoneDir, gitmodulesScanArgs, gitScanArgs, gitToplevelArgs, neutralGitCall, neutralGitEnv, parseGitConfigList,
+  parseSubmoduleNames, scannedGitConfig,
 } = await import('./git-neutral.js');
 
 const host = createGenericHost(TimonConfigSchema.parse({}));
@@ -70,9 +71,9 @@ test('a planted upload-pack or receive-pack is overridden on the command line', 
     { scope: 'local', key: 'remote.origin.receivepack', value: 'evil' },
   ];
   const fetch = neutralGitCall(['-C', '/r', 'fetch', 'origin'], entries, {});
-  assert.ok(!('refused' in fetch) && fetch.args.join(' ').endsWith('fetch --upload-pack=git-upload-pack origin'));
+  assert.ok(!('refused' in fetch) && fetch.args.join(' ').endsWith('fetch --no-recurse-submodules --upload-pack=git-upload-pack origin'));
   const push = neutralGitCall(['push', 'origin', 'main'], entries, {});
-  assert.ok(!('refused' in push) && push.args.join(' ').endsWith('push --receive-pack=git-receive-pack origin main'));
+  assert.ok(!('refused' in push) && push.args.join(' ').endsWith('push --no-recurse-submodules --receive-pack=git-receive-pack origin main'));
   assert.ok('refused' in neutralGitCall(['remote', 'update'], entries, {}));
   const status = neutralGitCall(['status'], entries, {});
   assert.ok(!('refused' in status) && !status.args.some((a) => a.startsWith('--upload-pack')));
@@ -84,6 +85,62 @@ test('a key that -c cannot reach refuses the call', () => {
   assert.ok('refused' in neutralGitCall(['push'], entries, {}));
 });
 
+test('alternate refs, configured hooks and Git LFS programs a mission named are neutralized', () => {
+  const alt = scannedGitConfig([{ scope: 'local', key: 'core.alternaterefscommand', value: 'evil' }]);
+  assert.deepEqual(alt.config, [`core.alternaterefscommand=git --git-dir="$1" for-each-ref --format='%(objectname)' #`]);
+  assert.equal(scannedGitConfig([{ scope: 'worktree', key: 'hook.pre-commit.command', value: 'evil' }]).refused, 'hook.pre-commit.command');
+  assert.equal(scannedGitConfig([{ scope: 'global', key: 'hook.x.command', value: 'mine' }]).refused, undefined);
+  const lfs = scannedGitConfig([
+    { scope: 'global', key: 'filter.lfs.process', value: 'git-lfs filter-process' },
+    { scope: 'local', key: 'lfs.customtransfer.t.path', value: 'evil' },
+  ]);
+  assert.deepEqual(lfs.config, ['filter.lfs.clean=', 'filter.lfs.smudge=', 'filter.lfs.process=', 'filter.lfs.required=false']);
+  assert.deepEqual(scannedGitConfig([{ scope: 'global', key: 'lfs.customtransfer.t.path', value: 'mine' }]).config, []);
+});
+
+test('git never runs inside a submodule, and the local transport is refused', () => {
+  const args = (call: ReturnType<typeof neutralGitCall>) => ('refused' in call ? [] : call.args);
+  const fixed = args(neutralGitCall(['rev-parse', 'HEAD'], null, {}));
+  for (const pair of ['protocol.file.allow=never', 'protocol.ext.allow=never', 'submodule.recurse=false']) {
+    assert.ok(fixed.includes(pair), pair);
+  }
+  assert.ok(args(neutralGitCall(['status', '--porcelain'], [], {})).includes('--ignore-submodules=dirty'));
+  assert.ok(args(neutralGitCall(['diff-index', 'HEAD'], [], {})).includes('--ignore-submodules=dirty'));
+  assert.ok(args(neutralGitCall(['checkout', 'main'], [], {})).includes('--quiet'));
+  assert.equal(args(neutralGitCall(['checkout', '-q', 'main'], [], {})).filter((a) => a === '--quiet' || a === '-q').length, 1);
+  assert.ok(args(neutralGitCall(['fetch', 'origin'], [], {})).includes('--no-recurse-submodules'));
+  // It would replace the protocol policy with its own list.
+  const call = neutralGitCall(['push'], [], { GIT_ALLOW_PROTOCOL: 'file:ext', PATH: '/usr/bin' }, { platform: 'linux' });
+  assert.ok(!('refused' in call) && call.env.GIT_ALLOW_PROTOCOL === undefined);
+  const win = neutralGitCall(['push'], [], { Git_Allow_Protocol: 'file' }, { platform: 'win32' });
+  assert.ok(!('refused' in win) && !Object.keys(win.env).some((k) => k.toUpperCase() === 'GIT_ALLOW_PROTOCOL'));
+});
+
+test('a merge names every submodule git may read, so git never runs inside one', () => {
+  assert.equal(gitToplevelArgs(['-C', '/r', 'status']), null);
+  const top = gitToplevelArgs(['-C', '/r', 'merge', '--no-edit', 'x']);
+  assert.deepEqual([top?.slice(0, 3), top?.slice(-2)], [['-C', '/r', '--no-pager'], ['rev-parse', '--show-toplevel']]);
+  assert.ok(top?.includes('core.fsmonitor=false'));
+  const reads = gitmodulesScanArgs(['-C', '/r', 'merge', 'x'], '/r');
+  assert.deepEqual(reads.map((a) => a.slice(-2)), [['--file', join('/r', '.gitmodules')], ['--blob', ':.gitmodules'], ['--blob', 'HEAD:.gitmodules']]);
+  assert.deepEqual(
+    parseSubmoduleNames(['submodule.a.path\0submodule.a.url\0submodule.x.y.path\0', 'submodule.b.ignore\0core.bare\0submodule.\0', '']),
+    ['a', 'x.y', 'b'],
+  );
+  const call = neutralGitCall(['merge', 'x'], [], {}, { submodules: ['a', 'x.y'] });
+  assert.ok(!('refused' in call) && call.args.includes('submodule.a.ignore=dirty') && call.args.includes('submodule.x.y.ignore=dirty'));
+  assert.ok('refused' in neutralGitCall(['merge', 'x'], [], {}, { submodules: ['a=b'] }));
+});
+
+test('a commit must carry its message: without one git builds a status of the submodules', () => {
+  assert.ok('refused' in neutralGitCall(['-C', '/r', 'commit', '-a'], [], {}));
+  assert.ok('refused' in neutralGitCall(['commit', '--amend'], [], {}));
+  for (const ok of [['commit', '--quiet', '-m', 'x'], ['commit', '-qam', 'x'], ['commit', '--message=x'], ['commit', '-F', 'f'], ['commit', '--no-edit', '--amend']]) {
+    assert.ok(!('refused' in neutralGitCall(ok, [], {})), ok.join(' '));
+  }
+  assert.ok(!('refused' in neutralGitCall(['-c', 'user.name=T', 'commit', '--quiet', '-m', 'Demo project'], [], {})));
+});
+
 test('neutralGitCall fixes hooks, fsmonitor, pager, and diff drivers', () => {
   const call = neutralGitCall(['-C', '/r', 'diff', '--numstat', 'HEAD'], null, { PATH: '/usr/bin' });
   assert.ok(!('refused' in call));
@@ -92,7 +149,7 @@ test('neutralGitCall fixes hooks, fsmonitor, pager, and diff drivers', () => {
   assert.ok(call.args.includes('core.fsmonitor=false'));
   assert.ok(call.args.includes(`core.hooksPath=${gitHooksNoneDir()}`));
   const diff = call.args.indexOf('diff');
-  assert.deepEqual(call.args.slice(diff, diff + 4), ['diff', '--no-ext-diff', '--no-textconv', '--numstat']);
+  assert.deepEqual(call.args.slice(diff, diff + 5), ['diff', '--no-ext-diff', '--no-textconv', '--ignore-submodules=dirty', '--numstat']);
   const status = neutralGitCall(['status'], null, {});
   assert.ok(!('refused' in status) && !status.args.includes('--no-ext-diff'));
 });
@@ -106,8 +163,14 @@ test('the PATH git gets loses every folder a mission can write', () => {
   assert.deepEqual(env.PATH?.split(sep), [kept, join(tmpdir(), 'elsewhere')]);
 });
 
+/** Every witness `trappedRepo` plants. */
+const WITNESSES = [
+  'alternate-refs', 'filter', 'fsmonitor', 'gpg', 'hook-post-checkout', 'hook-pre-commit',
+  'hook-reference-transaction', 'merge-driver', 'planted-helper', 'pre-receive', 'subfilter', 'uploadpack',
+];
+
 /** A repository whose configuration runs a witness for every hook, driver and
- *  helper git can be asked to run. */
+ *  helper git can be asked to run, a submodule and two local remotes. */
 function trappedRepo(): { root: string; repo: string; env: NodeJS.ProcessEnv; witnesses: () => string[] } {
   const root = mkdtempSync(join(tmpdir(), 'timon-git-trap-'));
   const seen = join(root, 'seen');
@@ -118,16 +181,27 @@ function trappedRepo(): { root: string; repo: string; env: NodeJS.ProcessEnv; wi
   writeFileSync(globalFile, `[user]\n\tname = T\n\temail = t@example.com\n[credential]\n\thelper = "!${touch('trusted-helper')}; :"\n[init]\n\tdefaultBranch = main\n`);
   const env: NodeJS.ProcessEnv = {
     ...process.env, GIT_CONFIG_GLOBAL: globalFile, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0',
+    LANGUAGE: 'C', LC_ALL: 'C',
+  };
+  delete env.GIT_ALLOW_PROTOCOL;
+  const run = (cwd: string, ...args: string[]) => {
+    const r = spawnSync('git', ['-C', cwd, ...args], { env, encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.trim();
   };
   const repo = join(root, 'repo');
-  const git = (...args: string[]) => {
-    const r = spawnSync('git', ['-C', repo, ...args], { env, encoding: 'utf8' });
-    assert.equal(r.status, 0, r.stderr);
-  };
+  const git = (...args: string[]) => run(repo, ...args);
+  const subsrc = join(root, 'subsrc');
+  mkdirSync(subsrc);
+  run(subsrc, 'init', '-q');
+  writeFileSync(join(subsrc, 'a.txt'), 'a\n');
+  run(subsrc, 'add', 'a.txt');
+  run(subsrc, 'commit', '-qm', 'sub');
   mkdirSync(repo);
   git('init', '-q');
   writeFileSync(join(repo, 'f.txt'), 'base\n');
   git('add', 'f.txt');
+  git('-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', subsrc, 'sub');
   git('commit', '-qm', 'base');
   git('branch', 'side');
   writeFileSync(join(repo, 'f.txt'), 'main\n');
@@ -137,68 +211,123 @@ function trappedRepo(): { root: string; repo: string; env: NodeJS.ProcessEnv; wi
   git('commit', '-qam', 'side');
   git('checkout', '-q', 'main');
   const upstream = join(root, 'upstream');
-  spawnSync('git', ['clone', '-q', '--bare', repo, upstream], { env });
+  run(root, 'clone', '-q', '--bare', repo, upstream);
+  // Something to fetch, so the fetch negotiates (and asks the alternates).
+  const extra = run(upstream, 'commit-tree', '-p', 'main', '-m', 'extra', 'main^{tree}');
+  run(upstream, 'update-ref', 'refs/heads/extra', extra);
+  const other = join(root, 'other');
+  run(root, 'clone', '-q', '--bare', repo, other);
+  // A bare repository a mission prepared where it can write (a temporary
+  // folder), to receive the daemon's push.
+  const drop = join(root, 'drop');
+  run(root, 'init', '-q', '--bare', drop);
+  writeFileSync(join(drop, 'hooks', 'pre-receive'), `#!/bin/sh\n${touch('pre-receive')}\n`, { mode: 0o755 });
+
   // What a mission writes into the repository it works in.
   writeFileSync(join(repo, '.gitattributes'), '* filter=trap merge=trap\n');
   git('config', 'core.fsmonitor', `${touch('fsmonitor')}; exit 1`);
   git('config', 'filter.trap.clean', `${touch('filter')}; cat`);
+  git('config', 'filter.trap.smudge', `${touch('filter')}; cat`);
   git('config', 'filter.trap.required', 'true');
   git('config', 'merge.trap.driver', `${touch('merge-driver')}; false`);
   git('config', 'credential.helper', `!${touch('planted-helper')}; :`);
   git('remote', 'add', 'origin', upstream);
   git('config', 'remote.origin.uploadpack', `${touch('uploadpack')}; git-upload-pack`);
+  git('remote', 'add', 'drop', drop);
   git('config', 'commit.gpgSign', 'true');
-  git('config', 'gpg.program', `${touch('gpg')}; false`);
+  // git starts `gpg.program` without a shell: a script stands in for it.
+  const gpg = join(root, 'gpg-trap');
+  writeFileSync(gpg, `#!/bin/sh\n${touch('gpg')}\nexit 1\n`, { mode: 0o755 });
+  git('config', 'gpg.program', gpg);
+  writeFileSync(join(repo, '.git', 'objects', 'info', 'alternates'), `${join(other, 'objects')}\n`);
+  git('config', 'core.alternateRefsCommand', `${touch('alternate-refs')}; true`);
   for (const hook of ['pre-commit', 'pre-merge-commit', 'post-merge', 'reference-transaction', 'post-checkout']) {
     writeFileSync(join(repo, '.git', 'hooks', hook), `#!/bin/sh\n${touch(`hook-${hook}`)}\n`, { mode: 0o755 });
   }
-  writeFileSync(join(repo, 'f.txt'), 'main\n'); // a stat change: status must hash the file
+  // The submodule's own configuration, never scanned, and the setting that
+  // outranks `diff.ignoreSubmodules`.
+  const sub = join(repo, 'sub');
+  // Its own filter name: the daemon's `-c filter.trap.clean=` reaches a git
+  // started inside the submodule and would blank a filter of the same name.
+  writeFileSync(join(sub, '.gitattributes'), '* filter=subtrap\n');
+  run(sub, 'config', 'filter.subtrap.clean', `${touch('subfilter')}; cat`);
+  git('config', 'submodule.sub.ignore', 'none');
+  git('config', '-f', '.gitmodules', 'submodule.sub.ignore', 'none');
+  // Same size, new stat: git must hash the file, through the clean filter.
+  writeFileSync(join(sub, 'a.txt'), 'z\n');
+  writeFileSync(join(repo, 'f.txt'), 'main\n');
   return { root, repo, env, witnesses: () => readdirSync(seen).sort() };
 }
 
-test('the trap fires under a plain git: the witnesses are real', { skip: !hasGit || process.platform === 'win32' }, () => {
+/** What the daemon does in a repository, in the order it would. */
+async function gestures(t: ReturnType<typeof trappedRepo>, git: (args: string[], input?: string) => Promise<{ code: number; stderr: string }>) {
+  const r = (args: string[], input?: string) => git(['-C', t.repo, ...args], input);
+  return {
+    status: await r(['status', '--porcelain']),
+    diff: await r(['diff', '--numstat', 'HEAD']),
+    checkout: await r(['checkout', 'side']),
+    back: await r(['checkout', 'main']),
+    // The refresh merge of `worktree.ts`.
+    merge: await r(['merge', '--no-edit', '-m', 'refresh', 'side']),
+    abort: await r(['merge', '--abort']),
+    commit: await r(['commit', '-qam', 'x', '--allow-empty']),
+    fill: await r(['credential', 'fill'], 'protocol=https\nhost=example.com\n\n'),
+    fetch: await r(['fetch', '-q', 'origin']),
+    push: await r(['push', '-q', 'drop', 'main']),
+  };
+}
+
+test('the trap fires under a plain git: every witness is real', { skip: !hasGit || process.platform === 'win32' }, async () => {
   const t = trappedRepo();
-  spawnSync('git', ['-C', t.repo, 'status', '--porcelain'], { env: t.env });
-  spawnSync('git', ['-C', t.repo, 'merge', '--no-edit', 'side'], { env: t.env });
-  assert.ok(t.witnesses().includes('fsmonitor'), t.witnesses().join(','));
-  assert.ok(t.witnesses().includes('merge-driver'), t.witnesses().join(','));
+  const done = await gestures(t, async (args, input) => {
+    const r = spawnSync('git', args, { env: t.env, encoding: 'utf8', input, timeout: 30_000 });
+    return { code: r.status ?? 1, stderr: r.stderr };
+  });
+  assert.equal(done.fetch.code, 0, done.fetch.stderr);
+  assert.equal(done.push.code, 0, done.push.stderr);
+  assert.deepEqual(t.witnesses().filter((w) => w !== 'trusted-helper'), WITNESSES);
   rmSync(t.root, { recursive: true, force: true });
 });
 
-test('the daemon git runs nothing a mission wrote: status, diff, fetch, merge, commit, credentials',
+test('the daemon git runs nothing a mission wrote: status, diff, checkout, merge, commit, credentials, fetch, push',
   { skip: !hasGit || process.platform === 'win32' }, async () => {
     const t = trappedRepo();
     const opts = { env: t.env, timeout: 30_000 };
-    const status = host.exec('git', ['-C', t.repo, 'status', '--porcelain'], opts);
-    assert.equal(status.code, 0, status.stderr);
-    const diff = await host.execAsync('git', ['-C', t.repo, 'diff', '--numstat', 'HEAD'], opts);
-    assert.equal(diff.code, 0, diff.stderr);
-    const fetch = await host.execAsync('git', ['-C', t.repo, 'fetch', '-q', 'origin'], opts);
-    assert.equal(fetch.code, 0, fetch.stderr);
-    // The refresh merge of `worktree.ts`: the planted driver gives way to a
-    // plain text merge, which conflicts on the line both sides changed.
-    const merge = await host.execAsync('git', ['-C', t.repo, 'merge', '--no-edit', '-m', 'refresh', 'side'], opts);
-    assert.notEqual(merge.code, 0);
-    await host.execAsync('git', ['-C', t.repo, 'merge', '--abort'], opts);
-    host.exec('git', ['-C', t.repo, 'commit', '-qam', 'x'], opts);
-    const fill = host.exec('git', ['-C', t.repo, 'credential', 'fill'], { ...opts, input: 'protocol=https\nhost=example.com\n\n' });
-    assert.ok(fill.code !== undefined);
+    const done = await gestures(t, (args, input) => (input === undefined
+      ? host.execAsync('git', args, opts)
+      : Promise.resolve(host.exec('git', args, { ...opts, input }))));
+    assert.equal(done.status.code, 0, done.status.stderr);
+    assert.equal(done.diff.code, 0, done.diff.stderr);
+    assert.equal(done.checkout.code, 0, done.checkout.stderr);
+    // The planted driver gives way to a plain text merge, which conflicts on
+    // the line both sides changed.
+    assert.notEqual(done.merge.code, 0);
+    // The local transport is refused: a local remote runs ITS hooks.
+    assert.match(done.fetch.stderr, /transport 'file' not allowed/);
+    assert.match(done.push.stderr, /transport 'file' not allowed/);
     const seen = t.witnesses();
     assert.deepEqual(seen.filter((w) => w !== 'trusted-helper'), [], `ran: ${seen.join(', ')}`);
     assert.ok(seen.includes('trusted-helper'), 'the credential helper of the global configuration still runs');
-    assert.equal(existsSync(gitHooksNoneDir()), false);
     rmSync(t.root, { recursive: true, force: true });
   });
 
-test('something planted in the empty hooks folder is removed before git runs', { skip: !hasGit || process.platform === 'win32' }, () => {
+test('the neutral alternate-refs command still lets a fetch through', { skip: !hasGit || process.platform === 'win32' }, () => {
   const t = trappedRepo();
-  const planted = gitHooksNoneDir();
-  mkdirSync(planted, { recursive: true });
-  writeFileSync(join(planted, 'pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
-  const r = host.exec('git', ['-C', t.repo, 'rev-parse', 'HEAD'], { env: t.env });
-  assert.equal(r.code, 0, r.stderr);
-  assert.equal(existsSync(planted), false);
+  const scanned = scannedGitConfig([{ scope: 'local', key: 'core.alternaterefscommand', value: 'evil' }]);
+  const pair = scanned.config.find((c) => c.startsWith('core.alternaterefscommand='));
+  assert.ok(pair);
+  // A plain git, the file transport allowed: only the neutral value differs.
+  const r = spawnSync('git', ['-C', t.repo, '-c', pair, '-c', 'remote.origin.uploadpack=git-upload-pack', 'fetch', '-q', '--upload-pack=git-upload-pack', 'origin'],
+    { env: t.env, encoding: 'utf8', timeout: 30_000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(spawnSync('git', ['-C', t.repo, 'rev-parse', '--verify', '-q', 'origin/extra'], { env: t.env }).status, 0);
+  assert.ok(!t.witnesses().includes('alternate-refs'), t.witnesses().join(','));
   rmSync(t.root, { recursive: true, force: true });
+});
+
+test('the hooks folder cannot exist: it lies under a regular file', () => {
+  assert.ok(statSync(process.execPath).isFile());
+  assert.equal(dirname(gitHooksNoneDir()), process.execPath);
 });
 
 test('a configuration scan that fails stops the call', { skip: !hasGit }, async () => {
