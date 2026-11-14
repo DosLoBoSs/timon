@@ -29,6 +29,8 @@ import { implicitBackendName, defaultBackendName } from '../backends/index.js';
 import { accountInstanceRefusal } from '../backends/account-launch.js';
 import { loadConfig, type AgentConfig } from '../agent-config.js';
 import { delegationRefusal } from '../delegation-guard.js';
+import { getMcp } from '../mcp.js';
+import { isInjectedMcpServer } from '../injected-mcp.js';
 
 /**
  * A caller who is exempt from these checks.
@@ -48,6 +50,8 @@ export function isPrivilegedCaller(req: Request): boolean {
  * own level. A superadmin (and the `Administration` preset, `*`) holds it
  * implicitly, mission tokens of such a launcher carry it too
  * (`MISSION_TOKEN_PERMISSIONS`); an employee does not unless a role grants it.
+ * For a mission token it never covers adding a tool or a stdio MCP server:
+ * that takes a person (`agentWideningRefusal`).
  */
 export const PRIVILEGED_CONFIG_PERMISSION = 'agents:privileged-config';
 
@@ -55,7 +59,8 @@ export const PRIVILEGED_CONFIG_PERMISSION = 'agents:privileged-config';
  * What a caller who is NOT unrestricted may put in a payload.
  *
  * `relaxed` = holds `agents:privileged-config`: any recognised permission mode
- * up to `ceiling`, any known backend, tools and MCP servers unbounded. The
+ * up to `ceiling`, any known backend, tools and MCP servers unbounded here —
+ * an agent's token is bounded on those by `agentWideningRefusal` first. The
  * ceiling is the caller's own effective level (its mission's override, else its
  * agent's `permission_mode`): nobody hands out more than they hold, and
  * `bypassPermissions` may be passed on by an agent that already runs in it.
@@ -444,6 +449,126 @@ export function spawnOverrideRefusal(
     if (refusal) return refusal;
   }
   return null;
+}
+
+/* ── Widening what an agent runs: a person only ─────────────────────────── */
+
+/**
+ * An agent calling with its own token: a mission's (a verified developer-owner
+ * one included) or a plugin job's. Never a person: a session cookie and a
+ * paired device are people, the daemon-token is the operator's CLI.
+ */
+export function isAgentToken(req: Pick<Request, 'auth'>): boolean {
+  return req.auth?.kind === 'api-token';
+}
+
+/**
+ * Whether an agent's token may attach MCP server `id` to an agent without a
+ * person: an http server (a url, judged by `mcpWriteRefusal` when declared), an
+ * account connector, or one Timon injects itself. A stdio server is a command
+ * the host runs outside the permission classifier; an id nothing declares yet
+ * fails closed, since a person declaring it later as stdio would hand it to the
+ * agent without anyone deciding.
+ */
+function agentAttachableMcp(id: string): boolean {
+  let server: ReturnType<typeof getMcp>;
+  try { server = getMcp(id); } catch { return false; }
+  if (!server) return isInjectedMcpServer(id);
+  return server.transport.type === 'http' || server.transport.type === 'external';
+}
+
+export type WideningRequest = {
+  allowed_tools?: unknown;
+  mcp_servers?: unknown;
+  disallowed_tools?: unknown;
+};
+
+export type WideningGrant = {
+  allowed_tools?: readonly string[] | null;
+  mcp_servers?: readonly string[] | null;
+  disallowed_tools?: readonly string[] | null;
+} | null;
+
+/**
+ * The maintainer's decision of 08/11/2026: adding a tool to an agent, or
+ * attaching a stdio MCP server to it, needs a person, whatever the calling
+ * agent's account holds (`agents:privileged-config` included). An agent a
+ * prompt injection steers would otherwise put `Bash` in another agent's
+ * `allowed_tools`, or a command of its choosing in its MCP servers, and run it
+ * on the host at that agent's next turn, with no card.
+ *
+ * `granted` is what the agent already holds (null for a new agent): keeping it,
+ * or narrowing it, grants nothing and passes. Lifting a `disallowed_tools`
+ * entry widens too. An http MCP server stays under the usual rules
+ * (`agentConfigRefusal`, `mcpWriteRefusal`). `labels` names the fields as the
+ * caller sent them (`extra_allowed_tools` on a spawn or a task).
+ *
+ * Pure, for the paths with no request (the dispatcher); `agentWideningDenied`
+ * applies it to a request.
+ */
+export function agentWideningRefusal(
+  wanted: WideningRequest,
+  granted: WideningGrant,
+  labels: Partial<Record<keyof WideningRequest, string>> = {},
+): string | null {
+  const label = (key: keyof WideningRequest): string => labels[key] ?? key;
+  const listOf = (key: keyof WideningRequest): string[] | null | 'invalid' => {
+    const value = wanted[key];
+    if (value === undefined || value === null) return null;
+    return asStringArray(value) ?? 'invalid';
+  };
+
+  const tools = listOf('allowed_tools');
+  if (tools === 'invalid') return `${label('allowed_tools')} must be an array of strings`;
+  for (const tool of tools ?? []) {
+    if (toolCovered(tool, granted?.allowed_tools ?? [])) continue;
+    return `${label('allowed_tools')} adds ${tool}: an agent's token cannot add a tool to an agent, whatever its account holds. `
+      + 'A person adds it from the Agents page of the app. Removing tools, or sending the list unchanged, is accepted';
+  }
+
+  const servers = listOf('mcp_servers');
+  if (servers === 'invalid') return `${label('mcp_servers')} must be an array of strings`;
+  for (const id of servers ?? []) {
+    if ((granted?.mcp_servers ?? []).includes(id) || agentAttachableMcp(id)) continue;
+    return `${label('mcp_servers')} attaches ${id}, a stdio MCP server or one that is not declared: it runs a command on the host, `
+      + 'outside the permission classifier, and an agent\'s token cannot attach it, whatever its account holds. '
+      + 'A person attaches it from the Agents page of the app. An http MCP server (a url) can be attached';
+  }
+
+  if ('disallowed_tools' in wanted && wanted.disallowed_tools !== undefined) {
+    const kept = listOf('disallowed_tools');
+    if (kept === 'invalid') return `${label('disallowed_tools')} must be an array of strings`;
+    for (const tool of granted?.disallowed_tools ?? []) {
+      if ((kept ?? []).includes(tool)) continue;
+      return `${label('disallowed_tools')} lifts ${tool}: an agent's token cannot give an agent back a tool it is denied, whatever its account holds. `
+        + 'A person does it from the Agents page of the app';
+    }
+  }
+  return null;
+}
+
+/** `agentWideningRefusal` for a request: null for anyone but an agent's token. */
+export function agentWideningDenied(
+  req: Pick<Request, 'auth'>,
+  wanted: WideningRequest,
+  granted: WideningGrant,
+  labels?: Partial<Record<keyof WideningRequest, string>>,
+): string | null {
+  return isAgentToken(req) ? agentWideningRefusal(wanted, granted, labels) : null;
+}
+
+/** The spawn and task spelling of the same rule: extras on top of the agent's own config. */
+export function spawnWideningDenied(
+  req: Pick<Request, 'auth'>,
+  body: { extra_allowed_tools?: unknown; extra_mcp_servers?: unknown },
+  agentConfig: AgentConfig | null,
+): string | null {
+  return agentWideningDenied(
+    req,
+    { allowed_tools: body.extra_allowed_tools, mcp_servers: body.extra_mcp_servers },
+    agentConfig,
+    { allowed_tools: 'extra_allowed_tools', mcp_servers: 'extra_mcp_servers' },
+  );
 }
 
 /* ── Agent config (POST /api/agents, PATCH /api/agents/:name/config) ─────── */

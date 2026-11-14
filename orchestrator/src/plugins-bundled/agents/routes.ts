@@ -20,7 +20,7 @@ import { agentAvatarSchema, applyAgentAvatar } from '../../agent-avatar.js';
 import { recordWriteOrigin } from '../../write-origin.js';
 import { GLOBAL_INSTRUCTIONS_FILE } from '../../paths.js';
 import { GLOBAL_INSTRUCTIONS_MAX_CHARS, readGlobalInstructions, writeGlobalInstructions } from '../../global-instructions.js';
-import { agentConfigRefusal, canonicalizePermissionMode, isPrivilegedCaller, overrideAuthority, promptRewriteRefusal, rejectOverride } from '../../users/privileged-overrides.js';
+import { agentConfigRefusal, agentWideningDenied, canonicalizePermissionMode, isPrivilegedCaller, overrideAuthority, promptRewriteRefusal, rejectOverride } from '../../users/privileged-overrides.js';
 import { scopedDb } from '../../users/scoped-db.js';
 import { browseAgentFiles, deleteAgentPath, mkdirAgentPath, moveAgentPath, openAgentFileRaw, openExternalFileRaw, readExternalFile, renameAgentPath, writeAgentFile, writeExternalFile } from '../../files.js';
 import { sendMedia } from '../../media-send.js';
@@ -317,6 +317,8 @@ function trashRestoreRefusal(req: express.Request, cfg: Record<string, unknown> 
   if (delegatingAgent(req) !== null && (delegates || cfg.orchestrator === true)) {
     return 'the trashed agent holds delegation rights (orchestrates / orchestrator): an agent cannot restore it, a person must';
   }
+  const widening = agentWideningDenied(req, cfg, null);
+  if (widening) return `restoring this agent brings its tools and MCP servers back: ${widening}`;
   if (privileged) return null;
   if (cfg.orchestrator === true) return 'the trashed agent is flagged orchestrator: only an operator may restore it';
   return agentConfigRefusal(cfg, null, overrideAuthority(req));
@@ -891,10 +893,19 @@ export function registerRoutes(app: express.IRouter): void {
       // directory nor pre-allocates tools/MCP servers beyond what the agent
       // already declares — that config is what the CLI runs under the user's OS
       // account.
+      const existing = existsSync(agentDir(body.name))
+        ? (() => { try { return loadConfig(body.name!); } catch { return null; } })()
+        : null;
+      // Adding a tool or a stdio MCP server needs a person, whatever an
+      // agent's token holds: checked before the privileged exemption, which a
+      // developer-owner mission passes.
+      const widening = agentWideningDenied(req, (body.config ?? {}) as Record<string, unknown>, existing);
+      if (widening) {
+        rejectOverride(req, res, 'agent.config_denied', `agent:${body.name}`, widening);
+        return;
+      }
       if (!isPrivilegedCaller(req)) {
-        const current = existsSync(agentDir(body.name))
-          ? (() => { try { return loadConfig(body.name!); } catch { return null; } })()
-          : null;
+        const current = existing;
         const refusal = agentConfigRefusal(
           (body.config ?? {}) as Record<string, unknown>,
           current,
@@ -1141,12 +1152,20 @@ export function registerRoutes(app: express.IRouter): void {
       }
       if ('cwd' in patch) validateCwd(patch.cwd);
       if ('browser_profile_id' in patch || 'project' in patch || 'cwd' in patch) validateBrowserAssignment(req, req.params.name, { ...loadConfig(req.params.name), ...patch });
+      const configured = (() => {
+        try { return loadConfig(req.params.name); } catch { return null; }
+      })();
+      // Same rule as the creation path: no tool and no stdio MCP server added
+      // by an agent's token, privileged or not.
+      const widening = agentWideningDenied(req, patch, configured);
+      if (widening) {
+        rejectOverride(req, res, 'agent.config_denied', `agent:${req.params.name}`, widening);
+        return;
+      }
       // secu-4: same rule as the creation path — a non-superadmin may only
       // narrow what an admin granted to this agent.
       if (!isPrivilegedCaller(req)) {
-        const current = (() => {
-          try { return loadConfig(req.params.name); } catch { return null; }
-        })();
+        const current = configured;
         const refusal = agentConfigRefusal(patch, current, overrideAuthority(req));
         if (refusal) {
           rejectOverride(req, res, 'agent.config_denied', `agent:${req.params.name}`, refusal);
@@ -1575,7 +1594,7 @@ export function registerRoutes(app: express.IRouter): void {
     }
     try {
       const plan = planSkillImport(entry);
-      // Same guard as a write by id: a skill that pre-authorises tools needs agents:privileged-config.
+      // Same guard as a write by id: a skill that pre-authorises tools takes a person, or the operator.
       const refusal = skillWriteRefusal(req, { path: skillFile(id), content: plan.content });
       if (refusal) {
         rejectOverride(req, res, 'skill.import_denied', `skill:${id}`, refusal);

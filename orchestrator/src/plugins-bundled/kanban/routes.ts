@@ -35,7 +35,7 @@ import { agentRequeueDelayMs, agentRequeueRefusal, isCorrection } from '../../cr
 import { loadConfig } from '../../agent-config.js';
 import { auditRequest } from '../../users/audit-actor.js';
 import {
-  canonicalizePermissionMode, isPrivilegedCaller, llmChoiceRefusal, overrideAuthority, rejectOverride, taskOverrideRefusal,
+  canonicalizePermissionMode, isPrivilegedCaller, llmChoiceRefusal, overrideAuthority, rejectOverride, spawnWideningDenied, taskOverrideRefusal,
   type TaskOverrides,
 } from '../../users/privileged-overrides.js';
 import { existsSync } from 'node:fs';
@@ -461,8 +461,21 @@ function taskOverrideDenied(
   reassigned: TaskRow | null = null,
   current: TaskRow | null = null,
 ): string | null {
-  if (isPrivilegedCaller(req)) return null;
   const target = (() => { try { return loadConfig(agentName); } catch { return null; } })();
+  // Extra tools or a stdio MCP server need a person, whatever an agent's token
+  // holds: before the privileged exemption, which a developer-owner mission passes.
+  // A PUT that re-sends the extras the task already carries grants nothing new.
+  const granted = current && !reassigned ? withTaskExtras(target, current) : target;
+  let widening = spawnWideningDenied(req, body, granted);
+  if (!widening && reassigned) {
+    const kept = spawnWideningDenied(req, overridesAfterUpdate(reassigned, body), target);
+    if (kept) widening = `the task already carries extras agent "${agentName}" may not receive from an agent's token: ${kept}`;
+  }
+  if (widening) {
+    auditRequest(req, 'task.override_denied', `agent:${agentName} — ${widening}`);
+    return widening;
+  }
+  if (isPrivilegedCaller(req)) return null;
   const authority = overrideAuthority(req);
   const judged = current ? {
     ...body,
@@ -479,6 +492,21 @@ function taskOverrideDenied(
   // the name they all understand (see `canonicalPermissionMode`).
   else canonicalizePermissionMode(body as Record<string, unknown>, 'permission_mode_override');
   return refusal;
+}
+
+/** The agent's config plus the extras `task` already carries: what an edit of that task keeps. */
+function withTaskExtras(config: AgentConfig | null, task: TaskRow): AgentConfig {
+  const stored = (raw: string | null): string[] => {
+    try {
+      const value = raw ? JSON.parse(raw) as unknown : undefined;
+      return Array.isArray(value) ? value.map(String) : [];
+    } catch { return []; }
+  };
+  return {
+    ...config,
+    allowed_tools: [...(config?.allowed_tools ?? []), ...stored(task.extra_allowed_tools)],
+    mcp_servers: [...(config?.mcp_servers ?? []), ...stored(task.extra_mcp_servers)],
+  };
 }
 
 /**
