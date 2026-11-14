@@ -152,8 +152,12 @@ function notifySuperadmins(title: string, body: string): void {
  * `agents:manage` greys every skill attachment write, the agent scope included;
  * `agents:privileged-config` greys the global / project / role ones on top
  * (skill-attachment-routes.ts, TODO #620, #693).
+ * `providers:manage` / `providers:accounts` give the level of the Providers
+ * screen (`users/provider-access.ts`): which of it the app paints at all.
  */
-export const ME_CAN_PERMISSIONS = ['projects:manage', 'agents:manage', 'agents:privileged-config'] as const;
+export const ME_CAN_PERMISSIONS = [
+  'projects:manage', 'agents:manage', 'agents:privileged-config', 'providers:manage', 'providers:accounts',
+] as const;
 export type MeCan = Record<(typeof ME_CAN_PERMISSIONS)[number], boolean>;
 
 function meCan(req: Request): MeCan {
