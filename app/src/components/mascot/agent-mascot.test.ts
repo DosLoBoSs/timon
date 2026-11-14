@@ -31,8 +31,8 @@ test('every skull renders with every accessory, spilling or fitted, without a Na
       }
     }
   }
-  assert.equal(count, 7 * 20 * 2);
-  assert.equal(ACC.length - 1, 19, 'nineteen tools and none');
+  assert.equal(count, 7 * 31 * 2);
+  assert.equal(ACC.length - 1, 30, 'thirty tools and none');
 });
 
 test('a part drawn alone: the screen with its eyes, or the tool centred, never the fur', async () => {

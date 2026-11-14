@@ -48,6 +48,7 @@ export type MascotEyes = typeof EYES[number];
 export const ACC = [
   'none', 'loupe', 'pen', 'quill', 'hammer', 'wrench', 'baton', 'telescope', 'envelope', 'calendar',
   'clipboard', 'hourglass', 'teacher', 'calculator', 'chart', 'brush', 'globe', 'megaphone', 'shield', 'coffee',
+  'whip', 'wizard', 'chef', 'crown', 'idea', 'rocket', 'chemist', 'gamer', 'photographer', 'gardener', 'musician',
 ] as const;
 export type MascotAccessory = typeof ACC[number];
 

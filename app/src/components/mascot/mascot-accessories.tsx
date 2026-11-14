@@ -139,6 +139,101 @@ const TOOLS: Readonly<Record<Exclude<MascotAccessory, 'none'>, Tool>> = {
     <text x="-1.75" y="4.6" textAnchor="middle" fontFamily={ARIAL} fontWeight="700" fontSize="6" fill="#3fa9ff">{'</>'}</text>
     <path d="M-4.5 -9 q-2 -2.5 0 -5 q2 -2.5 0 -5 M1 -9 q-2 -2.5 0 -5 q2 -2.5 0 -5" fill="none" stroke="#fff" strokeOpacity=".55" strokeWidth="1.2" strokeLinecap="round" />
   </>) },
+  whip: { deg: -18, body: () => (<>
+    <rect x="-1.7" y="3" width="3.4" height="12" rx="1.6" fill="#3f2716" />
+    <circle cx="0" cy="15" r="2.3" fill="#6b4226" />
+    <path d="M0 3 C 1 -8, -2 -16, -9 -17 C -17 -18, -19 -9, -14 -5 C -10 -2, -8 -7, -12 -9" fill="none" stroke="#6b4226" strokeWidth="2.2" strokeLinecap="round" />
+  </>) },
+  wizard: { deg: 0, body: () => (<>
+    <ellipse cx="0" cy="11" rx="15" ry="3" fill="#46308a" />
+    <path d="M-9 10 C -7 0, -3 -10, 2 -14 C 6 -16, 10 -15, 12 -12 C 7 -12, 5 -9, 9 10 Z" fill="#5b3fa8" />
+    <rect x="-9" y="6.5" width="18" height="3.4" fill="#ffc233" />
+    <circle cx="12" cy="-12" r="1.6" fill="#ffc233" />
+    <polygon points="-2,-4 -1.2,-1.8 1,-1.8 -.8,-.4 -.1,1.8 -2,.5 -3.9,1.8 -3.2,-.4 -5,-1.8 -2.8,-1.8" fill="#ffd84a" />
+    <circle cx="3.5" cy="2" r="1" fill="#ffd84a" />
+  </>) },
+  chef: { deg: 0, body: () => (<>
+    <rect x="-8" y="2" width="16" height="9" rx="1.2" fill="#ecebe4" />
+    <path d="M-5 2 v9 M0 2 v9 M5 2 v9" stroke="#d6d4ca" strokeWidth="1" />
+    <circle cx="-6" cy="-3" r="6" fill="#fbfaf6" />
+    <circle cx="6" cy="-3" r="6" fill="#fbfaf6" />
+    <circle cx="0" cy="-7" r="7" fill="#fbfaf6" />
+    <rect x="-10" y="-2" width="20" height="5" fill="#fbfaf6" />
+  </>) },
+  crown: { deg: 0, body: () => (<>
+    <path d="M-13 9 L-13 -6 L-7 1 L0 -10 L7 1 L13 -6 L13 9 Z" fill="#ffc233" stroke="#e3a21a" strokeWidth="1.2" strokeLinejoin="round" />
+    <rect x="-13" y="6" width="26" height="3.5" fill="#e3a21a" />
+    <circle cx="-13" cy="-7" r="1.8" fill="#fff6e0" />
+    <circle cx="0" cy="-11" r="1.8" fill="#fff6e0" />
+    <circle cx="13" cy="-7" r="1.8" fill="#fff6e0" />
+    <circle cx="-6" cy="3.5" r="1.6" fill="#2fae6b" />
+    <circle cx="0" cy="3" r="2" fill="#e2463b" />
+    <circle cx="6" cy="3.5" r="1.6" fill="#3f8fe0" />
+  </>) },
+  idea: { deg: 0, body: () => (<>
+    <path d="M-4.5 6 C -4.5 2, -9 -1, -9 -6 A 9 9 0 0 1 9 -6 C 9 -1, 4.5 2, 4.5 6 Z" fill="#ffe680" stroke="#f2c94c" strokeWidth="1" />
+    <rect x="-4.6" y="6" width="9.2" height="5.4" rx="1" fill="#b9bfc6" />
+    <path d="M-4.6 8 h9.2 M-4.6 10 h9.2" stroke="#8e949c" strokeWidth=".8" />
+    <path d="M-2 12 h4 l-1 2 h-2 Z" fill="#5b5f66" />
+    <path d="M-3 -6 A 4 4 0 0 1 0 -9" fill="none" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+    <path d="M-13 -13 l3 3 M13 -13 l-3 3 M0 -19 v4 M-15 -4 h3 M15 -4 h-3" stroke="#ffc233" strokeWidth="1.6" strokeLinecap="round" />
+  </>) },
+  rocket: { deg: 20, body: () => (<>
+    <path d="M-3 6 L-9 13 L-9 7 L-5 1 Z M3 6 L9 13 L9 7 L5 1 Z" fill="#e2463b" />
+    <path d="M0 -16 C 5 -12, 6 -6, 5.6 0 L5 8 L-5 8 L-5.6 0 C -6 -6, -5 -12, 0 -16 Z" fill="#f6f1e7" />
+    <path d="M0 -16 C 3.6 -13, 4.6 -11, 5 -9 L-5 -9 C -4.6 -11, -3.6 -13, 0 -16 Z" fill="#e2463b" />
+    <circle cx="0" cy="-2" r="2.8" fill="#3fa9ff" stroke="#8e949c" strokeWidth="1.2" />
+    <path d="M-3 8 L0 16 L3 8 Z" fill="#ff7a1a" />
+    <path d="M-1.4 8 L0 13 L1.4 8 Z" fill="#ffd23e" />
+  </>) },
+  chemist: { deg: -6, body: () => (<>
+    <path d="M-2.8 -10 L-2.8 -2 L-10 11 Q -11 13, -8.6 13 L8.6 13 Q 11 13, 10 11 L2.8 -2 L2.8 -10 Z" fill="#cfe9ff" fillOpacity=".35" stroke="#dfe3e8" strokeWidth="1.2" />
+    <path d="M-6.4 4.5 L6.4 4.5 L10 11 Q 11 13, 8.6 13 L-8.6 13 Q -11 13, -10 11 Z" fill="#3ddc84" />
+    <rect x="-4" y="-12.5" width="8" height="2.6" rx="1" fill="#dfe3e8" />
+    <circle cx="-1" cy="1" r="1" fill="#c8ffe0" />
+    <circle cx="1" cy="-4" r=".8" fill="#c8ffe0" />
+    <circle cx="0" cy="-8" r=".6" fill="#c8ffe0" />
+  </>) },
+  gamer: { deg: -10, body: () => (<>
+    <path d="M-8 -6 h16 a6 6 0 0 1 5.6 4 l2.4 9 a3.6 3.6 0 0 1 -6.4 3 l-3 -4 h-9.2 l-3 4 a3.6 3.6 0 0 1 -6.4 -3 l2.4 -9 a6 6 0 0 1 5.6 -4 Z" fill="#3a3a42" />
+    <path d="M-9.6 -1.4 h5 M-7.1 -3.9 v5" stroke="#1f1f24" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="7" cy="-3.8" r="1.3" fill="#2fd4a5" />
+    <circle cx="9.6" cy="-1.3" r="1.3" fill="#e2463b" />
+    <circle cx="7" cy="1.2" r="1.3" fill="#3fa9ff" />
+    <circle cx="4.4" cy="-1.3" r="1.3" fill="#ffc233" />
+    <circle cx="-3" cy="3" r="1.8" fill="#4a4a55" />
+    <circle cx="3" cy="3" r="1.8" fill="#4a4a55" />
+  </>) },
+  photographer: { deg: -6, body: () => (<>
+    <rect x="-13" y="-7" width="26" height="17" rx="2.6" fill="#3a3a42" />
+    <rect x="-13" y="-7" width="26" height="5" rx="2.2" fill="#c9ccd2" />
+    <rect x="-8" y="-11" width="8" height="4.5" rx="1.2" fill="#c9ccd2" />
+    <circle cx="1" cy="2.4" r="6.6" fill="#8e949c" />
+    <circle cx="1" cy="2.4" r="5" fill="#23232a" />
+    <circle cx="1" cy="2.4" r="3.4" fill="#3a6fb0" />
+    <circle cx="-.4" cy="1" r="1" fill="#fff" />
+    <rect x="6" y="-5.6" width="5" height="2.6" rx=".6" fill="#fff6c8" />
+    <rect x="7" y="-9" width="3" height="2" rx=".6" fill="#e2463b" />
+  </>) },
+  gardener: { deg: 0, body: () => (<>
+    <path d="M-7 3 L7 3 L5.4 15 L-5.4 15 Z" fill="#c8643c" />
+    <rect x="-8" y="1" width="16" height="3.4" rx="1" fill="#a94f2d" />
+    <path d="M0 2 C 1 -4, -1 -9, 0 -13" fill="none" stroke="#3f9a3a" strokeWidth="1.4" strokeLinecap="round" />
+    <ellipse cx="-4" cy="-4" rx="4.4" ry="2" transform="rotate(-25 -4 -4)" fill="#5cbf4a" />
+    <ellipse cx="4" cy="-7.5" rx="4.4" ry="2" transform="rotate(25 4 -7.5)" fill="#5cbf4a" />
+    <ellipse cx="-3.6" cy="-10.6" rx="3.6" ry="1.7" transform="rotate(-20 -3.6 -10.6)" fill="#5cbf4a" />
+    <circle cx="0" cy="-14" r="2.2" fill="#ffcf3a" />
+    <circle cx="0" cy="-14" r="1" fill="#e2463b" />
+  </>) },
+  musician: { deg: 24, body: () => (<>
+    <rect x="-1.4" y="-16" width="2.8" height="16" rx=".6" fill="#6b4a2b" />
+    <rect x="-2.2" y="-19.5" width="4.4" height="4.4" rx="1.1" fill="#4a3220" />
+    <ellipse cx="0" cy="8" rx="8.4" ry="7.4" fill="#e08a3a" />
+    <ellipse cx="0" cy="-.5" rx="6.4" ry="5.6" fill="#e08a3a" />
+    <circle cx="0" cy="2" r="2.4" fill="#2a1a10" />
+    <rect x="-3.4" y="9.6" width="6.8" height="1.8" rx=".6" fill="#6b4a2b" />
+    <path d="M-.8 -15 L-1 10 M0 -15 V10 M.8 -15 L1 10" stroke="#eef0f2" strokeWidth=".3" />
+  </>) },
 };
 
 /** The mortarboard, sized from the top of the skull. */

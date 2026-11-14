@@ -14,7 +14,9 @@
       "none": "Aucun", "loupe": "Loupe", "pen": "Stylo rouge", "quill": "Plume", "hammer": "Marteau", "wrench": "Clé à molette",
       "baton": "Baguette", "telescope": "Longue-vue", "envelope": "Enveloppe", "calendar": "Calendrier", "clipboard": "Presse-papiers",
       "hourglass": "Sablier", "teacher": "Livre et toque", "calculator": "Calculatrice", "chart": "Graphique", "brush": "Pinceau",
-      "globe": "Globe", "megaphone": "Mégaphone", "shield": "Bouclier", "coffee": "Tasse de café"
+      "globe": "Globe", "megaphone": "Mégaphone", "shield": "Bouclier", "coffee": "Tasse de café",
+      "whip": "Fouet", "wizard": "Magicien", "chef": "Cuisinier", "crown": "Couronne", "idea": "Idée", "rocket": "Fusée",
+      "chemist": "Chimiste", "gamer": "Joueur", "photographer": "Photographe", "gardener": "Jardinier", "musician": "Musicien"
     },
     "state": {
       "idle": "Au repos", "listening": "Écoute", "thinking": "Réfléchit", "working": "Travaille", "searching": "Cherche",
