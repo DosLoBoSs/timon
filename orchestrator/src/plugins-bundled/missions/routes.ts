@@ -1721,6 +1721,20 @@ export function registerRoutes(
       });
       return;
     }
+    // No identity at all only gets this far before the first account, on the
+    // loopback. That caller may be the mission itself having dropped its token
+    // (a `curl`, or its browser driving the app): it cannot approve either.
+    // The interface creates the account before any agent exists, so no card
+    // waits on a person there; the operator's daemon-token still can. 401, as
+    // for any anonymous caller once an account exists: no identity was given.
+    if (!req.auth && decision.behavior !== 'deny') {
+      res.status(401).json({
+        error: 'unauthorized',
+        reason: 'an anonymous caller cannot approve a permission request; only a person can',
+        hint: 'Create the first account and answer the card from it, or answer "deny" to cancel it.',
+      });
+      return;
+    }
     // Resolving someone else's Allow/Deny card would approve a tool use in a
     // mission the caller cannot even read: unknown card and foreign card
     // answer the same 404.

@@ -5,6 +5,9 @@
  * holds a mission token like any other: the install's rights while no account
  * exists, as an agent — never as a person nor as the operator.
  *
+ * Before the first account, an anonymous loopback call is refused the same
+ * way: the mission could otherwise drop its token and approve anyway.
+ *
  * Everything real but the click: the daemon auth middleware, the token issued
  * the way a launch does (`missionApiToken`), the card engine.
  */
@@ -105,6 +108,19 @@ test.describe('a mission launched before the first account', { concurrency: fals
     const denied = await call('POST', `/api/permissions/${first.card.id}/resolve`, mission, { behavior: 'deny', message: 'not needed' });
     assert.equal(denied.status, 200);
     assert.equal((await first.decision).behavior, 'deny');
+  });
+
+  test('dropping its token does not help: an anonymous loopback call cannot allow, and may deny', async () => {
+    // The open loopback of a first run still answers anonymous reads.
+    assert.equal((await call('GET', '/api/missions/m-first?view=status', anonymous)).status, 200);
+    const { card, decision } = ask();
+    const refused = await call('POST', `/api/permissions/${card.id}/resolve`, anonymous, { behavior: 'allow', updatedInput: { command: 'ls' } });
+    assert.equal(refused.status, 401);
+    assert.match((await refused.json() as { reason: string }).reason, /only a person can/);
+    assert.equal((await call('POST', `/api/permissions/${card.id}/resolve`, anonymous, { behavior: 'paste' })).status, 401);
+    assert.ok(stillPending(card.id), 'the card still waits');
+    assert.equal((await call('POST', `/api/permissions/${card.id}/resolve`, anonymous, { behavior: 'deny' })).status, 200);
+    assert.equal((await decision).behavior, 'deny');
   });
 
   test('the operator (daemon-token) still allows', async () => {
