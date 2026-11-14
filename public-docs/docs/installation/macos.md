@@ -24,7 +24,7 @@ By default the service is a launchd **agent**: it keeps running while the screen
 To keep it running with no session open, Timon needs a long-lived Claude token. On macOS, `claude` keeps its sign-in in your login keychain, which background services cannot read, even while you are logged in.
 
 1. In a terminal, run `claude setup-token` and copy the token it prints.
-2. Store it in Timon, either in **Settings → AI models → Providers → Claude → Claude long-lived token**, or with `timon auth claude-token set` (paste the token when asked).
+2. Store it in Timon, either in **Settings → AI models → Providers → Claude**, row **Long-lived token** under **Settings**, then **Set**, or with `timon auth claude-token set` (paste the token when asked).
 3. Run `timon service install`. macOS asks once for an administrator password: the service becomes a launchd **daemon** that starts at boot and keeps running after you log out.
 
 Every Claude mission then uses this token. Without a token nothing changes: the service stays a launchd agent. Removing the token (`timon auth claude-token clear`) and running `timon service install` again brings back the agent.

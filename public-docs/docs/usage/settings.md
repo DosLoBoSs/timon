@@ -80,7 +80,9 @@ access to the Providers screen (see [Several accounts](./multi-user.md#access-to
 
 ### A provider's page
 
-The page of a provider (**Settings → AI models → Providers → _its name_**) has these sections, in this order, each shown only when it applies: **Connection**, **API key**, **Program**, **Settings** (followed by the provider's own settings, such as the Claude long-lived token) and **Models**. Its header says how many agents use it, and holds the switch that turns it on or off.
+The page of a provider (**Settings → AI models → Providers → _its name_**) has these sections, in this order, each shown only when it applies: **Connection**, **API key**, **Program**, **Settings** (the provider's own settings, such as the Claude long-lived token) and **Models**. Its header says how many agents use it, and holds the switch that turns it on or off.
+
+Every section reads the same way: one row per thing to know, its state underneath, one button at the right for what to do next, and the other actions in the row's **…** menu. Fields open in a dialog or under their row only once you ask for them.
 
 Turning a provider off hides it from selectors and refuses new launches that
 explicitly name it. Timon shows the agents, routines and pending tasks that
@@ -89,22 +91,29 @@ silent fallback. The last active provider cannot be turned off. If the usual
 default is turned off, launches with no explicit provider use an active one.
 Existing running missions are not stopped by this setting.
 
-Its **Models** section lists what the provider serves, with a search field and
-a line such as *3 of 12 models appear in the selector*. Add an exact model ID,
-hide or show models with the eye of a row, change their order with the handle,
-select the default model, then **Save**. An exact model ID is sent unchanged; a
-display label does not create an alias. Newly added models appear first and
-carry a **New** badge for seven days. Renaming one does not restart that
-period. For a provider you added yourself, each model also says how it thinks.
+Its **Models** section starts with a line such as *3 of 12 models appear in the
+selector*, with **Hide all** or **Show all** beside it, and a search field. Each
+model is a row with its label, its exact ID and a switch that shows or hides it
+in the selectors, saved at once. A row's **…** menu makes it the default model,
+opens **Edit** (label, picture, context window and, for a provider you added
+yourself, how it thinks) or removes it. The line's **…** menu adds a model by
+its exact ID, or opens **Edit or reorder the list**: the full editor, where the
+handle changes the order, saved with **Save**. An exact model ID is sent
+unchanged; a display label does not create an alias. Newly added models appear
+first and carry a **New** badge for seven days. Renaming one does not restart
+that period.
 
-Its **Settings** section holds the name and picture the selectors show. For
-built-in and plugin providers, connection details remain under their
-provider's control. For a provider you added yourself, **Advanced** holds its
-protocol, address and API key: the key field stays empty, typing one replaces
-the stored key, and **Test** checks the saved address with the stored key
-while you change nothing; **Remove this provider** deletes it. When its file
-holds a credential in clear text, a warning heads the section. The Claude page
-adds the **Claude long-lived token** section (see [macOS](../installation/macos.md#keep-timon-running-when-you-are-logged-out)).
+Its **Settings** section appears for a provider you added yourself: a row with
+its picture, its name and the address it reaches. **Edit** opens the name and
+picture the selectors show and, under **Advanced**, its protocol, address and
+API key: the key field stays empty, typing one replaces the stored key, and
+**Test** checks the saved address with the stored key while you change
+nothing. **Remove this provider**, in the row's **…** menu, deletes it. When
+its file holds a credential in clear text, a warning shows under the row.
+Built-in and plugin providers keep their name, picture and connection under
+their provider's control. On the Claude page, **Settings** holds the
+**Long-lived token** row: **Set** opens a dialog to paste it (see
+[macOS](../installation/macos.md#keep-timon-running-when-you-are-logged-out)).
 
 **Add a provider**, next to the search of the list, opens a page with two ways:
 **From the catalog** installs an agent of the official Agent Client Protocol
@@ -114,7 +123,7 @@ Responses protocol (see [Add a provider](./add-a-provider.md#from-settings)).
 Nothing is read from the registry until you choose the catalog. Either way the
 new provider joins the list and opens on its own page.
 
-Each model row also has a **context window** field. Its placeholder shows the
+A model's **Edit** dialog also has a **context window** field. Its placeholder shows the
 window Timon detected (for example `auto · 400k`). If the context gauge in the
 chat (the ring beside the send button, with the maximum in its centre)
 shows the wrong limit for your plan or gateway, type the right one, such as
@@ -127,13 +136,13 @@ Use the live backend catalogue (`timon backends`) rather than copying model IDs 
 
 Open a provider in **Settings → AI models → Providers**: its **Program** section shows the command-line tool Timon runs for it on this computer (`claude`, `codex`, `grok`, `copilot`…). Only a superadmin, or an account with full access to the Providers screen, signed in to the app sees it. A provider reached over the network has no program, and no such section.
 
-- Its **version**, a status — **Installed**, **Update available**, **Not found on this computer**, **The path you set cannot be run** — and the one path Timon launches. When that path is a link, **About this path** shows the file it points to.
+- A **Version** row: the installed version, and the newer one when there is one (`v2.1.322 · 2.1.325 available`), or what stands in the way — **Not found on this computer**, **The path you set cannot be run**. Its **…** menu opens **Advanced settings**, which shows the one path Timon launches; when that path is a link, **About this path** shows the file it points to.
 - **Install** runs the vendor's official installer when the tool is missing (Claude Code, Codex, Grok, Copilot CLI, Pi, Antigravity; opencode on macOS and Linux); **Update** runs it again when the vendor has published a newer version. The command being run and the installer's own output appear while it works; **Run it yourself** shows the same command to paste into a terminal. Hermes, and opencode on Windows, link to their vendor's installation page instead. Pi's installer needs Node.js 22.19 or newer and npm already installed. Timon supports opencode 1: with opencode 2 installed, it says so and offers neither install nor update, which would replace it.
 - Timon looks for new versions shortly after it starts and then every 12 hours. To stop these checks, turn off the **Check for CLI updates** setting (`TIMON_CLI_UPDATE_CHECK`); `TIMON_CLI_UPDATE_INTERVAL_HOURS` sets the interval, one hour at the least. Turned off, Timon asks the vendors for nothing and still shows the installed version.
-- **Check again** looks for the tool once more, and for a newer version — after you installed one while Timon was running, or after you edited `host.binaries` in `timon.config.json` by hand — without restarting.
+- **Check again**, in the row's **…** menu, looks for the tool once more, and for a newer version — after you installed one while Timon was running, or after you edited `host.binaries` in `timon.config.json` by hand — without restarting.
 - A provider installed from the agents catalog shows the version installed, and **Update to…** when the catalog has a newer one (**Reinstall** when its files changed or are missing).
 
-**Advanced** holds the path you set yourself. If the tool is installed somewhere Timon does not look, type its full path (for example `/opt/homebrew/bin/claude`, `~/.local/bin/claude` or `C:\Users\you\AppData\Roaming\npm\claude.cmd`) and choose **Save path**. In the desktop app, **Browse…** opens a file picker; on macOS it can open an app bundle to reach the binary inside it. While the window is connected to another machine, or in a web browser, **Browse…** lists that machine's folders and files instead, opening on the set binary when there is one. Timon checks that the file exists and can be run, then the next mission uses it: no restart. **Remove pin** goes back to automatic detection. When the path you set no longer runs, **Advanced** opens by itself.
+**Advanced settings** also hold the path you set yourself. If the tool is installed somewhere Timon does not look, type its full path (for example `/opt/homebrew/bin/claude`, `~/.local/bin/claude` or `C:\Users\you\AppData\Roaming\npm\claude.cmd`) and choose **Save path**. In the desktop app, **Browse…** opens a file picker; on macOS it can open an app bundle to reach the binary inside it. While the window is connected to another machine, or in a web browser, **Browse…** lists that machine's folders and files instead, opening on the set binary when there is one. Timon checks that the file exists and can be run, then the next mission uses it: no restart. **Remove pin** goes back to automatic detection. When the path you set no longer runs, **Advanced settings** open by themselves.
 
 For a provider brought by a plugin you installed, the section also shows the plugin and the program's **security authorization**:
 
@@ -152,15 +161,15 @@ Providers that come with Timon are not asked for any authorization.
 
 Choose a provider in **Settings → AI models → Providers** to open its page. Two sections deal with how Timon reaches it, each shown only when it applies:
 
-- **Connection** says whether this computer is signed in to the provider (**Signed in on this computer** or **Not signed in on this computer**). **Connect** types the provider's sign-in command in Timon's terminal, or copies it when no terminal is open; sign in through your browser, then click **Try again**. When the provider takes several subscriptions, its accounts are listed below, with the same gestures as described in [Subscription accounts](#subscription-accounts).
-- **API key** says whether the key the provider expects is in the vault (**Key saved** or **No key yet**) and lets you paste it. The key is reserved to that provider and never shown again: a saved key can only be replaced. **Open Secrets** leads to the vault for anything else, such as sharing the key or deleting it.
+- **Connection** has a **This computer** row saying whether this computer is signed in to the provider (**Signed in on this computer** or **Not signed in**). When it is not but one of your subscription accounts is, the row says missions use your subscription accounts: nothing to fix. **Connect** types the provider's sign-in command in Timon's terminal, or copies it when no terminal is open, then shows the command and its steps under the row; sign in through your browser, then click **Try again**. **Try again** and **Show the sign-in command** are also in the row's **…** menu. When the provider takes several subscriptions, each account is a row below, with the gestures described in [Subscription accounts](#subscription-accounts).
+- **API key** says whether the key the provider expects is in the vault (**Key saved** or **No key**). **Add a key** or **Replace** opens a dialog to paste it. The key is reserved to that provider and never shown again: a saved key can only be replaced. **Open Secrets**, in the row's **…** menu, leads to the vault for anything else, such as sharing the key or deleting it.
 
 ## Subscription accounts
 
 Subscription accounts live in the **Connection** section of each provider's page (**Settings → AI models → Providers**, then the provider), for everyone. An account that is not the superadmin sees that screen at the level its role gives (see [Several accounts](./multi-user.md#access-to-the-providers-screen)): with **Own accounts only**, the list of providers and, on a provider's page, the **Connection** section with its own accounts and nothing else. You can use several subscriptions of the same provider, for example a personal and a work Claude plan, or two ChatGPT plans for Codex. Each account appears in every model selector as its own choice (`Claude · Perso`), next to the provider's plain entry.
 
 - **Add an account** asks for the provider and a name (administrators also choose who it is **For**: themselves, a user, or the instance), then starts the sign-in on the Timon machine while you stay in your browser.
-- A row shows the address the account is signed in as and its state: **Signed in**, **Not signed in**, **Sign in again** or **Out of quota**.
+- A row shows the address the account is signed in as and its state: **Signed in**, **Not signed in**, **Sign in again** or **Out of quota**. Its button signs it in when it needs it; signing in again, **Rename**, **Assign** and **Delete** are in its **…** menu.
 - You sign in your own accounts. An administrator sees and signs in everyone's.
 - A mission never moves to another subscription on its own.
 
