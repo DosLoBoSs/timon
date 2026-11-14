@@ -13,6 +13,11 @@ const DOT: Readonly<Record<StatusTone, string>> = {
   off: 'bg-muted-foreground/50',
 };
 
+/** The pastille alone, for a section's own state line (a token stored, missing, unreadable). */
+export function ToneDot({ tone }: { tone: StatusTone }): ReactElement {
+  return <span aria-hidden data-tone={tone} className={cn('inline-block size-2 shrink-0 rounded-full', DOT[tone])} />;
+}
+
 /** A pastille and its words: every state a provider page shows reads the same way. */
 export function TonePill({ tone, children, className, ...data }: {
   tone: StatusTone;
@@ -22,7 +27,7 @@ export function TonePill({ tone, children, className, ...data }: {
 }): ReactElement {
   return (
     <span className={cn('inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground', className)} data-tone={tone} {...data}>
-      <span aria-hidden className={cn('inline-block size-2 shrink-0 rounded-full', DOT[tone])} />
+      <ToneDot tone={tone} />
       <span className="truncate">{children}</span>
     </span>
   );

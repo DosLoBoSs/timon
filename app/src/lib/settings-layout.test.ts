@@ -119,6 +119,15 @@ test('a user with no setting row nor plugin pane still finds the subscription ac
   assert.ok(tabIds(layout, 'models').includes('accounts'));
 });
 
+test('the superadmin finds the subscription accounts on each provider page, not in a tab', () => {
+  const layout = buildSettingsLayout(input({
+    rows: [],
+    plugins: [{ id: '@timon/backends', origin: 'occupant', label: 'Backends' }],
+    superadmin: true,
+  }));
+  assert.deepEqual(tabIds(layout, 'models'), ['backends', 'fallback']);
+});
+
 test('Plugins disappears when nothing lives there', () => {
   const layout = buildSettingsLayout(input({ rows: ROWS.slice(0, 5) }));
   assert.equal(layout.some((c) => c.id === 'plugins'), false);
