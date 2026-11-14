@@ -8,7 +8,7 @@
  * the provider and the gestures, `ProductProviderRow` the product's occupant,
  * which reads the host's context like any replacement.
  */
-import { useMemo, type ReactElement, type ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { ArrowUpCircle, ChevronRight } from 'lucide-react';
 import { BrandMark } from '@/components/brand-mark';
 import { ProviderStatusPill } from '@/components/provider-page/provider-status-pill';
@@ -25,10 +25,8 @@ export function ProviderRow({ provider, onOpen = null, action = null, mode = 'se
   action?: ReactNode;
   mode?: ProviderRowMode;
 }): ReactElement {
-  const value = useMemo<ProviderRowValue>(
-    () => ({ mode, provider, status: provider.status, open: onOpen, action }),
-    [mode, provider, onOpen, action],
-  );
+  // Not memoized: `action` is an element its host builds on every render, so a memo would never hit.
+  const value: ProviderRowValue = { mode, provider, status: provider.status, open: onOpen, action };
   // An empty slot (a page the bundled halves do not reach) still gets the product's row.
   const claimed = useSlotEntries(PROVIDER_ROW_SLOT).length > 0;
   return (

@@ -245,6 +245,7 @@
     "rows": {
       "searching": "Looking…",
       "installAndSignIn": "Install and sign in",
+      "installedNotFound": "Installed, but Timon cannot find the program: restart Timon, or set its path on the provider's page.",
       "signInOutcome": {
         "terminal": "Typed in Timon's terminal: press Enter there and finish in your browser. Timon checks again when you come back.",
         "copied": "Command copied: paste it into a terminal on this machine, press Enter and finish in your browser. Timon checks again when you come back.",
