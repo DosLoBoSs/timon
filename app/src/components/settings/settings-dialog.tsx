@@ -5,7 +5,7 @@
  * `?settings=<category>[/<tab>]` parameter (see `settings-navigation.ts`);
  * the filing of rows, grafts and plugin panes lives in `settings-layout.ts`.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MutableRefObject, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement, type RefObject } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Brain, ChevronLeft, Cpu, Gauge, Globe, KeyRound, LayoutPanelLeft, Puzzle, Rocket, ScrollText, Wrench, type LucideIcon,
@@ -109,7 +109,7 @@ export function SettingsDialog(): ReactElement | null {
   );
 }
 
-function SettingsPanel({ onClose, unsavedRef }: { onClose: () => void; unsavedRef: MutableRefObject<boolean> }): ReactElement {
+function SettingsPanel({ onClose, unsavedRef }: { onClose: () => void; unsavedRef: RefObject<boolean> }): ReactElement {
   const searchParams = useSearchParams();
   const target = parseSettingsParam(searchParams.get(SETTINGS_PARAM)) ?? { category: 'interface', tab: null };
   const { select: navigate, selectAccount } = useSettingsNavigation();
