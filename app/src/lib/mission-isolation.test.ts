@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import { setLocale } from './i18n';
 import './i18n-test-locales';
 import {
-  draftsProblem, exceptionsSummary, fromDrafts, isolationSummary, isolationTone, toDrafts,
+  draftsProblem, exceptionsSummary, fromDrafts, isFenceRefusal, isolationSummary, isolationTone, toDrafts,
   type MissionIsolationStatus,
 } from './mission-isolation';
 
@@ -83,4 +83,11 @@ test('a name the fence would ignore, or the same one twice, is refused before sa
     { kind: 'agent', name: 'site', unixSockets: false, writable: '' },
     { kind: 'project', name: 'site', unixSockets: false, writable: '' },
   ]), null);
+});
+
+test('a launch refused by the fence is recognised by its code, nothing else', () => {
+  assert.equal(isFenceRefusal({ error: 'Mission refused: …', code: 'mission_fence_refused' }), true);
+  assert.equal(isFenceRefusal({ error: 'Mission refused: host.isolation.filesystem is "enforce"' }), false);
+  assert.equal(isFenceRefusal({ error: 'backend claude is out of quota', code: 'backend_exhausted' }), false);
+  assert.equal(isFenceRefusal(null), false);
 });

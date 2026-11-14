@@ -8,6 +8,7 @@
  * The daemon's `reason` and `gaps` arrive in English, like `timon doctor`;
  * the card frames them with translated text.
  */
+import { parseApiError } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import type { SettingsTarget } from '@/lib/settings-layout';
 
@@ -149,4 +150,13 @@ export function draftsProblem(drafts: readonly ExceptionDraft[]): string | null 
     seen.add(key);
   }
   return null;
+}
+
+/**
+ * The daemon refused a launch because `enforce` is set and this machine
+ * cannot fence it. Nothing the chat retries will do better: it says why, in
+ * the reader's language (`apiErrors.mission_fence_refused`).
+ */
+export function isFenceRefusal(body: unknown): boolean {
+  return parseApiError(body)?.code === 'mission_fence_refused';
 }
