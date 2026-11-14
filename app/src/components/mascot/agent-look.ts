@@ -15,11 +15,10 @@ export const SHAPES = ['squircle', 'tri', 'gem', 'round', 'bean', 'cloud', 'hex'
 export type MascotShape = typeof SHAPES[number];
 
 /**
- * The natural pelts, drawn as is in 2D (`furOf`). The
- * drawing takes any `#rrggbb` — a natural pelt as is, any other colour blended
- * into a meerkat brown so the head stays a plush. A look carries a colour of
- * `LOOK_COLORS` (the named furs, in the daemon's order: `orchestrator/src/agent-look.ts`)
- * or any other `#rrggbb` mixed with the configurator's colour picker.
+ * The natural pelts. The drawing takes any `#rrggbb` and paints it as is, in
+ * 2D (`furOf`) as in 3D. A look carries a colour of `LOOK_COLORS` (the named
+ * furs, in the daemon's order: `orchestrator/src/agent-look.ts`) or any other
+ * `#rrggbb` mixed with the configurator's colour picker.
  */
 export const NATURAL_FURS = ['#d4a373', '#b8743d', '#e6c9a2', '#8a5a3b', '#c98e5a', '#a8826a', '#d9b48a', '#7a4f35', '#e0b07a'] as const;
 /**

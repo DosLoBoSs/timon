@@ -1,13 +1,16 @@
 /**
- * The job accessories: a hand tool held at the bottom right of the head (the
- * teacher also wears a mortarboard). Each tool is drawn around its own
- * origin, then placed and tilted.
+ * The job accessories: one drawing per job (the teacher also wears a
+ * mortarboard). Each tool is drawn around its own origin, then placed on the
+ * head where the 3D character carries it (`three/place.ts`): held at its side,
+ * tucked above the ear, perched on or worn over the head, before the eye, or
+ * standing at its foot.
  */
 
 import { createElement, type ReactElement, type ReactNode } from 'react';
 import type { MascotAccessory } from './agent-look';
 import { readMascotSvg, type MascotPartId, type MascotSvgNode } from '@/lib/mascot/parts-contract';
 import { mascotPartOf } from './mascot-parts';
+import type { HeadLayout } from './mascot-geometry';
 
 /** Built on demand: a table of elements would be created at import, mascot or not. */
 type Tool = { deg: number; body: () => ReactNode };
@@ -236,6 +239,52 @@ const TOOLS: Readonly<Record<Exclude<MascotAccessory, 'none'>, Tool>> = {
   </>) },
 };
 
+/**
+ * Where a tool sits on the head, after its 3D placement: `hand` held at the
+ * side, `ear` tucked above the ear, `top` perched on the head, `hat` worn on
+ * it, `eye` held before the right eye, `ground` standing at the foot. A
+ * pack's tool is held.
+ */
+export type AccessoryAnchor = 'hand' | 'ear' | 'top' | 'hat' | 'eye' | 'ground';
+const ANCHORS: Readonly<Partial<Record<MascotAccessory, AccessoryAnchor>>> = {
+  loupe: 'eye', pen: 'ear', quill: 'ear', baton: 'ear', brush: 'ear',
+  telescope: 'top', idea: 'top',
+  wizard: 'hat', chef: 'hat', crown: 'hat',
+  hourglass: 'ground', globe: 'ground', megaphone: 'ground', coffee: 'ground', rocket: 'ground',
+  chemist: 'ground', gardener: 'ground', musician: 'ground',
+};
+export const accessoryAnchor = (acc: string): AccessoryAnchor => (ANCHORS as Readonly<Record<string, AccessoryAnchor>>)[acc] ?? 'hand';
+
+/** A tool's drawings reach about this far from their origin: what keeps a fitted tool inside the box. */
+const REACH = 16;
+
+/**
+ * Where a tool is drawn on a head: its origin and its scale. Big by default,
+ * a held or standing tool spilling past the box's right edge (the svg
+ * overflows); `fit` keeps it inside the 100×100 box, for a bitmap or a cell
+ * that clips.
+ */
+export function accessoryPlace(acc: string, L: HeadLayout, fit: boolean): { x: number; y: number; s: number } {
+  const h = L.bottom - L.top;
+  let x: number;
+  let y: number;
+  let s: number;
+  switch (accessoryAnchor(acc)) {
+    case 'eye': x = L.geo.c2 + 2; y = L.geo.cy + 1; s = 0.95; break;
+    case 'ear': x = L.ears.R[0] + 3; y = Math.min(L.ears.R[1], L.earsTop) - 8; s = 1; break;
+    case 'top': x = 58; y = L.top - 8; s = 1.05; break;
+    // The hats are drawn about 26 units wide: sized to the top of the skull, their brim on it.
+    case 'hat': s = Math.max(0.9, (L.topWidth * 0.7) / 26); x = 50; y = L.top + 2 - 9 * s; break;
+    case 'ground': s = 1.25; x = 50 + L.bottomWidth / 2 + 7; y = L.bottom - 13 * s; break;
+    default: s = 1.25; x = 50 + L.belly + 5; y = L.bottom - h * 0.32; break;
+  }
+  if (!fit) return { x, y, s };
+  const sf = s * 0.82;
+  const r = REACH * sf;
+  const clamp = (v: number): number => Math.min(100 - r, Math.max(r, v));
+  return { x: clamp(x), y: clamp(y), s: sf };
+}
+
 /** The mortarboard, sized from the top of the skull. */
 function Mortarboard({ top }: { top: number }): ReactElement {
   const y = Math.max(top, 12.5);
@@ -288,20 +337,19 @@ function packTool(acc: string): { deg: number; body: () => ReactNode } | null {
 }
 
 /**
- * The accessory of a look, in front of the head. Big by default, spilling
- * past the bottom-right corner (the svg overflows); `fit` keeps it inside the
- * 100×100 box, for a bitmap or a cell that clips. A pack's tool is drawn the
- * same way; one whose pack is gone draws nothing.
+ * The accessory of a look, on the head (`accessoryPlace`). A pack's tool is
+ * drawn the same way; one whose pack is gone draws nothing.
  */
-export function MascotAccessoryArt({ acc, top, fit }: { acc: MascotAccessory | MascotPartId; top: number; fit: boolean }): ReactElement | null {
+export function MascotAccessoryArt({ acc, layout, fit }: { acc: MascotAccessory | MascotPartId; layout: HeadLayout; fit: boolean }): ReactElement | null {
   if (acc === 'none') return null;
   const tool = (TOOLS as Readonly<Record<string, Tool>>)[acc] ?? packTool(acc);
   if (!tool) return null;
-  const place = fit ? `translate(78 78) rotate(${tool.deg}) scale(1.3)` : `translate(85 85) rotate(${tool.deg}) scale(1.75)`;
+  const at = accessoryPlace(acc, layout, fit);
+  const f = (v: number): string => v.toFixed(2);
   return (
     <>
-      {acc === 'teacher' && <Mortarboard top={top} />}
-      <g transform={place}>{tool.body()}</g>
+      {acc === 'teacher' && <Mortarboard top={layout.top} />}
+      <g transform={`translate(${f(at.x)} ${f(at.y)}) rotate(${tool.deg}) scale(${f(at.s)})`}>{tool.body()}</g>
     </>
   );
 }

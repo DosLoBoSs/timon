@@ -16,8 +16,11 @@ import { ACC, EYES, SHAPES, type AgentLook, type MascotColor } from '../mascot/a
 
 export type Rng = () => number;
 
-/** A head's extent in its 100×100 box (`skullSize`). */
-export type HeadSize = { tw: number; bw: number; h: number };
+/**
+ * A head's extent in its 100×100 box (`skullSize`): top and bottom widths,
+ * height, and the line it stands on (92 when absent).
+ */
+export type HeadSize = { tw: number; bw: number; h: number; bottom?: number };
 
 export type BodyState = 'wait' | 'fly' | 'placed' | 'held' | 'fall';
 
@@ -164,7 +167,7 @@ export function buildAvalanche({ width: W, height: H, looks, rng = Math.random, 
     const vb = (head.h / 200) * size;
     const squish = rnd(0.68, 0.9);
     return {
-      look, side, size, va, vb, a: va * squish, b: vb * squish, oy: ((42 - head.h / 2) / 100) * size,
+      look, side, size, va, vb, a: va * squish, b: vb * squish, oy: (((head.bottom ?? 92) - 50 - head.h / 2) / 100) * size,
       // A messy pile: every mascot ends up tilted its own way.
       tilt: clamp(gauss() * 0.42, -0.6, 0.6), z: rng(),
       x: 0, y: 0, vx: 0, vy: 0, state: 'wait', delay: 0, slot: { x: 0, y: 0 }, sup: [], fly: null,
