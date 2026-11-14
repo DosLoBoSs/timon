@@ -564,15 +564,16 @@
     "agents": "{count, plural, =0 {No agent uses it} one {# agent uses it} other {# agents use it}}",
     "connection": {
       "title": "Connection",
-      "description": "How Timon signs in to this provider: the sign-in of this computer, and your subscription accounts when you have several.",
       "signedIn": "Signed in on this computer",
-      "signedOut": "Not signed in on this computer",
+      "signedOut": "Not signed in",
       "connect": "Connect",
       "checkAgain": "Try again",
-      "accounts": {
-        "title": "Subscription accounts",
-        "description": "Several subscriptions of this provider, each one a choice in the model selectors. A mission never moves to another subscription on its own."
-      }
+      "computer": "This computer",
+      "usesAccounts": "Missions use your subscription accounts",
+      "reconnect": "Reconnect",
+      "showCommand": "Show the sign-in command",
+      "hideSteps": "Hide",
+      "accountMore": "More actions for {name}"
     },
     "apiKey": {
       "title": "API key",

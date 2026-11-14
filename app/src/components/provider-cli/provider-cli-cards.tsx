@@ -319,6 +319,6 @@ export function InstallConsole({ job }: { job: InstallJob }): ReactElement {
 }
 
 /** The sign-in hint, plus what to type once the CLI runs when it needs it. */
-function signInLabel(key: string, then: string | null): string {
+export function signInLabel(key: string, then: string | null): string {
   return then ? `${t(key)} ${t('providerClis.signInThen', { command: then })}` : t(key);
 }

@@ -2,10 +2,14 @@
 
 /**
  * The Connection section of a provider page (`settings.provider.section`,
- * key `connection`): whether this computer is signed in to the provider, the
- * button that signs it in (the gesture of the provider cards), and the
- * subscription accounts of THIS provider with every gesture of the former
+ * key `connection`): one row for the sign-in of this computer, then one row
+ * per subscription account of THIS provider, with every gesture of the former
  * "Subscription accounts" tab — add, sign in, rename, assign, delete.
+ *
+ * The sign-in command and its steps show only after "Connect": typed in
+ * Timon's terminal or copied, then unfolded under the row for a terminal of
+ * one's own. A computer that is not signed in while an account is says so
+ * without alarm: missions run on the accounts.
  *
  * Painted only when there is something to say: a sign-in command, a known
  * sign-in state, or backends that take accounts. Accounts are listed in the
@@ -13,18 +17,20 @@
  * no order to set.
  */
 import { useState, type ReactElement } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { ProviderSignIn, runSignInCommand } from '@/components/provider-cli/provider-cli-cards';
-import { ProviderSection } from '@/components/provider-page/provider-section';
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { CommandToRun } from '@/components/command-to-run';
+import { runSignInCommand, signInLabel } from '@/components/provider-cli/provider-cli-cards';
+import type { ProviderCliSignInOutcome } from '@/components/provider-cli/provider-cli-context';
+import { ProviderSection, ProviderSettingRow } from '@/components/provider-page/provider-section';
 import { useProviderPage } from '@/components/provider-page/provider-page-context';
-import { ToneDot } from '@/components/provider-page/provider-status-pill';
+import { TonePill } from '@/components/provider-page/provider-status-pill';
 import { BackendAccountsList } from '@/components/settings/backend-accounts-settings';
 import { fetchProviderClis } from '@/lib/provider-clis';
-import type { ProviderOverview } from '@/lib/provider-overview';
+import type { ProviderOverview, StatusTone } from '@/lib/provider-overview';
 import { t } from '@/lib/i18n';
-import { cn } from '@/lib/utils';
 
 /** Whether the section has anything to show for this provider. */
 export function hasConnection(provider: Pick<ProviderOverview, 'connection'>): boolean {
@@ -32,19 +38,50 @@ export function hasConnection(provider: Pick<ProviderOverview, 'connection'>): b
   return connection.signInCommand !== null || connection.signedIn !== null || connection.acceptsAccounts;
 }
 
+/**
+ * What the computer row says, `null` when the daemon cannot tell. Not signed
+ * in here but an account is: missions run on it, nothing to fix.
+ */
+export function computerState(connection: ProviderOverview['connection']): { tone: StatusTone; key: string } | null {
+  if (connection.signedIn === true) return { tone: 'ready', key: 'providerPage.connection.signedIn' };
+  if (connection.signedIn === null) return null;
+  if (connection.accounts.some((account) => account.connected)) return { tone: 'off', key: 'providerPage.connection.usesAccounts' };
+  return { tone: 'action', key: 'providerPage.connection.signedOut' };
+}
+
 export function ConnectionSection(): ReactElement | null {
   const page = useProviderPage();
-  const [checking, setChecking] = useState(false);
   if (!page || !hasConnection(page.provider)) return null;
   const { provider } = page;
   const { connection } = provider;
+  return (
+    <ProviderSection title={t('providerPage.connection.title')}>
+      {connection.signInCommand !== null || connection.signedIn !== null
+        ? <ComputerRow connection={connection} refresh={page.refresh} />
+        : null}
+      {connection.acceptsAccounts ? (
+        <div className="flex flex-col gap-0.5" data-connection="accounts">
+          <BackendAccountsList backends={provider.backends.map((backend) => backend.id)} onChanged={() => void page.refresh()} />
+        </div>
+      ) : null}
+    </ProviderSection>
+  );
+}
+
+function ComputerRow({ connection, refresh }: { connection: ProviderOverview['connection']; refresh: () => Promise<void> }): ReactElement {
+  const [checking, setChecking] = useState(false);
+  /** Unfolded after "Connect": what happened to the command, and the command itself. */
+  const [steps, setSteps] = useState<ProviderCliSignInOutcome | 'shown' | null>(null);
+  const command = connection.signInCommand;
+  const state = computerState(connection);
+  const usesAccounts = state?.key === 'providerPage.connection.usesAccounts';
 
   // Asking the CLIs again refreshes the daemon's sign-in verdicts; the page then reads them.
   const checkAgain = async (): Promise<void> => {
     setChecking(true);
     try {
       await fetchProviderClis().catch(() => null);
-      await page.refresh();
+      await refresh();
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -52,48 +89,50 @@ export function ConnectionSection(): ReactElement | null {
     }
   };
 
-  const command = connection.signInCommand;
-  const known = connection.signedIn;
+  const connect = async (): Promise<void> => {
+    if (command === null) return;
+    setSteps(await runSignInCommand(command));
+  };
+
+  const offerConnect = command !== null && connection.signedIn !== true;
   return (
-    <ProviderSection
-      title={t('providerPage.connection.title')}
-      description={t('providerPage.connection.description')}
-      actions={command !== null || known !== null ? (
-        <Button type="button" size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" disabled={checking} onClick={() => void checkAgain()}>
-          <RefreshCw className={cn('size-3.5', checking && 'animate-spin')} aria-hidden />
-          {t('providerPage.connection.checkAgain')}
+    <ProviderSettingRow
+      data-connection="computer"
+      data-signed-in={connection.signedIn === null ? undefined : String(connection.signedIn)}
+      title={t('providerPage.connection.computer')}
+      status={state ? <TonePill tone={state.tone} className="flex">{t(state.key)}</TonePill> : null}
+      action={offerConnect ? (
+        <Button type="button" size="sm" variant={usesAccounts ? 'outline' : 'default'} className="h-8 gap-1.5" onClick={() => void connect()}>
+          <LogIn aria-hidden className="size-3.5" />
+          {t('providerPage.connection.connect')}
         </Button>
-      ) : undefined}
+      ) : null}
+      menu={<>
+        <DropdownMenuItem disabled={checking} onSelect={() => void checkAgain()}>{t('providerPage.connection.checkAgain')}</DropdownMenuItem>
+        {command !== null && connection.signedIn === true
+          ? <DropdownMenuItem onSelect={() => void connect()}>{t('providerPage.connection.reconnect')}</DropdownMenuItem>
+          : null}
+        {command !== null && steps === null
+          ? <DropdownMenuItem onSelect={() => setSteps('shown')}>{t('providerPage.connection.showCommand')}</DropdownMenuItem>
+          : null}
+      </>}
     >
-      <div className="space-y-5">
-        {(command !== null || known !== null) && (
-          <div className="space-y-2" data-connection="computer">
-            {known !== null && (
-              <p className="m-0 inline-flex items-center gap-1.5 text-[13px]" data-signed-in={String(known)}>
-                <ToneDot tone={known ? 'ready' : 'action'} />
-                {known ? t('providerPage.connection.signedIn') : t('providerPage.connection.signedOut')}
-              </p>
-            )}
-            {command !== null && known !== true && (
-              <ProviderSignIn
-                command={command}
-                then={connection.signInThen}
-                label={t('providerPage.connection.connect')}
-                onSignIn={() => runSignInCommand(command)}
-              />
-            )}
+      {steps !== null && command !== null ? (
+        <div className="space-y-2 rounded-md bg-background/60 p-3" data-sign-in-steps>
+          {steps !== 'shown'
+            ? <p role="status" className="m-0 text-xs text-muted-foreground">{signInLabel(`providerClis.signInOutcome.${steps}`, connection.signInThen)}</p>
+            : null}
+          <CommandToRun command={command} label={signInLabel('providerClis.signInHint', connection.signInThen)} />
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button type="button" size="sm" variant="outline" className="h-7 text-xs" disabled={checking} onClick={() => void checkAgain()}>
+              {t('providerPage.connection.checkAgain')}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSteps(null)}>
+              {t('providerPage.connection.hideSteps')}
+            </Button>
           </div>
-        )}
-        {connection.acceptsAccounts && (
-          <div className="space-y-2" data-connection="accounts">
-            <div className="space-y-0.5">
-              <h5 className="m-0 text-[13px] font-medium">{t('providerPage.connection.accounts.title')}</h5>
-              <p className="m-0 max-w-[65ch] text-xs leading-relaxed text-muted-foreground">{t('providerPage.connection.accounts.description')}</p>
-            </div>
-            <BackendAccountsList backends={provider.backends.map((backend) => backend.id)} onChanged={() => void page.refresh()} />
-          </div>
-        )}
-      </div>
-    </ProviderSection>
+        </div>
+      ) : null}
+    </ProviderSettingRow>
   );
 }

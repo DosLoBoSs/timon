@@ -126,13 +126,17 @@ test('the Connection section signs this computer in and manages the accounts of 
     await render('settings=models%2Fbackends&provider=claude');
     await until(() => (section()?.textContent ?? '').includes('Perso'), 'the accounts of the provider');
     const text = section()!.textContent ?? '';
-    assert.match(text, /Not signed in on this computer/);
+    assert.match(section()!.querySelector('[data-connection="computer"]')?.textContent ?? '', /This computer\s*Not signed in/);
     assert.ok(!text.includes('Work'), 'an account of another provider is not listed');
+    assert.ok(!text.includes('claude /login'), 'the sign-in command waits for a click');
+    assert.equal(section()!.querySelectorAll('[data-account-row="a1"] button[data-row-menu]').length, 1, 'the account\'s other gestures sit in its menu');
 
     await click(button('Connect')!);
     await until(() => typed.length === 1, 'the sign-in line typed in the terminal');
     assert.deepEqual(typed, ['claude /login']);
+    await until(() => section()?.querySelector('[data-sign-in-steps]') != null, 'the sign-in steps unfolded');
     assert.match(section()!.textContent ?? '', /Typed in Timon's terminal/);
+    assert.match(section()!.querySelector('[data-sign-in-steps] code')?.textContent ?? '', /claude \/login/);
 
     await click(button('Add an account')!);
     await until(() => section()?.querySelector('form') !== null, 'the add form');
@@ -166,4 +170,14 @@ test('the Connection section signs this computer in and manages the accounts of 
       else delete (globalThis as Record<string, unknown>)[key];
     }
   }
+});
+
+test('a computer signed out while an account is signed in says so without alarm', async () => {
+  const { computerState } = await import('./provider-connection-section');
+  const base = { signInCommand: 'claude /login', signInThen: null, acceptsAccounts: true };
+  const connected = { ...account('a1', 'claude', 'Perso'), state: 'active' as const, connected: true, createdAt: 0, ownerUserId: 'owner' };
+  assert.deepEqual(computerState({ ...base, signedIn: false, accounts: [connected] }), { tone: 'off', key: 'providerPage.connection.usesAccounts' });
+  assert.deepEqual(computerState({ ...base, signedIn: false, accounts: [] }), { tone: 'action', key: 'providerPage.connection.signedOut' });
+  assert.deepEqual(computerState({ ...base, signedIn: true, accounts: [] }), { tone: 'ready', key: 'providerPage.connection.signedIn' });
+  assert.equal(computerState({ ...base, signedIn: null, accounts: [connected] }), null);
 });
