@@ -6,10 +6,13 @@ import type { AccountUsageView } from '@/lib/account-usage';
 /** What the catalogue says of the backend: its name, and the command that signs in when it declared one. */
 export type UsageProvider = { label: string; signInCommand?: string; signInThen?: string };
 
-function connectHint(backend: string, provider: UsageProvider | undefined): string {
+function connectHint(backend: string, provider: UsageProvider | undefined, superadmin: boolean): string {
   // A subscription account (`claude@<id>`) is signed in from the settings,
-  // never from the CLI of this machine.
-  if (backend.includes('@')) return t('cockpit.accountUsage.connectAccount', { settingsPath: settingsPath('models', 'accounts') });
+  // never from the CLI of this machine: on its provider's page for the
+  // superadmin, in the accounts tab for anyone else.
+  if (backend.includes('@')) {
+    return t('cockpit.accountUsage.connectAccount', { settingsPath: superadmin ? settingsPath('models', 'backends') : settingsPath('models', 'accounts') });
+  }
   if (provider?.signInCommand && provider.signInThen) {
     return t('cockpit.accountUsage.connectCliThen', { name: provider.label, command: provider.signInCommand, then: provider.signInThen });
   }
@@ -18,12 +21,12 @@ function connectHint(backend: string, provider: UsageProvider | undefined): stri
 }
 
 /** Idle "not signed in" vs a real probe failure. Neutral until it is an error. */
-export function AccountUsageStatus({ view, provider }: { view: AccountUsageView; provider?: UsageProvider }) {
+export function AccountUsageStatus({ view, provider, superadmin = false }: { view: AccountUsageView; provider?: UsageProvider; superadmin?: boolean }) {
   if (view.kind === 'disconnected') {
     return (
       <div role="status" className="px-1 py-0.5 text-center text-muted-foreground">
         <p>{t('cockpit.accountUsage.disconnected')}</p>
-        <p className="mt-0.5">{connectHint(view.backend, provider)}</p>
+        <p className="mt-0.5">{connectHint(view.backend, provider, superadmin)}</p>
       </div>
     );
   }
