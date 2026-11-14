@@ -872,7 +872,7 @@
     "mascotsStyle2d": "2D",
     "mascotsStyle2dHint": "The flat drawing, lighter for older computers.",
     "mascotsStyleNoWebgl": "This browser cannot draw in 3D (WebGL2 is off or missing): mascots are drawn in 2D.",
-    "mascotsStyleShared": "Applies to every mascot. You can change it later in Settings → Appearance.",
+    "mascotsStyleShared": "Applies to every mascot. You can change it later in {settingsPath}.",
     "variants": {
       "coral": {
         "name": "Coral",

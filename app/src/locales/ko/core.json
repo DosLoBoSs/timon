@@ -1106,7 +1106,7 @@
     "mascotsStyle2d": "2D",
     "mascotsStyle2dHint": "평면 그림으로, 오래된 컴퓨터에서도 가볍습니다.",
     "mascotsStyleNoWebgl": "이 브라우저는 3D로 그릴 수 없습니다(WebGL2가 꺼져 있거나 없음). 마스코트는 2D로 그려집니다.",
-    "mascotsStyleShared": "모든 마스코트에 적용됩니다. 나중에 설정 → 모양에서 바꿀 수 있습니다.",
+    "mascotsStyleShared": "모든 마스코트에 적용됩니다. 나중에 {settingsPath}에서 바꿀 수 있습니다.",
     "variants": {
       "coral": {
         "name": "코랄",

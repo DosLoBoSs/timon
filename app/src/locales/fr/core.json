@@ -872,7 +872,7 @@
     "mascotsStyle2d": "2D",
     "mascotsStyle2dHint": "Le dessin à plat, plus léger pour les ordinateurs anciens.",
     "mascotsStyleNoWebgl": "Ce navigateur ne peut pas dessiner en 3D (WebGL2 est désactivé ou absent) : les mascottes sont dessinées en 2D.",
-    "mascotsStyleShared": "S’applique à toutes les mascottes. Vous pourrez le changer plus tard dans Paramètres → Apparence.",
+    "mascotsStyleShared": "S’applique à toutes les mascottes. Vous pourrez le changer plus tard dans {settingsPath}.",
     "variants": {
       "coral": {
         "name": "Corail",

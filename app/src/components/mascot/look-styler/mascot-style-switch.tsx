@@ -18,6 +18,7 @@
 import { useId, type ReactElement } from 'react';
 import { MASCOT_STYLES, mascotStylePref, useMascotStyle, useWebGL2, type MascotStyle, type MascotStylePref } from '@/components/mascot/mascot-style-pref';
 import { t } from '@/lib/i18n';
+import { settingsPath } from '@/lib/settings-path';
 import { cn } from '@/lib/utils';
 
 const LABEL_KEYS: Record<MascotStyle, string> = {
@@ -79,7 +80,7 @@ export function MascotStyleSwitch({ pref = mascotStylePref() }: { pref?: MascotS
         </div>
       </div>
       <p className="px-0.5 text-[11.5px] text-muted-foreground" data-mascot-style-note={webgl2 ? 'shared' : 'no-webgl'}>
-        {t(webgl2 ? 'appearance.mascotsStyleShared' : 'appearance.mascotsStyleNoWebgl')}
+        {webgl2 ? t('appearance.mascotsStyleShared', { settingsPath: settingsPath('interface', 'appearance') }) : t('appearance.mascotsStyleNoWebgl')}
       </p>
     </div>
   );
