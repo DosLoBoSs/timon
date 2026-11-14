@@ -227,6 +227,14 @@ Every agent also gets Timon's own tools without any setup — the Kanban, missio
 
 Permission behaviour depends on the backend's capabilities. Some support interactive tool approval; others receive a sandbox policy fixed when the mission starts. Read the editor's explanation for the selected backend instead of assuming every model can show the same permission dialog.
 
+### A command that runs a project file
+
+When a shell command runs a file from the mission's folder, the permission card shows that file under a warning, so you approve what it contains and not only its name. It covers a script run by its path (`./run_tests.sh`), a script handed to an interpreter (`bash`, `sh`, `python`, `node`…) or to `source`, an npm script (`npm test`, `npm run build`: its line in `package.json`, and the file it runs) and a make target (its rule in the `Makefile`). For each file the card gives its path, its size, its first 40 lines (4 KB at most; a long excerpt starts folded) and the beginning of its SHA-256 fingerprint. Timon only reads the file: it never runs it to find out what it does.
+
+A file outside the mission's folder, a link that leads out of it, or a path only the shell can work out (a variable, `~`, a wildcard) is named on the card with the reason, and not read: check it yourself before you allow.
+
+If the file changes between the moment the card shows it and your **Allow**, the command does not run: the card says so and the agent is asked to request again, with a new card showing the current content. Such a command never offers **Allow for this session** or **Always allow**, and an approval you gave earlier for the same command no longer stands in for the card: what you approved was the command, not the file's content, which can change after your click.
+
 ### Allow for this session, always allow
 
 On a Claude Code mission, a permission card offers two wider answers next to **Allow**:
