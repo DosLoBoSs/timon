@@ -56,7 +56,7 @@ test('Check runs every step, and one that fails never stops the others', async (
     async () => { ran.push('catalogue'); },
   ]);
   assert.deepEqual(ran, ['clis', 'binaries', 'catalogue']);
-  assert.deepEqual(out, { failed: 1 });
+  assert.deepEqual(out, { failed: ['offline'] });
 });
 
 type Server = {

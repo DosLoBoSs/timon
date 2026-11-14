@@ -15,14 +15,14 @@
  * here, in the desktop app; otherwise (another machine, a web browser) the
  * daemon's own file browser (`directory.picker` in file mode, TODO #791).
  */
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
-import { FolderOpen, RefreshCw } from 'lucide-react';
+import { useEffect, useState, type ReactElement } from 'react';
+import { FolderOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reportDirectoryPick, useDirectoryPicker } from '@/components/directory-browser';
 import {
-  binaryState, fetchBinaries, pinBinary, recheckBinaries, unpinBinary, type BackendBinary, type BinaryState,
+  binaryState, fetchBinaries, pinBinary, unpinBinary, type BackendBinary, type BinaryState,
 } from '@/lib/backend-binaries';
 import { desktopBridge } from '@/lib/desktop';
 import { nativePickerReachesDaemon, type DirectoryPick } from '@/lib/directory-pick';
@@ -50,31 +50,12 @@ export function BinariesPanel(): ReactElement | null {
     void fetchBinaries().then(setBinaries, () => setBinaries(null));
   }, []);
 
-  const recheck = useCallback(async () => {
-    setBusy('recheck');
-    try {
-      const out = await recheckBinaries();
-      setBinaries(out.binaries);
-      if (out.configError) toast.error(t(`binariesSettings.errors.${out.configError}`));
-      else toast.success(t('binariesSettings.rechecked'));
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  }, []);
-
   if (binaries === null) return null;
 
   return (
     <section className="mt-8 max-w-3xl space-y-3" aria-labelledby="binaries-title">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 id="binaries-title" className="m-0 text-sm font-semibold">{t('binariesSettings.title')}</h3>
-        <Button size="sm" variant="ghost" className="ml-auto h-7 gap-1.5 px-2 text-xs" disabled={busy !== null} onClick={() => void recheck()}>
-          <RefreshCw className={`h-3.5 w-3.5${busy === 'recheck' ? ' animate-spin' : ''}`} aria-hidden />
-          {t('binariesSettings.recheck')}
-        </Button>
-      </div>
+      {/* Checked again by the providers list's one Check, which remounts this block. */}
+      <h3 id="binaries-title" className="m-0 text-sm font-semibold">{t('binariesSettings.title')}</h3>
       <p className="m-0 text-xs leading-relaxed text-muted-foreground">{t('binariesSettings.description')}</p>
       {binaries.length === 0
         ? <p className="m-0 text-xs text-muted-foreground">{t('binariesSettings.none')}</p>

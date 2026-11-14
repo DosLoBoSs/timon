@@ -68,7 +68,7 @@ export function ProvidersList({ onOpen, onVerified }: {
     setVerifying(true);
     try {
       const { failed } = await verifyProviders();
-      if (failed) toast.error(t('providerList.verify.partial', { count: failed }));
+      if (failed.length) toast.error(t('providerList.verify.partial', { count: failed.length }), { description: failed.join('\n') });
       else toast.success(t('providerList.verify.done'));
     } finally {
       setVerifying(false);

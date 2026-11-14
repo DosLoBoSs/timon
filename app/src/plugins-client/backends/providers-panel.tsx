@@ -10,7 +10,7 @@
  * is allowed or downloaded before a click on a confirmation that names it.
  */
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
-import { AlertTriangle, CheckCircle2, Copy, Download, KeyRound, RefreshCw, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Copy, Download, KeyRound, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -112,12 +112,6 @@ export function ProvidersPanel(): ReactElement | null {
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <h4 className="m-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t('providersSettings.acp.title')}</h4>
-          {registry && (
-            <Button size="sm" variant="ghost" className="h-7 gap-1.5 px-2 text-xs" disabled={busy !== null} onClick={() => void loadRegistry(true)}>
-              <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-              {t('providersSettings.acp.refresh')}
-            </Button>
-          )}
         </div>
         <p className="m-0 text-xs leading-relaxed text-muted-foreground">{t('providersSettings.acp.description')}</p>
         {!registry && !registryError && (

@@ -6,6 +6,7 @@
 import { checkProviderClis } from '@/lib/provider-clis';
 import { recheckBinaries } from '@/lib/backend-binaries';
 import { fetchAcpRegistry } from '@/lib/providers';
+import { t } from '@/lib/i18n';
 import { statusTone, type ProviderOverview } from '@/lib/provider-overview';
 
 export type ProviderGroups = { connected: ProviderOverview[]; others: ProviderOverview[] };
@@ -58,11 +59,23 @@ export type VerifyStep = () => Promise<unknown>;
  * The one "Check" of the screen: the AI programs and their updates, the
  * program paths, the catalogue — the four buttons it replaces, at once. Each
  * step answers on its own: one that fails (the catalogue offline) never keeps
- * the others from landing. Returns how many failed.
+ * the others from landing. Returns why each failed one did.
  */
-export const VERIFY_STEPS: readonly VerifyStep[] = [checkProviderClis, recheckBinaries, () => fetchAcpRegistry(true)];
+export const VERIFY_STEPS: readonly VerifyStep[] = [
+  checkProviderClis,
+  async () => {
+    // Read again even when the config file is unreadable: the paths are, the file's own pins are not.
+    const { configError } = await recheckBinaries();
+    if (configError) throw new Error(t(`binariesSettings.errors.${configError}`));
+  },
+  () => fetchAcpRegistry(true),
+];
 
-export async function verifyProviders(steps: readonly VerifyStep[] = VERIFY_STEPS): Promise<{ failed: number }> {
+export async function verifyProviders(steps: readonly VerifyStep[] = VERIFY_STEPS): Promise<{ failed: string[] }> {
   const results = await Promise.allSettled(steps.map((step) => step()));
-  return { failed: results.filter((result) => result.status === 'rejected').length };
+  return {
+    failed: results.flatMap((result) => (result.status === 'rejected'
+      ? [result.reason instanceof Error ? result.reason.message : String(result.reason)]
+      : [])),
+  };
 }
