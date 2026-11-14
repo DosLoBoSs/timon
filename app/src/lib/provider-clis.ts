@@ -1,10 +1,11 @@
 /**
  * The AI CLIs of the product's providers on the daemon's machine
- * (`/api/host/provider-clis`, TODO #251): what the provider cards of the
- * onboarding's "Your AIs" step and of Settings › AI models › Providers show
- * and do. The daemon decides everything — what is installed, signed in, which
- * installer runs; this module types its answers and reads them.
+ * (`/api/host/provider-clis`, TODO #251): what the onboarding's "Your AIs"
+ * step and its "cannot start" screen show and do. The daemon decides
+ * everything — what is installed, signed in, which installer runs; this module
+ * types its answers and reads them.
  */
+import type { ProviderOverview, ProviderStatus } from '@/lib/provider-overview';
 
 export type ProviderCli = {
   /** The CLI's canonical binary name: what the install route is told. */
@@ -76,6 +77,51 @@ export function providerCliState(cli: Pick<ProviderCli, 'path' | 'signedIn' | 'b
  */
 export function readyForSetupChat(backends: readonly ProviderCli[]): boolean {
   return backends.some((cli) => cli.seedsMainAgent && cli.path !== null && cli.signedIn !== false);
+}
+
+/**
+ * A CLI's one status line, in the words the providers list uses, by the
+ * daemon's own order (`provider-status.ts`): not downloaded, then signed in,
+ * then known to be signed out; a CLI that cannot tell is available.
+ */
+export function providerCliStatus(cli: Pick<ProviderCli, 'path' | 'signedIn'>): ProviderStatus {
+  if (!cli.path) return 'not-installed';
+  if (cli.signedIn === true) return 'connected';
+  return cli.signedIn === false ? 'not-connected' : 'available';
+}
+
+/**
+ * The record the shared provider row (`providers.row`) paints for a CLI of
+ * the onboarding. Built from the list the step already follows live, so its
+ * status moves with an install or a sign-in. Only what a row shows is filled:
+ * no path, no authorization, no token, and no update to offer on a first run.
+ */
+export function onboardingProvider(cli: ProviderCli): ProviderOverview {
+  return {
+    id: cli.name,
+    name: cli.label,
+    brand: cli.brand,
+    icon: null,
+    origin: 'built-in',
+    pluginId: null,
+    plugin: null,
+    catalogAgent: null,
+    enabled: true,
+    isDefault: false,
+    backends: [],
+    modelCount: 0,
+    connection: {
+      signedIn: cli.signedIn,
+      signInCommand: cli.signInCommand,
+      signInThen: cli.signInThen,
+      acceptsAccounts: false,
+      accounts: [],
+    },
+    secret: { required: false, present: false, names: [] },
+    programs: [],
+    status: providerCliStatus(cli),
+    updateAvailable: false,
+  };
 }
 
 const BASE = '/api/ui/backends/provider-clis';

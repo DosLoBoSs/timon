@@ -244,13 +244,7 @@
     },
     "rows": {
       "searching": "Looking…",
-      "connected": "Connected",
-      "state": {
-        "missing": "Not installed",
-        "bundled": "Ships with the desktop app, not signed in",
-        "signIn": "Installed, not signed in",
-        "ready": "Signed in"
-      },
+      "installAndSignIn": "Install and sign in",
       "signInOutcome": {
         "terminal": "Typed in Timon's terminal: press Enter there and finish in your browser. Timon checks again when you come back.",
         "copied": "Command copied: paste it into a terminal on this machine, press Enter and finish in your browser. Timon checks again when you come back.",

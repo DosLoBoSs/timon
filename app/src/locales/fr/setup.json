@@ -244,13 +244,7 @@
     },
     "rows": {
       "searching": "Recherche…",
-      "connected": "Connecté",
-      "state": {
-        "missing": "Non installé",
-        "bundled": "Fourni avec l’app de bureau, non connecté",
-        "signIn": "Installé, non connecté",
-        "ready": "Connecté"
-      },
+      "installAndSignIn": "Installer et se connecter",
       "signInOutcome": {
         "terminal": "Tapée dans le terminal de Timon : appuyez sur Entrée et terminez dans votre navigateur. Timon vérifie de nouveau à votre retour.",
         "copied": "Commande copiée : collez-la dans un terminal de cette machine, appuyez sur Entrée et terminez dans votre navigateur. Timon vérifie de nouveau à votre retour.",
