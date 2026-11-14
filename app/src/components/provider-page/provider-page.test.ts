@@ -183,7 +183,7 @@ test('the page paints its header and a provider plugin\'s section with the provi
 
     await m.render(React.createElement(page.ProviderPage, { requested: 'beta-provider', onBack: () => {} }));
     await m.until(() => document.querySelector('h3')?.textContent === 'Beta', 'the other provider');
-    assert.equal(document.querySelector('[data-acme-section]'), null, 'a plugin section never lands on another provider\'s page');
+    assert.ok(!document.querySelector('[data-acme-section]'), 'a plugin section never lands on another provider\'s page');
   } finally {
     await m.unmount();
   }
@@ -207,7 +207,7 @@ test('an unknown provider says so; a refused read says why, never in the daemon\
   try {
     await m.render(m.React.createElement(m.page.ProviderPage, { requested: 'gone', onBack: () => {} }));
     await m.until(() => /no longer on this computer/.test(document.body.textContent ?? ''), 'the not-found line');
-    assert.equal(document.querySelector('[data-provider-section]'), null);
+    assert.ok(!document.querySelector('[data-provider-section]'));
   } finally {
     await m.unmount();
   }
