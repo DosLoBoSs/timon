@@ -74,7 +74,21 @@ export interface HostFence {
    * rendered faithfully; the caller then decides between `auto` and `enforce`.
    */
   wrap(policy: FencePolicy, cmd: string, args: readonly string[], policyFile: string): { cmd: string; args: string[] };
+  /**
+   * Runs the launcher once more on `policyFile`, with a system command that
+   * prints nothing and exits 0 in place of the CLI. What it reports is the
+   * launcher's own doing: a mission's CLI can print the launcher's words and
+   * exit with its codes, so a launch that looks like a launcher failure is
+   * only believed once this witness fails the same way.
+   */
+  witness(policyFile: string): Promise<HostFenceWitness>;
 }
+
+/** One witness run of the fence launcher (`HostFence.witness`). */
+export type HostFenceWitness =
+  | { readonly ran: true; readonly status: number | null; readonly stderr: string }
+  /** The launcher could not be started, or gave no answer in time. */
+  | { readonly ran: false; readonly reason: string; readonly timedOut: boolean };
 
 export interface Host {
   inspectPort?: (address: string, port: number) => ListenPortState | Promise<ListenPortState>;

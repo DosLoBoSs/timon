@@ -40,9 +40,11 @@
 import { chmodSync, mkdirSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { posix } from 'node:path';
 import type { FencePolicy as IsolationFencePolicy } from './isolation.js';
-import { encodeFencePolicy, fenceStatus, type FencePolicy as LauncherPolicy, type FenceStatus } from './fence.js';
+import {
+  encodeFencePolicy, fenceStatus, runFenceWitness, WITNESS_PAYLOAD, type FencePolicy as LauncherPolicy, type FenceStatus,
+} from './fence.js';
 import { canonicalPaths } from './seatbelt.js';
-import type { HostFence, HostFenceProbe } from './types.js';
+import type { HostFence, HostFenceProbe, HostFenceWitness } from './types.js';
 
 export class LandlockRenderError extends Error {
   constructor(message: string) {
@@ -174,6 +176,8 @@ export type LandlockFenceDeps = {
   status?: () => FenceStatus;
   fs?: LandlockRenderDeps;
   writePolicy?: (file: string, data: Buffer) => void;
+  /** Runs the witness; `runFenceWitness` by default. */
+  runWitness?: (file: string, args: readonly string[]) => Promise<HostFenceWitness>;
 };
 
 /** A launcher status as the host contract reports it. */
@@ -192,6 +196,7 @@ export function createLandlockFence(deps: LandlockFenceDeps = {}): HostFence {
   const status = deps.status ?? (() => fenceStatus());
   const fs = deps.fs ?? LANDLOCK_FS;
   const writePolicy = deps.writePolicy ?? writePolicyFile;
+  const runWitness = deps.runWitness ?? ((file: string, args: readonly string[]) => runFenceWitness(file, args));
   let launcher: string | null = null;
   return {
     mechanism: 'landlock',
@@ -205,6 +210,11 @@ export function createLandlockFence(deps: LandlockFenceDeps = {}): HostFence {
       if (!posix.isAbsolute(policyFile)) throw new LandlockRenderError(`the policy file must be an absolute path: ${policyFile}`);
       writePolicy(policyFile, encodeFencePolicy(renderLandlockPolicy(policy, fs)));
       return { cmd: launcher, args: ['--policy', policyFile, '--', cmd, ...args] };
+    },
+    witness(policyFile) {
+      // The launcher the last probe checked, as for a launch: never one found anew.
+      if (!launcher) return Promise.resolve({ ran: false, reason: 'no checked fence launcher', timedOut: false });
+      return runWitness(launcher, ['--policy', policyFile, '--', WITNESS_PAYLOAD]);
     },
   };
 }

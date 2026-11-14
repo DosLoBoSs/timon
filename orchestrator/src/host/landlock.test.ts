@@ -233,6 +233,22 @@ test('a launcher that stopped being usable is not used by a later wrap', () => {
   assert.throws(() => fence.wrap(fakePolicy(), 'x', [], `${TH}/run/fence/u.policy`), /probe the fence/);
 });
 
+test('the witness runs the checked launcher on the launch\'s policy, with a payload that prints nothing', async () => {
+  const runs: Array<[string, readonly string[]]> = [];
+  let status: FenceStatus = READY;
+  const fence = createLandlockFence({
+    status: () => status, fs: FAKE, writePolicy: () => {},
+    runWitness: async (file, args) => { runs.push([file, args]); return { ran: true, status: 0, stderr: '' }; },
+  });
+  assert.deepEqual(await fence.witness(`${TH}/run/fence/u.policy`), { ran: false, reason: 'no checked fence launcher', timedOut: false });
+  fence.probe();
+  assert.deepEqual(await fence.witness(`${TH}/run/fence/u.policy`), { ran: true, status: 0, stderr: '' });
+  assert.deepEqual(runs, [[READY.binary, ['--policy', `${TH}/run/fence/u.policy`, '--', '/bin/true']]]);
+  status = { state: 'tampered', reason: 'missing', abi: 0 };
+  fence.probe();
+  assert.equal((await fence.witness(`${TH}/run/fence/u.policy`)).ran, false, 'never a launcher the last probe refused');
+});
+
 // ---------------------------------------------------------------------------
 // The real fence, rendered from the daemon's own policy.
 
