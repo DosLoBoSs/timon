@@ -26,9 +26,9 @@ What each answer means on each system:
 | --- | --- | --- | --- |
 | Linux | A systemd user service, without user lingering: it stops when your last session ends. | The same service with user lingering (`loginctl enable-linger`): it starts at boot and survives logout. | [Linux](linux.md) |
 | macOS | A launchd agent: it stops when you log out. | A launchd daemon: it starts at boot and survives logout. macOS asks for an administrator password, and Claude missions need a long-lived Claude token. | [macOS](macos.md#keep-timon-running-when-you-are-logged-out) |
-| Windows | Not available yet: Windows does not ask the question. | The `TimonOrchestrator` scheduled task: it starts at boot and survives sign-out. After a restart, Timon waits for your first sign-in. | [Windows](windows.md) |
+| Windows | The `TimonOrchestrator` scheduled task, started when you sign in: Windows ends it when you sign out. | The same task, started at boot under your account: it survives sign-out. After a restart, Timon waits for your first sign-in. | [Windows](windows.md) |
 
-Switching Linux back to **Only while I'm logged in** turns user lingering off for your whole account, so your other user services also stop when you log out. On macOS, the switch reinstalls the service; from the app, Timon shows the command to run in a terminal (`timon service install`).
+Choosing **Only while I'm logged in** on Linux turns user lingering off for your whole account if it was on, so your other user services also stop when you log out. Setup and Settings say so before you choose. On macOS and Windows, the switch reinstalls the service, and the system asks for permission; from the app, Timon shows the command to run in a terminal (`timon service install`).
 
 An installation made before this question existed keeps the behaviour it had until you choose.
 
@@ -105,7 +105,7 @@ Turning off only the display is fine: it does not stop Timon.
 
 On Linux with **Even when I'm logged out**, Timon starts at boot, before anyone signs in. Otherwise it waits for you to sign in.
 
-On Windows, Timon waits for your **first sign-in** after each restart, including restarts made by Windows Update during the night. After that sign-in you can sign out again and Timon keeps running. To keep a machine working through unattended restarts, enable automatic sign-in on it, or sign in after each restart.
+On Windows with **Even when I'm logged out**, Timon waits for your **first sign-in** after each restart, including restarts made by Windows Update during the night. After that sign-in you can sign out again and Timon keeps running. To keep a machine working through unattended restarts, enable automatic sign-in on it, or sign in after each restart. With **Only while I'm logged in**, Timon starts when you sign in and stops when you sign out.
 
 On macOS with **Even when I'm logged out**, Timon starts at boot, before anyone logs in. If FileVault is turned on, nothing starts until someone unlocks the disk at the login screen. Otherwise Timon waits for you to log in.
 

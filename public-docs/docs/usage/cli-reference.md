@@ -415,8 +415,8 @@ Web app served by the daemon (NEVER an orchestrator restart):
   timon app status [--json]                  module active? app built? child alive?
   timon app restart                          signals the web-app child (or rearms a supervisor that gave up)
 
-Daemon service (systemd user unit on Linux, launchd agent on macOS — a launchd
-                daemon when it keeps running logged out —, scheduled task at boot on Windows):
+Daemon service (systemd user unit on Linux, launchd agent on macOS, logon task on Windows;
+                a launchd daemon or a boot task when it keeps running logged out):
   timon service install [--dry-run] [--allow-temp-home] [--force]
                                              writes the unit/plist and starts it; refuses a TIMON_HOME
                                              under the system temporary folder without the flag, and a
@@ -429,7 +429,8 @@ Daemon service (systemd user unit on Linux, launchd agent on macOS — a launchd
   timon service session-mode [session|always]
                                              shows or sets whether Timon keeps running once you log out: 'session'
                                              stops it with your session, 'always' keeps routines and night tasks
-                                             running (Linux: loginctl linger; macOS: a launchd daemon, reinstalled)
+                                             running (Linux: loginctl linger; macOS: a launchd daemon; Windows: a
+                                             boot task instead of a logon task; both reinstalled)
 
 Bundled modules (writes timon.config.json — effective on next daemon boot):
   timon module list [--json]                 catalog, wanted state, actual state + reason
