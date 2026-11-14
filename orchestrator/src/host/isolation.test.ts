@@ -27,7 +27,7 @@ const { TimonConfigSchema } = await import('../config/schema.js');
 const {
   isolationArgsFor, isolationProperties, resolveIsolation, sandboxSupported,
   setDeclaredCredentialDirsSource, PROTECTED_HOME_DIRS,
-  BACKEND_HOME_DIRS,
+  BACKEND_HOME_DIRS, MISSION_TIMON_ZONES, isRefusedTimonEntry, timonRefusedPaths,
 } = await import('./isolation.js');
 
 const FAKE_HOME = '/home/tester';
@@ -75,12 +75,42 @@ test('a mission cwd living under a masked path is never masked away', () => {
   assert.ok(deny.includes(`${FAKE_HOME}/.ssh`), 'the rest of the list still applies');
 });
 
-test('TIMON_HOME and its ancestors are never masked', () => {
-  const { deny } = resolveIsolation(cfg({ deny: ['~/state'] }), {
-    home: FAKE_HOME,
-    timonHome: `${FAKE_HOME}/state/timon`,
-  });
-  assert.deepEqual(deny.filter((p) => p.startsWith(`${FAKE_HOME}/state`)), []);
+test('TIMON_HOME and its ancestors are never masked, the private files in it always are', () => {
+  const timonHome = `${FAKE_HOME}/state/timon`;
+  const { deny } = resolveIsolation(cfg({ deny: ['~/state'] }), { home: FAKE_HOME, timonHome });
+  assert.ok(!deny.includes(`${FAKE_HOME}/state`) && !deny.includes(timonHome), 'the folders themselves stay visible');
+  // Guard 3 no longer spares what lives inside: every refused entry is masked.
+  for (const name of MISSION_TIMON_ZONES.refused) {
+    assert.ok(deny.includes(`${timonHome}/${name}`), `${name} must be masked`);
+  }
+  assert.deepEqual(
+    deny.filter((p) => p.startsWith(`${FAKE_HOME}/state`)).sort(),
+    MISSION_TIMON_ZONES.refused.map((name) => `${timonHome}/${name}`).sort(),
+    'nothing else under the Timon home is masked by this launcher',
+  );
+});
+
+test('neither the cwd nor allow reopens a private file of the Timon home', () => {
+  const timonHome = `${FAKE_HOME}/.timon`;
+  const { deny, readOnly } = resolveIsolation(
+    cfg({ allow: ['~/.timon', '~/.timon/daemon-token'], readOnly: ['~/.timon/secret-key'] }),
+    { home: FAKE_HOME, timonHome, cwd: `${timonHome}/backups/x` },
+  );
+  for (const name of ['daemon-token', 'secret-key', 'timon.db', 'timon.config.json', 'backups']) {
+    assert.ok(deny.includes(`${timonHome}/${name}`), `${name} must stay masked`);
+  }
+  assert.ok(!readOnly.includes(`${timonHome}/secret-key`), 'a masked path is not also listed read-only');
+});
+
+test('the refused entries of the Timon home include the copies a prefix catches', () => {
+  const paths = timonRefusedPaths('/t', ['timon.config.json.bak-20261025', 'license.state.json.tmp-42', 'skills', 'timon.db-journal']);
+  for (const name of ['daemon-token', 'timon.config.json.bak-20261025', 'license.state.json.tmp-42', 'timon.db-journal']) {
+    assert.ok(paths.includes(join('/t', name)), `${name} must be refused`);
+  }
+  assert.ok(!paths.includes(join('/t', 'skills')));
+  for (const name of [...MISSION_TIMON_ZONES.writable, ...MISSION_TIMON_ZONES.readable]) {
+    assert.equal(isRefusedTimonEntry(name), false, `${name} cannot be both granted and refused`);
+  }
 });
 
 test('allow wins over the built-in list, deny and readOnly extend it', () => {

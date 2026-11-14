@@ -45,7 +45,7 @@
  * what it was, and `docs/SECURITY.md` §9.1 says so out loud.
  */
 import { homedir } from 'node:os';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import type { TimonConfig } from '../config/schema.js';
 import { PROTECTED_HOME_DIRS } from '../backends/credential-home-dirs.js';
 import { BACKEND_HOME_DIRS } from '../backends/builtin-declarations.js';
@@ -98,6 +98,66 @@ export const DEFAULT_DENY_HOME_DIRS: readonly string[] = Object.freeze([
   ...Object.values(BACKEND_HOME_DIRS).flat(),
 ]);
 
+/**
+ * What a mission may reach under `TIMON_HOME` (inventory of the fence
+ * framing, §1). The fence treats the Timon home as an allow-list: it is
+ * invisible to a mission except the folders `resolveFence` grants inside
+ * `writable` and `readable`, so a private file added tomorrow is protected
+ * without anyone remembering to list it.
+ *
+ * `refused` is still spelled out, for three reasons: a launcher that can only
+ * mask (`resolveIsolation`, a systemd unit) needs the names; a grant computed
+ * from a caller or from the configuration must never land on one; and the
+ * tests prove each of them stays out of the projection. The prefixes catch the
+ * copies the daemon and the operator leave next to a file (`timon.db-wal`,
+ * `timon.config.json.bak-…`, `license.state.json.tmp-…`).
+ */
+export const MISSION_TIMON_ZONES = Object.freeze({
+  /** Top-level folders holding one sub-folder per mission, agent, account or
+   *  plugin. Only that sub-folder is granted, never the whole folder. */
+  writable: Object.freeze([
+    'worktrees', 'tmp', 'backend-accounts', 'provider-runs', 'provider-cache', 'codex-runs', 'grok-runs',
+    'workflows', 'workspace',
+  ]),
+  /** Readable on a declared need (identity docs, skills, project memory,
+   *  attachments, the code of a plugin's MCP server), never writable — except
+   *  the mission's own agent memory. */
+  readable: Object.freeze(['agents', 'skills', 'projects', 'uploads', 'plugins']),
+  /** Never granted, read or write: secrets, the database, the configuration
+   *  the daemon executes, sessions and other tenants' state. */
+  refused: Object.freeze([
+    'daemon-token', 'plugin-token-key', 'setup-token', 'update-token', 'remote-key', 'remote.db',
+    'secrets.env', 'secret-key', 'secret-key.next', 'secret-key.location',
+    'license.jwt', 'license.key', 'license.state.json', 'license.enrollment-secret',
+    'device-id', 'install-id', 'cli-daemons.json', 'legacy-account-tables.json',
+    'timon.db', 'timon.db-wal', 'timon.db-shm', 'integrations.db', 'integrations.db-wal', 'integrations.db-shm',
+    'timon.config.json', 'daemon.lock', 'daemon.lock.json',
+    'plugins-data', 'browser-profiles', 'browser-native', 'desktop-profile', 'mcp', 'run', 'backups', 'archive',
+  ]),
+  refusedPrefixes: Object.freeze([
+    'secret-key', 'license.', 'timon.db', 'integrations.db', 'timon.config.json', 'remote.db', 'daemon.lock',
+  ]),
+});
+
+/** `name`, a top-level entry of the Timon home, is one a mission never reaches. */
+export function isRefusedTimonEntry(name: string): boolean {
+  return MISSION_TIMON_ZONES.refused.includes(name)
+    || MISSION_TIMON_ZONES.refusedPrefixes.some((prefix) => name.startsWith(prefix));
+}
+
+/**
+ * The refused entries of `timonHome` as absolute paths: the fixed names, plus
+ * every listed entry a prefix catches. Pure — the caller lists the folder when
+ * it wants the copies (`timon.config.json.bak-…`) included.
+ */
+export function timonRefusedPaths(timonHome: string, entries: readonly string[] = []): string[] {
+  const names = [...MISSION_TIMON_ZONES.refused];
+  for (const entry of entries) {
+    if (!names.includes(entry) && isRefusedTimonEntry(entry)) names.push(entry);
+  }
+  return names.map((name) => join(timonHome, name));
+}
+
 export type IsolationTarget = {
   /** Working directory of the mission. Never masked, ancestors included. */
   cwd?: string | undefined;
@@ -142,8 +202,12 @@ function contains(parent: string, child: string): boolean {
  *  1. never mask the mission's `cwd`, nor any ancestor of it (a worktree under
  *     a masked home folder is exactly that case);
  *  2. never mask the credential directory of the backend actually in use;
- *  3. never mask `TIMON_HOME` nor any ancestor of it.
- * `host.isolation.allow` is applied last and wins over everything.
+ *  3. never mask `TIMON_HOME` nor any ancestor of it — but the private files
+ *     it holds (`MISSION_TIMON_ZONES.refused`) are masked whatever the target
+ *     or the configuration says: sparing the folder must not spare the
+ *     operator token, the vault key or the database inside it.
+ * `host.isolation.allow` is applied last and wins over everything but those
+ * private files.
  */
 export function resolveIsolation(config: TimonConfig, target: IsolationTarget = {}): IsolationPolicy {
   const iso = config.host.isolation;
@@ -190,7 +254,16 @@ export function resolveIsolation(config: TimonConfig, target: IsolationTarget = 
     readOnly.push(path);
   }
 
-  return { deny, readOnly, enabled: true };
+  // Guard 3 spares the Timon home, never what a mission must not read in it.
+  // Added after every spared path on purpose: neither the cwd nor `allow` can
+  // reopen them.
+  if (target.timonHome) {
+    for (const path of timonRefusedPaths(resolve(target.timonHome))) {
+      if (!deny.includes(path)) deny.push(path);
+    }
+  }
+
+  return { deny, readOnly: readOnly.filter((path) => !deny.includes(path)), enabled: true };
 }
 
 /** systemd takes a space-separated path list; a path holding a space must be
