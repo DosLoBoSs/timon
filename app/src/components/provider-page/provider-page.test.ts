@@ -168,7 +168,7 @@ test('the page paints its header and a provider plugin\'s section with the provi
     assert.equal(document.querySelector('[data-acme-section]')?.textContent, 'Acme AI');
     assert.ok(seen.every((id) => id === 'acme-provider'));
     // The common sections are there, in order, and paint nothing yet.
-    const order = [...document.querySelectorAll('[data-provider-section]')].map((el) => el.getAttribute('data-provider-section'));
+    const order = Array.from(document.querySelectorAll('[data-provider-section]')).map((el) => el.getAttribute('data-provider-section'));
     assert.deepEqual(order, ['connection', 'apiKey', 'program', 'settings', 'models', 'acme-provider']);
 
     const crumb = document.querySelector('nav button');
