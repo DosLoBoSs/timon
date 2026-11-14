@@ -38,12 +38,12 @@ function SortableRow({ backend, busy }: { backend: CustomBackend; busy: boolean 
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: backend.id, disabled: busy || !editableBackend(backend) });
   return (
     <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} data-reorder-row={backend.id}
-      className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/60">
+      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-secondary">
       <button type="button" {...attributes} {...listeners} aria-label={t('backendsSettings.reorder')}
-        className="shrink-0 touch-none rounded p-1 text-muted-foreground hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+        className="shrink-0 touch-none rounded p-1 text-muted-foreground hover:bg-background focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
         <GripVertical className="size-4" />
       </button>
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-background">
         <BrandMark icon={backend.icon ?? undefined} brand={backend.brand ?? undefined} className="size-4" />
       </span>
       <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{backend.label}</span>
@@ -112,7 +112,7 @@ export function ProvidersReorder({ onChanged }: { onChanged?: () => void }): Rea
       <p className="m-0 max-w-3xl text-xs leading-relaxed text-muted-foreground">{t('backendsSettings.reorderHint')}</p>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event) => void reorder(event)}>
         <SortableContext items={backends.map((backend) => backend.id)} strategy={verticalListSortingStrategy}>
-          <ul className="m-0 flex list-none flex-col gap-0.5 rounded-xl bg-card p-1 shadow-elev-1" aria-label={t('providerList.reorder.title')}>
+          <ul className="m-0 flex list-none flex-col gap-0.5 rounded-xl bg-muted p-1" aria-label={t('providerList.reorder.title')}>
             {backends.map((backend) => <SortableRow key={backend.id} backend={backend} busy={busy} />)}
           </ul>
         </SortableContext>

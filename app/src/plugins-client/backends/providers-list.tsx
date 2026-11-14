@@ -153,7 +153,7 @@ function ProviderGroup({ id, title, providers, onOpen }: {
       <h4 id={heading} className="m-0 text-xs font-medium text-muted-foreground">
         {title} <span className="tabular-nums">{providers.length}</span>
       </h4>
-      <ul className="m-0 flex list-none flex-col gap-0.5 rounded-xl bg-card p-1 shadow-elev-1">
+      <ul className="m-0 flex list-none flex-col gap-0.5 rounded-xl bg-muted p-1">
         {providers.map((provider) => (
           <li key={provider.id}>
             <ProviderRow provider={provider} onOpen={() => onOpen(provider.id)} />
@@ -209,7 +209,7 @@ function DefaultProvider({ overview, onSaved }: { overview: ProvidersOverview; o
 
   return (
     <section aria-labelledby="providers-default" data-default-provider
-      className="flex flex-col gap-3 rounded-xl bg-card p-4 shadow-elev-1 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
+      className="flex flex-col gap-3 rounded-xl bg-muted px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
       <div className="min-w-0 flex-1 space-y-0.5">
         <h4 id="providers-default" className="m-0 text-sm font-semibold">{t('providerList.default.title')}</h4>
         <p className="m-0 max-w-[60ch] text-xs leading-relaxed text-muted-foreground">

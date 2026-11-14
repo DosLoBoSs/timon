@@ -111,7 +111,7 @@ export function ProviderCatalog({ onOpen }: {
         <p className="m-0 text-[13px] text-muted-foreground">{t('providersSettings.acp.noMatch', { query: query.trim() })}</p>
       )}
       {agents.length > 0 && (
-        <ul className="m-0 flex list-none flex-col gap-0.5 rounded-xl bg-card p-1 shadow-elev-1">
+        <ul className="m-0 flex list-none flex-col gap-0.5 rounded-xl bg-muted p-1">
           {agents.map((agent) => (
             <CatalogRow
               key={agent.id}
@@ -214,7 +214,7 @@ function SignInMethods({ agentName, methods }: { agentName: string; methods: Acp
     <div className="basis-full space-y-2 pt-1">
       <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
         {methods.map((method) => (
-          <li key={method.id} className="space-y-1 rounded-md bg-muted/50 px-2.5 py-2 text-xs">
+          <li key={method.id} className="space-y-1 rounded-md bg-background px-2.5 py-2 text-xs">
             <p className="m-0 flex flex-wrap items-center gap-2">
               <span className="font-medium">{method.name}</span>
               {method.recommended && (

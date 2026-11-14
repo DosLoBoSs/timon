@@ -51,10 +51,10 @@ export function AddProvider({ choice, onChoose, onBack, onAdded }: {
           return (
             <button key={id} type="button" role="radio" aria-checked={selected} data-add-choice={id} onClick={() => onChoose(id)}
               className={cn(
-                'flex items-start gap-3 rounded-xl bg-card p-4 text-left shadow-elev-1 hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary',
+                'flex items-start gap-3 rounded-xl bg-muted p-4 text-left transition-colors hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary',
                 selected && 'ring-2 ring-primary',
               )}>
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted/60">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background">
                 <Icon aria-hidden className="size-4" />
               </span>
               <span className="min-w-0 space-y-0.5">
@@ -110,7 +110,7 @@ function AddEndpoint({ onAdded, onBack }: { onAdded: (providerId: string) => voi
         <h4 id="add-endpoint-title" className="m-0 text-sm font-semibold">{t('providerAdd.choices.endpoint.title')}</h4>
         <p className="m-0 max-w-[70ch] text-xs leading-relaxed text-muted-foreground">{t('providerAdd.endpoint.hint')}</p>
       </div>
-      <div className="rounded-xl bg-card p-4 shadow-elev-1">
+      <div className="rounded-xl bg-muted p-4">
         <EndpointFields form={form} protocols={protocols} patch={draft.patch} />
       </div>
       <div className="flex flex-wrap items-center gap-2">

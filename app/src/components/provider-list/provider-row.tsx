@@ -43,7 +43,7 @@ export function ProductProviderRow(): ReactElement | null {
   const { provider, status, open, action } = row;
   const body = (
     <>
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-background">
         <BrandMark icon={provider.icon ?? undefined} brand={provider.brand ?? undefined} className="size-4" />
       </span>
       <span className="min-w-0 flex-1 space-y-0.5">
@@ -57,7 +57,7 @@ export function ProductProviderRow(): ReactElement | null {
     <div className="flex min-w-0 items-center gap-2" data-provider-row={provider.id}>
       {open ? (
         <button type="button" onClick={open} aria-label={t('providerList.open', { name: provider.name })}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-muted/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
           {body}
           <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         </button>
