@@ -1106,6 +1106,7 @@
     "mascotsStyle2d": "2D",
     "mascotsStyle2dHint": "平面のイラスト。古いパソコンでも軽く動きます。",
     "mascotsStyleNoWebgl": "このブラウザーは 3D で描画できません（WebGL2 がオフか未対応）。マスコットは 2D で表示されます。",
+    "mascotsStyleShared": "すべてのマスコットに適用されます。あとから「設定 → 外観」で変更できます。",
     "variants": {
       "coral": {
         "name": "コーラル",
