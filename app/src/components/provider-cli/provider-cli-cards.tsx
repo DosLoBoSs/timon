@@ -272,7 +272,7 @@ function SignIn({ cli, bundled, disabled }: { cli: ProviderCli; bundled: boolean
 }
 
 /** The installer's own lines while it runs, newest at the bottom and kept in view. */
-function InstallConsole({ job }: { job: InstallJob }): ReactElement {
+export function InstallConsole({ job }: { job: InstallJob }): ReactElement {
   const pane = useRef<HTMLPreElement>(null);
   useEffect(() => {
     const node = pane.current;

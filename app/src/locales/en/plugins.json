@@ -568,7 +568,63 @@
     "agents": "{count, plural, =0 {No agent uses it} one {# agent uses it} other {# agents use it}}",
     "program": {
       "title": "Program",
-      "waiting": "The program this provider runs waits for your authorization: Timon launches nothing before you allow it."
+      "description": "What Timon runs on this computer for this provider.",
+      "recheck": "Check again",
+      "rechecked": "Program checked again.",
+      "plugin": "Brought by the plugin {name}, version {version}.",
+      "version": "Version {version}",
+      "path": "Runs",
+      "pathDetails": "About this path",
+      "link": "This path is a link. The file it points to: {target}",
+      "pinned": "This path is the one set under Advanced.",
+      "install": "Install",
+      "installing": "Installing…",
+      "update": "Update",
+      "updating": "Updating…",
+      "state": {
+        "installed": "Installed",
+        "missing": "Not found on this computer",
+        "brokenPin": "The path you set cannot be run",
+        "update": "Update available",
+        "updateTo": "Update available: {latest}",
+        "unsupported": "Version {version} is not supported"
+      },
+      "advanced": "Advanced",
+      "pin": {
+        "title": "Set the path",
+        "description": "If the program is somewhere Timon does not look, give its full path. It applies to the next mission, without restarting Timon."
+      },
+      "authorization": {
+        "title": "Security authorization",
+        "review": "Review and authorize",
+        "ready": {
+          "label": "Authorized",
+          "body": "This plugin may run this program, at this exact path. If the program moves or is replaced, Timon asks you again."
+        },
+        "authorize": {
+          "label": "To authorize",
+          "body": "This plugin waits for your agreement to run this program: it is new, was moved or was updated. Timon does not run it until you allow it."
+        },
+        "install": {
+          "label": "Install it first",
+          "body": "The program is not on this computer yet. Once it is installed, you will be asked to authorize it before its first run."
+        },
+        "refused": {
+          "label": "Blocked: this program cannot be run by a plugin",
+          "body": "For your safety, no plugin may run a shell, a script interpreter, a generic launcher or a program Timon manages itself. No authorization can unblock it: only the plugin's publisher can change what it runs.",
+          "detail": "Reason given by Timon: {reason}"
+        }
+      },
+      "catalog": {
+        "installed": "Installed from the catalog, version {version}",
+        "updateTo": "Update to {version}",
+        "repair": "Reinstall",
+        "updated": "{name} is up to date.",
+        "state": {
+          "tampered": "Its files changed: not used",
+          "missing": "Its files are missing"
+        }
+      }
     },
     "notFound": "This provider is no longer on this computer.",
     "errors": {
