@@ -1,0 +1,60 @@
+{
+  "name": "@timon-ai/plugin-provider-section",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": { "./client": "./lib/client.js" },
+  "files": ["lib", "README.md", "SIGNATURE"],
+  "timon": {
+    "id": "example-provider-section",
+    "apiVersion": 16,
+    "kind": "provider",
+    "label": "Acme Gateway",
+    "description": "A provider pack whose page in Settings gets a section of its own: the gateway's address, its models, and a link to its console.",
+    "author": "Timon",
+    "permissions": [
+      "backends:register"
+    ],
+    "settings": [
+      {
+        "key": "apiKey",
+        "type": "secret",
+        "label": "Acme Gateway API key"
+      }
+    ],
+    "backends": [
+      {
+        "id": "acme-gateway",
+        "dialect": "codex",
+        "label": "Acme Gateway",
+        "vendor": "Acme",
+        "env": {
+          "BACKEND_ACME_GATEWAY_API_KEY": {
+            "setting": "apiKey"
+          }
+        },
+        "providerConfig": {
+          "id": "acme-gateway",
+          "name": "Acme Gateway",
+          "baseUrl": "https://gateway.example.com/v1",
+          "envKey": "BACKEND_ACME_GATEWAY_API_KEY",
+          "wireApi": "responses"
+        },
+        "defaultModel": "acme-large",
+        "models": [
+          { "slug": "acme-large", "label": "Acme Large" },
+          { "slug": "acme-small", "label": "Acme Small" }
+        ]
+      }
+    ],
+    "client": {
+      "slots": ["settings.provider.section"],
+      "external": ["react", "@timon/ui"],
+      "mode": "esm"
+    },
+    "license": {
+      "required": false
+    }
+  }
+}

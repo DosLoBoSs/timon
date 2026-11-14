@@ -411,8 +411,6 @@
     }
   },
   "providersSettings": {
-    "title": "Providers",
-    "description": "Provider plugins bring an AI service to Timon. Each program a provider launches is authorized here, by its resolved path, before it can run.",
     "cancel": "Cancel",
     "consent": {
       "prompts": "Receives every instruction and every answer of the missions it serves.",
@@ -427,37 +425,22 @@
       "allowHint": "Without this, the provider is installed but stays inactive until you authorize it in {settingsPath}."
     },
     "plugins": {
-      "title": "Provider plugins",
-      "none": "No provider plugin is installed.",
-      "backends": "Backends: {list}",
       "notFound": "not installed on this machine",
-      "authorize": "Review and authorize",
       "authorizeTitle": "Authorize {name}",
       "authorizeBody": "Timon resolved these programs on this machine. Allow only the paths you recognize.",
       "authorizeConfirm": "Allow these programs",
       "authorized": "{name} is authorized.",
-      "state": {
-        "active": "Active",
-        "failed": "Needs attention",
-        "disabled": "Off",
-        "skipped": "Refused"
-      },
       "binary": {
         "authorize": "to authorize",
         "ready": "authorized",
-        "install": "install it first",
-        "refused": "never allowed"
+        "install": "install it first"
       }
     },
     "acp": {
-      "title": "ACP registry",
-      "description": "Agents published in the official Agent Client Protocol registry. Timon downloads the program, checks it, and runs it as a backend.",
-      "browse": "Browse the registry",
+      "title": "Catalog",
+      "description": "Agents published in the official Agent Client Protocol registry. Timon downloads the program, checks it, and runs it as a provider.",
       "refresh": "Refresh",
       "stale": "The registry could not be reached; this is the last list Timon read.",
-      "verified": "Verified sha256",
-      "noHash": "No published hash",
-      "unsupported": "Not available here: {reason}",
       "install": "Install",
       "update": "Update",
       "repair": "Reinstall",
@@ -466,18 +449,10 @@
       "installed": "{name} is installed.",
       "updated": "{name} is up to date.",
       "removed": "{name} was removed.",
-      "state": {
-        "ok": "Installed {version}",
-        "tampered": "Files changed — not used",
-        "missing": "Files missing",
-        "pending": "Checking {version}…"
-      },
       "confirmTitle": "Install {name} without a published hash?",
       "confirmBody": "The registry gives no checksum for this program. Its integrity rests on the https download alone. Install only if you trust its publisher.",
       "confirmAction": "Install anyway",
       "verify": "Install verified version",
-      "unverified": "Unverified",
-      "verifiedUpdate": "{installed} was installed without a published hash. The registry now publishes a sha256 for {version}: install it to replace the unverified build.",
       "signIn": {
         "show": "Sign-in methods",
         "hide": "Hide sign-in methods",
@@ -491,6 +466,25 @@
         "agentStep": "{name} runs this step itself when an ACP client asks for it, and Timon does not start it. Complete it once from a client that offers it, or use the provider of its own CLI if Timon has one.",
         "copy": "Copy",
         "copied": "Command copied."
+      },
+      "search": "Search the catalog",
+      "noMatch": "No agent matches “{query}”.",
+      "empty": "The registry lists no agent.",
+      "open": "Open its page",
+      "line": {
+        "available": "Version {version}, checksum verified",
+        "availableUnverified": "Version {version}, no published checksum",
+        "unsupported": "Not available on this computer: {reason}",
+        "installed": "Installed {installed}, checksum verified",
+        "unverified": "Installed {installed}, no published checksum",
+        "installedUpdate": "Installed {installed} · verified {version} available",
+        "installedUpdateUnverified": "Installed {installed} · {version} available, without a published checksum",
+        "unverifiedUpdate": "Installed {installed} without a published checksum · verified {version} available",
+        "unverifiedUpdateUnverified": "Installed {installed} without a published checksum · {version} available, without one either",
+        "unverifiedVerifiedUpdate": "Installed {installed} without a published checksum · verified {version} available to replace it",
+        "tampered": "Installed {installed}: its files changed, so Timon does not use it",
+        "missing": "Installed {installed}: its files are missing",
+        "pending": "Checking {installed}…"
       }
     },
     "errors": {
@@ -516,15 +510,7 @@
     }
   },
   "binariesSettings": {
-    "title": "CLI binaries",
-    "description": "Where Timon found the command-line tool of each AI provider on this machine. If one is missing or in an unusual place, pin its full path: it applies to the next mission, without restarting Timon.",
-    "recheck": "Check again",
-    "rechecked": "Binaries checked again.",
-    "none": "No local provider uses a command-line tool.",
-    "backends": "Used by: {list}",
-    "resolved": "Runs {path}",
     "brokenPin": "The pinned path cannot be run: {path}",
-    "notFound": "Not found on this machine. Install it, or pin its path below.",
     "pathLabel": "Path to the {name} binary",
     "placeholder": "Full path, for example /usr/local/bin/claude or C:\\Users\\you\\AppData\\Roaming\\npm\\claude.cmd",
     "browse": "Browse…",
@@ -532,12 +518,6 @@
     "clear": "Remove pin",
     "saved": "{name}: path saved. New missions use it.",
     "cleared": "{name}: pin removed. Timon looks for it on its own again.",
-    "state": {
-      "found": "Found",
-      "pinned": "Pinned",
-      "brokenPin": "Pinned path broken",
-      "missing": "Not found"
-    },
     "errors": {
       "forbidden": "Only a superadmin signed in to the app can change these paths.",
       "unknown_binary": "This is not the command-line tool of a local provider.",
@@ -550,6 +530,207 @@
       "invalid_body": "This path cannot be saved.",
       "browse": "The file picker could not open.",
       "generic": "The change failed (error {status})."
+    }
+  },
+  "providerStatus": {
+    "connected": "Account connected",
+    "available": "Available on this computer",
+    "not-connected": "Not connected",
+    "not-installed": "Not downloaded",
+    "needs-authorization": "Waiting for your authorization",
+    "blocked": "Blocked",
+    "disabled": "Turned off"
+  },
+  "providerPage": {
+    "models": {
+      "title": "Models",
+      "search": "Search models",
+      "count": "{shown} of {total, plural, one {# model appears} other {# models appear}} in the selector",
+      "saved": "Models saved.",
+      "hideAll": "Hide all",
+      "showAll": "Show all",
+      "more": "More actions on the models",
+      "editList": "Edit or reorder the list",
+      "empty": "No model yet. Add the ones this provider serves.",
+      "default": "Default",
+      "setDefault": "Make it the default",
+      "edit": "Edit",
+      "editTitle": "Edit {name}",
+      "modelMore": "More actions for {name}"
+    },
+    "settings": {
+      "title": "Settings",
+      "name": "Name in the selectors",
+      "advanced": "Advanced",
+      "advancedHint": "Where this provider is reached and with which key. Change them only if the provider moved or its key changed.",
+      "remove": "Remove this provider",
+      "saved": "Settings saved.",
+      "edit": "Edit",
+      "editTitle": "Edit {name}",
+      "reaches": "Reaches {host}",
+      "shownAs": "Name and picture in the model selectors"
+    },
+    "breadcrumb": "Where you are",
+    "root": "Providers",
+    "default": "Default provider",
+    "agents": "{count, plural, =0 {No agent uses it} one {# agent uses it} other {# agents use it}}",
+    "connection": {
+      "title": "Connection",
+      "signedIn": "Signed in on this computer",
+      "signedOut": "Not signed in",
+      "connect": "Connect",
+      "checkAgain": "Try again",
+      "computer": "This computer",
+      "usesAccounts": "Missions use your subscription accounts",
+      "reconnect": "Reconnect",
+      "showCommand": "Show the sign-in command",
+      "hideSteps": "Hide",
+      "accountMore": "More actions for {name}"
+    },
+    "apiKey": {
+      "title": "API key",
+      "description": "Kept in Timon's vault and reserved to this provider. Timon never shows it back: you can only replace it.",
+      "present": "Key saved",
+      "absent": "No key",
+      "environment": "This provider reads its key from an environment variable of the computer Timon runs on.",
+      "placeholder": "Paste the key",
+      "replacePlaceholder": "Paste a new key to replace the saved one",
+      "save": "Save",
+      "replace": "Replace",
+      "saved": "{name} saved in the vault",
+      "openSecrets": "Open Secrets",
+      "errorGeneric": "The key could not be saved. Try again.",
+      "add": "Add a key",
+      "addTitle": "Add the API key",
+      "replaceTitle": "Replace the API key",
+      "entry": "Kept in the vault as {name}"
+    },
+    "program": {
+      "title": "Program",
+      "recheck": "Check again",
+      "rechecked": "Program checked again.",
+      "plugin": "Brought by the plugin {name}, version {version}.",
+      "path": "Runs",
+      "pathDetails": "About this path",
+      "link": "This path is a link. The file it points to: {target}",
+      "pinned": "This path is the one set under Advanced.",
+      "install": "Install",
+      "installing": "Installing…",
+      "update": "Update",
+      "updating": "Updating…",
+      "state": {
+        "installed": "Installed",
+        "missing": "Not found on this computer",
+        "brokenPin": "The path you set cannot be run",
+        "update": "Update available",
+        "updateTo": "Update available: {latest}",
+        "unsupported": "Version {version} is not supported"
+      },
+      "pin": {
+        "title": "Set the path",
+        "description": "If the program is somewhere Timon does not look, give its full path. It applies to the next mission, without restarting Timon."
+      },
+      "authorization": {
+        "title": "Security authorization",
+        "review": "Review and authorize",
+        "ready": {
+          "label": "Authorized",
+          "body": "This plugin may run this program, at this exact path. If the program moves or is replaced, Timon asks you again."
+        },
+        "authorize": {
+          "label": "To authorize",
+          "body": "This plugin waits for your agreement to run this program: it is new, was moved or was updated. Timon does not run it until you allow it."
+        },
+        "install": {
+          "label": "Install it first",
+          "body": "The program is not on this computer yet. Once it is installed, you will be asked to authorize it before its first run."
+        },
+        "refused": {
+          "label": "Blocked: this program cannot be run by a plugin",
+          "body": "For your safety, no plugin may run a shell, a script interpreter, a generic launcher or a program Timon manages itself. No authorization can unblock it: only the plugin's publisher can change what it runs.",
+          "detail": "Reason given by Timon: {reason}"
+        }
+      },
+      "catalog": {
+        "installed": "Installed from the catalog, version {version}",
+        "updateTo": "Update to {version}",
+        "repair": "Reinstall",
+        "updated": "{name} is up to date.",
+        "state": {
+          "tampered": "Its files changed: not used",
+          "missing": "Its files are missing"
+        }
+      },
+      "versionTitle": "Version",
+      "versionLine": "v{version}",
+      "versionUpdate": "v{version} · {latest} available",
+      "showAdvanced": "Advanced settings",
+      "hideAdvanced": "Hide advanced settings"
+    },
+    "notFound": "This provider is no longer on this computer.",
+    "errors": {
+      "forbidden": "Only an administrator can see the providers.",
+      "generic": "The providers could not be read (error {status})."
+    },
+    "activation": {
+      "on": "On",
+      "off": "Off",
+      "readOnly": "This provider's file cannot be changed from here: fix it in its folder first.",
+      "pluginOff": "Its plugin is turned off: turn it on in {settingsPath}."
+    },
+    "more": "More actions",
+    "claudeToken": {
+      "title": "Long-lived token",
+      "set": "Set",
+      "replace": "Replace",
+      "field": "Token"
+    }
+  },
+  "providerList": {
+    "hidden": "Your account has no access to the providers. Ask an administrator.",
+    "ownAccountsIntro": "The providers of this Timon. Open one to add and sign in your own subscription accounts.",
+    "open": "Open {name}",
+    "updateAvailable": "Update available",
+    "search": "Search providers",
+    "empty": "No provider is installed yet.",
+    "noMatch": "No provider matches “{query}”.",
+    "groups": {
+      "connected": "Connected",
+      "others": "Other providers"
+    },
+    "default": {
+      "title": "Default provider",
+      "hint": "The provider a mission runs on when nothing names one.",
+      "auto": "Automatic",
+      "autoNamed": "Automatic ({name})"
+    },
+    "reorder": {
+      "start": "Reorder",
+      "done": "Done",
+      "title": "Order in the model picker"
+    },
+    "verify": {
+      "button": "Check",
+      "done": "Providers checked: programs, updates and catalogue are up to date.",
+      "partial": "{count, plural, one {One check failed} other {# checks failed}}: the rest is up to date."
+    }
+  },
+  "providerAdd": {
+    "title": "Add a provider",
+    "intro": "Install an agent from the catalog, or connect a service that speaks a protocol Timon runs. The new provider joins the list, and its page is where you sign in and pick its models.",
+    "choices": {
+      "catalog": {
+        "title": "From the catalog",
+        "body": "Agents of the official Agent Client Protocol registry. Timon downloads the program, checks its checksum when one is published, and runs it."
+      },
+      "endpoint": {
+        "title": "Compatible endpoint",
+        "body": "A service reached at an address you give, speaking the Anthropic or OpenAI Responses protocol: a hosted model, a proxy, a server on your network."
+      }
+    },
+    "endpoint": {
+      "hint": "Test checks the address and the key, and lists the models the endpoint serves. Each provider is a file in ~/.timon/backends/, its key stays in the vault.",
+      "submit": "Add this provider"
     }
   }
 }

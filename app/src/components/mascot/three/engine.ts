@@ -605,7 +605,9 @@ export function createEngine(data: ModelData): Mascot3DEngine {
     last = now;
     // Hidden tab: the loop stops here; `visibilitychange` wakes it.
     if (document.hidden) return;
-    if (lost) { schedule(); return; }
+    // Lost context: the loop sleeps; `webglcontextrestored` wakes it. Polling every frame would spin for as long as
+    // the context stays away, which can be for good.
+    if (lost) return;
     const list = [...tiles];
     let anyLive = false;
     perf.frames += 1;
@@ -639,7 +641,7 @@ export function createEngine(data: ModelData): Mascot3DEngine {
     // Nothing live and nothing left to draw: the loop sleeps until a prop changes.
     if (anyLive || list.some((t) => t.dirty)) schedule();
   }
-  function schedule(): void { if (!raf) raf = requestAnimationFrame(frame); }
+  function schedule(): void { if (!raf && !lost) raf = requestAnimationFrame(frame); }
   function wake(): void { last = performance.now() - MIN_FRAME_MS; schedule(); }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
   // A zoom changes a still tile's on-screen size without any prop change: check now and then.

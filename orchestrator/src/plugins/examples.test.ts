@@ -248,6 +248,17 @@ test('plugin-provider-cards: a browser-only replacement of `providers.cli` loads
   });
 });
 
+test('plugin-provider-section: a provider pack with a section on its own page loads at API 16', async () => {
+  await withExample('plugin-provider-section', '@timon-ai/plugin-provider-section', async (url) => {
+    const gallery = await (await fetch(url('/api/plugins/example-provider-section'))).json() as {
+      state: string; kind: string[]; client: { slots: string[] } | null;
+    };
+    assert.equal(gallery.state, 'active');
+    assert.deepEqual(gallery.kind, ['provider']);
+    assert.deepEqual(gallery.client?.slots, ['settings.provider.section']);
+  });
+});
+
 test('plugin-app-card: a browser-only replacement of `apps.card` loads at API 15', async () => {
   await withExample('plugin-app-card', '@timon-ai/plugin-app-card', async (url) => {
     const gallery = await (await fetch(url('/api/plugins/example-app-card'))).json() as {

@@ -1609,7 +1609,6 @@
       },
       "models": {
         "backends": "Anbieter",
-        "accounts": "Abo-Konten",
         "fallback": "Auto-Wechsel",
         "breaker": "Schutzschalter",
         "quotas": "Kontingente"
@@ -1669,8 +1668,7 @@
         "terminal": "shell konsole pty schrift"
       },
       "models": {
-        "backends": "claude codex anbieter provider llm api modell standard reihenfolge",
-        "accounts": "abo konto anmelden login verbinden neu verbinden mehrere claude codex chatgpt tarif gerätecode",
+        "backends": "claude codex anbieter provider llm api modell standard reihenfolge abo konto anmelden login verbinden neu verbinden mehrere chatgpt tarif gerätecode add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "fallback ausweich kontingent quota wechsel erschöpft abkühlung letzter ausweg",
         "breaker": "schutzschalter circuit breaker sterile turns aussetzen",
         "quotas": "nutzung limits credits abo tarif zurücksetzen"
@@ -2975,6 +2973,7 @@
     "save": "Speichern",
     "cancel": "Abbrechen",
     "editor": "Diese Injektion bearbeiten",
+    "freshConversation": "Der Agent beginnt bei seiner nächsten Mission eine neue Unterhaltung: Die bisherige enthielt diese Regel noch ({agents}).",
     "skillMode": {
       "include": "Katalog",
       "import": "importiert"
@@ -3516,10 +3515,7 @@
       }
     },
     "intro": "Verwalte alle deine LLM-Anbieter und ihre Modelle. Änderungen gelten ohne Neustart von Timon.",
-    "edit": "Bearbeiten",
-    "editTitle": "Anbieter bearbeiten",
     "saved": "Anbieter aktualisiert.",
-    "modelCount": "{count} Modelle",
     "keyHintEdit": "Leer lassen, um den gespeicherten Schlüssel zu behalten. Ein eingegebener ersetzt ihn im Tresor — er wird nie wieder angezeigt.",
     "picto": {
       "choose": "Bild wählen",
@@ -3549,19 +3545,12 @@
       "contextWindowDetected": "auto · {window}",
       "contextWindowAuto": "Kontext"
     },
-    "empty": "Noch kein Anbieter hinzugefügt.",
-    "add": "Anbieter hinzufügen",
     "added": "Anbieter hinzugefügt.",
     "save": "Speichern",
-    "remove": "Entfernen",
     "confirmRemove": "Den Anbieter „{name}“ entfernen? Sein Schlüssel wird auch aus dem Tresor gelöscht.",
-    "active": "Aktiv",
-    "notDetected": "Nicht erkannt",
-    "inactive": "Inaktiv",
     "testButton": "Testen",
     "destinationNotice": "Jeder Prompt einer Mission auf diesem Anbieter wird an {host} gesendet.",
     "keyHint": "Im Geheimnistresor gespeichert, nie in der Datei, und nie wieder angezeigt. Leer lassen für einen lokalen Server, der keinen verlangt.",
-    "fileHint": "Jeder Anbieter ist eine Datei in ~/.timon/backends/. Du kannst dort auch von Hand eine JSON-Datei ablegen: Sie wird innerhalb einer Sekunde übernommen.",
     "fields": {
       "name": "Name",
       "protocol": "Protokoll",
@@ -3596,11 +3585,10 @@
       "protocolUnavailable": "Dieses Protokoll ist nicht installiert.",
       "unconfirmed": "Änderung nicht bestätigt. Lade diese Seite neu, um den gespeicherten Zustand zu prüfen."
     },
-    "disabled": "Deaktiviert",
     "reorder": "Ziehen, um diesen Anbieter neu einzuordnen",
     "claudeToken": {
       "title": "Langlebiges Claude-Token",
-      "hint": "Optional. Führe `claude setup-token` in einem Terminal aus und füge das Token hier ein: Jede Claude-Mission nutzt es dann statt der eigenen Anmeldung der CLI. Unter macOS kann Timon so ohne offene Sitzung weiterlaufen; führe danach `timon service install` aus, um den Dienst umzustellen. Das Token wird verschlüsselt gespeichert und nie wieder angezeigt.",
+      "hint": "Optional. Führe `claude setup-token` in einem Terminal aus und füge das Token hier ein: Jede Claude-Mission nutzt es dann statt der eigenen Anmeldung der CLI. Unter macOS brauchen Claude-Missionen es, wenn Timon nach der Abmeldung weiterläuft ({settingsPath}). Das Token wird verschlüsselt gespeichert und nie wieder angezeigt.",
       "none": "Nicht gesetzt",
       "set": "Gesetzt",
       "unreadable": "Gesetzt, aber unlesbar — füge es erneut ein",
@@ -3615,11 +3603,6 @@
     "disableHint": "Er verschwindet aus den Auswahlfeldern. Neue Starts, die ihn ausdrücklich nutzen, werden abgelehnt, ohne automatischen Fallback. Bestehende Auswahlen unten bleiben erhalten.",
     "disable": "Anbieter deaktivieren",
     "managedHint": "Du kannst Modelle umbenennen, hinzufügen, löschen und ausblenden sowie Namen, Bilder und das Standardmodell ändern. Die Verbindungseinstellungen verwaltet Timon oder das Anbieter-Plugin.",
-    "origins": {
-      "builtin": "Eingebaut",
-      "plugin": "Plugin",
-      "file": "Von dir hinzugefügt"
-    },
     "usages": {
       "agents": "Agenten",
       "routines": "Routinen",
@@ -3985,7 +3968,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Mehrere Abos desselben Anbieters, jedes eine Wahl in den Modellauswahlfeldern („Claude · Perso“). Du meldest deine eigenen Konten an; ein Administrator meldet die von allen an. Eine Mission wechselt nie von selbst zu einem anderen Abo.",
     "loading": "Konten werden geladen…",
     "empty": "Noch kein Abo-Konto: Missionen laufen mit der Anbieter-Anmeldung dieses Rechners.",
     "add": "Konto hinzufügen",

@@ -24,8 +24,9 @@ export function systemNotificationText(n: PresentableNotification): { title: str
     cmd: metadata.cmd,
     backends: metadata.backends.join(', '),
     configKey: `host.binaries.${metadata.cmd}`,
-    // Composed from the settings tabs, so the path follows their labels in every locale.
-    settings: `${settingsPath('models', 'backends')} → ${t('binariesSettings.title')}`,
+    // Composed from the settings tabs, so the path follows their labels in every locale. The path is
+    // pinned, and the CLI checked again, from the Program section of the provider's own page.
+    settings: `${settingsPath('models', 'backends')} → ${t('providerPage.program.title')}`,
     recheck: t('systemNotifications.backendBinary.recheck'),
   };
   return {

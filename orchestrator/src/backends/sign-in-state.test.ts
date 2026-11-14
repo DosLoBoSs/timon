@@ -7,7 +7,7 @@ const { mountOfficialProviders, stubCliBinaries } = await import('../../tests/he
 await stubCliBinaries('claude', 'codex');
 await mountOfficialProviders();
 const {
-  noteProviderSignedIn, noteProviderSignedOut, primeProviderSignIn, providerSignedIn, providerSignedOut,
+  noteProviderSignedIn, noteProviderSignedOut, onProviderSignInChanged, primeProviderSignIn, providerSignedIn, providerSignedOut,
   refreshProviderSignIn, resetProviderSignInForTest, setSignInEnv,
 } = await import('./sign-in-state.js');
 const { tryDefaultBackendName } = await import('./index.js');
@@ -113,4 +113,27 @@ test('the default backend skips a signed-out provider and honours the preferred 
     invalidateSettingsCache();
     resetProviderSignInForTest();
   }
+});
+
+test('a flip of the sign-in is announced once, a turn that only confirms it is not', () => {
+  resetProviderSignInForTest();
+  let calls = 0;
+  const off = onProviderSignInChanged(() => { calls += 1; });
+  try {
+    noteProviderSignedIn('claude');
+    assert.equal(calls, 1, 'unknown → signed in is a change');
+    noteProviderSignedIn('claude');
+    noteProviderSignedIn('claude');
+    assert.equal(calls, 1, 'every turn that works says the same thing');
+    noteProviderSignedOut('claude');
+    assert.equal(calls, 2, 'signed in → signed out is a change');
+    noteProviderSignedIn('claude@acct-1');
+    assert.equal(calls, 2, 'an account instance is not tracked here');
+  } finally {
+    off();
+    resetProviderSignInForTest();
+  }
+  noteProviderSignedOut('claude');
+  assert.equal(calls, 2, 'an unsubscribed listener hears nothing');
+  resetProviderSignInForTest();
 });

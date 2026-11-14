@@ -14,7 +14,7 @@ import type { AddressInfo } from 'node:net';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { postTestAccount } from '../../../tests/helpers/accounts.js';
+import { grantTestPermissions, postTestAccount } from '../../../tests/helpers/accounts.js';
 
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-account-login-'));
 await import('../../../tests/helpers/paid-license.js');
@@ -188,6 +188,9 @@ const ada = await login('ada@example.com', 'ada-secret');
 const bob = await login('bob@example.com', 'bob-secret');
 const adaId = dbApi.getUserByEmail('ada@example.com')!.id;
 const bobId = dbApi.getUserByEmail('bob@example.com')!.id;
+// Signing one's own accounts in is the `accounts` level of the Providers screen.
+grantTestPermissions(dbApi, adaId, ['providers:accounts']);
+grantTestPermissions(dbApi, bobId, ['providers:accounts']);
 const adaPerso = await createAccount(ada, { backend: 'claude', name: 'Perso' });
 
 test('an anonymous caller is refused on every sign-in route', async () => {

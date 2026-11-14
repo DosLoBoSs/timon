@@ -64,28 +64,66 @@ without restarting Timon. Lowering a ceiling can stop a process already over
 that limit. Enforcement uses the host's available confinement support;
 detecting RAM does not add systemd confinement to Windows or macOS.
 
-## Backend and fallback choices
+## Providers and fallback choices
 
-**Settings → AI models → LLM backends** lists built-in providers, providers installed by
-plugins, and providers you added yourself. Only a superadmin can change them.
-Drag a row's handle to set the order in model selectors. Keyboard users can
-press Space on the handle, move with the arrow keys, then press Space again.
+**Settings → AI models → Providers** lists built-in providers, providers installed by
+plugins, and providers you added yourself. Only a superadmin, or an account with full
+access to the Providers screen (see [Several accounts](./multi-user.md#access-to-the-providers-screen)), can change them.
 
-Turning a backend off hides it from selectors and refuses new launches that
+### The providers list
+
+- **Default provider**, at the top, is the provider a mission runs on when nothing names one. It is the same setting as **Preferred provider** in **Auto switch**: **Automatic** leaves the choice to Timon and says which provider that is now.
+- The providers come in two groups: **Connected**, the ones a mission can run on now, and **Other providers**. The search field filters both, accents ignored.
+- Each row shows the provider's logo, its name and one status: **Account connected**, **Available on this computer**, **Not connected**, **Not downloaded**, **Waiting for your authorization**, **Blocked** or **Turned off**, plus an **Update available** badge when its program or catalog agent has a newer version. Click a row to open the provider's page.
+- **Reorder** shows the providers in the order of the model selectors. Drag a row's handle to move it; keyboard users press Space on the handle, move with the arrow keys, then press Space again. **Done** brings the groups back.
+- **Check** looks again, in one go, for every provider's program and its updates, and for the catalog: after you installed a tool while Timon was running, for example.
+
+### A provider's page
+
+The page of a provider (**Settings → AI models → Providers → _its name_**) has these sections, in this order, each shown only when it applies: **Connection**, **API key**, **Program**, **Settings** (the provider's own settings, such as the Claude long-lived token) and **Models**. Its header says how many agents use it, and holds the switch that turns it on or off.
+
+Every section reads the same way: one row per thing to know, its state underneath, one button at the right for what to do next, and the other actions in the row's **…** menu. Fields open in a dialog or under their row only once you ask for them.
+
+Turning a provider off hides it from selectors and refuses new launches that
 explicitly name it. Timon shows the agents, routines and pending tasks that
 still reference it in a confirmation dialog; those choices are kept, without a
-silent fallback. The last active backend cannot be disabled. If the usual
-default is disabled, launches with no explicit backend use an active one.
+silent fallback. The last active provider cannot be turned off. If the usual
+default is turned off, launches with no explicit provider use an active one.
 Existing running missions are not stopped by this setting.
 
-Choose **Edit** to rename a backend, choose its picture, add an exact model ID,
-hide or show models, change their order, or select the default model. For
-built-in and plugin backends, connection details remain under their provider's
-control. An exact model ID is sent unchanged; a display label does not create
-an alias. Newly added models appear first and carry a **New** badge for seven
-days. Renaming one does not restart that period.
+Its **Models** section starts with a line such as *3 of 12 models appear in the
+selector*, with **Hide all** or **Show all** beside it, and a search field. Each
+model is a row with its label, its exact ID and a switch that shows or hides it
+in the selectors, saved at once. A row's **…** menu makes it the default model,
+opens **Edit** (label, picture, context window and, for a provider you added
+yourself, how it thinks) or removes it. The line's **…** menu adds a model by
+its exact ID, or opens **Edit or reorder the list**: the full editor, where the
+handle changes the order, saved with **Save**. An exact model ID is sent
+unchanged; a display label does not create an alias. Newly added models appear
+first and carry a **New** badge for seven days. Renaming one does not restart
+that period.
 
-Each model row also has a **context window** field. Its placeholder shows the
+Its **Settings** section appears for a provider you added yourself: a row with
+its picture, its name and the address it reaches. **Edit** opens the name and
+picture the selectors show and, under **Advanced**, its protocol, address and
+API key: the key field stays empty, typing one replaces the stored key, and
+**Test** checks the saved address with the stored key while you change
+nothing. **Remove this provider**, in the row's **…** menu, deletes it. When
+its file holds a credential in clear text, a warning shows under the row.
+Built-in and plugin providers keep their name, picture and connection under
+their provider's control. On the Claude page, **Settings** holds the
+**Long-lived token** row: **Set** opens a dialog to paste it (see
+[macOS](../installation/macos.md#keep-timon-running-when-you-are-logged-out)).
+
+**Add a provider**, next to the search of the list, opens a page with two ways:
+**From the catalog** installs an agent of the official Agent Client Protocol
+registry (see [Agents from the ACP registry](../plugins/providers.md#agents-from-the-acp-registry)),
+and **Compatible endpoint** adds a service that speaks the Anthropic or OpenAI
+Responses protocol (see [Add a provider](./add-a-provider.md#from-settings)).
+Nothing is read from the registry until you choose the catalog. Either way the
+new provider joins the list and opens on its own page.
+
+A model's **Edit** dialog also has a **context window** field. Its placeholder shows the
 window Timon detected (for example `auto · 400k`). If the context gauge in the
 chat (the ring beside the send button, with the maximum in its centre)
 shows the wrong limit for your plan or gateway, type the right one, such as
@@ -94,33 +132,44 @@ including the value the CLI reports. Clear the field to go back to detection.
 
 Use the live backend catalogue (`timon backends`) rather than copying model IDs from an old guide. Providers can appear or disappear as tools, credentials or plugins change. Select the backend and its model together. To add a provider of your own, see [Add a provider](./add-a-provider.md).
 
-### AI tools on this machine
+### A provider's program
 
-**Settings → AI models → Providers** shows one card per AI command-line tool Timon works with — Claude Code, Codex, Grok, Copilot CLI, opencode, Hermes, Pi, Antigravity — with its state on this computer (**Not installed**, **Installed — sign in**, **Desktop app — sign in**, **Ready**), its version and the path Timon runs. Only a superadmin signed in to the app sees it. These are the same cards as the **Your AIs** step of the first-run setup.
+Open a provider in **Settings → AI models → Providers**: its **Program** section shows the command-line tool Timon runs for it on this computer (`claude`, `codex`, `grok`, `copilot`…). Only a superadmin, or an account with full access to the Providers screen, signed in to the app sees it. A provider reached over the network has no program, and no such section.
 
-- **Install** runs the vendor's official installer (Claude Code, Codex, Grok, Copilot CLI, Pi, Antigravity; opencode on macOS and Linux). The command being run and the installer's own output appear on the card while it works. **Run it yourself** shows the same command to paste into a terminal. Hermes, and opencode on Windows, link to their vendor's installation page instead. Pi's installer needs Node.js 22.19 or newer and npm already installed.
-- Once installed, **Sign in** types the tool's sign-in command in Timon's terminal (press Enter there), or copies it when no terminal is open on the page; sign in through your browser, then click **Try again**. The command also stays shown on the card, to run in a **new** terminal of your own.
-- Timon supports opencode 1. When opencode 2 is installed, its card says so and offers neither install nor update, which would replace it.
-- **Update available** appears when the vendor has published a newer version than the one installed; **Update** runs the official installer again. Timon looks for new versions shortly after it starts and then every 12 hours; **Check for updates** looks now. To stop these checks, turn off the **Check for CLI updates** setting (`TIMON_CLI_UPDATE_CHECK`); `TIMON_CLI_UPDATE_INTERVAL_HOURS` sets the interval, one hour at the least. Turned off, Timon asks the vendors for nothing and still shows the installed version.
+- A **Version** row: the installed version, and the newer one when there is one (`v2.1.322 · 2.1.325 available`), or what stands in the way — **Not found on this computer**, **The path you set cannot be run**. Its **…** menu opens **Advanced settings**, which shows the one path Timon launches; when that path is a link, **About this path** shows the file it points to.
+- **Install** runs the vendor's official installer when the tool is missing (Claude Code, Codex, Grok, Copilot CLI, Pi, Antigravity; opencode on macOS and Linux); **Update** runs it again when the vendor has published a newer version. The command being run and the installer's own output appear while it works; **Run it yourself** shows the same command to paste into a terminal. Hermes, and opencode on Windows, link to their vendor's installation page instead. Pi's installer needs Node.js 22.19 or newer and npm already installed. Timon supports opencode 1: with opencode 2 installed, it says so and offers neither install nor update, which would replace it.
+- Timon looks for new versions shortly after it starts and then every 12 hours. To stop these checks, turn off the **Check for CLI updates** setting (`TIMON_CLI_UPDATE_CHECK`); `TIMON_CLI_UPDATE_INTERVAL_HOURS` sets the interval, one hour at the least. Turned off, Timon asks the vendors for nothing and still shows the installed version.
+- **Check again**, in the row's **…** menu, looks for the tool once more, and for a newer version — after you installed one while Timon was running, or after you edited `host.binaries` in `timon.config.json` by hand — without restarting.
+- A provider installed from the agents catalog shows the version installed, and **Update to…** when the catalog has a newer one (**Reinstall** when its files changed or are missing).
 
-### CLI binaries
+**Advanced settings** also hold the path you set yourself. If the tool is installed somewhere Timon does not look, type its full path (for example `/opt/homebrew/bin/claude`, `~/.local/bin/claude` or `C:\Users\you\AppData\Roaming\npm\claude.cmd`) and choose **Save path**. In the desktop app, **Browse…** opens a file picker; on macOS it can open an app bundle to reach the binary inside it. While the window is connected to another machine, or in a web browser, **Browse…** lists that machine's folders and files instead, opening on the set binary when there is one. Timon checks that the file exists and can be run, then the next mission uses it: no restart. **Remove pin** goes back to automatic detection. When the path you set no longer runs, **Advanced settings** open by themselves.
 
-Below them comes **CLI binaries**: one row per command-line tool Timon runs for a provider (`claude`, `codex`, `grok`, `copilot`…), with the path it will launch and a status — **Found**, **Pinned**, **Pinned path broken** or **Not found**. Only a superadmin signed in to the app sees it.
+For a provider brought by a plugin you installed, the section also shows the plugin and the program's **security authorization**:
 
-If a tool is missing or installed somewhere unusual, type its full path (for example `/opt/homebrew/bin/claude`, `~/.local/bin/claude` or `C:\Users\you\AppData\Roaming\npm\claude.cmd`) and choose **Save path**. In the desktop app, **Browse…** opens a file picker; on macOS it can open an app bundle to reach the binary inside it. While the window is connected to another machine, or in a web browser, **Browse…** lists that machine's folders and files instead, opening on the pinned binary when there is one. Timon checks that the file exists and can be run, then the next mission uses it: no restart. **Remove pin** goes back to automatic detection.
+- **To authorize**: the plugin waits for your agreement to run this program — it is new, was moved or was updated. **Review and authorize** shows the exact paths Timon found, and nothing runs before you confirm.
+- **Authorized**: the plugin may run this program, at this exact path.
+- **Install it first**: the program is not on this computer yet; once installed, you authorize it before its first run.
+- **Blocked: this program cannot be run by a plugin**: no plugin may run a shell, a script interpreter, a generic launcher or a program Timon manages itself (such as `claude` or `codex`). No authorization can unblock it; only the plugin's publisher can change what it runs.
 
-**Check again** looks for the tools once more — after you installed one while Timon was running, or after you edited `host.binaries` in `timon.config.json` by hand — without restarting either.
+Providers that come with Timon are not asked for any authorization.
 
 **Settings → AI models → Auto switch** opens on **Preferred provider**: the provider new agents, missions and chats run on when they name none. It applies only while that provider is signed in; **Automatic** takes the first signed-in provider. A provider whose CLI is installed but signed in to nobody carries a **Not signed in** badge in every model selector, and Auto switch never moves work onto it: with a single signed-in provider, a quota limit stops the work instead of switching. Changing the preferred provider never moves a conversation already started: it keeps the provider it began on.
 
 **Settings → AI models → Auto switch** controls global fallback behaviour. The **Fallback model** control shows the last-resort backend and model currently set; click it to open the same [model picker](missions.md#choosing-a-model) as the chat and pick both together. **Remove** leaves no last resort (the switch stops at the model-equivalence step), and **Default** restores the shipped pair. The **Circuit breaker** tab next to it sidelines a backend after repeated sterile turns, and sets how many times Timon retries the turn of an unattended mission whose provider dropped the connection (3 by default, 0 turns it off). A series can override it by scope, and a task can carry an even more specific override. Unknown quota reset times are displayed as unknown; the cooldown is a fallback estimate, not a provider guarantee.
 
+### Connection and API key on a provider's page
+
+Choose a provider in **Settings → AI models → Providers** to open its page. Two sections deal with how Timon reaches it, each shown only when it applies:
+
+- **Connection** has a **This computer** row saying whether this computer is signed in to the provider (**Signed in on this computer** or **Not signed in**). When it is not but one of your subscription accounts is, the row says missions use your subscription accounts: nothing to fix. **Connect** types the provider's sign-in command in Timon's terminal, or copies it when no terminal is open, then shows the command and its steps under the row; sign in through your browser, then click **Try again**. **Try again** and **Show the sign-in command** are also in the row's **…** menu. When the provider takes several subscriptions, each account is a row below, with the gestures described in [Subscription accounts](#subscription-accounts).
+- **API key** says whether the key the provider expects is in the vault (**Key saved** or **No key**). **Add a key** or **Replace** opens a dialog to paste it. The key is reserved to that provider and never shown again: a saved key can only be replaced. **Open Secrets**, in the row's **…** menu, leads to the vault for anything else, such as sharing the key or deleting it.
+
 ## Subscription accounts
 
-**Settings → AI models → Subscription accounts** lets you use several subscriptions of the same provider, for example a personal and a work Claude plan, or two ChatGPT plans for Codex. Each account appears in every model selector as its own choice (`Claude · Perso`), next to the provider's plain entry.
+Subscription accounts live in the **Connection** section of each provider's page (**Settings → AI models → Providers**, then the provider), for everyone. An account that is not the superadmin sees that screen at the level its role gives (see [Several accounts](./multi-user.md#access-to-the-providers-screen)): with **Own accounts only**, the list of providers and, on a provider's page, the **Connection** section with its own accounts and nothing else. You can use several subscriptions of the same provider, for example a personal and a work Claude plan, or two ChatGPT plans for Codex. Each account appears in every model selector as its own choice (`Claude · Perso`), next to the provider's plain entry.
 
 - **Add an account** asks for the provider and a name (administrators also choose who it is **For**: themselves, a user, or the instance), then starts the sign-in on the Timon machine while you stay in your browser.
-- A row shows the address the account is signed in as and its state: **Signed in**, **Not signed in**, **Sign in again** or **Out of quota**.
+- A row shows the address the account is signed in as and its state: **Signed in**, **Not signed in**, **Sign in again** or **Out of quota**. Its button signs it in when it needs it; signing in again, **Rename**, **Assign** and **Delete** are in its **…** menu.
 - You sign in your own accounts. An administrator sees and signs in everyone's.
 - A mission never moves to another subscription on its own.
 
@@ -136,6 +185,10 @@ How sign-in works, who may use which account, instance accounts, assigning an ac
 - **Support diagnostic**: **Copy diagnostic**, **Save report** and **Show report** prepare the report to send with a support request (versions, how Timon runs, the service, detected problems, latest log lines newest first; secrets masked), and **Open logs folder** in the desktop app. See [Troubleshooting](../installation/troubleshooting.md#diagnostic-report-and-logs).
 - **Paths**: the installation folder, the data folder, the configuration file, the logs folder (one file per day) and the daemon's service output — a file for the Windows and macOS services, the system journal for the Linux service (with the `journalctl` command to read it), the app's or the terminal's output otherwise.
 - **Export and import**: **Export my data** writes a portable archive to the data folder (secrets are never included) and shows its path. Importing replaces the database, so it cannot run while Timon runs: quit the app, then run the commands the tab lists, with your data folder filled in (replace `ARCHIVE.tar.gz` with your archive). See [Upgrading](../installation/upgrading.md) for what an import restores.
+
+## Security (System)
+
+**System › Security** shows whether missions run inside the operating system's fence on this computer, and sets the isolation mode (**Automatic**, **Required** or **Off**), Unix sockets, and exceptions for one agent or project. Only the superadmin sees this tab. See [Mission isolation](mission-isolation.md).
 
 ## Backups and the agent trash (System)
 

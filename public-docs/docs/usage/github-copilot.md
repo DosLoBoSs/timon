@@ -20,7 +20,7 @@ Timon can run agents on a **GitHub Copilot** subscription, personal or provided 
    copilot login
    ```
 
-4. Restart Timon. **GitHub Copilot** then appears among the LLM backends, with the GitHub logo.
+4. Restart Timon. **GitHub Copilot** then appears in the model selectors, with the GitHub logo.
 
 On Windows, `winget install GitHub.Copilot` works too.
 

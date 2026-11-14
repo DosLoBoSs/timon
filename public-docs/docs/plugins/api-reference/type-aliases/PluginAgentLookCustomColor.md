@@ -2,4 +2,4 @@
 
 # Type Alias: PluginAgentLookCustomColor
 
-> **PluginAgentLookCustomColor** = `` `#${string}` ``
+> **PluginAgentLookCustomColor** = `` `#${HexDigit}${string}${HexDigit}` ``

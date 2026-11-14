@@ -27,6 +27,7 @@ import { agentChatClient } from './agent-chat';
 import { coreSettingsClient } from './settings';
 import { coreSecretsClient } from './secrets-vault';
 import { coreBackendsClient } from './backends';
+import { providerClaudeClient } from './provider-claude';
 import { corePluginsClient } from './plugins';
 import { workflowsClient } from './workflows';
 import { notificationsClient } from './notifications';
@@ -64,6 +65,7 @@ export const BUNDLED_CLIENT_PLUGINS: readonly BundledClientPlugin[] = [
   coreSettingsClient,
   coreSecretsClient,
   coreBackendsClient,
+  providerClaudeClient,
   corePluginsClient,
   workflowsClient,
   notificationsClient,

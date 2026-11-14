@@ -10,7 +10,7 @@ import type { AddressInfo } from 'node:net';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { postTestAccount } from '../../../tests/helpers/accounts.js';
+import { grantTestPermissions, postTestAccount } from '../../../tests/helpers/accounts.js';
 
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-claude-token-routes-'));
 await import('../../../tests/helpers/paid-license.js');
@@ -65,7 +65,9 @@ function cookieOf(res: Response): string {
 const setup = await call('POST', '/api/auth/setup', { body: { email: 'admin@example.com', name: 'Admin', password: 'admin-secret' } });
 assert.equal(setup.status, 201);
 const admin = cookieOf(setup.res);
-assert.equal((await postTestAccount(dbApi, { email: 'ada@example.com', name: 'Ada', password: 'ada-secret' })).status, 201);
+const adaAccount = postTestAccount(dbApi, { email: 'ada@example.com', name: 'Ada', password: 'ada-secret' });
+assert.equal(adaAccount.status, 201);
+const adaId = adaAccount.json.user!.id;
 const ada = cookieOf((await call('POST', '/api/auth/login', { body: { email: 'ada@example.com', password: 'ada-secret' } })).res);
 
 test('an anonymous caller is refused on every verb', async () => {
@@ -80,6 +82,28 @@ test('a signed-in user who is not superadmin is refused', async () => {
   const r = await call('PUT', '/api/backends/claude-token', { cookie: ada, body: { token: SECRET } });
   assert.equal(r.status, 403);
   assert.equal(readClaudeToken(), null);
+});
+
+test('the Providers levels: own accounts only is refused, full access sets it', async () => {
+  grantTestPermissions(dbApi, adaId, ['providers:accounts']);
+  try {
+    const r = await call('PUT', '/api/backends/claude-token', { cookie: ada, body: { token: SECRET } });
+    assert.equal(r.status, 403);
+    assert.equal(readClaudeToken(), null);
+  } finally {
+    grantTestPermissions(dbApi, adaId, []);
+  }
+  grantTestPermissions(dbApi, adaId, ['providers:manage']);
+  try {
+    const set = await call('PUT', '/api/backends/claude-token', { cookie: ada, body: { token: SECRET } });
+    assert.equal(set.status, 200);
+    assert.ok(!set.text.includes(SECRET));
+    assert.equal(readClaudeToken(), SECRET);
+    assert.equal((await call('DELETE', '/api/backends/claude-token', { cookie: ada })).status, 200);
+    assert.equal(readClaudeToken(), null);
+  } finally {
+    grantTestPermissions(dbApi, adaId, []);
+  }
 });
 
 test('the superadmin sets and clears it, and no response carries the value', async () => {

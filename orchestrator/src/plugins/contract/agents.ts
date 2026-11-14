@@ -15,8 +15,19 @@ export type PluginAgentLookColor =
   | '#d4a373' | '#b8743d' | '#e6c9a2' | '#8a5a3b' | '#c98e5a' | '#a8826a' | '#d9b48a' | '#7a4f35' | '#e0b07a'
   | '#ff5fbf' | '#3fa9ff' | '#7ed957'
   | '#ffc233' | '#ff8a2a' | '#a35bff';
-/** A fur off the palette, mixed with the colour picker: `#rrggbb`, read back lower-case. */
-export type PluginAgentLookCustomColor = `#${string}`;
+/** One hexadecimal digit of a `#rrggbb` fur, either case. */
+type HexDigit =
+  | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+  | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+/**
+ * A fur off the palette, mixed with the colour picker: `#` then exactly six
+ * hexadecimal digits (`^#[0-9a-fA-F]{6}$`), either case on write, read back
+ * lower-case. TypeScript cannot count the digits (six positions would make a
+ * union of over a hundred million members), so the type checks the `#` and the
+ * first and last digits; any other length is refused by the daemon with
+ * `invalid`.
+ */
+export type PluginAgentLookCustomColor = `#${HexDigit}${string}${HexDigit}`;
 /** Resting eye expression. */
 export type PluginAgentLookEyes =
   | 'pill' | 'big' | 'happy' | 'wink' | 'surprised' | 'squint' | 'sleepy' | 'heart' | 'star' | 'code';

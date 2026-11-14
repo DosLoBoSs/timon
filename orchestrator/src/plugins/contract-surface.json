@@ -1,5 +1,5 @@
 {
-  "apiVersion": 15,
+  "apiVersion": 16,
   "members": {
     "accountProvider": {
       "type": "object",
@@ -2136,6 +2136,8 @@
         "discoverModels?": "((profile: ProfileRuntime) => Promise<Array<string | DiscoveredModel>>) | undefined",
         "permissionsByAgent?": "((profileId: string) => boolean) | undefined",
         "appliesPermissionMode?": "boolean | undefined",
+        "supportedPermissionModes?": "readonly string[] | undefined",
+        "nestedSandbox?": "NestedSandboxDeclaration | undefined",
         "thinkingControls?": "readonly (\"levels\" | \"budget\" | \"toggle\")[] | undefined",
         "nativeCompact?": "{ readonly command: string; } | undefined",
         "buildSpawn": "(opts: BuildSpawnOpts, profile: ProfileRuntime) => Promise<SpawnResult>",
@@ -2357,6 +2359,8 @@
         "discoverModels?": "((profile: ProfileRuntime) => Promise<Array<string | DiscoveredModel>>) | undefined",
         "permissionsByAgent?": "((profileId: string) => boolean) | undefined",
         "appliesPermissionMode?": "boolean | undefined",
+        "supportedPermissionModes?": "readonly string[] | undefined",
+        "nestedSandbox?": "NestedSandboxDeclaration | undefined",
         "thinkingControls?": "readonly (\"levels\" | \"budget\" | \"toggle\")[] | undefined",
         "nativeCompact?": "{ readonly command: string; } | undefined",
         "extractSessionId": "(ev: NormalizedEvent) => string | null",
@@ -3044,6 +3048,18 @@
         "binary-identity"
       ],
       "since": 14
+    },
+    "provider.PERMISSION_MODES": {
+      "type": "array",
+      "value": [
+        "plan",
+        "default",
+        "acceptEdits",
+        "auto",
+        "dontAsk",
+        "bypassPermissions"
+      ],
+      "since": 15
     }
   },
   "kitTypes": {
@@ -3144,7 +3160,9 @@
       "members": {
         "model": "\"mcp-bridge\" | \"sandbox\" | \"protocol\" | \"none\"",
         "byAgent?": "boolean | ((profileId: string) => boolean) | undefined",
-        "appliesMode?": "boolean | undefined"
+        "appliesMode?": "boolean | undefined",
+        "supportedModes?": "readonly (\"plan\" | \"default\" | \"acceptEdits\" | \"auto\" | \"dontAsk\" | \"bypassPermissions\")[] | undefined",
+        "nestedSandbox?": "NestedSandboxDeclaration | undefined"
       }
     },
     "LimitsStrategy": {
@@ -3943,6 +3961,14 @@
       "signature": "UsageProbeOptions",
       "members": {
         "force?": "boolean | undefined"
+      }
+    },
+    "NestedSandboxDeclaration": {
+      "since": 15,
+      "signature": "NestedSandboxDeclaration",
+      "members": {
+        "level?": "{ readonly flag: string; readonly off: string; readonly readOnly?: readonly string[]; } | undefined",
+        "offArgs?": "readonly string[] | undefined"
       }
     }
   },

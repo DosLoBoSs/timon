@@ -50,8 +50,19 @@ export const AGENT_LOOK_ACCESSORIES = [
 
 export type AgentLookShape = typeof AGENT_LOOK_SHAPES[number];
 export type AgentLookColor = typeof AGENT_LOOK_COLORS[number];
-/** A fur off the palette, `#rrggbb` lower case. */
-export type AgentLookCustomColor = `#${string}`;
+type HexDigit =
+  | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+  | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+/**
+ * A fur off the palette, `#rrggbb` (`AGENT_LOOK_CUSTOM_COLOR_RE`), stored lower
+ * case. The type can only check the `#` and the first and last digits: the
+ * regular expression is what counts the six.
+ */
+export type AgentLookCustomColor = `#${HexDigit}${string}${HexDigit}`;
+// What the type tells a plugin author at compilation: a mixed fur fits, a colour name or a bare `#` does not.
+type _CustomColorTakesHex = Assert<'#a1B2c3' extends AgentLookCustomColor ? true : false>;
+type _CustomColorRefusesName = Assert<'#red' extends AgentLookCustomColor ? false : true>;
+type _CustomColorRefusesBare = Assert<'#' extends AgentLookCustomColor ? false : true>;
 export type AgentLookEyes = typeof AGENT_LOOK_EYES[number];
 export type AgentLookAccessory = typeof AGENT_LOOK_ACCESSORIES[number];
 

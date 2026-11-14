@@ -8,6 +8,7 @@
       "connectCli": "Sign in to {name} from the CLI: run {command}.",
       "connect": "Sign in from this provider’s CLI.",
       "connectAccount": "Sign this account in again from {settingsPath}.",
+      "connectAccountAsk": "Ask an administrator to sign this account in again.",
       "error": "Usage unavailable"
     },
     "board": {

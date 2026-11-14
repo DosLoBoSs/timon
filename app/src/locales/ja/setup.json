@@ -202,7 +202,6 @@
     "loading": "このマシンの AI CLI を探しています…",
     "unavailable": "現在、このマシンの AI CLI を一覧表示できません。",
     "retry": "もう一度試す",
-    "checkUpdates": "更新を確認",
     "updateCheckOff": "更新の確認はオフになっています (設定「CLI の更新を確認」)。",
     "install": "インストール",
     "installing": "インストール中…",
@@ -241,10 +240,6 @@
       "continue": "続ける",
       "needOne": "続けるには Claude、Codex、Grok、Copilot のいずれかをインストールしてサインインしてください。",
       "anyway": "それでも続ける"
-    },
-    "settings": {
-      "title": "このマシンの AI ツール",
-      "description": "ベンダー公式のインストーラーで AI CLI をインストールし、サインインして、新しいバージョンが出たら更新します。Timon は起動時とその後数時間ごとに更新を確認します。"
     }
   }
 }
