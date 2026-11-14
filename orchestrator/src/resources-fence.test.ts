@@ -7,13 +7,16 @@
 import './test-home.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { TimonConfigSchema } from './config/schema.js';
+import { findFenceBinary, probeFence } from './host/fence.js';
+import { createLandlockFence } from './host/landlock.js';
 import { createLinuxHost } from './host/linux.js';
 import { hasSystemd } from './host/systemd.js';
 import type { FencePolicy } from './host/isolation.js';
@@ -230,4 +233,82 @@ test('a CLI that fails on its own leaves the fence on', () => {
   stderr.write('Error: invalid API key\n');
   proc.emit('close', 1);
   assert.equal(hostFenceStatus(fakeFence({ available: true, abi: 6 })).state, 'ready');
+});
+
+/* ── The real chain, on a kernel that can fence ─────────────────────────── */
+
+const REPO = fileURLToPath(new URL('../..', import.meta.url));
+
+/** The launcher of this checkout, or one built for the test when a C compiler is around. */
+function realLauncher(): string | null {
+  if (process.platform !== 'linux') return null;
+  const found = findFenceBinary();
+  if (found) return found;
+  const out = join(mkdtempSync(join(tmpdir(), 'fence-chain-bin-')), 'timon-fence');
+  try {
+    execFileSync(process.execPath, [join(REPO, 'native', 'timon-fence', 'build.mjs'), '--out', out, '--optional'], { stdio: 'ignore', timeout: 120_000 });
+  } catch { return null; }
+  return existsSync(out) ? out : null;
+}
+
+function onPath(name: string): boolean {
+  try {
+    execFileSync('/bin/sh', ['-c', `command -v ${name}`], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const REAL = realLauncher();
+const REAL_PROBE = REAL ? probeFence(REAL) : null;
+const realSkip = !REAL ? 'no timon-fence for this machine (Linux with a C compiler only)'
+  : !REAL_PROBE?.available ? `no fence on this kernel: ${REAL_PROBE?.reason}`
+  : !onPath('nice') || !onPath('ionice') ? 'nice or ionice missing' : false;
+
+const CHAIN_SCRIPT = String.raw`
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+const [TH] = process.argv.slice(1);
+const out = { pid: process.pid, tmp: os.tmpdir() };
+const t = (name, fn) => { try { fn(); out[name] = 'ok'; } catch (e) { out[name] = e.code || String(e.message); } };
+t('readToken', () => fs.readFileSync(path.join(TH, 'daemon-token')));
+t('readPolicy', () => fs.readdirSync(path.join(TH, 'run', 'fence')));
+t('writeTmp', () => fs.writeFileSync(path.join(os.tmpdir(), 'scratch'), 'x'));
+process.stdout.write(JSON.stringify(out));
+`;
+
+test('the real chain: nice, ionice and timon-fence exec down to the CLI, which keeps its pid and reads nothing private', { skip: realSkip }, async () => {
+  // Not under /tmp when avoidable: every mission writes it, so a home inside it is listed whole.
+  const runtime = process.env.XDG_RUNTIME_DIR;
+  const base = runtime && existsSync(runtime) ? runtime : tmpdir();
+  const root = realpathSync(mkdtempSync(join(base, 'fence-chain-')));
+  try {
+    const home = join(root, 'home');
+    const th = join(home, '.timon');
+    const cwd = join(th, 'worktrees', 'task-r');
+    mkdirSync(cwd, { recursive: true });
+    writeFileSync(join(th, 'daemon-token'), 'FAKE-TOKEN');
+    const fence = createLandlockFence({ status: () => ({ state: 'ready', binary: REAL as string, abi: REAL_PROBE?.abi ?? 0, seccomp: true }) });
+    const launch = fenceMissionCommand(process.execPath, ['-e', CHAIN_SCRIPT, th], 'unit-real', {
+      timonHome: th, home, cwd, missionId: MISSION, platform: 'linux',
+    }, { mode: 'enforce', fence, warn: () => {} });
+    assert.ok(launch.fence?.state === 'fenced' && launch.fence.tmpDir);
+    const child = spawn('nice', ['-n', '5', 'ionice', '-c', '3', launch.cmd, ...launch.args], {
+      cwd, env: { ...process.env, TMPDIR: launch.fence.tmpDir }, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8'); });
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+    const code = await new Promise<number | null>((resolve) => child.on('close', resolve));
+    assert.equal(code, 0, stderr);
+    const out = JSON.parse(stdout) as Record<string, string | number>;
+    assert.equal(out.pid, child.pid, 'the pid the daemon spawned is the CLI\'s');
+    assert.equal(out.readToken, 'EACCES');
+    assert.equal(out.readPolicy, 'EACCES', 'the policies of other launches are out of reach');
+    assert.equal(out.tmp, launch.fence.tmpDir);
+    assert.equal(out.writeTmp, 'ok');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
