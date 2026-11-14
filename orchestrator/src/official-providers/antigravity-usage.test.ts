@@ -25,8 +25,11 @@ const QUOTA_PATH = '/exa.language_server_pb.LanguageServerService/RetrieveUserQu
 
 /* The stand-in, driven by `fake-agy.json` next to it:
    mode     ok | auth | hang | noport | old (the server answers 404 to everything)
+            | orphan: the server is a child of agy, and agy exits once the session is open, leaving it
+              listening; it answers only after agy is gone, so the probe meets an agy already exited
+            | orphan-nopid: the same, but the log never names the server's pid
    answers  what the quota method returns, one per request, the last one repeated
-   record   folder where it writes `pid`, `seen.json` and `requests` */
+   record   folder where it writes `pid`, `children`, `seen.json` and `requests` */
 if (posix) {
   const script = join(BIN, 'agy');
   writeFileSync(script, [
@@ -34,6 +37,23 @@ if (posix) {
     "const fs = require('node:fs'); const path = require('node:path'); const http = require('node:http');",
     "const cfg = JSON.parse(fs.readFileSync(path.join(path.dirname(process.argv[1]), 'fake-agy.json'), 'utf8'));",
     'const args = process.argv.slice(2);',
+    // The orphan's server, started by agy below as `agy --serve <log>`.
+    "if (args[0] === '--serve') {",
+    "  fs.appendFileSync(path.join(cfg.record, 'children'), process.pid + '\\n');",
+    '  const parent = process.ppid; let served = 0;',
+    "  const answer = (res) => { const a = cfg.answers[Math.min(served++, cfg.answers.length - 1)]; res.setHeader('content-type', 'application/json'); res.end(typeof a === 'string' ? a : JSON.stringify(a)); };",
+    '  const whenOrphaned = (res, tries = 0) => (process.ppid !== parent || tries > 150 ? answer(res) : setTimeout(() => whenOrphaned(res, tries + 1), 20));',
+    '  const child = http.createServer((req, res) => {',
+    "    fs.appendFileSync(path.join(cfg.record, 'requests'), req.method + ' ' + req.url + '\\n');",
+    "    req.resume(); req.on('end', () => whenOrphaned(res));",
+    '  });',
+    "  child.listen(0, '127.0.0.1', () => {",
+    "    if (cfg.mode !== 'orphan-nopid') fs.appendFileSync(args[1], 'Starting language server process with pid ' + process.pid + '\\n');",
+    "    fs.appendFileSync(args[1], 'Language server listening on random port at ' + child.address().port + ' for HTTP\\n');",
+    '  });',
+    '  setInterval(() => {}, 1000);',
+    '  return;',
+    '}',
     "const log = args[args.indexOf('--log-file') + 1];",
     "if (args.indexOf('--log-file') !== 0 || args[2] !== 'acp') process.exit(3);",
     "fs.appendFileSync(path.join(cfg.record, 'pid'), process.pid + '\\n');",
@@ -57,6 +77,11 @@ if (posix) {
     "  else if (m.method === 'session/new') {",
     "    if (cfg.mode === 'auth') send({ id: m.id, error: { code: -32000, message: 'Authentication required for someone@example.test' } });",
     "    else if (cfg.mode === 'hang') { /* never answers */ }",
+    "    else if (cfg.mode.startsWith('orphan')) {",
+    "      require('node:child_process').spawn(process.execPath, [process.argv[1], '--serve', log], { stdio: 'ignore' }).unref();",
+    "      const ready = () => (/for HTTP\\n/.test(fs.readFileSync(log, 'utf8')) ? (send({ id: m.id, result: { sessionId: 'probe-session' } }), setTimeout(() => process.exit(0), 50)) : setTimeout(ready, 20));",
+    '      ready();',
+    '    }',
     "    else server.listen(0, '127.0.0.1', () => {",
     "      if (cfg.mode !== 'noport') fs.appendFileSync(log, 'Language server listening on random port at ' + server.address().port + ' for HTTP\\n');",
     "      send({ id: m.id, result: { sessionId: 'probe-session' } });",
@@ -196,7 +221,7 @@ test('an answer is read in a stream and abandoned past its ceiling, never held w
 /* ── Through the daemon's process: a stand-in agy ─────────────────────────── */
 
 let unique = 0;
-type Run = { record: string; pids(): number[]; requests(): string[]; seen(): { log: string; dirMode: number; AGY_ADC_AUTH?: string; GEMINI_API_KEY?: string; keys: string[] } };
+type Run = { record: string; pids(): number[]; children(): number[]; requests(): string[]; seen(): { log: string; dirMode: number; AGY_ADC_AUTH?: string; GEMINI_API_KEY?: string; keys: string[] } };
 
 function scenario(mode: string, answers: unknown[] = [SUMMARY]): Run {
   // One record folder per scenario, the stand-in writes into it.
@@ -206,6 +231,7 @@ function scenario(mode: string, answers: unknown[] = [SUMMARY]): Run {
   return {
     record: dir,
     pids: () => read('pid').split('\n').filter(Boolean).map(Number),
+    children: () => read('children').split('\n').filter(Boolean).map(Number),
     requests: () => read('requests').split('\n').filter(Boolean),
     seen: () => JSON.parse(read('seen.json')) as ReturnType<Run['seen']>,
   };
@@ -220,6 +246,17 @@ function probe(timeoutMs?: number) {
 
 function alive(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
+/** A process left by agy is reparented and reaped by whoever adopts it: `kill(pid, 0)` sees the zombie until then. */
+async function gone(pid: number): Promise<boolean> {
+  for (let i = 0; i < 40 && alive(pid); i += 1) await new Promise((resolve) => setTimeout(resolve, 50));
+  return !alive(pid);
+}
+
+/** Whatever a scenario left, so a failed assertion does not leave a listening server behind the suite. */
+function killChildren(run: Run): void {
+  for (const pid of run.children()) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
 }
 
 /** The process is gone and its log folder with it: the server lived for the probe only. */
@@ -301,6 +338,45 @@ test('an oversized answer is an error, and agy is still gone', { skip: !posix },
   const run = scenario('ok', ['x'.repeat(300 * 1024)]);
   await assert.rejects(probe().getUsage(), /unexpected size/);
   assertCleanedUp(run);
+});
+
+test('a server agy leaves behind when it exits first is killed by the pid its log gives', { skip: !posix }, async () => {
+  const run = scenario('orphan');
+  try {
+    const usage = probe();
+    assert.deepEqual((await usage.getUsage()).windows, EXPECTED, 'answered once agy had exited');
+    const [server] = run.children();
+    assert.ok(server, 'agy left a child listening');
+    assert.equal(await gone(server), true, `the server ${server} agy left is killed`);
+    assertCleanedUp(run);
+    assert.deepEqual(run.requests(), [`POST ${QUOTA_PATH}`], 'the check of the port sends no request');
+  } finally {
+    killChildren(run);
+  }
+});
+
+test('a server that cannot be killed fails the reading and holds it until a person retries', { skip: !posix }, async () => {
+  const run = scenario('orphan-nopid');
+  try {
+    const usage = probe();
+    await assert.rejects(usage.getUsage(), (err: Error) => {
+      assert.equal(err.name, 'LeftoverServerError');
+      assert.match(err.message, /left its local language server running/);
+      assert.doesNotMatch(err.message, /\d{4,5}/, 'no port in the message');
+      return true;
+    });
+    const [server] = run.children();
+    assert.ok(server && alive(server), 'without its pid, the server is not guessed: it is reported');
+    await assert.rejects(usage.getUsage(undefined, { now: Date.now() + 10 * 60_000 }), /left its local language server/);
+    assert.equal(run.pids().length, 1, 'no automatic reading starts agy again while a server is left');
+    killChildren(run);
+    assert.equal(await gone(server), true);
+    const next = scenario('ok');
+    assert.deepEqual((await usage.getUsage(undefined, { force: true })).windows, EXPECTED, 'the ↻ reads again');
+    assertCleanedUp(next);
+  } finally {
+    killChildren(run);
+  }
 });
 
 test('an agy without the method says to update it', { skip: !posix }, async () => {
