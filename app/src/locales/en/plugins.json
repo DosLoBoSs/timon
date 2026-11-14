@@ -566,6 +566,10 @@
     "root": "Providers",
     "default": "Default provider",
     "agents": "{count, plural, =0 {No agent uses it} one {# agent uses it} other {# agents use it}}",
+    "program": {
+      "title": "Program",
+      "waiting": "The program this provider runs waits for your authorization: Timon launches nothing before you allow it."
+    },
     "notFound": "This provider is no longer on this computer.",
     "errors": {
       "forbidden": "Only an administrator can see the providers.",

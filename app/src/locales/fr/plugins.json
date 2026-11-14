@@ -556,6 +556,10 @@
     "root": "Fournisseurs",
     "default": "Fournisseur par défaut",
     "agents": "{count, plural, =0 {Aucun agent ne l'utilise} one {# agent l'utilise} other {# agents l'utilisent}}",
+    "program": {
+      "title": "Programme",
+      "waiting": "Le programme de ce fournisseur attend votre autorisation : Timon ne lance rien avant que vous l'ayez permis."
+    },
     "notFound": "Ce fournisseur n'est plus sur cet ordinateur.",
     "errors": {
       "forbidden": "Seul un administrateur peut voir les fournisseurs.",
