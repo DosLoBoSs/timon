@@ -8,8 +8,8 @@ import type { CustomBackend } from './form';
  * The Models and own-settings sections of a provider page, mounted on the real
  * page with the common sections of `@timon/backends` and the client half of the
  * Claude provider: the count of models the selector offers, the search, a save
- * that sends the models alone; the name and, for a provider added by hand, its
- * connection under Advanced, saved apart, its Test reusing the stored key; and
+ * that sends the models alone; for a provider added by hand only, its name and
+ * its connection behind Edit, saved apart, its Test reusing the stored key; and
  * the long-lived Claude token on the Claude page only. The daemon's refusal of
  * anyone but a superadmin is covered by the routes' own tests.
  */
@@ -136,28 +136,33 @@ test('a provider page edits its models and its own settings, each saved apart', 
     assert.deepEqual(Object.keys(sent[0]!.body).sort(), ['defaultModel', 'models'], 'a models save never resends the name');
     assert.equal((sent[0]!.body.models as { hidden?: boolean }[])[1]!.hidden, false);
 
-    // Own settings of a plugin's provider: its name, no connection to change.
-    assert.equal((section('settings')?.querySelector('input') as HTMLInputElement | null)?.value, 'Claude');
-    assert.equal(buttonIn(section('settings'), 'Advanced'), undefined);
-    // The Claude provider's own section: the long-lived token, right after the common settings.
-    await until(() => document.querySelector('[data-provider-section="provider-claude"] form') !== null, 'the Claude token section');
+    // An official provider has no name, picture or connection to change: no own-settings section.
+    assert.equal(section('settings')?.textContent ?? '', '', 'nothing to customize on an official provider');
+    // The Claude provider's own section: the long-lived token, one row, right after the common settings.
+    await until(() => document.querySelector('[data-provider-section="provider-claude"] [data-claude-token]') !== null, 'the Claude token section');
+    assert.equal(document.querySelector('[data-provider-section="provider-claude"] input'), null, 'the token field waits for Set');
     const order = Array.from(document.querySelectorAll('[data-provider-section]')).map((el) => el.getAttribute('data-provider-section'));
     assert.deepEqual(order.slice(-3), ['settings', 'provider-claude', 'models']);
 
     // A provider added by hand: its connection under Advanced, saved without its models.
     await show('user:deepseek');
-    await until(() => buttonIn(section('settings'), 'Advanced') !== undefined, 'the Advanced fold');
+    await until(() => buttonIn(section('settings'), 'Edit') !== undefined, 'the Edit button');
     assert.ok(!document.querySelector('[data-provider-section="provider-claude"]'), 'the Claude token lands on the Claude page only');
+    assert.match(section('settings')!.textContent ?? '', /Reaches api\.deepseek\.com/);
+    assert.equal(section('settings')!.querySelector('input'), null, 'no field on the page');
+    await click(buttonIn(section('settings'), 'Edit')!);
+    const dialog = () => document.querySelector('[data-provider-settings-dialog]');
+    await until(() => buttonIn(dialog(), 'Advanced') !== undefined, 'the settings dialog and its Advanced fold');
     assert.ok(!document.querySelector('input[type="url"]'), 'folded by default');
-    await click(buttonIn(section('settings'), 'Advanced')!);
+    await click(buttonIn(dialog(), 'Advanced')!);
     assert.equal((document.querySelector('input[type="url"]') as HTMLInputElement).value, 'https://api.deepseek.com/anthropic');
 
-    await click(buttonIn(section('settings'), 'Test')!);
+    await click(buttonIn(dialog(), 'Test')!);
     await until(() => sent.length === 2, 'the test');
     assert.deepEqual(sent[1], { method: 'POST', url: '/api/ui/backends/custom/test', body: { id: 'deepseek' } }, 'unchanged: the stored key is tested');
 
-    await type(section('settings')!.querySelector('input[type="password"]') as HTMLInputElement, 'sk-new');
-    await click(buttonIn(section('settings'), 'Save')!);
+    await type(dialog()!.querySelector('input[type="password"]') as HTMLInputElement, 'sk-new');
+    await click(buttonIn(dialog(), 'Save')!);
     await until(() => sent.length === 3, 'the settings save');
     assert.equal(sent[2]!.url, '/api/ui/backends/manage/deepseek');
     assert.equal(sent[2]!.body.key, 'sk-new');

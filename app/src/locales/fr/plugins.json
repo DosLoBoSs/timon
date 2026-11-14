@@ -541,12 +541,15 @@
     },
     "settings": {
       "title": "Réglages",
-      "description": "Comment ce fournisseur apparaît dans les sélecteurs de modèle.",
       "name": "Nom dans les sélecteurs",
       "advanced": "Avancé",
       "advancedHint": "Où joindre ce fournisseur et avec quelle clé. À changer seulement s'il a déménagé ou si sa clé a changé.",
       "remove": "Supprimer ce fournisseur",
-      "saved": "Réglages enregistrés."
+      "saved": "Réglages enregistrés.",
+      "edit": "Modifier",
+      "editTitle": "Modifier {name}",
+      "reaches": "Joint {host}",
+      "shownAs": "Nom et image dans les sélecteurs de modèle"
     },
     "breadcrumb": "Où vous êtes",
     "root": "Fournisseurs",

@@ -551,12 +551,15 @@
     },
     "settings": {
       "title": "Settings",
-      "description": "How this provider reads in the model selectors.",
       "name": "Name in the selectors",
       "advanced": "Advanced",
       "advancedHint": "Where this provider is reached and with which key. Change them only if the provider moved or its key changed.",
       "remove": "Remove this provider",
-      "saved": "Settings saved."
+      "saved": "Settings saved.",
+      "edit": "Edit",
+      "editTitle": "Edit {name}",
+      "reaches": "Reaches {host}",
+      "shownAs": "Name and picture in the model selectors"
     },
     "breadcrumb": "Where you are",
     "root": "Providers",
