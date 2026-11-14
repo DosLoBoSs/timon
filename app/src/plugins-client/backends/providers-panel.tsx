@@ -9,8 +9,7 @@
  * shown with the path the DAEMON resolved — never one typed here — and nothing
  * is allowed or downloaded before a click on a confirmation that names it.
  */
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { AlertTriangle, CheckCircle2, Copy, Download, KeyRound, RefreshCw, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   acpAction, binaryAction, fetchAcpAuthMethods, fetchAcpRegistry, fetchProviders, installAcpAgent, needsAuthorization,
-  orderAuthMethods, PROVIDER_PARAM, providerToAuthorize, removeAcpAgent,
+  orderAuthMethods, removeAcpAgent,
   type AcpAgent, type AcpAuthMethod, type AcpRegistry, type ProviderPlugin,
 } from '@/lib/providers';
 import { sseOn } from '@/lib/sse-stream';
@@ -49,25 +48,6 @@ export function ProvidersPanel(): ReactElement | null {
     void loadProviders();
     return sseOn('plugins_changed', () => { void loadProviders(); });
   }, [loadProviders]);
-
-  // A refused launch's card (TODO #598) lands here with `?provider=<id>`: the authorization dialog opens on
-  // what the daemon resolves NOW, and nothing is authorized before its confirm button.
-  // Null outside the App Router (a test, a surface mounted elsewhere): nothing was requested.
-  const requested = useSearchParams()?.get(PROVIDER_PARAM) ?? null;
-  const [highlighted, setHighlighted] = useState<string | null>(null);
-  const handled = useRef<string | null>(null);
-  useEffect(() => {
-    if (!requested || providers === null || handled.current === requested) return;
-    handled.current = requested;
-    const target = providerToAuthorize(providers, requested);
-    if (target) setAuthorizing(target);
-    setHighlighted(requested);
-    // Replaced, not pushed: Back closes Settings, it does not reopen the dialog. Next keeps
-    // `useSearchParams` in step with `history` (`openSettingsFromAnywhere` relies on the same).
-    const url = new URL(window.location.href);
-    url.searchParams.delete(PROVIDER_PARAM);
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-  }, [requested, providers]);
 
   const run = async (key: string, work: () => Promise<void>): Promise<void> => {
     setBusy(key);
@@ -121,7 +101,6 @@ export function ProvidersPanel(): ReactElement | null {
                   <ProviderRow
                     key={provider.id}
                     provider={provider}
-                    highlighted={highlighted === provider.id}
                     onAuthorize={() => setAuthorizing(provider)}
                   />
                 ))}
@@ -189,14 +168,12 @@ export function ProvidersPanel(): ReactElement | null {
   );
 }
 
-function ProviderRow({
-  provider, highlighted, onAuthorize,
-}: { provider: ProviderPlugin; highlighted: boolean; onAuthorize: () => void }): ReactElement {
+function ProviderRow({ provider, onAuthorize }: { provider: ProviderPlugin; onAuthorize: () => void }): ReactElement {
   const toAuthorize = needsAuthorization(provider);
   return (
     <li
       data-provider={provider.id}
-      className={highlighted ? 'space-y-2 rounded-md bg-amber-500/10 px-3 py-2.5 ring-1 ring-amber-500/40' : 'space-y-2 rounded-md bg-muted/30 px-3 py-2.5'}
+      className="space-y-2 rounded-md bg-muted/30 px-3 py-2.5"
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13px] font-medium">{provider.label}</span>
