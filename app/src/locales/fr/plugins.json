@@ -567,9 +567,9 @@
     },
     "apiKey": {
       "title": "Clé API",
-      "description": "La clé qu’attend ce fournisseur, gardée dans le coffre de Timon et réservée à ce fournisseur. Timon ne la réaffiche jamais : vous pouvez seulement la remplacer.",
+      "description": "Gardée dans le coffre de Timon et réservée à ce fournisseur. Timon ne la réaffiche jamais : vous pouvez seulement la remplacer.",
       "present": "Clé enregistrée",
-      "absent": "Aucune clé pour l’instant",
+      "absent": "Aucune clé",
       "environment": "Ce fournisseur lit sa clé dans une variable d’environnement de l’ordinateur où tourne Timon.",
       "placeholder": "Collez la clé",
       "replacePlaceholder": "Collez une nouvelle clé pour remplacer celle enregistrée",
@@ -577,7 +577,11 @@
       "replace": "Remplacer",
       "saved": "{name} enregistrée dans le coffre",
       "openSecrets": "Ouvrir Secrets",
-      "errorGeneric": "La clé n’a pas pu être enregistrée. Réessayez."
+      "errorGeneric": "La clé n’a pas pu être enregistrée. Réessayez.",
+      "add": "Ajouter une clé",
+      "addTitle": "Ajouter la clé API",
+      "replaceTitle": "Remplacer la clé API",
+      "entry": "Gardée dans le coffre sous {name}"
     },
     "program": {
       "title": "Programme",

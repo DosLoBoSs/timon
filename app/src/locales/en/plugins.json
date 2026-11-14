@@ -577,9 +577,9 @@
     },
     "apiKey": {
       "title": "API key",
-      "description": "The key this provider expects, kept in Timon's vault and reserved to this provider. Timon never shows it back: you can only replace it.",
+      "description": "Kept in Timon's vault and reserved to this provider. Timon never shows it back: you can only replace it.",
       "present": "Key saved",
-      "absent": "No key yet",
+      "absent": "No key",
       "environment": "This provider reads its key from an environment variable of the computer Timon runs on.",
       "placeholder": "Paste the key",
       "replacePlaceholder": "Paste a new key to replace the saved one",
@@ -587,7 +587,11 @@
       "replace": "Replace",
       "saved": "{name} saved in the vault",
       "openSecrets": "Open Secrets",
-      "errorGeneric": "The key could not be saved. Try again."
+      "errorGeneric": "The key could not be saved. Try again.",
+      "add": "Add a key",
+      "addTitle": "Add the API key",
+      "replaceTitle": "Replace the API key",
+      "entry": "Kept in the vault as {name}"
     },
     "program": {
       "title": "Program",

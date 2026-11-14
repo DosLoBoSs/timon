@@ -107,7 +107,11 @@ test('the API key section writes the provider\'s key, reserved to it, and never 
   try {
     await render('settings=models%2Fbackends&provider=llmtr');
     await until(() => section()?.querySelector('[data-api-key="absent"]') != null, 'the key reported missing');
-    const input = section()!.querySelector('input')!;
+    assert.equal(section()!.querySelector('input'), null, 'no field on the page');
+    await click(Array.from(section()!.querySelectorAll('button')).find((b) => b.textContent === 'Add a key')!);
+    const dialog = () => document.querySelector('[data-secret-dialog]');
+    await until(() => dialog()?.querySelector('input') != null, 'the key dialog');
+    const input = dialog()!.querySelector('input')!;
     assert.equal(input.type, 'password');
     assert.equal(input.value, '', 'the field starts empty');
 
@@ -117,7 +121,7 @@ test('the API key section writes the provider\'s key, reserved to it, and never 
       input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     });
     const readsBefore = overviewReads;
-    const save = Array.from(section()!.querySelectorAll('button')).find((b) => b.textContent === 'Save')!;
+    const save = Array.from(dialog()!.querySelectorAll('button')).find((b) => b.textContent === 'Save')!;
     await React.act(async () => { save.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
     await until(() => writes.length === 1, 'the key to be written');
     assert.deepEqual(writes[0], {
@@ -125,8 +129,8 @@ test('the API key section writes the provider\'s key, reserved to it, and never 
       body: { name: 'LLMTR_API_KEY', mode: 'inject', note: null, grants: [{ scope_kind: 'backend', scope_ref: 'llmtr' }], value: 'sk-live-123' },
     });
     await until(() => overviewReads > readsBefore && section()?.querySelector('[data-api-key="present"]') != null, 'the key reported saved');
-    assert.equal(section()!.querySelector('input')!.value, '', 'the typed value is forgotten');
-    assert.ok(!(section()!.textContent ?? '').includes('sk-live'), 'the key is never shown');
+    await until(() => dialog() === null, 'the dialog closed once saved');
+    assert.ok(!(document.body.textContent ?? '').includes('sk-live'), 'the key is never shown');
     assert.ok(addresses.every((address) => !address.includes('sk-live')), 'nor put in an address');
     assert.ok(Array.from(section()!.querySelectorAll('button')).some((b) => b.textContent === 'Replace'));
 
