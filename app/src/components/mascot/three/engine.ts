@@ -474,10 +474,8 @@ export function createEngine(data: ModelData): Mascot3DEngine {
     return out;
   }
 
-  function draw(t: Tile): void {
-    const t0 = performance.now();
-    const { css, px } = measure(t);
-    if (t.canvas.width !== px) { t.canvas.width = px; t.canvas.height = px; }
+  /** Renders the tile's head into its canvas, `px` pixels wide, with the fur detail of a `css`-pixel head. */
+  function render(t: Tile, css: number, px: number): void {
     const rpx = Math.min(MAX_PX, Math.round(px * supersampleFor(css)));
     // The GL canvas keeps its size: each tile renders into its bottom-left corner (GL origin), read back from the top.
     renderer.setViewport(0, 0, rpx, rpx);
@@ -564,6 +562,13 @@ export function createEngine(data: ModelData): Mascot3DEngine {
     c.imageSmoothingEnabled = true;
     c.imageSmoothingQuality = 'high';
     c.drawImage(canvas, 0, MAX_PX - rpx, rpx, rpx, 0, 0, px, px);
+  }
+
+  function draw(t: Tile): void {
+    const t0 = performance.now();
+    const { css, px } = measure(t);
+    if (t.canvas.width !== px) { t.canvas.width = px; t.canvas.height = px; }
+    render(t, css, px);
     t.dirty = false;
     t.drawnAt = performance.now();
     // Read by a screen that copies the head as a bitmap (the onboarding's avalanche): the modelled head is
