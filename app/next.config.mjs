@@ -83,6 +83,18 @@ const nextConfig = {
   // `buildId` and locale of `/_next/data/...` URLs, which only exist in the
   // Pages Router — this app is App Router throughout, with no routing i18n.
   skipMiddlewareUrlNormalize: true,
+  // The image optimizer (`/_next/image`) is switched off.
+  //
+  // It is unauthenticated (the middleware matcher skips it) and hands any
+  // local or allowed remote file to sharp/libvips: Next 14.2.x carries
+  // critical advisories on exactly that path (remote code execution through
+  // AVIF and SVG decoding, out-of-memory and disk-filling denials of service),
+  // fixed only in the 15.5 and 16 lines. No component uses `next/image`: every
+  // image is a plain `<img>` served as is. With this flag Next answers 404
+  // before parsing the query, fetching or decoding anything
+  // (`next/dist/server/next-server.js`, `handleNextImageRequest`);
+  // `src/lib/image-optimizer-off.test.ts` keeps both halves true.
+  images: { unoptimized: true },
   experimental: {
     serverComponentsExternalPackages: ['better-sqlite3'],
     externalDir: true,
