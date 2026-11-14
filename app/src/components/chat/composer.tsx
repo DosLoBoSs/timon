@@ -1227,7 +1227,12 @@ function ComposerSettingsPills({
       {/* A mission only — before the first send there is no row to carry
         * the mode yet. */}
       {appearance.showPermission && currentMissionId && (
-        <PermissionModeMenu missionId={currentMissionId} compact={compact} className={cn(pill, 'shrink-0')} />
+        <PermissionModeMenu
+          missionId={currentMissionId}
+          compact={compact}
+          className={cn(pill, 'shrink-0')}
+          refreshKey={`${effBackend}:${thinking ? 'turn' : 'idle'}`}
+        />
       )}
     </div>
   );

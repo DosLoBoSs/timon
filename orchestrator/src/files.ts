@@ -76,8 +76,9 @@ function loadAgentCwd(agentName: string): string {
 }
 
 /** Verify the requested relative path stays inside the sandboxed root.
- *  Returns the resolved absolute path on success. */
-function safeResolve(root: string, rel: string): string {
+ *  Returns the resolved absolute path on success. `root` must already be a
+ *  real path. Shared with the script preview of permission cards. */
+export function safeResolve(root: string, rel: string): string {
   // On Windows a leading `\` is drive-rooted, not relative: strip it like `/`.
   const cleaned = (rel || '').replace(sep === '\\' ? /^[\\/]+/ : /^\/+/, '');
   const abs = resolve(root, cleaned);
@@ -99,7 +100,7 @@ function isHidden(name: string): boolean {
   return HIDDEN_PREFIXES.includes(name) || name.startsWith('.DS_Store');
 }
 
-function sniffBinary(buf: Buffer): boolean {
+export function sniffBinary(buf: Buffer): boolean {
   // First 8 KB sample — NUL byte is a strong signal.
   const sample = buf.subarray(0, Math.min(buf.length, 8192));
   for (let i = 0; i < sample.length; i++) {
