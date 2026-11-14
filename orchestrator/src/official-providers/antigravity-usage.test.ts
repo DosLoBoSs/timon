@@ -17,7 +17,8 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 
 const posix = process.platform !== 'win32';
-const BIN = mkdtempSync(join(tmpdir(), 'timon-agy-usage-test-'));
+// Never under the probe's own prefix (`timon-agy-usage-`): its sweep would remove the stand-in once a long suite passes a minute.
+const BIN = mkdtempSync(join(tmpdir(), 'timon-agyfake-'));
 process.env.PATH = `${BIN}${delimiter}${process.env.PATH ?? ''}`;
 const CONFIG = join(BIN, 'fake-agy.json');
 const QUOTA_PATH = '/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary';
