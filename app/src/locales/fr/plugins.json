@@ -541,5 +541,25 @@
       "browse": "Le sélecteur de fichier n'a pas pu s'ouvrir.",
       "generic": "La modification a échoué (erreur {status})."
     }
+  },
+  "providerStatus": {
+    "connected": "Compte connecté",
+    "available": "Disponible sur cet ordinateur",
+    "not-connected": "Non connecté",
+    "not-installed": "Non téléchargé",
+    "needs-authorization": "En attente de votre autorisation",
+    "blocked": "Bloqué",
+    "disabled": "Désactivé"
+  },
+  "providerPage": {
+    "breadcrumb": "Où vous êtes",
+    "root": "Fournisseurs",
+    "default": "Fournisseur par défaut",
+    "agents": "{count, plural, =0 {Aucun agent ne l'utilise} one {# agent l'utilise} other {# agents l'utilisent}}",
+    "notFound": "Ce fournisseur n'est plus sur cet ordinateur.",
+    "errors": {
+      "forbidden": "Seul un administrateur peut voir les fournisseurs.",
+      "generic": "Impossible de lire les fournisseurs (erreur {status})."
+    }
   }
 }

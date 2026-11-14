@@ -551,5 +551,25 @@
       "browse": "The file picker could not open.",
       "generic": "The change failed (error {status})."
     }
+  },
+  "providerStatus": {
+    "connected": "Account connected",
+    "available": "Available on this computer",
+    "not-connected": "Not connected",
+    "not-installed": "Not downloaded",
+    "needs-authorization": "Waiting for your authorization",
+    "blocked": "Blocked",
+    "disabled": "Turned off"
+  },
+  "providerPage": {
+    "breadcrumb": "Where you are",
+    "root": "Providers",
+    "default": "Default provider",
+    "agents": "{count, plural, =0 {No agent uses it} one {# agent uses it} other {# agents use it}}",
+    "notFound": "This provider is no longer on this computer.",
+    "errors": {
+      "forbidden": "Only an administrator can see the providers.",
+      "generic": "The providers could not be read (error {status})."
+    }
   }
 }
