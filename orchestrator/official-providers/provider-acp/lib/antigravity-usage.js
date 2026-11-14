@@ -185,6 +185,38 @@ function sweepStaleDirs(now = Date.now()) {
   }
 }
 
+/**
+ * The body as text, read chunk by chunk and abandoned past `max` bytes (null): `response.text()` would
+ * hold a runaway answer in memory before its size could be checked.
+ *
+ * @param {Response} response
+ * @param {number} max
+ * @returns {Promise<string | null>}
+ */
+export async function readCapped(response, max) {
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > max) {
+    await response.body?.cancel().catch(() => undefined);
+    return null;
+  }
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  /** @type {Uint8Array[]} */
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks, size).toString('utf8');
+}
+
 /** @param {number} ms */
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms).unref?.(); });
 
@@ -295,8 +327,8 @@ export function createAntigravityUsage(opts) {
         await response.body?.cancel().catch(() => undefined);
         throw new Error(`agy's language server refused the quota request (HTTP ${response.status})`);
       }
-      const text = await response.text();
-      if (text.length > MAX_ANSWER_BYTES) throw new Error('agy returned a quota answer of an unexpected size');
+      const text = await readCapped(response, MAX_ANSWER_BYTES);
+      if (text === null) throw new Error('agy returned a quota answer of an unexpected size');
       /** @type {unknown} */
       let payload;
       try { payload = JSON.parse(text); } catch { throw new Error('agy returned a quota answer that is not JSON'); }

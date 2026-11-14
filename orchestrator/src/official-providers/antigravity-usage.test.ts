@@ -73,6 +73,7 @@ const usageModule = await import('../../official-providers/provider-acp/lib/anti
   QUOTA_METHOD_PATH: string;
   parseQuotaSummary(payload: unknown): { state: 'ok'; usage: { windows: Record<string, { utilization: number; resets_at: string } | null>; extra: null } } | { state: 'pending' } | { state: 'invalid'; reason: string };
   portFromLog(file: string): number | null;
+  readCapped(response: Response, max: number): Promise<string | null>;
   createAntigravityUsage(opts: {
     services: typeof ctx.provider; names: readonly string[]; env: Record<string, string>;
     authenticateWith?: string; signIn: string; timeoutMs?: number;
@@ -82,7 +83,7 @@ const usageModule = await import('../../official-providers/provider-acp/lib/anti
   };
 };
 const { isUsageNotSignedInError } = await import('../backends/usage-error.js');
-const { parseQuotaSummary, portFromLog, createAntigravityUsage, QUOTA_METHOD_PATH } = usageModule;
+const { parseQuotaSummary, portFromLog, readCapped, createAntigravityUsage, QUOTA_METHOD_PATH } = usageModule;
 
 /** The answer captured from agy 1.5.9 on a Pro account (research of 14/11/2026), descriptions trimmed. */
 const SUMMARY = {
@@ -174,6 +175,22 @@ test('the port is the HTTP one of the log, and nothing else', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('an answer is read in a stream and abandoned past its ceiling, never held whole', async () => {
+  assert.equal(await readCapped(new Response('{"a":1}'), 16), '{"a":1}');
+  assert.equal(await readCapped(new Response(null), 16), '');
+  assert.equal(await readCapped(new Response('x'.repeat(17)), 16), null, 'the declared length is enough to refuse');
+  // No length declared, and an endless source: the read stops at the first chunk past the ceiling.
+  let pulled = 0;
+  let cancelled = false;
+  const endless = new ReadableStream<Uint8Array>({
+    pull(controller) { pulled += 1; controller.enqueue(new Uint8Array(10)); },
+    cancel() { cancelled = true; },
+  });
+  assert.equal(await readCapped(new Response(endless), 25), null);
+  assert.equal(pulled <= 4, true, `pulled ${pulled} chunks`);
+  assert.equal(cancelled, true, 'the rest of the body is cancelled');
 });
 
 /* ── Through the daemon's process: a stand-in agy ─────────────────────────── */
@@ -278,6 +295,12 @@ test('a changed answer is an error without the answer in it', { skip: !posix }, 
   const run2 = scenario('ok', ['not json at all']);
   await assert.rejects(probe().getUsage(), /not JSON/);
   assertCleanedUp(run2);
+});
+
+test('an oversized answer is an error, and agy is still gone', { skip: !posix }, async () => {
+  const run = scenario('ok', ['x'.repeat(300 * 1024)]);
+  await assert.rejects(probe().getUsage(), /unexpected size/);
+  assertCleanedUp(run);
 });
 
 test('an agy without the method says to update it', { skip: !posix }, async () => {
