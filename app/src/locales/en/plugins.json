@@ -578,6 +578,20 @@
         "description": "Several subscriptions of this provider, each one a choice in the model selectors. A mission never moves to another subscription on its own: the order they are tried in is set in Auto switch."
       }
     },
+    "apiKey": {
+      "title": "API key",
+      "description": "The key this provider expects, kept in Timon's vault and reserved to this provider. Timon never shows it back: you can only replace it.",
+      "present": "Key saved",
+      "absent": "No key yet",
+      "environment": "This provider reads its key from an environment variable of the computer Timon runs on.",
+      "placeholder": "Paste the key",
+      "replacePlaceholder": "Paste a new key to replace the saved one",
+      "save": "Save",
+      "replace": "Replace",
+      "saved": "{name} saved in the vault",
+      "openSecrets": "Open Secrets",
+      "errorGeneric": "The key could not be saved. Try again."
+    },
     "program": {
       "title": "Program",
       "waiting": "The program this provider runs waits for your authorization: Timon launches nothing before you allow it."

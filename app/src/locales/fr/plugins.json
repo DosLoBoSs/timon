@@ -568,6 +568,20 @@
         "description": "Plusieurs abonnements de ce fournisseur, chacun choisi dans les sélecteurs de modèle. Une mission ne bascule jamais seule sur un autre abonnement : l’ordre dans lequel ils sont essayés se règle dans Bascule auto."
       }
     },
+    "apiKey": {
+      "title": "Clé API",
+      "description": "La clé qu’attend ce fournisseur, gardée dans le coffre de Timon et réservée à ce fournisseur. Timon ne la réaffiche jamais : vous pouvez seulement la remplacer.",
+      "present": "Clé enregistrée",
+      "absent": "Aucune clé pour l’instant",
+      "environment": "Ce fournisseur lit sa clé dans une variable d’environnement de l’ordinateur où tourne Timon.",
+      "placeholder": "Collez la clé",
+      "replacePlaceholder": "Collez une nouvelle clé pour remplacer celle enregistrée",
+      "save": "Enregistrer",
+      "replace": "Remplacer",
+      "saved": "{name} enregistrée dans le coffre",
+      "openSecrets": "Ouvrir Secrets",
+      "errorGeneric": "La clé n’a pas pu être enregistrée. Réessayez."
+    },
     "program": {
       "title": "Programme",
       "waiting": "Le programme de ce fournisseur attend votre autorisation : Timon ne lance rien avant que vous l'ayez permis."
