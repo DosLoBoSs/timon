@@ -1352,6 +1352,16 @@ db.exec(`CREATE TABLE IF NOT EXISTS mission_remote_resume (
   updated_at INTEGER NOT NULL
 )`);
 
+// The point after which an agent's earlier provider sessions may no longer be
+// carried into a new mission (memory-session-fence.ts). Written when a memory
+// rule that may have reached the agent is removed or rewritten: the rule lives
+// on in the history of every session that saw it, so only a session born after
+// this point is safe to resume. Keyed by agent name, carried by a rename.
+db.exec(`CREATE TABLE IF NOT EXISTS agent_session_fences (
+  agent_name TEXT PRIMARY KEY,
+  fenced_at INTEGER NOT NULL
+)`);
+
 // What the opening of a mission's chat has folded so far (mission-history-page.ts).
 // Derived from `events` and rebuilt from them when absent, so nothing backfills
 // it. Written when a chat opens rather than per inserted event: the insert path
@@ -3808,6 +3818,7 @@ const taskCountsStmt = db.prepare(
 const latestSessionStmt = db.prepare(
   `SELECT session_id FROM missions
    WHERE agent_name = ? AND session_id IS NOT NULL
+     AND started_at > COALESCE((SELECT fenced_at FROM agent_session_fences WHERE agent_name = missions.agent_name), -1)
    ORDER BY started_at DESC LIMIT 1`,
 );
 
@@ -4808,6 +4819,8 @@ export const dbApi = {
       db.prepare('UPDATE approval_rules SET agent = ? WHERE agent = ?').run(newName, oldName);
       db.prepare('UPDATE memory_proposals SET agent = ? WHERE agent = ?').run(newName, oldName);
       db.prepare('UPDATE learnings SET agent = ? WHERE agent = ?').run(newName, oldName);
+      // A revoked rule stays revoked under the new name: the sessions it reached moved too.
+      db.prepare('UPDATE OR REPLACE agent_session_fences SET agent_name = ? WHERE agent_name = ?').run(newName, oldName);
       // `acting_agent` is re-checked at every run: an old name would make the
       // trigger fail its delegation check from then on.
       db.prepare('UPDATE triggers SET creator_agent = ? WHERE creator_agent = ?').run(newName, oldName);
@@ -6160,9 +6173,41 @@ export const dbApi = {
   getLatestSessionForAgent(agentName: string, ownerUserId?: string | null): string | null {
     const row = (ownerUserId === undefined ? latestSessionStmt.get(agentName)
       : db.prepare(`SELECT session_id FROM missions WHERE agent_name = ? AND owner_user_id IS ?
-          AND session_id IS NOT NULL ORDER BY started_at DESC LIMIT 1`).get(agentName, ownerUserId)) as
+          AND session_id IS NOT NULL
+          AND started_at > COALESCE((SELECT fenced_at FROM agent_session_fences WHERE agent_name = missions.agent_name), -1)
+          ORDER BY started_at DESC LIMIT 1`).get(agentName, ownerUserId)) as
       { session_id: string } | undefined;
     return row?.session_id ?? null;
+  },
+  /** Bars every provider session these agents already have from a new mission
+   *  (`agent_session_fences`). Moving the fence back is never wanted: the latest
+   *  revocation wins. */
+  fenceAgentSessions(agentNames: readonly string[], at: number = Date.now()): void {
+    const stmt = db.prepare(
+      `INSERT INTO agent_session_fences (agent_name, fenced_at) VALUES (?, ?)
+       ON CONFLICT(agent_name) DO UPDATE SET fenced_at = MAX(fenced_at, excluded.fenced_at)`,
+    );
+    db.transaction(() => { for (const name of agentNames) stmt.run(name, at); })();
+  },
+  agentSessionFence(agentName: string): number | null {
+    const row = db.prepare(`SELECT fenced_at FROM agent_session_fences WHERE agent_name = ?`).get(agentName) as
+      { fenced_at: number } | undefined;
+    return row?.fenced_at ?? null;
+  },
+  /**
+   * Whether `sessionId` was born before a fence of `agentName` or of an agent
+   * whose mission holds it. "Born" is the start of the first mission that holds
+   * the session: a mission resumed in place, or a session id renewed by its CLI,
+   * keeps the history of where it started.
+   */
+  sessionFenced(sessionId: string, agentName: string): boolean {
+    const row = db.prepare(
+      `SELECT MIN(m.started_at) AS born, MAX(f.fenced_at) AS fence
+         FROM missions m
+         LEFT JOIN agent_session_fences f ON f.agent_name = m.agent_name OR f.agent_name = ?
+        WHERE m.session_id = ?`,
+    ).get(agentName, sessionId) as { born: number | null; fence: number | null } | undefined;
+    return row?.born != null && row.fence != null && row.born <= row.fence;
   },
   /** Mission a provider session belongs to (the most recent if several share it,
    *  which happens when a mission is resumed in place). Returns enough to recover

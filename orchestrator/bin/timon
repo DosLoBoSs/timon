@@ -3190,6 +3190,11 @@ async function cmdMemoryRule(argv) {
     if (!id) { process.stderr.write('usage: timon memory rule rm <id>\n'); process.exit(64); }
     const j = await http('DELETE', `/api/memory/rules/${encodeURIComponent(id)}`);
     process.stdout.write(`rule #${(j.deleted || {}).id ?? id} deleted\n`);
+    // The rule lives on in the sessions that saw it: say who loses theirs.
+    const fresh = Array.isArray(j.fresh_conversation) ? j.fresh_conversation : [];
+    if (fresh.length) {
+      process.stdout.write(`the agent will start a fresh conversation at its next mission: ${fresh.join(', ')}\n`);
+    }
     return;
   }
 
