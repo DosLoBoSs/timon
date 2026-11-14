@@ -1014,6 +1014,12 @@ export interface Dialect {
    */
   readonly appliesPermissionMode?: boolean;
   /**
+   * The only permission modes the provider honours (`PermissionStrategy.supportedModes`):
+   * every other one runs in `plan` (`resolveSupportedPermissionMode`). Absent =
+   * every mode is honoured.
+   */
+  readonly supportedPermissionModes?: readonly string[];
+  /**
    * Kinds of thinking control this dialect can send for a CUSTOM provider's
    * model, read from the model's resolved `reasoning`. Absent = levels only:
    * `reasoningEffort` goes to the CLI as a level, so a budget or a switch must

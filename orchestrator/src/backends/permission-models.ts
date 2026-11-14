@@ -46,3 +46,45 @@ export const PERMISSION_MODEL_OBLIGATIONS: Readonly<Record<'mcp-bridge' | 'sandb
   protocol: 'supply `openSession`: its driver forwards the agent\'s permission requests to `host.requestPermission`',
   none: 'nothing — the CLI runs everything unguarded, which the UI says plainly',
 };
+
+/**
+ * The permission modes an agent may be given, as stored in its config (the
+ * Claude names: `canonicalPermissionMode` turns a sandbox name into one of
+ * these before it is written). What a provider lists in
+ * `PermissionStrategy.supportedModes`.
+ */
+export const PERMISSION_MODES = ['plan', 'default', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions'] as const;
+export type PermissionMode = (typeof PERMISSION_MODES)[number];
+
+/** Where every mode a provider does not support lands: the one that runs no tool. */
+export const UNSUPPORTED_MODE_FALLBACK: PermissionMode = 'plan';
+
+/** The sandbox names, as the mode they mean (`canonicalPermissionMode`). */
+const SANDBOX_NAMES: ReadonlyMap<string, PermissionMode> = new Map([
+  ['read-only', 'plan'],
+  ['workspace-write', 'auto'],
+  ['danger-full-access', 'bypassPermissions'],
+]);
+
+/**
+ * The mode an agent really runs in on a provider that declares the only modes
+ * it can honour (`PermissionStrategy.supportedModes`).
+ *
+ * Fail-closed: a mode in the list (or the sandbox name of one) runs as itself,
+ * anything else — another mode, an unset one, a typo — runs in `plan`. A mode
+ * is never raised: a provider that cannot ask for an approval does not turn
+ * `default` into `bypassPermissions`. No list = the provider honours every
+ * mode, and `mode` is returned untouched.
+ */
+export function resolveSupportedPermissionMode(
+  mode: string | null | undefined,
+  supported: readonly string[] | null | undefined,
+): string | undefined {
+  if (!supported) return mode ?? undefined;
+  if (typeof mode === 'string') {
+    if (supported.includes(mode)) return mode;
+    const named = SANDBOX_NAMES.get(mode);
+    if (named && supported.includes(named)) return named;
+  }
+  return UNSUPPORTED_MODE_FALLBACK;
+}

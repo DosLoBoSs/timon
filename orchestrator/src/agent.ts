@@ -82,6 +82,7 @@ import {
   fallbackFor,
 } from './backend-fallback.js';
 import { backendStillDry } from './backend-recheck.js';
+import { resolvedPermissionModeFor } from './backends/catalog.js';
 import { settingBool, settingNum } from './settings.js';
 import { profileLimits, wrapMissionLaunch } from './resources.js';
 import { getHost, type Host } from './host/index.js';
@@ -2092,6 +2093,14 @@ async function spawnTurn(args: {
     dbApi.setMissionInterrupted(missionId, interruptionForCooldown(cfg.backend));
     throw new BackendExhaustedError(cfg.backend ?? 'unknown');
   }
+  // The mode the backend really honours: one that declares its supported modes
+  // (`PermissionStrategy.supportedModes`) runs any other in `plan`, never higher.
+  // Resolved here, where every launch path crosses, so the provider, the live
+  // agent and the mode it reports all see the level the ceiling judged.
+  {
+    const runs = resolvedPermissionModeFor(cfg.backend ?? defaultBackendName(), cfg.permission_mode);
+    if (runs !== cfg.permission_mode) cfg.permission_mode = runs;
+  }
   // Per-spawn skills added by the code (dispatcher, workflow coordinator) are
   // kept apart from `cfg.skills`: they are pasted whole, whatever the
   // attachments say, where a checked skill only gets a catalogue line.
@@ -2695,7 +2704,9 @@ function announceSessionlessTurn(missionId: string, backend: string, model: stri
  *  launch, and the message goes to the live CLI. */
 function permissionModeStale(live: RunningAgent): boolean {
   const m = dbApi.getMission(live.missionId);
-  const wanted = m?.permission_mode_override ?? null;
+  const stored = m?.permission_mode_override ?? null;
+  // Compared as the backend runs it: a mode it resolves to the live one changes nothing.
+  const wanted = stored === null ? null : resolvedPermissionModeFor(live.backend.name, stored) ?? stored;
   return wanted !== null && wanted !== (live.permissionMode ?? null) && !!m?.session_id;
 }
 
