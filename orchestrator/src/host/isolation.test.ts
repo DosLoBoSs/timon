@@ -249,6 +249,12 @@ test('an invalid fence setting is refused, not silently defaulted', () => {
     { writable: '~/.cache' },
     { exceptions: { agents: { coder: { unixSockets: 'yes' } } } },
     { exceptions: { projects: { app: { writable: ['./build'] } } } },
+    // A misspelt key is refused rather than dropped: the fence would differ from what was written.
+    { unixSocket: 'allow' },
+    { writeable: ['~/.cache'] },
+    { exceptions: { agent: { coder: { unixSockets: 'allow' } } } },
+    { exceptions: { agents: { coder: { writeable: ['~/.cache'] } } } },
+    { egress: { mode: 'log', prot: 8080 } },
   ];
   for (const isolation of invalid) {
     assert.equal(

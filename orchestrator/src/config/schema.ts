@@ -119,7 +119,7 @@ export const EgressSchema = z.object({
     .default('127.0.0.1')
     .describe("Loopback address the egress proxy listens on."),
   port: z.number().int().min(0).max(65_535).default(0).describe("Egress proxy port; 0 lets the system choose a free one."),
-});
+}).strict();
 
 /** A path the fence grants: absolute or `~/…`, never relative to whatever cwd the daemon has. */
 const FencePathSchema = z.string().refine((p) => p.startsWith('~/') || isAbsolute(p), {
@@ -135,7 +135,7 @@ const FencePathSchema = z.string().refine((p) => p.startsWith('~/') || isAbsolut
 const FenceExceptionSchema = z.object({
   unixSockets: z.enum(['deny', 'allow']).optional().describe("Overrides `host.isolation.unixSockets` for these missions."),
   writable: z.array(FencePathSchema).default([]).describe("Extra writable paths for these missions, added to `host.isolation.writable`."),
-});
+}).strict();
 
 /**
  * Filesystem confinement of a mission (audit finding #4, `host/isolation.ts`).
@@ -146,6 +146,10 @@ const FenceExceptionSchema = z.object({
  * `unixSockets`, `exceptions`) is applied by the kernel from inside the launch
  * chain; the reasoning and the measurements are in `host/isolation.ts` and
  * `docs/SECURITY.md` §9.1.
+ *
+ * Every object of this block is strict: a misspelt key (`writeable`,
+ * `unixSocket`) would otherwise be dropped, and the mission would run with
+ * a fence other than the one the operator believes they wrote.
  */
 export const IsolationSchema = z.object({
   /**
@@ -161,7 +165,7 @@ export const IsolationSchema = z.object({
   exceptions: z.object({
     agents: z.record(z.string(), FenceExceptionSchema).default({}).describe("Confinement exceptions by agent name."),
     projects: z.record(z.string(), FenceExceptionSchema).default({}).describe("Confinement exceptions by project slug."),
-  }).prefault({}).describe("Confinement exceptions for some agents or projects."),
+  }).strict().prefault({}).describe("Confinement exceptions for some agents or projects."),
   /** Extra paths to mask, absolute or `~/…`. Added to the built-in list. */
   deny: z.array(z.string()).default([]).describe("Additional paths requested to be hidden from missions."),
   /** Paths kept visible but read-only. */
@@ -176,7 +180,7 @@ export const IsolationSchema = z.object({
    */
   runAs: z.string().nullable().default(null).describe("Reserved OS-account isolation option; non-null values are currently refused by the runtime."),
   egress: EgressSchema.prefault({}).describe("Outbound network proxy offered to missions."),
-});
+}).strict();
 
 export const HostSchema = z.object({
   docker: z.enum(['auto', 'required', 'disabled']).default('auto').describe("Container capability policy."),
