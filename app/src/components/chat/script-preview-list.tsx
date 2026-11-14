@@ -64,6 +64,7 @@ function PreviewItem({ preview }: { preview: ScriptPreview }): ReactElement {
       {preview.sha256 && (
         // code-font: a fingerprint, compared by eye
         <div className="break-all font-mono text-[10px] text-muted-foreground/70" title={preview.sha256}>
+          {/* i18n-exempt: the name of a hash algorithm, the same in every language */}
           SHA-256 {preview.sha256.slice(0, 16)}
         </div>
       )}
