@@ -186,3 +186,34 @@ test('a plugin that takes agent.mascot still wins over the 3D head; the default 
   assert.ok(w.document.querySelector('canvas[data-mascot]'), 'the 3D head comes back');
   disposeFallback();
 });
+
+test('Settings → Appearance: the style radios store the choice, and say so when the browser cannot draw 3D', async (t) => {
+  const { resetSlotsForTests } = await import('@/lib/plugin-host/slots');
+  const { AgentMascotHost } = await import('./agent-mascot');
+  const { mascotStylePref } = await import('./mascot-style-pref');
+  const { MascotAnimationSetting } = await import('@/plugins-client/ui-theme-appearance');
+  resetSlotsForTests();
+  const w = await mount(t, { webgl2: true });
+  await w.act(async () => { await mascotStylePref().set('3d'); });
+  await w.render(React.createElement('div', null,
+    React.createElement(MascotAnimationSetting),
+    React.createElement(AgentMascotHost, { look: { shape: 'gem' }, size: 40 })));
+  const radio = (style: string) => w.document.querySelector<HTMLInputElement>(`[data-mascot-style="${style}"]`)!;
+  assert.equal(radio('3d').checked, true, '3D by default');
+  assert.equal(radio('2d').checked, false);
+  assert.ok(!w.document.querySelector('[data-mascot-style-no-webgl]'), 'no warning where 3D draws');
+
+  const before = w.requests.filter((r) => r.method === 'PUT').length;
+  await w.act(async () => { radio('2d').click(); await settle(); });
+  assert.equal(radio('2d').checked, true);
+  assert.equal(mascotStylePref().get(), '2d');
+  assert.deepEqual(w.requests.filter((r) => r.method === 'PUT').slice(before).map((r) => r.body), [{ layout: { style: '2d' } }]);
+  assert.ok(w.document.querySelector('svg[data-mascot]') && !w.document.querySelector('canvas[data-mascot]'), 'the page\'s mascots turn 2D at once');
+});
+
+test('Settings → Appearance: without WebGL2 the setting warns that mascots stay 2D', async (t) => {
+  const { MascotAnimationSetting } = await import('@/plugins-client/ui-theme-appearance');
+  const w = await mount(t, { webgl2: false });
+  await w.render(React.createElement(MascotAnimationSetting));
+  assert.ok(w.document.querySelector('[data-mascot-style-no-webgl]'));
+});

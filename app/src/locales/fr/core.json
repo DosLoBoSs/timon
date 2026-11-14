@@ -866,6 +866,12 @@
     "mascotsHint": "Un agent dont la tête est sa mascotte montre ce qu’il fait : endormi, en réflexion, au travail, en recherche, en attente de vous, content quand sa tâche est terminée.",
     "mascotsAnimate": "Animer les mascottes",
     "mascotsAnimateHint": "Désactivé, une mascotte montre encore son état par ses yeux, sans bouger. Le réglage « réduire les animations » de votre système l’emporte toujours.",
+    "mascotsStyle": "Style des mascottes",
+    "mascotsStyle3d": "3D",
+    "mascotsStyle3dHint": "Une tête en peluche modelée, éclairée et en relief.",
+    "mascotsStyle2d": "2D",
+    "mascotsStyle2dHint": "Le dessin à plat, plus léger pour les ordinateurs anciens.",
+    "mascotsStyleNoWebgl": "Ce navigateur ne peut pas dessiner en 3D (WebGL2 est désactivé ou absent) : les mascottes sont dessinées en 2D.",
     "variants": {
       "coral": {
         "name": "Corail",
