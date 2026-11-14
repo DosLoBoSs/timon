@@ -354,27 +354,35 @@ The complete template is `examples/plugin-provider-section`.
 
 Timon can install any program-based agent of the official
 [Agent Client Protocol registry](https://agentclientprotocol.com): open
-**Settings → AI models → LLM backends → Providers → ACP registry**, pick an
-agent, and Timon downloads it, checks it, and offers it as the backend
-`acp-<agent>`. Only agents distributed as a downloadable program for your
-operating system can be installed; those that need a package runner (`npx`,
-`uvx`) or an archive format Timon cannot open are listed with the reason.
+**Settings → AI models → Providers**, choose **Add a provider**, then
+**From the catalog**. Search the list by name or description, pick an agent,
+and Timon downloads it, checks it, and offers it as the backend
+`acp-<agent>`. The installed agent joins the list of providers, and **Open its
+page** leads to its provider page. Only agents distributed as a downloadable
+program for your operating system can be installed; those that need a package
+runner (`npx`, `uvx`) or an archive format Timon cannot open are listed with
+the reason.
+
+Each agent of the catalog reads in one line: what is installed on this
+computer and what the registry offers, for example *Installed 1.4.1 without a
+published checksum · verified 1.5.0 available to replace it*.
 
 - **Checked download.** The registry publishes a `sha256` for some agents. When it
   does, a file that does not match is deleted and nothing is installed. When it
-  does not (the row says *No published hash*), Timon asks you to confirm before
-  downloading, and records the install as unverified.
+  does not (the line says *no published checksum*), Timon asks you to confirm
+  before downloading, and records the install as unverified.
 - **Checked on every start.** Timon keeps a digest of the installed files and
   compares it each time it registers the agent. A file changed afterwards is
-  never launched; the row shows *Files changed* and **Reinstall** repairs it.
-- **Updates.** A newer version appears on the row; installing it keeps the
+  never launched; the line says its files changed and **Reinstall** repairs it.
+- **Updates.** A newer version appears on the line; installing it keeps the
   working version until the new one is verified, then swaps them. The previous
   version is kept until the next update.
 - **From unverified to verified.** An agent installed without a published hash
-  is marked *Unverified*. When the registry later publishes a `sha256` for your
-  machine's build, the row says so and offers **Install verified version**,
-  even when the version number did not change. Nothing is replaced until you
-  click it, and the swap is the same as for any update.
+  is marked *without a published checksum*. When the registry later publishes a
+  `sha256` for your machine's build, the line says so and the row offers
+  **Install verified version**, even when the version number did not change.
+  Nothing is replaced until you click it, and the swap is the same as for any
+  update.
 - **Signing in.** Timon never signs an agent in for you. **Sign-in methods** on
   an installed agent asks the agent how it signs in and lists its methods. The
   suggested one comes first, with the command to run in a terminal when the

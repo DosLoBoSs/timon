@@ -96,6 +96,14 @@ the stored key, and **Test** checks the saved address with the stored key
 while you change nothing. The Claude page adds the **Claude long-lived token**
 section (see [macOS](../installation/macos.md#keep-timon-running-when-you-are-logged-out)).
 
+**Add a provider**, next to the search of the list, opens a page with two ways:
+**From the catalog** installs an agent of the official Agent Client Protocol
+registry (see [Agents from the ACP registry](../plugins/providers.md#agents-from-the-acp-registry)),
+and **Compatible endpoint** adds a service that speaks the Anthropic or OpenAI
+Responses protocol (see [Add a provider](./add-a-provider.md#from-settings)).
+Nothing is read from the registry until you choose the catalog. Either way the
+new provider joins the list and opens on its own page.
+
 Each model row also has a **context window** field. Its placeholder shows the
 window Timon detected (for example `auto · 400k`). If the context gauge in the
 chat (the ring beside the send button, with the maximum in its centre)
