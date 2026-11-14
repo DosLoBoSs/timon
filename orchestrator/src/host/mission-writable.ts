@@ -43,6 +43,9 @@ export type MissionWritableOptions = {
   timonHome?: string;
   /** More folders a mission writes; defaults to the fence's write list. */
   extraRoots?: readonly string[];
+  /** Folders refused on top of `extraRoots` (or its default), each also
+   *  compared once its links are resolved. */
+  alsoRoots?: readonly string[];
 };
 
 let rootsSource: () => readonly string[] = () => [];
@@ -51,6 +54,23 @@ let rootsSource: () => readonly string[] = () => [];
  *  configuration, set by `createHost`. */
 export function setMissionWritableRootsSource(source: () => readonly string[]): void {
   rootsSource = source;
+}
+
+let fencedSystemSource: () => readonly string[] = () => [];
+
+/**
+ * Where the system folders the fence leaves writable come from (`/tmp`…),
+ * set by `createHost`: empty when no fence is configured. They are no PATH
+ * entry, so binary resolution ignores them; a local git remote does not
+ * (`git-neutral.ts`): its hooks run on the daemon's side of a push.
+ */
+export function setFencedSystemFoldersSource(source: () => readonly string[]): void {
+  fencedSystemSource = source;
+}
+
+/** The system folders a fenced mission writes, as the live configuration says. */
+export function fencedSystemFolders(): readonly string[] {
+  try { return fencedSystemSource(); } catch { return []; }
 }
 
 /** The home folders `host.isolation` lets any mission write, `~/` expanded. */
@@ -111,6 +131,10 @@ export function missionWritableProblem(path: string, options: MissionWritableOpt
     }
     for (const root of options.extraRoots ?? safeRoots()) {
       if (within(platform, root, p)) return `inside ${root}`;
+    }
+    for (const root of options.alsoRoots ?? []) {
+      const spellings = platform === process.platform ? [root, canonical(root)] : [root];
+      if (spellings.some((r) => within(platform, r, p))) return `inside ${root}`;
     }
   }
   return null;

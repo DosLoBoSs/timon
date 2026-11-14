@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -12,8 +12,9 @@ const { TimonConfigSchema } = await import('../config/schema.js');
 const { createGenericHost } = await import('./generic.js');
 const {
   gitHooksNoneDir, gitmodulesScanArgs, gitScanArgs, gitToplevelArgs, neutralGitCall, neutralGitEnv, parseGitConfigList,
-  parseSubmoduleNames, scannedGitConfig,
+  localGitPath, localRemoteProblem, parseSubmoduleNames, reachedGitUrls, scannedGitConfig,
 } = await import('./git-neutral.js');
+type GitConfigEntry = import('./git-neutral.js').GitConfigEntry;
 
 const host = createGenericHost(TimonConfigSchema.parse({}));
 const hasGit = spawnSync('git', ['--version']).status === 0;
@@ -66,10 +67,11 @@ test('a command a mission wrote is replaced, the trusted one kept', () => {
 // `remote.<name>.uploadpack` keeps the first value git reads: only the
 // command-line option outranks a planted one.
 test('a planted upload-pack or receive-pack is overridden on the command line', () => {
-  const entries = [
+  const entries: GitConfigEntry[] = [
     { scope: 'local', key: 'remote.origin.uploadpack', value: 'evil' },
     { scope: 'local', key: 'remote.origin.receivepack', value: 'evil' },
   ];
+  entries.push({ scope: 'local', key: 'remote.origin.url', value: 'https://example.com/r.git' });
   const fetch = neutralGitCall(['-C', '/r', 'fetch', 'origin'], entries, {});
   assert.ok(!('refused' in fetch) && fetch.args.join(' ').endsWith('fetch --no-recurse-submodules --upload-pack=git-upload-pack origin'));
   const push = neutralGitCall(['push', 'origin', 'main'], entries, {});
@@ -98,7 +100,7 @@ test('alternate refs, configured hooks and Git LFS programs a mission named are 
   assert.deepEqual(scannedGitConfig([{ scope: 'global', key: 'lfs.customtransfer.t.path', value: 'mine' }]).config, []);
 });
 
-test('git never runs inside a submodule, and the local transport is refused', () => {
+test('git never runs inside a submodule, and the local transport is off by default', () => {
   const args = (call: ReturnType<typeof neutralGitCall>) => ('refused' in call ? [] : call.args);
   const fixed = args(neutralGitCall(['rev-parse', 'HEAD'], null, {}));
   for (const pair of ['protocol.file.allow=never', 'protocol.ext.allow=never', 'submodule.recurse=false']) {
@@ -108,12 +110,96 @@ test('git never runs inside a submodule, and the local transport is refused', ()
   assert.ok(args(neutralGitCall(['diff-index', 'HEAD'], [], {})).includes('--ignore-submodules=dirty'));
   assert.ok(args(neutralGitCall(['checkout', 'main'], [], {})).includes('--quiet'));
   assert.equal(args(neutralGitCall(['checkout', '-q', 'main'], [], {})).filter((a) => a === '--quiet' || a === '-q').length, 1);
-  assert.ok(args(neutralGitCall(['fetch', 'origin'], [], {})).includes('--no-recurse-submodules'));
+  const origin = [{ scope: 'local', key: 'remote.origin.url', value: 'git@example.com:o/r.git' }];
+  assert.ok(args(neutralGitCall(['fetch', 'origin'], origin, {})).includes('--no-recurse-submodules'));
+  assert.ok(!args(neutralGitCall(['fetch', 'origin'], origin, {})).includes('protocol.file.allow=always'));
   // It would replace the protocol policy with its own list.
   const call = neutralGitCall(['push'], [], { GIT_ALLOW_PROTOCOL: 'file:ext', PATH: '/usr/bin' }, { platform: 'linux' });
   assert.ok(!('refused' in call) && call.env.GIT_ALLOW_PROTOCOL === undefined);
   const win = neutralGitCall(['push'], [], { Git_Allow_Protocol: 'file' }, { platform: 'win32' });
   assert.ok(!('refused' in win) && !Object.keys(win.env).some((k) => k.toUpperCase() === 'GIT_ALLOW_PROTOCOL'));
+});
+
+test('localGitPath tells the local transport from the others, as git does', () => {
+  assert.equal(localGitPath('/srv/r.git', 'linux'), '/srv/r.git');
+  assert.equal(localGitPath('../r', 'linux'), '../r');
+  assert.equal(localGitPath('origin', 'linux'), 'origin');
+  assert.equal(localGitPath('./a:b', 'linux'), './a:b');
+  assert.equal(localGitPath('file:///srv/my%20r.git', 'linux'), '/srv/my r.git');
+  // git drops the host of a `file://` URL outside Windows.
+  assert.equal(localGitPath('file://host/srv/r.git', 'linux'), '/srv/r.git');
+  for (const remote of ['git@example.com:o/r.git', 'https://example.com/r.git', 'ssh://example.com/r', 'ext::sh -c x', 'C:/repos/r.git']) {
+    assert.equal(localGitPath(remote, 'linux'), null, remote);
+  }
+  assert.equal(localGitPath('C:\\repos\\r.git', 'win32'), 'C:\\repos\\r.git');
+  assert.equal(localGitPath('D:/repos/r.git', 'win32'), 'D:/repos/r.git');
+  assert.equal(localGitPath('file:///C:/repos/r.git', 'win32'), 'C:/repos/r.git');
+  assert.equal(localGitPath('file://server/share/r.git', 'win32'), '//server/share/r.git');
+  assert.equal(localGitPath('\\\\server\\share\\r.git', 'win32'), '\\\\server\\share\\r.git');
+});
+
+test('reachedGitUrls follows the remote a call names, its push URL and every rewrite', () => {
+  const entries: GitConfigEntry[] = [
+    { scope: 'local', key: 'remote.origin.url', value: 'gh:o/r' },
+    { scope: 'local', key: 'remote.origin.pushurl', value: '/srv/push.git' },
+    { scope: 'local', key: 'remote.mirror.url', value: 'https://example.com/m.git' },
+    { scope: 'global', key: 'url.https://github.com/.insteadof', value: 'gh:' },
+    { scope: 'local', key: 'url./srv/evil.git.pushinsteadof', value: 'https://example.com/m' },
+  ];
+  assert.equal(reachedGitUrls(['status'], entries), null);
+  assert.deepEqual(reachedGitUrls(['push', '-u', 'origin', 'main'], entries), ['https://github.com/o/r', '/srv/push.git']);
+  assert.deepEqual(reachedGitUrls(['fetch', '--prune', 'mirror'], entries), ['https://example.com/m.git', '/srv/evil.git.git']);
+  assert.deepEqual(reachedGitUrls(['ls-remote', '--heads', '--', 'mirror'], entries), ['https://example.com/m.git', '/srv/evil.git.git']);
+  assert.deepEqual(reachedGitUrls(['-C', '/r', 'fetch'], entries)?.length, 4);
+  assert.deepEqual(reachedGitUrls(['fetch', '--all'], entries)?.length, 4);
+  assert.deepEqual(reachedGitUrls(['fetch', '-o', 'x', 'unknown'], entries), ['unknown']);
+  assert.deepEqual(reachedGitUrls(['clone', '-o', 'up', '/srv/a.git', 'dir'], entries), ['/srv/a.git']);
+});
+
+test('a local remote opens the local transport only where no mission writes', () => {
+  const outside = mkdtempSync(join(tmpdir(), 'timon-git-outside-'));
+  const remote = (url: string): GitConfigEntry[] => [{ scope: 'local', key: 'remote.r.url', value: url }];
+  const reached = (url: string, options: { fencedFolders?: string[]; cwd?: string } = {}) =>
+    neutralGitCall(['push', 'r', 'main'], remote(url), {}, { fencedFolders: [], ...options });
+
+  const ok = reached(outside);
+  assert.ok(!('refused' in ok), JSON.stringify(ok));
+  // The fixed `never` comes first: the later `-c` wins.
+  assert.ok(ok.args.indexOf('protocol.file.allow=always') > ok.args.indexOf('protocol.file.allow=never'));
+  assert.ok(!('refused' in reached(`file://${outside}`)));
+
+  // A fence leaves the system temporary folders writable.
+  assert.match(JSON.stringify(reached(outside, { fencedFolders: [tmpdir()] })), /refused.*inside /);
+  // So is the folder git works in.
+  assert.match(JSON.stringify(reached(join(outside, 'sub.git'), { cwd: outside })), /refused/);
+  assert.match(JSON.stringify(reached('../r.git')), /refused.*relative path/);
+  assert.match(JSON.stringify(reached('origin')), /refused.*relative path/);
+
+  // A mission zone, named, rewritten into, or linked to.
+  const zone = mkdtempSync(join(HOME, 'worktrees-'));
+  assert.match(JSON.stringify(reached(zone)), /inside the Timon home/);
+  assert.match(JSON.stringify(reached(`file://${zone}`)), /inside the Timon home/);
+  const rewritten = neutralGitCall(['push', 'r', 'main'], [
+    ...remote('https://example.invalid/r.git'),
+    { scope: 'local', key: `url.${zone}.insteadof`, value: 'https://example.invalid/r.git' },
+  ], {}, { fencedFolders: [] });
+  assert.match(JSON.stringify(rewritten), /inside the Timon home/);
+  if (process.platform !== 'win32') {
+    const link = join(outside, 'link.git');
+    symlinkSync(zone, link);
+    assert.match(JSON.stringify(reached(link)), /inside the Timon home/);
+    // A path that does not exist yet, behind a link: a mission creates it
+    // once the check has passed.
+    assert.match(JSON.stringify(reached(join(link, 'later.git'))), /inside the Timon home/);
+    // git also tries `<path>.git`.
+    symlinkSync(zone, join(outside, 'bare.git'));
+    assert.match(JSON.stringify(reached(join(outside, 'bare'))), /inside the Timon home/);
+  }
+  // Every other protocol is left as it was.
+  const ssh = reached('git@example.com:o/r.git');
+  assert.ok(!('refused' in ssh) && !ssh.args.includes('protocol.file.allow=always'));
+  assert.equal(localRemoteProblem(outside, { fencedFolders: [] }), null);
+  rmSync(outside, { recursive: true, force: true });
 });
 
 test('a merge names every submodule git may read, so git never runs inside one', () => {
@@ -166,7 +252,7 @@ test('the PATH git gets loses every folder a mission can write', () => {
 /** Every witness `trappedRepo` plants. */
 const WITNESSES = [
   'alternate-refs', 'filter', 'fsmonitor', 'gpg', 'hook-post-checkout', 'hook-pre-commit',
-  'hook-reference-transaction', 'merge-driver', 'planted-helper', 'pre-receive', 'subfilter', 'uploadpack',
+  'hook-reference-transaction', 'merge-driver', 'planted-helper', 'pre-receive', 'pre-receive-inside', 'subfilter', 'uploadpack',
 ];
 
 /** A repository whose configuration runs a witness for every hook, driver and
@@ -217,9 +303,10 @@ function trappedRepo(): { root: string; repo: string; env: NodeJS.ProcessEnv; wi
   run(upstream, 'update-ref', 'refs/heads/extra', extra);
   const other = join(root, 'other');
   run(root, 'clone', '-q', '--bare', repo, other);
-  // A bare repository a mission prepared where it can write (a temporary
-  // folder), to receive the daemon's push.
-  const drop = join(root, 'drop');
+  // Bare repositories a mission prepared where it writes, to receive the
+  // daemon's push: a folder of the Timon home, and the repository's own git
+  // directory.
+  const drop = mkdtempSync(join(HOME, 'worktrees-'));
   run(root, 'init', '-q', '--bare', drop);
   writeFileSync(join(drop, 'hooks', 'pre-receive'), `#!/bin/sh\n${touch('pre-receive')}\n`, { mode: 0o755 });
 
@@ -234,6 +321,17 @@ function trappedRepo(): { root: string; repo: string; env: NodeJS.ProcessEnv; wi
   git('remote', 'add', 'origin', upstream);
   git('config', 'remote.origin.uploadpack', `${touch('uploadpack')}; git-upload-pack`);
   git('remote', 'add', 'drop', drop);
+  const inside = join(repo, '.git', 'inside.git');
+  run(root, 'init', '-q', '--bare', inside);
+  writeFileSync(join(inside, 'hooks', 'pre-receive'), `#!/bin/sh\n${touch('pre-receive-inside')}\n`, { mode: 0o755 });
+  git('remote', 'add', 'inside', inside);
+  // The same prepared repository, reached through a rewrite and through a
+  // link from a folder no mission writes.
+  git('config', `url.${drop}.insteadOf`, 'https://example.invalid/r.git');
+  git('remote', 'add', 'rewritten', 'https://example.invalid/r.git');
+  const link = join(root, 'link.git');
+  symlinkSync(drop, link);
+  git('remote', 'add', 'linked', link);
   git('config', 'commit.gpgSign', 'true');
   // git starts `gpg.program` without a shell: a script stands in for it.
   const gpg = join(root, 'gpg-trap');
@@ -274,6 +372,9 @@ async function gestures(t: ReturnType<typeof trappedRepo>, git: (args: string[],
     fill: await r(['credential', 'fill'], 'protocol=https\nhost=example.com\n\n'),
     fetch: await r(['fetch', '-q', 'origin']),
     push: await r(['push', '-q', 'drop', 'main']),
+    pushInside: await r(['push', '-q', 'inside', 'main']),
+    pushRewritten: await r(['push', '-q', 'rewritten', 'main']),
+    pushLinked: await r(['push', '-q', 'linked', 'main']),
   };
 }
 
@@ -285,6 +386,9 @@ test('the trap fires under a plain git: every witness is real', { skip: !hasGit 
   });
   assert.equal(done.fetch.code, 0, done.fetch.stderr);
   assert.equal(done.push.code, 0, done.push.stderr);
+  assert.equal(done.pushInside.code, 0, done.pushInside.stderr);
+  assert.equal(done.pushRewritten.code, 0, done.pushRewritten.stderr);
+  assert.equal(done.pushLinked.code, 0, done.pushLinked.stderr);
   assert.deepEqual(t.witnesses().filter((w) => w !== 'trusted-helper'), WITNESSES);
   rmSync(t.root, { recursive: true, force: true });
 });
@@ -302,9 +406,13 @@ test('the daemon git runs nothing a mission wrote: status, diff, checkout, merge
     // The planted driver gives way to a plain text merge, which conflicts on
     // the line both sides changed.
     assert.notEqual(done.merge.code, 0);
-    // The local transport is refused: a local remote runs ITS hooks.
-    assert.match(done.fetch.stderr, /transport 'file' not allowed/);
-    assert.match(done.push.stderr, /transport 'file' not allowed/);
+    // A local remote runs ITS hooks: the one no mission writes is reached,
+    // the ones a mission prepared are refused before git starts.
+    assert.equal(done.fetch.code, 0, done.fetch.stderr);
+    assert.match(done.push.stderr, /^git refused: the remote ".*" is a local repository in a place a mission can write \(inside the Timon home\)/);
+    assert.match(done.pushInside.stderr, /^git refused: the remote ".*inside\.git" is a local repository in a place a mission can write \(inside /);
+    assert.match(done.pushRewritten.stderr, /^git refused: .*\(inside the Timon home\)/);
+    assert.match(done.pushLinked.stderr, /^git refused: the remote ".*link\.git" .*\(inside the Timon home\)/);
     const seen = t.witnesses();
     assert.deepEqual(seen.filter((w) => w !== 'trusted-helper'), [], `ran: ${seen.join(', ')}`);
     assert.ok(seen.includes('trusted-helper'), 'the credential helper of the global configuration still runs');
