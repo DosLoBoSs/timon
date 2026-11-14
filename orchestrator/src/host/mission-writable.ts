@@ -18,11 +18,20 @@
  * (`~/.local/bin`, nvm, Volta, Git for Windows per-user install), and as long
  * as no fence applies a mission writes the whole home, `timon.config.json`
  * included, so refusing it would break those installs and protect nothing.
- * Once the fence makes the home read-only, only its write list stays
- * writable: that list joins `extraRoots` here.
+ * The fence makes the home read-only except its write list
+ * (`resolveFence`): the folders the configuration lets every mission, or
+ * some of them, write (`host.isolation.writable` and its exceptions) are
+ * refused here too, through `setMissionWritableRootsSource`.
+ *
+ * Not refused, on purpose: the system temporary folders the fence leaves
+ * writable, and a backend's own state folder (`~/.claude`…). Neither is on
+ * the daemon's PATH, which a mission cannot change, and an older Claude Code
+ * install keeps its CLI in the latter.
  */
 import { realpathSync } from 'node:fs';
-import { isAbsolute, relative, resolve, sep, win32 } from 'node:path';
+import { homedir } from 'node:os';
+import { isAbsolute, join, relative, resolve, sep, win32 } from 'node:path';
+import type { TimonConfig } from '../config/schema.js';
 import { TIMON_HOME } from '../paths.js';
 
 /** The only folders of `TIMON_HOME` that may hold an executable. */
@@ -32,9 +41,28 @@ export type MissionWritableOptions = {
   platform?: NodeJS.Platform;
   /** Stands in for `TIMON_HOME` in tests. */
   timonHome?: string;
-  /** More folders a mission writes (the fence's home write list). */
+  /** More folders a mission writes; defaults to the fence's write list. */
   extraRoots?: readonly string[];
 };
+
+let rootsSource: () => readonly string[] = () => [];
+
+/** Where the folders the fence lets missions write come from: the live
+ *  configuration, set by `createHost`. */
+export function setMissionWritableRootsSource(source: () => readonly string[]): void {
+  rootsSource = source;
+}
+
+/** The home folders `host.isolation` lets any mission write, `~/` expanded. */
+export function fenceWritableRoots(config: TimonConfig, home = homedir()): string[] {
+  const iso = config.host.isolation;
+  const all = [
+    ...iso.writable,
+    ...Object.values(iso.exceptions.agents).flatMap((e) => e.writable),
+    ...Object.values(iso.exceptions.projects).flatMap((e) => e.writable),
+  ];
+  return [...new Set(all.map((p) => resolve(p.startsWith('~/') ? join(home, p.slice(2)) : p)))];
+}
 
 function isAbsoluteFor(platform: NodeJS.Platform, path: string): boolean {
   return platform === 'win32' ? win32.isAbsolute(path) : isAbsolute(path);
@@ -49,6 +77,12 @@ function within(platform: NodeJS.Platform, parent: string, child: string): boole
     : relative(fold(parent), fold(child));
   const separator = platform === 'win32' ? win32.sep : sep;
   return rel === '' || (!rel.startsWith(`..${separator}`) && rel !== '..' && !isAbsoluteFor(platform, rel));
+}
+
+/** A configuration that cannot be read yet refuses nothing more: resolution
+ *  must not fail because of it. */
+function safeRoots(): readonly string[] {
+  try { return rootsSource(); } catch { return []; }
 }
 
 function canonical(path: string): string {
@@ -75,7 +109,7 @@ export function missionWritableProblem(path: string, options: MissionWritableOpt
       if (TIMON_HOME_EXECUTABLE_DIRS.some((dir) => within(platform, pathJoin(h, dir), p))) continue;
       return 'inside the Timon home';
     }
-    for (const root of options.extraRoots ?? []) {
+    for (const root of options.extraRoots ?? safeRoots()) {
       if (within(platform, root, p)) return `inside ${root}`;
     }
   }

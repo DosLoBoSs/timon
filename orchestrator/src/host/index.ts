@@ -3,6 +3,7 @@ import { config } from '../config/load.js';
 import { createGenericHost } from './generic.js';
 import { createLinuxHost } from './linux.js';
 import { hasSystemd } from './systemd.js';
+import { fenceWritableRoots, setMissionWritableRootsSource } from './mission-writable.js';
 import type { ExecOpts, Host } from './types.js';
 
 export type { Capability, ExecOpts, ExecResult, Host, RevealVia, SpawnOpts } from './types.js';
@@ -19,6 +20,8 @@ export function createHost(cfg: TimonConfig): Host {
   // Pins are read from the live config, not from `cfg`: the adapter lives as
   // long as the daemon, and `host.binaries` can change under it (TODO #413).
   const pins = () => config().host.binaries;
+  // A folder the fence lets missions write never yields a binary the daemon runs.
+  setMissionWritableRootsSource(() => fenceWritableRoots(config()));
   const host = process.platform === 'linux' && hasSystemd()
     ? createLinuxHost(cfg, pins)
     : createGenericHost(cfg, {}, pins);
