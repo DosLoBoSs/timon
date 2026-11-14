@@ -293,6 +293,63 @@ mission already running keeps working. Two rules protect missions:
   stored), it is refused while Timon runs, and the current version stays. Restart
   the missions, or Timon, to apply it.
 
+## Add a section to your provider's page
+
+In **Settings → AI models → Providers**, each provider has its own page: a header
+(logo, name, status, how many agents use it), then sections in this order —
+Connection, API key, Program, its own settings, Models. A section with nothing to
+say is not shown. The page's address names the provider
+(`?settings=models/backends&provider=<id>`), so a link can open it directly.
+
+Your provider plugin can add sections there, with a browser half that registers in
+the `settings.provider.section` list slot (client API 16). A section you register
+is painted on the pages of the providers your plugin brings, and nowhere else.
+
+```json
+"timon": {
+  "apiVersion": 16,
+  "kind": "provider",
+  "client": { "slots": ["settings.provider.section"], "external": ["react", "@timon/ui"], "mode": "esm" }
+}
+```
+
+```js
+import React from 'react'
+import { useProviderPage, ProviderSection } from '@timon/ui'
+
+function UsageSection() {
+  const page = useProviderPage()
+  if (!page) return null
+  return React.createElement(ProviderSection, { title: 'Usage' },
+    `${page.provider.modelCount} models`)
+}
+
+export function apply(ctx) {
+  return ctx.slots.register({ slot: 'settings.provider.section', order: 450 }, UsageSection)
+}
+```
+
+- The component receives no props. `useProviderPage()` returns the provider on
+  screen (`provider`: its id, name, origin, backends, models, status, whether a
+  vault entry it needs is present — names only, never a value), `status`,
+  `defaultBackend`, `refresh()` and `back()`. Call `refresh()` after a change your
+  section made, so the header and the other sections read the provider again.
+- `ProviderSection` is the frame of Timon's own sections: a `title`, a
+  `description`, `actions` at the right of the title, and your content.
+- `order` places the section: the common ones are at 100 (Connection), 200 (API
+  key), 300 (Program), 400 (own settings) and 500 (Models). Without `order`, it
+  comes after Models.
+- With the `key` of a common section (`connection`, `apiKey`, `program`,
+  `settings`, `models`), your section takes that section's place on your
+  provider's page only. `settings` is the one meant for a provider's own
+  settings.
+- Render nothing (`return null`) when your section does not apply: the page
+  leaves no gap for it.
+
+A plugin that brings several backends gets one page per backend; your section is
+painted on each of them, and `provider.backends` tells you which one is on screen.
+The complete template is `examples/plugin-provider-section`.
+
 ## Agents from the ACP registry
 
 Timon can install any program-based agent of the official
