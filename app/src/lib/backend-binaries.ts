@@ -1,8 +1,8 @@
 /**
- * Settings › AI models › CLI binaries (TODO #413): the backend CLIs the daemon
- * runs, and the paths pinned for them. The daemon validates every path and
- * decides who may pin (a superadmin signed in to the app); this module types
- * its answers and turns its codes into sentences.
+ * The paths pinned for the backend CLIs (TODO #413), set from the Program
+ * section of a provider page. The daemon validates every path and decides who
+ * may pin (a superadmin signed in to the app); this module types its answers
+ * and turns its codes into sentences.
  */
 import { t } from '@/lib/i18n';
 
@@ -18,13 +18,6 @@ export type BackendBinary = {
   /** The pinned value as configured, even when it no longer resolves. */
   pin: string | null;
 };
-
-export type BinaryState = 'found' | 'pinned' | 'brokenPin' | 'missing';
-
-export function binaryState(binary: BackendBinary): BinaryState {
-  if (binary.pin !== null) return binary.path !== null ? 'pinned' : 'brokenPin';
-  return binary.path !== null ? 'found' : 'missing';
-}
 
 const BASE = '/api/ui/backends/binaries';
 

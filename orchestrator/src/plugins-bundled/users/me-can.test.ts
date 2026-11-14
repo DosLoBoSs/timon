@@ -84,8 +84,8 @@ assert.ok(adaCookie);
 
 // TODO #560: the UI greys the Git buttons on `can`, so it must say no to an
 // account without the grant, and follow the grant both ways.
-const NONE = { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false };
-const ALL = { 'projects:manage': true, 'agents:manage': true, 'agents:privileged-config': true };
+const NONE = { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false, 'providers:manage': false, 'providers:accounts': false };
+const ALL = { 'projects:manage': true, 'agents:manage': true, 'agents:privileged-config': true, 'providers:manage': true, 'providers:accounts': true };
 const canOf = async (opts: { cookie?: string; bearer?: string }) =>
   ((await call('GET', '/api/auth/me', opts)).json as { can: Record<string, boolean> }).can;
 
@@ -123,6 +123,25 @@ test('GET /api/auth/me says whether the caller holds agents:privileged-config', 
     grantTestPermissions(dbApi, adaId, []);
   }
   assert.deepEqual(await canOf({ cookie: adaCookie }), NONE);
+});
+
+// The Providers screen paints its level from these two (`users/provider-access.ts`).
+test('GET /api/auth/me says which level of the Providers screen the caller holds', async () => {
+  grantTestPermissions(dbApi, adaId, ['providers:accounts']);
+  try {
+    assert.deepEqual(await canOf({ cookie: adaCookie }), { ...NONE, 'providers:accounts': true });
+  } finally {
+    grantTestPermissions(dbApi, adaId, []);
+  }
+  // A deny of the wide level on top of `*` leaves the narrow one.
+  grantTestPermissions(dbApi, adaId, ['*', '-providers:manage']);
+  try {
+    const can = await canOf({ cookie: adaCookie });
+    assert.equal(can['providers:manage'], false);
+    assert.equal(can['providers:accounts'], true);
+  } finally {
+    grantTestPermissions(dbApi, adaId, []);
+  }
 });
 
 // TODO #693: the skill island greys the agent-scope attachment controls on

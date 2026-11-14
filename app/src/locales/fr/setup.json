@@ -202,7 +202,6 @@
     "loading": "Recherche des CLI d’IA sur cette machine…",
     "unavailable": "Impossible de lister les CLI d’IA de cette machine pour l’instant.",
     "retry": "Réessayer",
-    "checkUpdates": "Rechercher des mises à jour",
     "updateCheckOff": "La recherche de mises à jour est désactivée (réglage « Check for CLI updates »).",
     "install": "Installer",
     "installing": "Installation…",
@@ -242,19 +241,10 @@
       "needOne": "Installez et connectez Claude, Codex, Grok ou Copilot pour continuer.",
       "anyway": "Continuer quand même"
     },
-    "settings": {
-      "title": "Outils d’IA de cette machine",
-      "description": "Installez un CLI d’IA avec l’installeur officiel de son éditeur, connectez-le, et mettez-le à jour quand une nouvelle version sort. Timon vérifie les mises à jour au démarrage puis toutes les quelques heures."
-    },
     "rows": {
       "searching": "Recherche…",
-      "connected": "Connecté",
-      "state": {
-        "missing": "Non installé",
-        "bundled": "Fourni avec l’app de bureau, non connecté",
-        "signIn": "Installé, non connecté",
-        "ready": "Connecté"
-      },
+      "installAndSignIn": "Installer et se connecter",
+      "installedNotFound": "Installé, mais Timon ne trouve pas le programme : relancez Timon ou imposez son chemin dans la page du fournisseur.",
       "signInOutcome": {
         "terminal": "Tapée dans le terminal de Timon : appuyez sur Entrée et terminez dans votre navigateur. Timon vérifie de nouveau à votre retour.",
         "copied": "Commande copiée : collez-la dans un terminal de cette machine, appuyez sur Entrée et terminez dans votre navigateur. Timon vérifie de nouveau à votre retour.",

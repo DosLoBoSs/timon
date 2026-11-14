@@ -1598,7 +1598,6 @@
       },
       "models": {
         "backends": "공급자",
-        "accounts": "구독 계정",
         "fallback": "자동 전환",
         "breaker": "회로 차단기",
         "quotas": "할당량"
@@ -1658,8 +1657,7 @@
         "terminal": "셸 콘솔 터미널 글꼴 shell console pty font"
       },
       "models": {
-        "backends": "claude codex 공급자 LLM API 모델 기본 순서 provider model",
-        "accounts": "구독 계정 로그인 연결 다시 연결 여러 claude codex chatgpt 요금제 기기 코드 subscription account login",
+        "backends": "claude codex 공급자 LLM API 모델 기본 순서 provider model 구독 계정 로그인 연결 다시 연결 여러 chatgpt 요금제 기기 코드 subscription account login add catalog registry acp endpoint compatible openai anthropic url api key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "대체 백업 할당량 전환 소진 대기 시간 최후 수단 fallback quota",
         "breaker": "회로 차단기 무익한 턴 대기 circuit breaker",
         "quotas": "사용량 한도 크레딧 구독 요금제 초기화 usage limits credits"
@@ -3505,10 +3503,7 @@
       }
     },
     "intro": "모든 LLM 공급자와 모델을 관리합니다. 변경 사항은 Timon을 다시 시작하지 않고 적용됩니다.",
-    "edit": "편집",
-    "editTitle": "공급자 편집",
     "saved": "공급자가 업데이트되었습니다.",
-    "modelCount": "모델 {count}개",
     "keyHintEdit": "저장된 키를 유지하려면 비워 두세요. 입력하면 볼트의 키를 대체하며 다시 표시되지 않습니다.",
     "picto": {
       "choose": "그림 선택",
@@ -3538,19 +3533,12 @@
       "contextWindowDetected": "자동 · {window}",
       "contextWindowAuto": "컨텍스트"
     },
-    "empty": "아직 추가된 공급자가 없습니다.",
-    "add": "공급자 추가",
     "added": "공급자가 추가되었습니다.",
     "save": "저장",
-    "remove": "제거",
     "confirmRemove": "공급자 \"{name}\"을(를) 제거하시겠습니까? 키도 볼트에서 삭제됩니다.",
-    "active": "활성",
-    "notDetected": "감지 안 됨",
-    "inactive": "비활성",
     "testButton": "테스트",
     "destinationNotice": "이 공급자에서 실행되는 미션의 모든 프롬프트가 {host}(으)로 전송됩니다.",
     "keyHint": "파일이 아닌 시크릿 볼트에 저장되며 다시 표시되지 않습니다. 키를 요구하지 않는 로컬 서버라면 비워 두세요.",
-    "fileHint": "각 공급자는 ~/.timon/backends/의 파일입니다. 그곳에 JSON 파일을 직접 넣을 수도 있으며, 1초 안에 인식됩니다.",
     "fields": {
       "name": "이름",
       "protocol": "프로토콜",
@@ -3585,7 +3573,6 @@
       "protocolUnavailable": "이 프로토콜은 설치되어 있지 않습니다.",
       "unconfirmed": "변경이 확인되지 않았습니다. 저장된 상태를 확인하려면 이 페이지를 새로 고치세요."
     },
-    "disabled": "사용 안 함",
     "reorder": "드래그해서 이 공급자 순서 바꾸기",
     "claudeToken": {
       "title": "Claude 장기 토큰",
@@ -3604,11 +3591,6 @@
     "disableHint": "선택기에서 사라집니다. 명시적으로 이를 사용하는 새 실행은 자동 대체 없이 거부됩니다. 아래의 기존 선택은 유지됩니다.",
     "disable": "공급자 사용 안 함",
     "managedHint": "모델 이름 바꾸기, 추가, 삭제, 숨기기와 이름, 그림, 기본 모델 변경을 할 수 있습니다. 연결 설정은 Timon 또는 공급자 플러그인이 관리합니다.",
-    "origins": {
-      "builtin": "내장",
-      "plugin": "플러그인",
-      "file": "직접 추가"
-    },
     "usages": {
       "agents": "에이전트",
       "routines": "루틴",
@@ -3974,7 +3956,6 @@
     }
   },
   "backendAccounts": {
-    "description": "같은 공급자의 여러 구독으로, 각각 모델 선택기의 선택지가 됩니다(\"Claude · Perso\"). 내 계정은 직접 로그인하며, 관리자는 누구의 계정이든 로그인할 수 있습니다. 미션이 스스로 다른 구독으로 옮겨 가지는 않습니다.",
     "loading": "계정 불러오는 중…",
     "empty": "아직 구독 계정이 없습니다: 미션은 이 컴퓨터의 공급자 로그인으로 실행됩니다.",
     "add": "계정 추가",

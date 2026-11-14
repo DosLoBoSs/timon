@@ -522,6 +522,15 @@ export const MODEL_PICKER_SLOT = 'model.picker';
 export const PROVIDER_CLI_SLOT = 'providers.cli';
 
 /**
+ * Slot of one provider's row (client API 16): logo, name, its one status line,
+ * "Update available" and the way to its page. Painted by every `ProviderRow`
+ * host — the providers list of Settings › AI models and the onboarding's
+ * "Your AIs" step — so a replacement changes the row on both at once. A boot
+ * slot like `providers.cli`.
+ */
+export const PROVIDER_ROW_SLOT = 'providers.row';
+
+/**
  * Slot of the task form: the creation and edition of a Kanban task, opened
  * from the board, the Agents page and the agents grid. Painted by every
  * `TaskFormModal` host. A boot slot like `model.picker`: a replacement
@@ -651,6 +660,7 @@ function declareBootSlots(): void {
   declareSlot(CHAT_MEDIA_SLOT, 'single');
   declareSlot(MODEL_PICKER_SLOT, 'single');
   declareSlot(PROVIDER_CLI_SLOT, 'single');
+  declareSlot(PROVIDER_ROW_SLOT, 'single');
   declareSlot(TASK_FORM_SLOT, 'single');
   declareSlot(DIRECTORY_PICKER_SLOT, 'single');
   declareSlot(CONFIRM_DIALOG_SLOT, 'single');

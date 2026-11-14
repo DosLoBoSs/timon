@@ -1598,7 +1598,6 @@
       },
       "models": {
         "backends": "Proveedores",
-        "accounts": "Cuentas de suscripción",
         "fallback": "Cambio automático",
         "breaker": "Cortacircuitos",
         "quotas": "Cuotas"
@@ -1658,8 +1657,7 @@
         "terminal": "shell consola pty fuente tipografía"
       },
       "models": {
-        "backends": "claude codex proveedor llm api modelo predeterminado orden",
-        "accounts": "suscripción cuenta iniciar sesión login conectar reconectar varias claude codex chatgpt plan dispositivo código",
+        "backends": "claude codex proveedor llm api modelo predeterminado orden suscripción cuenta iniciar sesión login conectar reconectar varias chatgpt plan dispositivo código add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "respaldo reserva cuota cambio agotada enfriamiento último recurso fallback",
         "breaker": "cortacircuitos circuit breaker turnos estériles apartar",
         "quotas": "límites de uso créditos suscripción plan reinicio cuotas"
@@ -3505,10 +3503,7 @@
       }
     },
     "intro": "Gestiona todos tus proveedores de LLM y sus modelos. Los cambios se aplican sin reiniciar Timon.",
-    "edit": "Editar",
-    "editTitle": "Editar el proveedor",
     "saved": "Proveedor actualizado.",
-    "modelCount": "{count} modelos",
     "keyHintEdit": "Déjalo vacío para conservar la clave guardada. Escribir una la reemplaza en el almacén: no se vuelve a mostrar.",
     "picto": {
       "choose": "Elegir una imagen",
@@ -3538,19 +3533,12 @@
       "contextWindowDetected": "auto · {window}",
       "contextWindowAuto": "contexto"
     },
-    "empty": "Aún no se ha añadido ningún proveedor.",
-    "add": "Añadir un proveedor",
     "added": "Proveedor añadido.",
     "save": "Guardar",
-    "remove": "Quitar",
     "confirmRemove": "¿Quitar el proveedor «{name}»? Su clave también se elimina del almacén.",
-    "active": "Activo",
-    "notDetected": "No detectado",
-    "inactive": "Inactivo",
     "testButton": "Probar",
     "destinationNotice": "Cada prompt de una misión ejecutada con este proveedor se envía a {host}.",
     "keyHint": "Guardada en el almacén de secretos, nunca en el archivo, y no se vuelve a mostrar. Déjalo vacío para un servidor local que no pide ninguna.",
-    "fileHint": "Cada proveedor es un archivo en ~/.timon/backends/. También puedes soltar ahí un archivo JSON a mano: se detecta en un segundo.",
     "fields": {
       "name": "Nombre",
       "protocol": "Protocolo",
@@ -3585,7 +3573,6 @@
       "protocolUnavailable": "Este protocolo no está instalado.",
       "unconfirmed": "Cambio sin confirmar. Recarga esta página para comprobar el estado guardado."
     },
-    "disabled": "Desactivado",
     "reorder": "Arrastra para reordenar este proveedor",
     "claudeToken": {
       "title": "Token de larga duración de Claude",
@@ -3604,11 +3591,6 @@
     "disableHint": "Desaparecerá de los selectores. Los nuevos lanzamientos que lo usen explícitamente se rechazarán, sin alternativa automática. Las elecciones existentes de abajo se conservarán.",
     "disable": "Desactivar proveedor",
     "managedHint": "Puedes renombrar, añadir, eliminar y ocultar modelos, y cambiar nombres, imágenes y el modelo por defecto. Los ajustes de conexión los gestiona Timon o el plugin del proveedor.",
-    "origins": {
-      "builtin": "Integrado",
-      "plugin": "Plugin",
-      "file": "Añadido por ti"
-    },
     "usages": {
       "agents": "Agentes",
       "routines": "Rutinas",
@@ -3974,7 +3956,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Varias suscripciones del mismo proveedor, cada una como una opción en los selectores de modelo («Claude · Perso»). Tú inicias sesión con tus propias cuentas; un administrador la inicia con las de cualquiera. Una misión nunca pasa sola a otra suscripción.",
     "loading": "Cargando cuentas…",
     "empty": "Aún no hay ninguna cuenta de suscripción: las misiones se ejecutan con el inicio de sesión del proveedor de este equipo.",
     "add": "Añadir una cuenta",

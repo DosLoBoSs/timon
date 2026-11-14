@@ -17,7 +17,7 @@ Timon can run agents on **Pi** ([pi.dev](https://pi.dev/)), the token-frugal cod
 
 2. Sign in, in a terminal, under the OS account that runs Timon: start `pi`, then type `/login` and choose a provider (a subscription or an API key). You can also configure Pi's providers or keys as Pi's own documentation describes.
 
-3. Restart Timon. **Pi** then appears among the LLM backends.
+3. Restart Timon. **Pi** then appears in the model selectors.
 
 If Pi does not appear, run `timon doctor`: it tells you whether the `pi` command was found. A command installed somewhere the service's PATH does not cover can be pinned: set `host.binaries.pi` to its absolute path. If a mission says Pi is older than 1.4.0, update it (`pi update`, or the npm command above) and send the message again; Timon does not need a restart.
 

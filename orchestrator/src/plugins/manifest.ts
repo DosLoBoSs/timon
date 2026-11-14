@@ -83,8 +83,14 @@ import { SECRET_NAME_RE } from '../secrets/resolve.js';
  * Same wave: `ctx.sql`, a plugin's own SQLite database, migrated by the core
  * from the manifest's `migrations` folder before `apply`, under the ordinary
  * permission `storage:sql` (docs/SDK-COMPAT.md §102).
+ *
+ * 16 — `@timon/ui` exports `useProviderPage`: the provider a
+ * `settings.provider.section` occupant is painted for, on the page of one
+ * provider in Settings › AI models › Providers. API 15 shipped in 0.1.7, so a
+ * new export opens a new wave. No member of `PluginContext` changes
+ * (docs/SDK-COMPAT.md §112).
  */
-export const PLUGIN_API_VERSION = 15;
+export const PLUGIN_API_VERSION = 16;
 
 /** First contract that knows `kind: dictation` and its manifest block. */
 export const DICTATION_API_VERSION = 14;

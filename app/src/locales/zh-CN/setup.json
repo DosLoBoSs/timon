@@ -202,7 +202,6 @@
     "loading": "正在查找此设备上的 AI 命令行工具…",
     "unavailable": "暂时无法列出此设备上的 AI 命令行工具。",
     "retry": "重试",
-    "checkUpdates": "检查更新",
     "updateCheckOff": "已关闭更新检查（“检查 CLI 更新”设置）。",
     "install": "安装",
     "installing": "正在安装…",
@@ -242,19 +241,9 @@
       "needOne": "请安装并登录 Claude、Codex、Grok 或 Copilot 中的至少一个工具，再继续。",
       "anyway": "仍然继续"
     },
-    "settings": {
-      "title": "此设备上的 AI 工具",
-      "description": "使用提供商的官方安装程序安装 AI 命令行工具，登录后可在新版本发布时更新。Timon 会在启动时检查更新，之后每隔几小时检查一次。"
-    },
     "rows": {
       "searching": "正在查找…",
-      "connected": "已连接",
-      "state": {
-        "missing": "未安装",
-        "bundled": "桌面应用自带，尚未登录",
-        "signIn": "已安装，尚未登录",
-        "ready": "已登录"
-      },
+      "installAndSignIn": "安装并登录",
       "signInOutcome": {
         "terminal": "命令已输入到 Timon 的终端。请在终端按 Enter，并在浏览器中完成登录。返回此页面时，Timon 会重新检查。",
         "copied": "命令已复制。请将其粘贴到此设备上的终端，按 Enter，并在浏览器中完成登录。返回此页面时，Timon 会重新检查。",

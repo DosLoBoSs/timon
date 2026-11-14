@@ -1598,7 +1598,6 @@
       },
       "models": {
         "backends": "プロバイダー",
-        "accounts": "サブスクアカウント",
         "fallback": "自動切り替え",
         "breaker": "サーキットブレーカー",
         "quotas": "クォータ"
@@ -1658,8 +1657,7 @@
         "terminal": "シェル コンソール ターミナル フォント shell console pty font"
       },
       "models": {
-        "backends": "claude codex プロバイダー LLM API モデル 既定 順序 provider model",
-        "accounts": "サブスクリプション アカウント サインイン ログイン 接続 再接続 複数 claude codex chatgpt プラン デバイスコード subscription account login",
+        "backends": "claude codex プロバイダー LLM API モデル 既定 順序 provider model サブスクリプション アカウント サインイン ログイン 接続 再接続 複数 chatgpt プラン デバイスコード subscription account login add catalog registry acp endpoint compatible openai anthropic url api key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "フォールバック 予備 クォータ 切り替え 枯渇 クールダウン 最終手段 fallback quota",
         "breaker": "サーキットブレーカー 無益なターン 待機 circuit breaker",
         "quotas": "使用量 上限 クレジット サブスクリプション プラン リセット usage limits credits"
@@ -3505,10 +3503,7 @@
       }
     },
     "intro": "すべての LLM プロバイダーとそのモデルを管理します。変更は Timon を再起動せずに適用されます。",
-    "edit": "編集",
-    "editTitle": "プロバイダーを編集",
     "saved": "プロバイダーを更新しました。",
-    "modelCount": "モデル {count} 個",
     "keyHintEdit": "保存済みのキーを維持するには空欄のままにしてください。入力すると保管庫のキーが置き換えられ、二度と表示されません。",
     "picto": {
       "choose": "画像を選択",
@@ -3538,19 +3533,12 @@
       "contextWindowDetected": "自動 · {window}",
       "contextWindowAuto": "コンテキスト"
     },
-    "empty": "プロバイダーはまだ追加されていません。",
-    "add": "プロバイダーを追加",
     "added": "プロバイダーを追加しました。",
     "save": "保存",
-    "remove": "削除",
     "confirmRemove": "プロバイダー「{name}」を削除しますか？キーも保管庫から削除されます。",
-    "active": "有効",
-    "notDetected": "未検出",
-    "inactive": "無効",
     "testButton": "テスト",
     "destinationNotice": "このプロバイダーで実行されるミッションのすべてのプロンプトは {host} に送信されます。",
     "keyHint": "ファイルではなくシークレット保管庫に保存され、二度と表示されません。キーを求めないローカルサーバーの場合は空欄にしてください。",
-    "fileHint": "各プロバイダーは ~/.timon/backends/ 内のファイルです。そこに JSON ファイルを手動で置くこともでき、1 秒以内に読み込まれます。",
     "fields": {
       "name": "名前",
       "protocol": "プロトコル",
@@ -3585,7 +3573,6 @@
       "protocolUnavailable": "このプロトコルはインストールされていません。",
       "unconfirmed": "変更が確認されていません。保存された状態を確認するには、このページを再読み込みしてください。"
     },
-    "disabled": "無効",
     "reorder": "ドラッグしてこのプロバイダーを並べ替え",
     "claudeToken": {
       "title": "Claude の長期トークン",
@@ -3604,11 +3591,6 @@
     "disableHint": "選択欄から消えます。明示的にこれを使う新しい起動は拒否され、自動フォールバックはありません。下の既存の選択は保持されます。",
     "disable": "プロバイダーを無効化",
     "managedHint": "モデルの名前変更・追加・削除・非表示、名前、画像、既定のモデルの変更ができます。接続設定は Timon またはプロバイダーのプラグインが管理します。",
-    "origins": {
-      "builtin": "組み込み",
-      "plugin": "プラグイン",
-      "file": "自分で追加"
-    },
     "usages": {
       "agents": "エージェント",
       "routines": "ルーティン",
@@ -3974,7 +3956,6 @@
     }
   },
   "backendAccounts": {
-    "description": "同じプロバイダーの複数のサブスクリプション。それぞれがモデルの選択欄の選択肢になります (「Claude · Perso」)。自分のアカウントは自分でサインインし、管理者は誰のアカウントでもサインインできます。ミッションが自動で別のサブスクリプションに移ることはありません。",
     "loading": "アカウントを読み込み中…",
     "empty": "サブスクリプションアカウントはまだありません: ミッションはこのマシンでのプロバイダーのサインインで実行されます。",
     "add": "アカウントを追加",

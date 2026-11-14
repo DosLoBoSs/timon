@@ -138,9 +138,6 @@
   "app/src/lib/plugin-host/slots.ts": {
     "french": 5
   },
-  "app/src/plugins-client/backends/backends-settings.tsx": {
-    "jsxAttr": 1
-  },
   "app/src/plugins-client/backends/claude-token.tsx": {
     "jsxAttr": 1
   },
