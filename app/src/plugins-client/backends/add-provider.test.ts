@@ -106,7 +106,7 @@ test('"Add a provider" offers the catalog or an endpoint, and what is added open
     // The list: a button, and no registry any more.
     await render('settings=models%2Fbackends');
     await until(() => button('Add a provider') !== undefined, 'the list and its button');
-    assert.equal(document.querySelector('[data-provider-catalog]'), null, 'the registry is no longer shown on the list');
+    assert.ok(!document.querySelector('[data-provider-catalog]'), 'the registry is no longer shown on the list');
     assert.equal(registryRead(), false, 'nor read');
     await click(button('Add a provider')!);
     assert.equal(last()?.how, 'push', 'Back returns to the list');
@@ -117,7 +117,7 @@ test('"Add a provider" offers the catalog or an endpoint, and what is added open
     await render('settings=models%2Fbackends&add-provider=');
     await until(() => document.querySelectorAll('[role="radio"]').length === 2, 'the two ways');
     assert.equal(document.querySelector('nav')?.textContent, 'ProvidersAdd a provider', 'the breadcrumb leads back to the list');
-    assert.equal(document.querySelector('[aria-checked="true"]'), null, 'nothing is chosen for the person');
+    assert.ok(!document.querySelector('[aria-checked="true"]'), 'nothing is chosen for the person');
     assert.equal(registryRead(), false, 'the third-party registry is read only once the catalog is chosen');
     await click(document.querySelector('[data-add-choice="catalog"]')!);
     assert.equal(last()?.how, 'replace');

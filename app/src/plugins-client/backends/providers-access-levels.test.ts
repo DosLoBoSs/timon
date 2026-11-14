@@ -97,16 +97,16 @@ test('own accounts reads the list and the Connection section alone; full gets ev
     await render('settings=models%2Fbackends');
     await until(() => document.querySelector('[data-providers-list]') !== null, 'the list');
     await until(() => buttons().some((label) => label.includes('Acme agent')), 'the provider row');
-    assert.equal(document.querySelector('[data-default-provider]'), null, 'the default provider is the install\'s');
+    assert.ok(!document.querySelector('[data-default-provider]'), 'the default provider is the install\'s');
     assert.equal(buttons().some((label) => /Reorder|Check/.test(label)), false);
-    assert.equal(document.querySelector('[data-providers-hidden]'), null);
+    assert.ok(!document.querySelector('[data-providers-hidden]'));
 
     // Its page: the Connection section and nothing else, no switch.
     await render('settings=models%2Fbackends&provider=acme');
     await until(() => document.querySelector('h3')?.textContent === 'Acme agent', 'the provider page');
     await until(() => document.querySelector('[data-connection="accounts"]') !== null, 'the own accounts');
     assert.deepEqual(sections(), ['connection']);
-    assert.equal(document.querySelector('[data-provider-activation]'), null);
+    assert.ok(!document.querySelector('[data-provider-activation]'));
 
     // Full access, without being the superadmin: every section, and the switch.
     can = { 'providers:manage': true };
