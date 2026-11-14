@@ -372,8 +372,6 @@
     }
   },
   "providersSettings": {
-    "title": "Provider",
-    "description": "I plugin provider portano un servizio di IA in Timon. Ogni programma che un provider avvia viene autorizzato qui, tramite il suo percorso risolto, prima di poter girare.",
     "cancel": "Annulla",
     "consent": {
       "prompts": "Riceve ogni istruzione e ogni risposta delle missioni che serve.",
@@ -388,26 +386,15 @@
       "allowHint": "Senza questo, il provider è installato ma resta inattivo finché non lo autorizzi in {settingsPath}."
     },
     "plugins": {
-      "title": "Plugin provider",
-      "none": "Nessun plugin provider installato.",
-      "backends": "Backend: {list}",
       "notFound": "non installato su questa macchina",
-      "authorize": "Rivedi e autorizza",
       "authorizeTitle": "Autorizza {name}",
       "authorizeBody": "Timon ha risolto questi programmi su questa macchina. Consenti solo i percorsi che riconosci.",
       "authorizeConfirm": "Consenti questi programmi",
       "authorized": "{name} è autorizzato.",
-      "state": {
-        "active": "Attivo",
-        "failed": "Richiede attenzione",
-        "disabled": "Spento",
-        "skipped": "Rifiutato"
-      },
       "binary": {
         "authorize": "da autorizzare",
         "ready": "autorizzato",
-        "install": "installalo prima",
-        "refused": "mai consentito"
+        "install": "installalo prima"
       }
     },
     "acp": {
@@ -458,15 +445,7 @@
     }
   },
   "binariesSettings": {
-    "title": "Binari CLI",
-    "description": "Dove Timon ha trovato lo strumento a riga di comando di ogni provider di IA su questa macchina. Se uno manca o è in un posto insolito, fissa il suo percorso completo: si applica alla prossima missione, senza riavviare Timon.",
-    "recheck": "Ricontrolla",
-    "rechecked": "Binari ricontrollati.",
-    "none": "Nessun provider locale usa uno strumento a riga di comando.",
-    "backends": "Usato da: {list}",
-    "resolved": "Esegue {path}",
     "brokenPin": "Il percorso fissato non può essere eseguito: {path}",
-    "notFound": "Non trovato su questa macchina. Installalo, oppure fissa il suo percorso qui sotto.",
     "pathLabel": "Percorso del binario {name}",
     "placeholder": "Percorso completo, per esempio /usr/local/bin/claude o C:\\Users\\you\\AppData\\Roaming\\npm\\claude.cmd",
     "browse": "Sfoglia…",
@@ -474,12 +453,6 @@
     "clear": "Rimuovi il percorso fissato",
     "saved": "{name}: percorso salvato. Le nuove missioni lo usano.",
     "cleared": "{name}: percorso fissato rimosso. Timon lo cerca di nuovo da solo.",
-    "state": {
-      "found": "Trovato",
-      "pinned": "Fissato",
-      "brokenPin": "Percorso fissato non valido",
-      "missing": "Non trovato"
-    },
     "errors": {
       "forbidden": "Solo un superadmin con accesso all’app può modificare questi percorsi.",
       "unknown_binary": "Questo non è lo strumento a riga di comando di un provider locale.",

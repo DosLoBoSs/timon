@@ -242,10 +242,6 @@
       "needOne": "请安装并登录 Claude、Codex、Grok 或 Copilot 中的至少一个工具，再继续。",
       "anyway": "仍然继续"
     },
-    "settings": {
-      "title": "此设备上的 AI 工具",
-      "description": "使用提供商的官方安装程序安装 AI 命令行工具，登录后可在新版本发布时更新。Timon 会在启动时检查更新，之后每隔几小时检查一次。"
-    },
     "rows": {
       "searching": "正在查找…",
       "connected": "已连接",

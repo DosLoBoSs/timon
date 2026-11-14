@@ -401,8 +401,6 @@
     }
   },
   "providersSettings": {
-    "title": "Fournisseurs",
-    "description": "Les plugins fournisseurs apportent un service d'IA à Timon. Chaque programme qu'un fournisseur lance est autorisé ici, par son chemin résolu, avant de pouvoir s'exécuter.",
     "cancel": "Annuler",
     "consent": {
       "prompts": "Reçoit chaque instruction et chaque réponse des missions qu'il sert.",
@@ -417,26 +415,15 @@
       "allowHint": "Sans cela, le fournisseur est installé mais reste inactif tant que vous ne l'autorisez pas dans {settingsPath}."
     },
     "plugins": {
-      "title": "Plugins fournisseurs",
-      "none": "Aucun plugin fournisseur n'est installé.",
-      "backends": "Backends : {list}",
       "notFound": "non installé sur cette machine",
-      "authorize": "Examiner et autoriser",
       "authorizeTitle": "Autoriser {name}",
       "authorizeBody": "Timon a résolu ces programmes sur cette machine. N'autorisez que les chemins que vous reconnaissez.",
       "authorizeConfirm": "Autoriser ces programmes",
       "authorized": "{name} est autorisé.",
-      "state": {
-        "active": "Actif",
-        "failed": "À corriger",
-        "disabled": "Désactivé",
-        "skipped": "Refusé"
-      },
       "binary": {
         "authorize": "à autoriser",
         "ready": "autorisé",
-        "install": "à installer d'abord",
-        "refused": "jamais autorisé"
+        "install": "à installer d'abord"
       }
     },
     "acp": {
@@ -506,15 +493,7 @@
     }
   },
   "binariesSettings": {
-    "title": "Binaires CLI",
-    "description": "Où Timon a trouvé l'outil en ligne de commande de chaque fournisseur d'IA sur cette machine. S'il manque ou se trouve dans un endroit inhabituel, épinglez son chemin complet : il s'applique dès la prochaine mission, sans redémarrer Timon.",
-    "recheck": "Vérifier à nouveau",
-    "rechecked": "Binaires vérifiés à nouveau.",
-    "none": "Aucun fournisseur local n'utilise d'outil en ligne de commande.",
-    "backends": "Utilisé par : {list}",
-    "resolved": "Lance {path}",
     "brokenPin": "Le chemin épinglé ne peut pas être lancé : {path}",
-    "notFound": "Introuvable sur cette machine. Installez-le, ou épinglez son chemin ci-dessous.",
     "pathLabel": "Chemin du binaire {name}",
     "placeholder": "Chemin complet, par exemple /usr/local/bin/claude ou C:\\Users\\vous\\AppData\\Roaming\\npm\\claude.cmd",
     "browse": "Parcourir…",
@@ -522,12 +501,6 @@
     "clear": "Retirer l'épingle",
     "saved": "{name} : chemin enregistré. Les nouvelles missions l'utilisent.",
     "cleared": "{name} : épingle retirée. Timon le cherche de nouveau lui-même.",
-    "state": {
-      "found": "Trouvé",
-      "pinned": "Épinglé",
-      "brokenPin": "Chemin épinglé cassé",
-      "missing": "Introuvable"
-    },
     "errors": {
       "forbidden": "Seul un superadmin connecté à l'app peut modifier ces chemins.",
       "unknown_binary": "Ce n'est pas l'outil en ligne de commande d'un fournisseur local.",

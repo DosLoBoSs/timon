@@ -372,8 +372,6 @@
     }
   },
   "providersSettings": {
-    "title": "Dostawcy",
-    "description": "Wtyczki dostawców wnoszą do Timon usługę AI. Każdy program uruchamiany przez dostawcę jest tutaj autoryzowany według rozwiązanej ścieżki, zanim będzie mógł działać.",
     "cancel": "Anuluj",
     "consent": {
       "prompts": "Otrzymuje każdą instrukcję i każdą odpowiedź obsługiwanych misji.",
@@ -388,26 +386,15 @@
       "allowHint": "Bez tego dostawca jest zainstalowany, ale pozostaje nieaktywny, dopóki nie autoryzujesz go w {settingsPath}."
     },
     "plugins": {
-      "title": "Wtyczki dostawców",
-      "none": "Nie zainstalowano żadnej wtyczki dostawcy.",
-      "backends": "Backendy: {list}",
       "notFound": "niezainstalowany na tej maszynie",
-      "authorize": "Przejrzyj i autoryzuj",
       "authorizeTitle": "Autoryzuj {name}",
       "authorizeBody": "Timon rozwiązał te programy na tej maszynie. Zezwalaj tylko na ścieżki, które rozpoznajesz.",
       "authorizeConfirm": "Zezwól na te programy",
       "authorized": "Autoryzowano {name}.",
-      "state": {
-        "active": "Aktywna",
-        "failed": "Wymaga uwagi",
-        "disabled": "Wyłączona",
-        "skipped": "Odrzucona"
-      },
       "binary": {
         "authorize": "do autoryzacji",
         "ready": "autoryzowany",
-        "install": "najpierw go zainstaluj",
-        "refused": "nigdy niedozwolony"
+        "install": "najpierw go zainstaluj"
       }
     },
     "acp": {
@@ -458,15 +445,7 @@
     }
   },
   "binariesSettings": {
-    "title": "Pliki binarne CLI",
-    "description": "Gdzie Timon znalazł narzędzie wiersza poleceń każdego dostawcy AI na tej maszynie. Jeśli któregoś brakuje lub jest w nietypowym miejscu, przypnij jego pełną ścieżkę: zadziała przy następnej misji, bez restartu Timon.",
-    "recheck": "Sprawdź ponownie",
-    "rechecked": "Pliki binarne sprawdzone ponownie.",
-    "none": "Żaden lokalny dostawca nie używa narzędzia wiersza poleceń.",
-    "backends": "Używany przez: {list}",
-    "resolved": "Uruchamia {path}",
     "brokenPin": "Przypiętej ścieżki nie można uruchomić: {path}",
-    "notFound": "Nie znaleziono na tej maszynie. Zainstaluj go lub przypnij jego ścieżkę poniżej.",
     "pathLabel": "Ścieżka do pliku binarnego {name}",
     "placeholder": "Pełna ścieżka, np. /usr/local/bin/claude lub C:\\Users\\ty\\AppData\\Roaming\\npm\\claude.cmd",
     "browse": "Przeglądaj…",
@@ -474,12 +453,6 @@
     "clear": "Usuń przypięcie",
     "saved": "{name}: ścieżka zapisana. Nowe misje będą jej używać.",
     "cleared": "{name}: przypięcie usunięte. Timon znowu szuka go sam.",
-    "state": {
-      "found": "Znaleziony",
-      "pinned": "Przypięty",
-      "brokenPin": "Przypięta ścieżka nie działa",
-      "missing": "Nie znaleziono"
-    },
     "errors": {
       "forbidden": "Tylko superadministrator zalogowany w aplikacji może zmieniać te ścieżki.",
       "unknown_binary": "To nie jest narzędzie wiersza poleceń lokalnego dostawcy.",

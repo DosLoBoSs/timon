@@ -372,8 +372,6 @@
     }
   },
   "providersSettings": {
-    "title": "プロバイダー",
-    "description": "プロバイダーのプラグインは AI サービスを Timon に追加します。プロバイダーが起動する各プログラムは、実行前に解決済みのパスでここで承認されます。",
     "cancel": "キャンセル",
     "consent": {
       "prompts": "担当するミッションのすべての指示と回答を受け取ります。",
@@ -388,26 +386,15 @@
       "allowHint": "許可しない場合、プロバイダーはインストールされますが、{settingsPath} で承認するまで無効のままです。"
     },
     "plugins": {
-      "title": "プロバイダーのプラグイン",
-      "none": "プロバイダーのプラグインはインストールされていません。",
-      "backends": "バックエンド: {list}",
       "notFound": "このマシンにはインストールされていません",
-      "authorize": "確認して承認",
       "authorizeTitle": "{name} を承認",
       "authorizeBody": "Timon はこのマシンでこれらのプログラムを解決しました。見覚えのあるパスだけを許可してください。",
       "authorizeConfirm": "これらのプログラムを許可",
       "authorized": "{name} を承認しました。",
-      "state": {
-        "active": "有効",
-        "failed": "要対応",
-        "disabled": "オフ",
-        "skipped": "拒否"
-      },
       "binary": {
         "authorize": "承認待ち",
         "ready": "承認済み",
-        "install": "先にインストール",
-        "refused": "許可不可"
+        "install": "先にインストール"
       }
     },
     "acp": {
@@ -458,15 +445,7 @@
     }
   },
   "binariesSettings": {
-    "title": "CLI のバイナリ",
-    "description": "このマシンで Timon が各 AI プロバイダーのコマンドラインツールを見つけた場所。ないものや通常と異なる場所にあるものは、フルパスを固定してください: Timon を再起動せずに次のミッションから適用されます。",
-    "recheck": "再確認",
-    "rechecked": "バイナリを再確認しました。",
-    "none": "コマンドラインツールを使うローカルプロバイダーはありません。",
-    "backends": "使用元: {list}",
-    "resolved": "{path} を実行",
     "brokenPin": "固定したパスは実行できません: {path}",
-    "notFound": "このマシンには見つかりません。インストールするか、下でパスを固定してください。",
     "pathLabel": "{name} バイナリのパス",
     "placeholder": "フルパス (例: /usr/local/bin/claude または C:\\Users\\you\\AppData\\Roaming\\npm\\claude.cmd)",
     "browse": "参照…",
@@ -474,12 +453,6 @@
     "clear": "固定を解除",
     "saved": "{name}: パスを保存しました。新しいミッションで使われます。",
     "cleared": "{name}: 固定を解除しました。Timon が再び自動で探します。",
-    "state": {
-      "found": "検出",
-      "pinned": "固定",
-      "brokenPin": "固定したパスが壊れています",
-      "missing": "見つかりません"
-    },
     "errors": {
       "forbidden": "これらのパスを変更できるのは、アプリにサインインしたスーパー管理者だけです。",
       "unknown_binary": "これはローカルプロバイダーのコマンドラインツールではありません。",

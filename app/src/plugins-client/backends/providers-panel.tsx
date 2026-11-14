@@ -1,43 +1,37 @@
 'use client';
 
 /**
- * Settings → AI models → Providers: what a provider plugin may run on this
- * machine, and the agents of the official ACP registry.
+ * Settings → AI models → Providers: the agents of the official ACP registry.
+ * What a provider plugin may run is reviewed on that provider's own page
+ * (its Program section), not here.
  *
  * Superadmin only, and the daemon is what enforces it: this panel renders
- * nothing when the list is refused. Every program Timon is about to launch is
- * shown with the path the DAEMON resolved — never one typed here — and nothing
- * is allowed or downloaded before a click on a confirmation that names it.
+ * nothing when the provider plugins' list, which only a superadmin reads, is
+ * refused. Nothing is downloaded before a click on a confirmation that names it.
  */
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
-import { AlertTriangle, CheckCircle2, Copy, Download, KeyRound, RefreshCw, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Copy, Download, KeyRound, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  acpAction, binaryAction, fetchAcpAuthMethods, fetchAcpRegistry, fetchProviders, installAcpAgent, needsAuthorization,
-  orderAuthMethods, removeAcpAgent,
-  type AcpAgent, type AcpAuthMethod, type AcpRegistry, type ProviderPlugin,
+  acpAction, fetchAcpAuthMethods, fetchAcpRegistry, fetchProviders, installAcpAgent, orderAuthMethods, removeAcpAgent,
+  type AcpAgent, type AcpAuthMethod, type AcpRegistry,
 } from '@/lib/providers';
-import { sseOn } from '@/lib/sse-stream';
 import { t } from '@/lib/i18n';
-import { ProviderAuthorizeDialog } from './provider-authorize-dialog';
 
 export function ProvidersPanel(): ReactElement | null {
-  const [providers, setProviders] = useState<ProviderPlugin[] | null>(null);
+  // `null` until the daemon answered: only a superadmin signed in to the app reads the provider plugins.
+  const [allowed, setAllowed] = useState<boolean | null>(null);
   const [registry, setRegistry] = useState<AcpRegistry | null>(null);
   const [registryError, setRegistryError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [authorizing, setAuthorizing] = useState<ProviderPlugin | null>(null);
   // An ACP agent whose build carries no checksum, waiting for the person's explicit go.
   const [unverified, setUnverified] = useState<AcpAgent | null>(null);
   // Sign-in methods by agent, read on a click: asking starts the agent's program on the daemon.
   const [signIns, setSignIns] = useState<Record<string, AcpAuthMethod[]>>({});
 
-  const loadProviders = useCallback(async () => {
-    try { setProviders(await fetchProviders()); } catch { setProviders(null); }
-  }, []);
   const loadRegistry = useCallback(async (refresh = false) => {
     setRegistryError(null);
     try { setRegistry(await fetchAcpRegistry(refresh)); } catch (err) { setRegistryError((err as Error).message); }
@@ -45,9 +39,10 @@ export function ProvidersPanel(): ReactElement | null {
 
   useEffect(() => {
     // The registry is a third-party CDN: it is read when asked, never on open.
-    void loadProviders();
-    return sseOn('plugins_changed', () => { void loadProviders(); });
-  }, [loadProviders]);
+    let gone = false;
+    fetchProviders().then(() => { if (!gone) setAllowed(true); }, () => { if (!gone) setAllowed(false); });
+    return () => { gone = true; };
+  }, []);
 
   const run = async (key: string, work: () => Promise<void>): Promise<void> => {
     setBusy(key);
@@ -81,37 +76,13 @@ export function ProvidersPanel(): ReactElement | null {
   });
 
   // Not a superadmin, or an older daemon: nothing to offer.
-  if (providers === null) return null;
+  if (allowed !== true) return null;
 
   return (
-    <section className="mt-8 max-w-3xl space-y-6" aria-labelledby="providers-title">
-      <div className="space-y-1">
-        <h3 id="providers-title" className="m-0 text-sm font-semibold">{t('providersSettings.title')}</h3>
-        <p className="m-0 text-xs leading-relaxed text-muted-foreground">{t('providersSettings.description')}</p>
-      </div>
-
-      {providers !== null && (
-        <div className="space-y-2">
-          <h4 className="m-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t('providersSettings.plugins.title')}</h4>
-          {providers.length === 0
-            ? <p className="m-0 text-xs text-muted-foreground">{t('providersSettings.plugins.none')}</p>
-            : (
-              <ul className="m-0 flex list-none flex-col gap-2 p-0">
-                {providers.map((provider) => (
-                  <ProviderRow
-                    key={provider.id}
-                    provider={provider}
-                    onAuthorize={() => setAuthorizing(provider)}
-                  />
-                ))}
-              </ul>
-            )}
-        </div>
-      )}
-
+    <section className="mt-8 max-w-3xl space-y-6" aria-labelledby="providers-acp-title">
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h4 className="m-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t('providersSettings.acp.title')}</h4>
+          <h3 id="providers-acp-title" className="m-0 text-sm font-semibold">{t('providersSettings.acp.title')}</h3>
           {registry && (
             <Button size="sm" variant="ghost" className="h-7 gap-1.5 px-2 text-xs" disabled={busy !== null} onClick={() => void loadRegistry(true)}>
               <RefreshCw className="h-3.5 w-3.5" aria-hidden />
@@ -144,8 +115,6 @@ export function ProvidersPanel(): ReactElement | null {
         )}
       </div>
 
-      <ProviderAuthorizeDialog provider={authorizing} onClose={() => setAuthorizing(null)} onAuthorized={loadProviders} />
-
       <Dialog open={unverified !== null} onOpenChange={(open) => { if (!open && busy === null) setUnverified(null); }}>
         <DialogContent className="sm:max-w-lg">
           {unverified && (
@@ -165,46 +134,6 @@ export function ProvidersPanel(): ReactElement | null {
         </DialogContent>
       </Dialog>
     </section>
-  );
-}
-
-function ProviderRow({ provider, onAuthorize }: { provider: ProviderPlugin; onAuthorize: () => void }): ReactElement {
-  const toAuthorize = needsAuthorization(provider);
-  return (
-    <li
-      data-provider={provider.id}
-      className="space-y-2 rounded-md bg-muted/30 px-3 py-2.5"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[13px] font-medium">{provider.label}</span>
-        <span className="text-[11px] tabular-nums text-muted-foreground">{provider.version}</span>
-        <Badge variant={provider.state === 'active' ? 'default' : 'outline'}>{t(`providersSettings.plugins.state.${provider.state}`)}</Badge>
-        {provider.backends.length > 0 && (
-          <span className="text-[11px] text-muted-foreground">{t('providersSettings.plugins.backends', { list: provider.backends.join(', ') })}</span>
-        )}
-        {toAuthorize && (
-          <Button size="sm" className="ml-auto h-7 gap-1.5 text-xs" onClick={onAuthorize}>
-            <ShieldAlert className="h-3.5 w-3.5" aria-hidden />
-            {t('providersSettings.plugins.authorize')}
-          </Button>
-        )}
-      </div>
-      {provider.error && provider.state !== 'active' && <p className="m-0 text-xs text-destructive">{provider.error}</p>}
-      <ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs">
-        {provider.binaries.map((binary) => {
-          const action = binaryAction(binary);
-          return (
-            <li key={binary.name} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="font-medium">{binary.name}</span>
-              <span className="break-all text-muted-foreground">{binary.resolved ?? t('providersSettings.plugins.notFound')}</span>
-              <span className={action === 'ready' ? 'text-emerald-700 dark:text-emerald-300' : action === 'refused' ? 'text-destructive' : 'text-amber-700 dark:text-amber-300'}>
-                {t(`providersSettings.plugins.binary.${action}`)}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </li>
   );
 }
 

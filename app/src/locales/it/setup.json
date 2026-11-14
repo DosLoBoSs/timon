@@ -241,10 +241,6 @@
       "continue": "Continua",
       "needOne": "Installa Claude, Codex, Grok o Copilot e accedi per continuare.",
       "anyway": "Continua comunque"
-    },
-    "settings": {
-      "title": "Strumenti di IA su questa macchina",
-      "description": "Installa una CLI di IA con l’installer ufficiale del suo produttore, accedi e aggiornala quando esce una nuova versione. Timon cerca aggiornamenti all’avvio e poi ogni poche ore."
     }
   }
 }

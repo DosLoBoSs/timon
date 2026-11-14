@@ -372,8 +372,6 @@
     }
   },
   "providersSettings": {
-    "title": "Provedores",
-    "description": "Os plugins de provedor trazem um serviço de IA para o Timon. Cada programa que um provedor inicia é autorizado aqui, pelo seu caminho resolvido, antes de poder ser executado.",
     "cancel": "Cancelar",
     "consent": {
       "prompts": "Recebe todas as instruções e todas as respostas das missões que atende.",
@@ -388,26 +386,15 @@
       "allowHint": "Sem isso, o provedor é instalado, mas permanece inativo até você autorizá-lo em {settingsPath}."
     },
     "plugins": {
-      "title": "Plugins de provedor",
-      "none": "Nenhum plugin de provedor está instalado.",
-      "backends": "Backends: {list}",
       "notFound": "não instalado nesta máquina",
-      "authorize": "Revisar e autorizar",
       "authorizeTitle": "Autorizar {name}",
       "authorizeBody": "O Timon resolveu estes programas nesta máquina. Permita apenas os caminhos que você reconhece.",
       "authorizeConfirm": "Permitir estes programas",
       "authorized": "{name} está autorizado.",
-      "state": {
-        "active": "Ativo",
-        "failed": "Requer atenção",
-        "disabled": "Desligado",
-        "skipped": "Recusado"
-      },
       "binary": {
         "authorize": "a autorizar",
         "ready": "autorizado",
-        "install": "instale-o primeiro",
-        "refused": "nunca permitido"
+        "install": "instale-o primeiro"
       }
     },
     "acp": {
@@ -458,15 +445,7 @@
     }
   },
   "binariesSettings": {
-    "title": "Binários de CLI",
-    "description": "Onde o Timon encontrou a ferramenta de linha de comando de cada provedor de IA nesta máquina. Se algum estiver ausente ou em um local incomum, fixe o caminho completo: ele vale a partir da próxima missão, sem reiniciar o Timon.",
-    "recheck": "Verificar novamente",
-    "rechecked": "Binários verificados novamente.",
-    "none": "Nenhum provedor local usa uma ferramenta de linha de comando.",
-    "backends": "Usado por: {list}",
-    "resolved": "Executa {path}",
     "brokenPin": "O caminho fixado não pode ser executado: {path}",
-    "notFound": "Não encontrado nesta máquina. Instale-o ou fixe o caminho abaixo.",
     "pathLabel": "Caminho do binário {name}",
     "placeholder": "Caminho completo, por exemplo /usr/local/bin/claude ou C:\\Users\\you\\AppData\\Roaming\\npm\\claude.cmd",
     "browse": "Procurar…",
@@ -474,12 +453,6 @@
     "clear": "Remover fixação",
     "saved": "{name}: caminho salvo. As novas missões o usam.",
     "cleared": "{name}: fixação removida. O Timon volta a procurá-lo sozinho.",
-    "state": {
-      "found": "Encontrado",
-      "pinned": "Fixado",
-      "brokenPin": "Caminho fixado inválido",
-      "missing": "Não encontrado"
-    },
     "errors": {
       "forbidden": "Somente um superadmin conectado ao aplicativo pode alterar estes caminhos.",
       "unknown_binary": "Esta não é a ferramenta de linha de comando de um provedor local.",

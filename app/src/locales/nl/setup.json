@@ -241,10 +241,6 @@
       "continue": "Doorgaan",
       "needOne": "Installeer Claude, Codex, Grok of Copilot en meld je aan om door te gaan.",
       "anyway": "Toch doorgaan"
-    },
-    "settings": {
-      "title": "AI-tools op deze machine",
-      "description": "Installeer een AI-CLI met het officiële installatieprogramma van de leverancier, meld haar aan en werk haar bij als er een nieuwe versie is. Timon controleert bij het starten en daarna om de paar uur op updates."
     }
   }
 }

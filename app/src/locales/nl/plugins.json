@@ -372,8 +372,6 @@
     }
   },
   "providersSettings": {
-    "title": "Providers",
-    "description": "Providerplug-ins brengen een AI-dienst naar Timon. Elk programma dat een provider start, wordt hier via zijn opgeloste pad geautoriseerd voordat het kan draaien.",
     "cancel": "Annuleren",
     "consent": {
       "prompts": "Krijgt elke instructie en elk antwoord van de missies die hij bedient.",
@@ -388,26 +386,15 @@
       "allowHint": "Zonder dit is de provider geïnstalleerd maar blijft hij inactief tot je hem autoriseert in {settingsPath}."
     },
     "plugins": {
-      "title": "Providerplug-ins",
-      "none": "Er is geen providerplug-in geïnstalleerd.",
-      "backends": "Backends: {list}",
       "notFound": "niet geïnstalleerd op deze machine",
-      "authorize": "Bekijken en autoriseren",
       "authorizeTitle": "{name} autoriseren",
       "authorizeBody": "Timon heeft deze programma's op deze machine opgelost. Sta alleen de paden toe die je herkent.",
       "authorizeConfirm": "Deze programma's toestaan",
       "authorized": "{name} is geautoriseerd.",
-      "state": {
-        "active": "Actief",
-        "failed": "Vraagt aandacht",
-        "disabled": "Uit",
-        "skipped": "Geweigerd"
-      },
       "binary": {
         "authorize": "te autoriseren",
         "ready": "geautoriseerd",
-        "install": "eerst installeren",
-        "refused": "nooit toegestaan"
+        "install": "eerst installeren"
       }
     },
     "acp": {
@@ -458,15 +445,7 @@
     }
   },
   "binariesSettings": {
-    "title": "CLI-programma's",
-    "description": "Waar Timon de opdrachtregeltool van elke AI-provider op deze machine heeft gevonden. Ontbreekt er een of staat hij op een ongewone plek, zet dan zijn volledige pad vast: het geldt vanaf de volgende missie, zonder Timon te herstarten.",
-    "recheck": "Opnieuw controleren",
-    "rechecked": "Programma's opnieuw gecontroleerd.",
-    "none": "Geen lokale provider gebruikt een opdrachtregeltool.",
-    "backends": "Gebruikt door: {list}",
-    "resolved": "Draait {path}",
     "brokenPin": "Het vastgezette pad kan niet worden uitgevoerd: {path}",
-    "notFound": "Niet gevonden op deze machine. Installeer het, of zet hieronder het pad vast.",
     "pathLabel": "Pad naar het programma {name}",
     "placeholder": "Volledig pad, bijvoorbeeld /usr/local/bin/claude of C:\\Users\\jij\\AppData\\Roaming\\npm\\claude.cmd",
     "browse": "Bladeren…",
@@ -474,12 +453,6 @@
     "clear": "Vastzetting verwijderen",
     "saved": "{name}: pad opgeslagen. Nieuwe missies gebruiken het.",
     "cleared": "{name}: vastzetting verwijderd. Timon zoekt het weer zelf.",
-    "state": {
-      "found": "Gevonden",
-      "pinned": "Vastgezet",
-      "brokenPin": "Vastgezet pad defect",
-      "missing": "Niet gevonden"
-    },
     "errors": {
       "forbidden": "Alleen een superadmin die in de app is aangemeld, kan deze paden wijzigen.",
       "unknown_binary": "Dit is niet de opdrachtregeltool van een lokale provider.",

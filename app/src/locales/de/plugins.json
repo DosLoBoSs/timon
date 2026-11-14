@@ -372,8 +372,6 @@
     }
   },
   "providersSettings": {
-    "title": "Anbieter",
-    "description": "Anbieter-Plugins bringen einen KI-Dienst zu Timon. Jedes Programm, das ein Anbieter startet, wird hier über seinen aufgelösten Pfad autorisiert, bevor es laufen kann.",
     "cancel": "Abbrechen",
     "consent": {
       "prompts": "Erhält jede Anweisung und jede Antwort der Missionen, die er bedient.",
@@ -388,26 +386,15 @@
       "allowHint": "Ohne dies ist der Anbieter installiert, bleibt aber inaktiv, bis du ihn unter {settingsPath} autorisierst."
     },
     "plugins": {
-      "title": "Anbieter-Plugins",
-      "none": "Kein Anbieter-Plugin ist installiert.",
-      "backends": "Backends: {list}",
       "notFound": "auf diesem Rechner nicht installiert",
-      "authorize": "Prüfen und autorisieren",
       "authorizeTitle": "{name} autorisieren",
       "authorizeBody": "Timon hat diese Programme auf diesem Rechner aufgelöst. Erlaube nur die Pfade, die du erkennst.",
       "authorizeConfirm": "Diese Programme erlauben",
       "authorized": "{name} ist autorisiert.",
-      "state": {
-        "active": "Aktiv",
-        "failed": "Braucht Aufmerksamkeit",
-        "disabled": "Aus",
-        "skipped": "Abgelehnt"
-      },
       "binary": {
         "authorize": "zu autorisieren",
         "ready": "autorisiert",
-        "install": "zuerst installieren",
-        "refused": "nie erlaubt"
+        "install": "zuerst installieren"
       }
     },
     "acp": {
@@ -458,15 +445,7 @@
     }
   },
   "binariesSettings": {
-    "title": "CLI-Programme",
-    "description": "Wo Timon das Kommandozeilenwerkzeug jedes KI-Anbieters auf diesem Rechner gefunden hat. Fehlt eines oder liegt es an einem ungewöhnlichen Ort, hefte seinen vollständigen Pfad an: Er gilt ab der nächsten Mission, ohne Timon neu zu starten.",
-    "recheck": "Erneut prüfen",
-    "rechecked": "Programme erneut geprüft.",
-    "none": "Kein lokaler Anbieter nutzt ein Kommandozeilenwerkzeug.",
-    "backends": "Genutzt von: {list}",
-    "resolved": "Führt {path} aus",
     "brokenPin": "Der angeheftete Pfad lässt sich nicht ausführen: {path}",
-    "notFound": "Auf diesem Rechner nicht gefunden. Installiere es oder hefte unten seinen Pfad an.",
     "pathLabel": "Pfad zum Programm {name}",
     "placeholder": "Vollständiger Pfad, zum Beispiel /usr/local/bin/claude oder C:\\Users\\du\\AppData\\Roaming\\npm\\claude.cmd",
     "browse": "Durchsuchen…",
@@ -474,12 +453,6 @@
     "clear": "Anheftung entfernen",
     "saved": "{name}: Pfad gespeichert. Neue Missionen nutzen ihn.",
     "cleared": "{name}: Anheftung entfernt. Timon sucht es wieder selbst.",
-    "state": {
-      "found": "Gefunden",
-      "pinned": "Angeheftet",
-      "brokenPin": "Angehefteter Pfad defekt",
-      "missing": "Nicht gefunden"
-    },
     "errors": {
       "forbidden": "Nur ein in der App angemeldeter Superadmin kann diese Pfade ändern.",
       "unknown_binary": "Das ist nicht das Kommandozeilenwerkzeug eines lokalen Anbieters.",
