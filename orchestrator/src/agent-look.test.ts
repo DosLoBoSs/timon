@@ -25,7 +25,14 @@ test('the mockup lists are all there', () => {
   assert.equal(AGENT_LOOK_SHAPES.length, 7);
   assert.equal(AGENT_LOOK_COLORS.length, 15);
   assert.equal(AGENT_LOOK_EYES.length, 10);
-  assert.equal(AGENT_LOOK_ACCESSORIES.length, 20);
+  assert.equal(AGENT_LOOK_ACCESSORIES.length, 31);
+});
+
+test('the accessories once drawn by the 3D mascot plugin are product ids, bare', () => {
+  const former = ['whip', 'wizard', 'chef', 'crown', 'idea', 'rocket', 'chemist', 'gamer', 'photographer', 'gardener', 'musician'];
+  assert.deepEqual(AGENT_LOOK_ACCESSORIES.slice(-former.length), former);
+  // No pack needed: an empty catalogue still accepts them.
+  for (const acc of former) assert.equal(parseAgentLook({ ...BASE, acc }, mascotCatalogOf([]))?.acc, acc);
 });
 
 test('a colour in upper case is the same fur; a missing accessory is none', () => {
@@ -104,14 +111,14 @@ test('a part a pack declares is accepted in its own field', () => {
 
 test('a part no enabled pack declares is refused, named, with the parts that are', () => {
   assert.throws(() => parseAgentLook({ ...BASE, acc: 'acme-pack:sword' }, PACK),
-    /^Error: look\.acc: "acme-pack:sword" is not declared for this field by an installed and enabled mascot pack \(expected one of none, .*coffee, or a part an enabled mascot pack declares: acme-pack:cap, acme-pack:scarf\)$/);
+    /^Error: look\.acc: "acme-pack:sword" is not declared for this field by an installed and enabled mascot pack \(expected one of none, .*musician, or a part an enabled mascot pack declares: acme-pack:cap, acme-pack:scarf\)$/);
   // Declared, but for another field: a fur is not an accessory.
   assert.throws(() => parseAgentLook({ ...BASE, acc: 'acme-pack:midnight' }, PACK), /look\.acc: "acme-pack:midnight" is not declared for this field/);
   // Another plugin cannot borrow a namespace it does not own.
   assert.throws(() => parseAgentLook({ ...BASE, acc: 'other-pack:cap' }, PACK), /look\.acc: "other-pack:cap" is not declared for this field/);
   // Without any pack, the refusal says nothing of packs.
   assert.throws(() => parseAgentLook({ ...BASE, acc: 'acme-pack:cap' }, mascotCatalogOf([])),
-    /^Error: look\.acc: "acme-pack:cap" is not declared for this field by an installed and enabled mascot pack \(expected one of none, [^)]*coffee\)$/);
+    /^Error: look\.acc: "acme-pack:cap" is not declared for this field by an installed and enabled mascot pack \(expected one of none, [^)]*musician\)$/);
   // A badly formed id is just an unknown value.
   assert.throws(() => parseAgentLook({ ...BASE, acc: 'Acme:Cap' }, PACK), /look\.acc: unknown value "Acme:Cap"/);
 });

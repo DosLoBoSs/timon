@@ -23,7 +23,8 @@ export type PluginAgentLookEyes =
 /** Job accessory, `none` included. */
 export type PluginAgentLookAccessory =
   | 'none' | 'loupe' | 'pen' | 'quill' | 'hammer' | 'wrench' | 'baton' | 'telescope' | 'envelope' | 'calendar'
-  | 'clipboard' | 'hourglass' | 'teacher' | 'calculator' | 'chart' | 'brush' | 'globe' | 'megaphone' | 'shield' | 'coffee';
+  | 'clipboard' | 'hourglass' | 'teacher' | 'calculator' | 'chart' | 'brush' | 'globe' | 'megaphone' | 'shield' | 'coffee'
+  | 'whip' | 'wizard' | 'chef' | 'crown' | 'idea' | 'rocket' | 'chemist' | 'gamer' | 'photographer' | 'gardener' | 'musician';
 
 /**
  * A part a mascot pack adds (API 15): `<pluginId>:<part>`, declared in the

@@ -45,6 +45,7 @@ export const AGENT_LOOK_EYES = [
 export const AGENT_LOOK_ACCESSORIES = [
   'none', 'loupe', 'pen', 'quill', 'hammer', 'wrench', 'baton', 'telescope', 'envelope', 'calendar',
   'clipboard', 'hourglass', 'teacher', 'calculator', 'chart', 'brush', 'globe', 'megaphone', 'shield', 'coffee',
+  'whip', 'wizard', 'chef', 'crown', 'idea', 'rocket', 'chemist', 'gamer', 'photographer', 'gardener', 'musician',
 ] as const;
 
 export type AgentLookShape = typeof AGENT_LOOK_SHAPES[number];
