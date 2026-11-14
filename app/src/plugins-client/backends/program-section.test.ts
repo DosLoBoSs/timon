@@ -181,7 +181,7 @@ test('the Program section paints the daemon\'s program and drives its installer 
     await suite.test('a provider shipped in the release: one path, its link folded away, no authorization', async () => {
       await render('provider-claude');
       await until(() => text().includes('v2.0.14'), 'the Program section');
-      assert.equal(section()!.querySelector('[data-program-path]'), null, 'the path waits under Advanced');
+      assert.ok(!section()!.querySelector('[data-program-path]'), 'the path waits under Advanced');
       await choose(section()!.querySelector('[data-program="claude"]')!, 'Advanced settings');
       await until(() => section()?.querySelector('[data-program-advanced]') != null, 'Advanced unfolded');
       assert.equal(section()!.querySelectorAll('[data-program-path]').length, 1, 'one path shown');

@@ -107,7 +107,7 @@ test('the API key section writes the provider\'s key, reserved to it, and never 
   try {
     await render('settings=models%2Fbackends&provider=llmtr');
     await until(() => section()?.querySelector('[data-api-key="absent"]') != null, 'the key reported missing');
-    assert.equal(section()!.querySelector('input'), null, 'no field on the page');
+    assert.ok(!section()!.querySelector('input'), 'no field on the page');
     await click(Array.from(section()!.querySelectorAll('button')).find((b) => b.textContent === 'Add a key')!);
     const dialog = () => document.querySelector('[data-secret-dialog]');
     await until(() => dialog()?.querySelector('input') != null, 'the key dialog');

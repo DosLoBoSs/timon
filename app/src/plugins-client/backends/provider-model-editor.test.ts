@@ -206,7 +206,7 @@ test('models reorder from the keyboard with their handle, and the eye toggles th
 test('the picture choices stay on one line: only the brands scroll sideways, the emoji picker is outside that box', async () => {
   const ui = await mount();
   try {
-    assert.equal(ui.section('settings')!.querySelector('[data-picto-brands]'), null, 'the picture waits behind Edit');
+    assert.ok(!ui.section('settings')!.querySelector('[data-picto-brands]'), 'the picture waits behind Edit');
     await ui.click(byText<HTMLButtonElement>('button', 'Edit', ui.section('settings')!));
     await ui.until(() => !!document.querySelector('[data-provider-settings-dialog] [data-picto-brands]'), 'the settings dialog');
     const brands = document.querySelector<HTMLElement>('[data-provider-settings-dialog] [data-picto-brands]');

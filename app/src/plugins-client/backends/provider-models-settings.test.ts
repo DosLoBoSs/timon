@@ -140,7 +140,7 @@ test('a provider page edits its models and its own settings, each saved apart', 
     assert.equal(section('settings')?.textContent ?? '', '', 'nothing to customize on an official provider');
     // The Claude provider's own section: the long-lived token, one row, right after the common settings.
     await until(() => document.querySelector('[data-provider-section="provider-claude"] [data-claude-token]') !== null, 'the Claude token section');
-    assert.equal(document.querySelector('[data-provider-section="provider-claude"] input'), null, 'the token field waits for Set');
+    assert.ok(!document.querySelector('[data-provider-section="provider-claude"] input'), 'the token field waits for Set');
     const order = Array.from(document.querySelectorAll('[data-provider-section]')).map((el) => el.getAttribute('data-provider-section'));
     assert.deepEqual(order.slice(-3), ['settings', 'provider-claude', 'models']);
 
@@ -149,7 +149,7 @@ test('a provider page edits its models and its own settings, each saved apart', 
     await until(() => buttonIn(section('settings'), 'Edit') !== undefined, 'the Edit button');
     assert.ok(!document.querySelector('[data-provider-section="provider-claude"]'), 'the Claude token lands on the Claude page only');
     assert.match(section('settings')!.textContent ?? '', /Reaches api\.deepseek\.com/);
-    assert.equal(section('settings')!.querySelector('input'), null, 'no field on the page');
+    assert.ok(!section('settings')!.querySelector('input'), 'no field on the page');
     await click(buttonIn(section('settings'), 'Edit')!);
     const dialog = () => document.querySelector('[data-provider-settings-dialog]');
     await until(() => buttonIn(dialog(), 'Advanced') !== undefined, 'the settings dialog and its Advanced fold');
