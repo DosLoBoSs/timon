@@ -15,18 +15,25 @@ export const SHAPES = ['squircle', 'tri', 'gem', 'round', 'bean', 'cloud', 'hex'
 export type MascotShape = typeof SHAPES[number];
 
 /**
- * The furs a picker offers: nine natural pelts, then three dyed ones. The
+ * The natural pelts, drawn as is in 2D (`furOf`). The
  * drawing takes any `#rrggbb` — a natural pelt as is, any other colour blended
  * into a meerkat brown so the head stays a plush. A look carries a colour of
  * `LOOK_COLORS` (the named furs, in the daemon's order: `orchestrator/src/agent-look.ts`)
  * or any other `#rrggbb` mixed with the configurator's colour picker.
  */
 export const NATURAL_FURS = ['#d4a373', '#b8743d', '#e6c9a2', '#8a5a3b', '#c98e5a', '#a8826a', '#d9b48a', '#7a4f35', '#e0b07a'] as const;
-export const FURS = [...NATURAL_FURS, '#ff5fbf', '#3fa9ff', '#7ed957'] as const;
+/**
+ * The furs the configurator offers before its colour picker: two browns, then
+ * the base colours. Any other colour, the older pelts included, stays a valid
+ * fur (the picker's `#rrggbb`).
+ */
+export const FURS = [
+  '#b8743d', '#7a4f35', '#ffc233', '#ff8a2a', '#e5484d', '#ff5fbf', '#a35bff', '#3fa9ff', '#2ec4b6', '#7ed957', '#f2efe9', '#8e8e93', '#2b2b2b',
+] as const;
 /** Colours of the default looks by mission (`MLOOK`) that the picker does not offer. */
 export const MISSION_COLORS = ['#ffc233', '#ff8a2a', '#a35bff'] as const;
-/** Every colour a look may carry, in the daemon's order. */
-export const LOOK_COLORS = [...FURS, ...MISSION_COLORS] as const;
+/** The named colours, in the daemon's order (`AGENT_LOOK_COLORS`); a look may also carry any `#rrggbb`. */
+export const LOOK_COLORS = [...NATURAL_FURS, '#ff5fbf', '#3fa9ff', '#7ed957', ...MISSION_COLORS] as const;
 export type MascotColor = typeof LOOK_COLORS[number];
 /** A fur off the lists, mixed with the colour picker: `#rrggbb`, lower case once stored. */
 export type CustomFurColor = `#${string}`;
@@ -38,6 +45,7 @@ const FUR_NAMES: Readonly<Record<string, string>> = {
   '#a8826a': 'taupe', '#d9b48a': 'honey', '#7a4f35': 'bark', '#e0b07a': 'wheat',
   '#ff5fbf': 'pink', '#3fa9ff': 'blue', '#7ed957': 'green',
   '#ffc233': 'yellow', '#ff8a2a': 'orange', '#a35bff': 'purple',
+  '#e5484d': 'red', '#2ec4b6': 'teal', '#f2efe9': 'white', '#8e8e93': 'grey', '#2b2b2b': 'black',
 };
 
 /** The eyes a picker offers. The mascot shows more expressions (`MascotExpression`), driven by its states. */

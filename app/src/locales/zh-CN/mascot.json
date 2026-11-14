@@ -4,7 +4,7 @@
     "shape": {"squircle": "经典", "tri": "梨形", "gem": "蛋形", "round": "圆形", "bean": "宽形", "cloud": "长形", "hex": "方形"},
     "fur": {
       "sand": "沙色", "cinnamon": "肉桂色", "cream": "奶油色", "cocoa": "可可色", "caramel": "焦糖色", "taupe": "灰褐色",
-      "honey": "蜂蜜色", "bark": "树皮色", "wheat": "小麦色", "pink": "粉色", "blue": "蓝色", "green": "绿色", "yellow": "黄色", "orange": "橙色", "purple": "紫色", "custom": "自定义"
+      "honey": "蜂蜜色", "bark": "树皮色", "wheat": "小麦色", "pink": "粉色", "blue": "蓝色", "green": "绿色", "yellow": "黄色", "orange": "橙色", "purple": "紫色", "red": "红色", "teal": "青绿色", "white": "白色", "grey": "灰色", "black": "黑色", "custom": "自定义"
     },
     "eyes": {
       "pill": "平静", "big": "睁大眼睛", "happy": "开心", "wink": "眨眼", "surprised": "惊讶",

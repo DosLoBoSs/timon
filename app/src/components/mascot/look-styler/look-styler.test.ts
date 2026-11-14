@@ -292,9 +292,9 @@ test('the fur grid ends with a colour picker: it shows a fur off the presets, an
 
   // A preset keeps its own cell: picking it leaves the picker on the fur mixed last.
   await w.render(React.createElement(LookStylerHost, {
-    look: { shape: 'round', color: '#d4a373', eyes: 'pill', acc: 'none' },
+    look: { shape: 'round', color: '#7a4f35', eyes: 'pill', acc: 'none' },
     onChange: () => undefined,
     name: 'Nova',
   }));
-  assert.equal(w.document.querySelector('button[data-fur="#d4a373"]')?.getAttribute('aria-pressed'), 'true');
+  assert.equal(w.document.querySelector('button[data-fur="#7a4f35"]')?.getAttribute('aria-pressed'), 'true');
 });
