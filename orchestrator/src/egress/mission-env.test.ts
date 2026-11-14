@@ -153,7 +153,7 @@ function fakeChild(): FakeChild {
 }
 
 test('a spawned mission reaches the web through the proxy, journaled under its own id', async () => {
-  adaId = createTestAccount(dbApi, { email: 'ada@example.com', name: 'Ada', passwordHash: hashPassword('ada-secret'), isSuperadmin: false }).id;
+  adaId = createTestAccount(dbApi, { email: 'ada@example.com', name: 'Ada', passwordHash: await hashPassword('ada-secret'), isSuperadmin: false }).id;
   upsertAgent({
     name: 'egress-witness',
     system_prompt: 'egress witness — does nothing.',
