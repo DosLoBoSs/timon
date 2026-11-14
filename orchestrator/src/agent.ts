@@ -48,7 +48,10 @@ import {
   restoreAgentSkillAttachments, setAgentSkills,
   type AgentSkillsDraft, type AgentSkillsWrite, type ResolvedSkill, type SkillMode, type SkillVia,
 } from './skill-attachments.js';
-import { refreshToolsCacheFromInit, listMcp } from './mcp.js';
+import { getMcp, refreshToolsCacheFromInit, listMcp } from './mcp.js';
+import { chatAttachmentsRoot } from './chat-attachments.js';
+import { pluginPackageDirs, worktreeGitDirs } from './mission-fence-target.js';
+import type { FenceTarget } from './host/isolation.js';
 import { journalDirectSkillReads } from './skill-reads.js';
 import {
   getBackend, backendMetadata, assertBackendEnabled, backendForModel, catalogBackend, catalogClaimsModel, asBackendName,
@@ -84,7 +87,7 @@ import {
 import { backendStillDry } from './backend-recheck.js';
 import { resolvedPermissionModeFor } from './backends/catalog.js';
 import { settingBool, settingNum } from './settings.js';
-import { profileLimits, wrapMissionLaunch } from './resources.js';
+import { profileLimits, watchFencedLaunch, wrapMissionLaunch } from './resources.js';
 import { getHost, type Host } from './host/index.js';
 import {
   backgroundDescendants, cliBaseline, cliProcessPid, readProcessTable, type ProcessEntry,
@@ -97,8 +100,8 @@ import { applyMissionMcpServers } from './mission-mcp-servers.js';
 import { conversionBackendRefusal, conversionMissionById, conversionToolCardRefusal, isConversionSource } from './users/conversion-mission.js';
 import { issueMissionApiToken, ownerForSpawn, PLUGIN_OWNER_PREFIX } from './users/api-tokens.js';
 import { missionEgressEnv } from './egress/service.js';
-import { baseBackendId, isAccountInstanceId } from './backends/instance-id.js';
-import { backendTrust, type BackendTrust } from './backends/registry.js';
+import { baseBackendId, isAccountInstanceId, splitBackendInstance } from './backends/instance-id.js';
+import { backendOwnerPlugin, backendTrust, type BackendTrust } from './backends/registry.js';
 import { DEFAULT_BACKEND_CAPABILITIES } from './backends/types.js';
 import { BUILTIN_DECLARATIONS } from './backends/builtin-declarations.js';
 import { withLaunchPath } from './host/launch-path.js';
@@ -1818,6 +1821,43 @@ const HANDOVER_START_TIMEOUT_MS = 120_000;
 
 type MissionLaunch = { spec: SpawnResult; proc: ChildProcessWithoutNullStreams; procEnv: NodeJS.ProcessEnv; missionToken: string };
 
+/**
+ * What the fence of a mission needs beyond its working directory
+ * (`host/isolation.ts`, `FenceTarget`): who it is, the subscription account
+ * and provider plugin it runs on, the git directories its worktree commits
+ * into, the plugin packages its MCP servers run from, and the folder its chat
+ * attachments were saved to. Every path is checked again by `resolveFence`.
+ */
+function missionFenceTarget(input: {
+  missionId: string;
+  agentName: string;
+  project: string;
+  backend: string;
+  cwd: string | null;
+  mcpServers: readonly string[];
+}): Partial<FenceTarget> {
+  const git = input.cwd ? worktreeGitDirs(input.cwd, homedir()) : { dirs: [], refused: null };
+  if (git.refused) console.warn(`[agent] mission ${input.missionId.slice(0, 8)}: git directory not opened to the fence: ${git.refused}`);
+  const commandLines = input.mcpServers.flatMap((id) => {
+    try {
+      const server = getMcp(id);
+      return server?.transport.type === 'stdio' ? [server.transport.command, ...(server.transport.args ?? [])] : [];
+    } catch {
+      return []; // an id that is not a server's: the launch leaves it out too
+    }
+  });
+  const attachments = join(chatAttachmentsRoot(), input.missionId);
+  return {
+    agent: input.agentName,
+    project: input.project || undefined,
+    account: splitBackendInstance(input.backend).accountId ?? undefined,
+    providerPlugin: backendOwnerPlugin(input.backend) ?? undefined,
+    gitDirs: git.dirs,
+    pluginDirs: pluginPackageDirs(commandLines, TIMON_HOME),
+    timonRead: existsSync(attachments) ? [attachments] : [],
+  };
+}
+
 /** Builds the backend's command and spawns it, confined and with the
  *  mission's environment. */
 async function launchMissionProcess(
@@ -1886,16 +1926,20 @@ async function spawnMissionProcess(
   // a deny list must never swallow. Inert on the current scope launcher —
   // `host/isolation.ts` says why, at length.
   const backendBin = resolveBackendBin(host, spec.cmd);
+  const project = cfg.project ?? projectFromCwd(cwd) ?? '';
+  // The fence (`resources.ts`) is the innermost wrapper: what it needs beyond
+  // the working directory is the mission's identity, from which it reopens
+  // the mission's own folders of the Timon home and nothing else.
   const launch = wrapMissionLaunch(backendBin, spec.args, missionId, {
     cwd: cwd ?? undefined,
     backend: backend.name,
     timonHome: TIMON_HOME,
+    ...missionFenceTarget({ missionId, agentName, project, backend: backend.name, cwd: cwd ?? null, mcpServers: cfg.mcp_servers ?? [] }),
   });
   // Vault slice computed HERE so the inject journal (§8 / §12.8) records the
   // identities without `missionEnv` writing to the database — that function
   // is called from tests that must not fill `secret_access`. inheritEnv
   // skips the vault entirely, same as missionEnv.
-  const project = cfg.project ?? projectFromCwd(cwd) ?? '';
   const inherit = inheritEnvEnabled();
   // What the user typed for THIS mission (`secret_request`, no grant) lies over
   // the vault slice; a `once` value is destroyed once it entered the environment.
@@ -1927,6 +1971,19 @@ async function spawnMissionProcess(
     // Only Electron's binary is no `node`: a daemon run from sources IS on the right one.
     selfExecutable: process.versions.electron ? process.execPath : undefined,
   });
+  if (launch.fence?.state === 'fenced') {
+    // A `mktemp` lands in the mission's own folder, not in a /tmp every other
+    // mission shares. And a CLI that updates itself writes where the fence
+    // keeps the home read-only: the update is the user's, outside a mission.
+    // Traced under the fence (`strace -f -e trace=%file`, claude, codex and
+    // grok answering a turn and writing in their worktree): the only refusals
+    // left were caches and locks a CLI does without (`~/.cache/claude-cli-nodejs`,
+    // `~/.local/state/claude/locks`, `~/.npm/_logs`) and, on the host's own
+    // claude sign-in, the rewrite of `~/.claude.json`, which the CLI survives;
+    // none of them earned a place on the write list.
+    if (launch.fence.tmpDir) procEnv.TMPDIR = launch.fence.tmpDir;
+    procEnv.DISABLE_AUTOUPDATER = '1';
+  }
   // Issued once: a second call would revoke the row the first one handed out.
   const missionToken = seal ? seal.token() : procEnv.TIMON_API_TOKEN ?? '';
   // Nothing awaited since: a third party's program is still the file checked for this launch.
@@ -1947,6 +2004,8 @@ async function spawnMissionProcess(
       process.stderr.write(`[${backend.name}:${missionId.slice(0, 8)}] ${name}: ${err.message}\n`);
     });
   }
+  // A launcher that cannot fence on this machine after all switches the fence off for the next launches.
+  watchFencedLaunch(proc, launch.fence);
   journalInjectedSecrets({ missionId, agent: agentName, injected: vault?.injected ?? [] });
   requested?.consume();
   // On disk, for whoever comes after a daemon that dies without ending it.

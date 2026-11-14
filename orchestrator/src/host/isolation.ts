@@ -418,6 +418,16 @@ const SYSTEM_WRITABLE: Readonly<Partial<Record<NodeJS.Platform, readonly string[
 
 const FENCE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
+/** A mission id, agent name or account id the fence may turn into a folder name. */
+export function isFenceSegment(value: string): boolean {
+  return FENCE_SEGMENT.test(value);
+}
+
+/** The mission's own temporary folder, its `TMPDIR` once fenced; the caller checks `missionId` with `isFenceSegment`. */
+export function missionTmpDir(timonHome: string, missionId: string): string {
+  return join(timonHome, 'tmp', 'missions', missionId);
+}
+
 /**
  * Where a grant comes from, which decides how far it may reach into the Timon home:
  * - `own`: a folder the fence builds itself from the mission's identity (its
@@ -609,7 +619,7 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
   if (missionId) {
     // `tmp/missions/<id>` becomes the mission's TMPDIR: a `mktemp` must not
     // land in a folder the mission can list, nor in another mission's.
-    grant(inTimon('tmp', 'missions', missionId), 'rw', 'own');
+    grant(missionTmpDir(timonHome, missionId), 'rw', 'own');
     grant(inTimon('codex-runs', missionId), 'rw', 'own');
     grant(inTimon('grok-runs', missionId), 'rw', 'own');
     if (plugin) grant(inTimon('provider-runs', plugin, missionId), 'rw', 'own');

@@ -1,0 +1,165 @@
+/**
+ * A mission launch through the fence, end to end on the daemon side: the
+ * process spawned is the host's fence launcher wrapping the CLI, the policy
+ * it is handed is built from the mission's identity and repository, and the
+ * CLI gets its own temporary folder. The fence itself is a stand-in: what it
+ * does to a real process is `host/landlock.test.ts`'s business.
+ */
+import './test-home.js';
+import '../tests/helpers/paid-license.js';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { delimiter, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import type { FencePolicy } from './host/isolation.js';
+import type { HostFence } from './host/types.js';
+
+process.env.TIMON_RESOURCE_GUARD_ENABLED = '0';
+const AUTH = mkdtempSync(join(tmpdir(), 'timon-fence-auth-'));
+writeFileSync(join(AUTH, 'auth.json'), JSON.stringify({ tokens: { access_token: 'test-only' } }));
+process.env.CODEX_AUTH_DIR = AUTH;
+const BIN = mkdtempSync(join(tmpdir(), 'timon-fence-bin-'));
+writeFileSync(join(BIN, 'codex'), '', { mode: 0o755 });
+process.env.PATH = `${BIN}${delimiter}${process.env.PATH ?? ''}`;
+process.on('exit', () => {
+  rmSync(AUTH, { recursive: true, force: true });
+  rmSync(BIN, { recursive: true, force: true });
+});
+
+const { mountOfficialProviders } = await import('../tests/helpers/official-providers.js');
+const { getHost } = await import('./host/index.js');
+const { spawnAgent, upsertAgent } = await import('./agent.js');
+const { config, setConfig } = await import('./config/load.js');
+const { TIMON_HOME } = await import('./paths.js');
+
+assert.ok((await mountOfficialProviders()).includes('provider-codex'));
+setConfig({ ...config(), host: { ...config().host, isolation: { ...config().host.isolation, filesystem: 'auto' } } });
+
+// A main checkout, and a linked worktree of it under the Timon home, as the dispatcher makes them.
+const ROOT = realpathSync(mkdtempSync(join(tmpdir(), 'timon-fence-repo-')));
+const MAIN = join(ROOT, 'app');
+const WT = join(TIMON_HOME, 'worktrees', 'task-1');
+const WT_GIT = join(MAIN, '.git', 'worktrees', 'task-1');
+mkdirSync(WT_GIT, { recursive: true });
+mkdirSync(WT, { recursive: true });
+writeFileSync(join(WT, '.git'), `gitdir: ${WT_GIT}\n`);
+writeFileSync(join(WT_GIT, 'gitdir'), `${join(WT, '.git')}\n`);
+writeFileSync(join(WT_GIT, 'commondir'), '../..\n');
+
+upsertAgent({
+  name: 'fence.witness',
+  system_prompt: 'witness — does nothing.',
+  config: { backend: 'codex', cwd: WT, skills: [], memory_scope: 'NONE' },
+});
+
+const LAUNCHER = '/opt/timon/timon-fence';
+
+async function launch(): Promise<{ cmd: string; args: string[]; env: NodeJS.ProcessEnv; policy: FencePolicy; missionId: string }> {
+  const host = getHost();
+  const original = { spawn: host.spawn, fence: host.fence };
+  const policies: FencePolicy[] = [];
+  const fence: HostFence = {
+    mechanism: 'landlock',
+    probe: () => ({ available: true, abi: 6 }),
+    wrap: (policy, cmd, args, policyFile) => {
+      policies.push(policy);
+      return { cmd: LAUNCHER, args: ['--policy', policyFile, '--', cmd, ...args] };
+    },
+  };
+  const child = Object.assign(new EventEmitter(), {
+    pid: 4247, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(), killed: false,
+    kill() { this.killed = true; return true; },
+  });
+  const seen = { cmd: '', args: [] as string[], env: {} as NodeJS.ProcessEnv };
+  host.fence = fence;
+  host.spawn = ((cmd: string, args: string[], opts?: { env?: NodeJS.ProcessEnv }) => {
+    seen.cmd = cmd; seen.args = args; seen.env = (opts?.env ?? {}) as NodeJS.ProcessEnv;
+    return child as unknown as ChildProcessWithoutNullStreams;
+  }) as typeof host.spawn;
+  let missionId = '';
+  try {
+    missionId = await spawnAgent('fence.witness', 'ping');
+  } finally {
+    host.spawn = original.spawn;
+    host.fence = original.fence;
+  }
+  const policy = policies[0];
+  assert.ok(policy, 'the fence was asked to wrap the launch');
+  return { ...seen, policy, missionId };
+}
+
+test('the CLI is spawned through the fence launcher, its own temporary folder as TMPDIR', async () => {
+  const run = await launch();
+  const at = run.args.indexOf('--');
+  assert.equal(run.cmd, LAUNCHER);
+  assert.match(run.args[1] ?? '', /run[\\/]fence[\\/].+\.policy$/);
+  assert.match(run.args[at + 1] ?? '', /codex$/, 'the CLI right after the launcher');
+  const tmp = join(TIMON_HOME, 'tmp', 'missions', run.missionId);
+  assert.equal(run.env.TMPDIR, tmp);
+  assert.equal(run.env.DISABLE_AUTOUPDATER, '1');
+  assert.ok(run.policy.rw.includes(tmp));
+});
+
+test('the policy opens the mission\'s worktree, repository and provider folders, and nothing else of the Timon home', async () => {
+  const run = await launch();
+  const { policy } = run;
+  assert.ok(policy.rw.includes(WT));
+  assert.ok(policy.rw.includes(join(MAIN, '.git')), 'the repository the worktree names back');
+  assert.ok(policy.rw.includes(MAIN), 'the main checkout, which a merge fast-forwards');
+  assert.ok(policy.rw.includes(join(TIMON_HOME, 'provider-runs', 'provider-codex', run.missionId)), 'the CLI\'s per-mission home');
+  assert.ok(policy.deny.includes(TIMON_HOME));
+  for (const path of policy.rw) {
+    if (!path.startsWith(`${TIMON_HOME}/`)) continue;
+    assert.ok(
+      [WT, join(TIMON_HOME, 'tmp', 'missions'), join(TIMON_HOME, 'provider-runs', 'provider-codex'), join(TIMON_HOME, 'provider-cache', 'provider-codex'), join(TIMON_HOME, 'agents', 'fence.witness')]
+        .some((own) => path === own || path.startsWith(`${own}/`)),
+      `${path} is one of the mission's own folders`,
+    );
+  }
+});
+
+test('without a fence on the machine, auto launches the bare CLI with the plain TMPDIR', async () => {
+  const host = getHost();
+  const original = { spawn: host.spawn, fence: host.fence };
+  const seen = { cmd: '', env: {} as NodeJS.ProcessEnv };
+  const child = Object.assign(new EventEmitter(), {
+    pid: 4248, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(), killed: false,
+    kill() { this.killed = true; return true; },
+  });
+  host.fence = { mechanism: 'landlock', probe: () => ({ available: false, reason: 'kernel without Landlock', abi: 0 }), wrap: () => { throw new Error('never'); } };
+  host.spawn = ((cmd: string, _args: string[], opts?: { env?: NodeJS.ProcessEnv }) => {
+    seen.cmd = cmd; seen.env = (opts?.env ?? {}) as NodeJS.ProcessEnv;
+    return child as unknown as ChildProcessWithoutNullStreams;
+  }) as typeof host.spawn;
+  try {
+    await spawnAgent('fence.witness', 'ping');
+  } finally {
+    host.spawn = original.spawn;
+    host.fence = original.fence;
+  }
+  assert.match(seen.cmd, /codex$/);
+  assert.equal(seen.env.DISABLE_AUTOUPDATER, undefined);
+  assert.notEqual(seen.env.TMPDIR?.includes(join('tmp', 'missions')), true);
+});
+
+test('enforce refuses a mission it cannot fence, before any process starts', async () => {
+  const host = getHost();
+  const original = { spawn: host.spawn, fence: host.fence };
+  let spawned = false;
+  const previous = config();
+  setConfig({ ...previous, host: { ...previous.host, isolation: { ...previous.host.isolation, filesystem: 'enforce' } } });
+  host.fence = undefined;
+  host.spawn = (() => { spawned = true; throw new Error('never'); }) as typeof host.spawn;
+  try {
+    await assert.rejects(spawnAgent('fence.witness', 'ping'), /Mission refused: host\.isolation\.filesystem is "enforce"/);
+  } finally {
+    host.spawn = original.spawn;
+    host.fence = original.fence;
+    setConfig(previous);
+  }
+  assert.equal(spawned, false);
+});
