@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TimonConfigSchema } from './config/schema.js';
-import { findFenceBinary, probeFence } from './host/fence.js';
+import { findFenceBinary, probeFence, runFenceWitness } from './host/fence.js';
 import { createLandlockFence } from './host/landlock.js';
 import { createSeatbeltFence } from './host/darwin.js';
 import { SANDBOX_EXEC } from './host/seatbelt.js';
@@ -371,6 +371,26 @@ test('macOS: a CLI exiting non-zero with sandbox-exec\'s words does not turn the
   }
 });
 
+test('macOS: a witness ended by a signal proves nothing: the fence stays on, and the log says why', async () => {
+  const warned: string[] = [];
+  const original = console.warn;
+  const seatbelt = createSeatbeltFence({
+    run: () => ({ status: 0, stderr: '' }),
+    writeProfile: () => {},
+    realpath: (path) => path,
+    runWitness: async () => ({ ran: true, status: null, stderr: '' }),
+  });
+  console.warn = (line: string) => { warned.push(line); };
+  try {
+    await endLaunch(fencedOutcome('mac-signal', 'seatbelt'), seatbelt, 'sandbox-exec: sandbox_apply: Operation not permitted\n', 1);
+    assert.equal(hostFenceStatus(seatbelt).state, 'ready');
+    assert.ok(warned.some((l) => l.includes('ended by a signal')), warned.join('\n'));
+  } finally {
+    console.warn = original;
+    resetFenceLaunchFailureForTest();
+  }
+});
+
 test('auto: a real launcher failure is warned about once in the log', async () => {
   const warned: string[] = [];
   const original = console.warn;
@@ -397,6 +417,39 @@ test('a launcher that cannot even start at the witness run turns the fence off',
   } finally {
     resetFenceLaunchFailureForTest();
   }
+});
+
+test('a witness the machine could not start for want of resources proves nothing; a launcher that is not there does', async () => {
+  const warned: string[] = [];
+  const original = console.warn;
+  console.warn = (line: string) => { warned.push(line); };
+  try {
+    for (const code of ['EAGAIN', 'EMFILE', 'ENFILE', 'ENOMEM']) {
+      const fence = fakeFence({ available: true, abi: 6 }, undefined, { ran: false, reason: `spawn /opt/timon/timon-fence ${code}`, timedOut: false, code });
+      await endLaunch(fencedOutcome(`spawn-${code}`), fence, 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n', 71);
+      assert.equal(fence.witnessed.length, 1, code);
+      assert.equal(hostFenceStatus(fence).state, 'ready', code);
+    }
+    assert.equal(warned.filter((l) => l.includes('the fence stays on')).length, 4, warned.join('\n'));
+
+    const fence = fakeFence({ available: true, abi: 6 }, undefined, { ran: false, reason: 'spawn /opt/timon/timon-fence ENOENT', timedOut: false, code: 'ENOENT' });
+    await endLaunch(fencedOutcome('spawn-ENOENT'), fence, 'timon-fence: cannot apply the Landlock ruleset: Operation not permitted\n', 71);
+    assert.deepEqual(hostFenceStatus(fence), { state: 'unsupported', reason: 'the fence launcher cannot run (spawn /opt/timon/timon-fence ENOENT)', abi: 0 });
+  } finally {
+    console.warn = original;
+    resetFenceLaunchFailureForTest();
+  }
+});
+
+test('a witness run hands back the errno code of a launcher it could not start', { skip: process.platform === 'win32' && 'the execute bit is a POSIX matter' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fence-witness-'));
+  const missing = await runFenceWitness(join(dir, 'absent'), []);
+  assert.ok(!missing.ran && missing.code === 'ENOENT', JSON.stringify(missing));
+  const plain = join(dir, 'not-executable');
+  writeFileSync(plain, '#!/bin/sh\nexit 0\n');
+  chmodSync(plain, 0o644);
+  const denied = await runFenceWitness(plain, []);
+  assert.ok(!denied.ran && denied.code === 'EACCES', JSON.stringify(denied));
 });
 
 test('an altered launcher that fails whatever it runs turns the fence off', { skip: process.platform === 'win32' && 'a stand-in launcher is a shell script' }, async () => {
@@ -473,8 +526,20 @@ test('what a witness run proves', () => {
   assert.equal(fenceWitnessFailure('seatbelt', { ran: true, status: 1, stderr: '' }), 'sandbox-exec exited with 1');
   assert.equal(fenceWitnessFailure('seatbelt', { ran: true, status: 71, stderr: 'sandbox-exec: sandbox_apply: Operation not permitted\n' }),
     'sandbox-exec: sandbox_apply: Operation not permitted');
-  assert.equal(fenceWitnessFailure('seatbelt', { ran: false, reason: 'spawn /usr/bin/sandbox-exec ENOENT', timedOut: false }),
-    'the fence launcher cannot run (spawn /usr/bin/sandbox-exec ENOENT)');
+  assert.equal(fenceWitnessFailure('seatbelt', { ran: true, status: null, stderr: '' }), null, 'a signal comes from outside sandbox-exec');
+  assert.equal(fenceWitnessFailure('seatbelt', { ran: true, status: null, stderr: 'sandbox-exec: sandbox_apply: Operation not permitted\n' }), null);
+  assert.equal(fenceWitnessFailure('landlock', { ran: true, status: null, stderr: '' }), null);
+  for (const code of ['ENOENT', 'EACCES', 'ENOEXEC', 'EPERM']) {
+    assert.equal(fenceWitnessFailure('seatbelt', { ran: false, reason: `spawn /usr/bin/sandbox-exec ${code}`, timedOut: false, code }),
+      `the fence launcher cannot run (spawn /usr/bin/sandbox-exec ${code})`, code);
+    assert.equal(fenceWitnessFailure('landlock', { ran: false, reason: `spawn timon-fence ${code}`, timedOut: false, code }),
+      `the fence launcher cannot run (spawn timon-fence ${code})`, code);
+  }
+  for (const code of ['EAGAIN', 'EMFILE', 'ENFILE', 'ENOMEM']) {
+    assert.equal(fenceWitnessFailure('landlock', { ran: false, reason: `spawn timon-fence ${code}`, timedOut: false, code }), null, `${code} is the machine, not the launcher`);
+    assert.equal(fenceWitnessFailure('seatbelt', { ran: false, reason: `spawn /usr/bin/sandbox-exec ${code}`, timedOut: false, code }), null, code);
+  }
+  assert.equal(fenceWitnessFailure('landlock', { ran: false, reason: 'no checked fence launcher', timedOut: false }), null, 'no errno code, no proof');
   assert.equal(fenceWitnessFailure('landlock', { ran: false, reason: 'no answer within 5000 ms', timedOut: true }), null);
 });
 

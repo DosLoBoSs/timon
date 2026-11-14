@@ -674,21 +674,36 @@ function launcherLine(stderr: string, prefix: string): string | null {
 }
 
 /**
+ * The spawn errors that say the launcher itself cannot run: missing, not
+ * executable, not a binary this machine runs, or refused by the OS. Any other
+ * (EAGAIN, EMFILE, ENFILE, ENOMEM…) is the machine short of resources for a
+ * moment, which says nothing about the fence and must not turn it off.
+ */
+const LAUNCHER_SPAWN_FAILURES: ReadonlySet<string> = new Set(['ENOENT', 'EACCES', 'ENOEXEC', 'EPERM']);
+
+/**
  * What a witness run of the launcher (`HostFence.witness`) proves: the reason
- * the fence cannot be applied on this machine, or null when the launcher
- * applied it. The payload prints nothing and exits 0, so a failure here is the
+ * the fence cannot be applied on this machine, or null when it proves nothing
+ * of the kind — the launcher applied it, or gave no conclusive answer (no
+ * answer in time, a spawn error that is not the launcher's, an end by a
+ * signal). The payload prints nothing and exits 0, so a failure here is the
  * launcher's. Under Landlock, 127 means every fence step succeeded and only
  * the payload could not run; 78 and 64 are the daemon's bugs, not the
- * machine's (as for a launch).
+ * machine's (as for a launch). Under Seatbelt, only a numeric non-zero exit
+ * is a failure: `sandbox-exec` reports a refused profile that way, while a
+ * signal comes from outside it (the OS, an out-of-memory kill).
  */
 export function fenceWitnessFailure(mechanism: FenceMechanism, witness: HostFenceWitness): string | null {
-  if (!witness.ran) return witness.timedOut ? null : `the fence launcher cannot run (${witness.reason})`;
+  if (!witness.ran) {
+    if (witness.timedOut || witness.code === undefined || !LAUNCHER_SPAWN_FAILURES.has(witness.code)) return null;
+    return `the fence launcher cannot run (${witness.reason})`;
+  }
   if (mechanism === 'landlock') {
     if (witness.status !== FENCE_EXIT.unavailable && witness.status !== FENCE_EXIT.osError) return null;
     return launcherLine(witness.stderr, 'timon-fence: ') ?? `timon-fence exited with ${witness.status}`;
   }
-  if (witness.status === 0) return null;
-  return launcherLine(witness.stderr, 'sandbox-exec: ') ?? `sandbox-exec exited with ${witness.status ?? 'a signal'}`;
+  if (witness.status === 0 || witness.status === null) return null;
+  return launcherLine(witness.stderr, 'sandbox-exec: ') ?? `sandbox-exec exited with ${witness.status}`;
 }
 
 /**
@@ -711,6 +726,10 @@ async function confirmFenceLaunchFailure(fence: HostFence | undefined, outcome: 
     }
     if (!witness.ran) {
       console.warn(`[resources] the fence launcher gave no answer to its witness run (${witness.reason}) after ${unit}: the fence stays on`);
+      return;
+    }
+    if (witness.status === null) {
+      console.warn(`[resources] the fence launcher's witness run was ended by a signal after ${unit}: the fence stays on`);
       return;
     }
     // The mission's text is not repeated: it is the mission's, not the launcher's.
