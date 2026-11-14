@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import { BrandMark } from '@/components/brand-mark';
 import { blankForm, formOf, type CustomBackend } from './form';
 import { API, EndpointFields, MANAGE_API, VerdictLine, connectionEditable, errorText, useEndpointDraft, type ProtocolOption } from './endpoint-form';
-import { ProvidersPanel } from './providers-panel';
+import { ProvidersPanel } from './provider-catalog';
 import { ProvidersList } from './providers-list';
 import { SidePanel } from './side-panel';
 import { HINT } from './type-scale';

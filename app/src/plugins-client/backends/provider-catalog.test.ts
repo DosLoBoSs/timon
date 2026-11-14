@@ -52,7 +52,7 @@ test('the registry offers the verified build and lists sign-in methods with bill
   install('React', React);
   const { createRoot } = await import('react-dom/client');
   const { SearchParamsContext } = await import('next/dist/shared/lib/hooks-client-context.shared-runtime');
-  const { ProvidersPanel } = await import('./providers-panel');
+  const { ProvidersPanel } = await import('./provider-catalog');
 
   const root = createRoot(document.getElementById('root')!);
   const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);
