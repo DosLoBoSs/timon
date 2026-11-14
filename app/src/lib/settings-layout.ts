@@ -58,6 +58,7 @@ export const STATIC_TABS: Readonly<Record<SettingsCategoryId, readonly StaticTab
   models: [
     { id: 'backends', kind: 'plugin', pluginId: '@timon/backends' },
     // Per-account subscriptions (TODO #52): every signed-in user may own some.
+    // The superadmin manages them on each provider's page instead.
     { id: 'accounts', kind: 'native', pane: 'accounts' },
     { id: 'fallback', kind: 'native', pane: 'fallback' },
     { id: 'breaker', kind: 'rows' },
@@ -284,6 +285,9 @@ export function buildSettingsLayout(input: SettingsLayoutInput): SettingsCategor
         if (tab.pane === 'desktop' && !input.desktop) continue;
         if (tab.pane === 'secrets' && !input.secrets) continue;
         if ((tab.pane === 'installation' || tab.pane === 'developer') && !input.superadmin) continue;
+        // The provider pages, which carry each provider's accounts, are the superadmin's alone:
+        // a plain user keeps this tab, the only place they sign their own accounts in.
+        if (tab.pane === 'accounts' && input.superadmin) continue;
         tabs.push({ id: tab.id, kind: 'native', pane: tab.pane, grafts });
       } else {
         const plugin = pluginById.get(tab.pluginId);

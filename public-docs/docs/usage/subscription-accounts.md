@@ -13,7 +13,7 @@ A mission never moves to another subscription on its own. If its account is sign
 
 ## Add an account
 
-Open **Settings → AI models → Subscription accounts** and choose **Add an account**.
+Open **Settings → AI models → Subscription accounts** and choose **Add an account**. An administrator does it on the provider's own page instead: **Settings → AI models → Providers**, choose the provider, then **Add an account** in its **Connection** section; the **Provider** field is not asked there, the page already names it.
 
 | Field | What it is |
 |---|---|
@@ -82,7 +82,7 @@ An instance account has **no owner**: it is for the missions nobody launched fro
 
 An account belongs to its owner. An administrator can let other users use it without handing over the sign-in.
 
-In **Settings → AI models → Subscription accounts**, choose **Assign** on the account's row, tick the users who may use it, and **Save**. The owner is not offered: they use it anyway. The row then shows **Assigned to** and their names. Only administrators see the **Assign** button and that line.
+On the provider's page (**Settings → AI models → Providers**, then the provider, **Connection** section), choose **Assign** on the account's row, tick the users who may use it, and **Save**. The owner is not offered: they use it anyway. The row then shows **Assigned to** and their names. Only administrators see the **Assign** button and that line.
 
 From a terminal on the machine that runs Timon:
 

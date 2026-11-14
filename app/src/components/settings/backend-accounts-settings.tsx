@@ -426,12 +426,15 @@ function AddAccountForm({ backends, users, superadmin, onCreated, onCancel }: {
   };
   return (
     <form onSubmit={(event) => void submit(event)} className="space-y-3 rounded-md bg-muted/30 p-3">
-      <label className="block space-y-1">
-        <span className="text-[12px] font-medium">{t('backendAccounts.form.backend')}</span>
-        <select className={field} value={backend} onChange={(e) => setBackend(e.target.value)}>
-          {backends.map((id) => <option key={id} value={id}>{id}</option>)}
-        </select>
-      </label>
+      {/* On a provider page there is often one backend only: nothing to choose. */}
+      {backends.length > 1 && (
+        <label className="block space-y-1">
+          <span className="text-[12px] font-medium">{t('backendAccounts.form.backend')}</span>
+          <select className={field} value={backend} onChange={(e) => setBackend(e.target.value)}>
+            {backends.map((id) => <option key={id} value={id}>{id}</option>)}
+          </select>
+        </label>
+      )}
       <label className="block space-y-1">
         <span className="text-[12px] font-medium">{t('backendAccounts.form.name')}</span>
         <input className={field} value={name} maxLength={60} required placeholder={t('backendAccounts.form.namePlaceholder')}
@@ -455,7 +458,30 @@ function AddAccountForm({ backends, users, superadmin, onCreated, onCancel }: {
   );
 }
 
+/**
+ * The pane of Settings › AI models for whoever has no provider page: a plain
+ * user signs in their own accounts here. The superadmin manages them on each
+ * provider's page (`provider-connection-section.tsx`), the same list filtered.
+ */
 export function BackendAccountsSettings(): ReactElement {
+  return (
+    <div className="space-y-4">
+      <p className="max-w-[65ch] text-[13px] leading-snug text-muted-foreground">{t('backendAccounts.description')}</p>
+      <BackendAccountsList />
+    </div>
+  );
+}
+
+/**
+ * The accounts the viewer may see, with every gesture on them: add, sign in,
+ * rename, assign, delete. `backends` narrows it to the accounts of these
+ * backends, and what may be added to them (a provider page); `onChanged` is
+ * called after any change it made, once the list is read again.
+ */
+export function BackendAccountsList({ backends, onChanged }: {
+  backends?: readonly BackendName[];
+  onChanged?: () => void;
+} = {}): ReactElement {
   const me = useMe();
   const superadmin = actingUser(me)?.is_superadmin === true;
   const catalog = useBackendCatalog();
@@ -482,9 +508,18 @@ export function BackendAccountsSettings(): ReactElement {
   }, [superadmin]);
 
   const userNames = useMemo(() => new Map(users.map((user) => [user.id, user.name || user.email])), [users]);
+  // A new array each render from a caller would restart the effects below: compare by content.
+  const scopeKey = backends ? backends.join('\n') : null;
+  const scoped = useMemo(() => {
+    if (page === null || scopeKey === null) return page;
+    const keep = new Set(scopeKey.split('\n'));
+    return { accounts: page.accounts.filter((a) => keep.has(a.backend)), backends: page.backends.filter((id) => keep.has(id)) };
+  }, [page, scopeKey]);
+  const changed = useRef(onChanged);
+  changed.current = onChanged;
   const finished = useCallback(() => {
     setPanel(null);
-    void load();
+    void load().then(() => changed.current?.());
     // The selectors read account states from the catalogue.
     refreshBackendCatalog();
   }, [load]);
@@ -497,6 +532,7 @@ export function BackendAccountsSettings(): ReactElement {
       if (panel?.id === account.id) setPanel(null);
       await load();
       refreshBackendCatalog();
+      changed.current?.();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('backendAccounts.errorGeneric'));
     }
@@ -515,13 +551,12 @@ export function BackendAccountsSettings(): ReactElement {
 
   return (
     <div className="space-y-4">
-      <p className="max-w-[65ch] text-[13px] leading-snug text-muted-foreground">{t('backendAccounts.description')}</p>
-      {page === null && <p className="text-[12px] text-muted-foreground">{t('backendAccounts.loading')}</p>}
-      {page !== null && page.accounts.length === 0 && !adding && (
+      {scoped === null && <p className="text-[12px] text-muted-foreground">{t('backendAccounts.loading')}</p>}
+      {scoped !== null && scoped.accounts.length === 0 && !adding && (
         <p className="text-[12px] text-muted-foreground">{t('backendAccounts.empty')}</p>
       )}
       <div className="space-y-2">
-        {page?.accounts.map((account) => {
+        {scoped?.accounts.map((account) => {
           const open = panel?.id === account.id ? panel.kind : null;
           return (
             <AccountRow
@@ -545,15 +580,18 @@ export function BackendAccountsSettings(): ReactElement {
           );
         })}
       </div>
-      {page !== null && page.backends.length > 0 && (adding ? (
+      {scoped !== null && scoped.backends.length > 0 && (adding ? (
         <AddAccountForm
-          backends={page.backends}
+          backends={scoped.backends}
           users={users}
           superadmin={superadmin}
           onCancel={() => setAdding(false)}
           onCreated={(account) => {
             setAdding(false);
-            void load().then(() => setPanel({ id: account.id, kind: 'login' }));
+            void load().then(() => {
+              setPanel({ id: account.id, kind: 'login' });
+              changed.current?.();
+            });
           }}
         />
       ) : (

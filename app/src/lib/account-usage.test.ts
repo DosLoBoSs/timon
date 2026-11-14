@@ -79,4 +79,10 @@ test('a signed-out subscription account points at the settings, not at the CLI (
   }));
   assert.match(idle, /Subscription accounts/);
   assert.doesNotMatch(idle, /\/login/);
+  // The superadmin has no such tab: the account is on its provider's page.
+  const admin = renderToStaticMarkup(React.createElement(AccountUsageStatus, {
+    view: { kind: 'disconnected', backend: 'claude@k3f9a2b1c0' }, superadmin: true,
+  }));
+  assert.match(admin, /Providers/);
+  assert.doesNotMatch(admin, /Subscription accounts/);
 });
