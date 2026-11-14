@@ -24,7 +24,7 @@ import { auditRequest } from './audit-actor.js';
 import { requestHasPermission, forbidden } from './identity.js';
 import { isDeveloperAccount } from './agent-permissions.js';
 import { userAllows } from './permissions.js';
-import { catalogBackend, catalogClaimsModel } from '../backends/catalog.js';
+import { catalogBackend, catalogClaimsModel, resolvedPermissionModeFor } from '../backends/catalog.js';
 import { implicitBackendName, defaultBackendName } from '../backends/index.js';
 import { accountInstanceRefusal } from '../backends/account-launch.js';
 import { loadConfig, type AgentConfig } from '../agent-config.js';
@@ -113,9 +113,8 @@ const PERMISSION_RANK: ReadonlyMap<string, number> = new Map([
  * Judging `read-only` at rank 0 is not enough: what ends up in `config.json`
  * is read by whichever dialect runs the agent, and not all of them know the
  * name. Claude passes it straight to `--permission-mode` (the agent would fail
- * at spawn), grok keeps only `plan` and runs everything else in
- * `bypassPermissions` (a `read-only` agent would run unrestricted). Codex and
- * copilot treat both spellings alike, so storing the Claude name is lossless.
+ * at spawn). Codex and copilot treat both spellings alike, so storing the
+ * Claude name is lossless.
  */
 const MODE_ALIAS: ReadonlyMap<string, string> = new Map([
   ['read-only', 'plan'],
@@ -152,7 +151,9 @@ function levelOf(mode: string | null | undefined): number | null {
 /**
  * The level a caller really runs in, as a mode name.
  *
- * A sandbox dialect freezes privileges at spawn and has no card: its `default`
+ * First the mode the backend really honours (`resolvedPermissionModeFor`): on a
+ * provider that declares its supported modes, any other one runs in `plan`.
+ * Then a sandbox dialect freezes privileges at spawn and has no card: its `default`
  * (and an unset mode, which reads as `default`) is the workspace-write sandbox,
  * not the lowest rung of Claude's ladder. Taking the label at face value would
  * cap a codex agent that never set a mode at `default`, below the very sandbox
@@ -160,7 +161,7 @@ function levelOf(mode: string | null | undefined): number | null {
  * are: those sandboxes really are read-only.
  */
 function effectiveLevel(mode: string | null | undefined, backend: string): string {
-  const label = mode ?? 'default';
+  const label = resolvedPermissionModeFor(backend, mode) ?? 'default';
   const rank = levelOf(label);
   if (rank === null || rank === 0) return label;
   if (catalogBackend(backend)?.permissionModel !== 'sandbox') return label;
@@ -207,22 +208,45 @@ export function overrideAuthority(req: Request): OverrideAuthority {
   return { relaxed: true, ceiling: callerCeiling(req), accountUser };
 }
 
-/** Mode check shared by agents, spawns and tasks. */
-function modeRefusal(mode: unknown, authority: OverrideAuthority, label: string): string | null {
+/**
+ * Mode check shared by agents, spawns, tasks and live missions.
+ *
+ * It judges the HIGHER of the mode asked for and the mode it resolves to on
+ * `backend` (a provider that declares its supported modes runs any other one
+ * in `plan`). Resolution never raises a mode, so in practice this is the mode
+ * as asked; the resolved one only names, in the message, what the agent would
+ * really get.
+ *
+ * Why not the resolved mode alone: spawns, tasks and agent configs store the
+ * mode as asked, and a stored mode is not judged again when the backend it runs
+ * on changes (a task or a mission falling back to another backend when its
+ * quota runs dry). Judged as `plan`, an `auto` asked for on grok by a caller
+ * capped at `plan` would run as `auto` the day the task fell back to claude.
+ * The live-mission route stores the resolved mode instead, so what it judges
+ * is what it keeps.
+ *
+ * A name nobody knows is refused as such: once stored, it would reach the next
+ * backend the agent is moved to.
+ */
+function modeRefusal(mode: unknown, authority: OverrideAuthority, label: string, backend?: string): string | null {
   if (typeof mode !== 'string') return `${label} is not allowed: ${String(mode)}`;
+  const runs = backend === undefined ? mode : resolvedPermissionModeFor(backend, mode) ?? mode;
+  const shown = runs === mode ? mode : `${mode} (runs as ${runs} on backend ${backend})`;
   if (!authority.relaxed) {
-    return SAFE_PERMISSION_MODES.includes(mode as never)
+    return SAFE_PERMISSION_MODES.includes(mode as never) && SAFE_PERMISSION_MODES.includes(runs as never)
       ? null
-      : `${label} is not allowed: ${mode} (allowed: ${SAFE_PERMISSION_MODES.join(', ')}; any other level needs the ${PRIVILEGED_CONFIG_PERMISSION} permission)`;
+      : `${label} is not allowed: ${shown} (allowed: ${SAFE_PERMISSION_MODES.join(', ')}; any other level needs the ${PRIVILEGED_CONFIG_PERMISSION} permission)`;
   }
-  const wanted = levelOf(mode);
-  if (wanted === null) {
+  const asked = levelOf(mode);
+  const resolved = levelOf(runs);
+  if (asked === null || resolved === null) {
     return `${label} is not a known permission mode: ${mode} (known: ${[...PERMISSION_RANK.keys()].join(', ')})`;
   }
+  const wanted = Math.max(asked, resolved);
   if (authority.ceiling !== null) {
     const own = levelOf(authority.ceiling);
     if (own === null || wanted > own) {
-      return `${label} ${mode} is above the caller's own level (${authority.ceiling}): an agent hands out at most the level it runs in`;
+      return `${label} ${shown} is above the caller's own level (${authority.ceiling}): an agent hands out at most the level it runs in`;
     }
   }
   return null;
@@ -236,10 +260,11 @@ export function isKnownPermissionMode(mode: string): boolean {
 /**
  * The mode check alone, for a change of level on a mission that is already
  * running (`POST /api/missions/:id/permission-mode`). Raising a live mission is
- * the same decision as launching it at that level, so it takes the same grid.
+ * the same decision as launching it at that level, so it takes the same grid,
+ * on the backend serving the mission.
  */
-export function permissionModeRefusal(mode: string, authority: OverrideAuthority): string | null {
-  return modeRefusal(mode, authority, 'permission_mode');
+export function permissionModeRefusal(mode: string, authority: OverrideAuthority, backend?: string): string | null {
+  return modeRefusal(mode, authority, 'permission_mode', backend);
 }
 
 /**
@@ -276,9 +301,10 @@ const SAFE_PERMISSION_MODES = ['default', 'acceptEdits', 'plan', 'auto'] as cons
  *
  * The criterion is a CAPABILITY, never a name: only `mcp-bridge` can hand a
  * tool use back to TIMON mid-turn (Allow/Deny card + classifier). A `sandbox`
- * dialect freezes privileges at spawn, and one of them (grok) collapses EVERY
- * permission mode onto `bypassPermissions` — so letting a non-admin pick the
- * backend would silently defeat `SAFE_PERMISSION_MODES`.
+ * dialect freezes privileges at spawn, with no card: its `default` already
+ * edits and runs commands in a workspace sandbox (`effectiveLevel`), so letting
+ * a non-admin pick the backend would quietly widen what `SAFE_PERMISSION_MODES`
+ * lets through.
  *
  * This only constrains an explicit override: an agent already configured on a
  * sandbox backend by an admin keeps running on it.
@@ -296,8 +322,8 @@ function backendRefusal(backend: string, authority: OverrideAuthority): string |
   // A relaxed caller picks any backend: the level it asks for is already capped
   // by its own, and `modeRefusal` is what binds the sandbox dialects.
   // A remote one starts nothing here: the sandbox escalation this rule guards
-  // against (a dialect collapsing every mode onto `bypassPermissions` ON THIS
-  // HOST) has no host to land on. Whose gateway it reaches is decided at launch,
+  // against (a dialect running guarded modes unarbitrated ON THIS HOST) has no
+  // host to land on. Whose gateway it reaches is decided at launch,
   // from the launching account's own connection.
   if (!authority.relaxed && entry.permissionModel !== 'mcp-bridge' && !entry.remote) {
     return `backend ${backend} cannot arbitrate tool uses per call (${entry.permissionModel}): selecting it needs the ${PRIVILEGED_CONFIG_PERMISSION} permission, leave backend unset to inherit`;
@@ -406,8 +432,13 @@ export function spawnOverrideRefusal(
 ): string | null {
   // `permission_mode` is not read by `spawnAgent` today. Refusing it loudly
   // beats ignoring it silently: a caller who sends it believes it applies.
+  // Judged on the backend it would run on (the override, else the agent's);
+  // an invalid override is refused below.
   if (body.permission_mode !== undefined) {
-    const refusal = modeRefusal(body.permission_mode, authority, 'permission_mode override');
+    const runsOn = typeof body.backend_override === 'string'
+      ? body.backend_override
+      : agentConfig?.backend ?? implicitBackendName();
+    const refusal = modeRefusal(body.permission_mode, authority, 'permission_mode override', runsOn);
     if (refusal) return refusal;
   }
   for (const key of ['allowed_tools', 'mcp_servers'] as const) {
@@ -691,10 +722,24 @@ export function agentConfigRefusal(
   // declared one comes back with the default and sends it back as such.
   const backendOf = (cfg: AgentConfig | null): string => cfg?.backend ?? defaultBackendName();
   const backendSame = typeof patch.backend === 'string' && patch.backend === backendOf(current);
+  const runsOn = typeof patch.backend === 'string' ? patch.backend : backendOf(current);
 
   if ('permission_mode' in patch && !same('permission_mode')) {
-    const refusal = modeRefusal(patch.permission_mode, authority, 'permission_mode');
+    const refusal = modeRefusal(patch.permission_mode, authority, 'permission_mode', runsOn);
     if (refusal) return refusal;
+  } else if (current && typeof patch.backend === 'string' && !backendSame) {
+    // The stored mode, moved off a backend that ran it lower (one that declares
+    // its supported modes runs the others in `plan`): on the new backend it
+    // would run as written, so it is judged as if it were asked for now.
+    const stored = current.permission_mode ?? 'default';
+    const ranBefore = resolvedPermissionModeFor(backendOf(current), stored);
+    const runsAfter = resolvedPermissionModeFor(runsOn, stored);
+    const before = levelOf(ranBefore);
+    const after = levelOf(runsAfter);
+    if (ranBefore !== runsAfter && (after === null || before === null || after > before)) {
+      const refusal = modeRefusal(stored, authority, 'permission_mode', runsOn);
+      if (refusal) return refusal;
+    }
   }
   if ('backend' in patch && patch.backend !== undefined && patch.backend !== null && !backendSame) {
     if (typeof patch.backend !== 'string') return 'backend must be a string';

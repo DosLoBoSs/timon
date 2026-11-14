@@ -117,20 +117,36 @@ test('a huge message goes back through the file even with an image', async () =>
   assert.ok(written.includes('[Images jointes]'), 'images not referenced in the fallback');
 });
 
-test('permission_mode: everything falls back on always-approve, except plan', async () => {
+test('permission_mode: never raised — only an explicit bypassPermissions gets always-approve, the rest runs in plan', async () => {
   for (const [mode, expected] of [
-    ['auto', 'bypassPermissions'],
-    ['default', 'bypassPermissions'],
-    ['acceptEdits', 'bypassPermissions'],
-    ['dontAsk', 'bypassPermissions'],
     ['bypassPermissions', 'bypassPermissions'],
-    // Another dialect's vocabulary (codex): without a fallback the CLI would refuse the value.
-    ['danger-full-access', 'bypassPermissions'],
-    [undefined, 'bypassPermissions'],
     ['plan', 'plan'],
+    // Guarded modes: the CLI's approval pipeline has no channel headless, and
+    // always-approve would hand more than the agent was given (fail-closed).
+    ['default', 'plan'],
+    ['auto', 'plan'],
+    ['acceptEdits', 'plan'],
+    ['dontAsk', 'plan'],
+    // Another dialect's vocabulary, a typo, nothing: never a reason to raise.
+    ['danger-full-access', 'plan'],
+    ['read-only', 'plan'],
+    ['bypass', 'plan'],
+    [undefined, 'plan'],
   ] as const) {
     const sp = await provider.launch(opts({ cfg: { cwd: TMP_HOME, model: 'grok-4.6', permission_mode: mode } }), PROFILE);
     assert.equal(argAfter(sp.args, '--permission-mode'), expected, `mode ${mode}`);
+  }
+});
+
+test('permission_mode: the provider declares the two modes it honours, and its mapping keeps to them', async () => {
+  const { permissionModeForGrok, GROK_SUPPORTED_MODES } = await import('../../official-providers/provider-grok/lib/grok.js') as {
+    permissionModeForGrok(mode: string | undefined): string;
+    GROK_SUPPORTED_MODES: string[];
+  };
+  assert.deepEqual(provider.permission.supportedModes, ['plan', 'bypassPermissions']);
+  assert.deepEqual(dialect.supportedPermissionModes, ['plan', 'bypassPermissions']);
+  for (const mode of ['plan', 'default', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions', 'read-only', undefined]) {
+    assert.ok(GROK_SUPPORTED_MODES.includes(permissionModeForGrok(mode)), `mode ${String(mode)}`);
   }
 });
 

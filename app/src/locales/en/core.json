@@ -2306,7 +2306,8 @@
     "permissionsSelfBadge": "Manages its own permissions",
     "permissionsSelfBadgeHint": "This agent decides tool uses itself: the sandbox its own configuration sets applies, and TIMON shows no Allow/Deny card for it.",
     "permissionModeLabel": "Permission mode",
-    "permissionModeIgnored": "This mode is ignored: the backend applies its own permission configuration. For opencode, edit the permission key of its opencode.json file."
+    "permissionModeIgnored": "This mode is ignored: the backend applies its own permission configuration. For opencode, edit the permission key of its opencode.json file.",
+    "permissionModeRunsAsPlan": "This backend cannot run {mode}: the agent runs as plan (read-only). Choose one of the modes it supports."
   },
   "route": {
     "unknown": "No page is registered for {path}.",

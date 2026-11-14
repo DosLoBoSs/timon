@@ -105,6 +105,12 @@
 
 ***
 
+### supportedPermissionModes?
+
+> `readonly` `optional` **supportedPermissionModes?**: readonly `string`[]
+
+***
+
 ### thinkingControls?
 
 > `readonly` `optional` **thinkingControls?**: readonly (`"levels"` \| `"budget"` \| `"toggle"`)[]

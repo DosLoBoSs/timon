@@ -2306,7 +2306,8 @@
     "permissionsSelfBadge": "Gère ses permissions lui-même",
     "permissionsSelfBadgeHint": "Cet agent décide seul de ses tool uses : c'est le bac à sable de sa propre configuration qui s'applique, et TIMON n'affiche aucune carte Allow/Deny pour lui.",
     "permissionModeLabel": "Mode de permission",
-    "permissionModeIgnored": "Ce mode est ignoré : le backend applique sa propre configuration de permissions. Pour opencode, modifiez la clé permission de son fichier opencode.json."
+    "permissionModeIgnored": "Ce mode est ignoré : le backend applique sa propre configuration de permissions. Pour opencode, modifiez la clé permission de son fichier opencode.json.",
+    "permissionModeRunsAsPlan": "Ce backend ne sait pas exécuter {mode} : l'agent tourne en plan (lecture seule). Choisissez l'un des modes qu'il prend en charge."
   },
   "route": {
     "unknown": "Aucune page n'est enregistrée pour {path}.",

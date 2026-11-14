@@ -16,6 +16,7 @@ import type {
   SpanState, SpawnResult, UsageProbeOptions,
 } from '../types.js';
 import type { ReasoningControl } from '../reasoning-control.js';
+import type { PermissionMode } from '../permission-models.js';
 import type { ProviderDeclarations } from '../provider-declarations.js';
 
 /**
@@ -104,6 +105,15 @@ export type PermissionStrategy = {
    * card. Only a session protocol that asks can say it (`model: 'protocol'`, not `byAgent`).
    */
   readonly appliesMode?: boolean;
+  /**
+   * The only permission modes this provider can honour, `plan` among them. A CLI
+   * that cannot ask for an approval mid-turn may know nothing between read-only
+   * and run-everything (Grok: `['plan', 'bypassPermissions']`). Timon then runs
+   * every other mode in `plan`, never higher: the launch receives the resolved
+   * mode, the permission ceiling judges it, and the screens offer only these.
+   * Absent = every mode is honoured as such.
+   */
+  readonly supportedModes?: readonly PermissionMode[];
 };
 
 /** What the stream says about a usage limit. The detector stays in the core. */

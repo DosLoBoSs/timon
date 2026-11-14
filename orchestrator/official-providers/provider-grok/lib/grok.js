@@ -78,43 +78,49 @@ function grokAuthSource() {
 }
 
 /**
+ * The only two modes this CLI can honour headless. Declared to Timon as
+ * `permission.supportedModes`: the screens offer only these, the permission
+ * ceiling judges the mode an agent really runs in, and any other mode reaches
+ * `launch` already resolved to `plan`.
+ */
+const GROK_SUPPORTED_MODES = ['plan', 'bypassPermissions'];
+/**
  * `agent.permission_mode` → grok's `--permission-mode`.
  *
- * ── Why EVERYTHING falls back on `bypassPermissions` ("always-approve") ────
+ * ── Why only `plan` and `bypassPermissions` ("always-approve") ─────────────
  *
- * The other modes send every batch of tool calls through the CLI's approval
- * pipeline. Headless, that pipeline has nobody to talk to, and it does not
- * merely fail politely:
+ * The CLI's other modes send every batch of tool calls through its approval
+ * pipeline. Headless, that pipeline has nobody to talk to (no
+ * `--permission-prompt-tool`, and its ACP mode never sends
+ * `session/request_permission` either), and it does not merely fail politely:
  *
  *  1. LATENCY. In `auto`, the CLI submits the batch to its safety check before
  *     running it. Measured on grok 1.0.5 (gap between
  *     `shell.turn.inference_done` and `shell.tool.exec_done` in
  *     `<GROK_HOME>/logs/unified.jsonl`): 6 to 12 s per batch, for tools that
  *     then run in 0–200 ms. Over a four-batch turn, that is ~40 s of pure
- *     latency. With automatic approval, the same sequence drops to 6 ms.
+ *     latency.
  *  2. KILLED TURNS. When that check hits a call it cannot decide on, the call
  *     is cancelled (`User cancelled the execution for tool`) AND the whole turn
  *     stops: `result.stop_reason = "cancelled"`, exit 1, mission
- *     `failed`/`crash`. No Allow/Deny card, no resume: the work stops in the
- *     middle of a tool batch, with no readable reason. Reproduced outside TIMON
+ *     `failed`/`crash`. No Allow/Deny card, no resume. Reproduced outside TIMON
  *     with a dummy MCP server — three parallel `use_tool` calls are enough to
  *     trigger the cancellation, a single one goes through.
  *
- * The CLI's documentation says the same (user-guide/22-permissions-and-safety):
- * "For automation that must run tools without interactive approval, use
- * always-approve (and deny rules if you need hard blocks) rather than auto
- * alone." Hence this mapping, and the `--deny` rules below, which stay in force
- * even under always-approve (deny wins over everything else).
- *
- * `plan` is the only exception kept: planning mode runs nothing, so it has
- * nothing to get approved.
+ * So no guarded mode is usable as such, and raising one to always-approve
+ * would hand the agent more than it was given. The mapping is fail-closed, the
+ * same rule the daemon applies to `supportedModes`: an explicit
+ * `bypassPermissions` gets always-approve, everything else (`default`, `auto`,
+ * `acceptEdits`, `dontAsk`, another dialect's word, nothing) runs in `plan`,
+ * which runs no tool and so has nothing to get approved. Applied here too so
+ * the plugin stays read-only on a daemon that does not resolve the mode. The
+ * `--deny` rules below stay in force under always-approve (deny wins over
+ * everything else).
  */
 function permissionModeForGrok(permissionMode) {
-    if (permissionMode === 'plan')
-        return 'plan';
-    // `default`, `auto`, `acceptEdits`, `dontAsk`: all of them lead to an
-    // approval request which, headless, can go nowhere (see above).
-    return 'bypassPermissions';
+    if (permissionMode === 'bypassPermissions')
+        return 'bypassPermissions';
+    return 'plan';
 }
 /**
  * Hard guardrails, applied whatever the mode — a `deny` wins over automatic
@@ -148,7 +154,7 @@ const GROK_DENY_RULES = [
     'Bash(systemctl --user stop pkos-orchestrator*)',
     'Bash(systemctl --user start pkos-orchestrator*)',
 ];
-export { permissionModeForGrok, GROK_DENY_RULES };
+export { permissionModeForGrok, GROK_DENY_RULES, GROK_SUPPORTED_MODES };
 
 /**
  * Turns off discovery of the host's Claude Code and Cursor configurations.
@@ -459,8 +465,8 @@ export function createGrokProvider(services, log) {
         // No approval round trip during the turn: rights are frozen at spawn time by
         // `--permission-mode` plus the `--deny` rules (see permissionModeForGrok and
         // GROK_DENY_RULES). No Allow/Deny card, no classifier — exactly codex's
-        // situation.
-        permission: { model: 'sandbox' },
+        // situation, with two modes only: read-only or run-everything.
+        permission: { model: 'sandbox', supportedModes: GROK_SUPPORTED_MODES },
         // Two shapes, and only one of them is structured. An API error travels as
         // JSON inside `errors[]` and carries its `http_status`, which `parseLine`
         // hoists to `api_error_status` — that is what makes a 402 (no credit left)

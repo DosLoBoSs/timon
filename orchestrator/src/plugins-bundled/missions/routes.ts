@@ -60,6 +60,7 @@ import { buildTraceView } from '../../trace-view.js';
 import { forbidden, rejectUnlessAny, requireAuth } from '../../users/identity.js';
 import { RESTRICTED, canonicalPermissionMode, isKnownPermissionMode, overrideAuthority, permissionModeRefusal, rejectOverride } from '../../users/privileged-overrides.js';
 import { missionPermissionState, missionPermissionSwitchable } from '../../mission-permission-mode.js';
+import { resolvedPermissionModeFor } from '../../backends/catalog.js';
 import type { UserEventOrigin } from '../../user-origin.js';
 import type { MissionTitleOrigin } from '../../mission-title-source.js';
 import type { PromptPresentation } from '../../prompt-presentation.js';
@@ -1345,8 +1346,11 @@ export function registerRoutes(
       res.status(400).json({ error: `unknown permission mode: ${wanted}` });
       return;
     }
-    const mode = canonicalPermissionMode(wanted);
-    const refusal = permissionModeRefusal(mode, overrideAuthority(req));
+    // Judged and stored as the backend serving the mission runs it: one that
+    // declares its supported modes runs any other in `plan`.
+    const backend = missionPermissionState(owned.id, RESTRICTED)?.backend;
+    const mode = resolvedPermissionModeFor(backend, canonicalPermissionMode(wanted)) ?? canonicalPermissionMode(wanted);
+    const refusal = permissionModeRefusal(mode, overrideAuthority(req), backend);
     if (refusal) {
       rejectOverride(req, res, 'mission.permission_mode_denied', `mission:${owned.id}`, refusal);
       return;
