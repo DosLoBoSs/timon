@@ -16,7 +16,7 @@ import type {
   SpanState, SpawnResult, UsageProbeOptions,
 } from '../types.js';
 import type { ReasoningControl } from '../reasoning-control.js';
-import type { PermissionMode } from '../permission-models.js';
+import type { NestedSandboxDeclaration, PermissionMode } from '../permission-models.js';
 import type { ProviderDeclarations } from '../provider-declarations.js';
 
 /**
@@ -114,6 +114,13 @@ export type PermissionStrategy = {
    * Absent = every mode is honoured as such.
    */
   readonly supportedModes?: readonly PermissionMode[];
+  /**
+   * The CLI has a sandbox of its own that cannot run inside Timon's mission
+   * fence, and this is how a fenced launch turns it off: the fence then
+   * applies the level that sandbox would have (`NestedSandboxDeclaration`).
+   * Absent = the CLI has no such sandbox, or none Timon ever turns on.
+   */
+  readonly nestedSandbox?: NestedSandboxDeclaration;
 };
 
 /** What the stream says about a usage limit. The detector stays in the core. */

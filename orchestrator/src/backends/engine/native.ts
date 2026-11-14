@@ -41,6 +41,7 @@ export function dialectFromDefinition(def: NativeProviderDefinition): AnyDialect
     ...(def.reasoning ? { thinkingControls: def.reasoning.controls } : {}),
     ...(def.permission.appliesMode === true ? { appliesPermissionMode: true } : {}),
     ...(def.permission.supportedModes ? { supportedPermissionModes: [...def.permission.supportedModes] } : {}),
+    ...(def.permission.nestedSandbox ? { nestedSandbox: def.permission.nestedSandbox } : {}),
     ...(def.permission.byAgent !== undefined && def.permission.byAgent !== false
       ? { permissionsByAgent: typeof def.permission.byAgent === 'function' ? def.permission.byAgent : () => true }
       : {}),

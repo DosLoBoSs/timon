@@ -55,10 +55,15 @@ upsertAgent({
   system_prompt: 'witness — does nothing.',
   config: { backend: 'codex', cwd: WT, skills: [], memory_scope: 'NONE' },
 });
+upsertAgent({
+  name: 'fence.reader',
+  system_prompt: 'reader — plans, writes nothing.',
+  config: { backend: 'codex', cwd: WT, skills: [], memory_scope: 'NONE', permission_mode: 'plan' },
+});
 
 const LAUNCHER = '/opt/timon/timon-fence';
 
-async function launch(): Promise<{ cmd: string; args: string[]; env: NodeJS.ProcessEnv; policy: FencePolicy; missionId: string }> {
+async function launch(agent = 'fence.witness'): Promise<{ cmd: string; args: string[]; env: NodeJS.ProcessEnv; policy: FencePolicy; missionId: string }> {
   const host = getHost();
   const original = { spawn: host.spawn, fence: host.fence };
   const policies: FencePolicy[] = [];
@@ -82,7 +87,7 @@ async function launch(): Promise<{ cmd: string; args: string[]; env: NodeJS.Proc
   }) as typeof host.spawn;
   let missionId = '';
   try {
-    missionId = await spawnAgent('fence.witness', 'ping');
+    missionId = await spawnAgent(agent, 'ping');
   } finally {
     host.spawn = original.spawn;
     host.fence = original.fence;
@@ -122,17 +127,32 @@ test('the policy opens the mission\'s worktree, repository and provider folders,
   }
 });
 
+/** The value codex is handed for `--sandbox`. */
+const sandboxLevel = (args: readonly string[]): string | undefined => args[args.indexOf('--sandbox') + 1];
+
+test('fenced, codex runs without its own sandbox and the fence applies the agent\'s level', async () => {
+  const writing = await launch();
+  assert.equal(sandboxLevel(writing.args), 'danger-full-access', 'bwrap and Seatbelt cannot start inside the fence');
+  assert.equal(writing.args.filter((arg) => arg === '--sandbox').length, 1);
+  assert.ok(writing.policy.rw.includes(WT), 'workspace-write: the worktree stays writable');
+  const reading = await launch('fence.reader');
+  assert.equal(sandboxLevel(reading.args), 'danger-full-access');
+  assert.ok(reading.policy.ro.includes(WT) && !reading.policy.rw.includes(WT), 'plan: the worktree is read-only');
+  assert.ok(reading.policy.ro.includes(join(MAIN, '.git')) && !reading.policy.rw.includes(join(MAIN, '.git')), 'and its repository too');
+  assert.ok(reading.policy.rw.includes(join(TIMON_HOME, 'provider-runs', 'provider-codex', reading.missionId)), 'the CLI\'s own home stays writable');
+});
+
 test('without a fence on the machine, auto launches the bare CLI with the plain TMPDIR', async () => {
   const host = getHost();
   const original = { spawn: host.spawn, fence: host.fence };
-  const seen = { cmd: '', env: {} as NodeJS.ProcessEnv };
+  const seen = { cmd: '', args: [] as string[], env: {} as NodeJS.ProcessEnv };
   const child = Object.assign(new EventEmitter(), {
     pid: 4248, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(), killed: false,
     kill() { this.killed = true; return true; },
   });
   host.fence = { mechanism: 'landlock', probe: () => ({ available: false, reason: 'kernel without Landlock', abi: 0 }), wrap: () => { throw new Error('never'); } };
-  host.spawn = ((cmd: string, _args: string[], opts?: { env?: NodeJS.ProcessEnv }) => {
-    seen.cmd = cmd; seen.env = (opts?.env ?? {}) as NodeJS.ProcessEnv;
+  host.spawn = ((cmd: string, args: string[], opts?: { env?: NodeJS.ProcessEnv }) => {
+    seen.cmd = cmd; seen.args = args; seen.env = (opts?.env ?? {}) as NodeJS.ProcessEnv;
     return child as unknown as ChildProcessWithoutNullStreams;
   }) as typeof host.spawn;
   try {
@@ -142,6 +162,7 @@ test('without a fence on the machine, auto launches the bare CLI with the plain 
     host.fence = original.fence;
   }
   assert.match(seen.cmd, /codex$/);
+  assert.equal(sandboxLevel(seen.args), 'workspace-write', 'unfenced, codex keeps its own sandbox');
   assert.equal(seen.env.DISABLE_AUTOUPDATER, undefined);
   assert.notEqual(seen.env.TMPDIR?.includes(join('tmp', 'missions')), true);
 });
