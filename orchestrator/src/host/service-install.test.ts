@@ -59,8 +59,11 @@ import {
   repairSessionWitness,
   readSessionWitnessCommand,
   windowsServiceNotes,
+  applySessionMode,
+  sessionModeNeedsReinstall,
   type ServiceOpts,
 } from './service-install.js';
+import { readServiceSessionMode, writeServiceSessionMode } from './service-session-mode.js';
 
 /**
  * Ce que le batch élevé laisse derrière lui : une ligne par étape exécutée.
@@ -117,13 +120,13 @@ function fixture(platform: NodeJS.Platform, exec?: (n: string, a: string[]) => E
   };
 }
 
-test('linux: the shipped template is rendered, linger is enabled, the unit is started', () => {
+test('linux: the shipped template is rendered, linger is enabled on the user\'s answer, the unit is started', () => {
   const calls: string[][] = [];
   const opts = fixture('linux', (n, a) => {
     calls.push([n, ...a]);
     return { code: 0, stdout: '', stderr: '' };
   });
-  const res = installService(opts);
+  const res = installService({ ...opts, sessionMode: 'always' });
   assert.equal(res.ok, true);
   assert.equal(res.code, 0);
 
@@ -135,6 +138,76 @@ test('linux: the shipped template is rendered, linger is enabled, the unit is st
   assert.deepEqual(calls[0], ['loginctl', 'enable-linger', 'tester']);
   assert.deepEqual(calls[1], ['systemctl', '--user', 'daemon-reload']);
   assert.deepEqual(calls[2], ['systemctl', '--user', 'enable', '--now', LINUX_UNIT]);
+});
+
+test('linux: without the user\'s answer, or on "session", lingering is never touched (audit F2)', () => {
+  for (const sessionMode of [null, 'session'] as const) {
+    const calls: string[][] = [];
+    const opts = fixture('linux', (n, a) => {
+      calls.push([n, ...a]);
+      return { code: 0, stdout: '', stderr: '' };
+    });
+    assert.equal(installService({ ...opts, sessionMode }).ok, true);
+    assert.ok(!calls.some((c) => c[0] === 'loginctl'), `${String(sessionMode)}: ${JSON.stringify(calls)}`);
+    assert.deepEqual(calls[0], ['systemctl', '--user', 'daemon-reload']);
+  }
+});
+
+test('linux: the recorded answer is what an install with no explicit one follows', () => {
+  const calls: string[][] = [];
+  const opts = fixture('linux', (n, a) => {
+    calls.push([n, ...a]);
+    return { code: 0, stdout: '', stderr: '' };
+  });
+  writeServiceSessionMode(opts.timonHome, 'always');
+  assert.equal(installService(opts).ok, true);
+  assert.deepEqual(calls[0], ['loginctl', 'enable-linger', 'tester']);
+});
+
+test('linux: changing the answer switches lingering in place and records it, the unit untouched', () => {
+  const calls: string[][] = [];
+  const opts = fixture('linux', (n, a) => {
+    calls.push([n, ...a]);
+    return { code: 0, stdout: '', stderr: '' };
+  });
+  const on = applySessionMode(opts, 'always');
+  assert.equal(on.ok, true, on.lines.join('\n'));
+  assert.equal(readServiceSessionMode(opts.timonHome), 'always');
+  const off = applySessionMode(opts, 'session');
+  assert.equal(off.ok, true);
+  assert.equal(readServiceSessionMode(opts.timonHome), 'session');
+  assert.deepEqual(calls, [['loginctl', 'enable-linger', 'tester'], ['loginctl', 'disable-linger', 'tester']]);
+  assert.match(off.lines.join('\n'), /other user services/);
+  assert.equal(sessionModeNeedsReinstall('linux'), false);
+  assert.equal(existsSync(unitPath(opts.homeDir)), false, 'no unit written by a change of answer');
+});
+
+test('linux: a refused loginctl is a failure that says why', () => {
+  const opts = fixture('linux', () => ({ code: 1, stdout: '', stderr: 'Access denied' }));
+  const res = applySessionMode(opts, 'always');
+  assert.equal(res.ok, false);
+  assert.equal(res.reason, 'Access denied');
+});
+
+test('the answer is refused where it would change nothing (Windows), and nothing is recorded', () => {
+  const opts = fixture('win32');
+  const res = applySessionMode(opts, 'session');
+  assert.equal(res.ok, false);
+  assert.equal(readServiceSessionMode(opts.timonHome), null);
+});
+
+test('linux status reads lingering from loginctl: "not logged in or lingering" is a no', () => {
+  const read = (linger: ExecResult) => {
+    const opts = fixture('linux', (n) => (n === 'loginctl' ? linger : { code: 0, stdout: '', stderr: '' }));
+    assert.equal(installService({ ...opts, sessionMode: null }).ok, true);
+    return statusService(opts);
+  };
+  const on = read({ code: 0, stdout: 'yes\n', stderr: '' });
+  assert.equal(on.offSession, true);
+  assert.match(on.lines.join('\n'), /logged out: keeps running/);
+  assert.equal(read({ code: 0, stdout: 'no\n', stderr: '' }).offSession, false);
+  assert.equal(read({ code: 1, stdout: '', stderr: 'User tester is not logged in or lingering.' }).offSession, false);
+  assert.equal(read({ code: 1, stdout: '', stderr: 'Failed to connect to bus' }).offSession, undefined, 'unknown is not a no');
 });
 
 test('linux: a refusing systemctl is a failure, not a silent success', () => {

@@ -41,6 +41,7 @@ import { dirname, isAbsolute, join, posix, relative, resolve, sep, win32 as winP
 import { runtimeDir } from './packaged-service.js';
 import type { ExecResult } from './types.js';
 import { isBundledNode } from './bundled-node.js';
+import { readServiceSessionMode, sessionModeSupported, writeServiceSessionMode, type ServiceSessionMode } from './service-session-mode.js';
 
 export const LINUX_UNIT = 'timon-orchestrator';
 export const MACOS_LABEL = 'com.timon.daemon';
@@ -114,6 +115,12 @@ export type ServiceOpts = {
    * would be broken in it, open session or not.
    */
   offSession?: boolean;
+  /**
+   * The user's answer to "keep running when logged out?"
+   * (`service-session-mode.ts`). Left out, the recorded one is read; `null` =
+   * never asked, and the supervisor's off-session behaviour is left as found.
+   */
+  sessionMode?: ServiceSessionMode | null;
   /** macOS: where LaunchDaemons live. Tests point it at a temporary directory. */
   launchDaemonsDir?: string;
   /** macOS: how the administrator prompt is shown. Default: `sudo` in a
@@ -149,6 +156,13 @@ export type ServiceResult = {
    * definition that would be refused the same way.
    */
   refused?: boolean;
+  /**
+   * `status` only: does the registered service keep running once the user
+   * logs out? Linux: lingering is on for the account. macOS: the LaunchDaemon.
+   * Windows: always, the S4U task outlives the session. Absent when no
+   * service is registered or the answer could not be read.
+   */
+  offSession?: boolean;
   reason?: string;
 };
 
@@ -1334,8 +1348,16 @@ export function macosLauncherPath(timonHome: string): string {
   return join(timonHome, 'run', 'timon-service.sh');
 }
 
+function sessionModeOf(opts: ServiceOpts): ServiceSessionMode | null {
+  return opts.sessionMode !== undefined ? opts.sessionMode : readServiceSessionMode(opts.timonHome);
+}
+
+/** The user's answer first; an install from before the question keeps the claude token rule. */
 function wantsLaunchDaemon(opts: ServiceOpts): boolean {
-  return opts.offSession ?? existsSync(claudeTokenMarkerPath(opts.timonHome));
+  if (opts.offSession !== undefined) return opts.offSession;
+  const mode = sessionModeOf(opts);
+  if (mode !== null) return mode === 'always';
+  return existsSync(claudeTokenMarkerPath(opts.timonHome));
 }
 
 const SYSTEM_TARGET = `system/${MACOS_LABEL}`;
@@ -1752,16 +1774,18 @@ function installDarwin(opts: ServiceOpts, lines: string[]): ServiceResult {
     }
     return applyLaunchDaemon(opts, lines, renderLaunchDaemonPlist(opts), launcher);
   }
-  // No token: a LaunchDaemon left from an earlier token would run claude
-  // where it can never sign in. Back to the agent, which can.
+  // The user chose the session, or never chose and has no claude token (a
+  // LaunchDaemon would run claude where it can never sign in). Back to the
+  // agent, which lives and dies with the login session.
   const removed = removeLaunchDaemon(opts, lines);
   if (!removed.ok) return { ...removed, written: false };
   const file = plistPath(opts.homeDir);
   write(file, renderPlist(opts), opts.dryRun ?? false, lines);
   const res = bootstrapAgent(opts, lines, file);
   if (res.ok) {
-    res.lines.push('runs while you are logged in; to keep Timon running with no session open, '
-      + 'set a claude token (timon auth claude-token set) and run timon service install again');
+    res.lines.push(sessionModeOf(opts) === 'session'
+      ? 'runs while you are logged in, as you chose; timon service session-mode always keeps it running when you log out'
+      : 'runs while you are logged in; timon service session-mode always keeps it running when you log out');
   }
   return res;
 }
@@ -1793,7 +1817,7 @@ function statusDarwin(opts: ServiceOpts): ServiceResult {
     `state     : ${running ? 'running' : 'not loaded'}`,
   ];
   if (daemon && !token) lines.push('warning   : no claude token configured — claude missions fail in this service (timon auth claude-token set)');
-  if (!daemon && agent && token) lines.push('note      : a claude token is set — run timon service install to keep Timon running with no session open');
+  if (!daemon && agent && token && sessionModeOf(opts) === null) lines.push('note      : a claude token is set — run timon service install to keep Timon running with no session open');
   return { ok: running, code: running ? 0 : 3, installed: daemon || agent, lines };
 }
 
@@ -1955,9 +1979,10 @@ export function installService(opts: ServiceOpts): ServiceResult {
   const notStopped = takeDownReplacedUnits(opts, lines);
   if (notStopped) return notStopped;
   write(unitPath(opts.homeDir, opts.unitName), unit, opts.dryRun ?? false, lines);
-  // Without linger, the user manager stops at logout and the night's agents
-  // stop with it. This is the whole point of a service rather than a terminal.
-  run(opts, lines, 'loginctl', ['enable-linger', opts.userName]);
+  // Lingering keeps the user manager, and so this daemon, alive after logout.
+  // Only on the user's explicit answer: never asked, an existing lingering is
+  // left as found, and a fresh install stops with the session.
+  if (sessionModeOf(opts) === 'always') run(opts, lines, 'loginctl', ['enable-linger', opts.userName]);
   const reload = run(opts, lines, 'systemctl', ['--user', 'daemon-reload']);
   if (reload.code !== 0) return { ok: false, code: 1, lines: [...lines, reload.stderr.trim() || 'systemd reload failed'] };
   let res = run(opts, lines, 'systemctl', ['--user', 'enable', '--now', opts.unitName ?? LINUX_UNIT]);
@@ -2006,8 +2031,67 @@ export function uninstallService(opts: ServiceOpts): ServiceResult {
   return { ok: true, code: 0, lines };
 }
 
+/**
+ * Is lingering on for this account? `loginctl show-user` fails for a user with
+ * no session and no lingering, which is a "no"; any other answer is unknown.
+ */
+function lingerEnabled(opts: ServiceOpts): boolean | null {
+  const res = opts.exec('loginctl', ['show-user', opts.userName, '--property=Linger', '--value']);
+  if (res.code !== 0) return /not logged in or lingering/i.test(res.stderr) ? false : null;
+  const value = res.stdout.trim();
+  return value === 'yes' ? true : value === 'no' ? false : null;
+}
+
+/** What the registered supervisor does at logout, read from the machine (see `ServiceResult.offSession`). */
+function keepsRunningLoggedOut(opts: ServiceOpts): boolean | null {
+  if (opts.platform === 'win32') return true;
+  if (opts.platform === 'darwin') return existsSync(daemonPlistOf(opts));
+  if (opts.platform === 'linux') return lingerEnabled(opts);
+  return null;
+}
+
+/**
+ * Records the user's answer to "keep running when logged out?" and applies
+ * what can be applied in place. Linux: lingering, switched on or off for the
+ * account, the unit untouched. macOS: the answer picks between the agent and
+ * the LaunchDaemon, so the caller reinstalls the service (`sessionModeNeedsReinstall`)
+ * through the usual install path, which stages the runtime first.
+ * Turning lingering off is the user's explicit gesture: it also stops their
+ * other user services at logout, and the line says so.
+ */
+export function applySessionMode(opts: ServiceOpts, mode: ServiceSessionMode): ServiceResult {
+  const lines: string[] = [];
+  if (!sessionModeSupported(opts.platform)) {
+    const reason = 'Choosing whether Timon keeps running when you log out is not available on this system yet.';
+    return { ok: false, code: 1, lines: [reason], reason };
+  }
+  if (!opts.dryRun) writeServiceSessionMode(opts.timonHome, mode);
+  const what = mode === 'always' ? 'keep running when you log out' : 'run only while you are logged in';
+  lines.push(`${opts.dryRun ? '(dry-run) would record' : 'recorded'}: ${what}`);
+  if (opts.platform !== 'linux') return { ok: true, code: 0, lines };
+  const res = run(opts, lines, 'loginctl', [mode === 'always' ? 'enable-linger' : 'disable-linger', opts.userName]);
+  if (res.code !== 0) {
+    const reason = res.stderr.trim() || `loginctl exited with code ${res.code}`;
+    return { ok: false, code: 1, lines: [...lines, reason], reason };
+  }
+  if (mode === 'session') lines.push('lingering is off for your account: your other user services also stop when you log out');
+  return { ok: true, code: 0, lines };
+}
+
+/** On macOS the answer changes the supervisor itself: an installed service is reinstalled to follow it. */
+export function sessionModeNeedsReinstall(platform: NodeJS.Platform): boolean {
+  return platform === 'darwin';
+}
+
 export function statusService(opts: ServiceOpts): ServiceResult {
   const res = opts.platform === 'win32' ? statusWindows(opts) : opts.platform === 'darwin' ? statusDarwin(opts) : linuxService(opts);
+  if (res.installed) {
+    const offSession = keepsRunningLoggedOut(opts);
+    if (offSession !== null) {
+      res.offSession = offSession;
+      res.lines.push(`logged out: ${offSession ? 'keeps running' : 'stops when you log out'}`);
+    }
+  }
   if (existsSync(serviceStoppedMarker(opts.timonHome))) {
     res.lines.push('stopped   : by the user (timon service stop); it starts again when the app opens, or with timon service start');
   }
