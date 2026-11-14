@@ -202,7 +202,6 @@
     "loading": "Szukanie CLI AI na tej maszynie…",
     "unavailable": "Nie można teraz wyświetlić listy CLI AI tej maszyny.",
     "retry": "Spróbuj ponownie",
-    "checkUpdates": "Sprawdź aktualizacje",
     "updateCheckOff": "Sprawdzanie aktualizacji jest wyłączone (ustawienie „Sprawdzaj aktualizacje CLI”).",
     "install": "Zainstaluj",
     "installing": "Instalowanie…",

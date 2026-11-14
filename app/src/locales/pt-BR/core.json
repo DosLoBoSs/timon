@@ -1657,7 +1657,7 @@
         "terminal": "shell console pty fonte font"
       },
       "models": {
-        "backends": "claude codex provedor llm api modelo padrão ordem provider model default order assinatura conta entrar login conectar reconectar várias chatgpt plano código dispositivo subscription account sign in connect several plan device code",
+        "backends": "claude codex provedor llm api modelo padrão ordem provider model default order assinatura conta entrar login conectar reconectar várias chatgpt plano código dispositivo subscription account sign in connect several plan device code add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "fallback reserva cota troca esgotada espera último recurso backup quota switch exhausted cooldown last resort",
         "breaker": "disjuntor circuit breaker turnos estéreis sterile turns sideline",
         "quotas": "limites de uso créditos assinatura plano redefinição usage limits credits subscription plan reset"
@@ -3503,10 +3503,7 @@
       }
     },
     "intro": "Gerencie todos os seus provedores de LLM e seus modelos. As alterações se aplicam sem reiniciar o Timon.",
-    "edit": "Editar",
-    "editTitle": "Editar o provedor",
     "saved": "Provedor atualizado.",
-    "modelCount": "{count} modelos",
     "keyHintEdit": "Deixe vazio para manter a chave armazenada. Digitar uma a substitui no cofre — ela nunca é exibida de novo.",
     "picto": {
       "choose": "Escolher uma imagem",
@@ -3536,18 +3533,12 @@
       "contextWindowDetected": "auto · {window}",
       "contextWindowAuto": "contexto"
     },
-    "empty": "Nenhum provedor adicionado ainda.",
     "added": "Provedor adicionado.",
     "save": "Salvar",
-    "remove": "Remover",
     "confirmRemove": "Remover o provedor \"{name}\"? A chave dele também é excluída do cofre.",
-    "active": "Ativo",
-    "notDetected": "Não detectado",
-    "inactive": "Inativo",
     "testButton": "Testar",
     "destinationNotice": "Todo prompt de uma missão executada neste provedor é enviado a {host}.",
     "keyHint": "Armazenada no cofre de segredos, nunca no arquivo, e nunca exibida de novo. Deixe vazio para um servidor local que não exige chave.",
-    "fileHint": "Cada provedor é um arquivo em ~/.timon/backends/. Você também pode soltar um arquivo JSON ali manualmente: ele é detectado em um segundo.",
     "fields": {
       "name": "Nome",
       "protocol": "Protocolo",
@@ -3582,7 +3573,6 @@
       "protocolUnavailable": "Este protocolo não está instalado.",
       "unconfirmed": "Alteração não confirmada. Recarregue esta página para verificar o estado salvo."
     },
-    "disabled": "Desativado",
     "reorder": "Arraste para reordenar este provedor",
     "claudeToken": {
       "title": "Token de longa duração do Claude",
@@ -3601,11 +3591,6 @@
     "disableHint": "Ele desaparecerá dos seletores. Novas execuções que o usem explicitamente serão recusadas, sem fallback automático. As escolhas existentes abaixo serão mantidas.",
     "disable": "Desativar provedor",
     "managedHint": "Você pode renomear, adicionar, excluir e ocultar modelos, e alterar nomes, imagens e o modelo padrão. As configurações de conexão são gerenciadas pelo Timon ou pelo plugin do provedor.",
-    "origins": {
-      "builtin": "Integrado",
-      "plugin": "Plugin",
-      "file": "Adicionado por você"
-    },
     "usages": {
       "agents": "Agentes",
       "routines": "Rotinas",

@@ -464,7 +464,7 @@ test('a mission is refused every change, readably, and nothing moves', async () 
         assert.equal(r.code, 2, `${args.join(' ')}: ${r.stderr}`);
         assert.match(r.stderr, /refused \(403 operator_only\)/);
         assert.match(r.stderr, /by a person, never by an agent/);
-        assert.match(r.stderr, /Settings → Backends/);
+        assert.match(r.stderr, /Settings › AI models › Providers \(Add a provider, or the provider's page\)/);
         assert.doesNotMatch(r.stderr, /^\{/m, 'a sentence, not a raw body');
         assert.doesNotMatch(r.stdout + r.stderr, LEAK);
       }

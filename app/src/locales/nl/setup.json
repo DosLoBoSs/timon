@@ -202,7 +202,6 @@
     "loading": "De AI-CLI's op deze machine zoeken…",
     "unavailable": "De AI-CLI's van deze machine kunnen nu niet worden opgesomd.",
     "retry": "Opnieuw proberen",
-    "checkUpdates": "Op updates controleren",
     "updateCheckOff": "Updatecontroles staan uit (instelling « Op CLI-updates controleren »).",
     "install": "Installeren",
     "installing": "Installeren…",

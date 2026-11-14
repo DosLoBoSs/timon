@@ -202,7 +202,6 @@
     "loading": "Recherche des CLI d’IA sur cette machine…",
     "unavailable": "Impossible de lister les CLI d’IA de cette machine pour l’instant.",
     "retry": "Réessayer",
-    "checkUpdates": "Rechercher des mises à jour",
     "updateCheckOff": "La recherche de mises à jour est désactivée (réglage « Check for CLI updates »).",
     "install": "Installer",
     "installing": "Installation…",

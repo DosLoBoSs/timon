@@ -64,38 +64,47 @@ without restarting Timon. Lowering a ceiling can stop a process already over
 that limit. Enforcement uses the host's available confinement support;
 detecting RAM does not add systemd confinement to Windows or macOS.
 
-## Backend and fallback choices
+## Providers and fallback choices
 
-**Settings → AI models → LLM backends** lists built-in providers, providers installed by
+**Settings → AI models → Providers** lists built-in providers, providers installed by
 plugins, and providers you added yourself. Only a superadmin, or an account with full
 access to the Providers screen (see [Several accounts](./multi-user.md#access-to-the-providers-screen)), can change them.
-Drag a row's handle to set the order in model selectors. Keyboard users can
-press Space on the handle, move with the arrow keys, then press Space again.
 
-Turning a backend off hides it from selectors and refuses new launches that
+### The providers list
+
+- **Default provider**, at the top, is the provider a mission runs on when nothing names one. It is the same setting as **Preferred provider** in **Auto switch**: **Automatic** leaves the choice to Timon and says which provider that is now.
+- The providers come in two groups: **Connected**, the ones a mission can run on now, and **Other providers**. The search field filters both, accents ignored.
+- Each row shows the provider's logo, its name and one status: **Account connected**, **Available on this computer**, **Not connected**, **Not downloaded**, **Waiting for your authorization**, **Blocked** or **Turned off**, plus an **Update available** badge when its program or catalog agent has a newer version. Click a row to open the provider's page.
+- **Reorder** shows the providers in the order of the model selectors. Drag a row's handle to move it; keyboard users press Space on the handle, move with the arrow keys, then press Space again. **Done** brings the groups back.
+- **Check** looks again, in one go, for every provider's program and its updates, and for the catalog: after you installed a tool while Timon was running, for example.
+
+### A provider's page
+
+The page of a provider (**Settings → AI models → Providers → _its name_**) has these sections, in this order, each shown only when it applies: **Connection**, **API key**, **Program**, **Settings** (followed by the provider's own settings, such as the Claude long-lived token) and **Models**. Its header says how many agents use it, and holds the switch that turns it on or off.
+
+Turning a provider off hides it from selectors and refuses new launches that
 explicitly name it. Timon shows the agents, routines and pending tasks that
 still reference it in a confirmation dialog; those choices are kept, without a
-silent fallback. The last active backend cannot be disabled. If the usual
-default is disabled, launches with no explicit backend use an active one.
+silent fallback. The last active provider cannot be turned off. If the usual
+default is turned off, launches with no explicit provider use an active one.
 Existing running missions are not stopped by this setting.
 
-Choose **Edit** to rename a backend, choose its picture, add an exact model ID,
-hide or show models, change their order, or select the default model. For
-built-in and plugin backends, connection details remain under their provider's
-control. An exact model ID is sent unchanged; a display label does not create
-an alias. Newly added models appear first and carry a **New** badge for seven
-days. Renaming one does not restart that period.
+Its **Models** section lists what the provider serves, with a search field and
+a line such as *3 of 12 models appear in the selector*. Add an exact model ID,
+hide or show models with the eye of a row, change their order with the handle,
+select the default model, then **Save**. An exact model ID is sent unchanged; a
+display label does not create an alias. Newly added models appear first and
+carry a **New** badge for seven days. Renaming one does not restart that
+period. For a provider you added yourself, each model also says how it thinks.
 
-Each provider also has its own page, **Settings → AI models → Providers →
-_its name_**. Its **Models** section lists what the provider serves, with a
-search field and a line such as *3 of 12 models appear in the selector*; the
-eye of a row shows or hides that model in every model selector, and **Save**
-keeps the change. Its **Settings** section holds the name and picture the
-selectors show. For a provider you added yourself, **Advanced** holds its
+Its **Settings** section holds the name and picture the selectors show. For
+built-in and plugin providers, connection details remain under their
+provider's control. For a provider you added yourself, **Advanced** holds its
 protocol, address and API key: the key field stays empty, typing one replaces
 the stored key, and **Test** checks the saved address with the stored key
-while you change nothing. The Claude page adds the **Claude long-lived token**
-section (see [macOS](../installation/macos.md#keep-timon-running-when-you-are-logged-out)).
+while you change nothing; **Remove this provider** deletes it. When its file
+holds a credential in clear text, a warning heads the section. The Claude page
+adds the **Claude long-lived token** section (see [macOS](../installation/macos.md#keep-timon-running-when-you-are-logged-out)).
 
 **Add a provider**, next to the search of the list, opens a page with two ways:
 **From the catalog** installs an agent of the official Agent Client Protocol

@@ -687,9 +687,6 @@
       "button": "Check",
       "done": "Providers checked: programs, updates and catalogue are up to date.",
       "partial": "{count, plural, one {One check failed} other {# checks failed}}: the rest is up to date."
-    },
-    "legacy": {
-      "title": "Edit a provider's models and connection"
     }
   },
   "providerAdd": {

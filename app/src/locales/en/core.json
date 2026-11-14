@@ -1429,7 +1429,7 @@
         "terminal": "shell console pty font"
       },
       "models": {
-        "backends": "claude codex provider llm api model default order subscription account sign in login connect reconnect several chatgpt plan device code",
+        "backends": "claude codex provider llm api model default order subscription account sign in login connect reconnect several chatgpt plan device code add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "fallback backup quota switch exhausted cooldown last resort",
         "breaker": "circuit breaker sterile turns sideline",
         "quotas": "usage limits credits subscription plan reset"
@@ -3296,10 +3296,7 @@
       }
     },
     "intro": "Manage all your LLM providers and their models. Changes apply without restarting Timon.",
-    "edit": "Edit",
-    "editTitle": "Edit the provider",
     "saved": "Provider updated.",
-    "modelCount": "{count} models",
     "keyHintEdit": "Leave empty to keep the stored key. Typing one replaces it in the vault — it is never shown again.",
     "picto": {
       "choose": "Choose a picture",
@@ -3330,18 +3327,12 @@
       "contextWindowDetected": "auto · {window}",
       "contextWindowAuto": "context"
     },
-    "empty": "No provider added yet.",
     "added": "Provider added.",
     "save": "Save",
-    "remove": "Remove",
     "confirmRemove": "Remove the provider \"{name}\"? Its key is deleted from the vault too.",
-    "active": "Active",
-    "notDetected": "Not detected",
-    "inactive": "Inactive",
     "testButton": "Test",
     "destinationNotice": "Every prompt of a mission run on this provider is sent to {host}.",
     "keyHint": "Stored in the secrets vault, never in the file, and never shown again. Leave empty for a local server that asks for none.",
-    "fileHint": "Each provider is a file in ~/.timon/backends/. You can also drop a JSON file there by hand: it is picked up within a second.",
     "fields": {
       "name": "Name",
       "protocol": "Protocol",
@@ -3376,7 +3367,6 @@
       "protocolUnavailable": "This protocol is not installed.",
       "unconfirmed": "Change not confirmed. Reload this page to check the saved state."
     },
-    "disabled": "Disabled",
     "reorder": "Drag to reorder this provider",
     "claudeToken": {
       "title": "Claude long-lived token",
@@ -3395,11 +3385,6 @@
     "disableHint": "It will disappear from selectors. New launches that explicitly use it will be refused, with no automatic fallback. Existing choices below will be kept.",
     "disable": "Disable provider",
     "managedHint": "You can rename, add, delete and hide models, and change names, pictures and the default model. Connection settings are managed by Timon or the provider plugin.",
-    "origins": {
-      "builtin": "Built in",
-      "plugin": "Plugin",
-      "file": "Added by you"
-    },
     "usages": {
       "agents": "Agents",
       "routines": "Routines",

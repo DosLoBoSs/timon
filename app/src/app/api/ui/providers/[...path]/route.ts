@@ -5,8 +5,11 @@
  * provider's resolved binary, the ACP registry (list / install / sign-in
  * methods / remove), and the one-record-per-provider overview.
  *
- * Auth: the `timon_session` cookie only (`proxyJson`). The daemon admits a
- * superadmin SESSION and nothing else — the daemon token never travels here.
+ * Auth: the `timon_session` cookie only (`proxyJson`); the daemon token never
+ * travels here. The daemon decides: a superadmin session for the provider
+ * routes, and a session at a level of the Providers screen for the overview
+ * (`users/provider-access.ts`). `providers-overview-proxy.test.ts` holds the
+ * overview's allow-list.
  */
 import { proxyJson } from '@/lib/ui/proxy';
 

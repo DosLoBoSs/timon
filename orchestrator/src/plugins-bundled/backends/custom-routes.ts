@@ -1,5 +1,5 @@
 /**
- * `/api/backends/custom` — backends a user adds from Settings → Backends.
+ * `/api/backends/custom` — backends a user adds from Settings › AI models › Providers › Add a provider.
  *
  * The form writes the same `~/.timon/backends/<id>.json` a user could drop by
  * hand, through the same schema (`backends/local-profiles.ts`): there is one

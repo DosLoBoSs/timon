@@ -46,7 +46,7 @@ export function refuseBackendChange(req: Request, res: Response): boolean {
     return forbidden(req, res, {
       kind: 'operator',
       reason: 'backends are added, tested and removed by a person, never by an agent',
-      hint: 'Ask the user to do it in Settings → Backends, or with `timon backend` from a terminal outside any mission.',
+      hint: 'Ask the user to do it in Settings › AI models › Providers (Add a provider, or the provider\'s page), or with `timon backend` from a terminal outside any mission.',
     });
   }
   if (req.originalUrl.includes('?')) {

@@ -677,9 +677,6 @@
       "button": "Vérifier",
       "done": "Fournisseurs vérifiés : programmes, mises à jour et catalogue sont à jour.",
       "partial": "{count, plural, one {Une vérification a échoué} other {# vérifications ont échoué}} : le reste est à jour."
-    },
-    "legacy": {
-      "title": "Modifier les modèles et la connexion d'un fournisseur"
     }
   },
   "providerAdd": {

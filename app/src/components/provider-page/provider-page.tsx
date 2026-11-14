@@ -11,7 +11,7 @@
  * and paints it; `sections: 'connection'` keeps the Connection section alone.
  */
 import { useCallback, useEffect, useMemo, useState, type ComponentType, type ReactElement, type ReactNode } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { AlertTriangle, ChevronRight } from 'lucide-react';
 import { BrandMark } from '@/components/brand-mark';
 import { PluginBoundary } from '@/lib/plugin-host/plugin-boundary';
 import { useSlotEntries } from '@/lib/plugin-host/render';
@@ -101,9 +101,23 @@ export function Breadcrumb({ name, onBack }: { name: string | null; onBack: () =
   );
 }
 
+/**
+ * Why a blocked provider cannot run, as the daemon says it of its backends (a
+ * file it could not read, a protocol nobody brings…): nothing else on the page
+ * would say it. Only the full level receives reasons; they may name a key,
+ * never a value.
+ */
+function blockedReasons(value: ProviderPageValue): string[] {
+  if (value.status !== 'blocked') return [];
+  const reasons = value.provider.backends.flatMap((backend) => (!backend.active && !backend.disabled && backend.reason ? [backend.reason] : []));
+  return [...new Set(reasons)];
+}
+
 function ProviderHeader({ value, action }: { value: ProviderPageValue; action: ReactNode }): ReactElement {
   const { provider } = value;
+  const reasons = blockedReasons(value);
   return (
+    <>
     <header className="flex items-center gap-4">
       <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-muted/60">
         <BrandMark icon={provider.icon ?? undefined} brand={provider.brand ?? undefined} className="size-7" />
@@ -120,6 +134,13 @@ function ProviderHeader({ value, action }: { value: ProviderPageValue; action: R
       </div>
       {action}
     </header>
+    {reasons.map((reason) => (
+      <p key={reason} className="m-0 flex items-start gap-1.5 text-xs text-destructive" data-provider-reason>
+        <AlertTriangle aria-hidden className="mt-px size-3.5 shrink-0" />
+        <span>{reason}</span>
+      </p>
+    ))}
+    </>
   );
 }
 
