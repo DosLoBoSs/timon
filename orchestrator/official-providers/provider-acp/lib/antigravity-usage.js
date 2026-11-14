@@ -22,11 +22,16 @@
  *    the account's name and e-mail) is never called;
  *  - neither the log nor the raw answer is logged or echoed in an error: only the kind of failure is.
  *  - the environment is a mission's own (`profile.env`, then the row's `env`: the two switches that would
- *    move `agy` to per-token billing, emptied), nothing more.
+ *    move `agy` to per-token billing, emptied), nothing more;
+ *  - no server outlives the probe, even when `agy` exited first and `stop()` had nothing left to kill:
+ *    the port is tried once `agy` is gone, a server still listening is killed by the pid the same log
+ *    gives (`Starting language server process with pid N`), and one that cannot be killed fails the
+ *    reading and stops the automatic ones (`endLeftoverServer`).
  *
  * `docs/SECURITY.md` and `public-docs/docs/usage/antigravity.md` describe the same mechanism.
  */
 import { closeSync, mkdtempSync, openSync, readdirSync, readSync, rmSync, statSync, chmodSync } from 'node:fs';
+import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -35,6 +40,8 @@ export const QUOTA_METHOD_PATH = '/exa.language_server_pb.LanguageServerService/
 
 /** The line agy 1.5.9 writes to its log once the language server listens. */
 const PORT_LINE = /Language server listening on random port at (\d{1,5}) for HTTP\b/;
+/** The line agy 1.5.9 writes before it: the process the server runs in (agy's own, in that version). */
+const SERVER_PID_LINE = /Starting language server process with pid (\d{1,10})\b/;
 
 /** Whole probe, start to kill. Measured: port after ~0.1 s, quota after ~1.1 s. */
 const PROBE_TIMEOUT_MS = 10_000;
@@ -50,6 +57,11 @@ const HTTP_TIMEOUT_MS = 3_000;
 /** What is read of the log and of an answer: both are small, a larger one is not what we expect. */
 const MAX_LOG_BYTES = 1024 * 1024;
 const MAX_ANSWER_BYTES = 256 * 1024;
+/** A connection attempt to the port once agy is gone: on loopback a closed port refuses at once. */
+const PORT_CHECK_MS = 500;
+/** How long a killed server has to let go of its port. */
+const LEFTOVER_WAIT_MS = 2_000;
+const LEFTOVER_POLL_MS = 50;
 
 /** A weekly quota moves turn by turn; each reading is an `agy` process. */
 const CACHE_TTL_MS = 5 * 60_000;
@@ -144,25 +156,86 @@ export function parseQuotaSummary(payload) {
 }
 
 /**
+ * What the log the probe's own process writes says of its language server: the HTTP port, and the pid
+ * of the process it runs in; each null until its line is there. Only the first `MAX_LOG_BYTES` are read.
+ *
+ * @param {string} file
+ * @returns {{ port: number | null; serverPid: number | null }}
+ */
+export function serverFromLog(file) {
+  let fd;
+  try { fd = openSync(file, 'r'); } catch { return { port: null, serverPid: null }; }
+  try {
+    const buffer = Buffer.alloc(MAX_LOG_BYTES);
+    const read = readSync(fd, buffer, 0, MAX_LOG_BYTES, 0);
+    const text = buffer.subarray(0, read).toString('utf8');
+    const port = Number(PORT_LINE.exec(text)?.[1]);
+    const pid = Number(SERVER_PID_LINE.exec(text)?.[1]);
+    return {
+      port: Number.isInteger(port) && port > 0 && port < 65536 ? port : null,
+      // Never 0, 1 or a negative number: `process.kill` reads those as a group or as every process.
+      serverPid: Number.isInteger(pid) && pid > 1 && pid <= 0x7fffffff ? pid : null,
+    };
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
  * The HTTP port of the language server, from the log the probe's own process writes; null until the
- * line is there. Only the first `MAX_LOG_BYTES` are read.
+ * line is there.
  *
  * @param {string} file
  * @returns {number | null}
  */
 export function portFromLog(file) {
-  let fd;
-  try { fd = openSync(file, 'r'); } catch { return null; }
-  try {
-    const buffer = Buffer.alloc(MAX_LOG_BYTES);
-    const read = readSync(fd, buffer, 0, MAX_LOG_BYTES, 0);
-    const found = PORT_LINE.exec(buffer.subarray(0, read).toString('utf8'));
-    if (!found) return null;
-    const port = Number(found[1]);
-    return Number.isInteger(port) && port > 0 && port < 65536 ? port : null;
-  } finally {
-    closeSync(fd);
+  return serverFromLog(file).port;
+}
+
+/**
+ * Whether something still accepts a connection on `127.0.0.1:port`. A bare TCP connection, closed at
+ * once: no request reaches the server. No answer in time counts as listening, so a doubt is never
+ * read as "gone".
+ *
+ * @param {number} port
+ * @returns {Promise<boolean>}
+ */
+export function portListening(port) {
+  return new Promise((resolve) => {
+    const socket = connect({ host: '127.0.0.1', port });
+    const done = (/** @type {boolean} */ listening) => { clearTimeout(timer); socket.destroy(); resolve(listening); };
+    const timer = setTimeout(() => done(true), PORT_CHECK_MS);
+    socket.once('connect', () => done(true));
+    socket.once('error', () => done(false));
+  });
+}
+
+/**
+ * Run once agy is gone, whichever way it went. agy 1.5.9 runs its server in its own process, so
+ * stopping agy closes the port; a version (or an OS) where the server is a process of its own could
+ * leave it behind, reparented, listening without authentication, out of reach of `stop()`. Such a
+ * server is killed by the pid its log gave, and only while its port still answers: that is what
+ * tells the server still lives, and not a process that took its pid after it died. The pid of agy
+ * itself is never signalled here: once agy has exited, its pid may already be someone else's.
+ *
+ * Resolves true when nothing listens any more, false when a server is left that could not be killed.
+ *
+ * @param {{ port: number | null; serverPid: number | null }} server
+ * @param {number | null} agyPid
+ * @returns {Promise<boolean>}
+ */
+export async function endLeftoverServer(server, agyPid) {
+  const { port, serverPid } = server;
+  if (port === null || !(await portListening(port))) return true;
+  if (serverPid === null || serverPid === agyPid || serverPid === process.pid) return false;
+  try { process.kill(serverPid, 'SIGKILL'); } catch { /* gone, or not ours to signal: the port says which */ }
+  const stopAt = Date.now() + LEFTOVER_WAIT_MS;
+  while (Date.now() < stopAt) {
+    if (!(await portListening(port))) return true;
+    // Held, unlike `sleep`: the probe's caller is waiting on this, and it is bounded.
+    await new Promise((resolve) => { setTimeout(resolve, LEFTOVER_POLL_MS); });
   }
+  return false;
 }
 
 /** A folder only the daemon's account may read (POSIX 0700; on Windows the user's own temp folder). */
@@ -183,6 +256,38 @@ function sweepStaleDirs(now = Date.now()) {
       if (now - statSync(dir).mtimeMs > STALE_DIR_MS) rmSync(dir, { recursive: true, force: true });
     } catch { /* another account's, or already gone */ }
   }
+}
+
+/**
+ * The body as text, read chunk by chunk and abandoned past `max` bytes (null): `response.text()` would
+ * hold a runaway answer in memory before its size could be checked.
+ *
+ * @param {Response} response
+ * @param {number} max
+ * @returns {Promise<string | null>}
+ */
+export async function readCapped(response, max) {
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > max) {
+    await response.body?.cancel().catch(() => undefined);
+    return null;
+  }
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  /** @type {Uint8Array[]} */
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks, size).toString('utf8');
 }
 
 /** @param {number} ms */
@@ -214,10 +319,19 @@ export function createAntigravityUsage(opts) {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const timeoutMs = opts.timeoutMs ?? PROBE_TIMEOUT_MS;
 
-  /** @type {{ at: number; usage?: AccountUsage; error?: Error } | null} */
+  /** `held`: a failure the automatic readings do not retry, only a person's ↻. */
+  /** @type {{ at: number; usage?: AccountUsage; error?: Error; held?: boolean } | null} */
   let cache = null;
   /** @type {Promise<AccountUsage> | null} */
   let inFlight = null;
+
+  /** agy's language server is still listening after the probe, and could not be killed. */
+  class LeftoverServerError extends Error {
+    constructor() {
+      super('agy left its local language server running and Timon could not stop it: end the remaining agy process, then press ↻');
+      this.name = 'LeftoverServerError';
+    }
+  }
 
   const notSignedIn = () => new UsageNotSignedInError(`Antigravity is not signed in: ${opts.signIn}`);
 
@@ -295,8 +409,8 @@ export function createAntigravityUsage(opts) {
         await response.body?.cancel().catch(() => undefined);
         throw new Error(`agy's language server refused the quota request (HTTP ${response.status})`);
       }
-      const text = await response.text();
-      if (text.length > MAX_ANSWER_BYTES) throw new Error('agy returned a quota answer of an unexpected size');
+      const text = await readCapped(response, MAX_ANSWER_BYTES);
+      if (text === null) throw new Error('agy returned a quota answer of an unexpected size');
       /** @type {unknown} */
       let payload;
       try { payload = JSON.parse(text); } catch { throw new Error('agy returned a quota answer that is not JSON'); }
@@ -329,6 +443,8 @@ export function createAntigravityUsage(opts) {
     let channel = null;
     /** @type {ReturnType<typeof setTimeout> | undefined} */
     let deadline;
+    /** @type {number | null} */
+    let agyPid = null;
     try {
       let conversation;
       try {
@@ -340,6 +456,7 @@ export function createAntigravityUsage(opts) {
       } catch {
         throw new Error('agy could not be started: is it installed and on the PATH?');
       }
+      agyPid = conversation.pid;
       let exited = false;
       void conversation.exited.then(() => { exited = true; });
       const open = transportOver(conversation, { requestTimeoutMs: REQUEST_TIMEOUT_MS });
@@ -369,14 +486,20 @@ export function createAntigravityUsage(opts) {
       }
     } finally {
       clearTimeout(deadline);
+      // Read before the folder goes: the port and the server's pid, wherever the probe stopped.
+      const server = serverFromLog(logFile);
       await channel?.stop().catch(() => undefined);
+      const ended = await endLeftoverServer(server, agyPid).catch(() => false);
       rmSync(dir, { recursive: true, force: true });
+      // Over any other outcome, the quota included: this one asks the person to act.
+      if (!ended) throw new LeftoverServerError();
     }
   }
 
   /**
    * The quota, from the cache when it is fresh. `force` (a person's ↻, already spaced by the daemon's
    * floor) skips the cache, a cached failure included; it never starts a second process while one runs.
+   * A server that could not be stopped holds the failure until that ↻.
    *
    * @param {ProbeProfile} profile
    * @param {{ force?: boolean; now?: number }} [options]
@@ -386,7 +509,8 @@ export function createAntigravityUsage(opts) {
     const now = options.now ?? Date.now();
     if (options.force !== true && cache) {
       const ttl = cache.usage ? CACHE_TTL_MS : ERROR_TTL_MS;
-      if (now - cache.at < ttl) {
+      // A server left behind: each new reading could leave one more, so only the person decides when to retry.
+      if (cache.held || now - cache.at < ttl) {
         if (cache.usage) return cache.usage;
         throw cache.error ?? new Error('Antigravity quota unavailable');
       }
@@ -399,7 +523,7 @@ export function createAntigravityUsage(opts) {
         return usage;
       } catch (error) {
         const err = error instanceof Error ? error : new Error('Antigravity quota unavailable');
-        cache = { at: Date.now(), error: err };
+        cache = { at: Date.now(), error: err, held: err instanceof LeftoverServerError };
         throw err;
       } finally {
         inFlight = null;
