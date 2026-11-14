@@ -25,6 +25,7 @@
 import type { PluginPublic } from '../plugins/public.js';
 import { OWNED_TABLES, ownedReadAllPermission, type OwnedTable } from './owned.js';
 import { EXTRA_PAGES, navSlug, shortPluginId } from './surfaces.js';
+import { PROVIDERS_ACCOUNTS, PROVIDERS_MANAGE } from './provider-access.js';
 
 export type PermissionAction = {
   /** First segment of the string — how the editor groups the checkboxes. */
@@ -35,9 +36,27 @@ export type PermissionAction = {
   pluginId?: string;
 };
 
+/**
+ * Actions that are levels of one thing rather than independent switches. An
+ * editor offers one choice per entry instead of a checkbox per action: the
+ * options go from the widest to the narrowest, and the current one is the
+ * first whose `grants` the role holds (the last, with no grant, otherwise).
+ * Picking an option removes every grant of the other options and adds its
+ * own. The actions stay in `actions` too, so an editor that ignores
+ * `choices` still offers them as checkboxes.
+ */
+export type PermissionChoice = {
+  /** Stable: an editor may key its translations on it. */
+  key: string;
+  label: string;
+  description: string;
+  options: { key: string; label: string; description: string; grants: string[] }[];
+};
+
 export type PermissionCatalog = {
   actions: PermissionAction[];
   plugins: { id: string; name: string; kind: string[]; tier: string | null }[];
+  choices: PermissionChoice[];
 };
 
 function action(permission: string, label: string, pluginId?: string): PermissionAction {
@@ -121,6 +140,41 @@ export const PERMISSION_ACTIONS: readonly PermissionAction[] = [
   action('http:outbound', 'Outbound HTTP calls'),
   action('host:exec', 'Run host commands'),
   action('terminal:open', 'Open a shell on the host from the built-in terminal (amounts to full control of the machine)', '@timon/terminal-web'),
+  // The two levels of the Providers screen (`provider-access.ts`), offered as one choice (`PERMISSION_CHOICES`).
+  action(PROVIDERS_MANAGE, 'Providers: full access, like the superadmin (programs the daemon runs, API keys, models, adding providers)'),
+  action(PROVIDERS_ACCOUNTS, 'Providers: the list, and their own subscription accounts on a provider\'s page'),
+];
+
+/**
+ * The level choices of the catalogue. `none` comes last and grants nothing:
+ * a role without either action does not see the Providers screen at all.
+ */
+export const PERMISSION_CHOICES: readonly PermissionChoice[] = [
+  {
+    key: 'providers',
+    label: 'Providers screen',
+    description: 'Settings › AI models › Providers, for an account that is not the superadmin.',
+    options: [
+      {
+        key: 'full',
+        label: 'Full access',
+        description: 'Like the superadmin: every section of a provider\'s page, adding providers, and the programs the daemon runs on this machine.',
+        grants: [PROVIDERS_MANAGE],
+      },
+      {
+        key: 'accounts',
+        label: 'Own accounts only',
+        description: 'The list of providers, and on a provider\'s page the Connection section with their own subscription accounts.',
+        grants: [PROVIDERS_ACCOUNTS],
+      },
+      {
+        key: 'none',
+        label: 'Hidden',
+        description: 'The Providers screen does not appear.',
+        grants: [],
+      },
+    ],
+  },
 ];
 
 /**
@@ -195,5 +249,12 @@ export function permissionCatalog(plugins: readonly PluginPublic[] = []): Permis
     seen.add(entry.permission);
     actions.push(entry);
   }
-  return { actions, plugins: pluginPermissions(plugins) };
+  return {
+    actions,
+    plugins: pluginPermissions(plugins),
+    choices: PERMISSION_CHOICES.map((choice) => ({
+      ...choice,
+      options: choice.options.map((option) => ({ ...option, grants: [...option.grants] })),
+    })),
+  };
 }
