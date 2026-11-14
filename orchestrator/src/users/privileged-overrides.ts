@@ -599,11 +599,25 @@ export function agentWideningDenied(
  */
 export function spawnWideningDenied(
   req: Pick<Request, 'auth'>,
-  body: { extra_allowed_tools?: unknown; extra_mcp_servers?: unknown; extra_skills?: unknown },
+  body: SpawnExtras,
   agentConfig: AgentConfig | null,
   agentName: string | null,
 ): string | null {
-  if (!isAgentToken(req)) return null;
+  return isAgentToken(req) ? spawnWideningRefusal(body, agentConfig, agentName) : null;
+}
+
+export type SpawnExtras = { extra_allowed_tools?: unknown; extra_mcp_servers?: unknown; extra_skills?: unknown };
+
+/**
+ * `spawnWideningDenied` without a request: the dispatcher judges with it the
+ * extras a task stored, when an agent's mission wrote them, since the route's
+ * check only ran at creation and a task older than it was never judged.
+ */
+export function spawnWideningRefusal(
+  body: SpawnExtras,
+  agentConfig: AgentConfig | null,
+  agentName: string | null,
+): string | null {
   const refusal = agentWideningRefusal(
     { allowed_tools: body.extra_allowed_tools, mcp_servers: body.extra_mcp_servers },
     agentConfig,
