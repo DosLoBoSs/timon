@@ -28,6 +28,7 @@ import {
 import { defaultBackendName } from './backends/index.js';
 import { ATTACHMENTS_UNSUPPORTED, attachmentsRefusal } from './backends/capabilities.js';
 import { rejectIfDenied } from './users/identity.js';
+import { launchErrorStatus, missionLaunchErrorBody } from './resources.js';
 import { isPrivilegedCaller, overrideAuthority, rejectOverride, type SpawnOverrides, spawnOverrideRefusal, spawnWideningDenied } from './users/privileged-overrides.js';
 
 type SpawnBody = {
@@ -263,7 +264,7 @@ const handleSpawnOnce = async (req: express.Request, res: express.Response) => {
     res.status(201).json({ mission_id: missionId, ...skippedAttachmentsField(skipped) });
   } catch (err) {
     if (!started) discardChatAttachments(persisted);
-    res.status(500).json({ error: (err as Error).message });
+    res.status(launchErrorStatus(err, 500)).json(missionLaunchErrorBody(err));
   }
 };
 

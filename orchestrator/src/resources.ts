@@ -79,6 +79,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { cpus, homedir, loadavg } from 'node:os';
 import { join } from 'node:path';
 import { config } from './config/load.js';
+import { apiError } from './api-error.js';
 import { getHost } from './host/index.js';
 import { FENCE_EXIT, fenceLaunchDecision, type FenceStatus } from './host/fence.js';
 import {
@@ -437,6 +438,26 @@ export class MissionFenceRefusedError extends Error {
     super(message);
     this.name = 'MissionFenceRefusedError';
   }
+}
+
+/**
+ * The body a route answers for a launch that failed. A fence refusal keeps a
+ * code the interface translates, so the person reads why Timon refused, in
+ * their language, rather than a launch error like any other; anything else
+ * keeps its message, as before.
+ */
+/**
+ * 503 for a fence refusal: this machine cannot serve the launch until its
+ * kernel or its setting changes. Never 409, which the chat reads as "the
+ * agent is still talking" and answers by queueing the message.
+ */
+export function launchErrorStatus(err: unknown, otherwise: number): number {
+  return err instanceof MissionFenceRefusedError ? 503 : otherwise;
+}
+
+export function missionLaunchErrorBody(err: unknown): { error: string; code?: string } {
+  if (err instanceof MissionFenceRefusedError) return { ...apiError('mission_fence_refused', err.message) };
+  return { error: err instanceof Error ? err.message : String(err) };
 }
 
 /**
