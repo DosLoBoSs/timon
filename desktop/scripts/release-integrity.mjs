@@ -10,7 +10,9 @@ export const protectedRoots = ['dist', 'bin', 'scripts', 'presets', 'package.jso
 // them still fails on their removal, since the inventories must match.
 // `build-info.json` (channel + expiry) is signed too, so the date cannot be
 // edited in an installed package; a release prepared before it stays valid.
-export const optionalRoots = ['builtin-plugins', 'builtin-plugins.json', 'build-info.json'];
+// `native/` holds the Linux mission launcher (timon-fence): signed, so a
+// replaced launcher fails the boot check instead of unfencing the missions.
+export const optionalRoots = ['builtin-plugins', 'builtin-plugins.json', 'build-info.json', 'native'];
 // Read by the daemon to trust built-in plugins by location; set only here,
 // after the inventory below has been verified.
 export const RELEASE_MARKER = Symbol.for('timon.verifiedRelease');
