@@ -115,7 +115,7 @@ export function createGenericHost(
     windowsHide: true,
   });
   const finishGitCall = (args: string[], opts: ExecOpts, entries: GitConfigEntry[] | null, submodules: string[] = []): GitCall => {
-    const call = neutralGitCall(args, entries, opts.env ?? process.env, { submodules });
+    const call = neutralGitCall(args, entries, opts.env ?? process.env, { submodules, ...(typeof opts.cwd === 'string' ? { cwd: opts.cwd } : {}) });
     if ('refused' in call) return { failed: { code: 1, stdout: '', stderr: call.refused } };
     return { args: call.args, opts: { ...opts, env: call.env } };
   };

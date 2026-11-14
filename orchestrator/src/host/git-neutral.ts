@@ -15,8 +15,13 @@
  *
  * - **Fixed overrides**, whatever the configuration says: no fsmonitor, a hooks
  *   folder that cannot exist, no editor, no pager, no `ext::` transport, no
- *   local transport, no descent into submodules, no signature check in `log`.
- *   The daemon never needs any of them.
+ *   descent into submodules, no signature check in `log`. The daemon never
+ *   needs any of them.
+ * - **Local transport**, off unless every local repository the call may reach
+ *   (a remote that is a path or a `file://` URL, once `insteadOf` rewrote it)
+ *   lies where no mission writes: its hooks run on the receiving side, where
+ *   the daemon's `-c` no longer applies. A call that would reach one a mission
+ *   writes is refused.
  * - **Diff drivers**: `--no-ext-diff --no-textconv` on `diff`, `log` and `show`,
  *   the only porcelain commands of the daemon that render a diff.
  * - **Scanned overrides**: the configuration is read once per call, with the
@@ -41,16 +46,22 @@
  *   or by naming each submodule (`merge` and the commands that stash).
  * - A value can change between the scan and the call: a mission rewriting
  *   `filter.*` or `merge.*.driver`, or adding a submodule, in a loop may win
- *   that race. Residual risk, recorded in `docs/SECURITY.md`.
+ *   that race. So may one rewriting `remote.*.url` or `url.*.insteadOf` to
+ *   swap a checked local remote for one it prepared. Residual risk, recorded
+ *   in `docs/SECURITY.md`.
  *   `--attr-source=<empty tree>` would close it for filters and drivers, but
  *   it also drops the attributes Git LFS, line endings and the user's own
  *   drivers need, on exactly the gestures that run them (status, merge); the
  *   others run no filter or driver at all.
- * - Code the remote side of a transport runs: only `ssh`, `https`, `git` and
- *   installed remote helpers are reachable, the local transport is refused.
+ * - Code the remote side of a transport runs: `ssh`, `https`, `git`,
+ *   installed remote helpers, and a local repository no mission writes, as
+ *   far as `localRemoteProblem` knows the folders missions write: a project
+ *   folder outside the Timon home is known only as the working directory of
+ *   the call.
  */
-import { delimiter, join, win32 } from 'node:path';
-import { missionWritableProblem } from './mission-writable.js';
+import { readFileSync, statSync } from 'node:fs';
+import { delimiter, join, posix, win32 } from 'node:path';
+import { fencedSystemFolders, missionWritableProblem } from './mission-writable.js';
 
 /** A configuration value and the scope git read it from. `value` is null for
  *  a key written without `=` (an implicit `true`). */
@@ -112,7 +123,8 @@ type KeyRule = {
  * `pager.*` (`--no-pager`), `diff.external`, `diff.*.command` and
  * `diff.*.textconv` (`--no-ext-diff --no-textconv` on the only commands that
  * honour them), `url.*.insteadOf` and `remote.*.vcs` (they only pick a
- * transport, and the protocol policy refuses `ext` and `file`),
+ * transport: the protocol policy refuses `ext`, and checks every local
+ * target after rewriting),
  * `submodule.*.ignore`, `submodule.*.fetchRecurseSubmodules`,
  * `submodule.recurse` (the configuration of a submodule is never scanned, so
  * git must not run inside one: options on the commands that would).
@@ -127,8 +139,8 @@ type KeyRule = {
  * - `diff.tool`, `difftool.*`, `merge.tool`, `mergetool.*`, `sendemail.*`,
  *   `imap.tunnel`, `instaweb.*`, `web.browser`, `browser.*.cmd`, `man.*.cmd`,
  *   `interactive.diffFilter`: read only by commands the daemon never runs.
- * - `receive.*`, `uploadpack.*`: the remote side's, unreachable now that the
- *   local transport is refused.
+ * - `receive.*`, `uploadpack.*`: the remote side's, reachable only in a local
+ *   repository no mission writes.
  * - `.lfsconfig` in the worktree: Git LFS reads only a safe list of keys from
  *   it, none naming a program.
  */
@@ -236,11 +248,8 @@ export function fixedGitConfig(): string[] {
     'protocol.ext.allow=never',
     // A local remote runs ITS hooks and configuration on the receiving side,
     // where git drops the daemon's `-c`: a bare repository a mission prepared
-    // (a temporary folder stays writable) would run its `pre-receive`. Allowing
-    // a target no mission writes would need the URL git ends up using, which a
-    // mission rewrites (`remote.*.url`, `url.*.insteadOf`) between that check
-    // and the transport. The price: a remote that is a local path or a
-    // `file://` URL is out of reach of the daemon's push, fetch and check.
+    // would run its `pre-receive`. `neutralGitCall` reopens it for a call
+    // whose local targets no mission writes.
     'protocol.file.allow=never',
     // A submodule's configuration is never scanned: git must not run in it.
     // `dirty` still reports a changed submodule commit, without the `status`
@@ -431,6 +440,185 @@ export function neutralGitEnv(
   return env;
 }
 
+/** Commands that start a transport to the repository they name, or to the
+ *  remote they default to. Every other one keeps the local transport off. */
+const REPOSITORY_COMMANDS: ReadonlySet<string> = new Set(['fetch', 'pull', 'push', 'ls-remote', 'clone']);
+
+/** Their options whose value is the next argument, skipped while looking for
+ *  the repository. A value taken for the repository refuses the call or
+ *  leaves the local transport off: it never opens it to another target. */
+const REPOSITORY_VALUE_OPTIONS: Readonly<Record<string, ReadonlySet<string>>> = Object.freeze({
+  push: new Set(['-o', '--push-option', '--receive-pack', '--exec', '--repo']),
+  fetch: new Set([
+    '-o', '--server-option', '--upload-pack', '--depth', '--deepen', '--shallow-since', '--shallow-exclude',
+    '-j', '--jobs', '--negotiation-tip', '--refmap', '--filter', '--recurse-submodules-default', '--submodule-prefix',
+  ]),
+  pull: new Set([
+    '-o', '--server-option', '--upload-pack', '--depth', '--deepen', '--shallow-since', '--shallow-exclude',
+    '-j', '--jobs', '--negotiation-tip', '--refmap', '--filter', '-s', '--strategy', '-X', '--strategy-option',
+  ]),
+  'ls-remote': new Set(['-o', '--server-option', '--upload-pack', '--sort']),
+  clone: new Set([
+    '-o', '--origin', '-b', '--branch', '-u', '--upload-pack', '--reference', '--reference-if-able',
+    '--separate-git-dir', '--depth', '--shallow-since', '--shallow-exclude', '-c', '--config', '--template',
+    '-j', '--jobs', '--filter', '--server-option', '--bundle-uri', '--revision',
+  ]),
+});
+
+/** `url.<base>.insteadOf` rewriting, as git does it: the longest matching
+ *  prefix wins. Null when no rule matches. */
+function rewriteUrl(url: string, rules: ReadonlyArray<readonly [base: string, prefix: string]>): string | null {
+  let best: readonly [string, string] | null = null;
+  for (const rule of rules) {
+    if (url.startsWith(rule[1]) && (!best || rule[1].length > best[1].length)) best = rule;
+  }
+  return best ? best[0] + url.slice(best[1].length) : null;
+}
+
+/**
+ * Every URL the call may reach, once `url.*.insteadOf` and
+ * `url.*.pushInsteadOf` rewrote it: those of the remote it names (`url` and
+ * `pushurl`), the repository it names when that is no remote, every remote's
+ * when it names none. Null for a command that starts no such transport.
+ * Over-inclusive on purpose: a URL the call ends up not using costs at worst
+ * a refusal, a URL missed would open the local transport to it.
+ */
+export function reachedGitUrls(args: readonly string[], entries: readonly GitConfigEntry[] | null): string[] | null {
+  const { commandIndex } = parseCall(args);
+  const command = commandIndex >= 0 ? args[commandIndex]! : '';
+  if (!REPOSITORY_COMMANDS.has(command)) return null;
+  const remotes = new Map<string, string[]>();
+  const insteadOf: Array<[string, string]> = [];
+  const pushInsteadOf: Array<[string, string]> = [];
+  for (const e of entries ?? []) {
+    const remote = /^remote\.(.+)\.(url|pushurl)$/.exec(e.key);
+    if (remote && e.value !== null) remotes.set(remote[1]!, [...(remotes.get(remote[1]!) ?? []), e.value]);
+    const rule = /^url\.(.+)\.(insteadof|pushinsteadof)$/.exec(e.key);
+    if (rule && e.value !== null) (rule[2] === 'insteadof' ? insteadOf : pushInsteadOf).push([rule[1]!, e.value]);
+  }
+  const valueOptions = REPOSITORY_VALUE_OPTIONS[command] ?? new Set<string>();
+  const named: string[] = [];
+  let all = false;
+  let optionsDone = false;
+  const rest = args.slice(commandIndex + 1);
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]!;
+    if (!optionsDone && arg === '--') { optionsDone = true; continue; }
+    if (!optionsDone && arg.startsWith('-')) {
+      if (arg === '--all' || arg === '--multiple') all = true;
+      if (arg.startsWith('--repo=')) named.push(arg.slice('--repo='.length));
+      else if (arg === '--repo') named.push(rest[i + 1] ?? '');
+      if (valueOptions.has(arg)) i++;
+      continue;
+    }
+    named.push(arg);
+    // Further arguments are refspecs or a folder; `fetch --multiple` names
+    // remotes, and counts as naming them all.
+    if (named.length > 0 && !all) break;
+  }
+  const raw = named.length === 0 || all
+    ? [...[...remotes.values()].flat(), ...named.filter((n) => !remotes.has(n))]
+    : named.flatMap((n) => remotes.get(n) ?? [n]);
+  const urls = new Set<string>();
+  for (const url of raw) {
+    const fetched = rewriteUrl(url, insteadOf) ?? url;
+    urls.add(fetched);
+    urls.add(rewriteUrl(url, pushInsteadOf) ?? fetched);
+  }
+  return [...urls];
+}
+
+/**
+ * The folder a URL reaches through git's local transport, or null when git
+ * would use another one. Mirrors `url_is_local_not_ssh` and the `file://`
+ * parsing of git's `connect.c`: a `scp`-like `host:path` is SSH, a URL with a
+ * scheme other than `file` is not local, and git decodes `%xx` in a URL.
+ */
+export function localGitPath(url: string, platform: NodeJS.Platform = process.platform): string | null {
+  const windows = platform === 'win32';
+  const drive = (s: string) => windows && /^[A-Za-z]:/.test(s);
+  if (url.startsWith('file://')) {
+    let rest: string;
+    try { rest = decodeURIComponent(url.slice('file://'.length)); } catch { rest = url.slice('file://'.length); }
+    if (rest.startsWith('/') || drive(rest)) {
+      // `file:///C:/repo` names the drive.
+      return windows && /^\/[A-Za-z]:/.test(rest) ? rest.slice(1) : rest;
+    }
+    // `file://server/share/repo`: a UNC path under Windows, the host
+    // dropped elsewhere.
+    if (windows) return `//${rest}`;
+    const slash = rest.indexOf('/');
+    return slash < 0 ? '' : rest.slice(slash);
+  }
+  // A remote helper (`<transport>::<address>`) or another scheme.
+  if (/^[A-Za-z0-9][A-Za-z0-9+.-]*::/.test(url) || /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(url)) return null;
+  if (drive(url)) return url;
+  const colon = url.indexOf(':');
+  const slash = windows ? url.search(/[\\/]/) : url.indexOf('/');
+  return colon < 0 || (slash >= 0 && slash < colon) ? url : null;
+}
+
+/** The common git directory of the repository at `dir`, when its `.git` is a
+ *  file pointing elsewhere (a linked worktree): a fenced mission writes it. */
+function linkedGitDir(dir: string, platform: NodeJS.Platform): string | null {
+  const path = platform === 'win32' ? win32 : posix;
+  try {
+    const dotGit = path.join(dir, '.git');
+    if (!statSync(dotGit).isFile()) return null;
+    const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotGit, 'utf8'));
+    if (!m) return null;
+    const gitDir = path.resolve(dir, m[1]!);
+    try { return path.resolve(gitDir, readFileSync(path.join(gitDir, 'commondir'), 'utf8').trim()); } catch { return gitDir; }
+  } catch {
+    return null;
+  }
+}
+
+/** The folder git works in: the last `-C`, resolved against `cwd`. */
+function gitWorkDir(args: readonly string[], cwd: string | undefined, platform: NodeJS.Platform = process.platform): string | undefined {
+  const p = platform === 'win32' ? win32 : posix;
+  const { location } = parseCall(args);
+  let dir = cwd;
+  for (let i = 0; i < location.length; i++) {
+    if (location[i] === '-C' && location[i + 1]) dir = dir ? p.resolve(dir, location[i + 1]!) : location[i + 1];
+  }
+  return dir;
+}
+
+/**
+ * Why git must not reach the local repository at `path`, or null. Its hooks
+ * and configuration run on the receiving side, where git drops the daemon's
+ * `-c`: the repository must lie where no mission writes. That is outside the
+ * folders `missionWritableProblem` refuses, the system folders the fence
+ * leaves writable, the repository the call runs in and its git directory.
+ * Each of the suffixes git tries (`.git`, `/.git`) is checked, links resolved.
+ */
+export function localRemoteProblem(
+  path: string,
+  options: { platform?: NodeJS.Platform; timonHome?: string; cwd?: string; fencedFolders?: readonly string[] } = {},
+): string | null {
+  const platform = options.platform ?? process.platform;
+  const p = platform === 'win32' ? win32 : posix;
+  if (!path || !p.isAbsolute(path) || (platform === 'win32' && /^[A-Za-z]:(?![\\/])/.test(path))) return 'relative path';
+  const also = [...(options.fencedFolders ?? fencedSystemFolders())];
+  if (options.cwd && p.isAbsolute(options.cwd)) {
+    const cwd = p.resolve(options.cwd);
+    // A call made from a filesystem root would refuse every path.
+    if (p.parse(cwd).root !== cwd) also.push(cwd);
+    const common = linkedGitDir(cwd, platform);
+    if (common && p.parse(common).root !== common) also.push(common);
+  }
+  for (const candidate of [path, `${path}.git`, p.join(path, '.git'), p.join(`${path}.git`, '.git')]) {
+    const problem = missionWritableProblem(candidate, {
+      platform,
+      alsoRoots: also,
+      ...(options.timonHome ? { timonHome: options.timonHome } : {}),
+    });
+    if (problem) return problem;
+  }
+  return null;
+}
+
 /**
  * The arguments and environment of a daemon git call. `entries` is the result
  * of the scan `gitScanArgs` asked for, null when none was needed: a scan that
@@ -441,7 +629,15 @@ export function neutralGitCall(
   args: readonly string[],
   entries: readonly GitConfigEntry[] | null,
   baseEnv: NodeJS.ProcessEnv,
-  options: { platform?: NodeJS.Platform; timonHome?: string; submodules?: readonly string[] } = {},
+  options: {
+    platform?: NodeJS.Platform;
+    timonHome?: string;
+    submodules?: readonly string[];
+    /** Where git runs: a local remote inside it is refused. */
+    cwd?: string;
+    /** Stands in for the system folders a fenced mission writes, in tests. */
+    fencedFolders?: readonly string[];
+  } = {},
 ): { args: string[]; env: NodeJS.ProcessEnv } | { refused: string } {
   const scanned: ScannedGitConfig = entries ? scannedGitConfig(entries) : { config: [], env: {} };
   if (scanned.refused) {
@@ -453,8 +649,22 @@ export function neutralGitCall(
   if (unreachable !== undefined) {
     return { refused: `git refused: the submodule "${unreachable}" cannot be kept from running git inside it` };
   }
+  // The local transport opens only when every local repository the call may
+  // reach lies where no mission writes, and refuses the call otherwise.
+  let localTransport = false;
+  const workDir = gitWorkDir(args, options.cwd, options.platform);
+  for (const url of reachedGitUrls(args, entries) ?? []) {
+    const path = localGitPath(url, options.platform);
+    if (path === null) continue;
+    const problem = localRemoteProblem(path, { ...options, ...(workDir ? { cwd: workDir } : {}) });
+    if (problem) {
+      return { refused: `git refused: the remote "${path}" is a local repository in a place a mission can write (${problem}); its hooks would run as Timon` };
+    }
+    localTransport = true;
+  }
   const config = [
     ...fixedGitConfig(),
+    ...(localTransport ? ['protocol.file.allow=always'] : []),
     ...scanned.config,
     ...submodules.map((name) => `submodule.${name}.ignore=dirty`),
   ].flatMap((pair) => ['-c', pair]);
