@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { request as httpRequest } from 'node:http';
 import express from 'express';
@@ -26,6 +27,8 @@ const { authIsRequired, createDaemonAuthMiddleware, ensureDaemonToken, DAEMON_TO
   await import('./auth.js');
 const { loadConfig, ConfigError, setConfig, resetConfig } = await import('../../config/load.js');
 const { ZONES } = await import('../../paths.js');
+const { dbApi } = await import('../../db.js');
+const { issueMissionApiToken } = await import('../../users/api-tokens.js');
 const { daemonHostPolicy } = await import('../../http-host.js');
 type HostPolicy = import('../../http-host.js').HostPolicy;
 
@@ -376,25 +379,23 @@ test('auth off forcé en mémoire (sans loadConfig) + WebUI exposée : un anonym
   }
 });
 
-test('?token= : refusé hors SSE, accepté sur les deux flux SSE', async () => {
+test('?token= is read nowhere: the daemon-token and a mission token in the address get 401, the same token as a Bearer passes', async () => {
   const cfg = loadConfig(writeConfig({ daemon: { listen: { host: '0.0.0.0' }, auth: 'auto' } }));
   const token = ensureDaemonToken();
-  const q = `token=${encodeURIComponent(token)}`;
+  const missionId = randomUUID();
+  dbApi.createMission(missionId, 'witness', 'work');
+  const missionToken = issueMissionApiToken(missionId);
   const { port, close } = await listenApp(appWithAuth({ token, required: authIsRequired(cfg) }));
   try {
     const base = `http://127.0.0.1:${port}`;
-
-    // Les seules routes qui gardent la porte : EventSource ne pose pas d'en-tête.
-    assert.equal((await fetch(`${base}/api/stream?${q}`)).status, 200);
-    assert.equal((await fetch(`${base}/api/missions/m1/stream?${q}`)).status, 200);
-
-    // Tout le reste exige Authorization ou le cookie de session.
-    assert.equal((await fetch(`${base}/api/stats?${q}`)).status, 401);
-    assert.equal((await fetch(`${base}/api/health/resources?${q}`)).status, 401);
-    // Pas de préfixe : une route sous /api/stream/ ne bénéficie pas de l'exception.
-    assert.equal((await fetch(`${base}/api/stream/x?${q}`)).status, 401);
-    // Une méthode d'écriture sur le chemin SSE ne l'ouvre pas non plus.
-    assert.equal((await fetch(`${base}/api/stream?${q}`, { method: 'POST' })).status, 401);
+    for (const [label, secret] of [['daemon-token', token], ['mission token', missionToken]] as const) {
+      const q = `token=${encodeURIComponent(secret)}`;
+      for (const path of ['/api/stream', '/api/missions/m1/stream', '/api/stats']) {
+        assert.equal((await fetch(`${base}${path}?${q}`)).status, 401, `${label} in the address of ${path}`);
+        const bearer = await fetch(`${base}${path}`, { headers: { authorization: `Bearer ${secret}` } });
+        assert.equal(bearer.status, 200, `${label} as a Bearer on ${path}`);
+      }
+    }
   } finally {
     await close();
   }
