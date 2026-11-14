@@ -658,7 +658,8 @@
       "off": "Off",
       "readOnly": "This provider's file cannot be changed from here: fix it in its folder first.",
       "pluginOff": "Its plugin is turned off: turn it on in {settingsPath}."
-    }
+    },
+    "more": "More actions"
   },
   "providerList": {
     "hidden": "Your account has no access to the providers. Ask an administrator.",
