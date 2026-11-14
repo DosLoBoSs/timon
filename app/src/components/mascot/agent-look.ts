@@ -17,8 +17,9 @@ export type MascotShape = typeof SHAPES[number];
 /**
  * The furs a picker offers: nine natural pelts, then three dyed ones. The
  * drawing takes any `#rrggbb` — a natural pelt as is, any other colour blended
- * into a meerkat brown so the head stays a plush — but a look only carries a
- * colour of `LOOK_COLORS`, the list the daemon stores (`orchestrator/src/agent-look.ts`).
+ * into a meerkat brown so the head stays a plush. A look carries a colour of
+ * `LOOK_COLORS` (the named furs, in the daemon's order: `orchestrator/src/agent-look.ts`)
+ * or any other `#rrggbb` mixed with the configurator's colour picker.
  */
 export const NATURAL_FURS = ['#d4a373', '#b8743d', '#e6c9a2', '#8a5a3b', '#c98e5a', '#a8826a', '#d9b48a', '#7a4f35', '#e0b07a'] as const;
 export const FURS = [...NATURAL_FURS, '#ff5fbf', '#3fa9ff', '#7ed957'] as const;
@@ -27,6 +28,10 @@ export const MISSION_COLORS = ['#ffc233', '#ff8a2a', '#a35bff'] as const;
 /** Every colour a look may carry, in the daemon's order. */
 export const LOOK_COLORS = [...FURS, ...MISSION_COLORS] as const;
 export type MascotColor = typeof LOOK_COLORS[number];
+/** A fur off the lists, mixed with the colour picker: `#rrggbb`, lower case once stored. */
+export type CustomFurColor = `#${string}`;
+/** Same pattern as the daemon's `AGENT_LOOK_CUSTOM_COLOR_RE`. */
+export const CUSTOM_FUR_RE = /^#[0-9a-fA-F]{6}$/;
 
 const FUR_NAMES: Readonly<Record<string, string>> = {
   '#d4a373': 'sand', '#b8743d': 'cinnamon', '#e6c9a2': 'cream', '#8a5a3b': 'cocoa', '#c98e5a': 'caramel',
@@ -48,8 +53,8 @@ export type MascotAccessory = typeof ACC[number];
 
 export type AgentLook = {
   shape: MascotShape | MascotPartId;
-  /** One of `LOOK_COLORS`, lower case, or a pack's fur. */
-  color: MascotColor | MascotPartId;
+  /** One of `LOOK_COLORS` or any other `#rrggbb`, lower case, or a pack's fur. */
+  color: MascotColor | CustomFurColor | MascotPartId;
   eyes: MascotEyes | MascotPartId;
   acc: MascotAccessory | MascotPartId;
 };
@@ -68,22 +73,22 @@ export function isMascotEyes(value: unknown): value is MascotEyes {
 export function isMascotAccessory(value: unknown): value is MascotAccessory {
   return typeof value === 'string' && (ACC as readonly string[]).includes(value);
 }
-/** A colour of `LOOK_COLORS`, whatever its case (`#D4A373` is the same fur). */
+/** A colour of `LOOK_COLORS` or any other `#rrggbb`, whatever its case (`#D4A373` is the same fur). */
 export function isLookColor(value: unknown): value is string {
-  return typeof value === 'string' && (LOOK_COLORS as readonly string[]).includes(value.toLowerCase());
+  return typeof value === 'string' && ((LOOK_COLORS as readonly string[]).includes(value.toLowerCase()) || CUSTOM_FUR_RE.test(value));
 }
 
 /** A product skull, or a pack's skull registered now. */
 export const isLookShape = (value: unknown): value is AgentLook['shape'] => isMascotShape(value) || isRegisteredPart('shape', value);
 export const isLookEyes = (value: unknown): value is AgentLook['eyes'] => isMascotEyes(value) || isRegisteredPart('eyes', value);
 export const isLookAccessory = (value: unknown): value is AgentLook['acc'] => isMascotAccessory(value) || isRegisteredPart('acc', value);
-/** A colour of `LOOK_COLORS` (any case), or a pack's fur registered now. */
+/** A colour of `LOOK_COLORS` or any `#rrggbb` (any case), or a pack's fur registered now. */
 export const isLookFur = (value: unknown): value is string => isLookColor(value) || isRegisteredPart('color', value);
 
 export function isAgentLook(value: unknown): value is AgentLook {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Record<string, unknown>;
-  const color = typeof v.color === 'string' && ((LOOK_COLORS as readonly string[]).includes(v.color) || isRegisteredPart('color', v.color));
+  const color = typeof v.color === 'string' && ((LOOK_COLORS as readonly string[]).includes(v.color) || CUSTOM_FUR_RE.test(v.color) || isRegisteredPart('color', v.color));
   return isLookShape(v.shape) && color && isLookEyes(v.eyes) && isLookAccessory(v.acc);
 }
 
@@ -102,7 +107,7 @@ export function normalizeAgentLook(value: unknown, base: AgentLook = DEFAULT_LOO
   const pack = (type: 'shape' | 'color' | 'eyes' | 'acc', x: unknown): x is MascotPartId => (options.keepPackIds ? isMascotPartId(x) : isRegisteredPart(type, x));
   return {
     shape: isMascotShape(v.shape) || pack('shape', v.shape) ? v.shape as AgentLook['shape'] : base.shape,
-    color: isLookColor(v.color) ? v.color.toLowerCase() as MascotColor : pack('color', v.color) ? v.color : base.color,
+    color: isLookColor(v.color) ? v.color.toLowerCase() as AgentLook['color'] : pack('color', v.color) ? v.color : base.color,
     eyes: isMascotEyes(v.eyes) || pack('eyes', v.eyes) ? v.eyes as AgentLook['eyes'] : base.eyes,
     acc: isMascotAccessory(v.acc) || pack('acc', v.acc) ? v.acc as AgentLook['acc'] : base.acc,
   };

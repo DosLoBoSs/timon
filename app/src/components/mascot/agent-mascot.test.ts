@@ -110,7 +110,8 @@ test('defaultLookFor reads the onboarding tables, by role and by missions', () =
 
 test('a look read from elsewhere keeps its valid fields and falls back field by field', () => {
   assert.deepEqual(normalizeAgentLook({ shape: 'hex', color: '#FFC233', eyes: 'laser', acc: 'coffee' }), { shape: 'hex', color: '#ffc233', eyes: 'pill', acc: 'coffee' });
-  assert.equal(normalizeAgentLook({ color: '#abcdef' }).color, DEFAULT_LOOK.color, 'a colour the daemon would not store falls back');
+  assert.equal(normalizeAgentLook({ color: '#ABCDEF' }).color, '#abcdef', 'a fur off the lists from the colour picker is kept, lower case');
+  assert.equal(normalizeAgentLook({ color: '#abcdeg' }).color, DEFAULT_LOOK.color, 'a colour the daemon would not store falls back');
   assert.deepEqual(normalizeAgentLook(null), DEFAULT_LOOK);
   assert.deepEqual(normalizeAgentLook({ color: 'red' }, defaultLookFor('code')), defaultLookFor('code'));
   assert.equal(isAgentLook({ shape: 'hex', color: '#abc', eyes: 'pill', acc: 'none' }), false, 'three-digit colours are refused');
