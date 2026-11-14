@@ -69,7 +69,7 @@ async function mount(protocols: unknown[] = []) {
       root.render(React.createElement(Dialog, { open: settings.open, onOpenChange: (open: boolean) => { settings.open = open; } },
         React.createElement(DialogContent, { hideClose: true, 'aria-describedby': undefined },
           React.createElement(DialogTitle, null, 'Settings'),
-          React.createElement(BackendsSettings))));
+          React.createElement(BackendsSettings, { onOpenProvider: () => {} }))));
     });
   };
   const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);

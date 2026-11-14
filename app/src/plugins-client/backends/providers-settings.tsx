@@ -18,5 +18,5 @@ export function ProvidersSettings(): ReactElement {
   const requested = useSearchParams()?.get(PROVIDER_PARAM) ?? null;
   const navigation = useProviderNavigation();
   if (requested) return <ProviderPage requested={requested} onBack={navigation.back} onCanonical={navigation.show} />;
-  return <BackendsSettings />;
+  return <BackendsSettings onOpenProvider={navigation.open} />;
 }

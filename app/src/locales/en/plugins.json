@@ -578,6 +578,32 @@
   },
   "providerList": {
     "open": "Open {name}",
-    "updateAvailable": "Update available"
+    "updateAvailable": "Update available",
+    "search": "Search providers",
+    "empty": "No provider is installed yet.",
+    "noMatch": "No provider matches “{query}”.",
+    "groups": {
+      "connected": "Connected",
+      "others": "Other providers"
+    },
+    "default": {
+      "title": "Default provider",
+      "hint": "The provider a mission runs on when nothing names one.",
+      "auto": "Automatic",
+      "autoNamed": "Automatic ({name})"
+    },
+    "reorder": {
+      "start": "Reorder",
+      "done": "Done",
+      "title": "Order in the model picker"
+    },
+    "verify": {
+      "button": "Check",
+      "done": "Providers checked: programs, updates and catalogue are up to date.",
+      "partial": "{count, plural, one {One check failed} other {# checks failed}}: the rest is up to date."
+    },
+    "legacy": {
+      "title": "Edit a provider's models and connection"
+    }
   }
 }
