@@ -188,6 +188,9 @@ test('a local remote opens the local transport only where no mission writes', ()
     const link = join(outside, 'link.git');
     symlinkSync(zone, link);
     assert.match(JSON.stringify(reached(link)), /inside the Timon home/);
+    // A path that does not exist yet, behind a link: a mission creates it
+    // once the check has passed.
+    assert.match(JSON.stringify(reached(join(link, 'later.git'))), /inside the Timon home/);
     // git also tries `<path>.git`.
     symlinkSync(zone, join(outside, 'bare.git'));
     assert.match(JSON.stringify(reached(join(outside, 'bare'))), /inside the Timon home/);

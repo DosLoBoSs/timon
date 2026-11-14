@@ -59,8 +59,8 @@
  *   folder outside the Timon home is known only as the working directory of
  *   the call.
  */
-import { readFileSync, statSync } from 'node:fs';
-import { delimiter, join, posix, win32 } from 'node:path';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
+import { basename, delimiter, dirname, join, posix, resolve, win32 } from 'node:path';
 import { fencedSystemFolders, missionWritableProblem } from './mission-writable.js';
 
 /** A configuration value and the scope git read it from. `value` is null for
@@ -574,6 +574,22 @@ function linkedGitDir(dir: string, platform: NodeJS.Platform): string | null {
   }
 }
 
+/** `path` with its deepest existing ancestor resolved, links followed. */
+function throughExistingAncestor(path: string): string {
+  const rest: string[] = [];
+  let dir = resolve(path);
+  for (;;) {
+    try {
+      return join(realpathSync(dir), ...rest.reverse());
+    } catch {
+      const parent = dirname(dir);
+      if (parent === dir) return path;
+      rest.push(basename(dir));
+      dir = parent;
+    }
+  }
+}
+
 /** The folder git works in: the last `-C`, resolved against `cwd`. */
 function gitWorkDir(args: readonly string[], cwd: string | undefined, platform: NodeJS.Platform = process.platform): string | undefined {
   const p = platform === 'win32' ? win32 : posix;
@@ -608,7 +624,11 @@ export function localRemoteProblem(
     const common = linkedGitDir(cwd, platform);
     if (common && p.parse(common).root !== common) also.push(common);
   }
-  for (const candidate of [path, `${path}.git`, p.join(path, '.git'), p.join(`${path}.git`, '.git')]) {
+  const spellings = [path, `${path}.git`, p.join(path, '.git'), p.join(`${path}.git`, '.git')];
+  // A path that does not exist yet keeps its links unresolved: a mission may
+  // create it, behind a link, once the check has passed.
+  const candidates = platform === process.platform ? [...spellings, ...spellings.map(throughExistingAncestor)] : spellings;
+  for (const candidate of candidates) {
     const problem = missionWritableProblem(candidate, {
       platform,
       alsoRoots: also,
