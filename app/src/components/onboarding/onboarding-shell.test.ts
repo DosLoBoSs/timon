@@ -83,6 +83,7 @@ async function renderShell(
     }
     const steps = [
       { id: 'splash', Component: plain('splash') },
+      { id: 'background', Component: plain('background') },
       { id: 'account', Component: WithSubView },
       { id: 'llm', Component: plain('llm') },
       { id: 'profile', Component: legacyStep(null) },
@@ -117,13 +118,16 @@ test('« Continue » walks the steps; the dots and the address follow; a skipped
     assert.deepEqual(dots(host), [], 'no dots on the welcome');
     assert.equal(backButton(host), undefined, 'nothing to go back to');
     await click(host.querySelector('[data-next]'));
+    assert.equal(shown(host), 'background', 'the background question first: the install carries its answer');
+    assert.deepEqual(dots(host), ['current', 'todo', 'todo', 'todo', 'todo']);
+    await click(host.querySelector('[data-next]'));
     assert.equal(shown(host), 'account');
-    assert.deepEqual(dots(host), ['current', 'todo', 'todo', 'todo']);
+    assert.deepEqual(dots(host), ['done', 'current', 'todo', 'todo', 'todo']);
     assert.equal(dom.window.location.search, '?step=account');
     await click(host.querySelector('[data-next]'));
     await click(host.querySelector('[data-next]'));
     assert.equal(shown(host), 'agent', 'the profile stand-in has no screen: skipped');
-    assert.deepEqual(dots(host), ['done', 'done', 'done', 'current']);
+    assert.deepEqual(dots(host), ['done', 'done', 'done', 'done', 'current']);
     finished = 0;
     await click(host.querySelector('[data-next]'));
     assert.equal(shown(host), 'discover', 'the agent made, « Discover Timon » follows');
@@ -157,6 +161,8 @@ test('« Back » walks back: past a skipped step, and through a sub-view before 
     assert.equal(shown(host), 'account', 'the sub-view closes first');
     assert.equal(host.querySelector('[data-step]')?.getAttribute('data-sub'), 'closed');
     await click(backButton(host));
+    assert.equal(shown(host), 'background');
+    await click(backButton(host));
     assert.equal(shown(host), 'splash');
   });
 });
@@ -167,7 +173,7 @@ test('the guard keeps the agent step closed while the service is not ready; the 
     await click(host.querySelector('[data-next]'));
     assert.equal(shown(host), null, 'the agent step is not mounted');
     assert.equal(host.querySelector('[data-gate]')?.getAttribute('data-gate'), 'agent');
-    assert.deepEqual(dots(host), ['done', 'done', 'done', 'current'], 'the frame stays: dots and « Back »');
+    assert.deepEqual(dots(host), ['done', 'done', 'done', 'done', 'current'], 'the frame stays: dots and « Back »');
     await click(backButton(host));
     assert.equal(shown(host), 'llm', '« Back » still leaves a closed step');
   }, 'closed');
@@ -244,6 +250,12 @@ async function standIns(): Promise<OnboardingStepEntry[]> {
 test('a stand-in that opens another screen starts no background install', async () => {
   const events = await renderPrepared('http://localhost/onboarding?step=account', await standIns());
   assert.deepEqual(events, ['left:#login'], 'nothing asked of the daemon from a page about to unload');
+});
+
+test('the background question reads the machine but installs nothing: the install waits for its answer', async () => {
+  const { BackgroundStep } = await import('./steps/background');
+  const events = await renderPrepared('http://localhost/onboarding?step=background', [{ id: 'background', Component: BackgroundStep }]);
+  assert.deepEqual(events, ['service-status']);
 });
 
 // Last: the page's store is shared by the module, and this one starts it.

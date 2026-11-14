@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { CommandToRun } from '@/components/command-to-run';
 import { desktopBridge } from '@/lib/desktop';
 import { t } from '@/lib/i18n';
-import { diagnosticFileName, listenLabel, serviceState, versionGap, type DiagnosticReport, type SystemInfo } from '@/lib/system-info';
+import {
+  diagnosticFileName, listenLabel, serviceState, sessionModeView, versionGap, type DiagnosticReport, type ServiceSessionMode, type SystemInfo,
+} from '@/lib/system-info';
 import { apiErrorMessage } from '@/lib/api-error';
 
 /**
@@ -204,6 +206,7 @@ function ServiceGroup({ info, onChanged }: { info: SystemInfo; onChanged: () => 
           {service.windows.launcherMarked === false && <Hint>{t('systemSettings.windowsUnmarked')}</Hint>}
         </Fact>
       )}
+      {service.installed && <SessionModeFact service={service} onChanged={onChanged} />}
       {service.action && (
         <div className="pt-2">
           <p className="mb-2 max-w-[65ch] text-[13px] leading-snug text-muted-foreground">
@@ -228,6 +231,66 @@ function ServiceGroup({ info, onChanged }: { info: SystemInfo; onChanged: () => 
         </div>
       )}
     </Group>
+  );
+}
+
+/**
+ * Does the service keep running once the user logs out? The onboarding asked
+ * (`steps/background.tsx`); this row shows what the machine does and offers
+ * the one gesture that flips it. Windows has no choice yet: the row says what
+ * its scheduled task does, with no button.
+ */
+function SessionModeFact({ service, onChanged }: { service: SystemInfo['service']; onChanged: () => Promise<void> }): ReactElement | null {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ text: string; ok: boolean; command: string | null } | null>(null);
+  const view = sessionModeView(service);
+  if (view.kind === 'hidden') return null;
+
+  async function change(mode: ServiceSessionMode): Promise<void> {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch('/api/ui/system/service/session-mode', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      const answer = await response.json().catch(() => ({})) as { ok?: boolean; reason?: string | null; error?: string; command?: string | null };
+      if (response.ok && answer.ok) {
+        setMessage(answer.command
+          ? { text: t('systemSettings.sessionModeTerminal'), ok: true, command: answer.command }
+          : { text: t('systemSettings.sessionModeSaved'), ok: true, command: null });
+      } else {
+        setMessage({ text: answer.reason ?? apiErrorMessage(answer, t('systemSettings.sessionModeFailed')), ok: false, command: null });
+      }
+      await onChanged();
+    } catch (error) {
+      setMessage({ text: (error as Error).message, ok: false, command: null });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Fact label={t('systemSettings.loggedOut')}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="min-w-0">
+          {t(view.kind === 'fixed' ? 'systemSettings.loggedOutWindows' : view.keeps ? 'systemSettings.loggedOutKeeps' : 'systemSettings.loggedOutStops')}
+          {view.kind === 'choice' && view.pending && <Hint>{t('systemSettings.loggedOutPending')}</Hint>}
+        </span>
+        {view.kind === 'choice' && (
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void change(view.next)}>
+            {t(view.next === 'always' ? 'systemSettings.keepRunning' : 'systemSettings.stopAtLogout')}
+          </Button>
+        )}
+      </div>
+      {message && (
+        <div role={message.ok ? 'status' : 'alert'} className="pt-1">
+          <p className={message.ok ? 'text-[12px]' : 'text-[12px] text-destructive'}>{message.text}</p>
+          {message.command && <CommandToRun command={message.command} />}
+        </div>
+      )}
+    </Fact>
   );
 }
 
