@@ -344,3 +344,37 @@ test('a backend a plugin registered: per-call arbitration for any manager, sandb
   await assert.rejects(as(admin, () => plugin.agents.create(input('acme.gone', { backend: 'acme-bridge' }))), code('invalid'));
   await dispose();
 });
+
+test('reportsTo: read back, written on create and update, cleared by null, refused when it would break the hierarchy', async () => {
+  const { plugin, dispose } = await pluginWith(['agents:manage'], 'acme-reports');
+  upsertAgent({ name: 'Human.Lead', system_prompt: 'a person made me', config: { role: 'orchestrator' } });
+  const fresh = await as(manager, () => plugin.agents.create(input('rep.worker')));
+  assert.equal(fresh.reportsTo, null, 'nothing set: the app derives one');
+  const boss = await as(manager, () => plugin.agents.create(input('rep.boss', { reportsTo: 'human.lead' })));
+  assert.equal(boss.reportsTo, 'Human.Lead', 'canonical name of an agent the caller does not own');
+  assert.equal(loadConfig('rep.boss').reports_to, 'Human.Lead');
+  const worker = await as(manager, () => plugin.agents.update('rep.worker', { reportsTo: 'rep.boss' }));
+  assert.equal(worker.reportsTo, 'rep.boss');
+  assert.equal((await as(manager, () => plugin.agents.list())).find((a) => a.name === 'rep.worker')?.reportsTo, 'rep.boss');
+  await assert.rejects(as(manager, () => plugin.agents.update('rep.worker', { reportsTo: 'rep.worker' })), code('invalid'));
+  await assert.rejects(as(manager, () => plugin.agents.update('rep.worker', { reportsTo: 'nobody.here' })), code('invalid'));
+  await assert.rejects(as(manager, () => plugin.agents.update('rep.boss', { reportsTo: 'rep.worker' })), code('invalid'), 'a cycle');
+  await assert.rejects(as(manager, () => plugin.agents.create(input('rep.bad', { reportsTo: 'nobody.here' }))), code('invalid'));
+  assert.equal(getAgent('rep.bad'), undefined, 'a refused manager leaves no half-made agent');
+  assert.equal(loadConfig('rep.worker').reports_to, 'rep.boss', 'a refusal writes nothing');
+  const cleared = await as(manager, () => plugin.agents.update('rep.worker', { reportsTo: null }));
+  assert.equal(cleared.reportsTo, null);
+  await dispose();
+});
+
+test('reportsTo: only the agents of this plugin are written, and a job names only its own', async () => {
+  const { plugin, dispose } = await pluginWith(['agents:manage'], 'acme-reports2');
+  await assert.rejects(as(manager, () => plugin.agents.update('Human.Lead', { reportsTo: null })), code('forbidden'));
+  await assert.rejects(as(nobody, () => plugin.agents.update('rep2.x', { reportsTo: null })), PluginCallerError);
+  await assert.rejects(as(anonymous, () => plugin.agents.create(input('rep2.anon', { reportsTo: 'Human.Lead' }))), PluginCallerError);
+  await plugin.agents.create(input('rep2.lead'));
+  const job = await plugin.agents.create(input('rep2.member', { reportsTo: 'rep2.lead' }));
+  assert.equal(job.reportsTo, 'rep2.lead');
+  await assert.rejects(plugin.agents.update('rep2.member', { reportsTo: 'Human.Lead' }), code('invalid'), 'a job does not see the agents of the accounts');
+  await dispose();
+});
