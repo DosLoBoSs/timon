@@ -29,6 +29,7 @@ import { listProjects } from '../../projects.js';
 import { listSkills } from '../../skills.js';
 import { listMcp } from '../../mcp.js';
 import { TelemetryCollector, missionFactsFrom, type CollectorDeps } from './collector.js';
+import { installationUsageKind } from '../../onboarding-usage-kind.js';
 import {
   EVENT_SCHEMA_VERSION, archValue, backendValue, licenseTierValue, platformValue, validateEvent, validateGlobals, versionValue,
   type GlobalProperties, type TelemetryEventName,
@@ -181,6 +182,8 @@ function installationSnapshot(): Record<string, unknown> {
     out.bundled_plugins_active = gallery.filter((p) => p.source === 'bundled' && p.state === 'active').length;
     out.third_party_plugins = gallery.filter((p) => p.source === 'third-party' && !p.builtin).length;
   } catch { /* gallery not attached yet */ }
+  const usage = installationUsageKind();
+  if (usage) out.usage_kind = usage;
   if (agents.length) {
     const backends = new Set(agents.map((a) => backendValue(a.backend)).filter((b) => b !== 'other'));
     out.backends = [...backends].sort();
@@ -354,12 +357,13 @@ export function startTelemetry(opts: TelemetryOptions = {}): TelemetryRuntime {
     ...databaseDeps(),
     now,
     milestone: (m) => reachMilestone(m),
+    usageKind: installationUsageKind,
     installCreatedAt: () => {
       const created = Date.parse(identity().createdAt ?? '');
       return Number.isFinite(created) ? created : null;
     },
     ...opts.collector,
-  }, (name, props) => track(name, props));
+  }, (name, props, context) => track(name, props, 'daemon', context));
   try { collector.setInitialLicense(licenseState().status === 'valid'); } catch { /* not loaded */ }
 
   const onBus = (ev: BusEvent): void => {

@@ -513,3 +513,45 @@ test('install_age_days counts UTC calendar days and refuses what is not a day co
   assert.equal(validateEvent('turn_completed', { ...base, install_age_days: '7' }), null);
   assert.equal(validateEvent('turn_completed', { ...base, install_created_at: '2026-11-03' }), null, 'strict: no date property');
 });
+
+/* ── Usage kind (who the installation is used for) ─────────────────────── */
+
+test('usage_kind_set carries one of three words and nothing else; the agency offer never reaches analytics', async () => {
+  const { EVENT_SCHEMAS } = await import('./events.js');
+  assert.deepEqual(validateEvent('usage_kind_set', { usage_kind: 'agency' }), { usage_kind: 'agency' });
+  assert.equal(validateEvent('usage_kind_set', { usage_kind: 'freelance' }), null);
+  assert.equal(validateEvent('usage_kind_set', {}), null);
+  assert.equal(validateEvent('usage_kind_set', { usage_kind: 'agency', email: 'boss@agency.example' }), null);
+  assert.equal(validateEvent('usage_kind_set', { usage_kind: 'agency', withdraw_token: 'tok' }), null);
+  assert.equal(validateEvent('onboarding_step', { step: 'main_agent', action: 'completed', usage_kind: 'agency', email: 'boss@agency.example' }), null);
+  assert.deepEqual(
+    validateEvent('onboarding_step', { step: 'main_agent', action: 'completed', usage_kind: 'team' }),
+    { step: 'main_agent', action: 'completed', usage_kind: 'team' },
+  );
+  // No property of the catalogue may ever name an address, a lead or its token.
+  for (const [name, schema] of Object.entries(EVENT_SCHEMAS)) {
+    const inner = 'shape' in schema ? schema : (schema as unknown as { _def: { schema: { shape: Record<string, unknown> } } })._def.schema;
+    for (const key of Object.keys((inner as { shape: Record<string, unknown> }).shape)) {
+      assert.doesNotMatch(key, /mail|lead|token_value|withdraw|consent/i, `${name}.${key}`);
+    }
+  }
+});
+
+test('collector: a usage kind answer is announced for its account; wizard steps carry the installation\'s answer', async () => {
+  const { TelemetryCollector } = await import('./collector.js');
+  const emitted: [string, Record<string, unknown>, unknown][] = [];
+  let usage: 'solo' | 'team' | 'agency' | null = null;
+  const collector = new TelemetryCollector({
+    missionFacts: () => null, taskFacts: () => null, now: () => 0, usageKind: () => usage,
+  }, (name, props, context) => emitted.push([name, props, context]));
+  collector.handle({ kind: 'onboarding_step', step: 'account', action: 'completed' });
+  usage = 'agency';
+  collector.handle({ kind: 'usage_kind_set', usageKind: 'agency', userId: 'u-1' });
+  collector.handle({ kind: 'onboarding_step', step: 'main_agent', action: 'completed' });
+  assert.deepEqual(emitted, [
+    ['onboarding_step', { step: 'account', action: 'completed' }, undefined],
+    ['usage_kind_set', { usage_kind: 'agency' }, { userId: 'u-1' }],
+    ['onboarding_step', { step: 'main_agent', action: 'completed', usage_kind: 'agency' }, undefined],
+  ]);
+  for (const [name, props] of emitted) assert.ok(validateEvent(name, props), `${name} passes the catalogue`);
+});
