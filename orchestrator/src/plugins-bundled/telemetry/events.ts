@@ -84,6 +84,8 @@ export const GlobalPropertiesSchema = z.object({
   arch: z.enum(['x64', 'arm64', 'ia32', 'arm', 'other']),
   event_schema_version: z.literal(EVENT_SCHEMA_VERSION),
   license_tier: z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/),
+  /** `package`: the installed app; `source`: a daemon run from a checkout of the public code. */
+  build: z.enum(['package', 'source']),
   /** Rank of the account behind the event (1 = the first one created), never its id. */
   account_slot: z.number().int().min(1).max(10_000).optional(),
   /** Days since this installation's first event, as a cohort. */

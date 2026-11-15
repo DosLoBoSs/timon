@@ -74,6 +74,11 @@ export type TelemetryOptions = {
   intervalMs?: number;
   preference?: PreferenceSources;
   now?: () => number;
+  /**
+   * Tests only, with an injected `fetch`: whether to treat this process as a
+   * test run (detected by default), to exercise the production destination.
+   */
+  testRunner?: boolean;
   /** Tests: deps of the collector; the database by default. */
   collector?: Partial<CollectorDeps>;
 };
@@ -203,7 +208,8 @@ const INERT: TelemetryRuntime = {
 
 export function startTelemetry(opts: TelemetryOptions = {}): TelemetryRuntime {
   const env = opts.env ?? process.env;
-  const apiUrl = telemetryDestination(env, opts.packaged ?? packagedDaemon(env));
+  const packaged = opts.packaged ?? packagedDaemon(env);
+  const apiUrl = telemetryDestination(env, packaged, undefined, opts.testRunner);
   if (!apiUrl) return INERT;
 
   const now = opts.now ?? Date.now;
@@ -235,7 +241,7 @@ export function startTelemetry(opts: TelemetryOptions = {}): TelemetryRuntime {
     const firstDay = identity().firstSeenDay;
     return validateGlobals({
       surface, app_version: version, platform: platformValue(), arch: archValue(),
-      event_schema_version: EVENT_SCHEMA_VERSION, license_tier: tier,
+      event_schema_version: EVENT_SCHEMA_VERSION, license_tier: tier, build: packaged ? 'package' : 'source',
       ...(slot ? { account_slot: slot } : {}),
       ...(firstDay ? { install_age: installAgeOf(firstDay, utcDay(now())) } : {}),
     });

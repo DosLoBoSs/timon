@@ -44,7 +44,7 @@ function recorder(): { sent: Payload[]; fetch: typeof fetch } {
 }
 
 const noMission = { missionFacts: () => null, taskFacts: () => null };
-const GLOBAL_KEYS = new Set(['surface', 'app_version', 'platform', 'arch', 'event_schema_version', 'license_tier', 'install_age', 'account_slot']);
+const GLOBAL_KEYS = new Set(['surface', 'app_version', 'platform', 'arch', 'event_schema_version', 'license_tier', 'install_age', 'account_slot', 'build']);
 
 function start(opts: { now?: () => number; intervalMs?: number; stored?: () => string | null } = {}) {
   const { sent, fetch } = recorder();
@@ -232,7 +232,7 @@ test('the installation snapshot goes once a day, in counts and classes only', as
   assert.ok(typeof props.ram_class === 'string' && typeof props.cpu_class === 'string');
   assert.equal(props.accounts, 2);
   for (const [key, value] of Object.entries(props)) {
-    if (['ram_class', 'cpu_class', 'backends', 'surface', 'app_version', 'platform', 'arch', 'license_tier', 'install_age'].includes(key)) continue;
+    if (['ram_class', 'cpu_class', 'backends', 'surface', 'app_version', 'platform', 'arch', 'license_tier', 'install_age', 'build', 'usage_kind'].includes(key)) continue;
     assert.equal(typeof value, 'number', key);
   }
   clock += 24 * 3_600_000;
