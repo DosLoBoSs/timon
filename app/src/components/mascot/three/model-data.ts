@@ -2,8 +2,9 @@
  * The 3D mascot's model data and how to read it back. No three.js here: the
  * decoding is plain typed arrays, so it runs (and is tested) without WebGL.
  *
- * `agent-data.json` is generated, never edited by hand: the seven skulls were
- * built, furred and rigged in Blender, exported, then quantised into base64
+ * `agent-data.json` is generated, never edited by hand: the seven skulls are
+ * built, furred and rigged in Blender by the scripts of `tools/mascot-3d/`
+ * (their sources, see its README), exported, then quantised into base64
  * arrays (positions on 16 bits, normals and weights on 8) to keep the file
  * near 2 MB. It is loaded on demand (`loadModelData`), in a chunk of its own:
  * a page that never shows a 3D head never downloads it.
