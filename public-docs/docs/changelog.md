@@ -31,6 +31,7 @@ Published Timon releases. Preview changes are shown in the app when you install 
 - `timon init` finishes the setup from a terminal, for example on a server over SSH: it installs the background service if needed, creates your account (the password is typed hidden) and shows which AI tools are ready.
 - `timon` on its own shows where the installation stands (daemon, account, web address) and the next command to type; a command that cannot reach the daemon now says how to start it instead of `fetch failed`.
 - The welcome screen has a 3D / 2D switch next to the light/dark one: the falling mascots change style at once, and the account you then create keeps the choice.
+- Setup asks, optionally, who you use Timon for (yourself, your team or company, or your agency and its clients); agencies can ask to receive the partner offer by email, and withdraw in Settings › Profile.
 
 ### Fixed
 - Agents canvas: the node and edge count sits a little higher above the action bar.
