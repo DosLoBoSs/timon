@@ -66,7 +66,7 @@ const ROUTE_MAX = 2048;
 /** The base a route is parsed against: only an origin the route cannot change. */
 const PARSE_BASE = 'http://timon.invalid';
 /** Copy of `NOT_A_PLACE` (`app/src/lib/machines/last-route.ts`); `window-layout.test.ts` compares both. */
-export const NOT_A_PLACE = ['/api', '/_next', '/login', '/setup', '/invite', '/confirm-email'];
+export const NOT_A_PLACE = ['/api', '/_next', '/login', '/onboarding', '/setup', '/invite', '/confirm-email'];
 /** Copy of `OVERLAY_PARAMS` (same file); `window-layout.test.ts` compares both. */
 export const OVERLAY_PARAMS = ['settings'];
 
