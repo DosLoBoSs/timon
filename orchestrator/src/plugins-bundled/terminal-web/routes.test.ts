@@ -19,6 +19,9 @@ delete process.env.TIMON_TERMINAL_WEB_ENABLED;
 
 const { createDaemonAuthMiddleware } = await import('../http/auth.js');
 const { registerRoutes, createUpgradeHandler, matchTerminalWsPath } = await import('./routes.js');
+const { upgradeAuth } = await import('./access.js');
+const { createHttpPlugin } = await import('../../kernel/http-service.js');
+const { Context } = await import('@deepseek-ai/cordis');
 const { TerminalSessions } = await import('../../terminal-host/sessions.js');
 const { localStore } = await import('./store.js');
 const { dbApi } = await import('../../db.js');
@@ -64,8 +67,12 @@ app.use(createDaemonAuthMiddleware({ token: TOKEN, required: true }));
 app.use(express.json());
 registerRoutes(app, sessions);
 const upgrade = createUpgradeHandler(sessions);
+// Through the kernel, as in the daemon: it resolves the identity the route receives.
+const kernel = new Context();
+await kernel.plugin(createHttpPlugin(app, { upgradeAuth }));
+kernel.http.upgrade(upgrade);
 const server = createServer(app);
-server.on('upgrade', (req, socket, head) => { if (!upgrade.handle(req, socket, head)) socket.destroy(); });
+server.on('upgrade', (req, socket, head) => kernel.http.handleUpgrade(req, socket, head, () => ({ open: true })));
 server.listen(0, '127.0.0.1');
 await once(server, 'listening');
 test.after(() => { upgrade.close(); inProcess.disposeAll(); server.closeAllConnections(); server.close(); });

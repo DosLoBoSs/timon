@@ -92,7 +92,7 @@ export function apply(ctx: Context): void {
   }
   registerRoutes(ctx.http.router(), sessions);
   const upgrade = createUpgradeHandler(sessions);
-  ctx.http.upgrade(upgrade.handle);
+  ctx.http.upgrade(upgrade);
   // Disabling the module must not leave shells running nobody can reach. A
   // daemon restart never comes here: no shutdown hook disposes the modules.
   ctx.effect(() => () => {

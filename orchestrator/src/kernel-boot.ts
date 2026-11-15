@@ -72,6 +72,7 @@ import { reportBackendBinaries } from './backends/binary-check.js';
 import { expectProviders, providersLoaded } from './backends/registry.js';
 import { dbApi } from './db.js';
 import { noticeSuspendedAccounts } from './users/suspended-accounts.js';
+import { upgradeAuth } from './users/upgrade-auth.js';
 import { liveMissionBackends, reattachRemoteMissions, startReaper, sweepZombieMissions } from './agent.js';
 import { startReconcile } from './reconcile.js';
 import { createHttpPlugin } from './kernel/http-service.js';
@@ -197,7 +198,7 @@ export async function boot(opts: { listen?: boolean; catalog?: readonly ModuleDe
   ctx.baseUrl = new URL('./', import.meta.url).href;
 
   await ctx.plugin(Timer);
-  await ctx.plugin(createHttpPlugin(app));
+  await ctx.plugin(createHttpPlugin(app, { upgradeAuth }));
   await ctx.plugin(createHostPlugin(host));
   await ctx.plugin({ name: 'timon-bus-bridge', apply: applyBusBridge });
   await ctx.plugin(Loader);
