@@ -177,7 +177,7 @@ function resample(poly, n) {
 
 const f = (v) => (Math.round(v * 10) / 10).toString();
 
-/** A closed Catmull-Rom spline through the points, as cubic Bezier segments: a smooth path from a few points. */
+/** A closed cardinal spline of tension 0 through the points, as cubic Bezier segments: a smooth path from a few points. */
 function smoothPath(pts) {
   const n = pts.length;
   let d = `M${f(pts[0][0])} ${f(pts[0][1])}`;
