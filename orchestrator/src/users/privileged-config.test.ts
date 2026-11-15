@@ -20,7 +20,10 @@ const { inactiveProfiles } = await import('../backends/registry.js');
 const { db } = await import('../db.js');
 
 {
-  const { mountOfficialProviders } = await import('../../tests/helpers/official-providers.js');
+  // grok's profile exists only where its CLI is found: without the stand-in the
+  // suite reads the developer's own install and fails on a clean machine (the CI).
+  const { mountOfficialProviders, stubCliBinaries } = await import('../../tests/helpers/official-providers.js');
+  await stubCliBinaries('grok');
   await mountOfficialProviders();
 }
 
