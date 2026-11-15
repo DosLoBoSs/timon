@@ -37,6 +37,7 @@ import { covers } from '../license/license.js';
 import { catchAsyncHandlers, routeErrorHandler } from './async-routes.js';
 import { config } from '../config/load.js';
 import { daemonHostPolicy, hostAllowed, type HostPolicy } from '../http-host.js';
+import type { RequestAuth } from '../users/identity.js';
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -50,24 +51,49 @@ const CLAIMED_METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;
 type ClaimedMethod = (typeof CLAIMED_METHODS)[number];
 
 /**
- * A WebSocket upgrade handler. Express never sees upgrades (they bypass the
- * request pipeline, auth middleware included), so a module that speaks
- * WebSocket registers here and authenticates the request ITSELF. Returns
- * true when it took the socket; false lets the next handler try.
+ * Who sent a WebSocket upgrade, resolved by the daemon (`users/upgrade-auth.ts`):
+ * a paired device's bearer or a browser session, with the same checks as the
+ * HTTP middleware. Injected rather than imported so the kernel stays free of
+ * the accounts layer; a kernel built without one knows nobody.
  */
-export type UpgradeHandler = (req: IncomingMessage, socket: Duplex, head: Buffer) => boolean;
+export type UpgradeAuthResolver = (req: IncomingMessage) => RequestAuth | undefined;
+
+/**
+ * A WebSocket route. Express never sees upgrades (they bypass the request
+ * pipeline, auth middleware included), so a module that speaks WebSocket
+ * registers here and DECLARES its authentication, like every other route:
+ *  — `required`: the kernel refuses an anonymous upgrade with 401 before
+ *    `handle` runs, and hands it the resolved identity;
+ *  — `public`: the module accepts anonymous peers on purpose, and checks
+ *    whatever it needs itself.
+ * Permissions, origin and resource ownership stay the module's to check.
+ */
+export interface UpgradeRoute {
+  /** Whether this route serves the request (its path, usually). */
+  match: (req: IncomingMessage) => boolean;
+  auth: 'required' | 'public';
+  /** Takes the socket: answer it, upgrade it, or end it. */
+  handle: (req: IncomingMessage, socket: Duplex, head: Buffer, auth: RequestAuth | undefined) => void;
+}
 
 /**
  * Whether an upgrade may reach the handlers under the daemon's `Host` policy
  * (`http-host.ts`) — the rule the auth middleware applies to every other
- * request. A bearer credential exempts it there, and does here: a browser
- * cannot attach an `Authorization` header to a WebSocket, so a page that
- * rebound its own domain onto the loopback never carries one, and the handler
- * still checks the credential itself.
+ * request. A VALID bearer credential exempts it there, and does here: a
+ * browser cannot attach an `Authorization` header to a WebSocket, so a page
+ * that rebound its own domain onto the loopback never carries one. The header
+ * alone is not enough: a forged one must not carry an anonymous request past
+ * the guard. A session cookie never exempts, the browser attaches it itself.
  */
-export function upgradeHostAllowed(req: IncomingMessage, policy: HostPolicy): boolean {
-  if (/^Bearer\s+\S/i.test(req.headers.authorization ?? '')) return true;
-  return hostAllowed(req.headers.host, policy);
+export function upgradeHostAllowed(req: IncomingMessage, policy: HostPolicy, auth: () => RequestAuth | undefined): boolean {
+  if (hostAllowed(req.headers.host, policy)) return true;
+  if (!/^Bearer\s+\S/i.test(req.headers.authorization ?? '')) return false;
+  const who = auth();
+  return who !== undefined && who.kind !== 'session';
+}
+
+function refuseUpgrade(socket: Duplex, status: number, reason: string): void {
+  socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 }
 
 /**
@@ -87,12 +113,15 @@ export class HttpService extends Service {
   /** Claimed route key → owning module, for the collision guard. */
   private readonly claims = new Map<string, string>();
 
-  /** Live upgrade handlers, in registration order. */
-  private readonly upgrades = new Set<UpgradeHandler>();
+  /** Live upgrade routes, in registration order. */
+  private readonly upgrades = new Set<UpgradeRoute>();
 
-  constructor(ctx: Context, app: Express) {
+  private readonly upgradeAuth: UpgradeAuthResolver;
+
+  constructor(ctx: Context, options: { app: Express; upgradeAuth?: UpgradeAuthResolver }) {
     super(ctx, 'http');
-    this.app = app;
+    this.app = options.app;
+    this.upgradeAuth = options.upgradeAuth ?? (() => undefined);
     // Before any module mounts a route: a rejected async handler must reach
     // `next(err)`, not take the daemon down (TODO #580).
     catchAsyncHandlers();
@@ -128,33 +157,45 @@ export class HttpService extends Service {
   }
 
   /**
-   * Registers a WebSocket upgrade handler, removed when the calling module
-   * unloads — same reversibility as `router()`.
+   * Registers a WebSocket route, removed when the calling module unloads —
+   * same reversibility as `router()`.
    */
-  upgrade(handler: UpgradeHandler): void {
-    this.upgrades.add(handler);
-    this.ctx.effect(() => () => { this.upgrades.delete(handler); });
+  upgrade(route: UpgradeRoute): void {
+    this.upgrades.add(route);
+    this.ctx.effect(() => () => { this.upgrades.delete(route); });
   }
 
   /**
-   * Entry point wired on the HTTP server's `upgrade` event. An upgrade no
-   * module claims is destroyed: leaving it open would hold a socket forever.
-   * A misdirected one gets the same neutral 421 as any other request, before
-   * a handler sees it: the session cookie a browser attaches to a WebSocket
-   * must not open a shell to a page that rebound its domain here.
+   * Entry point wired on the HTTP server's `upgrade` event. A misdirected
+   * upgrade gets the same neutral 421 as any other request, before a route
+   * sees it: the session cookie a browser attaches to a WebSocket must not
+   * open a shell to a page that rebound its domain here. An upgrade no route
+   * claims is destroyed: leaving it open would hold a socket forever.
    */
   handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer, policy: () => HostPolicy = () => daemonHostPolicy(config())): void {
-    if (!upgradeHostAllowed(req, policy())) {
-      socket.end('HTTP/1.1 421 Misdirected Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
-      return;
-    }
-    for (const handler of this.upgrades) {
-      try {
-        if (handler(req, socket, head)) return;
-      } catch {
-        socket.destroy();
+    // Resolved at most once: it touches the session and audits device use.
+    let resolved = false;
+    let who: RequestAuth | undefined;
+    const auth = (): RequestAuth | undefined => {
+      if (!resolved) { resolved = true; who = this.upgradeAuth(req); }
+      return who;
+    };
+    try {
+      if (!upgradeHostAllowed(req, policy(), auth)) {
+        refuseUpgrade(socket, 421, 'Misdirected Request');
         return;
       }
+      for (const route of this.upgrades) {
+        if (!route.match(req)) continue;
+        if (route.auth === 'required' && auth() === undefined) {
+          refuseUpgrade(socket, 401, 'Unauthorized');
+          return;
+        }
+        route.handle(req, socket, head, auth());
+        return;
+      }
+    } catch {
+      // Falls through: a failing route or resolver must not leave the socket open.
     }
     socket.destroy();
   }
@@ -209,12 +250,16 @@ export class HttpService extends Service {
 
 export const name = 'timon-http';
 
-/** `@timon/http` plugin: publishes the Express app passed by `boot.ts`. */
-export function createHttpPlugin(app: Express) {
+/**
+ * `@timon/http` plugin: publishes the Express app passed by `boot.ts`.
+ * `upgradeAuth` resolves who sent a WebSocket upgrade; without it, every
+ * upgrade is anonymous and a `required` route refuses them all.
+ */
+export function createHttpPlugin(app: Express, options: { upgradeAuth?: UpgradeAuthResolver } = {}) {
   return {
     name,
     apply(ctx: Context) {
-      ctx.plugin(HttpService, app);
+      ctx.plugin(HttpService, { app, upgradeAuth: options.upgradeAuth });
     },
   };
 }
