@@ -204,15 +204,37 @@ test('a lead never sent is withdrawn on the spot; without a destination nothing 
   assert.equal((await leads.withdraw('u1')).state, 'none');
 });
 
-test('the destination: the real site only from a released packaged build, a loopback stand-in otherwise', () => {
+test('the destination: the real site from any daemon, a loopback stand-in first, never under a test', () => {
   assert.equal(PARTNER_LEADS_URL, 'https://timon-ai.com/api/partners/leads');
-  assert.equal(partnersDestination({ NODE_TEST_CONTEXT: 'child' }, true, 'beta'), null, 'never the real site under a test');
-  assert.equal(partnersDestination({}, true, 'stable'), PARTNER_LEADS_URL);
-  assert.equal(partnersDestination({ TIMON_PARTNERS_SERVER: 'http://127.0.0.1:9' }, true, 'beta'), PARTNER_LEADS_URL, 'a packaged build ignores the stand-in');
-  assert.equal(partnersDestination({}, false, 'dev'), null, 'a source checkout files no lead on the real site');
-  assert.equal(partnersDestination({ TIMON_PARTNERS_SERVER: 'http://127.0.0.1:9' }, false, 'dev'), 'http://127.0.0.1:9/api/partners/leads');
+  assert.equal(partnersDestination({}, false), PARTNER_LEADS_URL, 'packaged or from source, outside a test');
+  assert.equal(partnersDestination({}), null, 'this suite runs under the runner: read from the process, not only the env passed');
+  assert.equal(partnersDestination({ NODE_ENV: 'test' }), null);
+  assert.equal(partnersDestination({ NODE_TEST_CONTEXT: 'child' }, true), null);
+  assert.equal(partnersDestination({ TIMON_PARTNERS_SERVER: 'http://127.0.0.1:9' }, false), 'http://127.0.0.1:9/api/partners/leads', 'the stand-in comes first');
+  assert.equal(partnersDestination({ TIMON_PARTNERS_SERVER: 'http://127.0.0.1:9' }), 'http://127.0.0.1:9/api/partners/leads');
+  assert.equal(partnersDestination({ TIMON_PARTNERS_SERVER: 'https://evil.example' }, false), PARTNER_LEADS_URL, 'a non-loopback stand-in is ignored');
   assert.equal(partnersServerOverride('https://evil.example'), null);
   assert.equal(partnersServerOverride('http://user:pw@127.0.0.1:9'), null);
+});
+
+test('a daemon under test never reaches timon-ai.com, whatever its environment says', async () => {
+  const saved = process.env.TIMON_PARTNERS_SERVER;
+  delete process.env.TIMON_PARTNERS_SERVER;
+  const urls: string[] = [];
+  try {
+    const leads = new PartnerLeads({
+      file: join(mkdtempSync(join(tmpdir(), 'timon-leads-prod-')), 'partner-leads.json'),
+      // The default destination, as the daemon builds it.
+      fetch: (async (url: string | URL | Request) => { urls.push(String(url)); return Response.json({ withdrawToken: 'x' }, { status: 201 }); }) as typeof fetch,
+      log: () => undefined,
+    });
+    const view = await leads.subscribe('u1', EMAIL, 'fr');
+    await leads.tick();
+    assert.deepEqual(urls, [], 'no request at all');
+    assert.deepEqual([view.state, view.error], ['pending', 'unavailable']);
+  } finally {
+    if (saved !== undefined) process.env.TIMON_PARTNERS_SERVER = saved;
+  }
 });
 
 test('locales take the contract\'s three shapes', () => {

@@ -17,11 +17,12 @@
  *   - 400 (validation) and 413 (body over 2 KB): never retried, the account
  *     sees a readable error and may try again with another address.
  *
- * Where it goes: the production site only from a released packaged build, the
- * same two locks as analytics (`telemetryDestination`), so a source checkout or
- * a test never files a lead on the real site. Outside one, a loopback server
- * named in `TIMON_PARTNERS_SERVER` stands in (tests, a maintainer's check);
- * without it the request waits.
+ * Where it goes: the production site, from any daemon, packaged or run from
+ * source. It is an explicit consent, not analytics: whoever ticked the box
+ * asked for it, whatever way they installed Timon. A loopback server named in
+ * `TIMON_PARTNERS_SERVER` takes its place when set (tests, a maintainer's
+ * check). A test run never reaches the site: under a test runner, without that
+ * stand-in, the request waits.
  *
  * What is kept, per account, in `partner-leads.json` (secrets zone, `0600`):
  * the address while the request waits or is active, its state, and the
@@ -32,8 +33,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import { BRAND } from '../../brand.js';
-import { buildInfo, type BuildChannel } from '../../build-info.js';
-import { packagedDaemon, timonVersion } from '../../data-version.js';
+import { timonVersion } from '../../data-version.js';
 import { PARTNER_LEADS_FILE } from '../../paths.js';
 
 export const PARTNER_LEADS_PATH = '/api/partners/leads';
@@ -102,6 +102,11 @@ function underTest(env: NodeJS.ProcessEnv): boolean {
   return Boolean(env.NODE_TEST_CONTEXT) || env.NODE_ENV === 'test';
 }
 
+/** The runner is read from this process too: a test passing its own `env` still runs under it. */
+function runningUnderTest(env: NodeJS.ProcessEnv): boolean {
+  return underTest(env) || underTest(process.env);
+}
+
 /** A loopback `http(s):` base URL without credentials, or `null`. */
 export function partnersServerOverride(raw: string | undefined): string | null {
   if (!raw) return null;
@@ -115,12 +120,11 @@ export function partnersServerOverride(raw: string | undefined): string | null {
 /** Where a lead goes, or `null` when it must wait (see the header). */
 export function partnersDestination(
   env: NodeJS.ProcessEnv = process.env,
-  packaged: boolean = packagedDaemon(env),
-  channel: BuildChannel = buildInfo().channel,
+  testRunner: boolean = runningUnderTest(env),
 ): string | null {
-  if (packaged && underTest(env)) return null;
-  if (packaged && channel !== 'dev') return PARTNER_LEADS_URL;
-  return partnersServerOverride(env[PARTNERS_SERVER_ENV]);
+  const standIn = partnersServerOverride(env[PARTNERS_SERVER_ENV]);
+  if (standIn) return standIn;
+  return testRunner ? null : PARTNER_LEADS_URL;
 }
 
 export type PartnerLeadsOptions = {
@@ -315,7 +319,7 @@ export class PartnerLeads {
 
   private async request(method: 'POST' | 'DELETE', body: Record<string, unknown>): Promise<Outcome> {
     const url = this.destination();
-    // No destination (a source checkout): wait for the next start rather than poll.
+    // No destination (a test run without a stand-in): wait for the next start rather than poll.
     if (!url) return { ok: false, error: 'unavailable', retry: true, retryAfterMs: RETRY_MAX_MS };
     let res: Response;
     try {
