@@ -66,7 +66,15 @@ async function buildArgs(opts, thinkingArgs) {
    args.push('--mcp-config', scratch.resolve('mcp-config.json'));
  } else args.push('--mcp-config', mcpJson);
  if (plan.permissionTool) args.push('--permission-prompt-tool', plan.permissionTool);
- const disallowed = new Set([...(cfg.disallowed_tools ?? []), 'AskUserQuestion', 'Task', 'Agent', 'advisor']);
+ // ListAgents and SendMessage reach every Claude Code session of the machine, whatever the account
+ // folder: an agent would see and write into sessions that are not Timon's, past its teams and permissions.
+ // RemoteTrigger (cloud agents) and PushNotification (the account's phones) leave Timon the same way:
+ // Timon has its own missions, routines and notifications.
+ const disallowed = new Set([
+   ...(cfg.disallowed_tools ?? []),
+   'AskUserQuestion', 'Task', 'Agent', 'advisor',
+   'ListAgents', 'SendMessage', 'RemoteTrigger', 'PushNotification',
+ ]);
  for (const name of plan.excludedServers ?? []) {
    const slug = name.replace(/[.\s]+/g, '_').replace(/[^A-Za-z0-9_-]/g, '');
    disallowed.add(`mcp__${slug}__*`);
