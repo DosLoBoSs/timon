@@ -16,11 +16,11 @@ What your agents send to the AI providers you connect goes to those providers, u
 
 Timon can send **anonymous usage statistics** to the Timon team: which features are used, how often agent turns succeed, where setup stops. They tell us what to fix first. Sharing is **on by default** and you can turn it off at any time.
 
-Only the installed app sends them. Timon run from a source checkout sends nothing.
+This applies however you installed Timon: the installed app and Timon run from its source code both send them, and both turn them off the same way (see [Turning statistics off](#turning-statistics-off)).
 
 ### What is sent
 
-Each event carries the Timon version, your operating system and processor type, and your licence tier (Free, Beta…). An event caused by a person also carries the rank of their account on this installation (1 for the first account created, 2 for the next…), never the account itself. The events themselves are:
+Each event carries the Timon version, whether it is the installed app or Timon run from source, your operating system and processor type, and your licence tier (Free, Beta…). An event caused by a person also carries the rank of their account on this installation (1 for the first account created, 2 for the next…), never the account itself. The events themselves are:
 
 - the app starting, being updated, and the desktop app being opened;
 - the app being opened by a person, at most once a day per account;
