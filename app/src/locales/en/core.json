@@ -866,6 +866,13 @@
     "mascotsHint": "An agent whose head is its mascot shows what it is doing: asleep, thinking, working, searching, waiting for you, happy when its task is done.",
     "mascotsAnimate": "Animate mascots",
     "mascotsAnimateHint": "Off, a mascot still shows its state by its eyes, without moving. Your system's reduced-motion setting always wins.",
+    "mascotsStyle": "Mascot style",
+    "mascotsStyle3d": "3D",
+    "mascotsStyle3dHint": "A modelled plush head, lit and in relief.",
+    "mascotsStyle2d": "2D",
+    "mascotsStyle2dHint": "The flat drawing, lighter for older computers.",
+    "mascotsStyleNoWebgl": "This browser cannot draw in 3D (WebGL2 is off or missing): mascots are drawn in 2D.",
+    "mascotsStyleShared": "Applies to every mascot. You can change it later in {settingsPath}.",
     "variants": {
       "coral": {
         "name": "Coral",

@@ -1547,6 +1547,7 @@ declare module '@timon/ui' {
     eyes: 'pill' | 'big' | 'happy' | 'wink' | 'surprised' | 'squint' | 'sleepy' | 'heart' | 'star' | 'code' | `${string}:${string}`;
     acc: 'none' | 'loupe' | 'pen' | 'quill' | 'hammer' | 'wrench' | 'baton' | 'telescope' | 'envelope' | 'calendar'
       | 'clipboard' | 'hourglass' | 'teacher' | 'calculator' | 'chart' | 'brush' | 'globe' | 'megaphone' | 'shield' | 'coffee'
+      | 'whip' | 'wizard' | 'chef' | 'crown' | 'idea' | 'rocket' | 'chemist' | 'gamer' | 'photographer' | 'gardener' | 'musician'
       | `${string}:${string}`;
   };
   /** What an agent is doing (`idle`…`sleeping`) or how it reacts (`happy`…`coding`). Client API 15. */
