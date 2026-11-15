@@ -100,7 +100,7 @@ test('create marks the origin and reads back identity only', async () => {
   const made = await as(manager, () => plugin.agents.create(input('hermes-alpha', { model: 'opus', directives: 'Be brief.' })));
   assert.deepEqual(made, {
     name: 'hermes-alpha', backend: 'claude', model: 'opus', project: null, role: 'research',
-    hasSystemPrompt: true, createdBy: 'plugin:acme-agents', mine: true, look: null, avatar: null,
+    hasSystemPrompt: true, createdBy: 'plugin:acme-agents', mine: true, look: null, avatar: null, reportsTo: null,
   });
   assert.equal(loadConfig('hermes-alpha').created_by, 'plugin:acme-agents');
 
