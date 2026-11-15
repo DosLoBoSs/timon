@@ -80,7 +80,7 @@ access to the Providers screen (see [Several accounts](./multi-user.md#access-to
 
 ### A provider's page
 
-The page of a provider (**Settings → AI models → Providers → _its name_**) has these sections, in this order, each shown only when it applies: **Connection**, **API key**, **Program**, **Settings** (the provider's own settings, such as the Claude long-lived token) and **Models**. Its header says how many agents use it, and holds the switch that turns it on or off.
+The page of a provider (**Settings → AI models → Providers → _its name_**) has these sections, in this order, each shown only when it applies: **Connection**, **API key**, **Models**, **Program** and **Settings** (the provider's own settings, such as the Claude long-lived token). Its header says how many agents use it, and holds the switch that turns it on or off.
 
 Every section reads the same way: one row per thing to know, its state underneath, one button at the right for what to do next, and the other actions in the row's **…** menu. Fields open in a dialog or under their row only once you ask for them.
 
