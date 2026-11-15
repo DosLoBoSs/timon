@@ -3,7 +3,7 @@
  * `TIMON_BACKUP_MAX_AGE_DAYS`), pruned right after each archive, instead of a
  * hard-coded 7.
  */
-import { mkdtempSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -98,4 +98,138 @@ test('keeping zero archives is refused at write time', () => {
   const r = setSetting('TIMON_BACKUP_KEEP', '0');
   assert.equal(r.ok, false);
   assert.equal(backupRetention().keep, 7);
+});
+
+// A full disk cut `tar` short: the truncated archive kept the day's name, ranked
+// newest and pushed valid backups out, while the prune never ran again.
+
+const routines = await import('./routines.js');
+const { dbApi } = await import('./db.js');
+
+function backupAlerts() {
+  return dbApi.listActiveNotificationsByAnchorPrefix(routines.BACKUP_ALERT_ANCHOR, 'alert');
+}
+
+function resetBackupDir(): string {
+  const dir = backupsDir();
+  mkdirSync(dir, { recursive: true });
+  for (const name of readdirSync(dir)) rmSync(join(dir, name), { recursive: true, force: true });
+  dbApi.deleteSetting(routines.BACKUP_FAILURES_KEY);
+  dbApi.dismissNotificationsByAnchor(routines.BACKUP_ALERT_ANCHOR, 'alert');
+  return dir;
+}
+
+const failingExport: typeof import('./export.js').exportTimon = (opts) => {
+  writeFileSync(opts.out, 'truncated');
+  throw new Error('tar failed (2): gzip: stdout: No space left on device');
+};
+
+test('a failed export leaves no archive under the day name and evicts nothing', () => {
+  const dir = resetBackupDir();
+  seedDays(dir, '08', 15, 21);
+  assert.throws(
+    () => runNightlyBackup(new Date(2026, 7, 22, 3, 30, 0), { exportArchive: failingExport, freeBytes: () => null }),
+    /No space left/,
+  );
+  assert.deepEqual(readdirSync(dir).sort(), archivesIn(dir));
+  assert.equal(archivesIn(dir).length, 7);
+  assert.equal(archivesIn(dir)[6], 'timon-2026-08-21.tar.gz');
+});
+
+test('an unfinished export is not counted and is cleared by the next run', () => {
+  const dir = resetBackupDir();
+  seedDays(dir, '08', 18, 20);
+  writeFileSync(join(dir, `timon-2026-08-21.tar.gz${routines.BACKUP_PARTIAL_SUFFIX}`), 'cut');
+  writeFileSync(join(dir, 'other.partial'), 'not ours');
+  pruneBackupArchives(dir, { keep: 3, maxAgeDays: 0 });
+  assert.deepEqual(archivesIn(dir), ['timon-2026-08-18.tar.gz', 'timon-2026-08-19.tar.gz', 'timon-2026-08-20.tar.gz']);
+
+  const result = runNightlyBackup(new Date(2026, 7, 22, 3, 30, 0), { freeBytes: () => null });
+  assert.equal(result.out, join(dir, 'timon-2026-08-22.tar.gz'));
+  assert.ok(existsSync(result.out));
+  assert.ok(!readdirSync(dir).some((n) => n.startsWith('timon-') && n.endsWith('.partial')));
+  assert.ok(existsSync(join(dir, 'other.partial')), 'a file the backup did not write stays');
+});
+
+test('the prune runs even when the export fails', () => {
+  const dir = resetBackupDir();
+  seedDays(dir, '08', 1, 12);
+  assert.throws(() => runNightlyBackup(new Date(2026, 7, 13, 3, 30, 0), { exportArchive: failingExport, freeBytes: () => null }));
+  assert.deepEqual(archivesIn(dir), [
+    'timon-2026-08-06.tar.gz', 'timon-2026-08-07.tar.gz', 'timon-2026-08-08.tar.gz', 'timon-2026-08-09.tar.gz',
+    'timon-2026-08-10.tar.gz', 'timon-2026-08-11.tar.gz', 'timon-2026-08-12.tar.gz',
+  ]);
+});
+
+test('not enough free space: no export, an alert at once', () => {
+  const dir = resetBackupDir();
+  writeFileSync(join(dir, 'timon-2026-08-20.tar.gz'), Buffer.alloc(1000));
+  let exported = false;
+  assert.throws(
+    () => runNightlyBackup(new Date(2026, 7, 21, 3, 30, 0), {
+      freeBytes: () => 1400,
+      exportArchive: (opts) => { exported = true; return failingExport(opts); },
+    }),
+    (err: unknown) => err instanceof routines.BackupSpaceError && err.needed === 1500 && err.free === 1400,
+  );
+  assert.equal(exported, false);
+  assert.deepEqual(readdirSync(dir), ['timon-2026-08-20.tar.gz']);
+  const alerts = backupAlerts();
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0].title, /disk almost full/);
+
+  assert.throws(() => runNightlyBackup(new Date(2026, 7, 22, 3, 30, 0), { freeBytes: () => 1400 }));
+  assert.equal(backupAlerts().length, 1, 'one card while the first is open');
+});
+
+test('enough free space: the export runs', () => {
+  const dir = resetBackupDir();
+  writeFileSync(join(dir, 'timon-2026-08-20.tar.gz'), Buffer.alloc(1000));
+  const result = runNightlyBackup(new Date(2026, 7, 21, 3, 30, 0), { freeBytes: () => 1500 });
+  assert.ok(existsSync(result.out));
+});
+
+test('three failed nights in a row raise an alert, a success clears it', () => {
+  resetBackupDir();
+  const fail = (day: number) => assert.throws(() =>
+    runNightlyBackup(new Date(2026, 7, day, 3, 30, 0), { exportArchive: failingExport, freeBytes: () => null }));
+  fail(10);
+  fail(11);
+  assert.equal(backupAlerts().length, 0, 'two bad nights stay quiet');
+  fail(12);
+  const alerts = backupAlerts();
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0].title, /failed 3 nights in a row/);
+  assert.match(alerts[0].body ?? '', /No space left/);
+  fail(13);
+  assert.equal(backupAlerts().length, 1);
+  assert.equal(dbApi.getAllSettings()[routines.BACKUP_FAILURES_KEY], '4');
+
+  runNightlyBackup(new Date(2026, 7, 14, 3, 30, 0), { freeBytes: () => null });
+  assert.equal(backupAlerts().length, 0);
+  assert.equal(dbApi.getAllSettings()[routines.BACKUP_FAILURES_KEY], undefined);
+});
+
+test('a pre-rebuild snapshot leaves once the kept window is newer than it', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'timon-retention-snapshot-'));
+  writeFileSync(join(dir, 'pre-rebuild-2026-08-10.db'), 'snapshot');
+  seedDays(dir, '08', 9, 11);
+  pruneBackupArchives(dir, { keep: 3, maxAgeDays: 0 });
+  assert.ok(existsSync(join(dir, 'pre-rebuild-2026-08-10.db')), 'one newer archive only: kept');
+
+  seedDays(dir, '08', 12, 13);
+  const dropped = pruneBackupArchives(dir, { keep: 3, maxAgeDays: 0 });
+  assert.ok(dropped.includes('pre-rebuild-2026-08-10.db'));
+  assert.ok(!existsSync(join(dir, 'pre-rebuild-2026-08-10.db')));
+});
+
+test('a pre-rebuild snapshot past the age limit leaves only behind a newer archive', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'timon-retention-snapshot-age-'));
+  writeFileSync(join(dir, 'pre-rebuild-2026-08-01.db'), 'snapshot');
+  const now = new Date(2026, 7, 20, 3, 30, 0);
+  pruneBackupArchives(dir, { keep: 7, maxAgeDays: 5 }, now);
+  assert.ok(existsSync(join(dir, 'pre-rebuild-2026-08-01.db')), 'no backup since: kept');
+  seedDays(dir, '08', 19, 19);
+  pruneBackupArchives(dir, { keep: 7, maxAgeDays: 5 }, now);
+  assert.ok(!existsSync(join(dir, 'pre-rebuild-2026-08-01.db')));
 });
