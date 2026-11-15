@@ -1,7 +1,8 @@
 /**
  * The real `agy` inside the real mission fence (Linux, Landlock), on an empty home: it must start,
  * write in the folder its provider declares, and answer `auth_required` at once, not wait on a
- * keychain bus the fence refuses. Skipped where there is no fence launcher, no Landlock or no `agy`.
+ * keychain bus the fence refuses. Skipped where there is no fence launcher, no Landlock or no `agy`,
+ * and inside a fence already.
  * A signed-in run needs the user's own Google sign-in, which a test never copies: that case is a
  * manual check (`docs/A-TESTER-MULTI-OS.md`).
  */
@@ -41,11 +42,27 @@ function agyPath(): string | null {
   }
 }
 
+/**
+ * Inside a fence already (a mission running this test, a review say), `/` cannot be listed: the outer
+ * fence grants its entries, not the folder itself. A fence policy with a hole is rendered by listing
+ * around the hole from `/`, so a nested one would grant nothing and agy could not even start. The
+ * daemon that fences missions never runs fenced itself: only this test meets the case.
+ */
+function insideAFence(): boolean {
+  try {
+    readdirSync('/');
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 const BIN = launcher();
 const PROBE = BIN ? probeFence(BIN) : null;
 const AGY = BIN && PROBE?.available ? agyPath() : null;
 const skip = !BIN ? 'no timon-fence for this machine (Linux with a C compiler only)'
   : !PROBE?.available ? `no fence on this kernel: ${PROBE?.reason}`
+  : insideAFence() ? 'already inside a fence: the root folder cannot be listed, so a nested fence would grant nothing'
   : !AGY ? 'agy is not installed' : false;
 
 /** The declared sign-in folders of the ACP agents, as the provider's manifest lists them. */
@@ -58,11 +75,27 @@ function declaredDirs(): Record<string, string[]> {
 
 type Reply = { id?: number; error?: { code?: number }; result?: unknown };
 
-test('a fenced agy on a home without sign-in starts, writes in its own folder and answers auth_required at once', { skip, timeout: 60_000 }, async () => {
-  // Not under /tmp when avoidable: every mission writes it, so a home inside it is listed whole.
-  const runtime = process.env.XDG_RUNTIME_DIR;
-  const base = runtime && existsSync(runtime) ? runtime : tmpdir();
-  const root = realpathSync(mkdtempSync(join(base, 'agy-fence-')));
+/**
+ * A fresh scratch folder, not under /tmp when avoidable: every mission writes /tmp, so a home inside
+ * it is granted whole and the fence's limits go untested. The user's runtime folder comes first; when
+ * it refuses a new folder (read-only, as a sandbox may leave it), the temporary folder takes over.
+ */
+function scratchRoot(): string | null {
+  const bases = [process.env.XDG_RUNTIME_DIR, tmpdir()].filter((b): b is string => !!b && existsSync(b));
+  for (const base of bases) {
+    try {
+      return realpathSync(mkdtempSync(join(base, 'agy-fence-')));
+    } catch { /* read-only here: try the next one */ }
+  }
+  return null;
+}
+
+test('a fenced agy on a home without sign-in starts, writes in its own folder and answers auth_required at once', { skip, timeout: 60_000 }, async (t) => {
+  const root = scratchRoot();
+  if (!root) {
+    t.skip('no writable scratch folder: neither XDG_RUNTIME_DIR nor the temporary folder accepts one');
+    return;
+  }
   setDeclaredCredentialDirsSource(declaredDirs);
   try {
     const home = join(root, 'home');
