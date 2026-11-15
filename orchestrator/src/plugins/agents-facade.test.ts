@@ -351,8 +351,10 @@ test('reportsTo: read back, written on create and update, cleared by null, refus
   const fresh = await as(manager, () => plugin.agents.create(input('rep.worker')));
   assert.equal(fresh.reportsTo, null, 'nothing set: the app derives one');
   const boss = await as(manager, () => plugin.agents.create(input('rep.boss', { reportsTo: 'human.lead' })));
-  assert.equal(boss.reportsTo, 'Human.Lead', 'canonical name of an agent the caller does not own');
-  assert.equal(loadConfig('rep.boss').reports_to, 'Human.Lead');
+  // Case-insensitive: `canonicalAgentName` keeps the caller's casing where the
+  // filesystem ignores case (Windows, macOS), and restores it elsewhere.
+  assert.equal(boss.reportsTo?.toLowerCase(), 'human.lead', 'an agent the caller does not own');
+  assert.equal(loadConfig('rep.boss').reports_to?.toLowerCase(), 'human.lead');
   const worker = await as(manager, () => plugin.agents.update('rep.worker', { reportsTo: 'rep.boss' }));
   assert.equal(worker.reportsTo, 'rep.boss');
   assert.equal((await as(manager, () => plugin.agents.list())).find((a) => a.name === 'rep.worker')?.reportsTo, 'rep.boss');
@@ -360,7 +362,7 @@ test('reportsTo: read back, written on create and update, cleared by null, refus
   await assert.rejects(as(manager, () => plugin.agents.update('rep.worker', { reportsTo: 'nobody.here' })), code('invalid'));
   await assert.rejects(as(manager, () => plugin.agents.update('rep.boss', { reportsTo: 'rep.worker' })), code('invalid'), 'a cycle');
   await assert.rejects(as(manager, () => plugin.agents.create(input('rep.bad', { reportsTo: 'nobody.here' }))), code('invalid'));
-  assert.equal(getAgent('rep.bad'), undefined, 'a refused manager leaves no half-made agent');
+  assert.equal(getAgent('rep.bad'), null, 'a refused manager leaves no half-made agent');
   assert.equal(loadConfig('rep.worker').reports_to, 'rep.boss', 'a refusal writes nothing');
   const cleared = await as(manager, () => plugin.agents.update('rep.worker', { reportsTo: null }));
   assert.equal(cleared.reportsTo, null);
