@@ -65,7 +65,7 @@ import { parseBrokerSpec } from './secrets/broker-spec.js';
 import { renameAgentInEventFilter } from './triggers/filter.js';
 import { isSealed, open as openSecret } from './secrets/box.js';
 import { requireMasterKey } from './secrets/key.js';
-import type { TodoUrgency, TodoProgress } from './project-todo-tags.js';
+import { TODO_URGENCIES, type TodoUrgency, type TodoProgress } from './project-todo-tags.js';
 import { CHAT_VIEW_SQL, keepLatestState } from './mission-events-view.js';
 import { resultModelOf, resultModelSql, steeredResultSql } from './result-model.js';
 import {
@@ -3977,6 +3977,27 @@ export type ProjectTodoRow = {
 /** Statuses of an idea. `promoted` CANNOT be set by hand: an idea only becomes it
  *  through the promotion, which creates the task in the same move. */
 export type ProjectTodoStatus = 'open' | 'done' | 'promoted';
+
+/** An urgency, or `none` for the untagged ideas. */
+export type ProjectTodoUrgencyKey = TodoUrgency | 'none';
+
+/** Filters shared by the TO DO list and its counts, so the two cannot drift. */
+export interface ProjectTodoFilter {
+  project?: string;
+  urgency?: TodoUrgency;
+  /** Several urgencies at once, `none` for the untagged ideas; combined with `urgency` when both are set. */
+  urgencies?: readonly ProjectTodoUrgencyKey[];
+  progress?: TodoProgress;
+  ids?: readonly number[];
+  viewer?: DbViewer | null;
+}
+
+export interface ProjectTodoCounts {
+  byStatus: Record<ProjectTodoStatus, number>;
+  byUrgency: Record<ProjectTodoStatus, Record<ProjectTodoUrgencyKey, number>>;
+}
+
+export const PROJECT_TODO_LIST_DEFAULT_LIMIT = 200;
 export type ProjectTodoEditableStatus = 'open' | 'done';
 
 /** A place a task lives outside Timon (`task_external_ref`). */
@@ -4528,6 +4549,38 @@ function teamOwnerSql(viewer: DbViewer | null | undefined): { sql: string; param
 function teamVisible(row: TeamRow, viewer: DbViewer | null | undefined): boolean {
   if (!viewer || viewer.isSuperadmin) return true;
   return row.owner_user_id === viewer.id;
+}
+
+/** The urgencies a TO DO filter keeps, or null when it keeps them all. */
+function urgencySelection(f: ProjectTodoFilter): Set<ProjectTodoUrgencyKey> | null {
+  let keep: Set<ProjectTodoUrgencyKey> | null = f.urgencies ? new Set(f.urgencies) : null;
+  if (f.urgency) keep = keep ? new Set([...keep].filter((k) => k === f.urgency)) : new Set([f.urgency]);
+  return keep;
+}
+
+function projectTodoWhere(f: ProjectTodoFilter): { sql: string[]; args: unknown[] } {
+  const sql: string[] = [];
+  const args: unknown[] = [];
+  const keep = urgencySelection(f);
+  if (keep) {
+    const tags = [...keep].filter((k): k is TodoUrgency => k !== 'none');
+    const parts: string[] = [];
+    if (tags.length) { parts.push(`urgency IN (${tags.map(() => '?').join(', ')})`); args.push(...tags); }
+    // Same rule as the counts: a value outside the known list reads as untagged.
+    if (keep.has('none')) { parts.push(`(urgency IS NULL OR urgency NOT IN (${TODO_URGENCIES.map(() => '?').join(', ')}))`); args.push(...TODO_URGENCIES); }
+    // An empty selection keeps nothing, it does not fall back to everything.
+    sql.push(parts.length ? `(${parts.join(' OR ')})` : '0');
+  }
+  // Untagged legacy rows count as `todo`.
+  if (f.progress) { sql.push(f.progress === 'todo' ? "(progress = 'todo' OR progress IS NULL)" : 'progress = ?'); if (f.progress !== 'todo') args.push(f.progress); }
+  if (f.project) { sql.push('project = ?'); args.push(f.project); }
+  if (f.ids) {
+    sql.push(f.ids.length ? `id IN (${f.ids.map(() => '?').join(', ')})` : '0');
+    args.push(...f.ids);
+  }
+  const owner = ownerSql(f.viewer, 'project_todo');
+  if (owner.sql !== '1=1') { sql.push(owner.sql); args.push(...owner.params); }
+  return { sql, args };
 }
 
 export type BackendOverlayRow = {
@@ -8064,25 +8117,43 @@ export const dbApi = {
     );
     return this.getProjectTodo(Number(r.lastInsertRowid)) as ProjectTodoRow;
   },
-  listProjectTodo(opts: {
-    status?: ProjectTodoStatus; project?: string; limit?: number; viewer?: DbViewer | null;
-    urgency?: TodoUrgency; progress?: TodoProgress;
-  } = {}): ProjectTodoRow[] {
-    const where: string[] = [];
-    const args: unknown[] = [];
-    if (opts.status) { where.push('status = ?'); args.push(opts.status); }
-    if (opts.urgency) { where.push('urgency = ?'); args.push(opts.urgency); }
-    // Untagged legacy rows count as `todo`.
-    if (opts.progress) { where.push(opts.progress === 'todo' ? "(progress = 'todo' OR progress IS NULL)" : 'progress = ?'); if (opts.progress !== 'todo') args.push(opts.progress); }
-    if (opts.project) { where.push('project = ?'); args.push(opts.project); }
-    const owner = ownerSql(opts.viewer, 'project_todo');
-    if (owner.sql !== '1=1') { where.push(owner.sql); args.push(...owner.params); }
+  listProjectTodo(opts: ProjectTodoFilter & { status?: ProjectTodoStatus; limit?: number } = {}): ProjectTodoRow[] {
+    const where = projectTodoWhere(opts);
+    if (opts.status) { where.sql.push('status = ?'); where.args.push(opts.status); }
     // Open items bubble to the top: the cockpit shows a short list. Promoted
     // ideas sink below the done ones — they left the notebook for the board.
-    const sql = `SELECT * FROM project_todo ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+    const sql = `SELECT * FROM project_todo ${where.sql.length ? 'WHERE ' + where.sql.join(' AND ') : ''}
                  ORDER BY (status = 'open') DESC, (status = 'promoted') ASC, created_at DESC LIMIT ?`;
-    args.push(opts.limit ?? 200);
-    return db.prepare(sql).all(...args) as ProjectTodoRow[];
+    return db.prepare(sql).all(...where.args, opts.limit ?? PROJECT_TODO_LIST_DEFAULT_LIMIT) as ProjectTodoRow[];
+  },
+  /**
+   * Exact counts behind a list, which the `LIMIT` of `listProjectTodo` cannot
+   * give: a client that counted the rows it received stopped at the limit.
+   * `byStatus` honours every filter but the status, so one request tells how
+   * many ideas each status holds; `byUrgency` also drops the urgency filter,
+   * so the type chips can say what each one would show.
+   */
+  countProjectTodo(opts: ProjectTodoFilter = {}): ProjectTodoCounts {
+    const where = projectTodoWhere({ ...opts, urgencies: undefined, urgency: undefined });
+    const rows = db.prepare(
+      `SELECT status, urgency, COUNT(*) n FROM project_todo
+       ${where.sql.length ? 'WHERE ' + where.sql.join(' AND ') : ''} GROUP BY status, urgency`,
+    ).all(...where.args) as Array<{ status: ProjectTodoStatus; urgency: string | null; n: number }>;
+    const urgencyKeys: readonly ProjectTodoUrgencyKey[] = [...TODO_URGENCIES, 'none'];
+    const zeroes = (): Record<ProjectTodoUrgencyKey, number> =>
+      Object.fromEntries(urgencyKeys.map((k) => [k, 0])) as Record<ProjectTodoUrgencyKey, number>;
+    const out: ProjectTodoCounts = {
+      byStatus: { open: 0, done: 0, promoted: 0 },
+      byUrgency: { open: zeroes(), done: zeroes(), promoted: zeroes() },
+    };
+    const selected = urgencySelection(opts);
+    for (const r of rows) {
+      if (!(r.status in out.byStatus)) continue;
+      const key: ProjectTodoUrgencyKey = urgencyKeys.find((k) => k === r.urgency) ?? 'none';
+      out.byUrgency[r.status][key] += r.n;
+      if (!selected || selected.has(key)) out.byStatus[r.status] += r.n;
+    }
+    return out;
   },
   getProjectTodo(id: number, viewer?: DbViewer | null): ProjectTodoRow | undefined {
     return rowVisible(

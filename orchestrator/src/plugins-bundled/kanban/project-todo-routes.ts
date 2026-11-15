@@ -14,7 +14,7 @@
  */
 import type { Request, Router } from 'express';
 import { orchestratorForProject } from '../../main-agent.js';
-import { dbApi, type ProjectTodoRow, type ProjectTodoEditableStatus, type ProjectTodoStatus } from '../../db.js';
+import { dbApi, PROJECT_TODO_LIST_DEFAULT_LIMIT, type ProjectTodoRow, type ProjectTodoEditableStatus, type ProjectTodoStatus } from '../../db.js';
 import { rejectIfDenied, requireAuth, viewerFromRequest } from '../../users/identity.js';
 import { createTaskFromBody } from './routes.js';
 import { scopedDb } from '../../users/scoped-db.js';
@@ -29,8 +29,24 @@ import {
 } from '../../project-todo-tags.js';
 import { todoExtensionFields } from '../../project-todo-extensions.js';
 import { apiError } from '../../api-error.js';
+import { z } from 'zod';
 
+/** Hard ceiling of one page: a client after more narrows the filters instead. */
+export const PROJECT_TODO_LIST_MAX_LIMIT = 1000;
 
+const splitComma = (v: string) => v.split(',').map((x) => x.trim());
+
+/** The query fields that are not plain enums. A repeated key arrives as an array: refused. */
+const LIST_QUERY = z.object({
+  limit: z.coerce.number().int().min(1).max(PROJECT_TODO_LIST_MAX_LIMIT).default(PROJECT_TODO_LIST_DEFAULT_LIMIT),
+  ids: z.string().transform(splitComma)
+    .pipe(z.array(z.string().regex(/^[1-9]\d{0,15}$/).transform(Number)).min(1).max(PROJECT_TODO_LIST_MAX_LIMIT))
+    .optional(),
+  // One tag, or several separated by commas; `none` keeps the untagged ideas.
+  urgency: z.string().transform(splitComma)
+    .pipe(z.array(z.enum([...TODO_URGENCIES, 'none'])).min(1))
+    .optional(),
+});
 
 /**
  * Status acceptable as a list FILTER — `promoted` included: without it, we
@@ -69,9 +85,16 @@ export function registerRoutes(app: Router): void {
         return;
       }
       const project = typeof req.query.project === 'string' && req.query.project ? req.query.project : undefined;
-      const urgency = parseTodoUrgency(req.query.urgency);
-      if (req.query.urgency !== undefined && !urgency) {
-        res.status(400).json({ error: `urgency must be ${TODO_URGENCIES.join('|')}` });
+      const query = LIST_QUERY.safeParse(req.query);
+      if (!query.success) {
+        const field = query.error.issues[0]?.path[0];
+        res.status(400).json({
+          error: field === 'urgency'
+            ? `urgency must be ${[...TODO_URGENCIES, 'none'].join('|')}, comma-separated for several`
+            : field === 'limit'
+              ? `limit must be an integer from 1 to ${PROJECT_TODO_LIST_MAX_LIMIT}`
+              : 'ids must be comma-separated positive integers',
+        });
         return;
       }
       const progress = parseTodoProgress(req.query.progress);
@@ -80,14 +103,24 @@ export function registerRoutes(app: Router): void {
         return;
       }
       const scope = scopedDb(viewerFromRequest(req));
-      const items = scope.listProjectTodo({
-        status: rawStatus === 'all' ? undefined : parseTodoStatusFilter(rawStatus),
-        project,
-        urgency,
-        progress,
+      const status = rawStatus === 'all' ? undefined : parseTodoStatusFilter(rawStatus);
+      const filter = { project, urgencies: query.data.urgency, progress, ids: query.data.ids };
+      const items = scope.listProjectTodo({ ...filter, status, limit: query.data.limit });
+      // Counted in SQL with the list's own filters: a client that counted the
+      // rows it received stopped at the limit (200 open ideas, 0 done).
+      const counts = scope.countProjectTodo(filter);
+      const matching = status
+        ? counts.byStatus[status]
+        : counts.byStatus.open + counts.byStatus.done + counts.byStatus.promoted;
+      res.json({
+        // Links ride on the rows the caller may see: no second visibility rule.
+        items: withLinks(items),
+        counts,
+        truncated: items.length < matching,
+        // Kept for older clients: the caller's open ideas across EVERY
+        // project, whatever the filters. `counts.byStatus.open` is the filtered one.
+        open: scope.countOpenProjectTodo(),
       });
-      // Links ride on the rows the caller may see: no second visibility rule.
-      res.json({ items: withLinks(items), open: scope.countOpenProjectTodo() });
     } catch (err) { res.status(500).json({ error: (err as Error).message }); }
   });
 

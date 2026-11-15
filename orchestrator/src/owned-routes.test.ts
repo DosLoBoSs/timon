@@ -20,7 +20,7 @@ const OWNED_READS = [
   'listTasks', 'getTask', 'listTasksByRoutine',
   'listNotifications', 'getNotification', 'countActiveNotifications',
   'countActiveByType', 'listActiveNotifications',
-  'listProjectTodo', 'getProjectTodo', 'countOpenProjectTodo',
+  'listProjectTodo', 'getProjectTodo', 'countOpenProjectTodo', 'countProjectTodo',
   'listInbox', 'listAllInbox', 'getMessage', 'listMessagesForMission', 'pickMessage',
   'listBrowserSessions', 'getBrowserSession',
   'listPendingProposals', 'getProposal',

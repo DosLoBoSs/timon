@@ -598,11 +598,15 @@ const TOOLS = [
     description:
       'Lists a project\'s TO DO notebook: ideas jotted down on the fly, across all ' +
       'projects. READ-ONLY, and nothing in that notebook is ever executed. ' +
-      'By default: all statuses combined (open first, then done, then promoted).',
+      'By default: all statuses combined (open first, then done, then promoted), ' +
+      'at most 200 ideas. Returns the array of ideas; when more ideas match than ' +
+      'the limit, returns `{ truncated: true, shown, total, counts, hint, items }` ' +
+      'instead: narrow with `status`, `project`, `urgency` or `progress`, or raise `limit`.',
     inputSchema: {
       type: 'object',
       properties: {
         status: { type: 'string', enum: ['open', 'done', 'promoted', 'all'] },
+        limit: { type: 'integer', minimum: 1, maximum: 1000, description: 'Most ideas returned (default 200, at most 1000).' },
         project: { type: 'string', description: 'Filter by project slug.' },
         urgency: { type: 'string', enum: ['critical', 'bug', 'minor', 'idea'], description: 'Filter by urgency tag.' },
         progress: {
@@ -1476,8 +1480,22 @@ async function runTool(rawName, args, ctx) {
       if (args.project) qs.push(`project=${encodeURIComponent(args.project)}`);
       if (args.urgency) qs.push(`urgency=${encodeURIComponent(args.urgency)}`);
       if (args.progress) qs.push(`progress=${encodeURIComponent(args.progress)}`);
+      if (args.limit !== undefined) qs.push(`limit=${encodeURIComponent(args.limit)}`);
       const r = await call('GET', `/api/project-todo${qs.length ? '?' + qs.join('&') : ''}`);
-      return r.items;
+      if (!r.truncated) return r.items;
+      // Said out loud: an agent handed 200 ideas would take them for the whole notebook.
+      const by = r.counts?.byStatus ?? {};
+      const total = args.status && args.status !== 'all'
+        ? by[args.status] ?? 0
+        : (by.open ?? 0) + (by.done ?? 0) + (by.promoted ?? 0);
+      return {
+        truncated: true,
+        shown: r.items.length,
+        total,
+        counts: by,
+        hint: 'More ideas match than were returned. Narrow with status, project, urgency or progress, or raise limit (at most 1000).',
+        items: r.items,
+      };
     }
     case 'project_todo_add': {
       const r = await call('POST', '/api/project-todo', args);
