@@ -186,8 +186,7 @@ test('the Antigravity profile names its binary, invents no model and passes no v
   assert.equal(Object.keys(profile.envFrom ?? {}).length, 0, 'no key of the host environment reaches agy through the profile');
 });
 
-test('Antigravity reuses the saved Google sign-in: an `auth_required` is answered by `authenticate oauth-personal`, never by a billed method', async () => {
-  const sessionId = 'agy-session-1';
+test('Antigravity never sends `authenticate`: an `auth_required` is the sign-in step, not a browser page nobody can finish', async () => {
   const { createAcpReplayPeer } = await import('../../../packages/sdk/src/testing/index.js');
   const peer = createAcpReplayPeer([
     { on: 'initialize', reply: { protocolVersion: 1, agentCapabilities: { loadSession: true }, agentInfo: { name: 'Antigravity ACP Server', version: 'scripted' }, authMethods: [
@@ -197,8 +196,9 @@ test('Antigravity reuses the saved Google sign-in: an `auth_required` is answere
       { id: 'agent-platform', name: 'Gemini Enterprise Agent Platform' },
     ] } },
     { on: 'session/new', error: { code: -32000, message: 'Authentication required' } },
+    // agy 1.5.9 answers this by opening the Google sign-in page in the person's browser.
     { on: 'authenticate', reply: {} },
-    { on: 'session/new', reply: { sessionId } },
+    { on: 'session/new', reply: { sessionId: 'agy-session-1' } },
   ]);
   const spawn = opts();
   const seal = openLaunchSeal(spawn.missionId, 'antigravity', spawn, () => 'issued-token');
@@ -208,10 +208,11 @@ test('Antigravity reuses the saved Google sign-in: an `auth_required` is answere
     host: { emit: () => undefined, requestPermission: async () => ({ allow: false }) },
   });
   try {
-    const info = await driver.start();
-    assert.equal(info.sessionId, sessionId);
-    const methods = peer.received.filter((message) => message.method === 'authenticate').map((message) => (message.params as { methodId?: string }).methodId);
-    assert.deepEqual(methods, ['oauth-personal']);
+    await assert.rejects(driver.start(), (err: Error) => {
+      assert.match(err.message, AGY_SIGN_IN);
+      return true;
+    });
+    assert.deepEqual(peer.received.filter((message) => message.method === 'authenticate'), []);
   } finally {
     driver.close();
     peer.close();

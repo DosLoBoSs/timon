@@ -126,7 +126,17 @@ function opencodeOneShotConfig(cwd) {
   });
 }
 
-/** Tried once, only when `session/new` answers `auth_required`: it reuses the sign-in `agy` saved. */
+/**
+ * The method `agy` announces for a personal Google account: it only names the sign-in sentence.
+ *
+ * Never sent as `authenticate`. `agy` loads a saved sign-in by itself at start (its log:
+ * `ChainedAuth: authenticated via keyring`), so `session/new` succeeds without it; `authenticate
+ * oauth-personal` is reached only when nothing is saved, and then it opens the Google sign-in page in the
+ * person's browser and listens on a local port for the redirect (`Opening browser for ACP sign-in`,
+ * verified on 1.5.9). A process Timon starts is stopped long before anyone finishes that page: the
+ * redirect then lands on a closed port, and the quota gauge, retrying, opened a new page every minute.
+ * Signing in stays the person's gesture, from a terminal (`antigravitySignInCommand`).
+ */
 const ANTIGRAVITY_AUTH_METHOD = 'oauth-personal';
 
 /**
@@ -143,7 +153,6 @@ export function antigravityUsage(services) {
     services,
     names: ANTIGRAVITY.binary?.names ?? [],
     env: ANTIGRAVITY_ENV,
-    authenticateWith: ANTIGRAVITY_AUTH_METHOD,
     signIn: ANTIGRAVITY_SIGN_IN,
   });
   return {
@@ -202,7 +211,7 @@ export const ACP_AGENTS = Object.freeze([
     permissionsByAgent: false,
     env: () => ({ ...ANTIGRAVITY_ENV }),
     modelProbe: 'session-new',
-    authenticateWith: ANTIGRAVITY_AUTH_METHOD,
+    // No `authenticateWith` (`ANTIGRAVITY_AUTH_METHOD`): it would open a browser page nobody can finish.
     signIn: {
       byMethod: { [ANTIGRAVITY_AUTH_METHOD]: ANTIGRAVITY_SIGN_IN },
       fallback: ANTIGRAVITY_SIGN_IN,
