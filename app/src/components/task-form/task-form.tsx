@@ -164,7 +164,8 @@ function TaskForm({ host }: { host: TaskFormValue }): ReactElement {
     setTodoText(null);
     if (todoId === null) return;
     let cancelled = false;
-    fetch('/api/ui/project-todo?status=all', { cache: 'no-store' })
+    // By id: in a capped page of the whole notebook, an older idea is missing.
+    fetch(`/api/ui/project-todo?status=all&ids=${todoId}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() as Promise<{ items?: { id: number; text: string }[] }> : { items: [] }))
       .then((j) => { if (!cancelled) setTodoText(j.items?.find((x) => x.id === todoId)?.text ?? null); })
       .catch(() => {});

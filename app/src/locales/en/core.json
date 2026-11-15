@@ -3058,6 +3058,7 @@
     "authorUnknown": "Unknown",
     "emptyFilter": "No idea of this type",
     "clearFilter": "Show all types",
+    "truncated": "Showing the latest {shown} of {total}",
     "add": "Add",
     "newIdea": "New idea",
     "fieldTitle": "title",

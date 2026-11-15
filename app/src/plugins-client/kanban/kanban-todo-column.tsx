@@ -1,17 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClientRealtime } from '@/lib/plugin-host/realtime';
 import { subscribeProjectTodoChanges } from '@/lib/project-todo-realtime';
 import { KanbanCardHost } from './kanban-card-slot';
 import { TodoFormModal } from './todo-form-modal';
 import { handOffIdea } from './todo-handoff';
-import { filterTodoItems } from '@/lib/kanban-filters';
+import { ALL_FILTER, filterTodoItems } from '@/lib/kanban-filters';
 import { useKanbanFilters } from '@/lib/kanban-filters-context';
 import { t } from '@/lib/i18n';
 import { formatNumber } from '@/lib/intl';
 import { KanbanColumnEmpty, KanbanColumnHeader } from './kanban-column-header';
-import type { ProjectTodo } from './project-todo-types';
+import { TODO_SURFACE_LIMIT, type ProjectTodo, type ProjectTodoListResponse } from './project-todo-types';
 
 /**
  * The Kanban "TO DO" column: the ideas in bulk, before they are tasks.
@@ -40,22 +40,39 @@ export function KanbanTodoColumn({ realtime }: { realtime: ClientRealtime }) {
     () => filterTodoItems(all, filters),
     [all, filters],
   );
+  // The daemon's count of the open ideas under the board's project: the rows
+  // themselves stop at the page, past which they counted short.
+  const [total, setTotal] = useState<number | null>(null);
+  const [tronque, setTronque] = useState(false);
   const [chargement, setChargement] = useState(true);
   const [detailId, setDetailId] = useState<number | null>(null);
   // Read again on every render: after a save the form shows the reloaded idea.
   const detail = detailId === null ? null : items.find((i) => i.id === detailId) ?? null;
 
+  const projet = filters.project === ALL_FILTER ? null : filters.project;
+  // Only the latest answer lands: a project picked twice in a row must not
+  // end on the slower answer to the first pick.
+  const derniere = useRef(0);
   const load = useCallback(async () => {
+    const tour = ++derniere.current;
     try {
-      const r = await fetch('/api/ui/project-todo?status=open', { cache: 'no-store' });
-      const j = (await r.json()) as { items?: ProjectTodo[] };
+      // The project narrows on the daemon's side, so the page holds that
+      // project's ideas, not the newest of every project.
+      const query = new URLSearchParams({ status: 'open' });
+      if (projet) query.set('project', projet);
+      query.set('limit', String(TODO_SURFACE_LIMIT));
+      const r = await fetch(`/api/ui/project-todo?${query.toString()}`, { cache: 'no-store' });
+      const j = (await r.json()) as ProjectTodoListResponse;
+      if (tour !== derniere.current) return;
       setItems(j.items ?? []);
+      setTotal(j.counts?.byStatus.open ?? null);
+      setTronque(j.truncated === true);
     } catch {
       // Silent: a broken API must not break the task board.
     } finally {
-      setChargement(false);
+      if (tour === derniere.current) setChargement(false);
     }
-  }, []);
+  }, [projet]);
 
   const patch = async (id: number, fields: Partial<Pick<ProjectTodo, 'status'>>) => {
     await fetch(`/api/ui/project-todo/${id}`, {
@@ -81,7 +98,8 @@ export function KanbanTodoColumn({ realtime }: { realtime: ClientRealtime }) {
     <section aria-label={t('kanbanPage.columns.todo')} className="timon-island flex min-h-0 flex-1 flex-col">
       <KanbanColumnHeader
         label={t('kanbanPage.columns.todo')}
-        count={chargement ? '…' : formatNumber(items.length)}
+        // A keyword filters the loaded rows here, so its count is theirs.
+        count={chargement ? '…' : formatNumber(filters.q.trim() || total === null ? items.length : total)}
         dotClass="bg-muted-foreground/60"
       />
 
@@ -106,6 +124,11 @@ export function KanbanTodoColumn({ realtime }: { realtime: ClientRealtime }) {
               }}
             />
           ))
+        )}
+        {tronque && items.length > 0 && total !== null && (
+          <p className="px-1 pt-1 text-center text-[11.5px] text-muted-foreground">
+            {t('projectTodo.truncated', { shown: all.length, total })}
+          </p>
         )}
       </div>
 

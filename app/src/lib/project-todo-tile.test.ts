@@ -2,6 +2,34 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ClientRealtime } from './plugin-host/realtime';
 
+type Idee = { id: number; status: string; urgency: string | null; project?: string | null };
+
+/**
+ * The daemon's answer, as `GET /api/project-todo` writes it: rows of the
+ * requested status and types, capped at `limit` (200 by default), with counts
+ * that are not. A fake that sent every row would hide the very bug of a tile
+ * counting what it received.
+ */
+function daemon(url: string, items: readonly Idee[]): Response {
+  const q = new URL(url, 'http://localhost').searchParams;
+  const status = q.get('status');
+  const types = q.get('urgency')?.split(',') ?? null;
+  const limit = Number(q.get('limit') ?? 200);
+  const key = (i: Idee) => i.urgency ?? 'none';
+  const keys = ['critical', 'bug', 'minor', 'idea', 'none'];
+  const zero = () => Object.fromEntries(keys.map((k) => [k, 0])) as Record<string, number>;
+  const counts = {
+    byStatus: { open: 0, done: 0, promoted: 0 } as Record<string, number>,
+    byUrgency: { open: zero(), done: zero(), promoted: zero() } as Record<string, Record<string, number>>,
+  };
+  for (const i of items) {
+    counts.byUrgency[i.status]![key(i)]! += 1;
+    if (!types || types.includes(key(i))) counts.byStatus[i.status]! += 1;
+  }
+  const matching = items.filter((i) => (!status || status === 'all' || i.status === status) && (!types || types.includes(key(i))));
+  return Response.json({ items: matching.slice(0, limit), counts, truncated: matching.length > limit });
+}
+
 /**
  * La règle dure de « Project TO DO » : sans projet résolu, il ne liste RIEN.
  *
@@ -12,7 +40,7 @@ import type { ClientRealtime } from './plugin-host/realtime';
  */
 async function monterTuile(scope: unknown, appels: string[], realtime: ClientRealtime = {
   subscribe: () => () => {},
-}, items: unknown[] = [], opts: { layout?: unknown; editing?: boolean } = {}) {
+}, items: Idee[] = [], opts: { layout?: unknown; editing?: boolean } = {}) {
   const { JSDOM } = await import('jsdom');
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
   const install = (key: string, value: unknown) => {
@@ -30,7 +58,7 @@ async function monterTuile(scope: unknown, appels: string[], realtime: ClientRea
     // The display options live in a layout scope, not in the notebook.
     if (String(input).startsWith('/api/ui/layout')) return Response.json({ layout: opts.layout ?? null });
     appels.push(String(input));
-    return Response.json({ items });
+    return daemon(String(input), items);
   });
   const { ProjectTodoTile } = await import('../plugins-client/kanban/project-todo-tile');
   const root = createRoot(document.getElementById('root')!);
@@ -58,7 +86,7 @@ test('sans projet résolu, « Project TO DO » n\'appelle rien et le dit', async
 test('avec un projet, la liste est filtrée sur lui', async () => {
   const appels: string[] = [];
   const { React, root } = await monterTuile({ kind: 'project', slug: 'timon' }, appels);
-  assert.deepEqual(appels, ['/api/ui/project-todo?status=all&project=timon']);
+  assert.deepEqual(appels, ['/api/ui/project-todo?status=open&project=timon&limit=500']);
   const ajout = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Add');
   assert.equal(ajout?.disabled, false);
   await React.act(async () => { root.unmount(); });
@@ -67,7 +95,7 @@ test('avec un projet, la liste est filtrée sur lui', async () => {
 test('la tuile générale liste tout le carnet', async () => {
   const appels: string[] = [];
   const { React, root } = await monterTuile({ kind: 'all' }, appels);
-  assert.deepEqual(appels, ['/api/ui/project-todo?status=all']);
+  assert.deepEqual(appels, ['/api/ui/project-todo?status=open&limit=500']);
   await React.act(async () => { root.unmount(); });
 });
 
@@ -89,7 +117,7 @@ test('realtime reloads the scoped tile and unsubscribes on unmount', async (t) =
     handler?.({ id: 2 });
     t.mock.timers.tick(150);
   });
-  assert.deepEqual(appels, Array(2).fill('/api/ui/project-todo?status=all&project=timon'));
+  assert.deepEqual(appels, Array(2).fill('/api/ui/project-todo?status=open&project=timon&limit=500'));
   handler?.({ id: 3 });
   await React.act(async () => { root.unmount(); });
   assert.equal(unsubscribed, true);
@@ -164,4 +192,35 @@ test('number and author are grey badges, each one can be hidden per widget', asy
   assert.doesNotMatch(ligne(), /You/);
   assert.ok(options(), 'edit mode offers the display options');
   await tuile.React.act(async () => { tuile.root.unmount(); });
+});
+
+test('past one page of open ideas, Done still counts and opens the done ones', async () => {
+  // The bug seen on a real notebook: 221 open ideas and 737 done showed
+  // « Open 200 · Done 0 », the button greyed out.
+  const idees: Idee[] = [
+    ...Array.from({ length: 221 }, (_, n) => ({ id: n + 1, status: 'open', urgency: n < 21 ? 'bug' : null, project: 'timon' })),
+    ...Array.from({ length: 737 }, (_, n) => ({ id: 1000 + n, status: 'done', urgency: null, project: 'timon' })),
+  ].map((i) => ({ ...i, text: `idée ${i.id}`, author: null, notes: null, progress: null }));
+  const appels: string[] = [];
+  const { React, root } = await monterTuile({ kind: 'project', slug: 'timon' }, appels, undefined, idees);
+  const bouton = (label: string) => Array.from(document.querySelectorAll('[role=group] button'))
+    .find((b) => (b.getAttribute('aria-label') ?? b.textContent)?.startsWith(label)) as HTMLButtonElement;
+  assert.match(bouton('Open').textContent!, /221$/);
+  assert.match(bouton('Done').textContent!, /737$/);
+  assert.equal(bouton('Done').disabled, false);
+  assert.equal(document.querySelectorAll('li').length, 221);
+
+  await React.act(async () => { bouton('Done').click(); });
+  assert.equal(appels.at(-1), '/api/ui/project-todo?status=done&project=timon&limit=500');
+  assert.equal(document.querySelectorAll('li').length, 500);
+  assert.match(document.body.textContent!, /Showing the latest 500 of 737/);
+
+  // A chip narrows on the daemon's side, and the segments follow it.
+  await React.act(async () => { bouton('Open').click(); });
+  await React.act(async () => { bouton('Bug').click(); });
+  assert.equal(appels.at(-1), '/api/ui/project-todo?status=open&project=timon&urgency=bug&limit=500');
+  assert.equal(document.querySelectorAll('li').length, 21);
+  assert.match(bouton('Open').textContent!, /21$/);
+  assert.match(bouton('Done').textContent!, /0$/);
+  await React.act(async () => { root.unmount(); });
 });
