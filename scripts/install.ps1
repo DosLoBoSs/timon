@@ -52,8 +52,8 @@ function Install-Timon {
   $releaseKeyId = 'release-4253f18d5854243a'
   # The installers' P-256 key, its SPKI in base64 (docs/internal/scripts/
   # release-p256-keygen.mjs --pin writes both lines). Empty: not checked.
-  $releaseP256KeyId = ''
-  $releaseP256PublicKey = ''
+  $releaseP256KeyId = 'release-701bbfb6d1c1eed1'
+  $releaseP256PublicKey = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyUUvXZE0kGYqgsXTRslQyKnF1Y5MK2wjSflgy5lGkUbEUzJK9zRP1Iv88aOPoObrkPVSyJWVW4fGJE2Q7N5C6w=='
   $signatureDomain = 'timon-releases-v1'
   $docsUrl = 'https://docs.timon-ai.com/installation/windows'
   $artifactKey = 'win-x64-nsis'

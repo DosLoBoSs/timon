@@ -39,8 +39,11 @@ MCowBQYDK2VwAyEA/exKqVlkcdYZ9xhlreEUFmnjlu/7VfHpfPXfdbIyeAk=
 -----END PUBLIC KEY-----'
 # The installers' P-256 key (docs/internal/scripts/release-p256-keygen.mjs
 # --pin writes both lines). Empty: the P-256 signature is not checked.
-RELEASE_P256_KEY_ID=''
-RELEASE_P256_PUBLIC_KEY=''
+RELEASE_P256_KEY_ID='release-701bbfb6d1c1eed1'
+RELEASE_P256_PUBLIC_KEY='-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyUUvXZE0kGYqgsXTRslQyKnF1Y5M
+K2wjSflgy5lGkUbEUzJK9zRP1Iv88aOPoObrkPVSyJWVW4fGJE2Q7N5C6w==
+-----END PUBLIC KEY-----'
 DOCS_URL='https://docs.timon-ai.com/installation/overview'
 
 say() { printf '%s\n' "$*"; }
