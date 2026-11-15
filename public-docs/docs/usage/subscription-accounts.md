@@ -13,7 +13,7 @@ A mission never moves to another subscription on its own. If its account is sign
 
 ## Add an account
 
-Open **Settings → AI models → Subscription accounts** and choose **Add an account**.
+Open **Settings → AI models → Providers**, choose the provider, then **Add an account** in its **Connection** section; the **Provider** field is not asked there, the page already names it. On a shared installation, an account that is not the superadmin needs its role to give it at least **Own accounts only** on the Providers screen (see [Several accounts](./multi-user.md#access-to-the-providers-screen)); with **Hidden**, an administrator signs its accounts in for it.
 
 | Field | What it is |
 |---|---|
@@ -82,7 +82,7 @@ An instance account has **no owner**: it is for the missions nobody launched fro
 
 An account belongs to its owner. An administrator can let other users use it without handing over the sign-in.
 
-In **Settings → AI models → Subscription accounts**, choose **Assign** on the account's row, tick the users who may use it, and **Save**. The owner is not offered: they use it anyway. The row then shows **Assigned to** and their names. Only administrators see the **Assign** button and that line.
+On the provider's page (**Settings → AI models → Providers**, then the provider, **Connection** section), choose **Assign** on the account's row, tick the users who may use it, and **Save**. The owner is not offered: they use it anyway. The row then shows **Assigned to** and their names. Only administrators see the **Assign** button and that line.
 
 From a terminal on the machine that runs Timon:
 
@@ -118,7 +118,7 @@ Wherever Timon stores a backend, an account is written `claude@<account id>` (fo
 - **Each account has its own gauge.** The **LLM quotas** widget lists, next to the provider's sign-in of the Timon machine, every signed-in account you may use (`Claude · Perso`), measured on that account's own subscription. The strip under the chat composer of a mission running on an account shows that account's figures. An account that is not signed in has no gauge, and another user's account never appears, nor in the widget's trend.
 - **A gap after a long pause.** On Linux and Windows, Timon renews a Claude account's expired session when it reads its usage, as the CLI would. On macOS, where the CLI keeps that session in the keychain, only the account's missions renew it: when none has run for several hours, its gauge keeps its last reading (or shows *probe temporarily unavailable*) until the next one.
 
-- **Automatic fallback never moves an account.** The [Auto switch](settings.md#backend-and-fallback-choices) levels, the model-equivalence step and the last-resort model apply to the plain provider only. A mission set on an account, or whose plain `Claude` resolves to one, does not slide to another subscription when its quota runs out.
+- **Automatic fallback never moves an account.** The [Auto switch](settings.md#providers-and-fallback-choices) levels, the model-equivalence step and the last-resort model apply to the plain provider only. A mission set on an account, or whose plain `Claude` resolves to one, does not slide to another subscription when its quota runs out.
 - **Except the orchestrator of a series.** It holds the plan of the whole job and receives every task's return, so leaving it stopped stops the job. When its account runs dry and the fallback set for it cannot be used, it moves, keeping its conversation, to the first of these that works: another connection of the same provider that belongs to the mission's owner (the computer's own sign-in, one of their accounts, an account shared with them), on the same model; then the model-equivalence step and the last-resort model. Another user's account is never used, even for an administrator. A series fallback set to `none` for the orchestrator still stops it there. When nothing works, the orchestrator stays stopped and its owner gets one urgent notification listing what to do.
 - **A fallback you declare is honoured.** A fallback set on a series or on a task is a decision of yours, so it may name another account or provider; that is the only way a mission leaves an account.
 - **Sign-in failures are per account.** The circuit breaker marks the account that failed as **Sign in again**; the provider's other accounts keep running.

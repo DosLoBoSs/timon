@@ -269,6 +269,28 @@ test('remove unregisters and deletes; an unreachable registry keeps what is inst
   await assert.rejects(() => service.remove('rm'), (e: unknown) => e instanceof AcpRegistryError && e.code === 'not-installed');
 });
 
+test('installedAgents: what is installed, read without the network; the last registry copy says whether an update exists', { skip: !posix }, async () => {
+  const v1 = tarOf('#!/bin/sh\n');
+  const served: Served = new Map([
+    [REGISTRY_URL, registryDoc([agentEntry({ id: 'quiet', archive: 'https://downloads.example.com/quiet.tar.gz', sha256: sha(v1) })])],
+    ['https://downloads.example.com/quiet.tar.gz', v1],
+  ]);
+  const { service, home } = newService(served);
+  await service.install('quiet');
+  served.set(REGISTRY_URL, registryDoc([agentEntry({ id: 'quiet', version: '2.0.0', archive: 'https://downloads.example.com/quiet.tar.gz', sha256: sha(v1) })]));
+  await service.list({ refresh: true });
+  const known = service.installedAgents();
+  assert.deepEqual(known.map((agent) => [agent.id, agent.installed?.version, agent.installed?.updateAvailable]), [['quiet', '1.0.0', true]]);
+
+  // Another daemon on the same home, before it ever reached the registry: nothing is fetched.
+  const seen: string[] = [];
+  const cold = new AcpRegistryService({ home, fetchFn: fakeFetch(new Map(), seen), platform: 'linux', arch: 'x64', inspect: async () => [] });
+  const offline = cold.installedAgents();
+  assert.deepEqual(seen, []);
+  assert.deepEqual(offline.map((agent) => [agent.id, agent.installed?.version, agent.installed?.updateAvailable]), [['quiet', '1.0.0', false]]);
+  await service.remove('quiet');
+});
+
 test('windows: the x86_64 zip is used on arm64, with the .cmd launcher and backslash path', async () => {
   const zip = buildZip([{ path: 'dist-package/cursor-agent.cmd', data: '@echo off' }]);
   const served: Served = new Map([

@@ -241,6 +241,110 @@ test('Sign in types the command in Timon\'s terminal when the view has one, and 
   }
 });
 
+test('onboarding: one click installs, then starts the sign-in by itself, without a path, a version or a console', async () => {
+  const path = '/home/ann/.local/bin/claude';
+  const server: Server = { list: [cli('claude', { label: 'Claude' })], job: null, posts: [] };
+  const m = await mount(server);
+  const typed: string[] = [];
+  const terminal = (event: Event) => {
+    const detail = (event as CustomEvent<{ insert?: string; accepted?: boolean }>).detail;
+    typed.push(detail.insert ?? '');
+    detail.accepted = true;
+  };
+  const row = () => document.querySelector('section[aria-label="Claude"]');
+  try {
+    window.addEventListener('timon:terminal-open', terminal);
+    await m.render(m.React.createElement(m.cards.ProviderCliCards, { mode: 'onboarding' }));
+    await m.until(() => row()?.querySelector('[data-provider-row]') !== null && row() !== null, 'the shared provider row');
+    assert.equal(row()?.querySelector('[data-provider-status]')?.getAttribute('data-provider-status'), 'not-installed');
+    const buttons = () => Array.from(row()?.querySelectorAll('button') ?? []);
+    assert.deepEqual(buttons().map((b) => b.textContent), ['Install and sign in'], 'one gesture, nothing else');
+    await m.click(buttons()[0]);
+    assert.deepEqual(server.posts, ['claude']);
+    await m.until(() => row()?.getAttribute('data-state') === 'installing', 'the install running');
+    server.job = { ...server.job!, lines: ['Downloading Claude Code'] };
+    assert.ok(!document.querySelector('pre'), 'no console on the onboarding');
+    assert.deepEqual(typed, [], 'no sign-in before the program is there');
+
+    server.list = [cli('claude', { label: 'Claude', path, signedIn: false, version: '2.1.312', signInCommand: `${path} auth login` })];
+    server.job = { ...server.job, state: 'succeeded', finishedAt: 2, result: { ok: true, command: null, reason: null } };
+    await m.until(() => typed.length === 1, 'the sign-in started by itself', 5_000);
+    assert.deepEqual(typed, [`${path} auth login`]);
+    await m.until(() => document.body.textContent?.includes("Typed in Timon's terminal") === true, 'what comes next');
+    assert.equal(row()?.querySelector('[data-provider-status]')?.getAttribute('data-provider-status'), 'not-connected');
+    assert.equal(document.body.textContent?.includes(path), false, 'no path shown');
+    assert.equal(document.body.textContent?.includes('2.1.312'), false, 'no version shown');
+
+    // Signed in: the row says so, and offers nothing more.
+    server.list = [cli('claude', { label: 'Claude', path, signedIn: true })];
+    const retry = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Try again');
+    await m.click(retry);
+    await m.until(() => row()?.querySelector('[data-provider-status]')?.getAttribute('data-provider-status') === 'connected', 'connected');
+    assert.equal(buttons().length, 0);
+    assert.equal(typed.length, 1, 'the sign-in is not started twice');
+  } finally {
+    window.removeEventListener('timon:terminal-open', terminal);
+    await m.unmount();
+  }
+});
+
+test('onboarding: a failed install ends the chain, and shows the reason and the command to run by hand', async () => {
+  const server: Server = { list: [cli('codex', { label: 'Codex' })], job: null, posts: [] };
+  const m = await mount(server);
+  const typed: string[] = [];
+  const terminal = (event: Event) => {
+    typed.push((event as CustomEvent<{ insert?: string }>).detail.insert ?? '');
+  };
+  try {
+    window.addEventListener('timon:terminal-open', terminal);
+    await m.render(m.React.createElement(m.cards.ProviderCliCards, { mode: 'onboarding' }));
+    await m.until(() => document.querySelector('section[aria-label="Codex"] button') !== null, 'the row');
+    await m.click(document.querySelector('section[aria-label="Codex"] button'));
+    server.job = { ...server.job!, state: 'failed', finishedAt: 2, result: { ok: false, command: 'npm i -g @openai/codex', reason: 'npm not found' } };
+    await m.until(() => document.querySelector('section[aria-label="Codex"] [role="alert"]')?.textContent === 'npm not found', 'the reason', 5_000);
+    assert.ok(document.body.textContent?.includes('npm i -g @openai/codex'), 'the command to run by hand');
+    assert.deepEqual(typed, [], 'no sign-in after a failed install');
+    assert.equal(document.querySelector('section[aria-label="Codex"] button')?.textContent, 'Install and sign in', 'it can be tried again');
+  } finally {
+    window.removeEventListener('timon:terminal-open', terminal);
+    await m.unmount();
+  }
+});
+
+test('onboarding: an install that succeeded but left no program to find gives the row its button back, with why', async () => {
+  // Windows: the installer ended well, but the daemon's PATH was not refreshed, so the program stays unfound.
+  const server: Server = { list: [cli('claude', { label: 'Claude' })], job: null, posts: [] };
+  const m = await mount(server);
+  const typed: string[] = [];
+  const terminal = (event: Event) => {
+    typed.push((event as CustomEvent<{ insert?: string }>).detail.insert ?? '');
+  };
+  const row = () => document.querySelector('section[aria-label="Claude"]');
+  try {
+    window.addEventListener('timon:terminal-open', terminal);
+    await m.render(m.React.createElement(m.cards.ProviderCliCards, { mode: 'onboarding' }));
+    await m.until(() => row()?.querySelector('button') !== null, 'the row');
+    await m.click(row()?.querySelector('button'));
+    await m.until(() => row()?.getAttribute('data-state') === 'installing', 'the install running');
+
+    server.job = { ...server.job!, state: 'succeeded', finishedAt: 2, result: { ok: true, command: null, reason: null } };
+    await m.until(() => row()?.querySelector('button')?.textContent === 'Install and sign in', 'the button back', 5_000);
+    assert.doesNotMatch(row()?.textContent ?? '', /Installing/, 'no spinner left');
+    assert.match(row()?.textContent ?? '', /Installed, but Timon cannot find the program/);
+    assert.deepEqual(typed, [], 'no sign-in without a program');
+
+    // The program shows up on a later read: the reason goes, the sign-in is the next gesture.
+    server.list = [cli('claude', { label: 'Claude', path: 'C:\\Users\\ann\\.local\\bin\\claude.exe', signedIn: false })];
+    const retry = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Try again');
+    await m.click(retry);
+    await m.until(() => row()?.querySelector('button')?.textContent === 'Sign in', 'sign in offered');
+    assert.doesNotMatch(row()?.textContent ?? '', /cannot find the program/);
+  } finally {
+    window.removeEventListener('timon:terminal-open', terminal);
+    await m.unmount();
+  }
+});
+
 test('opencode 2 found: the card says why it is left alone, and offers no button that would replace it', async () => {
   const server: Server = {
     // What the daemon answers for a 2.x: not installable, no update, even with a newer 1.x published.

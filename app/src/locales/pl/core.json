@@ -1096,6 +1096,17 @@
     "widgetsBorderlessHint": "Widżety są rysowane bez konturu i cienia.",
     "widgetsTransparent": "Przezroczyste tło",
     "widgetsTransparentHint": "Przez widżety prześwituje tapeta; połącz z matowym szkłem, by uzyskać efekt szkła.",
+    "mascotsTitle": "Maskotki",
+    "mascotsHint": "Agent, którego głową jest maskotka, pokazuje, co robi: śpi, myśli, pracuje, szuka, czeka na ciebie, cieszy się, gdy skończy zadanie.",
+    "mascotsAnimate": "Animuj maskotki",
+    "mascotsAnimateHint": "Po wyłączeniu maskotka nadal pokazuje swój stan oczami, ale się nie porusza. Systemowe ustawienie ograniczenia ruchu zawsze ma pierwszeństwo.",
+    "mascotsStyle": "Styl maskotek",
+    "mascotsStyle3d": "3D",
+    "mascotsStyle3dHint": "Wymodelowana pluszowa głowa, oświetlona i trójwymiarowa.",
+    "mascotsStyle2d": "2D",
+    "mascotsStyle2dHint": "Płaski rysunek, lżejszy dla starszych komputerów.",
+    "mascotsStyleNoWebgl": "Ta przeglądarka nie potrafi rysować w 3D (WebGL2 jest wyłączony lub niedostępny): maskotki są rysowane w 2D.",
+    "mascotsStyleShared": "Dotyczy wszystkich maskotek. Możesz to później zmienić w {settingsPath}.",
     "variants": {
       "coral": {
         "name": "Koral",
@@ -1598,7 +1609,6 @@
       },
       "models": {
         "backends": "Dostawcy",
-        "accounts": "Konta subskrypcji",
         "fallback": "Auto-przełączanie",
         "breaker": "Bezpiecznik",
         "quotas": "Limity"
@@ -1658,8 +1668,7 @@
         "terminal": "powłoka konsola pty czcionka shell"
       },
       "models": {
-        "backends": "claude codex dostawca llm api model domyślny kolejność",
-        "accounts": "subskrypcja konto logowanie zaloguj połącz ponownie kilka claude codex chatgpt plan kod urządzenia",
+        "backends": "claude codex dostawca llm api model domyślny kolejność subskrypcja konto logowanie zaloguj połącz ponownie kilka chatgpt plan kod urządzenia add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "awaryjny zapasowy limit przełączanie wyczerpany przerwa ostatnia deska ratunku fallback",
         "breaker": "bezpiecznik jałowe tury odsunięcie circuit breaker",
         "quotas": "użycie limity kredyty subskrypcja plan reset"
@@ -2964,6 +2973,7 @@
     "save": "Zapisz",
     "cancel": "Anuluj",
     "editor": "Edytuj to wstrzyknięcie",
+    "freshConversation": "Agent rozpocznie nową rozmowę przy następnej misji: poprzednia wciąż zawierała tę regułę ({agents}).",
     "skillMode": {
       "include": "katalog",
       "import": "importowana"
@@ -3505,10 +3515,7 @@
       }
     },
     "intro": "Zarządzaj wszystkimi dostawcami LLM i ich modelami. Zmiany działają bez ponownego uruchamiania Timon.",
-    "edit": "Edytuj",
-    "editTitle": "Edytuj dostawcę",
     "saved": "Dostawca zaktualizowany.",
-    "modelCount": "{count} {count, plural, one {model} few {modele} many {modeli} other {modelu}}",
     "keyHintEdit": "Zostaw puste, aby zachować zapisany klucz. Wpisanie nowego zastępuje go w sejfie — nigdy nie zostanie pokazany ponownie.",
     "picto": {
       "choose": "Wybierz obrazek",
@@ -3538,19 +3545,12 @@
       "contextWindowDetected": "auto · {window}",
       "contextWindowAuto": "kontekst"
     },
-    "empty": "Nie dodano jeszcze dostawców.",
-    "add": "Dodaj dostawcę",
     "added": "Dostawca dodany.",
     "save": "Zapisz",
-    "remove": "Usuń",
     "confirmRemove": "Usunąć dostawcę „{name}”? Jego klucz zostanie też usunięty z sejfu.",
-    "active": "Aktywny",
-    "notDetected": "Niewykryty",
-    "inactive": "Nieaktywny",
     "testButton": "Testuj",
     "destinationNotice": "Każdy prompt misji uruchomionej u tego dostawcy jest wysyłany do {host}.",
     "keyHint": "Przechowywany w sejfie sekretów, nigdy w pliku, i nigdy więcej niepokazywany. Zostaw puste dla lokalnego serwera, który go nie wymaga.",
-    "fileHint": "Każdy dostawca to plik w ~/.timon/backends/. Możesz też ręcznie wrzucić tam plik JSON: zostanie wykryty w ciągu sekundy.",
     "fields": {
       "name": "Nazwa",
       "protocol": "Protokół",
@@ -3585,11 +3585,10 @@
       "protocolUnavailable": "Ten protokół nie jest zainstalowany.",
       "unconfirmed": "Zmiana niepotwierdzona. Odśwież stronę, aby sprawdzić zapisany stan."
     },
-    "disabled": "Wyłączony",
     "reorder": "Przeciągnij, aby zmienić kolejność tego dostawcy",
     "claudeToken": {
       "title": "Długotrwały token Claude",
-      "hint": "Opcjonalny. Uruchom `claude setup-token` w terminalu i wklej tu token: każda misja Claude będzie go używać zamiast logowania samego CLI. Na macOS pozwala to Timon działać bez otwartej sesji; potem uruchom `timon service install`, aby przełączyć usługę. Token jest przechowywany zaszyfrowany i nigdy więcej niepokazywany.",
+      "hint": "Opcjonalny. Uruchom `claude setup-token` w terminalu i wklej tu token: każda misja Claude będzie go używać zamiast logowania samego CLI. Na macOS misje Claude potrzebują go, gdy Timon działa dalej po wylogowaniu ({settingsPath}). Token jest przechowywany zaszyfrowany i nigdy więcej niepokazywany.",
       "none": "Nieustawiony",
       "set": "Ustawiony",
       "unreadable": "Ustawiony, ale nieczytelny — wklej go ponownie",
@@ -3604,11 +3603,6 @@
     "disableHint": "Zniknie z selektorów. Nowe uruchomienia, które jawnie go używają, zostaną odrzucone, bez automatycznego przełączenia. Istniejące wybory poniżej zostaną zachowane.",
     "disable": "Wyłącz dostawcę",
     "managedHint": "Możesz zmieniać nazwy, dodawać, usuwać i ukrywać modele oraz zmieniać nazwy, obrazki i model domyślny. Ustawieniami połączenia zarządza Timon lub wtyczka dostawcy.",
-    "origins": {
-      "builtin": "Wbudowany",
-      "plugin": "Wtyczka",
-      "file": "Dodany przez ciebie"
-    },
     "usages": {
       "agents": "Agenci",
       "routines": "Rutyny",
@@ -3974,7 +3968,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Kilka subskrypcji tego samego dostawcy, każda jako wybór w selektorach modeli („Claude · Perso”). Logujesz własne konta; administrator loguje konta każdego. Misja nigdy nie przechodzi sama na inną subskrypcję.",
     "loading": "Wczytywanie kont…",
     "empty": "Brak kont subskrypcji: misje działają na logowaniu dostawcy na tej maszynie.",
     "add": "Dodaj konto",

@@ -1096,6 +1096,17 @@
     "widgetsBorderlessHint": "Widgets worden zonder omtrek of schaduw getekend.",
     "widgetsTransparent": "Transparante achtergrond",
     "widgetsTransparentHint": "Widgets laten de achtergrond doorschijnen; combineer met matglas voor een glaslook.",
+    "mascotsTitle": "Mascottes",
+    "mascotsHint": "Een agent met een mascotte als hoofd laat zien wat hij doet: slapend, nadenkend, aan het werk, zoekend, wachtend op jou, blij als zijn taak klaar is.",
+    "mascotsAnimate": "Mascottes animeren",
+    "mascotsAnimateHint": "Uit: een mascotte toont zijn toestand nog met zijn ogen, zonder te bewegen. De instelling ‘beweging beperken’ van je systeem gaat altijd voor.",
+    "mascotsStyle": "Stijl van de mascottes",
+    "mascotsStyle3d": "3D",
+    "mascotsStyle3dHint": "Een gemodelleerd pluchen hoofd, belicht en met reliëf.",
+    "mascotsStyle2d": "2D",
+    "mascotsStyle2dHint": "De platte tekening, lichter voor oudere computers.",
+    "mascotsStyleNoWebgl": "Deze browser kan niet in 3D tekenen (WebGL2 staat uit of ontbreekt): mascottes worden in 2D getekend.",
+    "mascotsStyleShared": "Geldt voor elke mascotte. Je kunt het later wijzigen in {settingsPath}.",
     "variants": {
       "coral": {
         "name": "Koraal",
@@ -1598,7 +1609,6 @@
       },
       "models": {
         "backends": "Providers",
-        "accounts": "Abonnementsaccounts",
         "fallback": "Automatisch wisselen",
         "breaker": "Stroomonderbreker",
         "quotas": "Quota"
@@ -1658,8 +1668,7 @@
         "terminal": "shell console pty lettertype"
       },
       "models": {
-        "backends": "claude codex provider llm api model standaard volgorde",
-        "accounts": "abonnement account aanmelden login koppelen opnieuw meerdere claude codex chatgpt plan apparaatcode",
+        "backends": "claude codex provider llm api model standaard volgorde abonnement account aanmelden login koppelen opnieuw meerdere chatgpt plan apparaatcode add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "fallback reserve quotum wisselen uitgeput afkoelen laatste redmiddel",
         "breaker": "stroomonderbreker circuit breaker steriele beurten opzij",
         "quotas": "gebruik limieten credits abonnement plan reset"
@@ -2964,6 +2973,7 @@
     "save": "Opslaan",
     "cancel": "Annuleren",
     "editor": "Deze injectie bewerken",
+    "freshConversation": "De agent begint bij zijn volgende missie een nieuw gesprek: het vorige bevatte deze regel nog ({agents}).",
     "skillMode": {
       "include": "catalogus",
       "import": "geïmporteerd"
@@ -3505,10 +3515,7 @@
       }
     },
     "intro": "Beheer al je LLM-providers en hun modellen. Wijzigingen gelden zonder Timon te herstarten.",
-    "edit": "Bewerken",
-    "editTitle": "Provider bewerken",
     "saved": "Provider bijgewerkt.",
-    "modelCount": "{count} modellen",
     "keyHintEdit": "Leeg laten om de opgeslagen sleutel te behouden. Een nieuwe vervangt hem in de kluis — hij wordt nooit meer getoond.",
     "picto": {
       "choose": "Afbeelding kiezen",
@@ -3538,19 +3545,12 @@
       "contextWindowDetected": "auto · {window}",
       "contextWindowAuto": "context"
     },
-    "empty": "Nog geen provider toegevoegd.",
-    "add": "Provider toevoegen",
     "added": "Provider toegevoegd.",
     "save": "Opslaan",
-    "remove": "Verwijderen",
     "confirmRemove": "De provider ‘{name}’ verwijderen? Zijn sleutel wordt ook uit de kluis verwijderd.",
-    "active": "Actief",
-    "notDetected": "Niet gedetecteerd",
-    "inactive": "Inactief",
     "testButton": "Testen",
     "destinationNotice": "Elke prompt van een missie op deze provider wordt naar {host} gestuurd.",
     "keyHint": "Opgeslagen in de geheimenkluis, nooit in het bestand, en nooit meer getoond. Leeg laten voor een lokale server die er geen vraagt.",
-    "fileHint": "Elke provider is een bestand in ~/.timon/backends/. Je kunt daar ook handmatig een JSON-bestand neerzetten: het wordt binnen een seconde opgepikt.",
     "fields": {
       "name": "Naam",
       "protocol": "Protocol",
@@ -3585,11 +3585,10 @@
       "protocolUnavailable": "Dit protocol is niet geïnstalleerd.",
       "unconfirmed": "Wijziging niet bevestigd. Herlaad deze pagina om de opgeslagen toestand te controleren."
     },
-    "disabled": "Uitgeschakeld",
     "reorder": "Sleep om deze provider te verplaatsen",
     "claudeToken": {
       "title": "Langlevend Claude-token",
-      "hint": "Optioneel. Voer `claude setup-token` uit in een terminal en plak het token hier: elke Claude-missie gebruikt het dan in plaats van de eigen aanmelding van de CLI. Op macOS kan Timon zo blijven draaien zonder open sessie; voer daarna `timon service install` uit om de dienst om te zetten. Het token wordt versleuteld opgeslagen en nooit meer getoond.",
+      "hint": "Optioneel. Voer `claude setup-token` uit in een terminal en plak het token hier: elke Claude-missie gebruikt het dan in plaats van de eigen aanmelding van de CLI. Op macOS hebben Claude-missies het nodig wanneer Timon blijft draaien na het afmelden ({settingsPath}). Het token wordt versleuteld opgeslagen en nooit meer getoond.",
       "none": "Niet ingesteld",
       "set": "Ingesteld",
       "unreadable": "Ingesteld, maar onleesbaar — plak het opnieuw",
@@ -3604,11 +3603,6 @@
     "disableHint": "Hij verdwijnt uit de keuzelijsten. Nieuwe starts die hem expliciet gebruiken worden geweigerd, zonder automatische reserve. Bestaande keuzes hieronder blijven behouden.",
     "disable": "Provider uitschakelen",
     "managedHint": "Je kunt modellen hernoemen, toevoegen, verwijderen en verbergen, en namen, afbeeldingen en het standaardmodel wijzigen. De verbindingsinstellingen worden beheerd door Timon of de providerplug-in.",
-    "origins": {
-      "builtin": "Ingebouwd",
-      "plugin": "Plug-in",
-      "file": "Door jou toegevoegd"
-    },
     "usages": {
       "agents": "Agents",
       "routines": "Routines",
@@ -3974,7 +3968,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Meerdere abonnementen van dezelfde provider, elk een keuze in de modelkeuzelijsten (‘Claude · Perso’). Je meldt je eigen accounts aan; een beheerder meldt die van iedereen aan. Een missie stapt nooit vanzelf over naar een ander abonnement.",
     "loading": "Accounts laden…",
     "empty": "Nog geen abonnementsaccount: missies draaien op de aanmelding bij de provider van deze machine.",
     "add": "Account toevoegen",

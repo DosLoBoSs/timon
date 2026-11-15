@@ -1130,6 +1130,13 @@
     "mascotsHint": "使用吉祥物头像的智能体会通过它显示当前状态：休息、思考、工作、搜索、等待你的操作，或完成任务后的喜悦。",
     "mascotsAnimate": "启用吉祥物动画",
     "mascotsAnimateHint": "关闭后，吉祥物不会动，但仍会通过眼神显示状态。系统的减少动态效果设置始终优先。",
+    "mascotsStyle": "吉祥物样式",
+    "mascotsStyle3d": "3D",
+    "mascotsStyle3dHint": "立体建模的毛绒头像，带光影效果。",
+    "mascotsStyle2d": "2D",
+    "mascotsStyle2dHint": "平面绘制，对较旧的电脑更轻量。",
+    "mascotsStyleNoWebgl": "此浏览器无法进行 3D 绘制（WebGL2 已关闭或不可用）：吉祥物将以 2D 显示。",
+    "mascotsStyleShared": "适用于所有吉祥物。之后可以在“{settingsPath}”中更改。",
     "variants": {
       "coral": {
         "name": "珊瑚色",
@@ -1632,7 +1639,6 @@
       },
       "models": {
         "backends": "提供商",
-        "accounts": "订阅账号",
         "fallback": "自动切换",
         "breaker": "熔断机制",
         "quotas": "配额"
@@ -1692,8 +1698,7 @@
         "terminal": "shell 控制台 pty 字体"
       },
       "models": {
-        "backends": "claude codex 提供商 llm api 模型 默认 顺序",
-        "accounts": "订阅 账号 登录 连接 重连 多账号 claude codex chatgpt 套餐 设备代码",
+        "backends": "claude codex 提供商 llm api 模型 默认 顺序 订阅 账号 登录 连接 重连 多账号 chatgpt 套餐 设备代码 add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "回退 备用 配额 切换 耗尽 冷却 兜底",
         "breaker": "熔断 无效轮次 暂停使用",
         "quotas": "用量 限额 点数 订阅 套餐 重置"
@@ -3030,6 +3035,7 @@
     "save": "保存",
     "cancel": "取消",
     "editor": "编辑此注入项",
+    "freshConversation": "该代理将在下一次任务中开始新的对话：之前的对话仍包含这条规则（{agents}）。",
     "skillMode": {
       "include": "目录",
       "import": "已导入"
@@ -3576,10 +3582,7 @@
       }
     },
     "intro": "管理所有大语言模型提供商及其模型。更改无需重启 Timon 即可生效。",
-    "edit": "编辑",
-    "editTitle": "编辑提供商",
     "saved": "提供商已更新。",
-    "modelCount": "{count} 个模型",
     "keyHintEdit": "留空可保留已保存的密钥。输入新密钥将替换保险库中的旧密钥；保存后不会再显示。",
     "picto": {
       "choose": "选择图标",
@@ -3609,19 +3612,12 @@
       "contextWindowDetected": "自动 · {window}",
       "contextWindowAuto": "上下文"
     },
-    "empty": "尚未添加提供商。",
-    "add": "添加提供商",
     "added": "提供商已添加。",
     "save": "保存",
-    "remove": "移除",
     "confirmRemove": "要移除提供商「{name}」吗？其密钥也将从保险库中删除。",
-    "active": "已启用",
-    "notDetected": "未检测到",
-    "inactive": "未激活",
     "testButton": "测试",
     "destinationNotice": "使用此提供商运行任务会话时，所有提示词都会发送到 {host}。",
     "keyHint": "密钥存放在密钥保险库中，不会写入文件，保存后也不会再显示。如果本地服务器不需要密钥，请留空。",
-    "fileHint": "每个提供商对应 ~/.timon/backends/ 中的一个文件。也可以手动将 JSON 文件放入此目录，Timon 会在一秒内识别。",
     "fields": {
       "name": "名称",
       "protocol": "协议",
@@ -3656,11 +3652,10 @@
       "protocolUnavailable": "此协议未安装。",
       "unconfirmed": "未能确认更改。请重新加载页面查看保存结果。"
     },
-    "disabled": "已禁用",
     "reorder": "拖动以调整此提供商的顺序",
     "claudeToken": {
       "title": "Claude 长期令牌",
-      "hint": "可选。在终端运行 `claude setup-token`，并将令牌粘贴到此处。此后，所有 Claude 任务会话都会使用该令牌，而不再依赖 CLI 自身的登录状态。在 macOS 上，这样即使未登录系统，Timon 也能继续运行；完成后请运行 `timon service install` 以切换服务。令牌会加密保存，保存后不会再显示。",
+      "hint": "可选。在终端运行 `claude setup-token`，并将令牌粘贴到此处。此后，所有 Claude 任务会话都会使用该令牌，而不再依赖 CLI 自身的登录状态。在 macOS 上，如果 Timon 在注销后继续运行，Claude 任务会话需要此令牌（{settingsPath}）。令牌会加密保存，保存后不会再显示。",
       "none": "未设置",
       "set": "已设置",
       "unreadable": "已设置但无法读取，请重新粘贴",
@@ -3675,11 +3670,6 @@
     "disableHint": "禁用后，此提供商不会出现在选择器中。明确指定使用它的新运行请求将被拒绝，不会自动改用其他提供商。下方已有的选项会保留。",
     "disable": "禁用提供商",
     "managedHint": "你可以重命名、添加、删除或隐藏模型，也可以更改名称、图标和默认模型。连接设置由 Timon 或提供商插件管理。",
-    "origins": {
-      "builtin": "内置",
-      "plugin": "插件",
-      "file": "手动添加"
-    },
     "usages": {
       "agents": "智能体",
       "routines": "例行任务",
@@ -4045,7 +4035,6 @@
     }
   },
   "backendAccounts": {
-    "description": "同一提供商可使用多个订阅，每个订阅都是模型选择器中的独立选项（例如「Claude · 个人」）。你可以登录自己的账号，管理员可以登录任意账号。任务会话不会自行切换到其他订阅。",
     "loading": "正在加载账号…",
     "empty": "暂无订阅账号。任务会话将使用此设备上已登录的提供商账号。",
     "add": "添加账号",

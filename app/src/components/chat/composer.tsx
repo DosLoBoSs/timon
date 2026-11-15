@@ -81,6 +81,7 @@ import { Slot, SlotSingle } from '@/lib/plugin-host/render';
 import { declareSlot, register, slotKind } from '@/lib/plugin-host/slots';
 import { contextLimitFor, nextStandardLimit } from './chat-format';
 import { AccountUsageStatus } from '@/components/account-usage-status';
+import { useProviderAccess } from '@/hooks/use-me';
 import { useAfterConversation } from '@/lib/load-priority';
 import { agentGitId, useGit } from '@/lib/git-store';
 import { projectSlugOf } from '@/lib/project-slug';
@@ -138,8 +139,8 @@ export type ChatComposerValue = {
    *  `steer` redirects it now, `queue` waits for its end. Absent = the
    *  user's preference. */
   send: (mode?: WorkingEnterMode) => void;
-  taRef: RefObject<HTMLTextAreaElement>;
-  fileRef: RefObject<HTMLInputElement>;
+  taRef: RefObject<HTMLTextAreaElement | null>;
+  fileRef: RefObject<HTMLInputElement | null>;
   pendingImages: PendingImage[];
   setPendingImages: Dispatch<SetStateAction<PendingImage[]>>;
   addImageFiles: (files: File[]) => Promise<void>;
@@ -1226,7 +1227,12 @@ function ComposerSettingsPills({
       {/* A mission only — before the first send there is no row to carry
         * the mode yet. */}
       {appearance.showPermission && currentMissionId && (
-        <PermissionModeMenu missionId={currentMissionId} compact={compact} className={cn(pill, 'shrink-0')} />
+        <PermissionModeMenu
+          missionId={currentMissionId}
+          compact={compact}
+          className={cn(pill, 'shrink-0')}
+          refreshKey={`${effBackend}:${thinking ? 'turn' : 'idle'}`}
+        />
       )}
     </div>
   );
@@ -1365,6 +1371,7 @@ const UsageStrip = memo(function UsageStrip({
 }) {
   const accountUsage = liveStats.accountUsage;
   const catalog = useBackendCatalog();
+  const providers = useProviderAccess();
   if (accountUsage?.kind === 'disconnected' || accountUsage?.kind === 'error') {
     return (
       <div className={cn(
@@ -1374,6 +1381,7 @@ const UsageStrip = memo(function UsageStrip({
         <AccountUsageStatus
           view={accountUsage}
           provider={accountUsage.kind === 'disconnected' ? catalog.backends.find((b) => b.id === accountUsage.backend) : undefined}
+          providers={providers}
         />
       </div>
     );

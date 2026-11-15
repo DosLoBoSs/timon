@@ -1096,6 +1096,17 @@
     "widgetsBorderlessHint": "I widget sono disegnati senza contorno né ombra.",
     "widgetsTransparent": "Sfondo trasparente",
     "widgetsTransparentHint": "I widget lasciano intravedere lo sfondo; combina con il vetro smerigliato per un effetto vetro.",
+    "mascotsTitle": "Mascotte",
+    "mascotsHint": "Un agente la cui testa è la sua mascotte mostra cosa sta facendo: addormentato, pensieroso, al lavoro, in ricerca, in attesa di te, contento quando il suo compito è finito.",
+    "mascotsAnimate": "Anima le mascotte",
+    "mascotsAnimateHint": "Disattivato, una mascotte mostra ancora il suo stato con gli occhi, senza muoversi. L’impostazione di riduzione del movimento del sistema ha sempre la precedenza.",
+    "mascotsStyle": "Stile delle mascotte",
+    "mascotsStyle3d": "3D",
+    "mascotsStyle3dHint": "Una testa di peluche modellata, illuminata e in rilievo.",
+    "mascotsStyle2d": "2D",
+    "mascotsStyle2dHint": "Il disegno piatto, più leggero per i computer meno recenti.",
+    "mascotsStyleNoWebgl": "Questo browser non può disegnare in 3D (WebGL2 è disattivato o assente): le mascotte sono disegnate in 2D.",
+    "mascotsStyleShared": "Vale per tutte le mascotte. Puoi cambiarlo in seguito in {settingsPath}.",
     "variants": {
       "coral": {
         "name": "Corallo",
@@ -1598,7 +1609,6 @@
       },
       "models": {
         "backends": "Provider",
-        "accounts": "Account in abbonamento",
         "fallback": "Cambio automatico",
         "breaker": "Circuit breaker",
         "quotas": "Quote"
@@ -1658,8 +1668,7 @@
         "terminal": "shell console pty font terminale"
       },
       "models": {
-        "backends": "claude codex provider llm api modello predefinito ordine model default order",
-        "accounts": "abbonamento account accesso login connetti riconnetti più claude codex chatgpt piano codice dispositivo subscription sign in plan device code",
+        "backends": "claude codex provider llm api modello predefinito ordine model default order abbonamento account accesso login connetti riconnetti più chatgpt piano codice dispositivo subscription sign in plan device code add catalog registry acp endpoint compatible openai anthropic url key secret vault program binary cli path version update install authorize security token enable disable thinking context window",
         "fallback": "fallback riserva quota cambio esaurito attesa ultima risorsa backup switch exhausted cooldown last resort",
         "breaker": "circuit breaker turni sterili escludi sterile turns sideline",
         "quotas": "limiti di utilizzo crediti abbonamento piano reset usage limits credits subscription plan"
@@ -2964,6 +2973,7 @@
     "save": "Salva",
     "cancel": "Annulla",
     "editor": "Modifica questa iniezione",
+    "freshConversation": "L’agente inizierà una nuova conversazione alla prossima missione: quella precedente conteneva ancora questa regola ({agents}).",
     "skillMode": {
       "include": "catalogo",
       "import": "importata"
@@ -3505,10 +3515,7 @@
       }
     },
     "intro": "Gestisci tutti i tuoi provider LLM e i loro modelli. Le modifiche si applicano senza riavviare Timon.",
-    "edit": "Modifica",
-    "editTitle": "Modifica il provider",
     "saved": "Provider aggiornato.",
-    "modelCount": "{count} modelli",
     "keyHintEdit": "Lascia vuoto per mantenere la chiave salvata. Digitarne una la sostituisce nell’archivio: non viene più mostrata.",
     "picto": {
       "choose": "Scegli un’immagine",
@@ -3538,19 +3545,12 @@
       "contextWindowDetected": "auto · {window}",
       "contextWindowAuto": "contesto"
     },
-    "empty": "Nessun provider aggiunto per ora.",
-    "add": "Aggiungi un provider",
     "added": "Provider aggiunto.",
     "save": "Salva",
-    "remove": "Rimuovi",
     "confirmRemove": "Rimuovere il provider “{name}”? Anche la sua chiave viene eliminata dall’archivio.",
-    "active": "Attivo",
-    "notDetected": "Non rilevato",
-    "inactive": "Inattivo",
     "testButton": "Prova",
     "destinationNotice": "Ogni prompt di una missione eseguita su questo provider viene inviato a {host}.",
     "keyHint": "Salvata nell’archivio dei segreti, mai nel file, e mai mostrata di nuovo. Lascia vuoto per un server locale che non ne richiede.",
-    "fileHint": "Ogni provider è un file in ~/.timon/backends/. Puoi anche copiarci un file JSON a mano: viene rilevato entro un secondo.",
     "fields": {
       "name": "Nome",
       "protocol": "Protocollo",
@@ -3585,11 +3585,10 @@
       "protocolUnavailable": "Questo protocollo non è installato.",
       "unconfirmed": "Modifica non confermata. Ricarica la pagina per verificare lo stato salvato."
     },
-    "disabled": "Disattivato",
     "reorder": "Trascina per riordinare questo provider",
     "claudeToken": {
       "title": "Token Claude di lunga durata",
-      "hint": "Facoltativo. Esegui `claude setup-token` in un terminale e incolla qui il token: ogni missione Claude lo usa poi al posto dell’accesso proprio della CLI. Su macOS permette a Timon di continuare a funzionare senza una sessione aperta; esegui poi `timon service install` per passare il servizio. Il token è salvato cifrato e non viene più mostrato.",
+      "hint": "Facoltativo. Esegui `claude setup-token` in un terminale e incolla qui il token: ogni missione Claude lo usa poi al posto dell’accesso proprio della CLI. Su macOS le missioni Claude ne hanno bisogno quando Timon continua a funzionare a sessione chiusa ({settingsPath}). Il token è salvato cifrato e non viene più mostrato.",
       "none": "Non impostato",
       "set": "Impostato",
       "unreadable": "Impostato, ma illeggibile: incollalo di nuovo",
@@ -3604,11 +3603,6 @@
     "disableHint": "Scomparirà dai selettori. I nuovi avvii che lo usano esplicitamente verranno rifiutati, senza alcun ripiego automatico. Le scelte esistenti qui sotto verranno mantenute.",
     "disable": "Disattiva il provider",
     "managedHint": "Puoi rinominare, aggiungere, eliminare e nascondere modelli, e cambiare nomi, immagini e modello predefinito. Le impostazioni di connessione sono gestite da Timon o dal plugin del provider.",
-    "origins": {
-      "builtin": "Integrato",
-      "plugin": "Plugin",
-      "file": "Aggiunto da te"
-    },
     "usages": {
       "agents": "Agenti",
       "routines": "Routine",
@@ -3974,7 +3968,6 @@
     }
   },
   "backendAccounts": {
-    "description": "Più abbonamenti dello stesso provider, ciascuno una scelta nei selettori dei modelli (“Claude · Perso”). Tu accedi con i tuoi account; un amministratore accede con quelli di chiunque. Una missione non passa mai da sola a un altro abbonamento.",
     "loading": "Caricamento degli account…",
     "empty": "Nessun account di abbonamento per ora: le missioni usano l’accesso del provider di questa macchina.",
     "add": "Aggiungi un account",

@@ -2,14 +2,19 @@ import React from 'react';
 import { t } from '@/lib/i18n';
 import { settingsPath } from '@/lib/settings-path';
 import type { AccountUsageView } from '@/lib/account-usage';
+import type { ProviderAccess } from '@/lib/provider-access';
 
 /** What the catalogue says of the backend: its name, and the command that signs in when it declared one. */
 export type UsageProvider = { label: string; signInCommand?: string; signInThen?: string };
 
-function connectHint(backend: string, provider: UsageProvider | undefined): string {
-  // A subscription account (`claude@<id>`) is signed in from the settings,
-  // never from the CLI of this machine.
-  if (backend.includes('@')) return t('cockpit.accountUsage.connectAccount', { settingsPath: settingsPath('models', 'accounts') });
+function connectHint(backend: string, provider: UsageProvider | undefined, providers: ProviderAccess | null): string {
+  // A subscription account (`claude@<id>`) is signed in from its provider's page, never from the CLI
+  // of this machine; whoever is not shown the Providers screen asks someone who is.
+  if (backend.includes('@')) {
+    return providers === 'full' || providers === 'accounts'
+      ? t('cockpit.accountUsage.connectAccount', { settingsPath: settingsPath('models', 'backends') })
+      : t('cockpit.accountUsage.connectAccountAsk');
+  }
   if (provider?.signInCommand && provider.signInThen) {
     return t('cockpit.accountUsage.connectCliThen', { name: provider.label, command: provider.signInCommand, then: provider.signInThen });
   }
@@ -18,12 +23,12 @@ function connectHint(backend: string, provider: UsageProvider | undefined): stri
 }
 
 /** Idle "not signed in" vs a real probe failure. Neutral until it is an error. */
-export function AccountUsageStatus({ view, provider }: { view: AccountUsageView; provider?: UsageProvider }) {
+export function AccountUsageStatus({ view, provider, providers = null }: { view: AccountUsageView; provider?: UsageProvider; providers?: ProviderAccess | null }) {
   if (view.kind === 'disconnected') {
     return (
       <div role="status" className="px-1 py-0.5 text-center text-muted-foreground">
         <p>{t('cockpit.accountUsage.disconnected')}</p>
-        <p className="mt-0.5">{connectHint(view.backend, provider)}</p>
+        <p className="mt-0.5">{connectHint(view.backend, provider, providers)}</p>
       </div>
     );
   }

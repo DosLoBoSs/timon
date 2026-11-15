@@ -372,8 +372,6 @@
     }
   },
   "providersSettings": {
-    "title": "Proveedores",
-    "description": "Los plugins de proveedor aportan un servicio de IA a Timon. Cada programa que lanza un proveedor se autoriza aquí, por su ruta resuelta, antes de poder ejecutarse.",
     "cancel": "Cancelar",
     "consent": {
       "prompts": "Recibe todas las instrucciones y todas las respuestas de las misiones que atiende.",
@@ -388,37 +386,22 @@
       "allowHint": "Sin esto, el proveedor se instala pero permanece inactivo hasta que lo autorices en {settingsPath}."
     },
     "plugins": {
-      "title": "Plugins de proveedor",
-      "none": "No hay ningún plugin de proveedor instalado.",
-      "backends": "Backends: {list}",
       "notFound": "no instalado en esta máquina",
-      "authorize": "Revisar y autorizar",
       "authorizeTitle": "Autorizar {name}",
       "authorizeBody": "Timon resolvió estos programas en esta máquina. Permite solo las rutas que reconozcas.",
       "authorizeConfirm": "Permitir estos programas",
       "authorized": "{name} está autorizado.",
-      "state": {
-        "active": "Activo",
-        "failed": "Requiere atención",
-        "disabled": "Desactivado",
-        "skipped": "Rechazado"
-      },
       "binary": {
         "authorize": "por autorizar",
         "ready": "autorizado",
-        "install": "instálalo primero",
-        "refused": "nunca permitido"
+        "install": "instálalo primero"
       }
     },
     "acp": {
       "title": "Registro ACP",
       "description": "Agentes publicados en el registro oficial de Agent Client Protocol. Timon descarga el programa, lo comprueba y lo ejecuta como backend.",
-      "browse": "Explorar el registro",
       "refresh": "Actualizar",
       "stale": "No se pudo acceder al registro; esta es la última lista que leyó Timon.",
-      "verified": "sha256 verificado",
-      "noHash": "Sin hash publicado",
-      "unsupported": "No disponible aquí: {reason}",
       "install": "Instalar",
       "update": "Actualizar",
       "repair": "Reinstalar",
@@ -427,12 +410,6 @@
       "installed": "{name} está instalado.",
       "updated": "{name} está al día.",
       "removed": "{name} se quitó.",
-      "state": {
-        "ok": "{version} instalada",
-        "tampered": "Archivos modificados — no se usa",
-        "missing": "Faltan archivos",
-        "pending": "Comprobando {version}…"
-      },
       "confirmTitle": "¿Instalar {name} sin hash publicado?",
       "confirmBody": "El registro no da ninguna suma de verificación para este programa. Su integridad depende solo de la descarga por https. Instálalo solo si confías en su editor.",
       "confirmAction": "Instalar igualmente"
@@ -458,15 +435,7 @@
     }
   },
   "binariesSettings": {
-    "title": "Binarios de CLI",
-    "description": "Dónde encontró Timon la herramienta de línea de comandos de cada proveedor de IA en esta máquina. Si falta alguna o está en un lugar inusual, fija su ruta completa: se aplica a la siguiente misión, sin reiniciar Timon.",
-    "recheck": "Comprobar de nuevo",
-    "rechecked": "Binarios comprobados de nuevo.",
-    "none": "Ningún proveedor local usa una herramienta de línea de comandos.",
-    "backends": "Usado por: {list}",
-    "resolved": "Ejecuta {path}",
     "brokenPin": "No se puede ejecutar la ruta fijada: {path}",
-    "notFound": "No se encontró en esta máquina. Instálalo o fija su ruta abajo.",
     "pathLabel": "Ruta del binario de {name}",
     "placeholder": "Ruta completa, por ejemplo /usr/local/bin/claude o C:\\Users\\you\\AppData\\Roaming\\npm\\claude.cmd",
     "browse": "Examinar…",
@@ -474,12 +443,6 @@
     "clear": "Quitar la ruta fijada",
     "saved": "{name}: ruta guardada. Las misiones nuevas la usan.",
     "cleared": "{name}: ruta fijada quitada. Timon vuelve a buscarlo por su cuenta.",
-    "state": {
-      "found": "Encontrado",
-      "pinned": "Fijado",
-      "brokenPin": "Ruta fijada rota",
-      "missing": "No encontrado"
-    },
     "errors": {
       "forbidden": "Solo un superadmin con sesión iniciada en la aplicación puede cambiar estas rutas.",
       "unknown_binary": "Esta no es la herramienta de línea de comandos de un proveedor local.",

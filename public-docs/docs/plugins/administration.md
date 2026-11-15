@@ -90,6 +90,7 @@ rights.invalidate(userId);   // after a change of role or group; without an id, 
 - A superadmin keeps every right, whatever the function answers.
 - Only a signed plugin gets it, one at a time; it is released when the plugin is unloaded. Without a source, an account that is not a superadmin holds no right at all: Timon keeps no roles or groups of its own.
 - `ctx.permissionSource.catalog()` lists the rights a role can grant on this install: the checks Timon runs, then the pages, widgets and plugins that are active. Build a role editor on it rather than on a list of your own.
+- Since `apiVersion: 16`, the catalogue also has `choices`: actions that are levels of one thing, to offer as one pick rather than a checkbox each. The first is `providers` (the Providers screen): options `full` (grants `providers:manage`), `accounts` (`providers:accounts`) and `none` (no grant). Options go from the widest to the narrowest; the role's current option is the first whose `grants` it holds, the last otherwise; picking one removes the grants of the others and adds its own. The actions stay in `actions` too, so an editor that ignores `choices` still offers them.
 
 ## Plugins and modules
 

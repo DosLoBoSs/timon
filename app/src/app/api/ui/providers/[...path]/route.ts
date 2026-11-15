@@ -1,11 +1,15 @@
 /**
- * `/api/ui/providers/*` → the daemon's `/api/plugins/-/providers/*`.
+ * `/api/ui/providers/*` → the daemon's `/api/plugins/-/providers/*`, and
+ * `/api/ui/providers/overview[/<id>]` → its `/api/providers/overview[/<id>]`.
  * An allow-list, not a pass-through: the provider list, the authorization of a
- * provider's resolved binary, and the ACP registry (list / install / sign-in
- * methods / remove).
+ * provider's resolved binary, the ACP registry (list / install / sign-in
+ * methods / remove), and the one-record-per-provider overview.
  *
- * Auth: the `timon_session` cookie only (`proxyJson`). The daemon admits a
- * superadmin SESSION and nothing else — the daemon token never travels here.
+ * Auth: the `timon_session` cookie only (`proxyJson`); the daemon token never
+ * travels here. The daemon decides: a superadmin session for the provider
+ * routes, and a session at a level of the Providers screen for the overview
+ * (`users/provider-access.ts`). `providers-overview-proxy.test.ts` holds the
+ * overview's allow-list.
  */
 import { proxyJson } from '@/lib/ui/proxy';
 
@@ -16,11 +20,18 @@ type Params = { params: { path: string[] } };
 const DAEMON = '/api/plugins/-/providers';
 const PLUGIN_ID = /^[a-z0-9-]{3,40}$/;
 const AGENT_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+/** Same shape the daemon accepts: `provider-acp.opencode`, `user:my-endpoint`, `catalog:acme`. */
+const PROVIDER_ID = /^[A-Za-z0-9][A-Za-z0-9._:@-]{0,200}$/;
 const notFound = (): Response => Response.json({ error: 'not found' }, { status: 404 });
 
 export async function GET(request: Request, { params }: Params): Promise<Response> {
   const path = params.path.join('/');
   if (path === 'list') return proxyJson('GET', DAEMON);
+  const [head, id, ...rest] = params.path;
+  if (head === 'overview' && id === undefined) return proxyJson('GET', '/api/providers/overview');
+  if (head === 'overview' && id && PROVIDER_ID.test(id) && rest.length === 0) {
+    return proxyJson('GET', `/api/providers/overview/${encodeURIComponent(id)}`);
+  }
   if (path === 'acp-registry') {
     const refresh = new URL(request.url).searchParams.get('refresh') === '1' ? '?refresh=1' : '';
     return proxyJson('GET', `${DAEMON}/acp-registry${refresh}`);

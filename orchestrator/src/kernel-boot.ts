@@ -66,7 +66,7 @@ import { inspectListenPort } from './host/listen-port.js';
 import { endRecordedMissionProcesses, missionProcessDir, sweepOpsFor } from './host/mission-processes.js';
 import { bus } from './bus.js';
 import { backendNames, onBackendsChanged, primeModelDiscovery } from './backends/index.js';
-import { primeProviderSignIn, setSignInEnv } from './backends/sign-in-state.js';
+import { onProviderSignInChanged, primeProviderSignIn, setSignInEnv } from './backends/sign-in-state.js';
 import { mainAgentAuthEnv } from './doctor.js';
 import { reportBackendBinaries } from './backends/binary-check.js';
 import { expectProviders, providersLoaded } from './backends/registry.js';
@@ -221,6 +221,8 @@ export async function boot(opts: { listen?: boolean; catalog?: readonly ModuleDe
   // Set BEFORE the loader, to cover a registration made during the `apply`
   // of the first plugin loaded.
   onBackendsChanged(() => bus.publish({ kind: 'backends_changed' }));
+  // The catalogue and the providers overview carry each provider's sign-in: a flip is a change too.
+  onProviderSignInChanged(() => bus.publish({ kind: 'backends_changed' }));
 
   try {
     const loader = new PluginLoader(ctx, {

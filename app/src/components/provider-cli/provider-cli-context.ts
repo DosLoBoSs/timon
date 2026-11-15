@@ -2,8 +2,8 @@
 
 /**
  * What a `providers.cli` occupant is painted for: the provider cards of the
- * onboarding's "Your AIs" step, of Settings › AI models › Providers, and of
- * the onboarding's "cannot start" screen.
+ * onboarding's "Your AIs" step and of its "cannot start" screen. Settings no
+ * longer paints them: each provider's page shows its program (Program section).
  *
  * The slot passes no props — an entry is registered once and painted by every
  * host — so each host (`ProviderCliCards`) puts its own value here and the
@@ -21,7 +21,7 @@ export type ProviderCliCardsMode = 'onboarding' | 'settings' | 'recovery';
 export type ProviderCliSignInOutcome = 'terminal' | 'copied' | 'failed';
 
 export type ProviderCliCardsValue = {
-  /** `onboarding`: the "Your AIs" step. `settings`: Settings › AI models. `recovery`: the chat could not start. */
+  /** `onboarding`: the "Your AIs" step. `recovery`: the chat could not start. `settings`: no longer painted, kept for the contract. */
   mode: ProviderCliCardsMode;
   /** The cards, in the product's order; `null` until the daemon answered. */
   backends: ProviderCli[] | null;

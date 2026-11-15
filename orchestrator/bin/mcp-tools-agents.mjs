@@ -17,6 +17,7 @@ export const AGENT_LOOK_EYES = ['pill', 'big', 'happy', 'wink', 'surprised', 'sq
 export const AGENT_LOOK_ACCESSORIES = [
   'none', 'loupe', 'pen', 'quill', 'hammer', 'wrench', 'baton', 'telescope', 'envelope', 'calendar',
   'clipboard', 'hourglass', 'teacher', 'calculator', 'chart', 'brush', 'globe', 'megaphone', 'shield', 'coffee',
+  'whip', 'wizard', 'chef', 'crown', 'idea', 'rocket', 'chemist', 'gamer', 'photographer', 'gardener', 'musician',
 ];
 
 /** The avatar modes, as `src/agent-look.ts` checks them (same test). */
@@ -31,12 +32,16 @@ export const AGENT_AVATAR_MODES = ['emoji', 'image', 'mascot'];
  */
 export const MASCOT_PART_ID_PATTERN = '^[a-z0-9-]{3,40}:[a-z0-9][a-z0-9-]{0,39}$';
 
+/** Any fur off the palette, `#rrggbb` (same pattern as `AGENT_LOOK_CUSTOM_COLOR_RE`, kept equal by the parity test). */
+export const AGENT_LOOK_CUSTOM_COLOR_PATTERN = '^#[0-9a-fA-F]{6}$';
+
 /** One look field: a product value, or a pack's part checked by the daemon. */
-function lookField(values, description) {
+function lookField(values, description, extra = []) {
   return {
     anyOf: [
       { type: 'string', enum: values },
       { type: 'string', pattern: MASCOT_PART_ID_PATTERN, description: 'A part of an installed and enabled mascot pack, `<plugin>:<part>`.' },
+      ...extra,
     ],
     description,
   };
@@ -47,7 +52,8 @@ const LOOK_SCHEMA = {
   type: 'object',
   properties: {
     shape: lookField(AGENT_LOOK_SHAPES, 'Skull of the mascot.'),
-    color: lookField(AGENT_LOOK_COLORS, 'Fur colour, #rrggbb from this palette, or a pack\'s fur.'),
+    color: lookField(AGENT_LOOK_COLORS, 'Fur colour: #rrggbb from this palette, any other #rrggbb, or a pack\'s fur.',
+      [{ type: 'string', pattern: AGENT_LOOK_CUSTOM_COLOR_PATTERN, description: 'Any other fur, #rrggbb.' }]),
     eyes: lookField(AGENT_LOOK_EYES, 'Resting eyes.'),
     acc: lookField(AGENT_LOOK_ACCESSORIES, 'Job accessory held by the mascot.'),
   },
@@ -63,10 +69,10 @@ export const AGENT_CONFIG_PROPERTIES = {
   backend: { type: 'string', description: 'LLM backend id (see backends_list). Leave unset to inherit. Without the `agents:privileged-config` permission a call is refused (403, with a reason) for a backend that cannot arbitrate tool uses per call, such as codex.' },
   model: { type: 'string', description: 'Model slug for that backend (see backends_list). Leave unset to inherit.' },
   permission_mode: { type: 'string', description: 'Claude modes (plan, default, acceptEdits, auto, dontAsk, bypassPermissions) or codex sandbox names (read-only, workspace-write, danger-full-access), which sit on the same ladder. Never above the level of the calling agent; without `agents:privileged-config` only default, acceptEdits, plan and auto. A value the agent already holds is never refused.' },
-  skills: { ...STR_LIST, description: 'The whole set of skills checked on the agent (see skill_list), stored as its own skill attachments, not in config.json: a new id gets a catalogue (include) attachment, a listed one keeps its mode, an unlisted one is detached. Import mode or an exclusion: skill_attach.' },
-  mcp_servers: { ...STR_LIST, description: 'MCP server ids attached to the agent (see mcp_server_list). Same limit as allowed_tools on a new agent: leave unset.' },
-  allowed_tools: { ...STR_LIST, description: 'Tool patterns pre-allowed, e.g. `Bash(timon:*)`. Without `agents:privileged-config` a call cannot declare any on a NEW agent (403 with a reason): leave unset.' },
-  disallowed_tools: { ...STR_LIST, description: 'Tool patterns refused.' },
+  skills: { ...STR_LIST, description: 'The whole set of skills checked on the agent (see skill_list), stored as its own skill attachments, not in config.json: a new id gets a catalogue (include) attachment, a listed one keeps its mode, an unlisted one is detached. Import mode or an exclusion: skill_attach. From a mission, a new skill whose `allowed-tools` the agent does not already hold is refused.' },
+  mcp_servers: { ...STR_LIST, description: 'MCP server ids attached to the agent (see mcp_server_list). From a mission, a stdio server (a command on the host) the agent does not already hold is refused (403 with a reason): the user attaches it from the Agents page. Without `agents:privileged-config` a call cannot attach any on a NEW agent: leave unset.' },
+  allowed_tools: { ...STR_LIST, description: 'Tool patterns pre-allowed, e.g. `Bash(timon:*)`. From a mission a call cannot add one the agent does not already hold (403 with a reason), whatever the account holds: the user adds tools from the Agents page. Removing tools, or sending the list unchanged, passes.' },
+  disallowed_tools: { ...STR_LIST, description: 'Tool patterns refused. From a mission, a pattern already refused cannot be lifted.' },
   excluded_mcp_servers: { ...STR_LIST, description: 'MCP servers excluded for this agent.' },
   memory_scope: { type: 'string', enum: ['NONE', 'SESSION', 'AGENT', 'GLOBAL'], description: 'Memory scope.' },
   reports_to: { type: ['string', 'null'], description: 'Name of the agent this one reports to (team hierarchy); null clears it.' },
@@ -300,7 +306,9 @@ export const tools = [
       'catalogue line `id — description` in the prompt, the agent reads the body with skill_get; `import` pastes ' +
       'the whole body. `exclude: true` removes, at this scope, a skill inherited from a wider one. The narrowest ' +
       'scope wins: global < project < role < agent. Writing the same skill, scope and target again replaces it. ' +
-      'Agent scope: only an agent you orchestrate; a wider scope needs agents:privileged-config.',
+      'Agent scope: only an agent you orchestrate; a wider scope needs agents:privileged-config. ' +
+      'From a mission, a skill whose `allowed-tools` the agent does not already hold is refused (403 with a reason), ' +
+      'at any scope: the user attaches it from the Agents or Skills page.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -345,7 +353,7 @@ export const tools = [
       'Creates or replaces a skill (CLI `timon skill put`). `content` is the full SKILL.md, ' +
       'with its frontmatter (name, description). Attach it to an agent with skill_attach (or agent_update `skills`). ' +
       'From a mission: by id only, never a product skill (timon-task, timon-worktree, …), and no ' +
-      '`allowed_tools` unless the account holds agents:privileged-config. ' +
+      '`allowed_tools` (it pre-authorises tools: the user writes such a skill from the Skills page). ' +
       '`create_only: true` never replaces: an id that already exists answers 409, pick another one.',
     inputSchema: {
       type: 'object',
@@ -382,7 +390,8 @@ export const tools = [
       'Creates or replaces an MCP server declaration (CLI `timon mcp put`). `config` is ' +
       '`{ name?, description?, transport }`, transport being a stdio or http transport object. ' +
       'Attach it to an agent with agent_update `mcp_servers`. From a mission it needs `mcp:manage`; ' +
-      'an http server (public http(s) url) is accepted, a stdio server (a command on the host) or ' +
+      'an http server (public http(s) url) is accepted; a stdio server (a command on the host) is never ' +
+      'declared or changed from a mission, the user does it from the MCP servers page; ' +
       'the change of a server this agent did not declare needs `agents:privileged-config`, and ' +
       'servers Timon injects or account connectors are never writable. Secrets read back masked ' +
       '(`***`): send them back as is to keep the stored value.',

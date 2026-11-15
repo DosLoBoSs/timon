@@ -15,6 +15,7 @@
  * contract plugins graft into.
  */
 import type { SettingsPluginOrigin } from './settings-plugin-categories';
+import type { ProviderAccess } from './provider-access';
 
 export type SettingsCategoryId =
   | 'instructions'
@@ -33,9 +34,12 @@ export const SETTINGS_CATEGORY_IDS: readonly SettingsCategoryId[] = [
 ];
 
 /** Device-local panes: no row in the settings table. */
-export type NativePaneId = 'language' | 'push' | 'voice' | 'webui' | 'desktop' | 'installation' | 'instructions' | 'preamble' | 'fallback' | 'secrets' | 'connections' | 'accounts' | 'devices' | 'developer';
+export type NativePaneId = 'language' | 'push' | 'voice' | 'webui' | 'desktop' | 'installation' | 'instructions' | 'preamble' | 'fallback' | 'secrets' | 'connections' | 'devices' | 'developer' | 'isolation';
 
 type Placement = { category: SettingsCategoryId; tab: string };
+
+/** The module whose tab is Settings › AI models › Providers. */
+const PROVIDERS_PLUGIN = '@timon/backends';
 
 type StaticTab =
   | { id: string; kind: 'rows' }
@@ -56,9 +60,9 @@ export const STATIC_TABS: Readonly<Record<SettingsCategoryId, readonly StaticTab
     { id: 'terminal', kind: 'rows' },
   ],
   models: [
-    { id: 'backends', kind: 'plugin', pluginId: '@timon/backends' },
-    // Per-account subscriptions (TODO #52): every signed-in user may own some.
-    { id: 'accounts', kind: 'native', pane: 'accounts' },
+    // Providers: every account's subscription accounts live on each provider's page,
+    // at the viewer's level of the screen (`lib/provider-access.ts`).
+    { id: 'backends', kind: 'plugin', pluginId: PROVIDERS_PLUGIN },
     { id: 'fallback', kind: 'native', pane: 'fallback' },
     { id: 'breaker', kind: 'rows' },
     { id: 'quotas', kind: 'plugin', pluginId: 'quota-monitor' },
@@ -92,6 +96,8 @@ export const STATIC_TABS: Readonly<Record<SettingsCategoryId, readonly StaticTab
   system: [
     // How Timon runs on the machine (TODO #333): superadmin only.
     { id: 'installation', kind: 'native', pane: 'installation' },
+    // The mission fence (GHSA-f58g): superadmin only, like the machine it guards.
+    { id: 'security', kind: 'native', pane: 'isolation' },
     // The safety net (TODO #476): nightly backup retention, and the agent
     // trash whose list the agents plugin grafts below the rows.
     { id: 'backup', kind: 'rows' },
@@ -229,6 +235,8 @@ export type SettingsLayoutInput = {
   secrets?: boolean;
   /** The viewer is the superadmin: the machine's installation is theirs alone. */
   superadmin?: boolean;
+  /** The viewer's level of the Providers screen; `none` drops the tab (and so its search entry). Absent = shown. */
+  providers?: ProviderAccess;
 };
 
 function ownerActive(owner: string | null | undefined, states: ReadonlyMap<string, string>): boolean {
@@ -283,12 +291,14 @@ export function buildSettingsLayout(input: SettingsLayoutInput): SettingsCategor
       } else if (tab.kind === 'native') {
         if (tab.pane === 'desktop' && !input.desktop) continue;
         if (tab.pane === 'secrets' && !input.secrets) continue;
-        if ((tab.pane === 'installation' || tab.pane === 'developer') && !input.superadmin) continue;
+        if ((tab.pane === 'installation' || tab.pane === 'developer' || tab.pane === 'isolation') && !input.superadmin) continue;
         tabs.push({ id: tab.id, kind: 'native', pane: tab.pane, grafts });
       } else {
         const plugin = pluginById.get(tab.pluginId);
         if (!plugin) continue;
         placedPlugins.add(plugin.id);
+        // Placed, not shown: hidden from the viewer, it must not reappear under Plugins either.
+        if (plugin.id === PROVIDERS_PLUGIN && input.providers === 'none') continue;
         tabs.push({ id: tab.id, kind: 'plugin', pluginId: plugin.id, origin: plugin.origin, label: plugin.label });
       }
     }
@@ -375,7 +385,8 @@ const LEGACY_SLUGS: Readonly<Record<string, SettingsTarget>> = {
   reaper: { category: 'missions', tab: 'cleanup' },
   worktrees: { category: 'missions', tab: 'cleanup' },
   llmfallback: { category: 'models', tab: 'fallback' },
-  accounts: { category: 'models', tab: 'accounts' },
+  // The former Subscription accounts tab: the accounts are on the providers' pages now.
+  accounts: { category: 'models', tab: 'backends' },
   resources: { category: 'resources', tab: 'confinement' },
   memoryinjection: { category: 'memory', tab: 'injection' },
   digest: { category: 'memory', tab: 'injection' },
