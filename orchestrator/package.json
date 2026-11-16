@@ -21,6 +21,7 @@
     ],
     "files": [
       "../scripts/*.test.mjs",
+      "../scripts/release/*.test.mjs",
       "../public-docs/scripts/*.test.mjs",
       "../docs/internal/scripts/*.test.mjs",
       "../docs/internal/orchestrator/**/*.test.ts",
