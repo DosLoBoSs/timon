@@ -19,6 +19,10 @@ Import TypeScript contracts from `@timon-ai/sdk`. A provider author also imports
 `PluginContext` is an API façade, not a JavaScript sandbox. A host plugin runs in the daemon process with the OS account's privileges. Install only code you trust; permissions and signatures do not turn hostile Node code into isolated code.
 :::
 
+:::note The browser half runs no inline script
+The app window's Content-Security-Policy runs only the scripts loaded from the app's own origin and the inline scripts Timon writes itself, each marked with a nonce that changes on every page load. Your browser bundle loads that way, as a module. A `<script>` element your code adds with inline content, or markup you inject that contains one, is blocked by the browser: load code with `import()` from your package instead. A [conversation document](ui-documents.md) is the exception: its HTML runs its own inline scripts, in a sandbox.
+:::
+
 ## Package identity
 
 The npm package name and `timon.id` are separate. Use your own npm scope. **The current manifest validator accepts IDs matching `[a-z0-9-]{3,40}`**, such as `acme-weather`; it does not accept a scoped ID containing `/`. Bundled product IDs use their own catalogue convention. Use the manifest ID for configuration, plugin commands and bundle membership.
