@@ -58,6 +58,7 @@ import { warnSandboxCascadeAhead } from './sandbox-cascade.js';
 import { parseReviewVerdict } from './review-verdict.js';
 import { execFileHost } from './host/index.js';
 import { integrateMergeMessage } from './worktree.js';
+import { branchWork } from './code-gate.js';
 
 const exec = execFileHost;
 const MAX_ITERATIONS = 3;
@@ -77,6 +78,39 @@ async function diffSummary(task: TaskRow): Promise<{ stat: string; hasChanges: b
     );
     const stat = r.stdout.trim();
     return { stat, hasChanges: stat.length > 0 };
+  } catch {
+    return null;
+  }
+}
+
+/** Longest commit listing put into a review brief. */
+const INTEGRATED_STAT_MAX_LINES = 200;
+
+/** The coder's own commits on a branch its base already contains. */
+type IntegratedWork = { start: string; head: string; count: number; stat: string };
+
+/**
+ * What a review reads when the coder merged the branch into its base and
+ * `base...HEAD` is empty (TODO #1012): the first-parent commits since the
+ * branch was created, never an empty diff. Null when the branch has none, or
+ * when git cannot tell.
+ */
+async function integratedWork(task: TaskRow): Promise<IntegratedWork | null> {
+  if (!task.worktree_path) return null;
+  const work = branchWork(task.worktree_path, task.branch_name);
+  if (!work?.start || work.commits.length === 0) return null;
+  try {
+    const r = await exec(
+      'git',
+      ['-C', task.worktree_path, 'log', '--first-parent', '--no-merges', '--stat', '--format=%h %s',
+        `${work.start}..${work.head}`],
+      { timeout: 5_000, maxBuffer: 4 * 1024 * 1024 },
+    );
+    const lines = r.stdout.trim().split('\n');
+    const stat = lines.length > INTEGRATED_STAT_MAX_LINES
+      ? [...lines.slice(0, INTEGRATED_STAT_MAX_LINES), `… (${lines.length - INTEGRATED_STAT_MAX_LINES} more lines)`].join('\n')
+      : lines.join('\n');
+    return { start: work.start, head: work.head, count: work.commits.length, stat };
   } catch {
     return null;
   }
@@ -196,7 +230,10 @@ async function handleCodeDone(task: TaskRow): Promise<void> {
   }
 
   const diff = await diffSummary(task);
-  if (!diff || !diff.hasChanges) {
+  // An empty `base...HEAD` may only mean the coder merged the branch already:
+  // its commits are then reviewed from where the branch started.
+  const integrated = diff && !diff.hasChanges ? await integratedWork(task) : null;
+  if (!diff || (!diff.hasChanges && !integrated)) {
     console.log(`[verification] code ${task.id} DONE with no diff — skip review`);
     return;
   }
@@ -219,10 +256,26 @@ async function handleCodeDone(task: TaskRow): Promise<void> {
     `Branch: \`${task.branch_name ?? '?'}\` (base \`${task.base_branch ?? '?'}\`)`,
     `Worktree: \`${task.worktree_path ?? '?'}\``,
     ``,
-    `## Diff (stat)`,
-    '```',
-    diff.stat,
-    '```',
+    ...(integrated
+      ? [
+          `## Branch already merged into \`${task.base_branch ?? '?'}\``,
+          `The coder merged this branch into its base already, so \`git diff ${task.base_branch ?? '<base>'}...HEAD\` is empty.`,
+          `Review the coder's ${integrated.count} own commit(s) instead, from where the branch started:`,
+          '```bash',
+          `git log -p --first-parent --no-merges ${integrated.start}..${integrated.head}`,
+          '```',
+          ``,
+          `## Coder's commits (stat)`,
+          '```',
+          integrated.stat,
+          '```',
+        ]
+      : [
+          `## Diff (stat)`,
+          '```',
+          diff.stat,
+          '```',
+        ]),
     ``,
     `## Original mission (root ${rootId})`,
     root.description ?? root.title,
@@ -315,6 +368,10 @@ async function spawnMergeTask(review: TaskRow): Promise<void> {
     `4. Non-trivial conflict or broken build → do NOT force it: leave the task BLOCKED with the reason (the orchestrator will escalate).`,
     `5. Never delete a file your branch does not ask to delete: an automatic`,
     `   check detects it and will hand the task back to you for repair.`,
+    `6. The daemon checks the merge before accepting DONE: \`${branch}\` must be in \`${base}\``,
+    `   and the sha must contain it. If the branch was already in \`${base}\` before you`,
+    `   started (\`git merge-base --is-ancestor ${branch} ${base}\` succeeds), there is nothing`,
+    `   to merge: close with the full sha of \`git rev-parse ${branch}\`.`,
     ``,
     `Merge commits carry an explicit English message (\`-m\`) with no task or mission id, and no mention of Claude/Anthropic/Co-Authored-By: git's default message names the task branch, which a public repository's commit-msg hook refuses.`,
   ].filter(Boolean).join('\n');

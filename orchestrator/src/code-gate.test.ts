@@ -124,8 +124,17 @@ test('code-self: inspect actual merge ancestry, not commits ahead of base', (t) 
   assert.equal(inspect().mergedIntoBase, true);
   assert.equal(inspect(sha.slice(0, 8)).mergedIntoBase, true);
   assert.equal(evaluateCodeDone(task, inspect()), null);
+  // The coder merged the branch itself: its reflog still knows its own commit,
+  // which the review reads instead of an empty diff (TODO #1012).
   for (const pendingPipeline of ['full', 'code-group', null] as const) {
     const pendingTask = { ...task, pipeline: pendingPipeline, merged_commit_sha: null };
-    assert.match(evaluateCodeDone(pendingTask, inspectGitBranch(repo, 'task', 'main', pendingPipeline))!, /NO commits/);
+    const inspection = inspectGitBranch(repo, 'task', 'main', pendingPipeline);
+    assert.equal(inspection.integratedCommits, 1);
+    assert.match(evaluateCodeDone(pendingTask, inspection)!, /already contained in main: its 1 own commit/);
   }
+  // A branch created and never committed on has none.
+  git('checkout', '-b', 'idle', 'main');
+  const idle = inspectGitBranch(repo, 'idle', 'main', 'full');
+  assert.equal(idle.integratedCommits, 0);
+  assert.match(evaluateCodeDone({ ...task, branch_name: 'idle', pipeline: 'full', merged_commit_sha: null }, idle)!, /NO commits/);
 });

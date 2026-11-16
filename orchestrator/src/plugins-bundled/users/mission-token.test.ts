@@ -319,12 +319,13 @@ test('employee mission token closes only the task it runs, and none of the other
   assert.equal(dbApi.getTask(c.taskId)?.status, 'IN_PROGRESS');
 
   // `timon task done --merged-sha`: the sha first, then the closing PUT.
-  const sha = await call('POST', `/api/tasks/${c.taskId}/merged-sha`, { bearer: c.token, body: { sha: 'abcdef1234567' } });
+  // Another sha than the first closing's: a merge sha proves one task only.
+  const sha = await call('POST', `/api/tasks/${c.taskId}/merged-sha`, { bearer: c.token, body: { sha: 'abcdef7654321' } });
   assert.equal(sha.status, 200, JSON.stringify(sha.json));
   const done = await call('PUT', `/api/tasks/${c.taskId}`, { bearer: c.token, body: { status: 'DONE', done_comment: 'merged' } });
   assert.equal(done.status, 200, JSON.stringify(done.json));
   assert.equal(dbApi.getTask(c.taskId)?.status, 'DONE');
-  assert.equal(dbApi.getTask(c.taskId)?.merged_commit_sha, 'abcdef1234567');
+  assert.equal(dbApi.getTask(c.taskId)?.merged_commit_sha, 'abcdef7654321');
   refusedForWrite(await call('POST', `/api/tasks/${sibling}/merged-sha`, { bearer: c.token, body: { sha: 'abcdef1234567' } }));
   assert.equal(dbApi.getTask(sibling)?.merged_commit_sha, null);
   // The merger's cleanup (`timon worktree dispose`) on its own task: nothing to dispose is fine.
