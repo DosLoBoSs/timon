@@ -1,0 +1,10 @@
+{
+  "notices": {
+    "region": "Hinweise",
+    "close": "Schließen",
+    "githubStar": {
+      "title": "Ein Stern auf GitHub?",
+      "action": "Timon einen Stern geben"
+    }
+  }
+}

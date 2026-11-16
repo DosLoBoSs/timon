@@ -1,0 +1,10 @@
+{
+  "notices": {
+    "region": "通知",
+    "close": "关闭",
+    "githubStar": {
+      "title": "在 GitHub 上点个星？",
+      "action": "点个星"
+    }
+  }
+}

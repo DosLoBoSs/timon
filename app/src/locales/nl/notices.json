@@ -1,0 +1,10 @@
+{
+  "notices": {
+    "region": "Meldingen",
+    "close": "Sluiten",
+    "githubStar": {
+      "title": "Een ster op GitHub?",
+      "action": "Geef een ster"
+    }
+  }
+}

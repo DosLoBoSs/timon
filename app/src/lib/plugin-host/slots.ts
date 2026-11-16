@@ -610,6 +610,25 @@ export const PAGE_TOC_SLOT = 'page.toc';
 export const UPDATES_BANNER_SLOT = 'updates.banner';
 
 /**
+ * Slot of the notice sources (docs/NOTICES.md): the bottom-left cards of the
+ * product — a new version, a build about to end, a GitHub star. Each entry is
+ * mounted once by `NoticesHost`, paints nothing, and pushes its cards with
+ * `useNotices()`; a rule that needs React state lives there. A plugin with
+ * nothing to watch pushes from `apply` with `ctx.notices.push` instead. A
+ * boot slot: a source registers when the plugins load.
+ */
+export const NOTICES_SLOT = 'notices';
+
+/**
+ * Slot of ONE notice card, painted by `NoticesHost` once per visible notice.
+ * The occupant reads `useNotice()` — the notice, its gestures — and only
+ * paints; the host decides which cards show, how many, and remembers the
+ * closed ones. A boot slot like `confirm.dialog`: the product's card is the
+ * fallback and comes back when a replacement leaves.
+ */
+export const NOTICE_CARD_SLOT = 'notices.card';
+
+/**
  * Slot of the agent's mascot (docs/AGENT-MASCOT.md): the plush meerkat head
  * whose screen shows the agent's eyes, in the onboarding, the agent creation
  * and the chat. Painted by every `AgentMascotHost`; the occupant reads
@@ -670,6 +689,8 @@ function declareBootSlots(): void {
   declareSlot(PAGE_TOC_SLOT, 'single');
   declareSlot(CHAT_SECRET_REQUEST_SLOT, 'single');
   declareSlot(UPDATES_BANNER_SLOT, 'single');
+  declareSlot(NOTICES_SLOT, 'list');
+  declareSlot(NOTICE_CARD_SLOT, 'single');
   declareSlot(AGENT_MASCOT_SLOT, 'single');
   declareSlot(EMAIL_CODE_SLOT, 'single');
   declareSlot(AGENT_LOOK_STYLER_SLOT, 'single');

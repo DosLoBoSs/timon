@@ -29,6 +29,20 @@
       "arity": 1,
       "since": 1
     },
+    "notices": {
+      "type": "object",
+      "since": 16
+    },
+    "notices.push": {
+      "type": "function",
+      "arity": 1,
+      "since": 16
+    },
+    "notices.remove": {
+      "type": "function",
+      "arity": 1,
+      "since": 16
+    },
     "realtime": {
       "type": "object",
       "since": 4
@@ -651,6 +665,14 @@
         "since": 16
       },
       "useProviderRow": {
+        "type": "export",
+        "since": 16
+      },
+      "useNotice": {
+        "type": "export",
+        "since": 16
+      },
+      "useNotices": {
         "type": "export",
         "since": 16
       }

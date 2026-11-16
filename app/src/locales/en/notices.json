@@ -1,0 +1,10 @@
+{
+  "notices": {
+    "region": "Notices",
+    "close": "Close",
+    "githubStar": {
+      "title": "A star on GitHub?",
+      "action": "Star Timon"
+    }
+  }
+}

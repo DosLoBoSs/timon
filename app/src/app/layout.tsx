@@ -31,6 +31,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { AgentEditorModal } from '@/components/agent-editor/agent-editor-modal';
 import { UnsavedDocumentDialog } from '@/components/chat/unsaved-document-dialog';
 import { ConfirmDialogHost } from '@/components/confirm-dialog/confirm-dialog';
+import { NoticesHost } from '@/components/notices/notices-host';
 import { APPEARANCE_SCOPE, DEFAULT_APPEARANCE, effectiveGlass, readNativeAppearance } from '@/plugins-client/ui-theme-variants';
 import { BACKGROUND_SCOPE } from '@/components/background/background-model';
 import { DEFAULT_USER_PREFS, type ColorScheme } from '@/lib/auth';
@@ -328,6 +329,10 @@ export default async function RootLayout({
               browser panel is pinned. Pages call `toast()` and nothing
               else. */}
           <Toaster />
+          {/* The bottom-left notice cards (a new version, a GitHub star):
+              one host for every page, beside the toaster, inside the shell
+              so they follow it when the browser panel is pinned. */}
+          <NoticesHost />
           {/* "Save changes?" before a document closes: asked by an island
               tab that may be unmounted, so it lives here, once. */}
           <UnsavedDocumentDialog />

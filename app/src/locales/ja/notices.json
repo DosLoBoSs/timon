@@ -1,0 +1,10 @@
+{
+  "notices": {
+    "region": "お知らせ",
+    "close": "閉じる",
+    "githubStar": {
+      "title": "GitHub でスターを付けませんか？",
+      "action": "スターを付ける"
+    }
+  }
+}
