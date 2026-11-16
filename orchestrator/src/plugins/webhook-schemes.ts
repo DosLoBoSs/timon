@@ -30,7 +30,7 @@
  */
 import { createHash, createHmac, createPublicKey, timingSafeEqual, verify as verifySignatureBytes, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
-import { compileBoundedRegex, SlowRegexError } from '../bounded-regex.js';
+import { pluginRegex } from '../bounded-regex.js';
 
 // ── the description ─────────────────────────────────────────────────────────
 
@@ -256,8 +256,11 @@ export function proofHeaders(scheme: WebhookScheme): string[] {
 
 // ── secrets ──────────────────────────────────────────────────────────────────
 
-/** Why a pasted value is refused, `null` when the scheme accepts it. Never echoes the value. */
-export function invalidSecret(scheme: WebhookScheme, value: string): string | null {
+/**
+ * Why a pasted value is refused, `null` when the scheme accepts it. Never echoes the value. `owner` is the plugin
+ * pasting it and the format's id: a declared pattern that fails is skipped, and reported once under that name.
+ */
+export function invalidSecret(scheme: WebhookScheme, value: string, owner: { pluginId: string; format: string }): string | null {
   if (scheme.kind === 'ed25519') {
     return publicKeyOf(scheme, value) ? null : `expected a 32-byte Ed25519 public key in ${scheme.publicKey.encoding}`;
   }
@@ -265,13 +268,10 @@ export function invalidSecret(scheme: WebhookScheme, value: string): string | nu
   if (value.length > 512) return 'too long';
   if (/\s/.test(value)) return 'must not contain spaces or line breaks';
   if (scheme.secret.pattern) {
-    // The pattern is the plugin's, the value a person's paste: a backtracking pattern must not freeze the daemon.
-    let looksRight: boolean;
-    try { looksRight = compileBoundedRegex(scheme.secret.pattern).test(value); } catch (error) {
-      if (error instanceof SlowRegexError) return 'could not be checked: the pattern this service declares is too slow';
-      throw error;
-    }
-    if (!looksRight) return 'does not look like a secret of this service';
+    // A shape check only: a pattern that is too slow or not a pattern must neither freeze the daemon nor refuse the paste.
+    const pattern = pluginRegex({ pluginId: owner.pluginId, place: 'webhook-secret', name: owner.format }, scheme.secret.pattern);
+    const looksRight = pattern.test(value);
+    if (!looksRight && !pattern.failed) return 'does not look like a secret of this service';
   }
   if (scheme.kind === 'hmac' && scheme.key === 'whsec' && hmacKey(scheme, value).length < 16) return 'the decoded key is too short';
   return null;

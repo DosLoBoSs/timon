@@ -24,6 +24,8 @@ const { getHost } = await import('../host/index.js');
 const { readOsCredential, resetOsCredentialMisses } = await import('../host/os-credentials.js');
 const { ProviderBinaryError } = await import('../backends/provider-binary.js');
 const { TIMON_HOME } = await import('../paths.js');
+const { pluginPatternAlertsSettled } = await import('../bounded-regex.js');
+const { dbApi } = await import('../db.js');
 
 const posix = process.platform !== 'win32';
 const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -53,6 +55,10 @@ if (posix) {
   ].join('\n'));
   writeFileSync(join(dir, 'acme-talk'), '#!/bin/sh\nexec node "$(dirname "$0")/acme-talk.mjs"\n');
   chmodSync(join(dir, 'acme-talk'), 0o755);
+  // Prints exactly what it is given, no line break, then stays up: the ready line a test chooses.
+  writeFileSync(join(dir, 'acme-say.mjs'), "process.stdout.write(process.env.ACME_SAY ?? ''); setInterval(() => {}, 1000);");
+  writeFileSync(join(dir, 'acme-say'), '#!/bin/sh\nexec node "$(dirname "$0")/acme-say.mjs"\n');
+  chmodSync(join(dir, 'acme-say'), 0o755);
   writeFileSync(join(dir, 'acme-env'), '#!/bin/sh\nenv\n');
   chmodSync(join(dir, 'acme-env'), 0o755);
 }
@@ -188,9 +194,61 @@ test('S4: a server that never says it is ready, or exits first, is an error that
     await assert.rejects(ctx.provider.binary.serve('acme-serve', [], { ready: 'never printed', readyTimeoutMs: 300 }), /was not ready after 300 ms/);
     await assert.rejects(ctx.provider.binary.serve('acme-failing', [], { ready: 'never printed' }), /exited before it was ready: nope/);
     await assert.rejects(ctx.provider.binary.serve('acme-serve', [], { ready: 'x'.repeat(300) }), /over 200 characters/);
-    await assert.rejects(ctx.provider.binary.serve('acme-serve', [], { ready: '(' }), /not a regular expression/);
-    // Backtracks for minutes on the server's output: the wait ends, the daemon does not freeze.
-    await assert.rejects(ctx.provider.binary.serve('acme-serve', [], { ready: '(.*.*)*!$' }), /could not be tested .* declare a simpler pattern/);
+  } finally {
+    restore();
+  }
+});
+
+const patternAlerts = (pluginId: string) => dbApi.listActiveNotifications('alert').filter((n) => n.source === `plugin:${pluginId}`);
+
+test('S4: a ready pattern that backtracks out of control is skipped: the server is handed back, one alert, not run again (TODO #1003)', { skip: !posix }, async () => {
+  const restore = allowExec('acme-serve', 'acme-say');
+  const ctx = pluginContext('acme-bin-slow', ['acme-serve', 'acme-say']);
+  const started: Array<{ stop(): Promise<void> }> = [];
+  try {
+    // Backtracks for minutes on the server's output: the wait ends, the server is kept as if no `ready` was declared.
+    for (let i = 0; i < 2; i++) {
+      const server = await ctx.provider.binary.serve('acme-serve', [], { ready: '(.*.*)*!$' });
+      started.push(server);
+      assert.equal(server.match, null);
+      assert.equal(alive(server.pid!), true, 'handed back running');
+    }
+    // Proof the pattern is not run again: `aaaa` matches `^(a+)+$` at once, yet the second server gets no match.
+    const timedOut = await ctx.provider.binary.serve('acme-say', [], { ready: '^(a+)+$', env: { ACME_SAY: 'a'.repeat(40) + '!' } });
+    started.push(timedOut);
+    assert.equal(timedOut.match, null);
+    const skipped = await ctx.provider.binary.serve('acme-say', [], { ready: '^(a+)+$', env: { ACME_SAY: 'aaaa' }, readyTimeoutMs: 300 });
+    started.push(skipped);
+    assert.equal(skipped.match, null, 'off for this plugin: not evaluated on the new output');
+    await pluginPatternAlertsSettled();
+    const alerts = patternAlerts('acme-bin-slow');
+    assert.equal(alerts.length, 2, 'one alert per pattern, not per server');
+    assert.ok(alerts.every((n) => n.urgent === 0));
+    assert.ok(alerts.some((n) => /ready pattern for `acme-serve`/.test(n.title) && /ran past 250 ms/.test(n.body ?? '')));
+    // Another plugin with the same pattern still runs it.
+    const fresh = pluginContext('acme-bin-fresh', ['acme-say']);
+    const matched = await fresh.provider.binary.serve('acme-say', [], { ready: '^(a+)+$', env: { ACME_SAY: 'aaaa' } });
+    started.push(matched);
+    assert.equal(matched.match, 'aaaa');
+  } finally {
+    await Promise.all(started.map((server) => server.stop()));
+    restore();
+  }
+});
+
+test('S4: a ready pattern that is not a regular expression is skipped and alerted once', { skip: !posix }, async () => {
+  const restore = allowExec('acme-serve');
+  const ctx = pluginContext('acme-bin-broken', ['acme-serve']);
+  try {
+    for (let i = 0; i < 2; i++) {
+      const server = await ctx.provider.binary.serve('acme-serve', [], { ready: '(' });
+      assert.equal(server.match, null);
+      await server.stop();
+    }
+    await pluginPatternAlertsSettled();
+    const alerts = patternAlerts('acme-bin-broken');
+    assert.equal(alerts.length, 1);
+    assert.match(alerts[0]?.body ?? '', /not a valid regular expression/);
   } finally {
     restore();
   }

@@ -111,7 +111,8 @@ export type ProviderServeOptions = {
   readonly env?: Readonly<Record<string, string>>;
   /**
    * A regular expression (source text, up to 200 characters) the server prints when it is ready; its first group, if any, is handed back as `match`.
-   * It is tested on the last 16 KB of output with a 250 ms limit: a pattern that runs past it ends the wait with an error.
+   * It is tested on the last 16 KB of output with a 250 ms limit: a pattern that runs past it, or is not a regular expression,
+   * is ignored for this plugin until the daemon restarts (one alert to the operator), and the server is handed back as if none was declared.
    */
   readonly ready?: string;
   /** How long to wait for it. Default 15 000 ms, ceiling 60 000. */
