@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import {
-  NOTICES_ENVELOPE_MAX, NOTICES_MAX, NOTICES_SIGNATURE_DOMAIN, NOTICE_BODY_MAX, activeNotices, composeNoticesPayload,
+  NOTICES_ENVELOPE_MAX, NOTICES_MAX, NOTICE_ICONS, NOTICES_SIGNATURE_DOMAIN, NOTICE_BODY_MAX, activeNotices, composeNoticesPayload,
   signNoticesPayload, validateNoticesPayload, verifyNoticesFeed,
 } from './notices-feed.mjs';
 import { RELEASES_SIGNATURE_DOMAIN, composeReleasesPayload, releaseKeyPair, signReleasesPayload, verifyReleaseManifest } from './release-manifest.mjs';
@@ -114,6 +114,9 @@ test('the payload schema refuses what a card could not show safely', () => {
   refused(notice({ body: 'x'.repeat(NOTICE_BODY_MAX + 1) }), /body must be plain text/);
   refused(notice({ body: 'bell\u0007' }), /body must be plain text/);
   refused(notice({ html: '<b>x</b>' }), /unexpected field html/);
+  refused(notice({ icon: 'mastodon' }), /icon must be one of/);
+  refused(notice({ icon: 'https://evil.example/logo.svg' }), /icon must be one of/);
+  refused(notice({ icon: 1 }), /icon must be one of/);
   refused(notice({ startsAt: later(DAY).toISOString(), endsAt: now.toISOString() }), /endsAt must follow startsAt/);
   refused(notice({ channels: ['nightly'] }), /unknown channel/);
   refused(notice({ channels: [] }), /at least one channel/);
@@ -125,6 +128,7 @@ test('the payload schema refuses what a card could not show safely', () => {
   assert.throws(() => validateNoticesPayload({ ...base, notices: Array.from({ length: NOTICES_MAX + 1 }, (_, i) => notice({ id: `n${i}` })) }), /at most/);
   assert.throws(() => validateNoticesPayload({ ...base, schema: 2, notices: [] }), /unsupported schema/);
   assert.ok(validateNoticesPayload({ ...base, notices: [notice({ body: 'two\nlines' })] }));
+  for (const icon of NOTICE_ICONS) assert.ok(validateNoticesPayload({ ...base, notices: [notice({ icon })] }), icon);
 });
 
 test('a feed is composed only after the last one', () => {

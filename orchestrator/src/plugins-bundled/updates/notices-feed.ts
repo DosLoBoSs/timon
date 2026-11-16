@@ -25,6 +25,8 @@ export const NOTICE_BODY_MAX = 400;
 export const NOTICE_LINK_MAX = 2048;
 export const NOTICES_MAX = 20;
 export const NOTICES_ENVELOPE_MAX = 128 * 1024;
+/** The brand logos a card draws itself: a closed list, never an address to load. */
+export const NOTICE_ICONS = ['github', 'discord', 'timon', 'x', 'youtube'] as const;
 
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -50,6 +52,7 @@ const FeedNotice = z.object({
   tone: z.enum(['info', 'warning', 'success']),
   title: z.string().max(NOTICE_TITLE_MAX).regex(TITLE_TEXT, 'must be one line').refine((value) => value.trim().length > 0, 'is empty'),
   body: z.string().max(NOTICE_BODY_MAX).regex(BODY_TEXT, 'must be plain text').refine((value) => value.trim().length > 0, 'is empty'),
+  icon: z.enum(NOTICE_ICONS).optional(),
   link: z.string().refine(isNoticeLink, 'must be an https: address without credentials').optional(),
   startsAt: IsoDate.optional(),
   endsAt: IsoDate.optional(),
@@ -81,6 +84,7 @@ export const NoticesPayloadSchema = z.object({
 
 export type NoticesPayload = z.infer<typeof NoticesPayloadSchema>;
 export type FeedNotice = z.infer<typeof FeedNotice>;
+export type NoticeIcon = (typeof NOTICE_ICONS)[number];
 
 export function validateNoticesPayload(payload: unknown): NoticesPayload {
   const parsed = NoticesPayloadSchema.safeParse(payload);
