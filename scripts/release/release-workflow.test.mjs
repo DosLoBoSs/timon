@@ -204,7 +204,7 @@ test('the build: three systems, stable without expiry, stopped as a whole when o
   const build = jobText('build');
   assert.match(build, /fail-fast:\s*true/);
   assert.doesNotMatch(build, /continue-on-error/);
-  for (const [os, runner] of [['linux', 'ubuntu-latest'], ['mac', 'macos-latest'], ['windows', 'windows-latest']]) {
+  for (const [os, runner] of [['linux', 'ubuntu-latest'], ['mac', '\\[self-hosted, macOS, ARM64, timon-release\\]'], ['windows', 'windows-latest']]) {
     assert.match(build, new RegExp(`\\{ os: ${os}, runner: ${runner} \\}`));
   }
   assert.match(build, /node scripts\/release\/build-package\.mjs --version "\$VERSION" --channel stable --no-expiry --output \.\.\/release-output$/m);

@@ -171,7 +171,10 @@ jobs:
         # host's architecture).
         include:
           - { os: linux, runner: ubuntu-latest }
-          - { os: mac, runner: macos-latest }
+          # macOS builds run on the project's own Mac (org runner group
+          # `release-mac`, open to this workflow on main only): hosted
+          # macOS arm64 runners were not acquired under capacity limits.
+          - { os: mac, runner: [self-hosted, macOS, ARM64, timon-release] }
           - { os: windows, runner: windows-latest }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
