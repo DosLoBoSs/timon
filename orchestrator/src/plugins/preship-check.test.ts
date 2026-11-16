@@ -8,13 +8,13 @@ import '../test-home.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign as signCrypto } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const { checkPluginFolder, checkExitCode, formatCheckReport, npmPackLister, npmCouldNotStart } = await import('./preship-check.js');
-const { hashPluginDirectory } = await import('./signature.js');
+const { hashPluginDirectory, hashPluginFiles } = await import('./signature.js');
 const { PLUGIN_API_VERSION } = await import('./manifest.js');
 const { getHost } = await import('../host/index.js');
 type PackLister = import('./preship-check.js').PackLister;
@@ -123,6 +123,29 @@ test('a signature by a key this Timon does not know is invalid too, not "unsigne
   const report = await checkPluginFolder(dir, { keys: [], pack: DEFAULT_PACK });
   assert.equal(report.signature, 'invalid');
   assert.equal(report.findings[0]?.level, 'error');
+});
+
+test('a working folder signed over what npm ships passes, its tests and links aside (TODO #922)', async (t) => {
+  const dir = pkg({ files: { 'tests/index.test.js': 'export {};\n', 'node_modules/dep/index.js': 'module.exports = 1;\n' } });
+  try {
+    mkdirSync(join(dir, 'node_modules', '.bin'));
+    symlinkSync(join(dir, 'node_modules', 'dep'), join(dir, 'node_modules', '.bin', 'dep'), 'junction');
+  } catch {
+    t.diagnostic('no link could be created here: the .bin case is not exercised');
+  }
+  const shipping = async (d: string) => ({ files: ['README.md', 'lib/index.js', 'package.json', ...(existsSync(join(d, 'SIGNATURE')) ? ['SIGNATURE'] : [])] });
+  const hash = hashPluginFiles(dir, ['README.md', 'lib/index.js', 'package.json']);
+  writeFileSync(join(dir, 'SIGNATURE'), JSON.stringify({
+    alg: 'ed25519', keyId: 'test-check', hash, sig: signCrypto(null, Buffer.from(hash, 'hex'), pair.privateKey).toString('base64'),
+  }));
+  const report = await checkPluginFolder(dir, { keys: KEYS, pack: shipping });
+  assert.equal(report.signature, 'signed');
+  assert.deepEqual(report.findings, []);
+
+  // Signed, yet left out of the archive by `files`: the recipient gets it unsigned.
+  const unshipped = await checkPluginFolder(dir, { keys: KEYS, pack: DEFAULT_PACK });
+  assert.deepEqual(unshipped.findings.map((f) => [f.level, f.rule, f.file]), [['error', 'signature', 'package.json']]);
+  assert.match(unshipped.findings[0]!.message, /not among the shipped files/);
 });
 
 test('an unsigned package is a warning; --strict makes every warning an error', async () => {

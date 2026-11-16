@@ -227,21 +227,6 @@ export async function checkPluginFolder(dirArg: string, opts: CheckOptions = {})
     }
   }
 
-  // Signature: absent is the author's state before the distributor signs;
-  // present and wrong is what the recipient's Timon refuses outright.
-  const hasSignature = existsSync(join(dir, 'SIGNATURE'));
-  const verdict = verifyPluginDirectory(dir, opts.keys ?? PLUGIN_PUBLIC_KEYS);
-  let signature: CheckReport['signature'] = 'signed';
-  if (!verdict.ok) {
-    if (!hasSignature) {
-      signature = 'unsigned';
-      add('warn', 'unsigned', 'package.json', 0, 'the package is not signed: it only loads where developer mode is open (signing goes through the distributor)');
-    } else {
-      signature = 'invalid';
-      add('error', 'signature', 'SIGNATURE', 0, `the signature does not match this package (${verdict.message}); the recipient's Timon refuses it`);
-    }
-  }
-
   // What will ship.
   const files = json ? json.files : undefined;
   const filesList = Array.isArray(files) && files.every((f): f is string => typeof f === 'string') ? files : null;
@@ -266,6 +251,26 @@ export async function checkPluginFolder(dirArg: string, opts: CheckOptions = {})
     packed = { source: filesList ? 'files' : 'folder', files: filesFromFolder(dir, filesList, json) };
   }
   const shipped = new Set(packed.files);
+
+  // Signature: absent is the author's state before the distributor signs;
+  // present and wrong is what the recipient's Timon refuses outright. It
+  // covers what npm ships (`timon plugin sign`), so a working folder is read
+  // through that list; without npm, through the whole folder as before.
+  const hasSignature = existsSync(join(dir, 'SIGNATURE'));
+  const signedFiles = packed.source === 'npm' ? packed.files.filter((f) => f !== 'SIGNATURE') : undefined;
+  const verdict = verifyPluginDirectory(dir, opts.keys ?? PLUGIN_PUBLIC_KEYS, new Date(), signedFiles);
+  let signature: CheckReport['signature'] = 'signed';
+  if (!verdict.ok) {
+    if (!hasSignature) {
+      signature = 'unsigned';
+      add('warn', 'unsigned', 'package.json', 0, 'the package is not signed: it only loads where developer mode is open (signing goes through the distributor)');
+    } else {
+      signature = 'invalid';
+      add('error', 'signature', 'SIGNATURE', 0, `the signature does not match this package (${verdict.message}); the recipient's Timon refuses it`);
+    }
+  } else if (packed.source === 'npm' && !shipped.has('SIGNATURE')) {
+    add('error', 'signature', 'package.json', lineOfKey('files'), '`SIGNATURE` is not among the shipped files: the archive reaches the recipient unsigned (add "SIGNATURE" to `files`, then sign again)');
+  }
 
   for (const path of packed.files) {
     if (path.startsWith('node_modules/') || path.includes('/node_modules/')) continue;
