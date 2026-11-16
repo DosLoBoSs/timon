@@ -43,8 +43,8 @@ export function CockpitVaultGraphTile({ poignee, className }: WidgetProps) {
   // are memoised in VaultGraph3D and already carry their coordinates.
   const graphe = (
     <VaultGraph3D
-      rechercheOuverte={rechercheOuverte}
-      onFermerRecherche={() => setRechercheOuverte(false)}
+      searchOpen={rechercheOuverte}
+      onCloseSearch={() => setRechercheOuverte(false)}
     />
   );
 
