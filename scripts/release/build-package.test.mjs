@@ -140,12 +140,14 @@ test('buildPlan: installs, builds, then packages into the work folder', () => {
   const plan = buildPlan({ checkout, platform: 'win32', keys, work, signing: signingEnv({}, 'win32') });
   assert.deepEqual(plan.map((step) => step.label), [
     'orchestrator: npm ci --include=dev', 'app: npm ci --include=dev', 'desktop: npm ci --include=dev',
-    'app: npm run build', 'desktop: npm run build', 'desktop: npm run prepare:deps', 'desktop: npm run dist -- --win',
+    'app: npm run build', 'desktop: npm run build', 'desktop: npm run prepare:deps', 'desktop: npm run dist -- --win --publish never',
   ]);
   assert.deepEqual(plan.slice(0, 3).map((step) => step.cwd), PACKAGES.map((pkg) => join(checkout, pkg)));
   assert.deepEqual(plan[3].env, { NODE_ENV: 'production', TIMON_NEXT_STANDALONE: '1' });
   const dist = plan.at(-1);
-  assert.deepEqual(dist.args, ['run', 'dist', '--', '--win', `--config.directories.output=${work}`]);
+  assert.deepEqual(dist.args, ['run', 'dist', '--', '--win', '--publish', 'never', `--config.directories.output=${work}`]);
+  // electron-builder publishes on its own in CI when a token is present.
+  assert.equal(dist.args[dist.args.indexOf('--publish') + 1], 'never');
   assert.equal(dist.env.NODE_ENV, 'development');
   assert.equal(dist.env.CSC_IDENTITY_AUTO_DISCOVERY, 'false');
   assert.equal(dist.env[KEY_FILE_ENV.privateKey], keys.privateKey);
@@ -235,7 +237,7 @@ test('inspect: a clean checkout on CI with keys has no blocker', () => {
   assert.equal(state.paths.dir, join(checkout, DEFAULT_OUTPUT, '0.1.9-rc.1', 'linux'));
   const lines = describe(state, opts);
   assert.match(lines[0], /^rc 0\.1\.9-rc\.1 for linux \(linux-x64\)/);
-  assert.ok(lines.some((line) => line.includes('desktop: npm run dist -- --linux')));
+  assert.ok(lines.some((line) => line.includes('desktop: npm run dist -- --linux --publish never')));
   assert.ok(lines.every((line) => !line.includes(keys)), 'the plan never prints where the keys are');
 });
 

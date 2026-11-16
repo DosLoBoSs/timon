@@ -255,10 +255,14 @@ export function buildPlan({ checkout, platform, keys, work, signing }) {
     { label: 'app: npm run build', cwd: dir('app'), args: ['run', 'build'], env: { NODE_ENV: 'production', TIMON_NEXT_STANDALONE: '1' } },
     { label: 'desktop: npm run build', cwd: dir('desktop'), args: ['run', 'build'], env: dev },
     { label: 'desktop: npm run prepare:deps', cwd: dir('desktop'), args: ['run', 'prepare:deps'], env: dev },
+    // `--publish never`: on a CI runner electron-builder publishes to GitHub
+    // by itself as soon as it finds a token (GH_TOKEN, or a tag build).
+    // Publishing is a separate step that reads build-summary.json, so this
+    // one only ever builds.
     {
-      label: `desktop: npm run dist -- ${distTarget(platform)}`,
+      label: `desktop: npm run dist -- ${distTarget(platform)} --publish never`,
       cwd: dir('desktop'),
-      args: ['run', 'dist', '--', distTarget(platform), `--config.directories.output=${work}`],
+      args: ['run', 'dist', '--', distTarget(platform), '--publish', 'never', `--config.directories.output=${work}`],
       env: { ...dev, ...signing.env, [KEY_FILE_ENV.privateKey]: keys.privateKey, [KEY_FILE_ENV.publicKey]: keys.publicKey },
     },
   ];
