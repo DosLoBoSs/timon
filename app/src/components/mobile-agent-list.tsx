@@ -10,6 +10,7 @@ import { mainAgentOf } from '@/lib/main-agent';
 import { onAgentStateEvent } from '@/lib/active-agents';
 import { STATE_VISUALS, type ActiveState } from '@/lib/agent-state';
 import { AgentAvatar, agentIdentity } from '@/components/agent-avatar';
+import { useProjectMeta } from '@/hooks/use-project-meta';
 
 /**
  * Mobile-only quick navigator for the agents canvas.
@@ -71,6 +72,8 @@ export function MobileAgentList() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [agents, setAgents] = useState<MainAgent[]>([]);
+  // The project's logo and colour fill in for an agent without its own, as in every other view.
+  const projects = useProjectMeta();
 
   const refresh = useCallback(async () => {
     try {
@@ -252,7 +255,7 @@ export function MobileAgentList() {
                         )}
                       </span>
                       {/* The agent's head, by the same rule as every other view (docs/AGENT-AVATAR.md). */}
-                      <AgentAvatar identity={agentIdentity(a, null)} size="sm" roleBadge={false} />
+                      <AgentAvatar identity={agentIdentity(a, a.project ? projects.get(a.project) ?? null : null)} size="sm" roleBadge={false} />
                       <span className="min-w-0 flex-1">
                         <span
                           className="block truncate text-[13px] text-foreground"
