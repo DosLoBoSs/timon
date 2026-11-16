@@ -1,12 +1,12 @@
 'use client';
 
 /**
- * The steps of "update now" until the update window takes them over
- * (docs/AUTO-UPDATE.md §10): in the desktop app the shell downloads,
- * verifies, then installs the system's way, missions counted first; a browser
- * links the installer. One state machine painted in two places — the update
- * notice card and the lock screen of an ended build — so the view is text and
- * gestures only, each place deciding its own look.
+ * The steps of "update now" (docs/AUTO-UPDATE.md §10): in the desktop app the
+ * shell downloads, verifies, then installs the system's way, missions counted
+ * first; a browser links the installer. One state machine painted in three
+ * places — the update notice card, the update window it opens, and the lock
+ * screen of an ended build — so the view is text and gestures only, each place
+ * deciding its own look.
  */
 
 import { useEffect, useMemo, useState } from 'react';
