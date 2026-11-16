@@ -8,17 +8,26 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 
-const { dbApi, MAX_SYSTEM_REQUEUES, CRASH_LOOP_HARD_CEILING } = await import('./db.js');
-const { requeueRecentSystemDeaths, BOOT_REQUEUE_MAX_AGE_MS } = await import('./wake.js');
+const { db, dbApi, MAX_SYSTEM_REQUEUES, CRASH_LOOP_HARD_CEILING } = await import('./db.js');
+const { requeueRecentSystemDeaths, handleTaskBlocked, BOOT_REQUEUE_MAX_AGE_MS } = await import('./wake.js');
 type InterruptionReason = import('./interruption.js').InterruptionReason;
 
-/** A task whose missions died `deaths` times of `reason`, ending BLOCKED. */
+/** No agent of that name exists: a wake flush only expires its mail, it never spawns. */
+const PILOT = 'boot-requeue-pilot';
+
+/** A task whose missions died `deaths` times of `reason`, ending BLOCKED. Each
+ *  death is a mission of PILOT's that ended, the last one left attached. */
 function deadTask(title: string, deaths: number, reason: InterruptionReason = 'killed'): string {
   const id = randomUUID();
   dbApi.createTask(id, title, 'boot-requeue-worker', { type: 'review' });
   for (let i = 0; i < deaths; i++) {
     // A task already BLOCKED by its cap only dies again once someone replays it.
     if (dbApi.getTask(id)?.status === 'BLOCKED') dbApi.updateTaskStatus(id, 'PENDING');
+    const missionId = randomUUID();
+    dbApi.createMission(missionId, 'boot-requeue-worker', title);
+    dbApi.setMissionLineage(missionId, { parentAgent: PILOT, taskId: id });
+    dbApi.assignTaskMission(id, missionId);
+    dbApi.finishMission(missionId, 'terminated', null);
     dbApi.setTaskInterrupted(id, reason, `mission ${reason}`);
   }
   const t = dbApi.getTask(id);
@@ -81,4 +90,28 @@ test('a business block is never replayed', () => {
   dbApi.updateTaskStatus(id, 'BLOCKED', { blockedReason: 'API key missing' });
   requeueRecentSystemDeaths();
   assert.equal(dbApi.getTask(id)?.status, 'BLOCKED');
+});
+
+test('a task that died more than a day ago stays BLOCKED even if edited since', () => {
+  const id = deadTask('review: killed long ago, retitled today', MAX_SYSTEM_REQUEUES + 1);
+  const missionId = dbApi.getTask(id)!.mission_id!;
+  db.prepare('UPDATE missions SET ended_at = ? WHERE id = ?').run(Date.now() - 25 * 60 * 60_000, missionId);
+  dbApi.updateTask(id, { title: 'review: retitled today' });
+
+  requeueRecentSystemDeaths();
+  assert.equal(dbApi.getTask(id)?.status, 'BLOCKED', 'the death is old, the edit is not a block');
+});
+
+test('an unread "Task blocked" recap of a requeued task is expired', () => {
+  const id = deadTask('review: recap pending at reboot', MAX_SYSTEM_REQUEUES + 1);
+  handleTaskBlocked(id, dbApi.getTask(id)!.blocked_reason);
+  const recaps = () => dbApi.listInbox(PILOT, { limit: 200 }).filter((m) => {
+    const p = JSON.parse(m.payload) as { kind?: string; task_id?: string };
+    return p.kind === 'wake_recap' && p.task_id === id;
+  });
+  assert.equal(recaps().filter((m) => m.status === 'pending').length, 1);
+
+  requeueRecentSystemDeaths();
+  assert.equal(dbApi.getTask(id)?.status, 'PENDING');
+  assert.deepEqual(recaps().map((m) => m.status), ['expired'], 'the pilot is not woken on a stale block');
 });

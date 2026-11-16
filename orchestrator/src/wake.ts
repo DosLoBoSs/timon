@@ -1152,6 +1152,32 @@ export function representBlockedTasks(): number {
 /** How recent a system death must be for the boot sweep to replay its task. */
 export const BOOT_REQUEUE_MAX_AGE_MS = 24 * 60 * 60_000;
 
+/** When the task was blocked by its death: the end of the mission that died,
+ *  which the block leaves attached. `updated_at` moves with any later edit
+ *  (title, priority, worktree), so it is only the fallback. */
+function systemDeathAt(task: TaskRow): number {
+  const m = task.mission_id ? dbApi.getMission(task.mission_id) : null;
+  return m?.ended_at ?? task.updated_at;
+}
+
+/** Expires the "Task blocked" recaps still unread for tasks that are no
+ *  longer blocked: the pilot would otherwise be woken on a stale state and
+ *  might recreate or reassign a task that is already queued again. */
+function expireBlockedRecaps(taskIds: ReadonlySet<string>): number {
+  if (taskIds.size === 0) return 0;
+  const stale = dbApi.listAllInbox({ status: 'pending', limit: 500 }).filter((m) => {
+    if (m.from_agent !== WAKE_SENDER) return false;
+    try {
+      const p = JSON.parse(m.payload) as { kind?: unknown; task_id?: unknown; title?: unknown };
+      return p.kind === 'wake_recap' && typeof p.task_id === 'string' && taskIds.has(p.task_id)
+        && typeof p.title === 'string' && p.title.startsWith('Task blocked:');
+    } catch {
+      return false;
+    }
+  });
+  return dbApi.expirePendingMessages(stale.map((m) => m.id));
+}
+
 /**
  * Boot pass that sends back to PENDING the tasks a recent system death left
  * BLOCKED once their automatic retries ran out (TIM-0149). A restart often
@@ -1159,11 +1185,11 @@ export const BOOT_REQUEUE_MAX_AGE_MS = 24 * 60 * 60_000;
  * backend), and those tasks otherwise waited for a human to notice them.
  *
  * Bounded so a restart never turns into a spending spree:
- *   - only a replayable cause (`isRequeueableInterruption`): a quota, an auth
- *     failure or a stop is not cured by a restart;
- *   - only a task blocked for less than `BOOT_REQUEUE_MAX_AGE_MS`: an update
- *     must not replay weeks-old work (stale reviews cost credits). `updated_at`
- *     stands for the block time: a BLOCKED task is rarely written to again;
+ *   - only a replayable cause that counts toward the crash loop: a quota, an
+ *     auth failure or a stop is not cured by a restart, and a death that is
+ *     not counted would let a task be replayed at every boot;
+ *   - only a task blocked less than `BOOT_REQUEUE_MAX_AGE_MS` ago: an update
+ *     must not replay weeks-old work (stale reviews cost credits);
  *   - only under `CRASH_LOOP_HARD_CEILING` deaths. The count is never reset
  *     here and each new death still adds one, so a task gets at most a couple
  *     of boot replays before only a human can restart it (TIM-0065).
@@ -1172,21 +1198,23 @@ export const BOOT_REQUEUE_MAX_AGE_MS = 24 * 60 * 60_000;
  * to its pilot as blocked. Returns how many tasks it requeued.
  */
 export function requeueRecentSystemDeaths(now: number = Date.now()): number {
-  let requeued = 0;
+  const requeued = new Set<string>();
   for (const t of dbApi.listTasks('BLOCKED')) {
-    if (isMirrorTask(t)) continue;
+    if (isMirrorTask(t) || !diedOfSystemCause(t)) continue;
     const reason = toInterruptionReason(t.interrupted_reason);
     if (!reason || !isRequeueableInterruption(reason)) continue;
-    if (now - t.updated_at >= BOOT_REQUEUE_MAX_AGE_MS) continue;
+    if (now - systemDeathAt(t) >= BOOT_REQUEUE_MAX_AGE_MS) continue;
     const deaths = t.requeue_count ?? 0;
     if (deaths >= CRASH_LOOP_HARD_CEILING) continue;
     dbApi.updateTaskStatus(t.id, 'PENDING');
     // Same backoff as an agent's requeue: an overloaded backend may still be.
     dbApi.deferTask(t.id, now + requeueBackoffMs(Math.max(1, deaths)));
     console.log(`[wake] boot: task ${t.id} requeued after a system death (${reason}, ${deaths}/${CRASH_LOOP_HARD_CEILING} deaths)`);
-    requeued++;
+    requeued.add(t.id);
   }
-  return requeued;
+  const expired = expireBlockedRecaps(requeued);
+  if (expired) console.log(`[wake] boot: ${expired} stale "Task blocked" recap(s) expired`);
+  return requeued.size;
 }
 
 /**
