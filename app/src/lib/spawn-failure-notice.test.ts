@@ -42,3 +42,16 @@ test('the notice follows the locale', () => {
     setLocale('en');
   }
 });
+
+test('a working directory that is gone: the notice names the folder, never the binary', () => {
+  setLocale('en');
+  const notice = spawnFailureNotice({ backend: 'claude', binary: null, cause: 'cwd_missing', cwd: '/home/me/projects/a' });
+  assert.match(notice, /\/home\/me\/projects\/a/);
+  assert.match(notice, /does not exist/);
+  assert.doesNotMatch(notice, /host\.binaries|Install it|chatPage\./);
+  for (const cause of ['cwd_denied', 'cwd_not_directory']) {
+    const other = spawnFailureNotice({ backend: 'claude', cause, cwd: '/srv/x' });
+    assert.match(other, /\/srv\/x/);
+    assert.doesNotMatch(other, /host\.binaries|chatPage\./);
+  }
+});

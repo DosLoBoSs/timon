@@ -80,6 +80,7 @@ import { cpus, homedir, loadavg } from 'node:os';
 import { basename, join } from 'node:path';
 import { config } from './config/load.js';
 import { apiError } from './api-error.js';
+import { CwdUnusableError } from './cwd-check.js';
 import { getHost } from './host/index.js';
 import { FENCE_EXIT, fenceLaunchDecision, type FenceStatus } from './host/fence.js';
 import {
@@ -454,11 +455,15 @@ export class MissionFenceRefusedError extends Error {
  * agent is still talking" and answers by queueing the message.
  */
 export function launchErrorStatus(err: unknown, otherwise: number): number {
-  return err instanceof MissionFenceRefusedError ? 503 : otherwise;
+  if (err instanceof MissionFenceRefusedError) return 503;
+  // The agent's folder is gone or closed: the request is fine, the setup is not (TIM-0148).
+  if (err instanceof CwdUnusableError) return 409;
+  return otherwise;
 }
 
 export function missionLaunchErrorBody(err: unknown): { error: string; code?: string } {
   if (err instanceof MissionFenceRefusedError) return { ...apiError('mission_fence_refused', err.message) };
+  if (err instanceof CwdUnusableError) return { ...apiError('cwd_unusable', err.message, { path: err.path }) };
   return { error: err instanceof Error ? err.message : String(err) };
 }
 
