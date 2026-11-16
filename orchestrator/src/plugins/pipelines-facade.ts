@@ -9,6 +9,12 @@
  * does not exist. Of a pipeline it does not own it sees the summary — name,
  * step count, the `{{input.x}}` keys — never the prompts.
  *
+ * "What the caller sees" is the routes' rule (`pipelineVisibleTo`, TODO #854),
+ * not the other automation facades': a system pipeline (owner NULL, the seeded
+ * `feature-flow`) is every account's to read and run, so a plugin acting in an
+ * account's request sees and runs it too. A job has no account: it sees only
+ * the plugin's own.
+ *
  * A run is bounded like `ctx.kanban.add`: in a request its tasks (and the run
  * record) belong to the caller, in a job to `plugin:<id>`; the plugin must also
  * declare `kanban:write`, and the caller hold it. `runStatus` reads only the
@@ -33,7 +39,7 @@ import { canonicalAgentName } from '../agent-config.js';
 import { dbApi, TASK_TYPES } from '../db.js';
 import { agentDir } from '../paths.js';
 import {
-  createPipeline, deletePipeline, getPipeline, getRunStatus, listPipelines, runPipeline,
+  createPipeline, deletePipeline, getPipeline, getRunStatus, listPipelines, pipelineVisibleTo, runPipeline,
   type Pipeline, type PipelineDefinition,
 } from '../pipelines.js';
 import {
@@ -118,9 +124,23 @@ export function pipelineView(p: Pipeline, pluginId: string): PluginPipeline | Pl
   return { ...base, mine: true, steps };
 }
 
+/**
+ * A pipeline inside this caller's view: the plugin's own, then — in a request
+ * only — what the routes show the caller's account. Not `visibleTo`, which hides
+ * a system row from anyone but a superadmin: routines, triggers and workflows
+ * keep that rule.
+ */
+function pipelineInView(caller: AutomationCaller, p: Pick<Pipeline, 'owner_user_id'>): boolean {
+  if (ownedByPlugin(caller, p.owner_user_id)) return true;
+  if (caller.job) return false;
+  // A request always carries an account; without one, `pipelineVisibleTo` would read unscoped.
+  if (!caller.viewer) return caller.superadmin;
+  return pipelineVisibleTo(p, caller.viewer);
+}
+
 export function pipelinesFor(caller: PipelineCallerScope): ScopedPipelines {
   const seen = (p: Pipeline | null | undefined): Pipeline | undefined =>
-    p && visibleTo(caller, p.owner_user_id) ? p : undefined;
+    p && pipelineInView(caller, p) ? p : undefined;
   const summary = (p: Pipeline): PluginPipeline | PluginOwnPipeline => pipelineView(p, caller.pluginId);
   const origin = { kind: 'plugin', id: caller.pluginId } as const;
 
