@@ -80,6 +80,12 @@ type Entry = Notice & { origin: string; seq: number };
 const entries = new Map<string, Entry>();
 /** `null` until the daemon's list was read once. */
 let dismissed: Set<string> | null = null;
+/**
+ * The demonstration cards of `/?notices-preview=1`, shown instead of the real
+ * ones for the life of the page: closings are ignored and nothing is written.
+ */
+let preview: Entry[] | null = null;
+const closedInPreview = new Set<string>();
 let sequence = 0;
 let version = 0;
 const listeners = new Set<() => void>();
@@ -175,9 +181,37 @@ function strip(entry: Entry): Notice {
   };
 }
 
+/**
+ * Shows these cards instead of the pushed ones until the page is left: the
+ * account's closings are ignored, and closing one here only hides it in this
+ * page. Still nothing without a session, since the closed list must be read
+ * first. Invalid cards are skipped: the preview is the product's own.
+ */
+export function startNoticesPreview(cards: readonly (NoticeInput & { pluginId: string })[]): void {
+  preview = cards.filter((card) => noticeProblem(card) === null).map((card, index) => ({
+    id: card.id,
+    pluginId: card.pluginId,
+    tone: card.tone ?? 'info',
+    icon: card.icon ?? null,
+    title: card.title,
+    body: card.body?.trim() ? card.body : null,
+    actions: (card.actions ?? []).map((a) => ({ ...a })),
+    dismissible: card.dismissible ?? true,
+    origin: 'preview',
+    seq: index,
+  }));
+  closedInPreview.clear();
+  publish();
+}
+
+export function noticesPreviewActive(): boolean {
+  return preview !== null;
+}
+
 /** Every card that may show, in the order they stack: warnings first, then the oldest. */
 export function visibleNotices(): Notice[] {
   if (!dismissed) return [];
+  if (preview) return preview.filter((entry) => !closedInPreview.has(noticeKey(entry.pluginId, entry.id))).map(strip);
   const closed = dismissed;
   return [...entries.entries()]
     .filter(([key]) => !closed.has(key))
@@ -223,6 +257,11 @@ export async function loadDismissedNotices(): Promise<void> {
  */
 export function dismissNotice(pluginId: string, id: string): void {
   const key = noticeKey(pluginId, id);
+  if (preview) {
+    closedInPreview.add(key);
+    publish();
+    return;
+  }
   dismissed = new Set(dismissed ?? []);
   dismissed.add(key);
   publish();
@@ -279,6 +318,8 @@ export function usePluginNotices(pluginId: string): Notice[] {
 export function resetNoticesForTests(): void {
   entries.clear();
   dismissed = null;
+  preview = null;
+  closedInPreview.clear();
   sequence = 0;
   publish();
 }

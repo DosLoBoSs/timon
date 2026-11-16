@@ -19,9 +19,9 @@ import { waitUntil } from '../../lib/test-wait';
 
 type Mounted = Awaited<ReturnType<typeof mount>>;
 
-async function mount({ dismissed = [] as string[], session = true, usageDays = [] as string[], routes = {} as Record<string, () => Response> } = {}) {
+async function mount({ dismissed = [] as string[], session = true, usageDays = [] as string[], routes = {} as Record<string, () => Response>, url = 'http://localhost/' } = {}) {
   const { JSDOM } = await import('jsdom');
-  const dom = new JSDOM('<html><body><div id="root"></div></body></html>', { url: 'http://localhost/', pretendToBeVisual: true });
+  const dom = new JSDOM('<html><body><div id="root"></div></body></html>', { url, pretendToBeVisual: true });
   const saved = new Map<string, PropertyDescriptor | undefined>();
   const install = (key: string, value: unknown) => {
     if (!saved.has(key)) saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
@@ -39,10 +39,13 @@ async function mount({ dismissed = [] as string[], session = true, usageDays = [
   dom.window.open = ((url: string) => { opened.push(url); return null; }) as typeof dom.window.open;
   const server = new Set(dismissed);
   const posts: unknown[] = [];
+  const writes: string[] = [];
   install('fetch', async (input: string, init?: RequestInit) => {
     const url = String(input);
+    if (init?.method && init.method !== 'GET') writes.push(`${init.method} ${url}`);
     if (url === '/api/ui/prefs/dismissed-notices') {
       if (!session) return Response.json({ error: 'unauthorized' }, { status: 401 });
+      if (init?.method === 'DELETE') server.clear();
       if (init?.method === 'POST') {
         const body = JSON.parse(String(init.body)) as { id: string };
         posts.push(body);
@@ -87,7 +90,7 @@ async function mount({ dismissed = [] as string[], session = true, usageDays = [
       else delete (globalThis as Record<string, unknown>)[k];
     }
   };
-  return { React, slots, notices, ProductNoticeCard, until, click, pluginContext, unmount, posts, opened, server, dom };
+  return { React, slots, notices, ProductNoticeCard, until, click, pluginContext, unmount, posts, writes, opened, server, dom };
 }
 
 const cards = () => Array.from(document.querySelectorAll('[data-notice]'), (el) => el.getAttribute('data-notice'));
@@ -155,6 +158,45 @@ test('the product card: a brand logo or the tone\'s icon, the main action filled
     assert.equal(m.notices.visibleNotices().find((n) => n.id === 'plain')?.icon, null);
   } finally {
     await m.unmount();
+  }
+});
+
+test('/?notices-preview=1 shows one card of each kind, closed ones included, and writes nothing', async () => {
+  const m = await mount({ url: 'http://localhost/?notices-preview=1', dismissed: ['@timon/settings:github-star'] });
+  try {
+    const ctx = m.pluginContext('acme');
+    await m.React.act(async () => ctx.notices.push({ id: 'real', title: 'A real card' }));
+    await m.until(() => cards().length === 5, 'the five demonstration cards');
+    assert.deepEqual(cards(), [
+      '@timon/settings:github-star',
+      '@timon/settings:discord',
+      '@timon/updates:update-0.2.0',
+      '@timon/updates:build-ends-preview',
+      '@timon/updates:feed.preview',
+    ], 'more than three, in the demonstration\'s order; the closed star shows; the real card waits');
+    const visuals = Array.from(document.querySelectorAll('[data-notice-card]'), (el) => el.getAttribute('data-notice-visual'));
+    assert.deepEqual(visuals, ['github', 'discord', 'timon', 'warning', 'youtube']);
+    assert.match(document.querySelector('[data-notice="@timon/settings:discord"]')?.textContent ?? '', /Join the community/);
+
+    await m.click(document.querySelector('[data-notice="@timon/settings:discord"] [data-notice-dismiss]'));
+    await m.until(() => cards().length === 4, 'closed in the page');
+    await m.click(document.querySelector('[data-notice="@timon/updates:update-0.2.0"] [data-notice-action="0"]'));
+    await m.until(() => cards().length === 3, 'an action that closes, closed in the page');
+    await m.click(document.querySelector('[data-notice="@timon/settings:github-star"] [data-notice-action="0"]'));
+    assert.deepEqual(m.opened, ['https://github.com/ai-timon/timon']);
+    await m.until(() => cards().length === 2, 'the link opened and the card closed in the page');
+    assert.deepEqual(m.writes, [], 'not a single write');
+    assert.deepEqual([...m.server], ['@timon/settings:github-star'], 'the account\'s list untouched');
+  } finally {
+    await m.unmount();
+  }
+
+  const signedOut = await mount({ url: 'http://localhost/?notices-preview=1', session: false });
+  try {
+    await signedOut.until(() => true, 'a pass');
+    assert.deepEqual(cards(), [], 'no session, no preview');
+  } finally {
+    await signedOut.unmount();
   }
 });
 

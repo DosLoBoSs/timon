@@ -10,7 +10,8 @@
  * good (read from the daemon, re-read when the window comes back), and the
  * sources — the entries of the `notices` slot, mounted here once each. Each
  * card is painted by the occupant of `notices.card`, or the product's card
- * while the slot is empty.
+ * while the slot is empty. `/?notices-preview=1` swaps the real cards for one
+ * of each kind, for the life of the page (`notice-preview.ts`).
  */
 
 import { useEffect, useMemo, type CSSProperties, type ReactElement } from 'react';
@@ -20,11 +21,12 @@ import { PluginBoundary } from '@/lib/plugin-host/plugin-boundary';
 import { SlotSingle, useSlotEntries } from '@/lib/plugin-host/render';
 import { NOTICE_CARD_SLOT, NOTICES_SLOT, type SlotEntry } from '@/lib/plugin-host/slots';
 import {
-  NOTICES_VISIBLE_MAX, clearNoticesFrom, loadDismissedNotices, useVisibleNotices,
+  NOTICES_VISIBLE_MAX, clearNoticesFrom, loadDismissedNotices, noticesPreviewActive, startNoticesPreview, useVisibleNotices,
 } from '@/lib/notices';
 import { t } from '@/lib/i18n';
 import { NoticeProvider, NoticeSourceProvider, noticeValue, useNotice } from './notice-context';
 import { noticeVisual } from './notice-visual';
+import { noticesPreviewRequested, previewNotices } from './notice-preview';
 
 /**
  * The product's card: the default occupant of `notices.card`. `null` outside the host.
@@ -121,9 +123,12 @@ function NoticeSourceMount({ entry }: { entry: SlotEntry }): ReactElement {
 export function NoticesHost(): ReactElement {
   const sources = useSlotEntries(NOTICES_SLOT);
   const claimed = useSlotEntries(NOTICE_CARD_SLOT).length > 0;
-  const notices = useVisibleNotices().slice(0, NOTICES_VISIBLE_MAX);
+  const visible = useVisibleNotices();
+  // The preview shows every kind at once; the real stack keeps its cap.
+  const notices = noticesPreviewActive() ? visible : visible.slice(0, NOTICES_VISIBLE_MAX);
 
   useEffect(() => {
+    if (noticesPreviewRequested(window.location.search)) startNoticesPreview(previewNotices());
     void loadDismissedNotices();
     // A card closed on another client goes away when this window comes back.
     const onVisible = () => { if (document.visibilityState === 'visible') void loadDismissedNotices(); };

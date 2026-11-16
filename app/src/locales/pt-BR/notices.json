@@ -8,6 +8,17 @@
     },
     "feed": {
       "open": "Saiba mais"
+    },
+    "preview": {
+      "discord": {
+        "title": "Participe da comunidade",
+        "body": "Perguntas, ideias e novidades, com quem constrói o Timon.",
+        "action": "Participar"
+      },
+      "feed": {
+        "title": "Demo ao vivo na quinta",
+        "body": "Agentes e plugins, uma hora."
+      }
     }
   }
 }
