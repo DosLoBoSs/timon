@@ -35,35 +35,28 @@ Secrets and backend sign-ins are not in the archive: reconnect your backends and
 
 Timon checks whether a newer version is published for its channel: at startup, then every 6 hours. A beta build is offered release candidates as well as final versions; a stable build is offered final versions only, and never a version older than or equal to the one you run.
 
-When one is out, a banner at the top of the app names it and gives:
+When one is out, a card at the bottom left of the app says **Timon x.y.z is available**, with one button, **Update**. In a browser, **Update** downloads the installer for the system you are using (`.pkg` on macOS, AppImage on Linux, the setup program on Windows; on a phone, the release notes). Its **×** puts it off: that version is not announced again, on any device of your account, and the next one is.
 
-- **Download for …**: the installer for the system of the browser or app you are using (`.pkg` on macOS, AppImage on Linux with a `.deb` next to it, the setup program on Windows); on a phone, a link to the download page;
-- **What's new**: the release notes;
-- **Later**: hides the banner for this version; the next one is announced again.
-
-The banner also appears in the notification centre, once per version. Installing what you downloaded follows [Apply the update](#apply-the-update) below; the app installs nothing until you click **Install**.
+The new version also appears in the notification centre, once per version. Installing what you downloaded follows [Apply the update](#apply-the-update) below; the app installs nothing until you click **Install**.
 
 ### Download it from the desktop app
 
-In the desktop app, the banner offers **Download and verify** instead of a link. The app downloads the installer for this computer (`.pkg` on macOS, the setup program on Windows, the AppImage or `.deb` you installed on Linux), shows its progress, and checks it against the size and checksum published in the signed list before keeping it. A file that does not match is deleted. **Cancel** stops the download and deletes what was received; an interrupted download resumes where it stopped (**Resume**).
+In the desktop app, **Update** downloads the installer through the app itself. The app downloads the installer for this computer (`.pkg` on macOS, the setup program on Windows, the AppImage or `.deb` you installed on Linux), shows its progress, and checks it against the size and checksum published in the signed list before keeping it. A file that does not match is deleted. **Cancel** stops the download and deletes what was received; an interrupted download resumes where it stopped (**Resume**).
 
-Once verified:
+Once verified, the card offers **Install** (**Install and restart** for an AppImage), which installs it the way your system installs software — see [Install it from the desktop app](#install-it-from-the-desktop-app). The file is kept in the `updates` folder of your data directory (for example `~/.timon/updates/0.1.8/`); only the latest version downloaded is kept there.
 
-- **Install** (**Install and restart** for an AppImage) installs it, the way your system installs software — see [Install it from the desktop app](#install-it-from-the-desktop-app);
-- **Show in folder** shows the file, kept in the `updates` folder of your data directory (for example `~/.timon/updates/0.1.8/`). Only the latest version downloaded is kept there.
-
-The download needs room for the installer plus a small margin; when the disk is too full, the banner says so and nothing is written. Like the check, it sends no licence, account or machine identifier. A browser, or a desktop window showing another machine, keeps the plain download link.
+The download needs room for the installer plus a small margin; when the disk is too full, the card says so and nothing is written. Like the check, it sends no licence, account or machine identifier. A browser, or a desktop window showing another machine, keeps the plain download link.
 
 ### Install it from the desktop app
 
-**Install** first counts the missions running on this computer. When some are, the banner says how many: **Wait** leaves everything as it is (install later, once they are done), **Install anyway** goes on and they stop when the service moves to the new version. Then, depending on the package:
+**Install** first counts the missions running on this computer. When some are, the card says how many: **Wait** leaves everything as it is (install later, once they are done), **Install anyway** goes on and they stop when the service moves to the new version. Then, depending on the package:
 
 - **AppImage**: the AppImage you launched is replaced by the verified one, in the same folder and under the same name, and Timon restarts on it. The previous file stays next to it, hidden, as `.<name>.previous`, until the new version has started; if the replacement or the restart fails, your current AppImage is left as it was. When the AppImage's folder is not writable, nothing is replaced: the new AppImage stays in the `updates` folder for you to move;
-- **`.deb`**: Timon asks your system for administrator rights (the password dialog of your desktop), installs the package and restarts on it. Without that dialog (no `pkexec`, a server session) or when the installation fails, the package opens in your software manager and the banner shows the command that installs it (`sudo apt install '…/timon_<version>_amd64.deb'`) with a **Copy** button;
+- **`.deb`**: Timon asks your system for administrator rights (the password dialog of your desktop), installs the package and restarts on it. Without that dialog (no `pkexec`, a server session) or when the installation fails, the package opens in your software manager and the card shows the command that installs it (`sudo apt install '…/timon_<version>_amd64.deb'`) with a **Copy** button;
 - **macOS**: macOS asks for your administrator password, then Timon installs the `.pkg` and restarts on it. When the installation fails, the `.pkg` opens in Installer instead: once it is done, quit Timon and open it again;
 - **Windows**: Timon closes, the setup program installs the new version without its wizard, in the folder and for the users (you only, or everyone) of the current installation, and opens Timon again. Windows may ask for permission, to pause the background service and for an installation for everyone; the missions the service ran stop. If the installation does not happen (permission refused, an error), Timon opens again on the current version; if the setup program cannot be started that way, it opens with its wizard instead.
 
-Before anything runs with administrator rights, the installer is checked once more against the signed checksum. Closing the password dialog changes nothing: the banner offers **Install** again.
+Before anything runs with administrator rights, the installer is checked once more against the signed checksum. Closing the password dialog changes nothing: the card offers **Install** again.
 
 In every case, the next start shows **Update Timon from X to Y**, as in [Apply the update](#apply-the-update): nothing is migrated without your approval.
 
@@ -84,15 +77,15 @@ The environment variable `TIMON_UPDATES_CHECK=0` overrides both. Turned off, Tim
 
 ## When a beta build ends
 
-A beta build has an end date, and a paid licence may have one too. Fourteen days before either, a banner tells you; it turns red for the last three days. When a newer version is already out, the update banner gives the build's end date instead. A licence that ends does not stop Timon: it continues on Free. After the build's end date, Timon shows a full-screen notice instead of the app: **This build has expired**, install a newer build.
+A beta build has an end date, and a paid licence may have one too. Fourteen days before the build's end, a warning card at the bottom left tells you; when a newer version is already out, it is the update card that says so. Closed, the warning comes back for the last three days. Fourteen days before the licence's end, a banner at the top of the app tells you; it turns red for the last three days. A licence that ends does not stop Timon: it continues on Free. After the build's end date, Timon shows a full-screen notice instead of the app: **This build has expired**, install a newer build.
 
-When a newer version is published, this notice shows it too, with its notes and the download link for your system (in the desktop app, **Download and verify**). **Later** is not offered there: installing it is the way back into the app.
+When a newer version is published, this notice shows it too, with **Update**: the installer for your system, downloaded and verified by the desktop app. It cannot be put off there: installing it is the way back into the app.
 
 It keeps an **Export my data** button, so you can save your data before moving on.
 
 ## Apply the update
 
-Install the new package for your platform: the one the desktop app downloaded and verified, the one the update banner or `timon update check` links, or the one supplied to you.
+Install the new package for your platform: the one the desktop app downloaded and verified, the one the update card or `timon update check` links, or the one supplied to you.
 
 On Linux and macOS, installing the package replaces the program, not the
 background service: the service runs from its own copy of the release inside
