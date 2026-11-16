@@ -48,6 +48,12 @@ export type BuiltinBinaryDeclaration = Omit<ProviderBinaryDeclaration, 'desktopB
    * npm, unlike `install`: a desktop-only machine has no Node, and the standalone
    * builds need none. A side the vendor does not document is left out: that OS
    * gets the link to the vendor's page instead of a line we would have made up.
+   *
+   * The line runs with `TIMON_RESOLVED_BIN` (`RESOLVED_BIN_ENV`, `host/machine.ts`)
+   * set to the copy of the CLI the daemon resolved, a `host.binaries.<cli>` pin
+   * first, and unset when it found none: an "Update" line reads it to update
+   * that copy rather than search for one. The same line is shown for pasting
+   * into a terminal, where the variable is unset: it must work without it.
    */
   readonly standaloneInstaller?: { readonly label: string; readonly posix?: string; readonly windows?: string };
 };
@@ -142,6 +148,8 @@ export type ProductBackend = BuiltinDeclarations & {
 
 const LABEL = z.string().min(1).max(80);
 const COMMAND = z.string().min(1).max(500);
+/** An installer line: an "Update" branch in front of the vendor's script needs room a sign-in line does not. */
+const INSTALLER_COMMAND = z.string().min(1).max(1000);
 /** A vendor page or channel: the onboarding links to it or fetches it, so never anything but https. */
 const HTTPS_URL = z.string().max(300).url().refine((value) => value.startsWith('https://'), 'expected an https:// URL');
 /** A variable of the sign-in command: an upper-case name, a value a POSIX shell reads as written (no quote, space or `$`). */
@@ -172,7 +180,7 @@ const ProductBackendSchema = z.object({
 
 /** The product's narrowings of a binary declaration: a standalone installer, the folders that count as a desktop build. */
 const ProductBinaryExtrasSchema = z.object({
-  standaloneInstaller: z.object({ label: LABEL, posix: COMMAND.optional(), windows: COMMAND.optional() }).strict()
+  standaloneInstaller: z.object({ label: LABEL, posix: INSTALLER_COMMAND.optional(), windows: INSTALLER_COMMAND.optional() }).strict()
     .refine(({ posix, windows }) => posix !== undefined || windows !== undefined, 'names an installer for at least one OS').optional(),
   desktopBuilds: z.array(z.object({ folderPattern: z.string().min(1).max(200).optional() })).optional(),
 });
