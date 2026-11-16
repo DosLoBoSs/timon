@@ -19,7 +19,7 @@ The `timon` field in `package.json` declares the plugin contract. The npm packag
 | `client.external` | External module declarations; default `[]` |
 | `client.mode` | `esm` by default; schema also accepts `iframe` |
 | `declares` | Slots opened for other components, mapped to `single`, `list` or `keyed` |
-| `route` | Page route; required for a page, forbidden otherwise. Agents find it with their `ui_routes` tool, titled with your `label`, for the users who can open your plugin |
+| `route` | Page route; required for a page, forbidden otherwise. A route of the product, or a path below one, is refused (see [Page](page.md)). Agents find it with their `ui_routes` tool, titled with your `label`, for the users who can open your plugin |
 | `modifies` | Informational list of affected surfaces; default `[]` |
 | `contains` | Child manifest IDs for bundles only |
 | `settings` | Declarative fields: `key`, `type`, `label`, optional `default` |

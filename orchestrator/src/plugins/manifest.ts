@@ -25,6 +25,7 @@ import { BRAND } from '../brand.js';
 import { WEBHOOK_FORMAT_IDS, WEBHOOK_FORMATS_API_VERSION } from './webhook-format-ids.js';
 import { PLUGIN_HOOK_NAME_RE, RESERVED_PLUGIN_ID } from './webhook-path.js';
 import { SECRET_NAME_RE } from '../secrets/resolve.js';
+import { reservedRouteSegment } from './reserved-routes.js';
 
 /**
  * Version of the `PluginContext` contract (§10.4) this daemon implements.
@@ -840,6 +841,8 @@ function kindMismatch(manifest: PluginManifest): string | null {
 
   if (kinds.includes('page')) {
     if (!manifest.route) return '`kind: page` without `route` — a page is mounted by its route.';
+    const reserved = reservedRouteSegment(manifest.route);
+    if (reserved) return `\`route: ${manifest.route}\` is under \`${reserved}\`, a route of the product — a page takes a path of its own, such as one named after the plugin.`;
   } else if (manifest.route) {
     return '`route` is only read for `kind: page`.';
   }

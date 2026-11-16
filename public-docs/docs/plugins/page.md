@@ -7,7 +7,9 @@ A page plugin declares `kind: "page"`, `client.slots: ["page"]` and a route such
 
 The supplied `plugin-page` registers `/example` and opens `example.widget` as a list slot. Its component renders `Slot` for that name, allowing other widgets to fill the region. A page should not hard-code a private list of all possible widgets.
 
-Opening the declared route reaches the app's catch-all and renders the keyed entry without rebuilding the app. Routes already owned by the product take precedence over the catch-all; a third-party page cannot replace them by declaring the same URL.
+Opening the declared route reaches the app's catch-all and renders the keyed entry without rebuilding the app.
+
+The product's routes are reserved, together with every path below them: `/chat`, `/settings`, `/kanban`, `/workflows/…` and the other pages of the app, even when the module that serves one is switched off. A manifest whose `route` falls under one is refused at install, and registering such a key in `page` throws. The `page` key must be a path starting with `/`. Pick a route named after your plugin, such as `/acme`; a route that only starts like a product word, such as `/kanban-pro`, is yours.
 
 ## Layout authors
 
