@@ -39,6 +39,20 @@
       "pasted": "collé"
     },
     "unexpectedReaderResult": "Résultat de lecture de fichier inattendu",
-    "readFailed": "Impossible de lire le fichier"
+    "readFailed": "Impossible de lire le fichier",
+    "missionCard": {
+      "id": "id",
+      "status": "statut",
+      "started": "démarrée",
+      "cost": "coût",
+      "tokens": "jetons",
+      "session": "session",
+      "provider": "fournisseur",
+      "model": "modèle",
+      "agent": "agent",
+      "empty": "Aucune mission active. Écrivez un message pour en créer une.",
+      "newConversation": "Nouvelle conv.",
+      "memory": "Mémoire"
+    }
   }
 }
