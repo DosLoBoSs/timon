@@ -1639,6 +1639,7 @@
       },
       "system": {
         "installation": "Installatie",
+        "updates": "Updates",
         "backup": "Back-ups & prullenbak",
         "diagnostics": "Diagnose",
         "desktop": "Desktopapp",
@@ -1703,6 +1704,7 @@
       },
       "system": {
         "installation": "versie over installatie dienst daemon taak launchagent systemd pad gegevens map log poort export import back-up update",
+        "updates": "update bijwerken nieuwe versie controleren downloaden installatieprogramma release-opmerkingen automatisch",
         "backup": "back-up back-ups archief nachtelijk herstellen bewaren bewaartermijn dagen prullenbak verwijderde agent terughalen ongedaan definitief",
         "diagnostics": "logs debug overig infra probleemoplossing",
         "desktop": "verwijderen deïnstalleren electron app",

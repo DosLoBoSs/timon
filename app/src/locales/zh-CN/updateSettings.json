@@ -1,0 +1,34 @@
+{
+  "updates": {
+    "settings": {
+      "section": "版本",
+      "title": "Timon {version}",
+      "titleAvailable": "Timon {version} 可用",
+      "titleUnknown": "Timon",
+      "status": {
+        "upToDate": "已是最新",
+        "upToDateAt": "已是最新 · {ago}检查",
+        "installed": "已安装 {installed}",
+        "installedAt": "已安装 {installed} · {ago}检查",
+        "unchecked": "尚未检查",
+        "checking": "正在检查…",
+        "failed": "无法检查",
+        "off": "自动检查已关闭",
+        "dev": "源码构建，不检查",
+        "unknown": "状态不可用"
+      },
+      "check": "检查",
+      "retry": "重试",
+      "checking": "正在检查…",
+      "update": "更新",
+      "more": "更多更新操作",
+      "notes": "发行说明",
+      "download": "下载安装程序",
+      "automaticOff": "关闭自动检查",
+      "automaticOn": "开启自动检查",
+      "saveFailed": "无法保存该设置。",
+      "lockedEnv": "由环境变量 TIMON_UPDATES_CHECK 决定。",
+      "lockedConfig": "由 timon.config.json 决定。"
+    }
+  }
+}

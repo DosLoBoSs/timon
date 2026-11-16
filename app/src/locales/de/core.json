@@ -1639,6 +1639,7 @@
       },
       "system": {
         "installation": "Installation",
+        "updates": "Updates",
         "backup": "Backups & Papierkorb",
         "diagnostics": "Diagnose",
         "desktop": "Desktop-App",
@@ -1703,6 +1704,7 @@
       },
       "system": {
         "installation": "version über installation dienst daemon aufgabe launchagent systemd pfad daten ordner log port export import backup update",
+        "updates": "update aktualisierung neue version prüfen herunterladen installationsprogramm versionshinweise automatisch",
         "backup": "backup sicherung archiv nachts wiederherstellen aufbewahren tage papierkorb gelöschter agent zurückholen rückgängig endgültig",
         "diagnostics": "logs debug sonstiges infra fehlersuche",
         "desktop": "deinstallieren entfernen löschen electron app",

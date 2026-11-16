@@ -1639,6 +1639,7 @@
       },
       "system": {
         "installation": "Instalación",
+        "updates": "Actualizaciones",
         "backup": "Copias y papelera",
         "diagnostics": "Diagnóstico",
         "desktop": "App de escritorio",
@@ -1703,6 +1704,7 @@
       },
       "system": {
         "installation": "versión acerca de instalación servicio daemon tarea launchagent systemd ruta carpeta de datos registro puerto exportar importar copia actualización",
+        "updates": "actualización actualizar nueva versión comprobar descargar instalador notas automática",
         "backup": "copia copias archivo nocturna restaurar conservar retención días papelera eliminado agente recuperar deshacer purgar",
         "diagnostics": "registros logs depuración debug infra solución de problemas",
         "desktop": "desinstalar quitar eliminar electron aplicación",

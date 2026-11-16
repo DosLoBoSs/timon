@@ -1,0 +1,34 @@
+{
+  "updates": {
+    "settings": {
+      "section": "Version",
+      "title": "Timon {version}",
+      "titleAvailable": "Timon {version} disponible",
+      "titleUnknown": "Timon",
+      "status": {
+        "upToDate": "À jour",
+        "upToDateAt": "À jour · vérifié {ago}",
+        "installed": "{installed} installée",
+        "installedAt": "{installed} installée · vérifié {ago}",
+        "unchecked": "Pas encore vérifié",
+        "checking": "Vérification…",
+        "failed": "Vérification impossible",
+        "off": "Vérification automatique désactivée",
+        "dev": "Build des sources, non vérifié",
+        "unknown": "État indisponible"
+      },
+      "check": "Vérifier",
+      "retry": "Réessayer",
+      "checking": "Vérification…",
+      "update": "Mettre à jour",
+      "more": "Autres actions de mise à jour",
+      "notes": "Notes de version",
+      "download": "Télécharger l’installeur",
+      "automaticOff": "Désactiver la vérification automatique",
+      "automaticOn": "Activer la vérification automatique",
+      "saveFailed": "Le réglage n’a pas pu être enregistré.",
+      "lockedEnv": "La variable d’environnement TIMON_UPDATES_CHECK en décide.",
+      "lockedConfig": "timon.config.json en décide."
+    }
+  }
+}

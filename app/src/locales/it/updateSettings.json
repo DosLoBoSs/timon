@@ -1,0 +1,34 @@
+{
+  "updates": {
+    "settings": {
+      "section": "Versione",
+      "title": "Timon {version}",
+      "titleAvailable": "Timon {version} disponibile",
+      "titleUnknown": "Timon",
+      "status": {
+        "upToDate": "Aggiornato",
+        "upToDateAt": "Aggiornato · controllato {ago}",
+        "installed": "{installed} installata",
+        "installedAt": "{installed} installata · controllato {ago}",
+        "unchecked": "Non ancora controllato",
+        "checking": "Controllo…",
+        "failed": "Controllo non riuscito",
+        "off": "Controllo automatico disattivato",
+        "dev": "Build dai sorgenti, non controllato",
+        "unknown": "Stato non disponibile"
+      },
+      "check": "Controlla",
+      "retry": "Riprova",
+      "checking": "Controllo…",
+      "update": "Aggiorna",
+      "more": "Altre azioni di aggiornamento",
+      "notes": "Note di rilascio",
+      "download": "Scarica il programma di installazione",
+      "automaticOff": "Disattiva il controllo automatico",
+      "automaticOn": "Attiva il controllo automatico",
+      "saveFailed": "Impossibile salvare l'impostazione.",
+      "lockedEnv": "Lo decide la variabile d'ambiente TIMON_UPDATES_CHECK.",
+      "lockedConfig": "Lo decide timon.config.json."
+    }
+  }
+}

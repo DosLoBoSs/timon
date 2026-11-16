@@ -1,0 +1,34 @@
+{
+  "updates": {
+    "settings": {
+      "section": "Versie",
+      "title": "Timon {version}",
+      "titleAvailable": "Timon {version} beschikbaar",
+      "titleUnknown": "Timon",
+      "status": {
+        "upToDate": "Bijgewerkt",
+        "upToDateAt": "Bijgewerkt · gecontroleerd {ago}",
+        "installed": "{installed} geïnstalleerd",
+        "installedAt": "{installed} geïnstalleerd · gecontroleerd {ago}",
+        "unchecked": "Nog niet gecontroleerd",
+        "checking": "Controleren…",
+        "failed": "Controle mislukt",
+        "off": "Automatische controle uit",
+        "dev": "Build uit de broncode, niet gecontroleerd",
+        "unknown": "Status niet beschikbaar"
+      },
+      "check": "Controleren",
+      "retry": "Opnieuw",
+      "checking": "Controleren…",
+      "update": "Bijwerken",
+      "more": "Meer updateacties",
+      "notes": "Release-opmerkingen",
+      "download": "Installatieprogramma downloaden",
+      "automaticOff": "Automatische controle uitzetten",
+      "automaticOn": "Automatische controle aanzetten",
+      "saveFailed": "De instelling kon niet worden opgeslagen.",
+      "lockedEnv": "De omgevingsvariabele TIMON_UPDATES_CHECK bepaalt dit.",
+      "lockedConfig": "timon.config.json bepaalt dit."
+    }
+  }
+}

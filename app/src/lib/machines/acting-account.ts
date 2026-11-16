@@ -42,6 +42,7 @@ export type ActingAccount = {
 
 const PERMISSIONS: readonly MePermission[] = [
   'projects:manage', 'agents:manage', 'agents:privileged-config', 'providers:manage', 'providers:accounts',
+  'settings:write',
 ];
 const ID_MAX = 128;
 const TEXT_MAX = 320;
