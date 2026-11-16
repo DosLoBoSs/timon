@@ -1,28 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { Script } from 'node:vm';
-import ts from 'typescript';
-
-/** The engine and every local module it imports, followed from its own import lines: a list kept by hand goes stale. */
-async function engineModules(): Promise<Map<string, string>> {
-  const sources = new Map<string, string>();
-  const pending = ['native-browser'];
-  while (pending.length) {
-    const name = pending.pop()!;
-    if (sources.has(name)) continue;
-    const source = await readFile(new URL(`./${name}.ts`, import.meta.url), 'utf8');
-    sources.set(name, source);
-    for (const match of source.matchAll(/from '\.\/([\w-]+)\.js'/g)) pending.push(match[1]!);
-  }
-  return sources;
-}
+import { writeEngine } from './native-browser-smoke.fixture.js';
 
 /**
  * A site's "Sign in with Google" popup, against stand-ins served inside the profile's session
@@ -155,18 +140,7 @@ test('Google\'s sign-in host sees a versionless UA and Electron\'s hints, in a p
   const root = await mkdtemp(join(tmpdir(), 'timon-native-browser-google-identity-'));
   const electron = createRequire(import.meta.url)('electron') as string;
   try {
-    await writeFile(join(root, 'package.json'), '{"type":"module"}');
-    // The engine's modules import packages (i18n) that resolve from the desktop's own dependencies.
-    await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'junction');
-    for (const [name, source] of await engineModules()) {
-      await writeFile(join(root, `${name}.js`), ts.transpileModule(source, {
-        compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-      }).outputText);
-    }
-    const preloadSource = await readFile(new URL('./native-browser-preload.cts', import.meta.url), 'utf8');
-    await writeFile(join(root, 'native-browser-preload.cjs'), ts.transpileModule(preloadSource, {
-      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
-    }).outputText);
+    await writeEngine(root);
     new Script(fixture, { filename: 'smoke.cjs' });
     await writeFile(join(root, 'smoke.cjs'), fixture);
     const env: NodeJS.ProcessEnv = { ...process.env, TIMON_HOME: root };

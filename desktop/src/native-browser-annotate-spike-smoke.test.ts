@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { Script } from 'node:vm';
-import ts from 'typescript';
+import { writeEngine } from './native-browser-smoke.fixture.js';
 
 /**
  * Spike for TODO #468 (annotating the built-in browser). Nothing here ships: the real preload is
@@ -24,9 +24,6 @@ import ts from 'typescript';
  * "Human" input is `webContents.sendInputEvent` (no debugger), as in the #461 spike. Touch has no
  * sendInputEvent form: it goes through `Input.dispatchTouchEvent`, which the page sees as trusted too.
  */
-
-const MODULES = ['native-browser', 'native-browser-protocol', 'native-browser-credentials', 'native-browser-user-agent',
-  'native-browser-devtools', 'native-browser-cookies', 'native-browser-chrome', 'native-browser-chrome-signin', 'native-browser-recorder', 'native-browser-annotator'];
 
 /** Appended to the compiled production preload: the shape task 1 would give the real annotator. */
 const SPIKE_ANNOTATOR = String.raw`
@@ -599,17 +596,7 @@ test('annotate spike: swallowed gestures, passive fiber reads, clip coordinates,
     '/r19/scheduler.js': join(scheduler19, 'cjs', 'scheduler.development.js'),
   };
   try {
-    await writeFile(join(root, 'package.json'), '{"type":"module"}');
-    for (const name of MODULES) {
-      const source = await readFile(new URL(`./${name}.ts`, import.meta.url), 'utf8');
-      await writeFile(join(root, `${name}.js`), ts.transpileModule(source, {
-        compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-      }).outputText);
-    }
-    const preload = ts.transpileModule(await readFile(new URL('./native-browser-preload.cts', import.meta.url), 'utf8'), {
-      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
-    }).outputText;
-    await writeFile(join(root, 'native-browser-preload.cjs'), preload + SPIKE_ANNOTATOR);
+    await writeEngine(root, { preloadSuffix: SPIKE_ANNOTATOR });
     new Script(fixture, { filename: 'smoke.cjs' });
     await writeFile(join(root, 'smoke.cjs'), fixture);
     const env = { ...process.env, TIMON_HOME: root, TIMON_SPIKE_FILES: JSON.stringify(files) };

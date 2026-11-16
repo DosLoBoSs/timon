@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
-import ts from 'typescript';
+import { writeEngine } from './native-browser-smoke.fixture.js';
 import { Script } from 'node:vm';
 
 test('hidden Electron sends encoded tab video and audio with WebRTC, WebM and MP4, with scoped viewers', {
@@ -15,11 +15,7 @@ test('hidden Electron sends encoded tab video and audio with WebRTC, WebM and MP
   const home = await mkdtemp(join(tmpdir(), 'timon-media-smoke-'));
   const electron = createRequire(import.meta.url)('electron') as string;
   try {
-    await writeFile(join(home, 'package.json'), '{"type":"module"}');
-    for (const name of ['native-browser-media', 'native-browser-media-page', 'native-browser-protocol']) {
-      const source = await readFile(new URL(`./${name}.ts`, import.meta.url), 'utf8');
-      await writeFile(join(home, `${name}.js`), ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText);
-    }
+    await writeEngine(home, { entries: ['native-browser-media'], preloads: [] });
     await writeFile(join(home, 'fixture.html'), `<!doctype html><canvas width="640" height="480"></canvas><script>
       const canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d');let x=0;
       setInterval(()=>{ctx.fillStyle='rgb('+(x++%255)+',80,160)';ctx.fillRect(0,0,640,480)},33);

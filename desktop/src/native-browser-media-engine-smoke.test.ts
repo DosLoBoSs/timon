@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
 import { Script } from 'node:vm';
-import ts from 'typescript';
+import { writeEngine } from './native-browser-smoke.fixture.js';
 
 test('real engine WebContentsView streams while hidden and while attached to the desktop panel', {
   skip: process.env.TIMON_ELECTRON_SMOKE !== '1', timeout: 60_000,
@@ -15,17 +15,7 @@ test('real engine WebContentsView streams while hidden and while attached to the
   const home = await mkdtemp(join(tmpdir(), 'timon-engine-media-smoke-'));
   const electron = createRequire(import.meta.url)('electron') as string;
   try {
-    await writeFile(join(home, 'package.json'), '{"type":"module"}');
-    for (const name of ['native-browser', 'native-browser-credentials', 'native-browser-media', 'native-browser-media-page', 'native-browser-protocol', 'native-browser-user-agent', 'native-browser-devtools', 'native-browser-cookies', 'native-browser-chrome', 'native-browser-chrome-signin', 'native-browser-recorder', 'native-browser-annotator']) {
-      const source = await readFile(new URL(`./${name}.ts`, import.meta.url), 'utf8');
-      await writeFile(join(home, `${name}.js`), ts.transpileModule(source, {
-        compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-      }).outputText);
-    }
-    await writeFile(join(home, 'native-browser-preload.cjs'), ts.transpileModule(
-      await readFile(new URL('./native-browser-preload.cts', import.meta.url), 'utf8'), {
-        compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
-      }).outputText);
+    await writeEngine(home, { entries: ['native-browser', 'native-browser-media'] });
     const bootstrap = String.raw`
 const {app,dialog}=require('electron');
 globalThis.fail=(...errors)=>{require('node:fs').writeSync(2,'[engine media smoke pid='+process.pid+' '+new Date().toISOString()+']\n'+errors.map(e=>e?.stack||String(e)).join('\n')+'\n');app.exit(1)};
