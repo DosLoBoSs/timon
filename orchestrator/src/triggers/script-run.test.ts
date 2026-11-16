@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -278,6 +278,8 @@ test('approval: never by an agent, once only, and the trigger belongs to the pro
   assert.equal(trigger.created_by, 'user');
   assert.equal(trigger.creator_agent, 'helper');
   assert.equal(triggerCount(), before + 1);
+  // The person approving the card vouches for what it runs as it is now.
+  assert.equal((await runOnce(String(trigger.id))).status, 'received');
   assert.equal((await daemon('POST', `/api/triggers/proposals/${id}/approve`)).status, 409);
   assert.equal(triggerCount(), before + 1);
 
@@ -314,4 +316,101 @@ test('the card in the browser: Approve creates the trigger and tells the agent i
   assert.match(message, /^\[trigger proposal\] The user approved your trigger: it is created \(trigger [0-9a-f-]{36}\)/);
   assert.equal((await api('POST', `/api/layout/proposals/${id}/resolve`, { decision: 'applied' })).status, 409);
   assert.equal(triggerCount(), before + 1);
+});
+
+// ── approval of what a script runs ───────────────────────────────────────────
+
+/** A script file in the project, run by node: what a mission could rewrite. */
+function scriptFile(name: string, code: string): string {
+  const file = join(projectDir, name);
+  writeFileSync(file, code);
+  return file;
+}
+
+async function runOnce(id: string): Promise<Delivery> {
+  const before = finished(id).length;
+  runActions(getTrigger(id)!, { body: {}, headers: {} });
+  const rows = await waitFor(() => finished(id).length > before ? finished(id) : null);
+  return rows.at(-1)!;
+}
+
+test('a script file rewritten since it was approved is refused, once told, until a person re-approves it', async () => {
+  const file = scriptFile('watch.js', 'console.log("approved")');
+  const created = await create([{ type: 'script', command: process.execPath, args: [file], cwd: projectDir }]);
+  assert.equal(created.status, 201);
+  const id = String((created.body.trigger as Json).id);
+  const first = await runOnce(id);
+  assert.equal(first.status, 'received');
+  assert.match(String((JSON.parse(first.result!) as Json).stdout_tail), /approved/);
+
+  writeFileSync(file, 'console.log("swapped")');
+  const refused = await runOnce(id);
+  assert.equal(refused.status, 'error');
+  assert.match(String(refused.reason), /^script changed since it was approved \(watch\.js\): .*timon trigger approve-script/);
+  assert.equal((JSON.parse(refused.result!) as Json).stdout_tail, '');
+  const [alert] = await waitFor(() => alerts(id).length ? alerts(id) : null);
+  assert.equal(alert!.type, 'alert');
+  assert.match(alert!.title, /Script not run/);
+  // The same refusal again: journaled, not told twice.
+  await runOnce(id);
+  assert.equal(alerts(id).length, 1);
+
+  // A mission cannot vouch for it, whatever its token holds.
+  for (const as of ['agent', 'agent-super']) {
+    assert.equal((await api('POST', `/api/triggers/${id}/approve-script`, {}, as)).status, 403, as);
+  }
+  assert.equal((await api('POST', `/api/triggers/${id}/approve-script`, {}, 'bob')).status, 403);
+  assert.equal((await api('POST', `/api/triggers/${id}/approve-script`, {}, null)).status, 401);
+  assert.equal((await runOnce(id)).status, 'error');
+
+  const approved = await api('POST', `/api/triggers/${id}/approve-script`, {});
+  assert.equal(approved.status, 200);
+  assert.deepEqual((approved.body.approved as Json[])[0]!.files, ['watch.js']);
+  const after = await runOnce(id);
+  assert.equal(after.status, 'received');
+  assert.match(String((JSON.parse(after.result!) as Json).stdout_tail), /swapped/);
+});
+
+test('the terminal re-approves too; flipping the switch or renaming does not, saving the actions does', async () => {
+  const file = scriptFile('tick.js', 'console.log(1)');
+  const action = { type: 'script', command: process.execPath, args: [file], cwd: projectDir };
+  const created = await create([action]);
+  const id = String((created.body.trigger as Json).id);
+  writeFileSync(file, 'console.log(2)');
+  assert.equal((await api('PATCH', `/api/triggers/${id}`, { name: 'renamed tick' })).status, 200);
+  assert.equal((await api('PATCH', `/api/triggers/${id}`, { enabled: false })).status, 200);
+  assert.equal((await api('PATCH', `/api/triggers/${id}`, { enabled: true })).status, 200);
+  assert.match(String((await runOnce(id)).reason), /changed since it was approved/);
+  // The editor sends every action back: that save is the user's approval.
+  assert.equal((await api('PATCH', `/api/triggers/${id}`, { actions: [action] })).status, 200);
+  assert.equal((await runOnce(id)).status, 'received');
+
+  writeFileSync(file, 'console.log(3)');
+  assert.match(String((await runOnce(id)).reason), /changed since it was approved/);
+  assert.equal((await daemon('POST', `/api/triggers/${id}/approve-script`)).status, 200);
+  assert.equal((await runOnce(id)).status, 'received');
+});
+
+test('a script trigger saved before the check runs nothing until approved', async () => {
+  const file = scriptFile('legacy.js', 'console.log("legacy")');
+  const created = await create([{ type: 'script', command: process.execPath, args: [file], cwd: projectDir }]);
+  const id = String((created.body.trigger as Json).id);
+  db.prepare('UPDATE triggers SET script_pins = NULL WHERE id = ?').run(id);
+  const refused = await runOnce(id);
+  assert.equal(refused.status, 'error');
+  assert.match(String(refused.reason), /^script not approved: /);
+  const [alert] = await waitFor(() => alerts(id).length ? alerts(id) : null);
+  assert.match(String(alert!.body), new RegExp(`approve-script ${id}`));
+  assert.equal((await api('POST', `/api/triggers/${id}/approve-script`, {})).status, 200);
+  assert.equal((await runOnce(id)).status, 'received');
+});
+
+test('what cannot be fingerprinted is not approved: a file outside the project, a trigger without a script', async () => {
+  writeFileSync(join(outside, 'out.js'), 'console.log(1)');
+  const out = await create([{ type: 'script', command: process.execPath, args: ['../elsewhere/out.js'], cwd: projectDir }]);
+  assert.equal(out.status, 400);
+  assert.match(String(out.body.error), /cannot be fingerprinted: \.\.\/elsewhere\/out\.js \(outside cwd\)/);
+  const plain = await create([{ type: 'notify', title: 'x' }]);
+  const plainId = String((plain.body.trigger as Json).id);
+  assert.equal((await api('POST', `/api/triggers/${plainId}/approve-script`, {})).status, 400);
 });

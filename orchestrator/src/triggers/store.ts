@@ -9,6 +9,7 @@
  * typed `Trigger` carries them opened; a `TriggerRow` never does.
  */
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import { db } from '../db.js';
 import { triggerOutboundSecretIdentity, triggerSecretIdentity } from '../secrets/sealed-columns.js';
 import { isSealed } from '../secrets/box.js';
@@ -49,6 +50,8 @@ export type TriggerRow = {
    * without anyone having looked (an agent's trigger made before #529).
    */
   approved_at: number | null;
+  /** What each script action runs, fingerprinted when a person approved it (`ScriptPin[]`, JSON); NULL = none. */
+  script_pins: string | null;
   /** Frozen permissions, JSON array; NULL = system row (routines), unrestricted. */
   grants: string | null;
   last_run_at: number | null;
@@ -318,6 +321,41 @@ export function markTriggered(id: string, at: number): void {
 
 export function setTaskTrigger(taskId: string, triggerId: string): void {
   db.prepare(`UPDATE tasks SET trigger_id = ? WHERE id = ?`).run(triggerId, taskId);
+}
+
+// ── script approvals ─────────────────────────────────────────────────────────
+
+const scriptPinSchema = z.object({
+  /** The action it vouches for, as saved: another command, argv or folder is not approved. */
+  command: z.string(),
+  args: z.array(z.string()),
+  cwd: z.string(),
+  /** Real paths the files were read under; a folder that moved is not the one approved. */
+  root: z.string(),
+  real_cwd: z.string(),
+  /** One digest of every file state below (`script-preview.ts` `contentState`). */
+  state: z.string(),
+  /** Each local file the command runs, relative to `root`: its SHA-256, or `absent`. */
+  files: z.array(z.object({ path: z.string(), state: z.string() })),
+  approved_at: z.number(),
+});
+export type ScriptPin = z.infer<typeof scriptPinSchema>;
+
+/** The approved fingerprints of a trigger's scripts; none when unreadable, so nothing runs. */
+export function getScriptPins(id: string): ScriptPin[] {
+  const row = db.prepare(`SELECT script_pins FROM triggers WHERE id = ?`).get(id) as { script_pins: string | null } | undefined;
+  if (!row?.script_pins) return [];
+  try {
+    return z.array(scriptPinSchema).parse(JSON.parse(row.script_pins));
+  } catch (err) {
+    console.warn(`[triggers] ${id}: script approvals unreadable, none kept — ${(err as Error).message}`);
+    return [];
+  }
+}
+
+/** Replaces them all. Only a person's save or re-approval calls this. */
+export function setScriptPins(id: string, pins: readonly ScriptPin[]): void {
+  db.prepare(`UPDATE triggers SET script_pins = ? WHERE id = ?`).run(pins.length ? JSON.stringify(pins) : null, id);
 }
 
 // ── journal ──────────────────────────────────────────────────────────────────

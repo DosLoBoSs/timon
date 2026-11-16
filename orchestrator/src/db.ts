@@ -1668,6 +1668,10 @@ if (!triggerLaterCols.includes('outbound_secret')) db.exec(`ALTER TABLE triggers
 // agent's trigger keeps its `acting_agent` when the user only flips its switch,
 // so that column alone no longer tells a consented one from one nobody looked at.
 if (!triggerLaterCols.includes('approved_at')) db.exec(`ALTER TABLE triggers ADD COLUMN approved_at INTEGER`);
+// `script_pins` = the fingerprint of what each script action runs, taken when a
+// person saved or re-approved it (JSON, `triggers/store.ts`). A run whose files
+// no longer match is refused; NULL (every row saved before) runs nothing.
+if (!triggerLaterCols.includes('script_pins')) db.exec(`ALTER TABLE triggers ADD COLUMN script_pins TEXT`);
 // Pipelines and their runs gain an owner for `ctx.pipelines` (a plugin sees what
 // it created, a user what is theirs). Earlier pipelines stay NULL: shared system
 // rows, readable and runnable by every account, changed by a superadmin only
