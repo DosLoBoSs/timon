@@ -460,6 +460,18 @@ test('a server with no credential is still handed to the CLI directly; removing 
   deleteMcp('relay-plain');
 });
 
+test('REFUSAL: a key server held to public addresses never reaches this host through the relay', async () => {
+  // A record moved onto the loopback after its launch: the relay refuses the hop, the key goes nowhere.
+  upsertMcp({ id: 'relay-static-public', transport: { type: 'http', url: `${UP}/mcp`, headers: { 'X-Api-Key': STATIC_KEY } }, publicOnly: true });
+  const t = target('relay-static-public', '/mcp');
+  seen.length = 0;
+  const reply = await call(t.url, { headers: t.headers, body: RPC });
+  assert.equal(reply.status, 502);
+  assert.deepEqual(JSON.parse(reply.body), { error: 'destination refused' });
+  assert.equal(seen.length, 0, 'the upstream on this host was never contacted');
+  deleteMcp('relay-static-public');
+});
+
 test('without a mission to bind the relay to, a key server is left out, never written in clear', async () => {
   upsertMcp({ id: 'relay-static-nomission', transport: { type: 'http', url: `${UP}/mcp`, headers: { 'X-Api-Key': STATIC_KEY } } });
   assert.deepEqual(await resolveLaunchServers(['relay-static-nomission']), []);
