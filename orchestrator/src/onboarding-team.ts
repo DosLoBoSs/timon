@@ -4,7 +4,7 @@ import { isAbsolute, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { availableSeededLlmDefault } from './agent.js';
-import { AGENTS_DIR, TIMON_HOME, WORKSPACE_DIR, agentDir } from './paths.js';
+import { AGENTS_DIR, ONBOARDING_WORKSPACE_DIR, TIMON_HOME, agentDir } from './paths.js';
 import { CONFIG_FILE, config, expandTilde } from './config/load.js';
 import { catalogBackend } from './backends/catalog.js';
 import { mainAgentName } from './main-agent.js';
@@ -48,7 +48,7 @@ function planTeam(preset: TeamPreset): PlannedAgent[] {
   }
   if (!llm) throw new TeamSetupError('backend_unavailable');
   const rawRoot = (typeof saved.workspacesRoot === 'string' ? saved.workspacesRoot : '') || config().workspacesRoot;
-  const root = rawRoot ? expandTilde(rawRoot) : WORKSPACE_DIR;
+  const root = rawRoot ? expandTilde(rawRoot) : ONBOARDING_WORKSPACE_DIR;
   if (!isAbsolute(root)) throw new TeamSetupError('workspace_unavailable');
   let cwd: string;
   try {

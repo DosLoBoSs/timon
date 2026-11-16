@@ -23,7 +23,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const { AGENTS_DIR, TIMON_HOME, DB_PATH, agentDir } = await import('./paths.js');
+const { AGENTS_DIR, TIMON_HOME, DB_PATH, WORKSPACE_DIR, ONBOARDING_WORKSPACE_DIR, agentDir } = await import('./paths.js');
 await import('../tests/helpers/claude-provider.js');
 
 const { CONFIG_FILE } = await import('./config/load.js');
@@ -272,12 +272,15 @@ test('setup creates the saved workspace and preserves an existing cwd', () => {
   assert.equal(getAgent('Nova')?.cwd, custom);
 });
 
-test('without a workspacesRoot the agent works in the Timon home, never the user home', () => {
+test('without a workspacesRoot the agent works in a folder inside the workspace folder, never the user home', () => {
   reset();
   writeFileSync(CONFIG_FILE, JSON.stringify({}));
   applyMainAgent({ name: 'Nova' });
   const cwd = getAgent('Nova')?.cwd;
-  assert.equal(cwd, fs.realpathSync(join(TIMON_HOME, 'workspace')));
+  // The workspace folder itself lists every agent's folder: the fence never hands it over.
+  assert.equal(cwd, fs.realpathSync(ONBOARDING_WORKSPACE_DIR));
+  assert.notEqual(cwd, fs.realpathSync(WORKSPACE_DIR));
+  assert.equal(ONBOARDING_WORKSPACE_DIR, join(WORKSPACE_DIR, 'home'));
   assert.notEqual(cwd, os.homedir());
 });
 
