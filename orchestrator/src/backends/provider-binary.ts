@@ -28,7 +28,7 @@ import { getHost } from '../host/index.js';
 import { killProcessTree } from '../host/kill-tree.js';
 import { assertProviderExecAllowed } from '../plugins/policy.js';
 import { assertDeclaredIdentity } from './binary-identity.js';
-import { compileBoundedRegex, REGEX_TIMEOUT_MS, type BoundedRegex } from '../bounded-regex.js';
+import { pluginRegex, type PluginRegex } from '../bounded-regex.js';
 import { systemEnv } from '../secrets/env.js';
 import { redactText } from '../secrets/redact.js';
 import { TIMON_HOME } from '../paths.js';
@@ -195,13 +195,12 @@ export function createProviderBinary(scope: ProviderBinaryScope): { api: Provide
       }
       const resolved = program(name);
     await identified(name, resolved);
-      let ready: BoundedRegex | null = null;
+      let ready: PluginRegex | null = null;
       if (options.ready !== undefined) {
         if (options.ready.length > MAX_READY_PATTERN) throw new ProviderBinaryError(`\`ready\` is over ${MAX_READY_PATTERN} characters`);
-        try { ready = compileBoundedRegex(options.ready); } catch (error) {
-          if (error instanceof SyntaxError) throw new ProviderBinaryError('`ready` is not a regular expression');
-          throw error;
-        }
+        // A pattern that is not one, or that already failed for this plugin, is skipped: the server starts as if none was declared.
+        const pattern = pluginRegex({ pluginId: scope.pluginId, place: 'ready', name }, options.ready);
+        if (!pattern.failed) ready = pattern;
       }
       const child: ChildProcess = getHost().spawn(resolved, [...args], {
         env: childEnv(options.env), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, ...(options.cwd ? { cwd: options.cwd } : {}),
@@ -214,15 +213,13 @@ export function createProviderBinary(scope: ProviderBinaryScope): { api: Provide
         child.once('error', () => { exited = true; resolve({ code: null, signal: null }); });
       });
       let onReady: (() => void) | null = null;
-      // Set once the pattern could not be run on the output; it is not tried again.
-      let unusable = false;
       let onUnusable: (() => void) | null = null;
       const feed = (chunk: Buffer | string): void => {
         tail = (tail + chunk.toString()).slice(-OUTPUT_TAIL_CHARS);
-        if (ready && match === null && !unusable) {
-          let found: string | null;
-          // A throw here would escape a stream listener and take the daemon down: any failure ends the wait instead.
-          try { found = ready.firstGroup(tail); } catch { unusable = true; onUnusable?.(); return; }
+        if (ready && match === null) {
+          // Never throws, and does not run once off (here or in another server of this plugin): the wait ends instead.
+          const found = ready.firstGroup(tail);
+          if (ready.failed) { onUnusable?.(); return; }
           if (found !== null) { match = found; onReady?.(); }
         }
       };
@@ -254,14 +251,12 @@ export function createProviderBinary(scope: ProviderBinaryScope): { api: Provide
           onUnusable = () => { clearTimeout(timer); resolve('unusable'); };
           void exitedPromise.then(() => { clearTimeout(timer); resolve(match === null ? 'exited' : 'ready'); });
           if (match !== null) onReady();
-          else if (unusable) onUnusable();
+          else if (ready?.failed) onUnusable();
         });
-        if (outcome !== 'ready') {
+        // The pattern failed on the output: the server is handed over as if it had declared none, `match` left empty.
+        if (outcome !== 'ready' && outcome !== 'unusable') {
           const output = redactText(tail).slice(-500);
           await server.stop();
-          if (outcome === 'unusable') {
-            throw new ProviderBinaryError(`\`ready\` could not be tested on what \`${name}\` printed within ${REGEX_TIMEOUT_MS} ms: declare a simpler pattern`);
-          }
           throw new ProviderBinaryError(outcome === 'exited'
             ? `\`${name}\` exited before it was ready: ${output}`
             : `\`${name}\` was not ready after ${wait} ms: ${output}`);
