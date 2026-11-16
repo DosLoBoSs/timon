@@ -164,6 +164,21 @@ export function currentModel(result: AcpRecord): string | null {
   return null;
 }
 
+/** Id of the session's model config option, null when the agent has none
+ *  (Hermes: `session/set_model` is its only way). */
+export function modelConfigId(result: AcpRecord): string | null {
+  if (!Array.isArray(result.configOptions)) return null;
+  for (const o of result.configOptions) {
+    const r = asRecord(o);
+    if (r && (r.id === 'model' || r.category === 'model')) return str(r.id);
+  }
+  return null;
+}
+
+/** Normalized event a driver emits when the session does not run the model or
+ *  thinking level the mission asked for. Persisted: the chat says it. */
+export const MODEL_NOT_APPLIED = 'model_not_applied';
+
 /** The agent's own word for "no level chosen": it is not a level to offer. */
 const DEFAULT_LEVEL = 'default';
 
@@ -244,6 +259,10 @@ export class AcpSessionDriver implements SessionDriver {
 
   private sessionInfo: SessionInfo | null = null;
   private sessionId: string | null = null;
+  /** The session's config options as they last stood (session/new, then each
+   *  `session/set_config_option` reply): the way to select a model, and the
+   *  thinking levels of the one running. */
+  private options: AcpRecord = {};
   private replaying = false;
   private systemSent = false;
   private turn: Turn | null = null;
@@ -306,15 +325,37 @@ export class AcpSessionDriver implements SessionDriver {
         }
       }
       this.sessionId = sessionId;
-      await this.applyModel(sessionId, result);
-      await this.applyEffort(sessionId, result);
+      this.options = result;
+      const model = await this.applyModel(sessionId);
+      const effort = await this.applyEffort(sessionId);
 
       this.sessionInfo = { sessionId, capabilities, resumed };
       this.systemSent = resumed;
       const init0 = acpInitEvent(sessionId, this.opts.profileId);
-      this.emit([capabilities.permissionsByAgent
-        ? { ...init0, payload: { ...(init0.payload as AcpRecord), permissions_by_agent: true } }
-        : init0]);
+      this.emit([{
+        ...init0,
+        payload: {
+          ...(init0.payload as AcpRecord),
+          // What the session runs, as the agent reports it: the chat's model
+          // gauge reads it, and the stored row keeps it next to what was asked.
+          ...(model.active ? { model: model.active } : {}),
+          ...(model.requested ? { requested_model: model.requested } : {}),
+          ...(capabilities.permissionsByAgent ? { permissions_by_agent: true } : {}),
+        },
+      }]);
+      if (model.refused !== null || effort.refused !== null) {
+        this.emit([{
+          type: MODEL_NOT_APPLIED,
+          payload: {
+            type: MODEL_NOT_APPLIED,
+            backend: this.opts.profileId,
+            ...(model.refused !== null
+              ? { requested_model: model.requested, active_model: model.active, model_reason: model.refused }
+              : {}),
+            ...(effort.refused !== null ? { requested_effort: effort.requested, effort_reason: effort.refused } : {}),
+          },
+        }]);
+      }
       return this.sessionInfo;
     } catch (err) {
       this.close();
@@ -344,31 +385,65 @@ export class AcpSessionDriver implements SessionDriver {
     return null;
   }
 
-  private async applyModel(sessionId: string, result: AcpRecord): Promise<void> {
-    const want = this.opts.model?.trim();
-    if (!want || currentModel(result) === want) return;
+  /** A reply without the options (an agent that answers `{}`) must not erase
+   *  the way to select a model next time. */
+  private keepOptions(reply: AcpRecord): void {
+    if (Array.isArray(reply.configOptions)) this.options = reply;
+  }
+
+  /**
+   * Selects `model`: `session/set_model` first (Hermes), then the session's
+   * `model` config option (opencode answers -32601 to `set_model`). Returns the
+   * agent's reason when neither way took it. Never during a turn.
+   */
+  private async selectModel(sessionId: string, model: string): Promise<string | null> {
     try {
-      await this.transport.setModel(sessionId, want);
+      await this.transport.setModel(sessionId, model);
+      return null;
     } catch (err) {
       if (!(err instanceof AcpRpcError)) throw err;
-      // The agent keeps the model it has; the mission goes on with it rather
-      // than dying on a model id it does not know.
-      console.warn(`[acp] ${this.opts.profileId}: model ${want} not applied (${clip(err.message)})`);
+      const id = modelConfigId(this.options);
+      if (!id) return clip(err.message);
+      try {
+        this.keepOptions(await this.transport.setConfigOption(sessionId, id, model));
+        return null;
+      } catch (err2) {
+        if (!(err2 instanceof AcpRpcError)) throw err2;
+        return clip(err2.message);
+      }
     }
+  }
+
+  private async applyModel(sessionId: string): Promise<{ requested: string | null; active: string | null; refused: string | null }> {
+    const want = this.opts.model?.trim() || null;
+    const before = currentModel(this.options);
+    if (!want || before === want) return { requested: want, active: before, refused: null };
+    const refused = await this.selectModel(sessionId, want);
+    if (refused === null) {
+      // `set_model` answers nothing to read: the agent took the id it was given.
+      const active = currentModel(this.options);
+      return { requested: want, active: active === before ? want : (active ?? want), refused: null };
+    }
+    // The agent keeps the model it has; the mission goes on with it rather
+    // than dying on a model id it does not know, and says so in the chat.
+    console.warn(`[acp] ${this.opts.profileId}: model ${want} not applied (${refused})`);
+    return { requested: want, active: before, refused };
   }
 
   /** After the model: a level belongs to the model that declares it, and the
    *  agent refuses one the model does not know. */
-  private async applyEffort(sessionId: string, result: AcpRecord): Promise<void> {
-    const want = this.opts.reasoningEffort?.trim();
-    if (!want) return;
-    const id = thoughtLevels(result)?.id ?? EFFORT_CONFIG_ID;
+  private async applyEffort(sessionId: string): Promise<{ requested: string | null; refused: string | null }> {
+    const want = this.opts.reasoningEffort?.trim() || null;
+    if (!want) return { requested: null, refused: null };
+    const id = thoughtLevels(this.options)?.id ?? EFFORT_CONFIG_ID;
     try {
-      await this.transport.setConfigOption(sessionId, id, want);
+      this.keepOptions(await this.transport.setConfigOption(sessionId, id, want));
+      return { requested: want, refused: null };
     } catch (err) {
       if (!(err instanceof AcpRpcError)) throw err;
       // The agent keeps the model's default level; the mission goes on with it.
       console.warn(`[acp] ${this.opts.profileId}: thinking level ${want} not applied (${clip(err.message)})`);
+      return { requested: want, refused: clip(err.message) };
     }
   }
 
@@ -486,8 +561,7 @@ export class AcpSessionDriver implements SessionDriver {
   async setModel(model: string): Promise<boolean> {
     if (this.turn || this.sessionId === null || this.closed) return false;
     try {
-      await this.transport.setModel(this.sessionId, model);
-      return true;
+      return (await this.selectModel(this.sessionId, model)) === null;
     } catch {
       return false;
     }
