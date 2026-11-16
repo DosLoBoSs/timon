@@ -205,10 +205,13 @@
         "newTab": "New tab",
         "switchTab": "Switch tab",
         "closeTab": "Close tab",
-        "credential": "Saved login"
+        "credential": "Saved login",
+        "frame": "Manual step: embedded frame ({origin})"
       },
       "paramBadge": "Parameter: {name}",
       "flagged": "Possible secret",
+      "frameUnknownOrigin": "Manual step: embedded frame",
+      "frameNotice": "Timon cannot see what you do inside an embedded frame (a payment form, a captcha, a sign-in box). The learned skill will pause here and ask you to do this part yourself, so it needs someone in front of the screen.",
       "paramName": "Parameter name",
       "stepName": "Step name",
       "save": "Save",

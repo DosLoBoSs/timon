@@ -205,10 +205,13 @@
         "newTab": "Nouvel onglet",
         "switchTab": "Changer d'onglet",
         "closeTab": "Fermer l'onglet",
-        "credential": "Identifiant enregistré"
+        "credential": "Identifiant enregistré",
+        "frame": "Étape manuelle : cadre intégré ({origin})"
       },
       "paramBadge": "Paramètre : {name}",
       "flagged": "Secret possible",
+      "frameUnknownOrigin": "Étape manuelle : cadre intégré",
+      "frameNotice": "Timon ne voit pas ce que vous faites dans un cadre intégré (formulaire de paiement, captcha, fenêtre de connexion). Le skill appris s'arrêtera ici et vous demandera de faire cette partie vous-même : il a besoin de quelqu'un devant l'écran.",
       "paramName": "Nom du paramètre",
       "stepName": "Nom de l'étape",
       "save": "Enregistrer",

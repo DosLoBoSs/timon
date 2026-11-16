@@ -40,7 +40,8 @@ export type BrowserRecordingLearnOptions = { autoSubmit: boolean; agent?: string
 
 export type BrowserRecordingLearnAgent = { name: string; main: boolean };
 
-export type RecordedStepType = 'click' | 'input' | 'secret' | 'enter' | 'navigate' | 'newTab' | 'switchTab' | 'closeTab' | 'credential';
+/** `frame`: the user acted inside an embedded frame, which is never recorded; `origin` names its site. */
+export type RecordedStepType = 'click' | 'input' | 'secret' | 'enter' | 'navigate' | 'newTab' | 'switchTab' | 'closeTab' | 'credential' | 'frame';
 
 export type RecordedStep = {
   n: number;

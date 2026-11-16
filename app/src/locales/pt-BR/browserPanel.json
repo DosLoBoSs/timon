@@ -205,10 +205,13 @@
         "newTab": "Nova aba",
         "switchTab": "Trocar de aba",
         "closeTab": "Fechar a aba",
-        "credential": "Login salvo"
+        "credential": "Login salvo",
+        "frame": "Etapa manual: quadro incorporado ({origin})"
       },
       "paramBadge": "Parâmetro: {name}",
       "flagged": "Possível segredo",
+      "frameUnknownOrigin": "Etapa manual: quadro incorporado",
+      "frameNotice": "O Timon não vê o que você faz dentro de um quadro incorporado (um formulário de pagamento, um captcha, uma caixa de login). A skill aprendida vai pausar aqui e pedir que você faça essa parte, então precisa de alguém diante da tela.",
       "paramName": "Nome do parâmetro",
       "stepName": "Nome do passo",
       "save": "Salvar",

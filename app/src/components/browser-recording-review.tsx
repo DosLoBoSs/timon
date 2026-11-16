@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Check, EyeOff, GraduationCap, Loader2, MessageSquare, Pencil, Puzzle, RotateCw, ShieldAlert, Trash2, Variable, X } from 'lucide-react';
+import { ArrowLeft, Check, EyeOff, GraduationCap, Hand, Loader2, MessageSquare, Pencil, Puzzle, RotateCw, ShieldAlert, Trash2, Variable, X } from 'lucide-react';
 import { useBrowserChrome } from '@/components/browser-chrome';
 import { useBrowserRecording } from '@/hooks/use-browser-recording';
 import {
@@ -253,11 +253,21 @@ function stepDetail(step: RecordedStep): string | null {
   return null;
 }
 
+/** The heading of a step; a manual frame step names the frame's site (#944). */
+function stepTitle(step: RecordedStep): string {
+  if (step.type === 'frame') {
+    return step.origin ? t('browserPanel.recording.step.frame', { origin: step.origin }) : t('browserPanel.recording.frameUnknownOrigin');
+  }
+  return t(`browserPanel.recording.step.${step.type}`);
+}
+
 function StepCard({ step, editable, working, editing, setEditing, apply }: {
   step: RecordedStep; editable: boolean; working: boolean; editing: Editing | null;
   setEditing: (value: Editing | null) => void; apply: (ops: BrowserRecordingOp[]) => Promise<void>;
 }) {
   const flagged = !!step.flagged;
+  // Nothing done inside an embedded frame was recorded: the learned skill hands that part back to the user.
+  const manual = step.type === 'frame';
   const label = step.name || step.text || step.selector || '';
   const detail = stepDetail(step);
   const maskable = maskableValue(step) !== null;
@@ -267,15 +277,17 @@ function StepCard({ step, editable, working, editing, setEditing, apply }: {
     void apply([editing.kind === 'param' ? { op: 'param', step: step.n, name: editing.value } : { op: 'rename', step: step.n, name: editing.value }]);
   };
   return (
-    <li data-step={step.n} data-flagged={flagged ? step.flagged : undefined}
-      className={cn('space-y-1.5 rounded-lg p-2 text-xs', flagged ? 'bg-amber-500/10 ring-1 ring-amber-500/50' : 'bg-muted/40')}>
+    <li data-step={step.n} data-flagged={flagged ? step.flagged : undefined} data-manual-step={manual ? '' : undefined}
+      className={cn('space-y-1.5 rounded-lg p-2 text-xs', flagged || manual ? 'bg-amber-500/10 ring-1 ring-amber-500/50' : 'bg-muted/40')}>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[11px] text-muted-foreground tabular-nums">{step.n}</span>
-        <span className="font-medium">{t(`browserPanel.recording.step.${step.type}`)}</span>
+        {manual && <Hand className="size-3.5 text-amber-700 dark:text-amber-400" />}
+        <span className="break-all font-medium">{stepTitle(step)}</span>
         {step.param && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{t('browserPanel.recording.paramBadge', { name: step.param })}</span>}
         {flagged && <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-800 dark:text-amber-300"><ShieldAlert className="size-3" />{t('browserPanel.recording.flagged')}</span>}
       </div>
       {label && <p className="break-words">{label}</p>}
+      {manual && <p role="note" className="text-amber-800 dark:text-amber-300">{t('browserPanel.recording.frameNotice')}</p>}
       {detail && <p className="break-all text-muted-foreground">{detail}</p>}
       {editing && (
         <form className="flex flex-wrap items-center gap-1.5" onSubmit={(event) => { event.preventDefault(); save(); }}>

@@ -205,10 +205,13 @@
         "newTab": "新しいタブ",
         "switchTab": "タブを切り替え",
         "closeTab": "タブを閉じる",
-        "credential": "保存されたログイン情報"
+        "credential": "保存されたログイン情報",
+        "frame": "手動ステップ: 埋め込みフレーム ({origin})"
       },
       "paramBadge": "パラメーター: {name}",
       "flagged": "シークレットの可能性",
+      "frameUnknownOrigin": "手動ステップ: 埋め込みフレーム",
+      "frameNotice": "埋め込みフレーム (支払いフォーム、CAPTCHA、ログイン欄) の中での操作は Timon には見えません。学習したスキルはここで一時停止し、この部分をご自身で行うよう求めるため、画面の前に人がいる必要があります。",
       "paramName": "パラメーター名",
       "stepName": "ステップ名",
       "save": "保存",

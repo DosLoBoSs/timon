@@ -205,10 +205,13 @@
         "newTab": "Nieuw tabblad",
         "switchTab": "Tabblad wisselen",
         "closeTab": "Tabblad sluiten",
-        "credential": "Opgeslagen login"
+        "credential": "Opgeslagen login",
+        "frame": "Handmatige stap: ingesloten frame ({origin})"
       },
       "paramBadge": "Parameter: {name}",
       "flagged": "Mogelijk geheim",
+      "frameUnknownOrigin": "Handmatige stap: ingesloten frame",
+      "frameNotice": "Timon ziet niet wat je in een ingesloten frame doet (een betaalformulier, een captcha, een inlogvak). De geleerde skill pauzeert hier en vraagt je dit deel zelf te doen, dus er moet iemand achter het scherm zitten.",
       "paramName": "Parameternaam",
       "stepName": "Stapnaam",
       "save": "Opslaan",

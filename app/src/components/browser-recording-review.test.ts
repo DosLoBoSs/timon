@@ -13,7 +13,7 @@ import type { BrowserRecordingMeta, RecordedStep } from '@/lib/browser-recording
 const ID = 'br-00000000-0000-4000-8000-000000000002';
 const KEY = 'ghp_abcdefghijklmnopqrstuvwxyz0123';
 
-function fakeDaemon() {
+function fakeDaemon(extraSteps: RecordedStep[] = []) {
   let meta: BrowserRecordingMeta = {
     id: ID, profileId: 'p1', title: 'shop.example', startUrl: 'https://shop.example/', steps: 4, flagged: 1, truncated: false,
     stoppedReason: 'user', createdAt: Date.now() - 60_000, updatedAt: Date.now() - 60_000, status: 'draft', learnMissionId: null, stepsAvailable: true,
@@ -23,7 +23,9 @@ function fakeDaemon() {
     { n: 2, t: 1, type: 'input', tabId: 't', name: 'Search', value: 'running shoes' },
     { n: 3, t: 2, type: 'input', tabId: 't', name: 'Key', value: KEY, flagged: 'api-key' },
     { n: 4, t: 3, type: 'click', tabId: 't', text: 'Buy' },
+    ...extraSteps,
   ];
+  meta = { ...meta, steps: steps.length };
   const patches: unknown[] = [];
   /** What the daemon records once the conversion mission created its skill. */
   let learnedSkillId: string | null = null;
@@ -86,12 +88,12 @@ function fakeDaemon() {
   };
 }
 
-async function openReview(ui: Awaited<ReturnType<typeof browserRecordingDom>>) {
+async function openReview(ui: Awaited<ReturnType<typeof browserRecordingDom>>, count = 4) {
   await ui.until(() => !!ui.button('Recordings'), 'the recordings button');
   await ui.click(ui.button('Recordings'));
   await ui.until(() => !!document.querySelector('[data-browser-recording-review]'), 'the review drawer');
   await ui.click(Array.from(document.querySelectorAll<HTMLButtonElement>('[data-browser-recording-review] li button'))[0]);
-  await ui.until(() => document.querySelectorAll('[data-step]').length === 4, 'the steps');
+  await ui.until(() => document.querySelectorAll('[data-step]').length === count, 'the steps');
 }
 
 const card = (n: number) => document.querySelector<HTMLElement>(`[data-step="${n}"]`);
@@ -286,5 +288,30 @@ test('a viewer who does not own the profile gets no review', async () => {
     await ui.until(() => ui.calls.some((call) => call.url.endsWith('/p1/recordings')), 'the owner check');
     assert.ok(!ui.button('Recordings'));
     assert.equal(ui.calls.some((call) => call.url.includes('/recordings/')), false, 'no recording is ever read');
+  } finally { await ui.cleanup(); }
+});
+
+test('a manual frame step is shown as a warning naming the frame site, and does not block Learn (#944)', async () => {
+  const daemon = fakeDaemon([
+    { n: 5, t: 4, type: 'frame', tabId: 't', selector: 'iframe[name="card"]', tag: 'iframe', name: 'Secure card payment input frame', origin: 'https://js.stripe.com' },
+    { n: 6, t: 5, type: 'frame', tabId: 't', tag: 'iframe' },
+  ]);
+  const ui = await browserRecordingDom({ owner: true, route: daemon.route });
+  try {
+    await openReview(ui, 6);
+    const frame = card(5)!;
+    assert.equal(frame.dataset.manualStep, '');
+    assert.match(frame.className, /amber/, 'shown as a warning');
+    assert.match(frame.textContent ?? '', /Manual step: embedded frame \(https:\/\/js\.stripe\.com\)/);
+    assert.match(frame.querySelector('[role="note"]')?.textContent ?? '', /pause here and ask you to do this part yourself/);
+    assert.equal(card(6)?.querySelector('.font-medium')?.textContent, 'Manual step: embedded frame', 'no origin, no empty parentheses');
+    // No value to mask and nothing to make a parameter of: rename and delete only.
+    assert.equal(inCard(5, 'Mask value'), undefined);
+    assert.equal(inCard(5, 'Make a parameter'), undefined);
+    assert.ok(inCard(5, 'Rename'));
+    assert.ok(inCard(5, 'Delete step 5'));
+    assert.equal(frame.dataset.flagged, undefined);
+    await ui.click(inCard(3, 'Mask value'));
+    await ui.until(() => ui.button('Learn')?.disabled === false, 'Learn to turn on with the manual steps still there');
   } finally { await ui.cleanup(); }
 });

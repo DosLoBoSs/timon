@@ -205,10 +205,13 @@
         "newTab": "Nowa karta",
         "switchTab": "Zmiana karty",
         "closeTab": "Zamknięcie karty",
-        "credential": "Zapisane logowanie"
+        "credential": "Zapisane logowanie",
+        "frame": "Krok ręczny: osadzona ramka ({origin})"
       },
       "paramBadge": "Parametr: {name}",
       "flagged": "Możliwy sekret",
+      "frameUnknownOrigin": "Krok ręczny: osadzona ramka",
+      "frameNotice": "Timon nie widzi, co robisz wewnątrz osadzonej ramki (formularz płatności, captcha, okno logowania). Nauczona umiejętność zatrzyma się tutaj i poprosi Cię o wykonanie tej części samodzielnie, więc ktoś musi być przy ekranie.",
       "paramName": "Nazwa parametru",
       "stepName": "Nazwa kroku",
       "save": "Zapisz",

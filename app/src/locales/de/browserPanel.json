@@ -205,10 +205,13 @@
         "newTab": "Neuer Tab",
         "switchTab": "Tab wechseln",
         "closeTab": "Tab schließen",
-        "credential": "Gespeicherte Anmeldung"
+        "credential": "Gespeicherte Anmeldung",
+        "frame": "Manueller Schritt: eingebetteter Rahmen ({origin})"
       },
       "paramBadge": "Parameter: {name}",
       "flagged": "Mögliches Geheimnis",
+      "frameUnknownOrigin": "Manueller Schritt: eingebetteter Rahmen",
+      "frameNotice": "Timon sieht nicht, was Sie in einem eingebetteten Rahmen tun (Zahlungsformular, Captcha, Anmeldefeld). Der gelernte Skill hält hier an und bittet Sie, diesen Teil selbst zu erledigen; er braucht also jemanden vor dem Bildschirm.",
       "paramName": "Parametername",
       "stepName": "Schrittname",
       "save": "Speichern",

@@ -205,10 +205,13 @@
         "newTab": "新建标签页",
         "switchTab": "切换标签页",
         "closeTab": "关闭标签页",
-        "credential": "已保存的登录凭据"
+        "credential": "已保存的登录凭据",
+        "frame": "手动步骤：嵌入框架 ({origin})"
       },
       "paramBadge": "参数：{name}",
       "flagged": "可能含敏感信息",
+      "frameUnknownOrigin": "手动步骤：嵌入框架",
+      "frameNotice": "Timon 看不到你在嵌入框架（支付表单、验证码、登录框）中的操作。学到的技能会在此暂停，请你亲自完成这一部分，因此需要有人在屏幕前。",
       "paramName": "参数名称",
       "stepName": "步骤名称",
       "save": "保存",

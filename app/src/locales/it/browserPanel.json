@@ -205,10 +205,13 @@
         "newTab": "Nuova scheda",
         "switchTab": "Cambia scheda",
         "closeTab": "Chiudi la scheda",
-        "credential": "Accesso salvato"
+        "credential": "Accesso salvato",
+        "frame": "Passaggio manuale: riquadro incorporato ({origin})"
       },
       "paramBadge": "Parametro: {name}",
       "flagged": "Possibile segreto",
+      "frameUnknownOrigin": "Passaggio manuale: riquadro incorporato",
+      "frameNotice": "Timon non vede cosa fai all'interno di un riquadro incorporato (un modulo di pagamento, un captcha, una finestra di accesso). La skill appresa si fermerà qui e ti chiederà di fare questa parte da solo, quindi serve qualcuno davanti allo schermo.",
       "paramName": "Nome del parametro",
       "stepName": "Nome del passaggio",
       "save": "Salva",

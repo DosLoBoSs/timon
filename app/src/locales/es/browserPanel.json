@@ -205,10 +205,13 @@
         "newTab": "Nueva pestaña",
         "switchTab": "Cambiar de pestaña",
         "closeTab": "Cerrar pestaña",
-        "credential": "Inicio de sesión guardado"
+        "credential": "Inicio de sesión guardado",
+        "frame": "Paso manual: marco incrustado ({origin})"
       },
       "paramBadge": "Parámetro: {name}",
       "flagged": "Posible secreto",
+      "frameUnknownOrigin": "Paso manual: marco incrustado",
+      "frameNotice": "Timon no ve lo que hace dentro de un marco incrustado (un formulario de pago, un captcha, un cuadro de inicio de sesión). La skill aprendida se detendrá aquí y le pedirá que haga esta parte usted mismo, así que necesita a alguien frente a la pantalla.",
       "paramName": "Nombre del parámetro",
       "stepName": "Nombre del paso",
       "save": "Guardar",
