@@ -74,8 +74,6 @@
       "tooLarge": "{name}: za duży (najwyżej 15 MB).",
       "typeRefused": "{name}: ten typ pliku nie jest akceptowany.",
       "quota": "{name}: zadanie ma już maksymalną liczbę plików (20 plików, 100 MB).",
-      "failed": "{name}: nie udało się wysłać ({error}).",
-      "removeFailed": "Nie udało się usunąć {name}: {error}",
       "loadFailed": "Nie udało się odczytać załączonych plików.",
       "dismiss": "Odrzuć",
       "partial": "Zadanie zapisane, ale nie udało się wysłać niektórych plików: {names}"

@@ -74,8 +74,6 @@
       "tooLarge": "{name}: te groot (hooguit 15 MB).",
       "typeRefused": "{name}: dit bestandstype wordt niet geaccepteerd.",
       "quota": "{name}: de taak bevat al zoveel bestanden als mogelijk (20 bestanden, 100 MB).",
-      "failed": "{name}: kon niet worden verstuurd ({error}).",
-      "removeFailed": "Kan {name} niet verwijderen: {error}",
       "loadFailed": "De bijgevoegde bestanden konden niet worden gelezen.",
       "dismiss": "Sluiten",
       "partial": "Taak opgeslagen, maar sommige bestanden konden niet worden verstuurd: {names}"

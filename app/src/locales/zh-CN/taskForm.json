@@ -35,8 +35,6 @@
       "tooLarge": "{name}：文件过大（最大 15 MB）。",
       "typeRefused": "{name}：不支持此文件类型。",
       "quota": "{name}：已达到任务的附件上限（最多 20 个文件，总计 100 MB）。",
-      "failed": "{name}：上传失败（{error}）。",
-      "removeFailed": "无法移除 {name}：{error}",
       "loadFailed": "无法读取附件。",
       "dismiss": "关闭",
       "partial": "任务已保存，但部分文件未能上传：{names}",

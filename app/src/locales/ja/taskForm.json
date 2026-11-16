@@ -74,8 +74,6 @@
       "tooLarge": "{name}: 大きすぎます (最大 15 MB)。",
       "typeRefused": "{name}: この種類のファイルは受け付けられません。",
       "quota": "{name}: タスクに追加できるファイルの上限に達しています (20 ファイル、100 MB)。",
-      "failed": "{name}: 送信できませんでした ({error})。",
-      "removeFailed": "{name} を削除できませんでした: {error}",
       "loadFailed": "添付ファイルを読み取れませんでした。",
       "dismiss": "閉じる",
       "partial": "タスクは保存されましたが、一部のファイルを送信できませんでした: {names}"
