@@ -1,12 +1,12 @@
 import { createHash, verify as verifyCrypto } from 'node:crypto';
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { LICENSE_FILE } from '../paths.js';
 import { CommercialCapabilitiesSchema, type CommercialCapabilities } from './capabilities.js';
 import { deviceId } from './device.js';
 import { fingerprint } from './fingerprint.js';
 import { activeKeyring, type LicensePublicKey } from './pubkey.js';
-import { fileClockAnchor, readLicenseStore, writeLicenseStore, type ClockAnchor } from './store.js';
+import { fileClockAnchor, readLicenseStore, writeFileDurably, writeLicenseStore, type ClockAnchor } from './store.js';
 
 /**
  * Short-lived token issued by the license server (contract: `timon-site`
@@ -399,9 +399,7 @@ export function installLicenseToken(
     ? { anchor: { check: anchor.check, commit: () => undefined }, ...verifyOpts }
     : withAnchor(verifyOpts));
   if (state.status === 'unlicensed' || dryRun) return state;
-  const tmp = `${file}.tmp-${process.pid}`;
-  writeFileSync(tmp, token.trim() + '\n', { mode: 0o600 });
-  renameSync(tmp, file);
+  writeFileDurably(file, token.trim() + '\n');
   if (file === LICENSE_FILE) writeLicenseStore({ restrictionToken: state.capabilities?.plugins === 'fixed' ? token.trim() : null });
   return state;
 }

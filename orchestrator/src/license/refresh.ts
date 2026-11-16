@@ -34,8 +34,7 @@ import { fingerprintReadable } from './fingerprint.js';
 import { assertLicenseCompatible } from './compliance.js';
 import { LicenseCapabilityError } from './capabilities.js';
 import { fixedComposition } from './capabilities.js';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
 import type { Application } from 'express';
 import { bus } from '../bus.js';
 import { LICENSE_FILE, LICENSE_KEY_FILE } from '../paths.js';
@@ -43,7 +42,7 @@ import { deviceId } from './device.js';
 import { LicenseServerError, renew, type ClientOptions } from './client.js';
 import { installLicenseToken, readLicense, unlicensed, verifyLicenseToken, type LicenseReason, type LicenseState, type VerifyOptions } from './license.js';
 import { licenseRevision, licenseState, reevaluateBuildPolicy, setLicenseState } from './runtime.js';
-import { readLicenseStore, writeLicenseStore } from './store.js';
+import { licenseStoreDamaged, readLicenseStore, writeFileDurably, writeLicenseStore, type LicenseStore } from './store.js';
 
 /** §5.1 defaults, used only until the server has announced its own. */
 const DEFAULT_EVERY_SECONDS = 300;
@@ -60,10 +59,7 @@ export function readLicenseKey(file = LICENSE_KEY_FILE): string | null {
 }
 
 export function writeLicenseKey(key: string, file = LICENSE_KEY_FILE): void {
-  mkdirSync(dirname(file), { recursive: true });
-  const tmp = `${file}.tmp-${process.pid}`;
-  writeFileSync(tmp, key.trim() + '\n', { mode: 0o600 });
-  renameSync(tmp, file);
+  writeFileDurably(file, key.trim() + '\n');
 }
 
 export function forgetLicenseKey(file = LICENSE_KEY_FILE): void {
@@ -87,7 +83,7 @@ export function recordServerContact(refresh: { every: number; offlineHours: numb
  * says so (`offlineSince`) so the banner can.
  */
 export function bootLicenseState(opts: VerifyOptions = {}): LicenseState {
-  const store = readLicenseStore();
+  const store = recoverLicenseStore(opts.now ?? new Date());
   const graceUntil = store.lastContact === undefined
     ? undefined
     : store.lastContact + (store.offlineHours ?? DEFAULT_OFFLINE_HOURS) * 3600;
@@ -96,6 +92,31 @@ export function bootLicenseState(opts: VerifyOptions = {}): LicenseState {
     return { ...state, offlineSince: new Date(store.lastContact * 1000).toISOString() };
   }
   return state;
+}
+
+/**
+ * A hard reset can leave `license.state.json` empty or cut short, and reading
+ * it as absent lost `lastContact`: a token that expired during the outage then
+ * looked never renewed, so the boot read it `expired` and a beta build locked
+ * itself (`beta_ended`) until a renewal got through (TIM-0147). The token file
+ * is rewritten by every activation and renewal, so its date is the last server
+ * contact that survived; the tolerance counts from it, as it would have.
+ *
+ * Only with an activation key: without one, the token was installed by hand
+ * and its date says nothing about the server.
+ */
+function recoverLicenseStore(now: Date): LicenseStore {
+  const store = readLicenseStore();
+  if (!licenseStoreDamaged() || !readLicenseKey()) return store;
+  let tokenWritten: number;
+  try { tokenWritten = statSync(LICENSE_FILE).mtimeMs; } catch { return store; }
+  const lastContact = Math.floor(Math.min(tokenWritten, now.getTime()) / 1000);
+  console.warn(`[license] license.state.json is unreadable; offline tolerance counted from the licence file date (${new Date(lastContact * 1000).toISOString()})`);
+  try { return writeLicenseStore({ lastContact }); }
+  catch (err) {
+    console.warn('[license] could not rewrite license.state.json:', (err as Error).message);
+    return { ...store, lastContact };
+  }
 }
 
 // ── The loop ────────────────────────────────────────────────────────────────

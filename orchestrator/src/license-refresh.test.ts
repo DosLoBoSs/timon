@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -19,7 +19,7 @@ const { deviceId } = await import('./license/device.js');
 const { readLicenseStore, writeLicenseStore } = await import('./license/store.js');
 const { bus } = await import('./bus.js');
 const { whiteLabelAllowed } = await import('./license/capabilities.js');
-const { LICENSE_FILE } = await import('./paths.js');
+const { LICENSE_FILE, LICENSE_KEY_FILE, LICENSE_STATE_FILE } = await import('./paths.js');
 
 const fixture = JSON.parse(readFileSync(new URL('../fixtures/token-claims.json', import.meta.url), 'utf8')) as {
   examples: { name: string; claims: Record<string, unknown> }[];
@@ -236,6 +236,52 @@ test('bootLicenseState : un jeton périmé reste bon dans la fenêtre hors-ligne
   // A token that still verifies is not "offline".
   clock = contact;
   assert.equal(bootLicenseState({ keys, now: new Date(nowMs()) }).offlineSince, null);
+});
+
+// TIM-0147: a hard reset of a VPS left `license.state.json` empty. Its
+// `lastContact` gone, the boot read the token as never renewed: `expired`, and
+// a beta build locked itself to a lite composition.
+for (const [label, content] of [['empty', ''], ['cut short', '{"every":300,"lastCon'], ['of the wrong shape', '{"lastContact":"yesterday"}']] as const) {
+  test(`bootLicenseState: a ${label} license.state.json keeps the offline tolerance, counted from the token file`, () => {
+    activated();
+    const contact = clock;
+    utimesSync(LICENSE_FILE, contact, contact);
+    writeFileSync(LICENSE_STATE_FILE, content);
+    clock = contact + 3600;
+    const state = bootLicenseState({ keys, now: new Date(nowMs()) });
+    assert.equal(state.status, 'valid');
+    assert.equal(state.offlineSince, new Date(contact * 1000).toISOString());
+    assert.equal(readLicenseStore().lastContact, contact, 'the store is rewritten, so the loop counts from the same instant');
+  });
+}
+
+test('bootLicenseState: a damaged store grants no more than the tolerance would have', () => {
+  activated();
+  const contact = clock;
+  utimesSync(LICENSE_FILE, contact, contact);
+  writeFileSync(LICENSE_STATE_FILE, '');
+  clock = contact + 25 * 3600;
+  assert.equal(bootLicenseState({ keys, now: new Date(nowMs()) }).reason, 'expired');
+});
+
+test('bootLicenseState: without an activation key, a damaged store grants nothing', () => {
+  activated();
+  const contact = clock;
+  utimesSync(LICENSE_FILE, contact, contact);
+  rmSync(LICENSE_KEY_FILE);
+  writeFileSync(LICENSE_STATE_FILE, '');
+  clock = contact + 3600;
+  assert.equal(bootLicenseState({ keys, now: new Date(nowMs()) }).reason, 'expired', 'a hand-installed token says nothing about the server');
+});
+
+test('the licence files are replaced whole, with no temporary file left behind', () => {
+  activated();
+  writeLicenseStore({ every: 600 });
+  assert.equal(readLicenseStore().every, 600);
+  assert.equal(readFileSync(LICENSE_KEY_FILE, 'utf8'), 'TMN-REFRESH\n');
+  assert.ok(existsSync(LICENSE_FILE));
+  const dir = join(LICENSE_STATE_FILE, '..');
+  assert.deepEqual(readdirSync(dir).filter((f) => f.includes('.tmp-')), []);
 });
 
 test('un jeton renouvelé que ce daemon refuse (autre machine) éteint la licence', async () => {
