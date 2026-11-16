@@ -286,7 +286,7 @@ for (const [dir, pkg, id, slot] of [
   });
 }
 
-test('plugin-update-dialog: a browser-only replacement of `updates.dialog` loads at API 16', async () => {
+test('plugin-update-dialog: a browser-only replacement of `updates.dialog` loads at API 17', async () => {
   await withExample('plugin-update-dialog', '@timon-ai/plugin-update-dialog', async (url) => {
     const gallery = await (await fetch(url('/api/plugins/example-update-dialog'))).json() as {
       state: string; kind: string[]; client: { slots: string[] } | null;

@@ -8,7 +8,7 @@
   "files": ["lib", "README.md", "SIGNATURE"],
   "timon": {
     "id": "example-notice",
-    "apiVersion": 16,
+    "apiVersion": 17,
     "kind": "behavior",
     "label": "Compact notices",
     "description": "Pushes a welcome card at the bottom left, and paints every notice card as one compact line.",
