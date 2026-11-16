@@ -73,18 +73,29 @@ let syncChain: Promise<void> = Promise.resolve();
  * signal, every visit to a plugin route would flash "unknown route" first.
  */
 let synced = false;
+/**
+ * Whether a pass has ever read the plugin list. A page without a session (the
+ * sign-in, an invitation) is settled without one: the list answers 401, so no
+ * theme will ever claim the slot there, and the fallback must not take that
+ * for "the expected theme never came". Sticky: a later failed read leaves the
+ * halves already mounted in place, so what the slot shows stays true.
+ */
+let listed = false;
 const syncListeners = new Set<() => void>();
 
 export function pluginsSynced(): boolean { return synced; }
+
+export function pluginsListed(): boolean { return listed; }
 
 export function subscribePluginSync(listener: () => void): () => void {
   syncListeners.add(listener);
   return () => { syncListeners.delete(listener); };
 }
 
-function markSynced(): void {
-  if (synced) return;
+function markSynced(withList: boolean): void {
+  if (synced && (listed || !withList)) return;
   synced = true;
+  if (withList) listed = true;
   for (const listener of syncListeners) listener();
 }
 
@@ -105,6 +116,7 @@ export function resetClientPluginsForTests(): void {
   for (const plugin of loaded.values()) plugin.dispose();
   loaded.clear();
   synced = false;
+  listed = false;
 }
 
 function kindsOf(plugin: PublicPlugin): readonly string[] {
@@ -285,7 +297,7 @@ async function syncClientPluginPass(epoch: number): Promise<void> {
     remote ? sharedGet('/api/ui/plugins/local').catch(() => null) : Promise.resolve(null),
   ]);
   if (epoch !== syncEpoch) return;
-  if (!response?.ok) { markSynced(); return; }
+  if (!response?.ok) { markSynced(false); return; }
   const listed = (await response.json() as { plugins: PublicPlugin[] }).plugins;
   // No local list to compare with: no remote browser half at all.
   const plugins = remote ? mountableOnRemote(listed, await localPlugins(localResponse)) : listed;
@@ -327,7 +339,7 @@ async function syncClientPluginPass(epoch: number): Promise<void> {
       console.error(`[plugin:${plugin.id}] chargement client impossible`, error);
     }
   }
-  markSynced();
+  markSynced(true);
 }
 
 async function localPlugins(response: Response | null): Promise<PublicPlugin[]> {
