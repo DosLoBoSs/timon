@@ -5,7 +5,9 @@
  * mission, a forged token, a `Host` that is not the loopback, a forwarded
  * request, a route whose server is gone — then that the bearer travels only
  * from the daemon to the server's own origin, refreshed once on a 401, and
- * that neither the bearer nor a relay token is ever written to the logs.
+ * that neither the bearer nor a relay token is ever written to the logs. A
+ * server keyed by its headers (or by a key held in the vault) takes the same
+ * road: its key is in no CLI configuration, the relay adds it.
  */
 import './test-home.js';
 import { test } from 'node:test';
@@ -19,6 +21,8 @@ import express from 'express';
 import { dbApi } from './db.js';
 import { MCP_DIR, deleteMcp, resolveLaunchServers, setMcpOAuth, upsertMcp } from './mcp.js';
 import { createMcpRelayMiddleware, missionHasServer } from './mcp-relay-server.js';
+import { serializeCodexMcpToml, serializeGrokMcpToml, serializeMcpJson } from './backends/mcp-serialize.js';
+import { createSecret, deleteSecret } from './secrets/store.js';
 import { forgetMcpOAuthTokens } from './mcp-oauth-store.js';
 import {
   MCP_RELAY_HEADER, mcpRelayKey, mcpRelayLaunchTarget, mcpRelayRoute, mintMcpRelayToken, resetMcpRelayKeyForTest, verifyMcpRelayToken,
@@ -99,6 +103,8 @@ const relayPort = (relayServer.address() as AddressInfo).port;
 
 const STORED_HEADER = 'stored-api-key-0123456789abcdef';
 const ACCESS = 'oauth-access-token-0123456789abcdef';
+const STATIC_KEY = 'static-api-key-0123456789abcdef';
+const VAULT_KEY = 'vault-held-key-0123456789abcdef';
 
 function connect(id: string, path: string, access = ACCESS, refresh: string | null = 'oauth-refresh-token-0123456789'): void {
   upsertMcp({ id, transport: { type: 'http', url: `${UP}${path}`, headers: { 'X-Api-Key': STORED_HEADER } } });
@@ -351,8 +357,118 @@ test('missionHasServer reads the agent and its mission as they are now', () => {
   assert.equal(missionHasServer('m-erin-task', 'erin', 'srv-x'), false, 'a deleted agent');
 });
 
+/** The launch as the provider plugin does it: every server with credentials minted onto this relay. */
+function launch(ids: string[], agent = 'alice', missionId = 'm-alice') {
+  return resolveLaunchServers(ids, (server) => mcpRelayLaunchTarget(server, { agent, missionId }, { port: relayPort }));
+}
+
+test('a server with an API key in its headers reaches the CLI as the relay: the key is in no config, the relay adds it', async () => {
+  upsertMcp({ id: 'relay-static', transport: { type: 'http', url: `${UP}/mcp`, headers: { Authorization: `Bearer ${STATIC_KEY}`, 'X-Team': 'blue' } } });
+  const launched = await launch(['relay-static']);
+  assert.equal(launched.length, 1);
+  const [server] = launched;
+  assert.ok(server?.type === 'http');
+  assert.match(server.url, new RegExp(`^http://127\\.0\\.0\\.1:${relayPort}/mcp-relay/`));
+  assert.deepEqual(Object.keys(server.headers), [MCP_RELAY_HEADER], 'the relay token, and nothing of the server');
+  for (const text of [serializeMcpJson(launched), serializeCodexMcpToml(launched), serializeGrokMcpToml(launched)]) {
+    assert.ok(text);
+    assert.equal(text.includes(STATIC_KEY), false, 'the key is not written for the CLI');
+    assert.equal(text.includes(`${UP}/mcp`), false, 'nor the server\'s address');
+  }
+  seen.length = 0;
+  const reply = await call(server.url, { headers: { ...server.headers, authorization: 'Bearer agent-own-credential' }, body: RPC });
+  assert.equal(reply.status, 200);
+  const hit = seen.at(-1)!;
+  assert.equal(hit.headers.authorization, `Bearer ${STATIC_KEY}`, 'the stored key, not the agent\'s');
+  assert.equal(hit.headers['x-team'], 'blue');
+  assert.equal(hit.headers[MCP_RELAY_HEADER], undefined);
+  deleteMcp('relay-static');
+  assert.equal((await call(server.url, { headers: server.headers, body: RPC })).status, 403, 'a deleted server closes its route');
+});
+
+test('a key held in the vault (header_secrets) goes through the relay too, read at each request', async () => {
+  const secret = createSecret({ name: 'MCP_APP_RELAYED_KEY', value: VAULT_KEY });
+  upsertMcp({
+    id: 'relay-vaulted',
+    transport: { type: 'http', url: `${UP}/mcp` },
+    headerSecrets: { 'X-Api-Key': { secret_id: secret.id, prefix: 'Key ' } },
+  });
+  const launched = await launch(['relay-vaulted']);
+  const [server] = launched;
+  assert.ok(server?.type === 'http');
+  assert.deepEqual(Object.keys(server.headers), [MCP_RELAY_HEADER]);
+  assert.equal(serializeMcpJson(launched)?.includes(VAULT_KEY), false);
+  assert.equal(serializeCodexMcpToml(launched)?.includes(VAULT_KEY), false);
+  seen.length = 0;
+  assert.equal((await call(server.url, { headers: server.headers, body: RPC })).status, 200);
+  assert.equal(seen.at(-1)?.headers['x-api-key'], `Key ${VAULT_KEY}`);
+  assert.equal(seen.at(-1)?.headers.authorization, undefined, 'no bearer is invented for a key server');
+  // The key gone from the vault: an error the model can read, nothing sent without it.
+  deleteSecret(secret.id);
+  seen.length = 0;
+  const gone = await call(server.url, { headers: server.headers, body: RPC });
+  assert.equal(gone.status, 200);
+  assert.match((JSON.parse(gone.body) as { error: { message: string } }).error.message, /not connected/);
+  assert.equal(seen.length, 0);
+  assert.deepEqual(await launch(['relay-vaulted']), [], 'and the next launch leaves it out');
+  deleteMcp('relay-vaulted');
+});
+
+test('REFUSAL: the route of a key server is closed to an anonymous call, a forged token and another agent', async () => {
+  upsertMcp({ id: 'relay-static-guard', transport: { type: 'http', url: `${UP}/mcp`, headers: { 'X-Api-Key': STATIC_KEY } } });
+  const [alice] = await launch(['relay-static-guard']);
+  const [bob] = await launch(['relay-static-guard'], 'bob', 'm-bob');
+  assert.ok(alice?.type === 'http' && bob?.type === 'http');
+  seen.length = 0;
+  for (const [label, headers] of [
+    ['anonymous', {}],
+    ['forged token', { [MCP_RELAY_HEADER]: 'm-alice.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }],
+    ["bob's token on alice's path", bob.headers],
+    ['the server\'s own key', { 'x-api-key': STATIC_KEY, authorization: `Bearer ${STATIC_KEY}` }],
+  ] as Array<[string, Record<string, string>]>) {
+    const reply = await call(alice.url, { headers, body: RPC });
+    assert.equal(reply.status, 403, label);
+    assert.deepEqual(JSON.parse(reply.body), { error: 'forbidden' }, label);
+  }
+  assert.equal(seen.length, 0, 'nothing reached the server');
+  deleteMcp('relay-static-guard');
+});
+
+test('a key server that answers 401 is not replayed: a JSON-RPC error, no OAuth flow', async () => {
+  upsertMcp({ id: 'relay-static-401', transport: { type: 'http', url: `${UP}/mcp`, headers: { Authorization: 'Bearer stale-static-key-0123456789' } } });
+  const [server] = await launch(['relay-static-401']);
+  assert.ok(server?.type === 'http');
+  seen.length = 0;
+  tokenCalls = 0;
+  const reply = await call(server.url, { headers: server.headers, body: RPC });
+  assert.equal(reply.status, 200);
+  assert.match((JSON.parse(reply.body) as { error: { message: string } }).error.message, /not connected, or refused its credentials/);
+  assert.equal(reply.headers['www-authenticate'], undefined);
+  assert.equal(seen.length, 1, 'one call, no replay');
+  assert.equal(tokenCalls, 0);
+  deleteMcp('relay-static-401');
+});
+
+test('a server with no credential is still handed to the CLI directly; removing its headers takes it off the relay', async () => {
+  upsertMcp({ id: 'relay-plain', transport: { type: 'http', url: `${UP}/mcp` } });
+  assert.deepEqual(await launch(['relay-plain']), [{ type: 'http', name: 'relay-plain', url: `${UP}/mcp`, headers: {} }]);
+  upsertMcp({ id: 'relay-plain', transport: { type: 'http', url: `${UP}/mcp`, headers: { 'X-Api-Key': STATIC_KEY } } });
+  const [relayed] = await launch(['relay-plain']);
+  assert.ok(relayed?.type === 'http' && relayed.url.includes('/mcp-relay/'));
+  upsertMcp({ id: 'relay-plain', transport: { type: 'http', url: `${UP}/mcp`, headers: {} } });
+  assert.equal((await call(relayed.url, { headers: relayed.headers, body: RPC })).status, 403, 'its relay route leads nowhere any more');
+  deleteMcp('relay-plain');
+});
+
+test('without a mission to bind the relay to, a key server is left out, never written in clear', async () => {
+  upsertMcp({ id: 'relay-static-nomission', transport: { type: 'http', url: `${UP}/mcp`, headers: { 'X-Api-Key': STATIC_KEY } } });
+  assert.deepEqual(await resolveLaunchServers(['relay-static-nomission']), []);
+  deleteMcp('relay-static-nomission');
+});
+
 test('vault off: no relay key, the OAuth server is left out of the launch, the relay refuses an issued token', async () => {
   connect('relay-vault', '/mcp');
+  upsertMcp({ id: 'relay-vault-key', transport: { type: 'http', url: `${UP}/mcp`, headers: { 'X-Api-Key': STATIC_KEY } } });
   const t = target('relay-vault', '/mcp');
   assert.equal((await call(t.url, { headers: t.headers, body: RPC })).status, 200);
   setActiveModules(['@timon/agents']);
@@ -360,7 +476,7 @@ test('vault off: no relay key, the OAuth server is left out of the launch, the r
   try {
     assert.equal(mcpRelayKey(), null, 'no key held in memory in place of the vault');
     assert.equal(mcpRelayLaunchTarget({ id: 'relay-vault', url: `${UP}/mcp` }, { agent: 'alice', missionId: 'm-alice' }), null);
-    const launched = await resolveLaunchServers(['relay-vault'], (server) =>
+    const launched = await resolveLaunchServers(['relay-vault', 'relay-vault-key'], (server) =>
       mcpRelayLaunchTarget(server, { agent: 'alice', missionId: 'm-alice' }, { port: relayPort }));
     assert.deepEqual(launched, [], 'left out, never handed over in clear');
     seen.length = 0;
@@ -368,6 +484,7 @@ test('vault off: no relay key, the OAuth server is left out of the launch, the r
     assert.equal(seen.length, 0);
   } finally {
     resetActiveModules();
+    deleteMcp('relay-vault-key');
   }
 });
 
@@ -385,7 +502,7 @@ test('RESTART: with every cache gone, a token issued before still opens the rout
 test('neither a bearer, a refresh token nor a relay token was ever logged', () => {
   const text = logged.join('\n');
   const key = relayKey();
-  for (const secret of [ACCESS, STORED_HEADER, ...issued, 'stale-access-token', 'oauth-refresh-token', key.toString('base64url')]) {
+  for (const secret of [ACCESS, STORED_HEADER, STATIC_KEY, VAULT_KEY, ...issued, 'stale-access-token', 'oauth-refresh-token', key.toString('base64url')]) {
     assert.equal(text.includes(secret), false, `${secret.slice(0, 16)}… was logged`);
   }
   // A relay token is `<mission>.<hmac>`: no 43-character HMAC follows a mission id in the logs.

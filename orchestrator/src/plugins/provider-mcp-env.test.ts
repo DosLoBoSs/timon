@@ -262,10 +262,14 @@ test('REFUSAL: nothing the plugin saw holds the mission token, a vault value or 
     const stdio = plan.servers.find((s) => s.name === 'witness-user-stdio')!;
     assert.match(stdio.env!.UPSTREAM_KEY!, /^timon-seal-/);
     assert.match(stdio.env!.MODE!, /^timon-seal-/, 'every value of a user server is protected, not just the ones that look secret');
-    assert.match(plan.servers.find((s) => s.name === 'witness-user-http')!.headers!.Authorization!, /^timon-seal-/);
+    // An http server with a key is the daemon's relay (TODO #835): the plugin sees a reference to its relay token.
+    const http = plan.servers.find((s) => s.name === 'witness-user-http')!;
+    assert.deepEqual(Object.keys(http.headers ?? {}), ['x-timon-mcp-relay']);
+    assert.match(http.headers!['x-timon-mcp-relay']!, /^timon-seal-/);
 
     // The positive half: the stdin payload the daemon wrote carries the real values...
-    assert.ok(written.includes(USER_ENV_SECRET) && written.includes(USER_HEADER_SECRET), 'the stdin payload holds the real values');
+    assert.ok(written.includes(USER_ENV_SECRET), 'the stdin payload holds the real values');
+    assert.equal(written.includes(USER_HEADER_SECRET), false, 'the key of an http server stays in the daemon, the CLI talks to the relay');
     // ...and the environment, which every child of the CLI inherits, holds none of them.
     assert.equal(JSON.stringify(env).includes(real), false, 'the token is not in the process environment');
     assert.equal(JSON.stringify(env).includes(USER_ENV_SECRET), false);
@@ -442,7 +446,11 @@ test('S3: the MCP configuration written to a scratch file holds the real values,
     assert.ok(real && !real.startsWith('timon-seal-'), 'swapped on write');
     assert.notEqual(real, DAEMON_TOKEN);
     assert.equal(config.mcpServers['witness-user-stdio']!.env.UPSTREAM_KEY, USER_ENV_SECRET);
-    assert.equal(config.mcpServers['witness-user-http']!.headers!.Authorization, USER_HEADER_SECRET);
+    const http = config.mcpServers['witness-user-http'] as { url?: string; headers?: Record<string, string> };
+    assert.match(http.url ?? '', /^http:\/\/127\.0\.0\.1:\d+\/mcp-relay\/[A-Za-z0-9_-]{22}\/acme\.agent$/);
+    assert.deepEqual(Object.keys(http.headers ?? {}), ['x-timon-mcp-relay']);
+    assert.ok(!http.headers!['x-timon-mcp-relay']!.startsWith('timon-seal-'), 'the relay token is swapped on write');
+    assert.equal(onDisk.includes('user-mcp-header-secret-9c2e'), false, 'the key of an http server is not written for the CLI');
     if (process.platform !== 'win32') assert.equal(statSync(info.file).mode & 0o777, 0o600);
     // What the plugin's own code could have kept.
     const plugin = [seen.plans.at(-1), seen.envs.at(-1), JSON.stringify(args)].join('\n');

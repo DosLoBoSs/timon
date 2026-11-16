@@ -35,7 +35,7 @@ const { registerRoutes: registerUserRoutes } = await import('../users/routes.js'
 const { registerRoutes: registerAgents } = await import('./routes.js');
 const { dbApi } = await import('../../db.js');
 const { SKILLS_DIR, skillFile } = await import('../../paths.js');
-const { MCP_DIR, holdLegacyMissionServersToPublic, resolveLaunchServers } = await import('../../mcp.js');
+const { MCP_DIR, holdLegacyMissionServersToPublic, mcpRelayUpstream, resolveLaunchServers } = await import('../../mcp.js');
 const { setMcpHostLookupForTest } = await import('../../mcp-url-guard.js');
 const { MCP_PROXY_HEADER, stopMcpLaunchProxyForTest } = await import('../../mcp-launch-proxy.js');
 const { hashApiToken, issueMissionApiToken } = await import('../../users/api-tokens.js');
@@ -806,6 +806,39 @@ test('the host of a url is judged on what it resolves to, not on how it is spell
   assert.equal(storedMcp('dave-rebind')!.public_only, undefined);
   assert.deepEqual((await resolveLaunchServers(['dave-rebind'])).map((s) => s.type === 'http' && s.url), ['https://loop.example.net/mcp']);
   assert.equal((await call('DELETE', '/api/mcp/dave-rebind', { cookie: adminCookie })).status, 200);
+});
+
+test('a public server a mission declared with a key goes through the relay, which pins it, not through the launch proxy (TODO #835)', async () => {
+  const ok = await call('POST', '/api/mcp', {
+    bearer: daveToken, body: { id: 'dave-keyed', transport: HTTP('https://rebind.example.net/mcp', { headers: { 'x-api-key': 'dave-key-0123456789' } }) },
+  });
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
+  assert.equal(storedMcp('dave-keyed')!.public_only, true);
+  const minted: string[] = [];
+  const relay = (server: { id: string; url: string }) => {
+    minted.push(server.id);
+    return { url: 'http://127.0.0.1:3001/mcp-relay/r/dave.agent', headers: { 'x-timon-mcp-relay': 'relay-token' } };
+  };
+  const [launched] = await resolveLaunchServers(['dave-keyed'], relay);
+  assert.deepEqual(minted, ['dave-keyed']);
+  assert.ok(launched?.type === 'http');
+  assert.equal(launched.url, 'http://127.0.0.1:3001/mcp-relay/r/dave.agent');
+  assert.equal(launched.headers[MCP_PROXY_HEADER], undefined, 'not the launch proxy');
+  assert.ok(!JSON.stringify(launched).includes('dave-key-0123456789'));
+  // The relay connects only to the address it judged, at every hop.
+  const upstream = await mcpRelayUpstream('dave-keyed');
+  assert.equal(upstream?.publicOnly, true);
+  assert.equal(upstream?.headers['x-api-key'], 'dave-key-0123456789');
+  // Judged again at launch: a record moved to this host is left out before any relay is minted.
+  DNS['rebind.example.net'] = ['127.0.0.1'];
+  try {
+    minted.length = 0;
+    assert.deepEqual(await resolveLaunchServers(['dave-keyed'], relay), []);
+    assert.deepEqual(minted, []);
+  } finally {
+    DNS['rebind.example.net'] = ['93.184.215.14'];
+  }
+  assert.equal((await call('DELETE', '/api/mcp/dave-keyed', { bearer: daveToken })).status, 200);
 });
 
 test('what a human declared, or another agent, is not rewritten by a mission without privileged-config', async () => {

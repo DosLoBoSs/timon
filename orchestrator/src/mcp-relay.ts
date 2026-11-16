@@ -1,14 +1,17 @@
 /**
- * The daemon's relay for an MCP server connected by OAuth: what the agent's CLI
- * is handed instead of the server's url and bearer.
+ * The daemon's relay for an MCP server that carries a credential — an OAuth
+ * connection, headers of its own (an API key), or headers whose value the
+ * vault holds: what the agent's CLI is handed instead of the server's url and
+ * credential.
  *
- * Writing `Authorization: Bearer <access_token>` into the MCP configuration of a
- * CLI (`--mcp-config`, a `config.toml`) put the token in a file of the mission's
- * scratch folder, readable by the shell the model drives. So, like the vault's
- * broker (`timon_http_call`), the daemon holds the credential and the agent only
- * asks: its CLI talks to `http://127.0.0.1:<daemon port>/mcp-relay/<route>/<agent>`
- * with a relay token, and the relay (`mcp-relay-server.ts`) adds the current
- * OAuth bearer on its way out.
+ * Writing `Authorization: Bearer <access_token>` or an API key into the MCP
+ * configuration of a CLI (`--mcp-config`, a `config.toml`) put it in a file of
+ * the mission's scratch folder, readable by the shell the model drives. So,
+ * like the vault's broker (`timon_http_call`), the daemon holds the credential
+ * and the agent only asks: its CLI talks to
+ * `http://127.0.0.1:<daemon port>/mcp-relay/<route>/<agent>` with a relay
+ * token, and the relay (`mcp-relay-server.ts`) adds the stored headers and the
+ * current OAuth bearer on its way out.
  *
  *  - `<route>` derives from the server's id AND url: a url changed after the
  *    launch is another route, and the old one leads nowhere.
@@ -18,9 +21,8 @@
  *    survives a daemon restart (a resumed codex session keeps working) without
  *    any table of issued tokens.
  *  - No vault, no relay: a key held in memory only would die with the daemon
- *    and silently break every resumed session, so an OAuth server is then left
- *    out of the launch and the relay refuses everything (the OAuth tokens are
- *    in the vault anyway, `mcp-oauth-store.ts`).
+ *    and silently break every resumed session, so a server with credentials is
+ *    then left out of the launch and the relay refuses everything.
  *
  * The token sits in the CLI's configuration like any other header, so it is
  * worth nothing off this machine's loopback, nor for another agent or route.
@@ -52,7 +54,7 @@ let unavailableWarned = false;
 function unavailable(reason: string): null {
   if (!unavailableWarned) {
     unavailableWarned = true;
-    console.warn(`[timon] mcp relay unavailable: ${reason}; OAuth MCP servers are left out of launches until it is back`);
+    console.warn(`[timon] mcp relay unavailable: ${reason}; MCP servers with credentials (OAuth, headers) are left out of launches until it is back`);
   }
   return null;
 }
@@ -114,7 +116,7 @@ export function verifyMcpRelayToken(key: Buffer, token: string, route: string, a
 export type McpRelayCaller = { agent: string; missionId: string };
 
 /**
- * What a CLI is handed for an OAuth server: the relay's url and the header that
+ * What a CLI is handed for a server with credentials: the relay's url and the header that
  * opens it; `null` when the relay has no key (vault off): the server is then left out.
  */
 export function mcpRelayLaunchTarget(
