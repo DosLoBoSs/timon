@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { NewMissionMenu, type NewMissionOptions } from './new-mission-menu';
 import type { Agent, MissionSummary } from './chat-types';
 import { formatNumber, formatRelativeTime } from '@/lib/intl';
+import { backendLabel, useBackendCatalog, type BackendName } from '@/lib/backends';
 
 /**
  * The current mission's sheet — extracted verbatim from `MissionInfoPanel`.
@@ -22,6 +23,8 @@ export function MissionCard({
   currentMissionId,
   currentSessionId,
   stats,
+  backend,
+  model,
   onNew,
   newMission,
 }: {
@@ -31,10 +34,17 @@ export function MissionCard({
   currentMissionId: string | null;
   currentSessionId: string | null;
   stats: { tok: number; cost: number };
+  /** The EFFECTIVE pair of the next turn, the one the composer shows: the
+   *  mission's override or the pending choice, never the agent's config
+   *  alone, which read Opus on a thread running on another provider. */
+  backend: BackendName;
+  model: string;
   onNew: () => void;
   newMission?: NewMissionOptions | null;
 }) {
   const current = missions.find((m) => m.id === currentMissionId) ?? null;
+  const catalog = useBackendCatalog();
+  const modelShort = model.replace(/^claude-/, '').replace(/-\d{8}$/, '');
   // Cost/tokens: prefer the live SSE-driven `stats` (updates while a mission
   // runs), fall back to the mission row (covers historical / replayed views
   // where `stats` is reset to 0).
@@ -91,9 +101,13 @@ export function MissionCard({
             </span>
           </>
         )}
+        <span className="text-muted-foreground">provider</span>
+        <span className="truncate text-[11px]" title={backend}>
+          {backendLabel(catalog, backend)}
+        </span>
         <span className="text-muted-foreground">model</span>
-        <span className="text-[11px]">
-          {(agent.model || 'sonnet').replace('claude-', '')}
+        <span className="truncate text-[11px]" title={model}>
+          {modelShort}
         </span>
         <span className="text-muted-foreground">agent</span>
         <span className="truncate text-[11px]">{agent.name}</span>

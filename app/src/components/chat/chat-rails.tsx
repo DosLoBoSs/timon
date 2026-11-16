@@ -63,6 +63,7 @@ import { McpCard } from './mcp-card';
 import { AgentTodosCard } from './agent-todos-card';
 import type { Agent, AgentTodo, McpItem, MissionSummary, SkillItem } from './chat-types';
 import type { Delegation } from '@/hooks/use-delegations';
+import type { BackendName } from '@/lib/backends';
 import type { NewMissionOptions } from './new-mission-menu';
 import { widgetPicto } from '@/plugins-client/widget-pictos';
 import { FileContextMenu } from './file-context-menu';
@@ -151,6 +152,9 @@ export type ChatRailValue = {
 export type ChatInfoValue = {
   currentSessionId: string | null;
   stats: { tok: number; cost: number };
+  /** Effective backend and model of the next turn, as the composer shows them. */
+  backend: BackendName;
+  model: string;
   agentTodos: AgentTodo[];
   allSkills: SkillItem[];
   onToggleSkill: (id: string) => void;
@@ -248,6 +252,8 @@ function MissionCardWidget() {
       currentMissionId={chat.currentMissionId}
       currentSessionId={info.currentSessionId}
       stats={info.stats}
+      backend={info.backend}
+      model={info.model}
       onNew={chat.onNew}
       newMission={chat.newMission}
     />

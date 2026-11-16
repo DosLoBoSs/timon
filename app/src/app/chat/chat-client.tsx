@@ -5742,13 +5742,15 @@ export function ChatClient({
     () => ({
       currentSessionId,
       stats,
+      backend: effBackend,
+      model: effModel,
       agentTodos,
       allSkills,
       onToggleSkill: toggleSkill,
       allMcp,
       onToggleMcp: toggleMcp,
     }),
-    [currentSessionId, stats, agentTodos, allSkills, toggleSkill, allMcp, toggleMcp],
+    [currentSessionId, stats, effBackend, effModel, agentTodos, allSkills, toggleSkill, allMcp, toggleMcp],
   );
   useLayoutEffect(() => {
     if (!chrome) return;
