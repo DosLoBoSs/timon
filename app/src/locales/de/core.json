@@ -873,8 +873,6 @@
     "notActivated": "Free ist aktiv — weitere Konten brauchen eine Lizenz",
     "activate": "Aktivieren",
     "offlineSince": "Lizenzserver seit {date} nicht erreichbar — bezahlte Rechte bleiben während der Offline-Toleranz verfügbar, danach kehrt Timon zu Free zurück.",
-    "buildEndsSoon": "Dieser Beta-Build läuft am {date} ab. Installiere vorher die neueste Version.",
-    "buildEndsUrgent": "Dieser Beta-Build läuft am {date} ab. Installiere jetzt die neueste Version.",
     "licenseEndsSoon": "Deine Lizenz endet am {date}. Gib vorher einen neuen Schlüssel ein.",
     "licenseEndsUrgent": "Deine Lizenz endet am {date}. Gib jetzt einen neuen Schlüssel ein."
   },

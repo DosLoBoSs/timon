@@ -873,8 +873,6 @@
     "notActivated": "Free is actief — extra accounts hebben een licentie nodig",
     "activate": "Activeren",
     "offlineSince": "Licentieserver onbereikbaar sinds {date} — betaalde rechten blijven beschikbaar tijdens de offlinetolerantie, daarna keert Timon terug naar Free.",
-    "buildEndsSoon": "Deze bètabuild stopt op {date}. Installeer vóór die tijd de nieuwste versie.",
-    "buildEndsUrgent": "Deze bètabuild stopt op {date}. Installeer nu de nieuwste versie.",
     "licenseEndsSoon": "Je licentie eindigt op {date}. Voer vóór die tijd een nieuwe sleutel in.",
     "licenseEndsUrgent": "Je licentie eindigt op {date}. Voer nu een nieuwe sleutel in."
   },

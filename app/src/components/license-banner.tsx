@@ -7,12 +7,10 @@ import { isPageSurfaceAllowed, useCapabilities } from '@/lib/capabilities';
 import { t } from '@/lib/i18n';
 import { formatDate, formatDateTime } from '@/lib/intl';
 import { machineScopedStorage } from '@/lib/machines/machine-storage';
-import { useUpdateStore, visibleOffer } from '@/lib/updates';
 
 function expiryText(notice: ExpiryNotice): string {
   const date = formatDate(notice.at, { year: 'numeric', month: 'numeric', day: 'numeric' });
-  const key = `${notice.kind === 'build' ? 'buildEnds' : 'licenseEnds'}${notice.urgent ? 'Urgent' : 'Soon'}`;
-  return t(`license.${key}`, { date });
+  return t(notice.urgent ? 'license.licenseEndsUrgent' : 'license.licenseEndsSoon', { date });
 }
 
 const RELOAD_KEY = 'timon-lock-reload';
@@ -40,10 +38,9 @@ export function LicenseBanner() {
   const canActivate = isPageSurfaceAllowed(capabilities, '/license');
   // The end dates are announced whatever the setup policy: the "not activated"
   // banner below stays quiet during the beta, these never do.
-  // A newer version on offer takes the build's notice over: the update banner
-  // says when this build stops, next to the way out of it.
-  const updateShown = visibleOffer(useUpdateStore()) !== null;
-  const ending = expiryNotices(license, Date.now()).filter((item) => !(updateShown && item.kind === 'build'));
+  // The build's end is a notice card of `@timon/updates`, beside the newer
+  // version that is the way out of it; only the licence's end stays here.
+  const ending = expiryNotices(license, Date.now()).filter((item) => item.kind === 'license');
   const showLicense = notice !== null && capabilities !== null && capabilities.beta !== true;
   if (!showLicense && ending.length === 0) return null;
   return (
@@ -55,7 +52,7 @@ export function LicenseBanner() {
           className={`shrink-0 px-3 py-1 text-center text-xs font-semibold ${item.urgent ? 'bg-red-600 text-white' : 'bg-amber-400 text-amber-950'}`}
         >
           {expiryText(item)}
-          {item.kind === 'license' && canActivate && (
+          {canActivate && (
             <>{' · '}<Link className="underline" href="/license">{t('license.activate')}</Link></>
           )}
         </div>

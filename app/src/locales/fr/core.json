@@ -662,8 +662,6 @@
     "notActivated": "Free est actif — les comptes supplémentaires nécessitent une licence",
     "activate": "Activer",
     "offlineSince": "Serveur de licences injoignable depuis le {date} — les droits payants restent disponibles pendant la tolérance hors ligne, puis Timon revient à Free.",
-    "buildEndsSoon": "Ce build bêta s'arrête le {date}. Installez la dernière version avant cette date.",
-    "buildEndsUrgent": "Ce build bêta s'arrête le {date}. Installez la dernière version dès maintenant.",
     "licenseEndsSoon": "Votre licence prend fin le {date}. Saisissez une nouvelle clé avant cette date.",
     "licenseEndsUrgent": "Votre licence prend fin le {date}. Saisissez une nouvelle clé dès maintenant."
   },
@@ -4295,18 +4293,10 @@
     "empty": "Aucun agent"
   },
   "updates": {
-    "banner": {
-      "available": "Timon {version} est disponible — vous utilisez la {installed}.",
-      "buildEnds": "Cette version cesse de fonctionner le {date}.",
-      "downloadLinux": "Télécharger pour Linux ({format})",
-      "downloadMac": "Télécharger pour macOS ({format})",
-      "downloadWindows": "Télécharger pour Windows ({format})",
-      "downloadPage": "Page de téléchargement",
-      "notes": "Nouveautés",
-      "hideNotes": "Masquer les notes",
-      "noNotes": "Aucune note n'accompagne cette version.",
-      "fullNotes": "Journal complet des changements",
-      "later": "Plus tard"
+    "notice": {
+      "available": "Timon {version} est disponible",
+      "update": "Mettre à jour",
+      "buildEnds": "Cette version cesse de fonctionner le {date}."
     },
     "download": {
       "start": "Télécharger et vérifier",
