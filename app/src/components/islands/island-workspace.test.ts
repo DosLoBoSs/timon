@@ -18,7 +18,9 @@ async function mount(ctx: TestContext, { width = 1200, height = 800, exclusive =
     if (!saved.has(key)) saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
     Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
   };
-  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'getComputedStyle', 'MutationObserver']) {
+  // HTMLInputElement: Radix's focus scope tests `instanceof HTMLInputElement`
+  // when the focus leaves an open menu (the popup folded from its own menu).
+  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'HTMLInputElement', 'Element', 'Node', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'getComputedStyle', 'MutationObserver']) {
     install(key, key === 'window' ? dom.window : Reflect.get(dom.window, key));
   }
   Object.defineProperty(dom.window, 'innerWidth', { value: width, configurable: true });
@@ -1171,6 +1173,7 @@ test('a popup folds into a tab in the corner from its header or its menu, and co
   assert.ok(item, 'a "Minimize" entry in its menu');
   await w.act(() => { item!.click(); });
   assert.equal(w.tree.floatOf(w.calls.at(-1)!.tree, leafId)?.minimized, true);
+  assert.equal(document.activeElement, document.querySelector(`[data-island-minimized="${leafId}"]`), 'the closing menu does not pull the focus back');
 });
 
 test('the page alone with only folded popups is painted as it always was, their tabs in the corner', async (t) => {
