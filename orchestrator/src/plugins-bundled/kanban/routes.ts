@@ -13,7 +13,7 @@ import { asBackendName } from '../../backends/index.js';
 import { evaluateCodeDone, inspectGitBranch, shaInBase } from '../../code-gate.js';
 import { config } from '../../config/load.js';
 import { FALLBACK_SCOPES, TASK_TYPES, db, dbApi, isCodeOnlyPipeline, isFallbackScope, isTaskType, normalizeTaskStatusInput, rowVisible, type TaskDeleteOutcome, type TaskDeleteResult, type TaskRow, type TaskType } from '../../db.js';
-import { forbidden, forbiddenBody, rejectIfDenied, requireAuth, viewerFromRequest } from '../../users/identity.js';
+import { forbidden, forbiddenBody, isPersonAuth, rejectIfDenied, requireAuth, viewerFromRequest } from '../../users/identity.js';
 import { scopedDb } from '../../users/scoped-db.js';
 import { resolveTaskLlm, type SeriesLlmChoice } from '../../dispatcher.js';
 import {
@@ -387,7 +387,7 @@ export function closeTask(
   taskId: string,
   task: TaskRow,
   status: 'DONE' | 'BLOCKED',
-  opts: { doneComment?: string; blockedReason?: string; summary?: string },
+  opts: { doneComment?: string; blockedReason?: string; summary?: string; byPerson?: boolean },
 ): void {
   let doneComment = opts.doneComment;
   // Before the transition, like the merge sha: `task_done` builds the return
@@ -403,6 +403,7 @@ export function closeTask(
   dbApi.updateTaskStatus(taskId, status, {
     blockedReason: opts.blockedReason,
     doneComment,
+    byPerson: opts.byPerson,
   });
   // A dispatched task runs in a `persistentProcess` mission: after its
   // `result` the process keeps stdin open and stays idle indefinitely →
@@ -1170,7 +1171,7 @@ export function registerRoutes(app: Router): void {
         res.status(400).json({ error: 'reason is required to mark a task as failed' });
         return;
       }
-      closeTask(taskId, task, 'BLOCKED', { blockedReason: reason });
+      closeTask(taskId, task, 'BLOCKED', { blockedReason: reason, byPerson: isPersonAuth(req.auth) });
       res.json({ task: scope.getTask(taskId) });
       return;
     }
@@ -1392,6 +1393,9 @@ export function registerRoutes(app: Router): void {
           doneComment: body.done_comment ?? undefined,
           blockedReason: body.blocked_reason ?? undefined,
           summary: parseSummary(body.done_summary),
+          // Only a browser session: an agent, the CLI or a plugin blocking a
+          // task still hands it to the pilot.
+          byPerson: isPersonAuth(req.auth),
         });
       } else {
         dbApi.updateTaskStatus(req.params.id, nextStatus as Parameters<typeof dbApi.updateTaskStatus>[1], {

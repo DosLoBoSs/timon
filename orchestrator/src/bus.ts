@@ -142,7 +142,9 @@ export type BusEvent =
   // `timon task block`, failed mission, verification-loop cap, dispatcher
   // spawn failure). Centralised in dbApi.updateTaskStatus/setTaskStatusOnly so
   // that no blocking path is forgotten. Consumed by recovery.ts.
-  | { kind: 'task_blocked'; taskId: string; reason: string | null }
+  // `byPerson`: a person blocked it from the interface — the decision is
+  // theirs, the wake loop does not hand it to the pilot.
+  | { kind: 'task_blocked'; taskId: string; reason: string | null; byPerson?: boolean }
   // Emitted when an agent enqueues a message to another agent. `missionId`
   // serves the existing SSE routing (per mission) — for messages we broadcast,
   // so the source mission is taken. The inbox UI filters by `toAgent`.

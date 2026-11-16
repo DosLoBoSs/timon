@@ -1070,9 +1070,16 @@ function crashLoopNotice(task: TaskRow): string {
   return '';
 }
 
-function handleTaskBlocked(taskId: string, reason: string | null): void {
+export function handleTaskBlocked(taskId: string, reason: string | null, opts: { byPerson?: boolean } = {}): void {
   const task = dbApi.getTask(taskId);
   if (!task || isMirrorTask(task)) return;
+  // A person blocked it from the interface (a cancellation, "do not relaunch"):
+  // handing it to the pilot would ask an agent to undo their decision.
+  // `updateTaskStatus` already marked the return as given.
+  if (opts.byPerson) {
+    console.log(`[wake] task ${taskId} blocked by a person: the pilot is not woken`);
+    return;
+  }
   const agent = orchestratorForTask(task);
   const counterKey = task.group_id ?? `task:${taskId}`;
   const wakes = bumpBlockedCounter(counterKey);
@@ -1093,6 +1100,8 @@ function handleTaskBlocked(taskId: string, reason: string | null): void {
       ].join('\n'),
       { taskId, fromMission: task.mission_id },
     );
+    // The user holds it now: a restart must not hand it back to the pilot.
+    dbApi.markTaskReturnNotified(taskId);
     return;
   }
 
@@ -1114,6 +1123,29 @@ function handleTaskBlocked(taskId: string, reason: string | null): void {
   // will produce (sometimes 10 min later) would have nothing more to tell it.
   dbApi.markTaskReturnNotified(taskId);
   scheduleWake(agent);
+}
+
+/**
+ * Boot pass over the BLOCKED tasks: hands the pilot only those it has not
+ * been told about. Every BLOCKED task used to be re-sent at each start, so a
+ * task cancelled by its maintainer came back to the pilot after every restart
+ * (three "Task blocked" for the same decision, 2026-11-06). Skipped: a task
+ * whose return is already given (`return_notified` — its recap went out, a
+ * person blocked it, a scope stop silenced it, the user holds an escalated
+ * loop), unless the recap it got expired unread. A recap still pending is
+ * delivered by the inbox sweep, never doubled. Returns how many it presented.
+ */
+export function representBlockedTasks(): number {
+  const blocked = dbApi.listTasks('BLOCKED').filter((t) => !isMirrorTask(t));
+  const told = blocked.filter((t) => t.return_notified === 1);
+  const recaps = dbApi.latestTaskRecapStatus(WAKE_SENDER, told.map((t) => t.id));
+  let presented = 0;
+  for (const t of blocked) {
+    if (t.return_notified === 1 && recaps.get(t.id) !== 'expired') continue;
+    handleTaskBlocked(t.id, t.blocked_reason);
+    presented++;
+  }
+  return presented;
 }
 
 /**
@@ -1454,7 +1486,7 @@ export function startWake(): () => void {
       }
     } else if (ev.kind === 'task_blocked') {
       try {
-        handleTaskBlocked(ev.taskId, ev.reason);
+        handleTaskBlocked(ev.taskId, ev.reason, { byPerson: ev.byPerson === true });
       } catch (err) {
         console.error(`[wake] task_blocked handler error ${ev.taskId}: ${(err as Error).message}`);
       }
@@ -1508,9 +1540,8 @@ export function startWake(): () => void {
   // task_blocked recap comes from `orchestrator-wake` → excluded from the inbox sweep above,
   // hence this dedicated pass. handleTaskBlocked honours the anti-loop.
   try {
-    const blocked = dbApi.listTasks('BLOCKED');
-    for (const t of blocked) handleTaskBlocked(t.id, t.blocked_reason);
-    if (blocked.length) console.log(`[wake] boot: ${blocked.length} task(s) BLOCKED re-presented`);
+    const presented = representBlockedTasks();
+    if (presented) console.log(`[wake] boot: ${presented} task(s) BLOCKED re-presented`);
   } catch (err) {
     console.error(`[wake] boot blocked-sweep error: ${(err as Error).message}`);
   }
