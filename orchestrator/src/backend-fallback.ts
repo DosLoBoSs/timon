@@ -51,6 +51,7 @@ import { backendStillDry } from './backend-recheck.js';
 import { backendBinaryAvailable } from './backends/binary-check.js';
 import { providerSignedOut } from './backends/sign-in-state.js';
 import { messageDateTime, messageTime } from './message-dates.js';
+import { bus } from './bus.js';
 
 export type FallbackTarget = { backend: BackendName; model: string | null };
 
@@ -602,7 +603,22 @@ export async function redirectIfStillDry(
   taskOverride?: TaskFallbackOverride | null,
 ): Promise<FallbackTarget | null> {
   if (!(await backendStillDry(fallbackSource(backend, scope), { claimTrial: false }))) return null;
-  return fallbackFor(backend, scope, taskOverride);
+  const target = fallbackFor(backend, scope, taskOverride);
+  if (target) announceFallback(fallbackSource(backend, scope), target.backend);
+  return target;
+}
+
+/**
+ * Says on the bus that an actor really moves to its fallback. Only where a move
+ * is applied (a spawn redirect, a series switch): `fallbackFor` and
+ * `redirectIfExhausted` merely answer a question, which `backendResumeRoute` and
+ * the dispatcher also ask without moving anything.
+ */
+function announceFallback(from: string | null | undefined, to: string): void {
+  if (from === to) return;
+  try {
+    bus.publish({ kind: 'backend_fallback', fromBackend: from ?? null, toBackend: to });
+  } catch { /* a listener never stops a switchover */ }
 }
 
 /**
@@ -622,7 +638,9 @@ export async function redirectTaskSpawn(
   taskOverride?: TaskFallbackOverride | null,
 ): Promise<FallbackTarget | null> {
   await backendStillDry(fallbackSource(backend, scope), { claimTrial: false });
-  return redirectIfExhausted(backend, scope, taskOverride);
+  const target = redirectIfExhausted(backend, scope, taskOverride);
+  if (target) announceFallback(fallbackSource(backend, scope), target.backend);
+  return target;
 }
 
 /**
@@ -838,6 +856,7 @@ async function switchSeriesNow(seriesId: string, opts: SeriesSwitchOptions): Pro
           });
         })();
         pilotSwitched = true;
+        announceFallback(previousBackend, pilotTarget.backend);
         console.warn(
           `[fallback] series ${seriesId.slice(0, 8)}: pilot ${pilot.id.slice(0, 8)} repointed to `
           + `${pilotTarget.backend} without respawn (mission ${pilot.status})`,
@@ -852,6 +871,7 @@ async function switchSeriesNow(seriesId: string, opts: SeriesSwitchOptions): Pro
     }
   } else if (pilot && pilotTarget) {
     try {
+      const previousBackend = effective(pilot.backend_override, pilot.agent_name);
       await switchMissionBackend(pilot.id, {
         backend: pilotTarget.backend,
         model: pilotTarget.model,
@@ -863,6 +883,7 @@ async function switchSeriesNow(seriesId: string, opts: SeriesSwitchOptions): Pro
           'pick the plan up where it stood.',
       });
       pilotSwitched = true;
+      announceFallback(previousBackend, pilotTarget.backend);
     } catch (err) {
       // Turn in flight, mission not found, summary impossible... Switching the
       // tasks over is still worth it: they will start again on their fallback
@@ -927,6 +948,7 @@ async function switchSeriesNow(seriesId: string, opts: SeriesSwitchOptions): Pro
     const n = dbApi.setSeriesLlmOverride(seriesId, type, target.backend, target.model, planGroup);
     if (n === 0) continue;
     changed += n;
+    announceFallback(effective(sample.backend_override, sample.agent_name), target.backend);
     if (!opts.ruleScope) movesOfSeries.set(key, target.backend);
     movedKeys.push({ type, planGroup });
     firstTaskTarget ??= target;
