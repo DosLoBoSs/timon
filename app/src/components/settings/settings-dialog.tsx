@@ -90,7 +90,14 @@ function keywordsOf(key: string): string[] {
 }
 
 function tabLabel(category: SettingsCategoryId, tab: SettingsTab): string {
-  if (tab.kind === 'plugin') return tab.label;
+  if (tab.kind === 'plugin') {
+    // A plugin pane filed in a category is named after its tab, as `settingsPath()` names it,
+    // not after the plugin ("Updates", not "Timon updates").
+    if (category === 'plugins') return tab.label;
+    const key = `settingsDialog.tab.${category}.${tab.id}`;
+    const named = t(key);
+    return named === key ? tab.label : named;
+  }
   if (tab.kind === 'rows' && tab.ownerLabel) return tab.ownerLabel;
   return t(`settingsDialog.tab.${category}.${tab.id}`);
 }
