@@ -30,7 +30,10 @@
       "notices": "お知らせ",
       "saveFailed": "設定を保存できませんでした。",
       "lockedEnv": "環境変数 {key} で決まっています。",
-      "lockedConfig": "timon.config.json で決まっています。"
+      "lockedConfig": "timon.config.json で決まっています。",
+      "showClosedNotices": "閉じたカードを再表示",
+      "closedNoticesShown": "閉じたカードが再び表示されます。",
+      "closedNoticesFailed": "閉じたカードを再表示できませんでした。"
     }
   }
 }

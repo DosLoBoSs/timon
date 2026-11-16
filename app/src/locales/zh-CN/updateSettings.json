@@ -30,7 +30,10 @@
       "notices": "公告",
       "saveFailed": "无法保存该设置。",
       "lockedEnv": "由环境变量 {key} 决定。",
-      "lockedConfig": "由 timon.config.json 决定。"
+      "lockedConfig": "由 timon.config.json 决定。",
+      "showClosedNotices": "重新显示已关闭的卡片",
+      "closedNoticesShown": "已关闭的卡片将再次显示。",
+      "closedNoticesFailed": "无法重新显示已关闭的卡片。"
     }
   }
 }

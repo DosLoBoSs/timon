@@ -292,6 +292,23 @@ export function runNoticeAction(notice: Notice, index: number): void {
   if (action.dismiss) dismissNotice(notice.pluginId, notice.id);
 }
 
+/**
+ * Forgets every card the account closed, on every client: the daemon clears
+ * the list, then this page shows them again. `false` when the daemon refused
+ * or could not be reached: nothing changed.
+ */
+export async function resetDismissedNotices(): Promise<boolean> {
+  try {
+    const res = await fetch(DISMISSED_NOTICES_ENDPOINT, { method: 'DELETE' });
+    if (!res.ok) return false;
+  } catch {
+    return false;
+  }
+  dismissed = new Set();
+  publish();
+  return true;
+}
+
 export function subscribeNotices(listener: () => void): () => void {
   listeners.add(listener);
   return () => { listeners.delete(listener); };

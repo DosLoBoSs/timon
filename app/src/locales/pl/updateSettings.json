@@ -30,7 +30,10 @@
       "notices": "Ogłoszenia",
       "saveFailed": "Nie udało się zapisać ustawienia.",
       "lockedEnv": "Decyduje o tym zmienna środowiskowa {key}.",
-      "lockedConfig": "Decyduje o tym timon.config.json."
+      "lockedConfig": "Decyduje o tym timon.config.json.",
+      "showClosedNotices": "Pokaż ponownie zamknięte karty",
+      "closedNoticesShown": "Zamknięte karty pojawią się ponownie.",
+      "closedNoticesFailed": "Nie udało się ponownie pokazać zamkniętych kart."
     }
   }
 }

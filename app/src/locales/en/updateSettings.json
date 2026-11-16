@@ -30,7 +30,10 @@
       "notices": "Announcements",
       "saveFailed": "The setting could not be saved.",
       "lockedEnv": "The {key} environment variable decides this.",
-      "lockedConfig": "timon.config.json decides this."
+      "lockedConfig": "timon.config.json decides this.",
+      "showClosedNotices": "Show closed cards again",
+      "closedNoticesShown": "Closed cards will show again.",
+      "closedNoticesFailed": "The closed cards could not be shown again."
     }
   }
 }

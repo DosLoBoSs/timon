@@ -260,6 +260,35 @@ test('a closed card is remembered by the daemon and stays closed; one closed els
   }
 });
 
+test('showing the closed cards again: the daemon forgets them, and they come back in this page', async () => {
+  const m = await mount({ dismissed: ['acme:elsewhere'] });
+  try {
+    const ctx = m.pluginContext('acme');
+    await m.React.act(async () => {
+      ctx.notices.push({ id: 'elsewhere', title: 'Closed on the desktop' });
+      ctx.notices.push({ id: 'here', title: 'Close me' });
+    });
+    await m.until(() => cards().length === 1, 'one card');
+    await m.click(document.querySelector('[data-notice="acme:here"] [data-notice-dismiss]'));
+    await m.until(() => cards().length === 0, 'both closed');
+    let ok = false;
+    await m.React.act(async () => { ok = await m.notices.resetDismissedNotices(); });
+    assert.equal(ok, true);
+    assert.ok(m.writes.includes('DELETE /api/ui/prefs/dismissed-notices'));
+    assert.deepEqual([...m.server], [], 'the account\'s list cleared');
+    await m.until(() => cards().length === 2, 'both back');
+  } finally {
+    await m.unmount();
+  }
+
+  const refused = await mount({ session: false });
+  try {
+    assert.equal(await refused.notices.resetDismissedNotices(), false, 'refused: nothing changed');
+  } finally {
+    await refused.unmount();
+  }
+});
+
 test('an action runs, opens its address, and closes the card for good when it says so', async () => {
   const m = await mount();
   try {

@@ -30,7 +30,10 @@
       "notices": "Aankondigingen",
       "saveFailed": "De instelling kon niet worden opgeslagen.",
       "lockedEnv": "De omgevingsvariabele {key} bepaalt dit.",
-      "lockedConfig": "timon.config.json bepaalt dit."
+      "lockedConfig": "timon.config.json bepaalt dit.",
+      "showClosedNotices": "Gesloten kaarten weer tonen",
+      "closedNoticesShown": "Gesloten kaarten worden weer getoond.",
+      "closedNoticesFailed": "De gesloten kaarten konden niet opnieuw worden getoond."
     }
   }
 }
