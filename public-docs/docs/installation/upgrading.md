@@ -58,7 +58,7 @@ The download needs room for the installer plus a small margin; when the disk is 
 
 Before anything runs with administrator rights, the installer is checked once more against the signed checksum. Closing the password dialog changes nothing: the card offers **Install** again.
 
-In every case, the next start shows **Update Timon from X to Y**, as in [Apply the update](#apply-the-update): nothing is migrated without your approval.
+Clicking **Install** is your approval of the update: when the new version starts, it saves a copy of your data in `backups/pre-<version>/`, then migrates them, and only shows its progress. That approval holds for this exact update, on its first start, for one day. If the installation did not happen (password dialog closed, an error), it is withdrawn. A package installed another way (by hand, another version, more than a day later) asks for your approval, as in [Apply the update](#apply-the-update).
 
 From a terminal:
 

@@ -7,7 +7,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { createReleaseNotes } from '../scripts/release-notes.mjs';
 import {
-  DaemonStartTimeoutError, finishUpdate, LIGHT_THEME, START_BUDGET_MS, readProgress, renderNotes, requestUpdate, THEME, themeFor, updateCopy, updateOffer, updatePage, updateUnauthorizedMessage,
+  DaemonStartTimeoutError, finishUpdate, LIGHT_THEME, START_BUDGET_MS, readProgress, renderNotes, requestUpdate, THEME, themeFor, updateCopy, updateOffer, updatePage, updateProgressPage, updateUnauthorizedMessage,
   unmanagedDaemon, UpdateTokenMissingError, updateFailureDialog, type UpdateStatus,
 } from './data-update.js';
 import { instanceId, windowsLauncher } from './service.js';
@@ -245,9 +245,11 @@ for (const platform of ['win32', 'darwin', 'linux']) {
         keepDictionariesLocal: () => {},
         // P3: the approval screen counts missions; the new AppImage drops the previous one.
         localDaemonGet: () => async () => null, readMissionCount: async () => null, missionsAtStake: () => 0, removeAppImageBackup: async () => {},
+        // §10: no consent left by "Restart and install", so the approval screen asks.
+        takeUpdateConsent: () => { calls.push('consent'); return null; }, consentApproves: () => false,
     };
     await runInNewContext(`${compiled}\nmain()`, context);
-    assert.deepEqual(calls, ['verify', 'quit']);
+    assert.deepEqual(calls, ['verify', 'consent', 'quit']);
     assert.equal(context.updateApproved, false);
   });
 }
@@ -350,6 +352,93 @@ test('the approval screen counts running missions: Wait / Update anyway, then no
   assert.match(page, /<p id="missions" class="missions" role="alert" hidden><\/p>/);
 });
 
+test('§10: a consent for this exact update shows a progress only, without the missions guard; any other asks as before', async () => {
+  for (const [label, consent, approves] of [
+    ['matching', { from: '0.1.0', to: '0.2.0' }, true], ['other version', { from: '0.1.0', to: '0.3.0' }, false], ['none', null, false],
+  ] as const) {
+    const calls: string[] = [];
+    const built: { countMissions: unknown; preApproved: unknown }[] = [];
+    const logs: string[] = [];
+    const offer = { from: '0.1.0', to: '0.2.0' };
+    const context = {
+      app: { isPackaged: true, getAppPath: () => 'app', getVersion: () => '0.2.0', quit: () => calls.push('quit') },
+      uiLocale: () => 'en', initShellLocale: async () => {},
+      console: { log: (line: string) => { logs.push(line); } }, originOf: () => 'http://127.0.0.1',
+      process: { platform: 'linux', resourcesPath: 'resources' },
+      verifyInstalledRelease: async () => {}, readFileSync: () => '', join,
+      nativeImage: { createFromPath: () => ({ isEmpty: () => true }) }, APP_ICON_PATH: 'icon',
+      windowScheme: () => 'dark', nativeTheme: { shouldUseDarkColors: true },
+      desktopHome: 'home', packagedFirstRun: () => false, loadDesktopConfig: () => ({ home: 'home', daemon: { listen: {} } }), updateOffer: () => offer,
+      probeHealth: async () => ({ ok: false, status: null }), hasDesktopService: () => false, unmanagedDaemon: () => null,
+      updateWindow: null, updateApproved: false,
+      UpdateWindow: class {
+        choice = Promise.resolve(false);
+        constructor(...args: unknown[]) { built.push({ countMissions: args[4], preApproved: args[5] }); }
+      },
+      installWindowPermissions: () => {}, session: { defaultSession: {} }, microphone: {}, installAppMenu: () => {}, installJumpList: () => {},
+      installMachineHeader: () => {}, interfaceUrl: '', keepDictionariesLocal: () => {},
+      localDaemonGet: () => async () => null, readMissionCount: async () => null, missionsAtStake: () => 0, removeAppImageBackup: async () => {},
+      takeUpdateConsent: (home: string) => { calls.push(`take ${home}`); return consent; },
+      consentApproves: (given: unknown, seen: unknown) => { assert.equal(given, consent); assert.equal(seen, offer); return approves; },
+    };
+    await runInNewContext(`${compiled}\nmain()`, context);
+    assert.deepEqual(calls, ['take home', 'quit'], label);
+    assert.equal(built.length, 1, label);
+    assert.equal(built[0]!.preApproved, approves, label);
+    assert.equal(typeof built[0]!.countMissions, approves ? 'undefined' : 'function', `${label}: the missions guard`);
+    if (consent) assert.ok(logs.some(line => line.includes(approves ? 'approves this update' : 'does not match')), logs.join('\n'));
+  }
+});
+
+test('§10: the pre-approved window shows a progress, answers at once and cannot be closed mid-migration', async t => {
+  const home = fixture(t);
+  const module = readFileSync(new URL('./update-window.ts', import.meta.url), 'utf8');
+  const tree = ts.createSourceFile('window.ts', module, ts.ScriptTarget.Latest, true);
+  const cls = tree.statements.find(ts.isClassDeclaration)!;
+  const code = ts.transpileModule(cls.getText(tree).replace('export class', 'class'), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  type Handler = (event: { preventDefault: () => void }, url?: string) => void;
+  const handlers = new Map<string, Handler>();
+  const scripts: string[] = [];
+  const loaded: string[] = [];
+  let asked = 0;
+  const context = {
+    updateCopy, updatePage, updateProgressPage, themeFor,
+    setInterval: () => { throw new Error('no missions poll'); }, clearInterval: () => {},
+    shell: { openExternal: () => { throw new Error('nothing to open'); } },
+    BrowserWindow: class {
+      webContents = {
+        setWindowOpenHandler: () => {},
+        on: (name: string, fn: Handler) => handlers.set(name, fn),
+        executeJavaScript: async (s: string) => { scripts.push(s); },
+      };
+      on(name: string, fn: Handler) { handlers.set(name, fn); }
+      loadURL(url: string) { loaded.push(decodeURIComponent(url)); return Promise.resolve(); }
+      isDestroyed() { return false; }
+      destroy() {}
+    },
+    offer: { from: '0.1.0', to: '0.2.0' }, path: join(home, 'missing'),
+    countMissions: async () => { asked++; return 3; },
+  };
+  const window = runInNewContext(`${code}\nnew UpdateWindow(offer, path, 'en', 'dark', countMissions, true)`, context) as {
+    choice: Promise<boolean>; progress: (message: string) => void; close: () => void;
+  };
+  assert.equal(await window.choice, true);
+  assert.equal(asked, 0);
+  assert.equal(handlers.has('did-finish-load'), false);
+  const page = loaded[0]!;
+  assert.match(page, /Updating Timon to 0\.2\.0/);
+  assert.match(page, /Preparing the update…/);
+  assert.doesNotMatch(page, /timon-update:|id="intro"|id="missions"|<footer|<section|<a /);
+  handlers.get('will-navigate')!({ preventDefault: () => {} }, 'timon-update:quit');
+  let prevented = 0;
+  handlers.get('close')!({ preventDefault: () => { prevented++; } });
+  assert.equal(prevented, 1, 'closing would interrupt the migration');
+  window.progress('Copying data');
+  assert.match(scripts.at(-1)!, /Copying data/);
+  assert.match(scripts.at(-1)!, /if \(e\) e\.hidden = true/);
+  window.close();
+});
+
 test('pending health is retained by the real HTTP probe', async t => {
   const { createServer } = await import('node:http');
   const { probeHealth } = await import('./health.js');
@@ -425,6 +514,7 @@ for (const platform of ['win32', 'darwin', 'linux']) {
         keepDictionariesLocal: () => {},
         // P3: the approval screen counts missions; the new AppImage drops the previous one.
         localDaemonGet: () => async () => null, readMissionCount: async () => null, missionsAtStake: () => 0, removeAppImageBackup: async () => {},
+        takeUpdateConsent: () => null, consentApproves: () => false,
       };
       await runInNewContext(`${compiled}\nmain()`, context);
       assert.equal(calls[0], pending ? 'approve' : 'browser');

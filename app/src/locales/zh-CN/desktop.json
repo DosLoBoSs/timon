@@ -141,6 +141,8 @@
       "changelog": "查看更新日志",
       "downgrade": "返回上一版本",
       "working": "已批准更新，正在准备服务…",
+      "progressTitle": "正在将 Timon 更新到 {to}",
+      "preparing": "正在准备更新…",
       "waiting": "正在备份和迁移数据，可能需要几分钟…",
       "ready": "正在启动 Timon…",
       "partial": "部分备份",
