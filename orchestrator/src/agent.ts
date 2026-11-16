@@ -278,6 +278,7 @@ import {
   loadSoul,
   loadIdentityDocs,
   loadSystemPrompt,
+  isValidAgentName,
   validName,
 } from './agent-config.js';
 
@@ -4885,6 +4886,9 @@ export function upsertAgent(input: {
   system_prompt: string;
   config?: AgentConfig;
 }, opts: { createdBy?: string } = {}): AgentDetails {
+  // Before any read: `existed` below would otherwise load the files of
+  // whatever folder the name resolves to.
+  validName(input.name);
   const config = stripProtectedKeys(input.config ?? {});
   // Checked skills are attachments now, never a config.json field.
   const sentSkills = takeSentSkills(config);
@@ -5801,6 +5805,9 @@ export function listAgents(): AgentSummary[] {
   const entries = readdirSync(AGENTS_DIR);
   const out: AgentSummary[] = [];
   for (const name of entries) {
+    // A hidden folder (`.stfolder` from a sync tool…) is not an agent, and no
+    // route could act on it.
+    if (!isValidAgentName(name)) continue;
     const full = join(AGENTS_DIR, name);
     if (!statSync(full).isDirectory()) continue;
     const cfg = loadConfig(name);

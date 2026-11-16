@@ -1056,14 +1056,18 @@ export function registerRoutes(app: express.IRouter): void {
     res.json({ ok: true, main: out.name });
   });
 
+  // Same rule as the rename: an anonymous caller is refused even on the
+  // first-run loopback, where `rejectIfDenied` alone would let it through.
   app.delete('/api/agents/:name', (req, res) => {
+    if (!req.auth) { res.status(401).json({ error: 'unauthorized' }); return; }
     if (rejectIfDenied(req, res, 'agents:manage')) return;
-    const seatRefusal = mainSeatRemovalRefusal(req.params.name);
-    if (seatRefusal) {
-      res.status(409).json({ error: seatRefusal });
-      return;
-    }
     try {
+      // Inside the try: an invalid name throws from the seat lookup, a 400.
+      const seatRefusal = mainSeatRemovalRefusal(req.params.name);
+      if (seatRefusal) {
+        res.status(409).json({ error: seatRefusal });
+        return;
+      }
       const ok = deleteAgent(req.params.name, { deletedBy: deleterLabel(req) });
       if (!ok) {
         res.status(404).json(apiError('agent_not_found', 'agent not found'));
