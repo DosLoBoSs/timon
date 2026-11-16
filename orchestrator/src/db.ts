@@ -7873,6 +7873,22 @@ export const dbApi = {
     ).run(Date.now(), a.runId ?? null, a.scope ?? null, a.project ?? null, a.agent ?? null,
       a.action, a.ruleId ?? null, a.targetRuleId ?? null, a.candidateText ?? null, a.rationale ?? null);
   },
+  /**
+   * Removes a rule's wording from the curation journal, keeping the decision
+   * itself (who, when, what action). A deleted rule must not survive as text
+   * in its own audit trail; `onlyText` limits it to one wording, for a rule
+   * rewritten rather than deleted. The rows that name the rule are its own
+   * (`rule_id`) and the merges into it, whose text is the merged wording.
+   * Returns the rows emptied.
+   */
+  redactMemoryAuditText(ruleId: number, onlyText?: string): number {
+    const where = `candidate_text IS NOT NULL AND (rule_id = ? OR (target_rule_id = ? AND action = 'merge'))`;
+    if (onlyText === undefined) {
+      return db.prepare(`UPDATE memory_audit SET candidate_text = NULL WHERE ${where}`).run(ruleId, ruleId).changes;
+    }
+    return db.prepare(`UPDATE memory_audit SET candidate_text = NULL WHERE ${where} AND candidate_text = ?`)
+      .run(ruleId, ruleId, onlyText).changes;
+  },
   listMemoryAudit(opts: { runId?: string; project?: string | null; limit?: number } = {}): MemoryAuditRow[] {
     const where: string[] = [];
     const args: unknown[] = [];

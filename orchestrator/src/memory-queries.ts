@@ -60,7 +60,8 @@ export function removeMemoryRule(
   const cur = removed.rule;
   dbApi.logMemoryAudit({
     scope: cur.scope, project: cur.project, agent: cur.agent,
-    action: 'manual_delete', ruleId: id, candidateText: cur.text,
+    // No text: the journal records that the rule went, not what it said.
+    action: 'manual_delete', ruleId: id, candidateText: null,
   });
   emitMemoryRuleEvent('memory_rule_removed', cur, actor);
   return removed;
