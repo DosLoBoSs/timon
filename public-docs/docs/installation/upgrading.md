@@ -67,6 +67,15 @@ Before anything runs with administrator rights, the installer is checked once mo
 
 In every case, the next start shows **Update Timon from X to Y**, as in [Apply the update](#apply-the-update): nothing is migrated without your approval.
 
+### From the settings
+
+**Settings › System › Updates** shows the version you run and its state, for example **Up to date · checked 2 hr. ago**, with one button:
+
+- **Check**: asks now. When the check cannot reach the list, the row says **Check failed** and the button becomes **Retry**;
+- **Update**, when a newer version is out: opens the same update flow as the notice.
+
+The **…** menu next to it links the release notes and the installer for a download by hand (from a browser, or for a Timon running without a window), and turns the automatic check on or off. Checking and turning the check on or off need the right to change settings: an account without it sees the state only.
+
 From a terminal:
 
 ```bash
@@ -74,7 +83,7 @@ timon update check          # the version offered, its notes and its installers
 timon update check --json   # the same, as JSON
 ```
 
-The check reads a signed list of releases on `timon-ai.com`. The request carries no licence, account or machine identifier, and a list whose signature does not check out is ignored. To turn it off, switch off **Settings › Plugins › Timon updates › Check for Timon updates**, or set it in `timon.config.json`:
+The check reads a signed list of releases on `timon-ai.com`. The request carries no licence, account or machine identifier, and a list whose signature does not check out is ignored. To turn it off, choose **Turn off automatic check** in the **…** menu of **Settings › System › Updates**, or set it in `timon.config.json`:
 
 ```json
 { "settings": { "TIMON_UPDATES_CHECK": false } }
