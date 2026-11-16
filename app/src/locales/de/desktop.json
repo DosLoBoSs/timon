@@ -144,6 +144,7 @@
       "missions": "{count, plural, one {# Mission läuft} other {# Missionen laufen}} auf Timon {from}. Ein Update jetzt beendet {count, plural, one {sie} other {sie}}. Warten schließt dieses Fenster und lässt {count, plural, one {sie} other {sie}} weiterlaufen: Öffnen Sie Timon erneut, sobald {count, plural, one {sie fertig ist} other {sie fertig sind}}.",
       "wait": "Warten",
       "approveAnyway": "Trotzdem aktualisieren",
+      "adminPrompt": "Timon benötigt Ihr Passwort, um Version {version} zu installieren.",
       "notes": "Versionshinweise",
       "changelog": "Änderungsprotokoll ansehen",
       "downgrade": "Zur vorherigen Version zurückkehren",

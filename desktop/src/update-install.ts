@@ -18,7 +18,9 @@ import { sha256Of } from './update-download.js';
  *  - NSIS (Windows): the installer window, visibly; the shell then quits so it
  *    does not hold `Timon.exe` (the installer pauses the service itself).
  *
- * Every path needs the user's gesture; nothing here elevates anything.
+ * Every path needs the user's gesture; nothing here elevates anything. The
+ * `.deb`, `.pkg` and NSIS paths are now the fallback of the silent
+ * installation (`update-installer.ts`), taken when the system refuses it.
  */
 
 export type MissionCount = { live: number; working: number | null };
