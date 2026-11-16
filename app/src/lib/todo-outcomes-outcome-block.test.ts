@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { waitUntil } from './test-wait';
 
 /**
  * The outcome block of `@timon/todo-outcomes`, in the TO DO detail slot:
@@ -25,9 +26,21 @@ async function mount(opts: { enabled: boolean; outcome?: Outcome }) {
   install('React', React);
   const { createRoot } = await import('react-dom/client');
   const calls: Call[] = [];
+  // Set once the block has read the config body: from there on, an outcome
+  // read (or its absence) is a decision the block took, not a race not yet run.
+  let configRead = false;
   install('fetch', async (input: string, init?: RequestInit) => {
     calls.push({ url: String(input), body: init?.body ? JSON.parse(String(init.body)) : undefined });
-    if (String(input).endsWith('/todo-outcomes/config')) return Response.json({ enabled: opts.enabled });
+    if (String(input).endsWith('/todo-outcomes/config')) {
+      const response = Response.json({ enabled: opts.enabled });
+      const json = response.json.bind(response);
+      response.json = async () => {
+        const body: unknown = await json();
+        configRead = true;
+        return body;
+      };
+      return response;
+    }
     if (String(input).includes('/todo-outcomes/outcome/')) {
       return Response.json({ outcome: opts.outcome ?? { resolution: null, public_note: null, duplicate_of: null } });
     }
@@ -54,11 +67,22 @@ async function mount(opts: { enabled: boolean; outcome?: Outcome }) {
   await React.act(async () => {
     root.render(React.createElement(TodoDetailSlot, { item: item as never, saved: () => { saved += 1; } }));
   });
+  const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);
+  // The block is a lazily loaded slot occupant that reads the config, then the
+  // outcome, before it paints: one act() around the render does not cover that
+  // chain on a loaded CI runner, which then saw an empty page.
+  if (opts.enabled) {
+    await until(() => document.querySelector('textarea') !== null, 'the outcome block to paint');
+  } else {
+    await until(() => configRead, 'the block to read the outcome config');
+    // One more flush: whatever the block does with the config lands before the test looks.
+    await until(() => true, 'the config to be applied');
+  }
   const cleanup = async () => {
     await React.act(async () => { root.unmount(); });
     for (const fn of undo.reverse()) fn();
   };
-  return { React, calls, cleanup, saved: () => saved };
+  return { React, calls, cleanup, until, saved: () => saved };
 }
 
 /** Types into a React-controlled field the way a browser does. */
@@ -95,6 +119,7 @@ test('the outcome, its public note and the duplicate reference are sent only onc
   const note = Array.from(document.querySelectorAll('textarea')).find((el) => el.placeholder.startsWith('A short word')) as HTMLTextAreaElement;
   await m.React.act(async () => { type(note, ' Tracked in TIM-0007. '); });
   await m.React.act(async () => { button(/^Save outcome$/).click(); });
+  await m.until(() => m.saved() === 1, 'the save to reach the notebook');
   const patch = m.calls.at(-1)!;
   assert.equal(patch.url, '/api/ui/project-todo/42');
   assert.deepEqual(patch.body, { resolution: 'duplicate', duplicate_of: 'TIM-0007', public_note: 'Tracked in TIM-0007.' });
@@ -109,6 +134,7 @@ test('an outcome already given is not resent with a note edit', async () => {
   assert.equal(note.value, 'Which OS?');
   await m.React.act(async () => { type(note, 'Which OS and version?'); });
   await m.React.act(async () => { button(/^Save outcome$/).click(); });
+  await m.until(() => m.saved() === 1, 'the save to reach the notebook');
   assert.deepEqual(m.calls.at(-1)!.body, { public_note: 'Which OS and version?' });
   await m.cleanup();
 });
