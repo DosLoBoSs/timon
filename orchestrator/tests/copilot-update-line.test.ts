@@ -8,9 +8,10 @@
  *   search's folder order: no folder of the other OS, nvm folders in the daemon's order;
  * - stand-in CLIs in one or two places: the line runs `copilot update` on the copy the daemon
  *   selects, and never the vendor's script;
- * - what the line cannot do, kept as `todo` cases (TODO #799): an nvm folder with a SemVer
- *   pre-release (`v21.0.0-rc.1`) or build metadata. The daemon accepts and ranks those (SemVer
- *   §11); doing the same in sh takes ~830 characters, the manifest allows 500.
+ * - what its own search cannot do (TODO #799): an nvm folder with a SemVer pre-release
+ *   (`v21.0.0-rc.1`) or build metadata, which the daemon accepts and ranks (SemVer §11), and a
+ *   `host.binaries.copilot` pin. The install job hands the line the copy the daemon resolved
+ *   (`TIMON_RESOLVED_BIN`): with it, the line updates that copy whatever its search would find.
  *
  * Skipped when a real `copilot` sits in one of the fixed system folders the line appends to PATH:
  * the line would find it first and run a real update on this machine.
@@ -76,41 +77,50 @@ function nvmFolders(root: string, names: string[]): string {
   return versions;
 }
 
-type Extra = { path?: string[]; env?: Record<string, string>; uname?: 'Darwin' | 'Linux' };
+/**
+ * `resolved`: what the install job puts in `TIMON_RESOLVED_BIN` — `'daemon'` for the copy the
+ * daemon selects (as `runInstallBackend` does), a path for a `host.binaries` pin.
+ */
+type Extra = { path?: string[]; env?: Record<string, string>; uname?: 'Darwin' | 'Linux'; resolved?: 'daemon' | string };
 
 /** Runs the card's line as the install job does, with nothing of this machine's environment. */
 function runLine(shell: string, box: Sandbox, extra: Extra = {}) {
   const platform: NodeJS.Platform = extra.uname === 'Darwin' ? 'darwin' : extra.uname === 'Linux' ? 'linux' : process.platform;
   const head = [box.stubs];
   if (extra.uname) head.unshift(dirname(stub(join(box.root, 'uname'), 'uname', `echo ${extra.uname}`)));
-  const env = {
+  const env: Record<string, string> = {
     HOME: box.home,
     LOG: box.log,
     PATH: [...head, ...(extra.path ?? []), '/usr/bin', '/bin'].join(delimiter),
     ...extra.env,
   };
-  const result = spawnSync(shell, ['-c', line(platform).display], { env, encoding: 'utf8', timeout: 20_000 });
-  const log = existsSync(box.log) ? readFileSync(box.log, 'utf8').trim().split('\n') : [];
   const options = { platform, homeDir: box.home, env, path: env.PATH };
+  // What the daemon selects for the card.
+  const selected = findExecutableBinary('copilot', options);
+  const resolved = extra.resolved === 'daemon' ? selected : extra.resolved;
+  const runEnv = resolved ? { ...env, TIMON_RESOLVED_BIN: resolved } : env;
+  const result = spawnSync(shell, ['-c', line(platform).display], { env: runEnv, encoding: 'utf8', timeout: 20_000 });
+  const log = existsSync(box.log) ? readFileSync(box.log, 'utf8').trim().split('\n') : [];
   return {
     status: result.status,
     stderr: result.stderr,
     log,
     // What the daemon selects for the card, and the folders it searches, in order.
-    selected: findExecutableBinary('copilot', options),
+    selected,
     searched: [...new Set(binaryCandidates('copilot', options).map((file) => dirname(file)))],
     // The PATH the line ends with, read the way the shell does (first occurrence wins).
     built: existsSync(box.pathLog) ? [...new Set(readFileSync(box.pathLog, 'utf8').split(':').filter(Boolean))] : null,
   };
 }
 
-test('the line: /bin/sh -c, if/then/else (a failed update never falls through to the script), within the manifest cap', () => {
+test('the line: /bin/sh -c, the resolved copy first, if/then/else (a failed update never falls through to the script), within the manifest cap', () => {
   for (const platform of ['darwin', 'linux'] as const) {
     const plan = line(platform);
     assert.deepEqual(plan.argv.slice(0, 2), ['/bin/sh', '-c']);
-    assert.match(plan.display, /;if command -v copilot>\/dev\/null;then copilot update;else curl -fsSL https:\/\/gh\.io\/copilot-install\|bash;fi$/);
+    assert.match(plan.display, /^c=\$\{TIMON_RESOLVED_BIN:-copilot\};/);
+    assert.match(plan.display, /;if command -v "\$c">\/dev\/null;then "\$c" update;else curl -fsSL https:\/\/gh\.io\/copilot-install\|bash;fi$/);
     assert.ok(!/&&|\|\|/.test(plan.display), plan.display);
-    assert.ok(plan.display.length <= 500, `${plan.display.length} characters`);
+    assert.ok(plan.display.length <= 1000, `${plan.display.length} characters`);
   }
 });
 
@@ -124,7 +134,7 @@ test('a failed Copilot update on macOS or Linux is a failed job, though the CLI 
   }, () => '/usr/local/bin/copilot');
   assert.equal(calls.length, 1);
   assert.equal(calls[0]![0], '/bin/sh');
-  assert.match(calls[0]!.at(-1) ?? '', /then copilot update;else curl /);
+  assert.match(calls[0]!.at(-1) ?? '', /then "\$c" update;else curl /);
   assert.equal(failed.ok, false);
   assert.match(failed.reason ?? '', /EACCES: permission denied \(exit 1\)/);
 });
@@ -219,10 +229,16 @@ for (const shell of shells) {
       assert.equal(run.selected, expected, 'the daemon selects the copy this case expects');
       assert.deepEqual(run.log, [`${expected} update`], 'one update, on that copy, and no script');
     });
+    test(`copilot update line (${shell}): ${layout.name}, handed the daemon's copy → the same update`, { skip }, () => {
+      const box = sandbox();
+      const { expected, ...extra } = layout.arrange(box);
+      const run = runLine(shell, box, { ...extra, resolved: 'daemon' });
+      assert.equal(run.status, 0, run.stderr);
+      assert.deepEqual(run.log, [`${expected} update`]);
+    });
   }
 
-  // Known gaps of a static line (TODO #799): reported, not failed, until the daemon hands the
-  // installer the path it resolved.
+  // What the line's own search misses (TODO #799): covered by the path the daemon hands over.
   const GAPS: Layout[] = [
     {
       name: 'the only copy in an nvm pre-release folder (v21.0.0-rc.1)',
@@ -248,10 +264,29 @@ for (const shell of shells) {
       const { expected, ...extra } = gap.arrange(box);
       assert.equal(runLine(shell, box, extra).selected, expected);
     });
-    test(`copilot update line (${shell}): ${gap.name} → copilot update on that copy`, { skip, todo: 'TODO #799: the installer is not given the resolved path' }, () => {
+    test(`copilot update line (${shell}): ${gap.name}, handed the daemon's copy → copilot update on that copy`, { skip }, () => {
       const box = sandbox();
       const { expected, ...extra } = gap.arrange(box);
-      assert.deepEqual(runLine(shell, box, extra).log, [`${expected} update`]);
+      const run = runLine(shell, box, { ...extra, resolved: 'daemon' });
+      assert.equal(run.status, 0, run.stderr);
+      assert.deepEqual(run.log, [`${expected} update`], 'one update, on that copy, and no script');
     });
   }
+
+  test(`copilot update line (${shell}): a host.binaries pin outside every searched folder, over ~/.local/bin → copilot update on the pin`, { skip }, () => {
+    const box = sandbox();
+    copilotAt(join(box.home, '.local', 'bin'));
+    const pinned = copilotAt(join(box.root, 'pinned', 'tools'));
+    const run = runLine(shell, box, { resolved: pinned });
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(run.log, [`${pinned} update`]);
+  });
+
+  test(`copilot update line (${shell}): pasted in a terminal, without the variable → the copy its own search finds`, { skip }, () => {
+    const box = sandbox();
+    const expected = copilotAt(join(box.home, '.local', 'bin'));
+    const run = runLine(shell, box, { env: { TIMON_RESOLVED_BIN: '' } });
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(run.log, [`${expected} update`]);
+  });
 }

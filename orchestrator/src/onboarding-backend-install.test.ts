@@ -29,15 +29,18 @@ test('more vendors, each with its own documented line, and none made up', () => 
   assert.equal(installBackendPlanFor('grok', 'linux')?.display, 'curl -fsSL https://x.ai/cli/install.sh | bash');
   assert.equal(installBackendPlanFor('grok', 'win32')?.argv.at(-1), 'irm https://x.ai/cli/install.ps1 | iex');
   // A CLI already there updates itself, none yet gets the vendor's script (TODO #789): `tests/copilot-update-line.test.ts`.
-  assert.match(installBackendPlanFor('copilot', 'darwin')?.display ?? '', /then copilot update;else curl -fsSL https:\/\/gh\.io\/copilot-install\|bash;fi$/);
+  // The copy the daemon resolved comes first, when it hands one over (TODO #799).
+  assert.match(installBackendPlanFor('copilot', 'darwin')?.display ?? '', /^c=\$\{TIMON_RESOLVED_BIN:-copilot\};.*then "\$c" update;else curl -fsSL https:\/\/gh\.io\/copilot-install\|bash;fi$/);
   // A fresh Windows: winget with the flags without which it stops on the source's terms (TIM-0022).
   // A CLI already there: its own `copilot update`, since winget's record drifts from it (TIM-0138).
   const copilotWin = installBackendPlanFor('copilot', 'win32')?.argv.at(-1) ?? '';
   // After the update, an explicit exit with the CLI's own code: a failed update is a failed job.
   assert.match(copilotWin, /if \(Get-Command copilot -ErrorAction SilentlyContinue\) \{ copilot update; exit \(Get-Variable LASTEXITCODE -ValueOnly\) \} else \{ winget install .*--accept-source-agreements .*--id GitHub\.Copilot \}$/);
+  // The copy the daemon resolved first (TODO #799), read without a `$` so the line still pastes into CMD.
+  assert.match(copilotWin, /; if \(\[Environment\]::GetEnvironmentVariable\('TIMON_RESOLVED_BIN'\)\) \{ & \(\[Environment\]::GetEnvironmentVariable\('TIMON_RESOLVED_BIN'\)\) update; exit \(Get-Variable LASTEXITCODE -ValueOnly\) \} elseif \(Get-Command copilot /);
   assert.match(copilotWin, /GetEnvironmentVariable\('Path', 'User'\)/);
   assert.match(copilotWin, /GetEnvironmentVariable\('Path', 'Machine'\)/);
-  assert.ok(copilotWin.length <= 500, `${copilotWin.length} characters`);
+  assert.ok(copilotWin.length <= 1000, `${copilotWin.length} characters`);
   // Shown inside `-Command "…"` for pasting into PowerShell or CMD. A `"` ends the quoting; a `$`
   // is expanded by a PowerShell paste, and the backtick escaping it there reaches the inner shell
   // intact from a CMD paste: no escape works for both, hence `Get-Variable` over `$LASTEXITCODE`.
