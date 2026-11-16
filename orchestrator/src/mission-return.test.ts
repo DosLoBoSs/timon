@@ -125,14 +125,14 @@ test('(e) second tour après `timon send` : un nouveau retour', () => {
   assert.equal(returnsOf(id).length, 2);
 });
 
-test('(f) l\'agent a écrit lui-même à son pilote : plus rien derrière', () => {
+test('(f) l\'agent a écrit lui-même à son pilote par une request : plus rien derrière', () => {
   const id = delegated();
   sendAgentMessage({
     id: randomUUID(),
     fromMission: id,
     fromAgent: WORKER,
     toAgent: PILOT,
-    kind: 'notification',
+    kind: 'request',
     payload: JSON.stringify({ text: 'volet livré, sha abc1234' }),
   });
   assert.equal(dbApi.isMissionReturnNotified(id), true);
@@ -141,6 +141,34 @@ test('(f) l\'agent a écrit lui-même à son pilote : plus rien derrière', () =
   assert.equal(enqueueMissionReturn(id, 'terminated'), false);
   assert.equal(returnsOf(id).length, 0);
 });
+
+// Mission f81d9a3a du 11/11/2026 : le relecteur poste son verdict en `msg`
+// libre, sans `to_mission`. Ce message ne réveille pas le pilote et expire en
+// boîte au bout de 2 h ; il ne doit donc pas couper le retour de fin de tour.
+for (const kind of ['msg', 'notification'] as const) {
+  test(`(h) un ${kind} libre au pilote ne remplace pas le retour de fin de tour`, () => {
+    const id = delegated();
+    report(id, 'CHANGES_REQUESTED — bloquant dans loader.ts');
+    sendAgentMessage({
+      id: randomUUID(),
+      fromMission: id,
+      fromAgent: WORKER,
+      toAgent: PILOT,
+      kind,
+      payload: JSON.stringify({ text: 'CHANGES_REQUESTED — bloquant dans loader.ts' }),
+    });
+    assert.equal(dbApi.isMissionReturnNotified(id), false);
+
+    handleMissionTurnComplete(id);
+    const sent = returnsOf(id);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0]?.kind, 'mission_complete');
+    assert.equal(sent[0]?.final_text, 'CHANGES_REQUESTED — bloquant dans loader.ts');
+    // La mort qui suit (le kill du 11/11) reste muette : un retour par tour.
+    assert.equal(enqueueMissionReturn(id, 'terminated'), false);
+    assert.equal(returnsOf(id).length, 1);
+  });
+}
 
 test('un message à un pair ne vaut pas compte rendu', () => {
   const id = delegated();
