@@ -26,6 +26,9 @@ const OPENCODE = manifestBackend('opencode');
 const HERMES = manifestBackend('hermes');
 const ANTIGRAVITY = manifestBackend('antigravity');
 
+/** Said after Hermes' sign-in command: `hermes-acp` is not a way to sign in. */
+const HERMES_ACP_NOTE = 'do not start `hermes-acp` yourself: Timon starts it, and run by hand it opens nothing and only waits';
+
 /**
  * The sign-in Timon runs Antigravity on: a personal Google account (`oauth-personal`, the Free, Pro
  * and Ultra plans). The other methods `agy` announces are billed by the token (`gemini-api-key`,
@@ -188,12 +191,14 @@ export const ACP_AGENTS = Object.freeze([
     args: [],
     permissionsByAgent: false,
     modelProbe: 'session-new',
+    // `hermes-acp` is the stdio server Timon starts: run by hand it opens nothing and waits, which a
+    // tester took for a sign-in stuck on a browser (TIM-0153). The sentence names the command that does sign in.
     signIn: {
       byMethod: {
-        nous: 'sign in to Nous with `hermes --setup` in a terminal on this machine, then retry',
-        'hermes-setup': 'run `hermes --setup` in a terminal on this machine, then retry',
+        nous: `sign in to Nous with \`hermes --setup\` in a terminal on this machine, then retry the mission (${HERMES_ACP_NOTE})`,
+        'hermes-setup': `run \`hermes --setup\` in a terminal on this machine, then retry the mission (${HERMES_ACP_NOTE})`,
       },
-      fallback: 'run `hermes --setup` in a terminal on this machine, then retry',
+      fallback: `run \`hermes --setup\` in a terminal on this machine, then retry the mission (${HERMES_ACP_NOTE})`,
     },
     binary: HERMES.binary,
     declares: { credentialDirs: HERMES.credentialDirs },
