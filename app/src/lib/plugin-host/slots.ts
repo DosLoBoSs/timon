@@ -644,6 +644,17 @@ export const NOTICES_SLOT = 'notices';
 export const NOTICE_CARD_SLOT = 'notices.card';
 
 /**
+ * Slot of the update window (docs/AUTO-UPDATE.md §10): "Timon x.y.z", the
+ * release's highlights, the changelog link, the download and "Restart and
+ * install". Opened by `openUpdateDialog()` — the update card, Settings ›
+ * System › Updates. The occupant reads `useUpdateDialog()` and only paints;
+ * the host keeps the dialog and the update flow. A boot slot like
+ * `confirm.dialog`: the product's window (client half of `@timon/updates`)
+ * is the fallback and comes back when a replacement leaves.
+ */
+export const UPDATE_DIALOG_SLOT = 'updates.dialog';
+
+/**
  * Slot of the agent's mascot (docs/AGENT-MASCOT.md): the plush meerkat head
  * whose screen shows the agent's eyes, in the onboarding, the agent creation
  * and the chat. Painted by every `AgentMascotHost`; the occupant reads
@@ -707,6 +718,7 @@ function declareBootSlots(): void {
   declareSlot(UPDATES_BANNER_SLOT, 'single');
   declareSlot(NOTICES_SLOT, 'list');
   declareSlot(NOTICE_CARD_SLOT, 'single');
+  declareSlot(UPDATE_DIALOG_SLOT, 'single');
   declareSlot(AGENT_MASCOT_SLOT, 'single');
   declareSlot(EMAIL_CODE_SLOT, 'single');
   declareSlot(AGENT_LOOK_STYLER_SLOT, 'single');
