@@ -13,6 +13,7 @@ import { isDeveloperAccount } from './users/agent-permissions.js';
 import { EGRESS_PROXY_TOKEN_SCOPE, intersectMissionTokenPermissions } from './users/permissions.js';
 import { dedupeModelFavorites, parseStoredModelFavorites, type ModelFavorite } from './users/model-favorites.js';
 import { parseStoredPlanPresets, stampPlanPresets, type PlanPreset, type PlanPresetInput } from './users/plan-presets.js';
+import { addDismissedNotice, parseStoredDismissedNotices } from './users/dismissed-notices.js';
 import {
   OWNED_TABLES,
   SHARED_SYSTEM_ROW_TABLES,
@@ -1433,6 +1434,9 @@ CREATE TABLE IF NOT EXISTS user_prefs (
   // The account's model presets for the series planner (`users/plan-presets.ts`):
   // a JSON array of `{id, name, roles, updatedAt}`, the account's like the stars.
   if (!prefCols.includes('plan_presets')) db.exec(`ALTER TABLE user_prefs ADD COLUMN plan_presets TEXT`);
+  // The notices the account closed for good (`users/dismissed-notices.ts`): a
+  // JSON array of `<pluginId>:<noticeId>`, so a card closed on one client stays closed on the others.
+  if (!prefCols.includes('dismissed_notices')) db.exec(`ALTER TABLE user_prefs ADD COLUMN dismissed_notices TEXT`);
   // The Timon theme became the default in 0.1.7 (the maintainer, 05/11/2026) without
   // changing anyone's screen: every account that exists when this column
   // appears gets a row holding the theme it had (the product theme, which no
@@ -8662,6 +8666,26 @@ export const dbApi = {
        VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET
          model_favorites=excluded.model_favorites,
+         updated_at=excluded.updated_at`,
+    ).run(userId, DEFAULT_USER_PREFS.theme, DEFAULT_USER_PREFS.layout, DEFAULT_USER_PREFS.scheme, Date.now(), JSON.stringify(next));
+    return next;
+  },
+
+  /** The notices the account closed for good, oldest first; `[]` with no account, no row or a malformed value. */
+  userDismissedNoticesGet(userId: string | null | undefined): string[] {
+    if (!userId) return [];
+    const row = db.prepare(`SELECT dismissed_notices FROM user_prefs WHERE user_id=?`).get(userId) as { dismissed_notices: string | null } | undefined;
+    return parseStoredDismissedNotices(row?.dismissed_notices);
+  },
+  /** Adds one key (already validated by the route) to the list; the chrome columns keep their defaults when the row is new. */
+  userDismissedNoticeAdd(userId: string, key: string): string[] {
+    if (!userId) throw new Error('user_prefs.user_id must not be empty');
+    const next = addDismissedNotice(this.userDismissedNoticesGet(userId), key);
+    db.prepare(
+      `INSERT INTO user_prefs (user_id, theme, layout, scheme, updated_at, dismissed_notices)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         dismissed_notices=excluded.dismissed_notices,
          updated_at=excluded.updated_at`,
     ).run(userId, DEFAULT_USER_PREFS.theme, DEFAULT_USER_PREFS.layout, DEFAULT_USER_PREFS.scheme, Date.now(), JSON.stringify(next));
     return next;
