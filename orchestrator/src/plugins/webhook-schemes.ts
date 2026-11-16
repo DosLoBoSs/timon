@@ -30,6 +30,7 @@
  */
 import { createHash, createHmac, createPublicKey, timingSafeEqual, verify as verifySignatureBytes, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
+import { compileBoundedRegex, SlowRegexError } from '../bounded-regex.js';
 
 // ── the description ─────────────────────────────────────────────────────────
 
@@ -263,7 +264,15 @@ export function invalidSecret(scheme: WebhookScheme, value: string): string | nu
   if (value.length < scheme.secret.minLength) return `too short: at least ${scheme.secret.minLength} characters`;
   if (value.length > 512) return 'too long';
   if (/\s/.test(value)) return 'must not contain spaces or line breaks';
-  if (scheme.secret.pattern && !new RegExp(scheme.secret.pattern).test(value)) return 'does not look like a secret of this service';
+  if (scheme.secret.pattern) {
+    // The pattern is the plugin's, the value a person's paste: a backtracking pattern must not freeze the daemon.
+    let looksRight: boolean;
+    try { looksRight = compileBoundedRegex(scheme.secret.pattern).test(value); } catch (error) {
+      if (error instanceof SlowRegexError) return 'could not be checked: the pattern this service declares is too slow';
+      throw error;
+    }
+    if (!looksRight) return 'does not look like a secret of this service';
+  }
   if (scheme.kind === 'hmac' && scheme.key === 'whsec' && hmacKey(scheme, value).length < 16) return 'the decoded key is too short';
   return null;
 }

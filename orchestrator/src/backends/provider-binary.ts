@@ -28,6 +28,7 @@ import { getHost } from '../host/index.js';
 import { killProcessTree } from '../host/kill-tree.js';
 import { assertProviderExecAllowed } from '../plugins/policy.js';
 import { assertDeclaredIdentity } from './binary-identity.js';
+import { compileBoundedRegex, REGEX_TIMEOUT_MS, type BoundedRegex } from '../bounded-regex.js';
 import { systemEnv } from '../secrets/env.js';
 import { redactText } from '../secrets/redact.js';
 import { TIMON_HOME } from '../paths.js';
@@ -194,10 +195,13 @@ export function createProviderBinary(scope: ProviderBinaryScope): { api: Provide
       }
       const resolved = program(name);
     await identified(name, resolved);
-      let ready: RegExp | null = null;
+      let ready: BoundedRegex | null = null;
       if (options.ready !== undefined) {
         if (options.ready.length > MAX_READY_PATTERN) throw new ProviderBinaryError(`\`ready\` is over ${MAX_READY_PATTERN} characters`);
-        try { ready = new RegExp(options.ready); } catch { throw new ProviderBinaryError('`ready` is not a regular expression'); }
+        try { ready = compileBoundedRegex(options.ready); } catch (error) {
+          if (error instanceof SyntaxError) throw new ProviderBinaryError('`ready` is not a regular expression');
+          throw error;
+        }
       }
       const child: ChildProcess = getHost().spawn(resolved, [...args], {
         env: childEnv(options.env), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, ...(options.cwd ? { cwd: options.cwd } : {}),
@@ -210,11 +214,16 @@ export function createProviderBinary(scope: ProviderBinaryScope): { api: Provide
         child.once('error', () => { exited = true; resolve({ code: null, signal: null }); });
       });
       let onReady: (() => void) | null = null;
+      // Set once the pattern could not be run on the output; it is not tried again.
+      let unusable = false;
+      let onUnusable: (() => void) | null = null;
       const feed = (chunk: Buffer | string): void => {
         tail = (tail + chunk.toString()).slice(-OUTPUT_TAIL_CHARS);
-        if (ready && match === null) {
-          const found = ready.exec(tail);
-          if (found) { match = found[1] ?? found[0]; onReady?.(); }
+        if (ready && match === null && !unusable) {
+          let found: string | null;
+          // A throw here would escape a stream listener and take the daemon down: any failure ends the wait instead.
+          try { found = ready.firstGroup(tail); } catch { unusable = true; onUnusable?.(); return; }
+          if (found !== null) { match = found; onReady?.(); }
         }
       };
       child.stdout?.on('data', feed);
@@ -239,15 +248,20 @@ export function createProviderBinary(scope: ProviderBinaryScope): { api: Provide
 
       if (ready) {
         const wait = clamp(options.readyTimeoutMs, DEFAULT_READY_MS, MAX_READY_MS);
-        const outcome = await new Promise<'ready' | 'exited' | 'timeout'>((resolve) => {
+        const outcome = await new Promise<'ready' | 'exited' | 'timeout' | 'unusable'>((resolve) => {
           const timer = setTimeout(() => resolve('timeout'), wait);
           onReady = () => { clearTimeout(timer); resolve('ready'); };
+          onUnusable = () => { clearTimeout(timer); resolve('unusable'); };
           void exitedPromise.then(() => { clearTimeout(timer); resolve(match === null ? 'exited' : 'ready'); });
           if (match !== null) onReady();
+          else if (unusable) onUnusable();
         });
         if (outcome !== 'ready') {
           const output = redactText(tail).slice(-500);
           await server.stop();
+          if (outcome === 'unusable') {
+            throw new ProviderBinaryError(`\`ready\` could not be tested on what \`${name}\` printed within ${REGEX_TIMEOUT_MS} ms: declare a simpler pattern`);
+          }
           throw new ProviderBinaryError(outcome === 'exited'
             ? `\`${name}\` exited before it was ready: ${output}`
             : `\`${name}\` was not ready after ${wait} ms: ${output}`);
