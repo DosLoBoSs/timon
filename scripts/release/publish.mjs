@@ -49,7 +49,7 @@ import { createReadStream, existsSync, lstatSync, readdirSync, readFileSync, ren
 import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { CHANGELOG_URL, createReleaseNotes } from '../../desktop/scripts/release-notes.mjs';
+import { CHANGELOG_URL, HIGHLIGHTS_HEADING, createReleaseNotes, highlightsOf } from '../../desktop/scripts/release-notes.mjs';
 import { readFragmentsAt, withUnreleased } from '../changelog-fragments.mjs';
 import {
   DEFAULT_VALID_DAYS, INSTALL_RELEASES_URL, RELEASES_URL, addInstallSignature, boundNotes, channelsFor, composeReleasesPayload,
@@ -75,6 +75,8 @@ export const API_URL = 'https://api.github.com';
 export const UPLOADS_URL = 'https://uploads.github.com';
 
 const PREFIX = 'release: ';
+/** The app's update window shows at most this many highlights (`app/src/lib/update-highlights.ts`). */
+export const HIGHLIGHTS_SHOWN = 5;
 const USAGE = 'Usage: node scripts/release/publish.mjs --version <x.y.z[-rc.N]> [--input <dir>] [--manifests-dir <dir>] [--previous <file>] [--valid-days N] [--draft] [--dry-run]';
 const OS_PREFIX = { linux: 'linux', mac: 'mac', windows: 'win' };
 const FORMATS = { linux: [['.appimage', 'appimage'], ['.deb', 'deb']], mac: [['.pkg', 'pkg'], ['.dmg', 'dmg']], windows: [['.exe', 'nsis']] };
@@ -264,6 +266,13 @@ export function planAssets(builds, { repo, tag }) {
 /** The changelog section of this version (for an rc: the `Unreleased` fragments of its commit), as text. */
 export function notesFor(changelog, version) {
   return createReleaseNotes(changelog, version).entries.find((entry) => entry.version === version)?.content ?? '';
+}
+
+/** What the release run says about the update window's highlights: they are written by hand, and easy to forget. */
+export function highlightsLine(count) {
+  if (count === 0) return `none under ${HIGHLIGHTS_HEADING}: the update window shows only the changelog link`;
+  if (count > HIGHLIGHTS_SHOWN) return `${count}, the update window shows the first ${HIGHLIGHTS_SHOWN}`;
+  return String(count);
 }
 
 export function channelEntry({ version, assets, notes, publishedAt }) {
@@ -501,6 +510,7 @@ export async function publish({ version, builds, config, keys, p256, pins = null
   say(`${config.repo}, release ${tag}${prerelease ? ' (prerelease)' : ''} at ${commit}, channel(s) ${channelsFor(version).join(' + ')}${draft ? ', kept as a draft' : ''}`);
   for (const asset of assets) say(`  ${asset.key}: ${asset.asset} (${asset.size} bytes, sha256 ${asset.sha256})`);
   say(`notes: ${entry.notes ? `${entry.notes.split('\n').length} line(s) from the changelog` : 'none found in the changelog'}`);
+  say(`highlights: ${highlightsLine(highlightsOf(entry.notes).length)}`);
   if (signed.envelope) {
     say(`${RELEASES_FILE}: keyId ${keys.keyId}, changes ${signed.changed.join(' + ')}, valid until ${signed.payload.expiresAt}`);
     for (const [name, channel] of Object.entries(signed.payload.channels)) say(`  ${name}: ${channel.version}`);
