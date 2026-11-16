@@ -34,6 +34,7 @@ const STATUS: UpdateStatus = {
   host: { os: 'linux', arch: 'x64' }, buildExpiresAt: null,
 };
 let checks = 0;
+const NOTICES = [{ id: 'live-1', tone: 'info' as const, title: 'Live demo', body: 'Thursday, 6 pm.', link: 'https://timon-ai.com/live', endsAt: null }];
 
 const app = express();
 app.use(createDaemonAuthMiddleware({ token: DAEMON_TOKEN, required: false }));
@@ -43,6 +44,7 @@ registerRoutes(app, {
   status: () => STATUS,
   check: async () => { checks += 1; return { ...STATUS, state: 'up_to_date' }; },
   missions: () => ({ live: 3, working: 2 }),
+  notices: () => NOTICES,
 });
 const server = app.listen(0, '127.0.0.1');
 await once(server, 'listening');
@@ -76,6 +78,7 @@ test('first run, anonymous: no status, no check', async () => {
   assert.equal((await call('GET', '/api/updates', {})).status, 401);
   assert.equal((await call('POST', '/api/updates/check', {})).status, 401);
   assert.equal((await call('GET', '/api/updates/missions', {})).status, 401);
+  assert.equal((await call('GET', '/api/updates/notices', {})).status, 401);
   assert.equal(checks, 0);
 });
 
@@ -94,6 +97,9 @@ test('anonymous, or a forged cookie, is refused', async () => {
     const count = await call('GET', '/api/updates/missions', headers);
     assert.equal(count.status, 401);
     assert.equal(count.body.working, undefined);
+    const notices = await call('GET', '/api/updates/notices', headers);
+    assert.equal(notices.status, 401);
+    assert.equal(notices.body.notices, undefined);
   }
   assert.equal(checks, 0);
 });
@@ -141,4 +147,14 @@ test('the mission count: counts only, for a signed-in administrator or the deskt
     assert.deepEqual(count.body, { live: 3, working: 2 });
   }
   assert.equal((await call('GET', '/api/updates/missions?agent=acme.coder', { authorization: `Bearer ${DAEMON_TOKEN}` })).status, 400);
+});
+
+test('the notices: any signed-in caller reads them, a query is refused', async () => {
+  const member = await login('member@example.com', 'member-secret');
+  for (const headers of [{ cookie: member }, { cookie: await login() }, { authorization: `Bearer ${DAEMON_TOKEN}` }]) {
+    const res = await call('GET', '/api/updates/notices', headers);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { notices: NOTICES });
+  }
+  assert.equal((await call('GET', '/api/updates/notices?url=https://evil.example/', { cookie: member })).status, 400);
 });

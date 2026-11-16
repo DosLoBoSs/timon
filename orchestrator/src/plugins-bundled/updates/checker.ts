@@ -135,9 +135,9 @@ function secureTarget(location: string, base: string): string {
 
 /**
  * GET with redirects followed by hand: each target is checked before it is
- * requested, and each hop's body is cancelled unread.
+ * requested, and each hop's body is cancelled unread. The notice feed reuses it.
  */
-async function fetchManifest(fetchImpl: FetchLike, url: string): Promise<Response> {
+export async function fetchManifest(fetchImpl: FetchLike, url: string): Promise<Response> {
   const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
   let target = secureTarget(url, url);
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
@@ -159,7 +159,7 @@ async function fetchManifest(fetchImpl: FetchLike, url: string): Promise<Respons
 }
 
 /** Reads the body up to `max` bytes; past it the transfer is cut and nothing is parsed. */
-async function readCapped(res: Response, max: number): Promise<string> {
+export async function readCapped(res: Response, max: number): Promise<string> {
   const declared = Number(res.headers.get('content-length') ?? NaN);
   if (Number.isFinite(declared) && declared > max) throw new Error('manifest too large');
   if (!res.body) return '';
