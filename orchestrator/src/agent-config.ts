@@ -12,6 +12,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { AGENTS_DIR, agentConfig, agentDir, agentSystemPrompt } from './paths.js';
+import { agentNameKey, isValidAgentName } from './agent-name.js';
 import type { BackendName } from './backends/types.js';
 import type { AgentRoleId } from './agent-roles.js';
 import type { AgentAvatarMode, AgentLook } from './agent-look.js';
@@ -194,22 +195,34 @@ export function stripProtectedKeys(cfg: AgentConfig): AgentConfig {
 }
 
 /** Resolves an agent name to the EXACT name of its on-disk folder,
- *  CASE-INSENSITIVELY. On Linux the FS is case-sensitive, so a task
- *  created for `timon.main` did not find the real agent `TIMON.main` → spawn
- *  failing with "Missing system prompt" → BLOCKED in a loop. We canonicalise at the
- *  resolution point: if the folder exists as is → fast path; otherwise AGENTS_DIR
- *  is scanned for a case-insensitive match and the real name is returned; otherwise the
- *  name is returned unchanged (lets the clear error come up for a real unknown,
- *  and keeps the literal name for the CREATION of a new agent). */
+ *  CASE-INSENSITIVELY and whatever its Unicode normalisation. On Linux the FS
+ *  is case-sensitive, so a task created for `timon.main` did not find the real
+ *  agent `TIMON.main` → spawn failing with "Missing system prompt" → BLOCKED in
+ *  a loop. We canonicalise at the resolution point: if the folder exists as is
+ *  → fast path; otherwise AGENTS_DIR is scanned for a match in NFC and lower
+ *  case and the real name is returned; otherwise the name is returned in NFC
+ *  (lets the clear error come up for a real unknown, and keeps the literal
+ *  name for the CREATION of a new agent). */
 export function canonicalAgentName(name: string): string {
   if (existsSync(agentDir(name))) return name; // already the right case
-  const lower = name.toLowerCase();
+  return findAgentFolder(name) ?? name.normalize('NFC');
+}
+
+/**
+ * The existing agent folder `name` designates once case and Unicode
+ * normalisation are set aside (`Foo` for `foo`, an accented letter typed
+ * decomposed for the composed one), or null. A case-insensitive disk would merge the two
+ * folders, and a case-sensitive one would hold two agents nobody can tell
+ * apart: a creation under such a name is refused.
+ */
+export function findAgentFolder(name: string): string | null {
+  const key = agentNameKey(name);
   try {
     for (const entry of readdirSync(AGENTS_DIR)) {
-      if (entry.toLowerCase() === lower) return entry;
+      if (agentNameKey(entry) === key) return entry;
     }
-  } catch { /* AGENTS_DIR missing: nothing to canonicalise */ }
-  return name;
+  } catch { /* AGENTS_DIR missing: nothing to find */ }
+  return null;
 }
 
 export function loadConfig(agentName: string): AgentConfig {
@@ -272,14 +285,11 @@ export function loadIdentityDocs(agentName: string): { name: string; content: st
   } catch { return []; }
 }
 
+// The rule lives in `agent-name.ts`, shared with the web and desktop clients.
 // No leading dot: `.` and `..` are path segments, not folders of `agents/`,
 // and a hidden folder is not an agent. `_` stays a valid first character
 // (`_main`, the ephemeral `_eph-…` agents).
-const NAME_RE = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
-
-export function isValidAgentName(name: string): boolean {
-  return NAME_RE.test(name);
-}
+export { isValidAgentName };
 
 export function validName(name: string): void {
   if (!isValidAgentName(name)) throw new Error(`invalid agent name: ${name}`);

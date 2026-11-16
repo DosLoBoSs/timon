@@ -1,3 +1,4 @@
+import { isValidAgentName } from '../../agent-name.js';
 import { dbApi } from '../../db.js';
 import { resolveBrowserProfile } from '../../browser-profiles.js';
 import { resolveBrowserProject } from '../../browser-project.js';
@@ -17,7 +18,7 @@ type NodeConfig = {
 
 export function workflowAgentName(slug: string, nodeId: string): string {
   const name = `wf.${slug}.${nodeId}`;
-  if (!/^[A-Za-z0-9._-]+$/.test(name)) throw new Error(`inline workflow agent name is invalid: ${name}`);
+  if (!isValidAgentName(name)) throw new Error(`inline workflow agent name is invalid: ${name}`);
   return name;
 }
 

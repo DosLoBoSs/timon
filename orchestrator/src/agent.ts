@@ -274,6 +274,7 @@ import {
   type AgentConfig,
   stripProtectedKeys,
   canonicalAgentName,
+  findAgentFolder,
   loadConfig,
   loadSoul,
   loadIdentityDocs,
@@ -4889,6 +4890,10 @@ export function upsertAgent(input: {
   // Before any read: `existed` below would otherwise load the files of
   // whatever folder the name resolves to.
   validName(input.name);
+  // `foo` next to `Foo`, or a decomposed accent next to the composed one: one
+  // folder on Windows and macOS, two agents nobody can tell apart on Linux.
+  const clash = findAgentFolder(input.name);
+  if (clash !== null && clash !== input.name) throw new Error(`agent "${clash}" already exists`);
   const config = stripProtectedKeys(input.config ?? {});
   // Checked skills are attachments now, never a config.json field.
   const sentSkills = takeSentSkills(config);
@@ -5276,7 +5281,11 @@ function renameAgentLocked(oldName: string, newName: string): RenameResult {
   validName(newName);
   if (oldName === newName) return { ok: true };
   if (!existsSync(agentDir(oldName))) return { ok: false, error: `agent not found: ${oldName}` };
-  if (existsSync(agentDir(newName))) return { ok: false, error: `agent "${newName}" already exists` };
+  // Only a change of case of the agent itself may land on a name that matches
+  // an existing folder once case and normalisation are set aside.
+  const clash = findAgentFolder(newName);
+  if (clash !== null && clash !== oldName) return { ok: false, error: `agent "${clash}" already exists` };
+  if (clash === null && existsSync(agentDir(newName))) return { ok: false, error: `agent "${newName}" already exists` };
   for (const r of running.values()) {
     if (r.agentName === oldName) {
       return { ok: false, error: `mission in progress for ${oldName} — stop it before renaming` };

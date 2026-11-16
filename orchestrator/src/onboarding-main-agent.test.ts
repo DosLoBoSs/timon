@@ -74,8 +74,9 @@ test('step 3 seeds the cockpit card with the agent that was just named', () => {
 test('a typed display name becomes a valid agent name', () => {
   assert.equal(toAgentName('Nova'), 'Nova');
   assert.equal(toAgentName('Nova, mon assistante'), 'Nova-mon-assistante');
-  assert.equal(toAgentName('  Éléa  '), 'Elea');
-  assert.equal(toAgentName('***'), '', 'nothing usable left is an empty name, not a bad one');
+  assert.equal(toAgentName('  Éléa  '), 'Éléa', 'accents stay');
+  assert.equal(toAgentName('马斯克'), '马斯克', 'every script stays');
+  assert.equal(toAgentName('***'), 'agent', 'nothing usable left falls back to a name, never an empty one');
 });
 
 test('the step renames the orchestrator, writes SOUL.md and keeps the system prompt', () => {
@@ -119,7 +120,7 @@ test('an avatar must come from this daemon, and a taken name is refused', () => 
 
   upsertAgent({ name: 'Taken', system_prompt: 'x', config: {} });
   assert.throws(() => applyMainAgent({ name: 'Taken' }), /name_taken/);
-  assert.throws(() => applyMainAgent({ name: '***' }), /invalid_name/);
+  assert.throws(() => applyMainAgent({ name: '   ' }), /invalid_name/);
   assert.equal(mainAgentName(), '_main', 'nothing moved');
 });
 

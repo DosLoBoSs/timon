@@ -84,7 +84,7 @@ import { CwdUnusableError } from './cwd-check.js';
 import { getHost } from './host/index.js';
 import { FENCE_EXIT, fenceLaunchDecision, type FenceStatus } from './host/fence.js';
 import {
-  agentPackageCacheDir, isFenceSegment, missionTmpDir, resolveFence, type FenceMode, type FenceTarget, type IsolationTarget,
+  agentPackageCacheDir, isFenceAgent, isFenceSegment, missionTmpDir, resolveFence, type FenceMode, type FenceTarget, type IsolationTarget,
 } from './host/isolation.js';
 import type { FenceMechanism, HostFence, HostFenceWitness } from './host/types.js';
 import { argsUnderFence, type NestedSandboxDeclaration } from './backends/permission-models.js';
@@ -565,7 +565,7 @@ function prepareFencedFolders(target: FenceTarget): { tmpDir: string | null; pac
   }
   // Only for an agent folder that exists: a name alone never creates an agent.
   let packageCacheDir: string | null = null;
-  if (target.agent && isFenceSegment(target.agent)) {
+  if (target.agent && isFenceAgent(target.agent)) {
     const agentDir = join(target.timonHome, 'agents', target.agent);
     if (existsSync(agentDir)) {
       make(join(agentDir, 'memory'));

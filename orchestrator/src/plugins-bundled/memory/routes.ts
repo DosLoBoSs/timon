@@ -5,6 +5,7 @@
  *
  * Routes extracted verbatim from `index.ts` (step 1.4).
  */
+import { normalizeAgentNameParam } from '../../agent-name-param.js';
 import express, { type Request, type Response, type Router } from 'express';
 import { z } from 'zod';
 import { AGENT_DOC_MAX_BYTES, canonicalAgentName, deleteDoc, deleteMemory, getAgent, listDocs, listMemory, readDoc, readMemory, writeDoc, writeMemory } from '../../agent.js';
@@ -82,6 +83,7 @@ function requestActor(req: Request): { kind: string; id: string | null } {
 export function registerRoutes(app: Router): void {
   // The writer of an agent, for the `agent_*` events its write causes.
   app.use('/api/agents', recordWriteOrigin);
+  normalizeAgentNameParam(app);
   app.get('/api/agents/:name/memory', (req, res) => {
     if (rejectUnlessAny(req, res, AGENT_READ)) return;
     try {

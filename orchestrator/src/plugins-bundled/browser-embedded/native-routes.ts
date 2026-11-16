@@ -3,6 +3,7 @@ import type { Request, Router } from 'express';
 import { z } from 'zod';
 import { dbApi } from '../../db.js';
 import { loadConfig } from '../../agent-config.js';
+import { isValidAgentName, normalizeAgentName } from '../../agent-name.js';
 import { resolveBrowserProject } from '../../browser-project.js';
 import { createBrowserProfile, getBrowserProfile, listBrowserProfiles, resolveBrowserProfile, resolveMissionBrowserProfile, type BrowserProfile } from '../../browser-profiles.js';
 import { requireAuth, viewerFromRequest, isPersonAuth } from '../../users/identity.js';
@@ -268,8 +269,8 @@ export function registerNativeBrowserRoutes(app: Router, deps: {
       if (!profile || profile.owner_user_id !== mission.owner_user_id) throw new NativeBrowserError('Browser profile unavailable.', 403);
       return { profile };
     }
-    const agentName = typeof req.query.agent === 'string' ? req.query.agent : undefined;
-    if (agentName && !/^[A-Za-z0-9._-]{1,128}$/.test(agentName)) throw new NativeBrowserError('Invalid agent.');
+    const agentName = typeof req.query.agent === 'string' ? normalizeAgentName(req.query.agent) : undefined;
+    if (agentName && !isValidAgentName(agentName)) throw new NativeBrowserError('Invalid agent.');
     const cfg = agentName ? loadConfig(agentName) : undefined;
     const project = resolveBrowserProject({ agentProject: cfg?.project, agentCwd: cfg?.cwd,
       requested: typeof req.query.project === 'string' ? req.query.project : null });

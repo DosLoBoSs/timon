@@ -23,6 +23,7 @@
  * them (`GET /api/git/repos` lists them). Absent, the route works on the
  * project folder itself, exactly as before.
  */
+import { isValidAgentName, normalizeAgentName } from '../../agent-name.js';
 import type { Response, Router } from 'express';
 import { z } from 'zod';
 import { readMeta } from '../../projects.js';
@@ -52,7 +53,7 @@ function resolveProjectCwd(slug: string): string | null {
 const pathSegment = (max: number) => z.string().min(1).max(max).regex(/^[A-Za-z0-9._-]+$/)
   .refine((s) => s !== '.' && s !== '..', { message: 'invalid name' });
 const SLUG = pathSegment(64);
-const AGENT_NAME = pathSegment(128);
+const AGENT_NAME = z.string().max(128).transform(normalizeAgentName).refine(isValidAgentName, { message: 'invalid name' });
 const BRANCH = z.string().max(255).refine(validBranchName, { message: 'invalid branch name' });
 
 const AgentParams = z.object({ name: AGENT_NAME }).strict();

@@ -34,8 +34,9 @@ import type { HeldSkillAttachment } from './skill-attachments.js';
 const DAY_MS = 86_400_000;
 const ENTRY_FILE = 'entry.json';
 const PAYLOAD_DIR = 'agent';
-/** `<YYYYMMDD>-<HHMMSSmmm>-<agent name>`: sortable, one path segment, no `:` (Windows). */
-const ENTRY_ID_RE = /^\d{8}-\d{9}-[A-Za-z0-9._-]+$/;
+/** `<YYYYMMDD>-<HHMMSSmmm>-<agent name>`: sortable, one path segment, no `:` (Windows).
+ *  The name part takes the letters of every script an agent name may hold. */
+const ENTRY_ID_RE = /^\d{8}-\d{9}-[\p{L}\p{M}\p{N}._-]+$/u;
 
 export type AgentTrashEntry = {
   id: string;

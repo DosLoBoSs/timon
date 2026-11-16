@@ -28,6 +28,7 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { canonicalAgentName, loadConfig, validName } from '../agent-config.js';
+import { normalizeAgentName } from '../agent-name.js';
 import {
   CrossTeamError, InvalidReplyError, sendAgentMessage, UnknownAgentError,
 } from '../agent-messages.js';
@@ -65,10 +66,10 @@ const Payload = z.union([z.string().min(1), z.record(z.string(), z.unknown())])
   .transform((value) => (typeof value === 'string' ? value : JSON.stringify(value)))
   .refine((text) => text.length <= MAX_PAYLOAD, `payload too large (max ${MAX_PAYLOAD} characters)`);
 const SendSchema = z.object({
-  to: z.string().min(1).max(100),
+  to: z.string().min(1).max(100).transform(normalizeAgentName),
   payload: Payload,
   kind: z.enum(['msg', 'request']).optional(),
-  as: z.string().min(1).max(100).optional(),
+  as: z.string().min(1).max(100).transform(normalizeAgentName).optional(),
 }).strict();
 const RecvSchema = z.object({
   status: z.enum(['pending', 'picked', 'expired', 'held']).optional(),

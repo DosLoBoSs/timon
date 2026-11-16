@@ -32,7 +32,7 @@ for (let i = 2; i < process.argv.length; i++) {
   }
 }
 
-const name = args.name;
+const name = typeof args.name === 'string' ? args.name.normalize('NFC') : args.name;
 const cwd = args.cwd;
 const project = args.project || null;
 const role = args.role || 'lead'; // 'lead' or 'coder'
@@ -57,8 +57,12 @@ if (!name || !cwd) {
   console.error('usage: scaffold-agent --name <slug> --cwd </workspace/...> [--project <slug>] [--role lead|coder] ...');
   process.exit(64);
 }
-if (!/^[A-Za-z0-9._-]+$/.test(name)) {
-  console.error(`bad name "${name}" — must match [A-Za-z0-9._-]+`);
+// Same rule as orchestrator/src/agent-name.ts: letters, marks and digits of
+// any script plus `._-`, in NFC, 80 bytes, a letter, a digit or `_` first.
+if (Buffer.byteLength(name) > 80 || name.endsWith('.')
+  || !/^[\p{L}\p{N}_][\p{L}\p{M}\p{N}._-]*$/u.test(name)
+  || /^(?:con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])$/iu.test(name.split('.')[0])) {
+  console.error(`bad name "${name}": letters, digits, '.', '_' and '-', at most 80 bytes, a letter, a digit or '_' first`);
   process.exit(64);
 }
 
