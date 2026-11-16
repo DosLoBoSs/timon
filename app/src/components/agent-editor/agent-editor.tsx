@@ -26,7 +26,7 @@ import { startAgentEditorDiagnostic } from '@/lib/agent-editor-diagnostic';
 import { BrowserProfileSelect } from '@/components/browser-profile-select';
 import { ModelPickerPanel, type ModelPick } from '@/components/model-picker';
 import { SelfPermissionsBadge } from '@/components/self-permissions-badge';
-import { PermissionModeField } from './permission-mode-field';
+import { agentPermissionMode, PermissionModeField } from './permission-mode-field';
 import { AgentApprovals } from '@/components/agent-editor/agent-approvals';
 import { BackendLimitsBadge } from '@/components/backend-limits-badge';
 import { t } from '@/lib/i18n';
@@ -294,7 +294,7 @@ function toDraft(a: AgentSummary, cat: BackendCatalog): Draft {
     backend,
     model: a.model || defaultModelFor(cat, backend),
     reasoningEffort: a.reasoning_effort ?? '',
-    mode: a.permission_mode || 'auto',
+    mode: agentPermissionMode(a.permission_mode),
     allowed: [...(a.allowed_tools || [])],
     denied: [...(a.denied_tools || [])],
     skills: [...(a.skills || [])],
