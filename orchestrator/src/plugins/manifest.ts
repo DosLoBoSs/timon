@@ -89,12 +89,18 @@ import { reservedRouteSegment } from './reserved-routes.js';
  * `settings.provider.section` occupant is painted for, on the page of one
  * provider in Settings › AI models › Providers. API 15 shipped in 0.1.7, so a
  * new export opens a new wave. No member of `PluginContext` changes
- * (docs/SDK-COMPAT.md §112). Same wave: the bottom-left notice cards, in the
- * browser only — `ctx.notices` (`push`, `remove`), the `notices` and
- * `notices.card` slots, `useNotices` and `useNotice` (§114). Same wave: the
- * `updates.dialog` slot and `useUpdateDialog`, the update window (§116).
+ * (docs/SDK-COMPAT.md §112).
+ *
+ * 17 — the bottom-left notice cards, in the browser only: `ctx.notices`
+ * (`push`, `remove`), the `notices` and `notices.card` slots, `useNotices`
+ * and `useNotice` (docs/SDK-COMPAT.md §114). API 16 shipped in 0.1.8, so a
+ * new export opens a new wave. Same wave: `updates.banner` and
+ * `useUpdateStatus` deprecated (§115); the `updates.dialog` slot and
+ * `useUpdateDialog`, the update window (§116). A manifest naming one of the
+ * new slots must declare 17 (`SLOT_API_VERSIONS`). No member of the host's
+ * `PluginContext` changes.
  */
-export const PLUGIN_API_VERSION = 16;
+export const PLUGIN_API_VERSION = 17;
 
 /** First contract that knows `kind: dictation` and its manifest block. */
 export const DICTATION_API_VERSION = 14;
@@ -104,6 +110,18 @@ export const MASCOT_PACK_API_VERSION = 15;
 
 /** The slot a mascot pack's browser half registers the drawing of each part in. */
 export const MASCOT_PARTS_SLOT = 'mascot.parts';
+
+/**
+ * Slots younger than the first contract, with the contract that opened them.
+ * The browser half of a plugin that names one reads hooks an older client does
+ * not export: declaring less would let a host that predates the slot load the
+ * plugin, then its bundle dies on a missing import nobody sees.
+ */
+export const SLOT_API_VERSIONS: Readonly<Record<string, number>> = Object.freeze({
+  notices: 17,
+  'notices.card': 17,
+  'updates.dialog': 17,
+});
 
 /** A public path relative to the plugin prefix: lowercase segments or `:name` parameters, never a wildcard. */
 export const PLUGIN_PUBLIC_PATH_RE = /^(\/([a-z0-9][a-z0-9-]{0,62}|:[a-zA-Z][a-zA-Z0-9]{0,30})){1,6}\/?$/;
@@ -833,6 +851,9 @@ function kindMismatch(manifest: PluginManifest): string | null {
 
   const mascot = mascotMismatch(manifest);
   if (mascot) return mascot;
+
+  const young = slots.find((slot) => (SLOT_API_VERSIONS[slot] ?? 1) > manifest.apiVersion);
+  if (young) return `\`client.slots\` names \`${young}\`, which needs \`apiVersion: ${SLOT_API_VERSIONS[young]}\` or later.`;
 
   // The reverse of `KIND_SLOT.layout`: `root` is the whole interface, and only
   // a layout may ask for it. Without this rule a `behavior` or a `page` naming

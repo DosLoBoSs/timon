@@ -1,5 +1,5 @@
 {
-  "apiVersion": 16,
+  "apiVersion": 17,
   "clientContext": {
     "api": {
       "type": "function",
@@ -31,17 +31,17 @@
     },
     "notices": {
       "type": "object",
-      "since": 16
+      "since": 17
     },
     "notices.push": {
       "type": "function",
       "arity": 1,
-      "since": 16
+      "since": 17
     },
     "notices.remove": {
       "type": "function",
       "arity": 1,
-      "since": 16
+      "since": 17
     },
     "realtime": {
       "type": "object",
@@ -670,15 +670,15 @@
       },
       "useNotice": {
         "type": "export",
-        "since": 16
+        "since": 17
       },
       "useNotices": {
         "type": "export",
-        "since": 16
+        "since": 17
       },
       "useUpdateDialog": {
         "type": "export",
-        "since": 16
+        "since": 17
       }
     },
     "api.js": {

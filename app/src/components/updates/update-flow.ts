@@ -14,6 +14,7 @@ import { formatBytes, formatPercent } from '@/lib/intl';
 import type { UpdateDownloadErrorCode, UpdateInstallOutcome } from '@/lib/update-download';
 import { copyToClipboard } from '@/lib/clipboard';
 import { t } from '@/lib/i18n';
+import { installerLink } from '@/lib/update-settings';
 import type { UpdateStatusValue } from './update-status-context';
 
 export type UpdateFlowAction = {
@@ -51,7 +52,7 @@ const DOWNLOAD_ERROR: Record<UpdateDownloadErrorCode, string> = {
 /**
  * Starts the flow where it stands: the shell's download, the install of a
  * file already verified, or — outside the desktop app — the installer for
- * this system (the release page when none fits).
+ * this system (the install page when none fits).
  */
 export function beginUpdate(value: UpdateStatusValue, install: () => void): void {
   const { download } = value;
@@ -60,8 +61,7 @@ export function beginUpdate(value: UpdateStatusValue, install: () => void): void
     else if (download.state.phase !== 'downloading' && download.state.phase !== 'verifying') download.start();
     return;
   }
-  const target = value.installers[0]?.url ?? value.offer.notesUrl;
-  window.open(target, '_blank', 'noopener,noreferrer');
+  window.open(installerLink(value.installers).href, '_blank', 'noopener,noreferrer');
 }
 
 /**

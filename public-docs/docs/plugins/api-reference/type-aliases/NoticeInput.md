@@ -5,7 +5,7 @@
 
 > **NoticeInput** = `object`
 
-A bottom-left notice card (client API 16): not a toast, it stays until an
+A bottom-left notice card (client API 17): not a toast, it stays until an
 action or its × takes it away. `id`: 1-96 letters, digits, `.`, `_`, `:` or
 `-`, scoped to the plugin; carry a version in it for a card that must come
 back for each version. `title` up to 120 characters, `body` up to 400, both

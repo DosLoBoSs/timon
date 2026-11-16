@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { SlotSingle, useSlotEntries } from '@/lib/plugin-host/render';
 import { UPDATE_DIALOG_SLOT } from '@/lib/plugin-host/slots';
 import { releaseHighlights } from '@/lib/update-highlights';
+import { installerLink } from '@/lib/update-settings';
 import type { UpdateDownloadState } from '@/lib/update-download';
 import { formatDate } from '@/lib/intl';
 import { t } from '@/lib/i18n';
@@ -34,7 +35,8 @@ export function downloadRatio(state: UpdateDownloadState | null): number | null 
  * What the window paints for `value` at the flow's `view`. The card's words
  * become the window's where they differ: "Download" before anything started
  * (the card's "Update" opens this window), "Restart and install" once the
- * file is verified, and in a browser one link to the installer of this system.
+ * file is verified, and in a browser one link to the installer of this system
+ * (the install page when none fits).
  */
 export function updateDialogValue(value: UpdateStatusValue, view: UpdateFlowView, close: () => void): UpdateDialogValue {
   const { offer, download } = value;
@@ -48,9 +50,9 @@ export function updateDialogValue(value: UpdateStatusValue, view: UpdateFlowView
     close,
   };
   if (!download) {
-    const href = value.installers[0]?.url ?? offer.notesUrl;
+    const { href, forThisSystem } = installerLink(value.installers);
     const installer: UpdateDialogAction = {
-      label: t('updates.dialog.installer'),
+      label: t(forThisSystem ? 'updates.dialog.installer' : 'updates.dialog.allInstallers'),
       marker: 'installer',
       run: () => { window.open(href, '_blank', 'noopener,noreferrer'); },
       href,

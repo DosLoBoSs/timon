@@ -4597,6 +4597,16 @@
         "diskFull": "磁盘空间不足，无法下载安装程序。",
         "filesystem": "无法将安装程序保存到 Timon 的数据文件夹。"
       }
+    },
+    "dialog": {
+      "title": "Timon {version}",
+      "changelog": "查看完整更新日志",
+      "download": "下载",
+      "install": "重启并安装",
+      "verified": "已下载并验证",
+      "installer": "下载安装程序",
+      "allInstallers": "所有安装程序",
+      "progress": "下载进度"
     }
   }
 }

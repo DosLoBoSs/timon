@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CHANGELOG_URL, INSTALL_PAGE_URL, manualInstallerUrl, noticesSettingValue, noticesSwitchView, releaseNotesUrl,
+  CHANGELOG_URL, INSTALL_PAGE_URL, installerLink, manualInstallerLink, noticesSettingValue, noticesSwitchView, releaseNotesUrl,
   settingLockedBy, updateRowView,
 } from './update-settings';
 import type { UpdateStatus } from './updates';
@@ -76,12 +76,21 @@ test('the menu links the offered notes and installer, else the changelog and the
   assert.equal(releaseNotesUrl(BASE), CHANGELOG_URL);
   assert.equal(releaseNotesUrl(null), CHANGELOG_URL);
   const linux = 'Mozilla/5.0 (X11; Linux x86_64)';
-  assert.equal(manualInstallerUrl(OFFER, linux), 'https://example.com/Timon.AppImage');
-  assert.equal(manualInstallerUrl(OFFER, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'), 'https://example.com/Timon.Setup.exe');
+  const here = (url: string) => ({ href: url, forThisSystem: true });
+  const page = { href: INSTALL_PAGE_URL, forThisSystem: false };
+  assert.deepEqual(manualInstallerLink(OFFER, linux), here('https://example.com/Timon.AppImage'));
+  assert.deepEqual(manualInstallerLink(OFFER, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'), here('https://example.com/Timon.Setup.exe'));
   // A Mac with no published installer, a phone, no offer: the page that lists them all.
-  assert.equal(manualInstallerUrl(OFFER, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)'), INSTALL_PAGE_URL);
-  assert.equal(manualInstallerUrl(OFFER, 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)'), INSTALL_PAGE_URL);
-  assert.equal(manualInstallerUrl(BASE, linux), INSTALL_PAGE_URL);
+  assert.deepEqual(manualInstallerLink(OFFER, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)'), page);
+  assert.deepEqual(manualInstallerLink(OFFER, 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)'), page);
+  assert.deepEqual(manualInstallerLink(BASE, linux), page);
+});
+
+test('the card, the window and the menu share one link: the installer of this system, never the release notes', () => {
+  assert.deepEqual(installerLink([]), { href: INSTALL_PAGE_URL, forThisSystem: false });
+  const appImage = OFFER.available?.artifacts.find((a) => a.url.endsWith('.AppImage'));
+  assert.ok(appImage);
+  assert.deepEqual(installerLink([appImage]), { href: appImage.url, forThisSystem: true });
 });
 
 test('a switch the environment or the config file decides is reported as such', () => {

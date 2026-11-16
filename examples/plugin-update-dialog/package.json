@@ -8,7 +8,7 @@
   "files": ["lib", "README.md", "SIGNATURE"],
   "timon": {
     "id": "example-update-dialog",
-    "apiVersion": 16,
+    "apiVersion": 17,
     "kind": "behavior",
     "label": "Compact update window",
     "description": "Replaces Timon's update window with a compact one: the version, its highlights and one row of gestures.",

@@ -4346,6 +4346,7 @@
       "install": "Redémarrer et installer",
       "verified": "Téléchargée et vérifiée",
       "installer": "Télécharger l'installeur",
+      "allInstallers": "Tous les installeurs",
       "progress": "Progression du téléchargement"
     }
   },

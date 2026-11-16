@@ -923,9 +923,9 @@ export function apply(ctx) {
 
 ## Notice cards at the bottom left {#notice}
 
-Source: `examples/plugin-notice`. Manifest ID: `example-notice`. Minimum API: **16**.
+Source: `examples/plugin-notice`. Manifest ID: `example-notice`. Minimum API: **17**.
 
-API 16. The bottom-left cards of Timon (a new version, a GitHub star) are open to plugins in two ways, both shown here. From apply, ctx.notices.push({ id, tone, title, body, actions, dismissible }) shows a card under the plugin's name; pushing the same id updates it, ctx.notices.remove(id) takes it away, and a card the person closes stays closed for their account on every client. One registration in the single notices.card slot then replaces how every card is painted, here as one compact line. The component reads useNotice(): the notice, dismiss() and act(index), which runs the action's onSelect, opens its href and closes the card when the action says dismiss. Timon keeps the stack: at most three cards, warnings first. Remove the plugin and its card goes, and Timon's own card comes back.
+API 17. The bottom-left cards of Timon (a new version, a GitHub star) are open to plugins in two ways, both shown here. From apply, ctx.notices.push({ id, tone, title, body, actions, dismissible }) shows a card under the plugin's name; pushing the same id updates it, ctx.notices.remove(id) takes it away, and a card the person closes stays closed for their account on every client. One registration in the single notices.card slot then replaces how every card is painted, here as one compact line. The component reads useNotice(): the notice, dismiss() and act(index), which runs the action's onSelect, opens its href and closes the card when the action says dismiss. Timon keeps the stack: at most three cards, warnings first. Remove the plugin and its card goes, and Timon's own card comes back.
 
 Permissions: none. Read the [related guide](slots.md).
 
@@ -1052,9 +1052,9 @@ export function apply(ctx) {
 
 ## Replace the update window {#update-dialog}
 
-Source: `examples/plugin-update-dialog`. Manifest ID: `example-update-dialog`. Minimum API: **16**.
+Source: `examples/plugin-update-dialog`. Manifest ID: `example-update-dialog`. Minimum API: **17**.
 
-API 16. One registration in the single updates.dialog slot replaces the window that Update opens, from the update card and from Settings › System › Updates, here with a compact one. The component reads useUpdateDialog(): the version and its date, the highlights written by hand at the release (plain text, possibly none), the changelog link, the desktop app's download, the step the update flow is at with its line, and the actions of that step, each with run() or an href. Timon keeps the dialog around it, named with the version, and runs the flow: the download, its verification, the running missions asked about first, then the installation. Remove the plugin and Timon's own window comes back.
+API 17. One registration in the single updates.dialog slot replaces the window that Update opens, from the update card and from Settings › System › Updates, here with a compact one. The component reads useUpdateDialog(): the version and its date, the highlights written by hand at the release (plain text, possibly none), the changelog link, the desktop app's download, the step the update flow is at with its line, and the actions of that step, each with run() or an href. Timon keeps the dialog around it, named with the version, and runs the flow: the download, its verification, the running missions asked about first, then the installation. Remove the plugin and Timon's own window comes back.
 
 Permissions: none. Read the [related guide](slots.md).
 

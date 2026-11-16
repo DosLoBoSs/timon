@@ -272,7 +272,7 @@ export function clientContext(id: string, declaredSlots: readonly string[], subs
       },
     },
     /**
-     * The bottom-left cards (client API 16, docs/NOTICES.md). `push` shows a
+     * The bottom-left cards (client API 17, docs/NOTICES.md). `push` shows a
      * card or updates the one with the same id, under this plugin's name;
      * a card the account closed stays closed. `remove` takes it off the
      * screen without closing it for good. Both leave with the plugin.

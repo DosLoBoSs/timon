@@ -77,7 +77,7 @@ await ctx.notifications.dismiss(unread[0].id);                              // t
 
 ## Notice cards
 
-The notification centre keeps a history; a **notice card** asks for attention now, at the bottom left of the interface, until an action or its × takes it away. It lives in the browser half, needs no permission, and requires `apiVersion: 16`:
+The notification centre keeps a history; a **notice card** asks for attention now, at the bottom left of the interface, until an action or its × takes it away. It lives in the browser half, needs no permission, and requires `apiVersion: 17`:
 
 ```js
 export function apply(ctx) {

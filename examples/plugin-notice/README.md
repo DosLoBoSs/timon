@@ -1,6 +1,6 @@
 # plugin-notice
 
-Shows how a plugin uses the bottom-left notice cards of Timon (client API 16):
+Shows how a plugin uses the bottom-left notice cards of Timon (client API 17):
 
 - it pushes a card of its own with `ctx.notices.push({ id, tone, title, body?, actions?, dismissible })`
   from `apply`; `ctx.notices.remove(id)` takes it away, and a card the person

@@ -1,6 +1,6 @@
 # plugin-update-dialog
 
-Replaces Timon's update window (client API 16): the window that **Update**
+Replaces Timon's update window (client API 17): the window that **Update**
 opens, from the update card at the bottom left and from Settings › System ›
 Updates. This one is compact: the version, its highlights on one line each,
 the download as a percentage, and the gestures in one row.

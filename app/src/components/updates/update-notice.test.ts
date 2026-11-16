@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { waitUntil } from '../../lib/test-wait';
 import type { UpdateStatus } from '../../lib/updates';
+import { INSTALL_PAGE_URL } from '../../lib/update-settings';
 
 const NOW = Date.now();
 const DAY = 86_400_000;
@@ -216,6 +217,24 @@ test('in a browser the card says the version, its one action opens the window, w
     assert.equal(link?.getAttribute('href'), OFFER_STATUS.available!.artifacts[1]!.url, 'the AppImage, through openUpdateDialog()');
     assert.deepEqual(m.opened, [], 'nothing downloads by itself');
     assert.ok(card(), 'the action leaves the card');
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('in a browser with no installer for its system the window links the install page, never the release notes', async () => {
+  const winOnly: UpdateStatus = {
+    ...OFFER_STATUS,
+    available: { ...OFFER_STATUS.available!, artifacts: OFFER_STATUS.available!.artifacts.filter((a) => a.os === 'win') },
+  };
+  const m = await mount(winOnly);
+  try {
+    await m.until(() => card() !== null, 'the update card');
+    await m.click(action(0));
+    await m.until(() => windowEl() !== null, 'the update window');
+    const link = windowEl()?.querySelector('[data-update-dialog-action="installer"]');
+    assert.equal(link?.getAttribute('href'), INSTALL_PAGE_URL);
+    assert.equal(link?.textContent, 'All installers');
   } finally {
     await m.unmount();
   }
