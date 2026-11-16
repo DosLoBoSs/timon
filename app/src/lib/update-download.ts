@@ -2,13 +2,13 @@
 
 /**
  * The desktop shell's download and installation of a newer Timon
- * (docs/AUTO-UPDATE.md §6, P2 and P3), as the banner sees it.
+ * (docs/AUTO-UPDATE.md §6, P2 and P3), as the update flow sees it.
  *
  * Only the shell downloads: it reads the verified offer from its own daemon
  * and names the installer itself, so the page sends gestures and nothing else
  * — no URL, no path, no version. In a browser, in an older desktop, or in a
  * window showing another machine, the bridge is absent or refuses, and the
- * hook gives `null`: the banner keeps its plain download link.
+ * hook gives `null`: the flow keeps its plain download link.
  */
 import { useEffect, useMemo, useState } from 'react';
 
@@ -40,7 +40,7 @@ export type UpdateInstallOutcome =
   | { status: 'guided'; command: string; opened: boolean }
   | { status: 'failed'; message: string | null };
 
-/** What an `updates.banner` occupant drives; `null` outside the desktop app. */
+/** What the update flow drives; `null` outside the desktop app. */
 export type UpdateDownloadControl = {
   state: UpdateDownloadState;
   /** Downloads the installer the daemon verified for this machine. Takes nothing. */

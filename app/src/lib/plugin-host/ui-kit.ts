@@ -120,8 +120,8 @@ export const UI_KIT = {
   // A secret an agent asks its user for (client API 15): what a
   // `chat.secret` occupant renders, and its two gestures.
   useSecretRequest,
-  // A newer Timon the daemon verified (client API 15): what an
-  // `updates.banner` occupant renders, and its "Later".
+  // Deprecated since client API 16: the `updates.banner` slot is no longer
+  // painted, so this answers `null`. Kept so an API 15 plugin still loads.
   useUpdateStatus,
   // The composer's prompt history (client API 12): a `chat.composer`
   // replacement recalls the same prompts as the product's input.

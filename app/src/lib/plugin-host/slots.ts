@@ -380,6 +380,7 @@ export function register(options: RegisterOptions, Component: ComponentType = NO
   if (!slot) throw new Error(`Slot not declared: ${options.slot}`);
   const refusal = dictationRefusal(options, slot) ?? mascotPartRefusal(options);
   if (refusal) throw new Error(refusal);
+  warnDeprecatedSlot(options);
   const id = `${options.pluginId}:${++sequence}`;
   // Two packs may both call a part `cap`: the id a look stores is namespaced.
   const entryKey = options.slot === MASCOT_PARTS_SLOT
@@ -601,13 +602,27 @@ export const TODO_FORM_SLOT = 'todo.form';
 export const PAGE_TOC_SLOT = 'page.toc';
 
 /**
- * Slot of the "new version" banner (docs/AUTO-UPDATE.md §6): a newer Timon,
- * verified by the daemon, shown at the top of the page. A boot slot: a
- * replacement registers when the plugins load, before any version is known.
- * The occupant reads `useUpdateStatus()`; the host decides whether there is
- * anything to show.
+ * Deprecated since client API 16 (docs/SDK-COMPAT.md §115): the slot of the
+ * former "new version" banner at the top of the page. A newer Timon is now a
+ * notice card of `@timon/updates` (`notices`). Still declared, so a plugin
+ * that registers here loads, but nothing paints it any more: its author is
+ * told so once, in the console.
  */
 export const UPDATES_BANNER_SLOT = 'updates.banner';
+
+/** Slots still declared but no longer painted, with where their occupants went. */
+const DEPRECATED_SLOTS: Readonly<Record<string, string>> = {
+  [UPDATES_BANNER_SLOT]: 'a newer Timon is a notice card now: push your own with `ctx.notices`, or restyle every card through `notices.card`',
+};
+const deprecationTold = new Set<string>();
+
+function warnDeprecatedSlot(options: RegisterOptions): void {
+  const instead = DEPRECATED_SLOTS[options.slot];
+  const told = `${options.pluginId}:${options.slot}`;
+  if (!instead || deprecationTold.has(told)) return;
+  deprecationTold.add(told);
+  console.warn(`plugin \`${options.pluginId}\`: the \`${options.slot}\` slot is deprecated and no longer painted — ${instead}`);
+}
 
 /**
  * Slot of the notice sources (docs/NOTICES.md): the bottom-left cards of the
@@ -688,6 +703,7 @@ function declareBootSlots(): void {
   declareSlot(TODO_FORM_SLOT, 'single');
   declareSlot(PAGE_TOC_SLOT, 'single');
   declareSlot(CHAT_SECRET_REQUEST_SLOT, 'single');
+  // Deprecated, never painted: declared so that its former occupants still load.
   declareSlot(UPDATES_BANNER_SLOT, 'single');
   declareSlot(NOTICES_SLOT, 'list');
   declareSlot(NOTICE_CARD_SLOT, 'single');

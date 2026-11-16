@@ -446,18 +446,16 @@ declare module '@timon/ui' {
     size: number;
   };
   /**
-   * A newer Timon the daemon verified against the signed release list, as the
-   * `updates.banner` slot receives it (client API 15). `null` outside that
-   * slot; the host only paints the slot while such a version exists and the
-   * person has not put it off. `offer.notes` is plain text: render it as text,
-   * never as HTML. `installers` are the ones for this browser's system, the
-   * first to download first; empty on a phone or an unknown system — link
-   * `offer.notesUrl` then. `later()` hides this version only. While
-   * `buildExpiresAt` is set the build-expiry notice is hidden in favour of the
-   * banner: say when the build stops. `download` is set in the desktop app
-   * only: the shell downloads and verifies the installer for this machine
-   * itself (its URL, size and sha256 come from the daemon, never from the
-   * page) — show its `state` and offer its gestures instead of the link.
+   * @deprecated Since client API 16 the `updates.banner` slot is no longer
+   * painted: a newer Timon is a notice card of `@timon/updates`. Nothing
+   * provides this value to a plugin any more, so it answers `null`. Push your
+   * own card with `ctx.notices`, or restyle every card through `notices.card`.
+   *
+   * Before API 16: the newer Timon the daemon verified against the signed
+   * release list, as the `updates.banner` slot received it. `offer.notes` is
+   * plain text. `installers` are the ones for this browser's system, the
+   * first to download first. `later()` hid this version only. `download` was
+   * set in the desktop app only.
    */
   export function useUpdateStatus(): {
     installed: string;
