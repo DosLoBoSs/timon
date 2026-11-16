@@ -254,7 +254,7 @@
       "name": "Naam",
       "url": "URL",
       "urlPlaceholder": "git@gitlab.com:team/project.git",
-      "urlHint": "SSH (git@host:pad of ssh://), HTTPS zonder inloggegevens, git://, file:// of een map op deze machine.",
+      "urlHint": "SSH (git@host:pad of ssh://), HTTPS zonder inloggegevens, git://, file:// of een map op deze machine waarin agents niet kunnen schrijven.",
       "issue": {
         "name": "Letters, cijfers, punten, streepjes en underscores, niet beginnend met een streepje.",
         "credentials": "Geen gebruiker of token in de URL: gebruik een SSH-sleutel of de credential helper van git.",

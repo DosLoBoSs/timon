@@ -254,7 +254,7 @@
       "name": "이름",
       "url": "URL",
       "urlPlaceholder": "git@gitlab.com:team/project.git",
-      "urlHint": "SSH(git@host:path 또는 ssh://), 자격 증명 없는 HTTPS, git://, file:// 또는 이 컴퓨터의 폴더.",
+      "urlHint": "SSH(git@host:path 또는 ssh://), 자격 증명 없는 HTTPS, git://, file:// 또는 에이전트가 쓸 수 없는 이 컴퓨터의 폴더.",
       "issue": {
         "name": "문자, 숫자, 점, 하이픈, 밑줄을 사용하며 하이픈으로 시작하지 않아야 합니다.",
         "credentials": "URL에 사용자나 토큰을 넣지 마세요: SSH 키나 git 자격 증명 도우미를 사용하세요.",

@@ -605,6 +605,38 @@ test('an https url with credentials is refused and never echoed', async () => {
   assert.equal(git(work, 'remote', 'get-url', 'origin'), bare);
 });
 
+test('a local remote an agent can write is refused when saved, as the daemon\'s git refuses it', async () => {
+  // A bare repository in the Timon home, and the project's own folder: places
+  // a mission writes, whose hooks would run as Timon on a push.
+  const planted = join(process.env.TIMON_HOME!, 'planted.git');
+  execFileSync('git', ['init', '-q', '--bare', planted]);
+  for (const [url, reason] of [
+    [planted, /inside the Timon home/],
+    [`file://${planted}`, /inside the Timon home/],
+    [work, /inside /],
+    [join(work, '.git'), /inside /],
+  ] as const) {
+    for (const call of [
+      () => send('POST', '/api/git-remote/gitproj/remotes', { name: 'local', url, check: false }),
+      () => send('PATCH', '/api/git-remote/gitproj/remotes/origin', { url, check: false }),
+    ]) {
+      const r = await call();
+      assert.equal(r.status, 400, url);
+      const { error } = await r.json() as { error: string };
+      assert.match(error, /^a local remote must be a repository no agent can write/);
+      assert.match(error, reason);
+    }
+  }
+  assert.deepEqual(git(work, 'remote').split('\n'), ['origin']);
+  assert.equal(git(work, 'remote', 'get-url', 'origin'), bare);
+
+  // A local repository outside those places is still saved and reached.
+  const r = await send('POST', '/api/git-remote/gitproj/remotes', { name: 'disk', url: `file://${bare}` });
+  assert.equal(r.status, 200);
+  assert.deepEqual((await r.json() as RemoteChangeBody).check, { ok: true });
+  assert.equal((await send('DELETE', '/api/git-remote/gitproj/remotes/disk')).status, 200);
+});
+
 test('add, change and remove a remote; the reach check relays git as it is', async () => {
   const list = await send('GET', '/api/git-remote/gitproj/remotes');
   assert.equal(list.status, 200);

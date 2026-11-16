@@ -254,7 +254,7 @@
       "name": "Nazwa",
       "url": "URL",
       "urlPlaceholder": "git@gitlab.com:team/project.git",
-      "urlHint": "SSH (git@host:ścieżka lub ssh://), HTTPS bez danych logowania, git://, file:// lub folder na tej maszynie.",
+      "urlHint": "SSH (git@host:ścieżka lub ssh://), HTTPS bez danych logowania, git://, file:// lub folder na tej maszynie, do którego agenci nie mogą zapisywać.",
       "issue": {
         "name": "Litery, cyfry, kropki, myślniki i podkreślenia, bez myślnika na początku.",
         "credentials": "Bez użytkownika i tokenu w URL: użyj klucza SSH lub pomocnika poświadczeń git.",
