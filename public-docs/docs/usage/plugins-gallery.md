@@ -65,7 +65,9 @@ A plugin you write yourself has no signature. Timon installs it, but loads it on
 
 A plugin runs inside the Timon daemon, with the rights of the system account that runs it. Turn developer mode on only for code you wrote or have read.
 
-The switch works the same on Free and on a paid licence, and shows what Timon actually applies. A licence that includes a fixed plugin composition does not let unsigned plugins load: the switch then stays off and greyed out, and says why.
+The switch works the same on Free and on a paid licence, and shows what Timon actually applies. A licence that includes a fixed plugin composition does not let unsigned plugins load, nor does a beta build with no licence in force: the switch then stays off and greyed out, and says why.
+
+Turning the mode off by editing `developer.unsignedPlugins` in `timon.config.json` also applies at once. Turning it on that way applies only when Timon restarts: use the switch to turn it on without a restart.
 
 The install sheet of an unsigned package, or of a bundle that brings one, follows the mode:
 

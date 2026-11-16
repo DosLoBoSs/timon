@@ -727,7 +727,7 @@ test('a daemon in another process follows the file: the pass that sees the remov
 /** No test boots the real daemon: without this wiring, every test above passes and the hole stays open. */
 test('the daemon narrows its live grants on every pass and closes the cards of a package gone from disk', () => {
   const boot = readFileSync(new URL('../kernel-boot.ts', import.meta.url), 'utf8');
-  assert.match(boot, /beforePass: \(\) => narrowLivePluginGrants\(\)/);
+  assert.match(boot, /beforePass: \(\) => \{ narrowLivePluginGrants\(\); narrowLiveDeveloperMode\(\); \}/);
   const onRemoved = /onRemoved: \(id\) => \{([^}]*)\}/.exec(boot)?.[1] ?? '';
   for (const close of ['closePluginSecretCards(id)', 'closePluginSpawnCards(id)', 'closePluginLaunchCard(id)']) {
     assert.ok(onRemoved.includes(close), `${close} is not called by onRemoved`);

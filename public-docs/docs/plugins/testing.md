@@ -15,6 +15,8 @@ An unsigned plugin, which includes any plugin you write yourself, loads only in 
 
 This works the same on Free and on a paid licence. When the setting is absent or `false`, unsigned packages are installed but not loaded.
 
+A superadmin can also use the switch in **Settings › Plugins › Developer mode**, which applies at once ([Developer mode](../usage/plugins-gallery.md#developer-mode-load-unsigned-plugins)). An edit of `timon.config.json` that turns the mode off also applies at once: unsigned plugins stop within a couple of seconds. An edit that turns it on applies when Timon restarts.
+
 :::warning Timon 0.1.7 and earlier
 In Timon 0.1.7 and earlier, a Free installation installs an unsigned plugin but does not load it, whatever the value of `developer.unsignedPlugins`. Loading it on Free needs a later version; until you have one, an unsigned plugin loads only on an installation where a licence key is activated.
 :::

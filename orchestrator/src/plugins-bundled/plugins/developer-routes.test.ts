@@ -5,7 +5,10 @@
  * unsigned plugin already installed mounts and unmounts without a restart; the
  * answer separates the wish from what the licence lets through; Free admits it
  * like a paid licence; a fixed composition, the locked beta state included,
- * refuses to turn it on with its own code, which is the only refusal there is.
+ * refuses to turn it on, which is the only refusal there is, and the locked
+ * beta state says it has no licence rather than a licence that fixes plugins.
+ * A hand edit of the file that closes the mode applies on the watcher's next
+ * pass; one that opens it waits for a restart.
  */
 import { createTestAccount } from '../../../tests/helpers/accounts.js';
 import '../../test-home.js';
@@ -31,6 +34,7 @@ const { PluginLoader } = await import('../../plugins/loader.js');
 const { daemonHost } = await import('../../plugins/context.js');
 const { attachPluginLoader } = await import('../../plugins/runtime.js');
 const { unsignedPluginsAllowed } = await import('../../plugins/pubkey.js');
+const { narrowLiveDeveloperMode } = await import('../../plugins/install.js');
 const { CONFIG_FILE, config } = await import('../../config/load.js');
 const { mutationLicenseState, setLicenseState } = await import('../../license/runtime.js');
 const { unlicensed } = await import('../../license/license.js');
@@ -74,6 +78,7 @@ const loader = new PluginLoader(ctx, {
   host: daemonHost(ctx),
   plugins: () => ({}),
   allowUnsigned: () => unsignedPluginsAllowed(config().developer.unsignedPlugins),
+  beforePass: () => narrowLiveDeveloperMode(),
 });
 attachPluginLoader(app, loader);
 await loader.update();
@@ -164,7 +169,7 @@ test('on Free the switch is available and mounts an installed unsigned plugin', 
   }
 });
 
-test('a locked beta build refuses to turn it on as a fixed composition', async () => {
+test('a locked beta build refuses to turn it on because it has no licence', async () => {
   overrideSetupPolicyForTests('beta');
   overrideBuildInfo({ channel: 'beta' });
   // A beta build without a valid licence: the build policy locks it.
@@ -173,9 +178,9 @@ test('a locked beta build refuses to turn it on as a fixed composition', async (
     assert.equal(mutationLicenseState().localFree, false);
     const on = await call('PUT', { enabled: true });
     assert.equal(on.status, 403);
-    assert.equal(on.json.error, 'plugin_composition_fixed');
+    assert.equal(on.json.error, 'license_required');
     assert.equal(onDisk(), false);
-    assert.deepEqual((await call('GET')).json, { requested: false, effective: false, available: false, blockedBy: 'plugin_composition_fixed' });
+    assert.deepEqual((await call('GET')).json, { requested: false, effective: false, available: false, blockedBy: 'license_required' });
     assert.equal(fixtureState(), 'skipped');
   } finally {
     overrideBuildInfo(undefined);
@@ -235,5 +240,38 @@ test('every refusal the daemon can produce is a fixed composition', () => {
     overrideBuildInfo(undefined);
     overrideSetupPolicyForTests(undefined);
     setLicenseState(paidTestLicense());
+  }
+});
+
+/** The operator edits `timon.config.json` while the daemon runs; the watcher's pass is `loader.update()`. */
+function editByHand(unsignedPlugins: boolean): void {
+  const cfg = existsSync(CONFIG_FILE) ? JSON.parse(readFileSync(CONFIG_FILE, 'utf8')) as Record<string, unknown> : {};
+  writeFileSync(CONFIG_FILE, JSON.stringify({ ...cfg, developer: { unsignedPlugins } }, null, 2));
+}
+
+test('closing it by hand in the file unmounts an unsigned plugin on the next pass, without a restart', async () => {
+  setLicenseState(paidTestLicense());
+  try {
+    assert.equal((await call('PUT', { enabled: true })).status, 200);
+    assert.equal(fixtureState(), 'active');
+    editByHand(false);
+    await loader.update();
+    assert.equal(fixtureState(), 'skipped', 'the pass judged with the file, not the boot copy');
+    assert.deepEqual((await call('GET')).json, { requested: false, effective: false, available: true, blockedBy: null });
+  } finally {
+    await call('PUT', { enabled: false });
+  }
+});
+
+test('opening it by hand in the file waits for a restart: only the switch opens it live', async () => {
+  setLicenseState(paidTestLicense());
+  try {
+    assert.equal((await call('PUT', { enabled: false })).status, 200);
+    editByHand(true);
+    await loader.update();
+    assert.equal(fixtureState(), 'skipped');
+    assert.equal((await call('GET')).json.effective, false);
+  } finally {
+    await call('PUT', { enabled: false });
   }
 });

@@ -7,8 +7,8 @@
  *
  * The switch shows what the daemon APPLIES (`effective`), never the bare wish:
  * a wish the licence refuses would otherwise read as unsigned code that runs.
- * When a fixed plugin composition keeps it shut, the switch is disabled and
- * says why.
+ * When a fixed plugin composition or a missing licence keeps it shut, the
+ * switch is disabled and says why.
  */
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { AlertTriangle } from 'lucide-react';
