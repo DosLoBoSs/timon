@@ -265,7 +265,8 @@ const DEB = { key: 'linux-x64-deb', os: 'linux', arch: 'x64', format: 'deb', nam
 const MAC = { platform: 'darwin' as NodeJS.Platform, arch: 'arm64', appImage: false };
 const LINUX_DEB = { platform: 'linux' as NodeJS.Platform, arch: 'x64', appImage: false };
 
-function silentSetup(machine: { platform: NodeJS.Platform; arch: string; appImage: boolean }, artifact: object | null, outcome: SilentOutcome | (() => Promise<SilentOutcome>)) {
+function silentSetup(machine: { platform: NodeJS.Platform; arch: string; appImage: boolean }, artifact: object | null, outcome: SilentOutcome | (() => Promise<SilentOutcome>),
+  extra: Partial<UpdateControllerDeps> = {}) {
   const inputs: SilentInput[] = [];
   const s = installSetup(machine, {
     ...(artifact ? { readStatus: async () => ({ ...STATUS, available: { ...STATUS.available, artifacts: [artifact] } }) } : {}),
@@ -273,6 +274,7 @@ function silentSetup(machine: { platform: NodeJS.Platform; arch: string; appImag
     silentInstall: async (input) => { inputs.push(input); s.events.push(`silent ${input.format}`); return typeof outcome === 'function' ? outcome() : outcome; },
     adminPrompt: (version) => `password for ${version}`,
     relaunch: () => { s.events.push('relaunch'); },
+    ...extra,
   });
   return { ...s, inputs };
 }
@@ -369,4 +371,63 @@ test('install: a second gesture while the password prompt is open gets the first
   assert.deepEqual(await first, { status: 'cancelled' });
   assert.deepEqual(await second, { status: 'cancelled' });
   assert.equal(s.inputs.length, 1);
+});
+
+function consentSetup(machine: { platform: NodeJS.Platform; arch: string; appImage: boolean }, artifact: object | null, outcome: SilentOutcome,
+  extra: Partial<UpdateControllerDeps> = {}) {
+  const consent: string[] = [];
+  const s = silentSetup(machine, artifact, outcome, {
+    consent: {
+      grant: ({ from, to }) => { consent.push(`grant ${from}->${to}`); s.events.push('grant'); },
+      revoke: () => { consent.push('revoke'); },
+    },
+    ...extra,
+  });
+  return { ...s, consent };
+}
+
+test('install: the click grants the migration of this exact transition before any installer starts (§10)', async () => {
+  for (const [machine, artifact, outcome] of [[WIN, null, { status: 'handed_over' }], [MAC, PKG, { status: 'installed' }], [LINUX_DEB, DEB, { status: 'installed' }]] as const) {
+    const s = consentSetup(machine, artifact, outcome);
+    await s.call(UPDATE_CHANNELS.start);
+    assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'restarting' });
+    assert.deepEqual(s.consent, ['grant 0.1.7->0.1.8'], 'granted once, kept for the new version');
+    assert.equal(s.events[0], 'grant', 'before the installer');
+  }
+});
+
+test('install: the system installer opened by the click keeps the consent; a dismissed prompt or a failure revokes it', async () => {
+  const opened = consentSetup(MAC, PKG, { status: 'failed', reason: 'installer: Error' });
+  await opened.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await opened.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'opened' });
+  assert.deepEqual(opened.consent, ['grant 0.1.7->0.1.8']);
+  const cancelled = consentSetup(MAC, PKG, { status: 'cancelled' });
+  await cancelled.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await cancelled.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'cancelled' });
+  assert.deepEqual(cancelled.consent, ['grant 0.1.7->0.1.8', 'revoke']);
+  const failing = consentSetup(MAC, PKG, { status: 'failed', reason: 'installer: Error' }, { openPath: async () => 'no handler' });
+  await failing.call(UPDATE_CHANNELS.start);
+  assert.equal((await failing.call(UPDATE_CHANNELS.install, { confirmed: true }) as { status: string }).status, 'failed');
+  assert.deepEqual(failing.consent, ['grant 0.1.7->0.1.8', 'revoke']);
+});
+
+test('install: running missions, no file or changed bytes grant nothing and remove nothing', async () => {
+  const s = consentSetup(WIN, null, { status: 'handed_over' }, { readMissions: async () => ({ live: 4, working: 2 }) });
+  assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: false }), { status: 'none' });
+  await s.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: false }), { status: 'missions', count: 2 });
+  writeFileSync(s.downloader.ready()!.path, 'tampered');
+  assert.equal((await s.call(UPDATE_CHANNELS.install, { confirmed: true }) as { status: string }).status, 'failed');
+  assert.deepEqual(s.consent, []);
+});
+
+test('install: a consent that cannot be written still installs, and says so in the log', async () => {
+  const lines: string[] = [];
+  const s = silentSetup(WIN, null, { status: 'handed_over' }, {
+    consent: { grant: () => { throw new Error('EACCES'); }, revoke: () => {} },
+    log: (line) => { lines.push(line); },
+  });
+  await s.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'restarting' });
+  assert.ok(lines.some((line) => /update consent not written: EACCES/.test(line)), lines.join('\n'));
 });

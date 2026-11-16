@@ -149,6 +149,8 @@
       "changelog": "Zobacz dziennik zmian",
       "downgrade": "Wróć do poprzedniej wersji",
       "working": "Zatwierdzono. Przygotowywanie usługi…",
+      "progressTitle": "Aktualizacja Timon do {to}",
+      "preparing": "Przygotowywanie aktualizacji…",
       "waiting": "Kopia zapasowa i migracja danych. Może to potrwać kilka minut…",
       "ready": "Uruchamianie Timon…",
       "partial": "Częściowa kopia zapasowa",
