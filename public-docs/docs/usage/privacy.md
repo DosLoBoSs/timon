@@ -10,7 +10,7 @@ Timon runs on your computer, and your agents' work stays there. A few things lea
 - [**licence data**](#your-licence), so your licence key works on this computer;
 - [**the agency offer**](#the-agency-offer), only if you ask for it.
 
-What your agents send to the AI providers you connect goes to those providers, under their own terms, and never through us.
+What your agents send to the AI providers you connect goes to those providers, under their own terms, and never through us. What Timon keeps on your own computer is described in [What Timon keeps on your computer](#what-timon-keeps-on-your-computer).
 
 ## Usage statistics
 
@@ -109,3 +109,45 @@ When you ask for it, Timon sends the Timon team, and nothing else:
 The team uses that address to send you this offer only. If your computer is offline, the request waits and is sent when Timon next starts or is back online. Timon keeps, in the Timon folder, your address while the request waits or is active, and a withdrawal token the server returns; neither ever goes into usage statistics.
 
 To withdraw, open **Settings › Profile**: the **Agency offer** row shows whether you are subscribed, and **Withdraw** tells the Timon team to stop. If you are offline, the withdrawal waits and is sent as soon as possible.
+
+## What Timon keeps on your computer
+
+Everything below stays in the Timon folder (`~/.timon`, or `%USERPROFILE%\.timon` on Windows; see [Where Timon keeps its files](../installation/configuration.md#where-timon-keeps-its-files)). None of it is sent to the Timon team. It is stored in plain text: anyone who can read your user folder can read it.
+
+| What | Where | How long |
+|---|---|---|
+| Mission history: your messages, the agents' answers, the tools they ran and what those tools returned, including the content of files they read | the database `timon.db`, and `archive/events.db` if you turned on archiving | forever by default, see `TIMON_EVENTS_RETENTION_DAYS` below |
+| Raw memory facts: short notes agents take after a mission, before the memory curation turns some into rules | the database, and `agents/<name>/memory/learnings.jsonl` (with `learnings.archive.jsonl`) | forever by default, see `TIMON_LEARNINGS_RETENTION_DAYS` below |
+| Memory rules: the instructions Timon gives your agents | the database | until you delete them |
+| The list of missions, with their first message, title and summary | the database | as long as the Timon folder |
+| A provider's own conversation files (for example Codex's), which let a conversation resume | `provider-runs/` | 30 days after the mission ends (**Provider sessions kept after a mission ends**) |
+| Files attached in chat | the Timon folder | 30 days after the mission ends (**Chat attachments kept after a mission ends**) |
+| Mission timelines | the database | 90 days (`TIMON_TRACE_SPANS_RETENTION_DAYS`) |
+| Logs and copies of the prompts sent to agents | `tmp/` | 14 days (`TIMON_LOG_RETENTION_DAYS`) |
+| Backups | `backups/` | see [Backups and the agent trash](settings.md#backups-and-the-agent-trash-system) |
+
+The command-line programs of your AI providers (Claude Code, Codex…) also keep their own history in their own folders, under their own rules: Timon does not manage those.
+
+### Deleting a memory rule
+
+When you delete a memory rule, its text goes too: the memory journal keeps that a rule was deleted, and when, but no longer what it said. The same holds for the old wording of a rule you or the memory curation rewrite. The agents the rule reached start a fresh conversation at their next mission (see [Removing or rewriting a memory rule](agents.md#removing-or-rewriting-a-memory-rule)).
+
+### Keeping less
+
+Two settings delete old history once a day. Both are **0 by default**, which keeps everything: nothing is deleted until you set them.
+
+- `TIMON_EVENTS_RETENTION_DAYS`: the mission history older than this many days is deleted for good, archived history included, along with its text in the history search. A mission still running keeps its whole history. The list of missions stays.
+- `TIMON_LEARNINGS_RETENTION_DAYS`: raw memory facts older than this many days are deleted for good, from the database and from each agent's `learnings.jsonl` files. Memory rules are not affected.
+
+Set them in **Settings → System → Diagnostics**, or in `timon.config.json`:
+
+```json
+{ "settings": { "TIMON_EVENTS_RETENTION_DAYS": 365, "TIMON_LEARNINGS_RETENTION_DAYS": 180 } }
+```
+
+An environment variable of the same name wins over both. The first pass after you set them can take a while on a large history; Timon keeps working meanwhile.
+
+### Erasing everything
+
+- An agent's memory: delete the agent, then empty it from the trash (**Settings › System › Backups & trash**). Its memory rules and memory files go with it; the raw facts it noted stay with its project until `TIMON_LEARNINGS_RETENTION_DAYS` removes them.
+- Everything: quit Timon and delete the Timon folder. Your backups are in it too, unless you moved them elsewhere.

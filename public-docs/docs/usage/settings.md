@@ -217,6 +217,8 @@ Two settings bound what Timon keeps about finished missions. They are independen
 
 `TIMON_EVENTS_HOT_DAYS` (0 by default, off) moves older events to `archive/events.db`. They stay readable, but a standard export or backup no longer includes them unless you pass `--with-archive`, which is why it is off until you ask for it.
 
+`TIMON_EVENTS_RETENTION_DAYS` and `TIMON_LEARNINGS_RETENTION_DAYS` (0 by default, off) delete for good, once a day, the mission history and the raw memory facts older than that many days. See [Keeping less](privacy.md#keeping-less).
+
 ## Stopping stuck missions (Cleanup)
 
 **Settings → Missions → Cleanup** decides when Timon frees a mission that no longer needs its process, or stops one that is stuck. Two settings govern a turn that is still running:
