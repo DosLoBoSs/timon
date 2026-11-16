@@ -41,7 +41,7 @@ When one is out, a banner at the top of the app names it and gives:
 - **What's new**: the release notes;
 - **Later**: hides the banner for this version; the next one is announced again.
 
-The banner also appears in the notification centre, once per version. Installing what you downloaded follows [Apply the update](#apply-the-update) below; the app never installs anything by itself.
+The banner also appears in the notification centre, once per version. Installing what you downloaded follows [Apply the update](#apply-the-update) below; the app installs nothing until you click **Install**.
 
 ### Download it from the desktop app
 
@@ -59,9 +59,11 @@ The download needs room for the installer plus a small margin; when the disk is 
 **Install** first counts the missions running on this computer. When some are, the banner says how many: **Wait** leaves everything as it is (install later, once they are done), **Install anyway** goes on and they stop when the service moves to the new version. Then, depending on the package:
 
 - **AppImage**: the AppImage you launched is replaced by the verified one, in the same folder and under the same name, and Timon restarts on it. The previous file stays next to it, hidden, as `.<name>.previous`, until the new version has started; if the replacement or the restart fails, your current AppImage is left as it was. When the AppImage's folder is not writable, nothing is replaced: the new AppImage stays in the `updates` folder for you to move;
-- **`.deb`**: installing a package needs administrator rights, which Timon never asks for itself. The package opens in your software manager, and the banner shows the command that installs it (`sudo apt install '…/timon_<version>_amd64.deb'`) with a **Copy** button;
-- **macOS**: the `.pkg` opens in Installer, which asks for your password. Once it is done, quit Timon and open it again;
-- **Windows**: the setup program opens, visibly, and Timon closes so it can be replaced. The installer pauses the background service, and the missions it ran stop.
+- **`.deb`**: Timon asks your system for administrator rights (the password dialog of your desktop), installs the package and restarts on it. Without that dialog (no `pkexec`, a server session) or when the installation fails, the package opens in your software manager and the banner shows the command that installs it (`sudo apt install '…/timon_<version>_amd64.deb'`) with a **Copy** button;
+- **macOS**: macOS asks for your administrator password, then Timon installs the `.pkg` and restarts on it. When the installation fails, the `.pkg` opens in Installer instead: once it is done, quit Timon and open it again;
+- **Windows**: Timon closes, the setup program installs the new version without its wizard, in the folder and for the users (you only, or everyone) of the current installation, and opens Timon again. Windows may ask for permission, to pause the background service and for an installation for everyone; the missions the service ran stop. If the installation does not happen (permission refused, an error), Timon opens again on the current version; if the setup program cannot be started that way, it opens with its wizard instead.
+
+Before anything runs with administrator rights, the installer is checked once more against the signed checksum. Closing the password dialog changes nothing: the banner offers **Install** again.
 
 In every case, the next start shows **Update Timon from X to Y**, as in [Apply the update](#apply-the-update): nothing is migrated without your approval.
 
