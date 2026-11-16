@@ -24,7 +24,7 @@ Writing also lets you read. The powerful permissions — `routines:write`, `trig
 
 ## What your plugin owns
 
-Whatever your plugin creates belongs to it: its owner is `plugin:<your-id>`, in a request as in a background job. You read what the caller can see plus what you own, and you change only what you own. Anything else answers as if it did not exist (`not_found`, `false` or `undefined`), or fails with `forbidden` when you can see it without having created it. Rows that belong to the system — the nightly backup, anything made before owners existed — are visible to a superadmin only and are never yours to change.
+Whatever your plugin creates belongs to it: its owner is `plugin:<your-id>`, in a request as in a background job. You read what the caller can see plus what you own, and you change only what you own. Anything else answers as if it did not exist (`not_found`, `false` or `undefined`), or fails with `forbidden` when you can see it without having created it. Rows that belong to the system — the nightly backup, anything made before owners existed — are visible to a superadmin only and are never yours to change. Pipelines are the exception: a system pipeline such as `feature-flow` is one every account can read and run, so in a user's request you see and run it as that user can; a background job still does not see it, and you never change it.
 
 The tasks a routine opens, and what a trigger's actions create, belong to your plugin too. An `event` trigger therefore reacts to the objects your plugin owns, not to another account's tasks or missions; to react to a user's events, listen with `ctx.events.on` in the host half.
 
