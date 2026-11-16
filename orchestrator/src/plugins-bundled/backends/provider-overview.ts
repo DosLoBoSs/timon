@@ -12,10 +12,13 @@
  *   provider per backend: each is a distinct program the person installs and
  *   signs in to on its own, under the name the model picker shows for it;
  * - a backend the person added by hand (a file under `~/.timon/backends/`),
- *   a file Timon could not read included: blocked, with the reason why;
+ *   a file Timon could not read included: blocked, with the reason why. A
+ *   file whose id is taken, or whose name is no id at all, is listed under its
+ *   file name and reaches no backend: the id belongs to someone else;
  * - an agent installed from the ACP registry;
  * - a profile nobody registered (a built-in kept by the product itself).
  */
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { BackendProfile } from '../../backends/types.js';
 import { isRemoteDialect } from '../../backends/types.js';
@@ -26,7 +29,7 @@ import { backendCatalog, tryDefaultBackendName, type CatalogBackend } from '../.
 import { binaryPinStatuses, type BinaryPinStatus } from '../../backends/binary-pins.js';
 import { providerSignedIn } from '../../backends/sign-in-state.js';
 import { listBackendAccountsFor } from '../../backends/accounts.js';
-import { listLocalBackends, secretNamesOf } from '../../backends/local-profiles.js';
+import { LOCAL_BACKEND_ID_RE, listLocalBackends, secretNamesOf } from '../../backends/local-profiles.js';
 import { probeProfileEnv } from '../../backends/credentials.js';
 import { dbApi, type BackendOverlayRow } from '../../db.js';
 import { providerClis, setupBackends, type SetupBackend } from '../../onboarding.js';
@@ -167,6 +170,8 @@ type Group = {
   declaredRanks: Map<string, number>;
   /** The only provider of its plugin: a program the plugin declares that no backend names is its own. */
   alone: boolean;
+  /** A file of `~/.timon/backends/` that could not be loaded: what it is listed as, and why. */
+  file?: { name: string; reason: string };
 };
 
 /** Everything the aggregation reads once per request. */
@@ -269,14 +274,66 @@ function groups(sources: OverviewSources, snap: Snapshot): Group[] {
     }
   }
   // A file nobody could read is still the person's provider: listed, so its reason is seen and fixed.
-  for (const id of snap.unreadable.keys()) {
-    if (claimed.has(id) || snap.profiles.has(id)) continue;
-    result.push({ id: `user:${id}`, origin: 'user', backendIds: [id], plugin: null, pluginId: null, agent: null, declaredNames: new Map(), declaredRanks: new Map(), alone: true });
+  for (const [id, reason] of snap.unreadable) {
+    const free = LOCAL_BACKEND_ID_RE.test(id) && !claimed.has(id) && !snap.profiles.has(id);
+    const base = { origin: 'user', plugin: null, pluginId: null, agent: null, declaredNames: new Map(), declaredRanks: new Map(), alone: true } as const;
+    if (free) {
+      result.push({ ...base, id: `user:${id}`, backendIds: [id], file: { name: id, reason } });
+    } else {
+      // No backend id: everything keyed by one (agents, accounts, the switch, the edit routes) is the owner's.
+      result.push({ ...base, id: blockedFileProviderId(id), backendIds: [], file: { name: `${id}.json`, reason } });
+    }
   }
   return result;
 }
 
-function backendView(id: string, snap: Snapshot): ProviderBackendView {
+/** What follows `user:` stays inside the shape the page's route accepts (`provider-overview-routes.ts`). */
+const FILE_PROVIDER_ID_RE = /^[A-Za-z0-9._@-]{1,190}$/;
+
+/**
+ * The provider id of a file that cannot stand as a backend. Its file name when
+ * the route accepts it: a `.json` suffix no backend id carries keeps it apart
+ * from `user:<id>`. Otherwise a readable slug and a hash of the name, stable
+ * across reads so the page's link keeps working.
+ */
+function blockedFileProviderId(stem: string): string {
+  const name = `${stem}.json`;
+  if (FILE_PROVIDER_ID_RE.test(name)) return `user:${name}`;
+  const slug = stem.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'file';
+  return `user:${slug}.${createHash('sha256').update(stem).digest('hex').slice(0, 8)}.json`;
+}
+
+/**
+ * A file listed with no backend: its one row says why, and stands for nothing
+ * of the backend whose id it took, so no action of its page reaches that one.
+ */
+function blockedFileOverview(group: Group, file: { name: string; reason: string }): ProviderOverview {
+  return {
+    id: group.id,
+    name: file.name,
+    brand: null,
+    icon: null,
+    origin: group.origin,
+    pluginId: null,
+    plugin: null,
+    catalogAgent: null,
+    enabled: true,
+    isDefault: false,
+    backends: [{
+      id: file.name, label: file.name, active: false, disabled: false, reason: file.reason, modelCount: 0, defaultModel: null, isDefault: false, remote: false,
+    }],
+    modelCount: 0,
+    agentCount: 0,
+    connection: { signedIn: null, signInCommand: null, signInThen: null, acceptsAccounts: false, accounts: [] },
+    secret: { required: false, present: false, names: [] },
+    programs: [],
+    status: 'blocked',
+    updateAvailable: false,
+  };
+}
+
+/** `fileReason`: why the file of this backend could not be loaded, when it is one. */
+function backendView(id: string, snap: Snapshot, fileReason: string | null): ProviderBackendView {
   const profile = snap.profiles.get(id);
   const overlay = snap.overlays.get(id);
   const entry = snap.catalog.get(id);
@@ -286,7 +343,7 @@ function backendView(id: string, snap: Snapshot): ProviderBackendView {
     label: entry?.label ?? overlay?.label ?? profile?.label ?? id,
     active: entry !== undefined,
     disabled: !!(overlay?.disabled ?? profile?.disabled),
-    reason: entry ? null : snap.reasons.get(id) ?? snap.unreadable.get(id) ?? (profile ? null : 'not registered'),
+    reason: entry ? null : snap.reasons.get(id) ?? fileReason ?? (profile ? null : 'not registered'),
     modelCount: entry ? entry.models.length : (profile?.models.filter((model) => !model.hidden).length ?? 0),
     defaultModel: entry ? entry.defaultModel : profile?.defaultModel ?? null,
     isDefault: snap.defaultBackend === id,
@@ -442,7 +499,8 @@ function rankOf(group: Group, snap: Snapshot): [number, number] {
 }
 
 function overviewOf(group: Group, snap: Snapshot, viewer: DbViewer): ProviderOverview {
-  const backends = group.backendIds.map((id) => backendView(id, snap));
+  if (group.file && group.backendIds.length === 0) return blockedFileOverview(group, group.file);
+  const backends = group.backendIds.map((id) => backendView(id, snap, group.file?.reason ?? null));
   const first = group.backendIds[0];
   const card = group.backendIds.map((id) => snap.cards.get(id)).find((entry) => entry !== undefined);
   const looks = first ? looksOf(first, snap) : { brand: null, icon: null };
@@ -462,7 +520,7 @@ function overviewOf(group: Group, snap: Snapshot, viewer: DbViewer): ProviderOve
     refused: progs.some((program) => program.authorization === 'refused') || installed?.state === 'tampered',
     programMissing: progs.some((program) => program.path === null && program.authorization !== 'refused') || installed?.state === 'missing',
     needsAuthorization: progs.some((program) => program.authorization === 'authorize'),
-    failed: plugin?.state === 'failed' || plugin?.state === 'skipped' || group.backendIds.some((id) => snap.unreadable.has(id))
+    failed: plugin?.state === 'failed' || plugin?.state === 'skipped' || group.file !== undefined
       || backends.some((backend) => !backend.active && !backend.disabled && backend.reason?.startsWith('dialect ') === true),
     signedIn,
     accountConnected: accounts.some((account) => account.connected && account.state !== 'reauth'),
