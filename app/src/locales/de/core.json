@@ -1884,6 +1884,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} heißt jetzt {name}. Prüfe {count} Trigger, deren Filter den alten Namen per Muster oder Teilzeichenkette trifft: {names}",
     "renameOpenTriggers": "Trigger öffnen",
+    "invalidName": "Ungültiger Name. Verwenden Sie Buchstaben und Ziffern in beliebiger Sprache sowie . _ -, ohne Leerzeichen oder Emoji, beginnend mit einem Buchstaben oder einer Ziffer (höchstens 80 Byte, etwa 26 chinesische Zeichen).",
     "autoFitView": "Ansicht automatisch einpassen",
     "poleProjects": "{count} Projekt(e)",
     "newPole": "Neuer Pol",

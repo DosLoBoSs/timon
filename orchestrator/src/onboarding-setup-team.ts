@@ -16,6 +16,8 @@ import { dbApi } from './db.js';
 import { mainAgentName } from './main-agent.js';
 import { defaultExcludedMcpIds } from './mcp.js';
 import { MainAgentSetupError, toAgentName } from './onboarding-main-agent.js';
+import { findAgentFolder } from './agent-config.js';
+import { agentNameKey } from './agent-name.js';
 import { agentDir } from './paths.js';
 
 /** Who this step created, so a second call answers with them instead of creating more. */
@@ -74,15 +76,20 @@ export function recruitSetupTeam(input: { coder: string; reviewer: string }): Se
 
   // A half-done earlier call keeps the teammate it made for that role.
   const plan = (role: SetupTeammateRole, raw: string): SetupTeammate => (
-    already.find((t) => t.role === role) ?? { name: toAgentName(raw.trim()), role }
+    // A blank answer stays blank, refused below: `toAgentName` never is.
+    already.find((t) => t.role === role) ?? { name: raw.trim() ? toAgentName(raw.trim()) : '', role }
   );
   const planned: SetupTeammate[] = [plan('coder', input.coder), plan('reviewer', input.reviewer)];
   if (planned.some((t) => !t.name)) throw new MainAgentSetupError('invalid_name');
   const mine = new Set(already.map((t) => t.name));
   const [coder, reviewer] = planned as [SetupTeammate, SetupTeammate];
-  if (coder.name === reviewer.name || planned.some((t) => t.name === lead)) throw new MainAgentSetupError('name_taken');
-  // Any other existing agent is not ours to rewrite.
-  if (planned.some((t) => existsSync(agentDir(t.name)) && !mine.has(t.name))) throw new MainAgentSetupError('name_taken');
+  if (agentNameKey(coder.name) === agentNameKey(reviewer.name) || planned.some((t) => agentNameKey(t.name) === agentNameKey(lead))) {
+    throw new MainAgentSetupError('name_taken');
+  }
+  // Any other existing agent is not ours to rewrite, whatever its case.
+  if (planned.some((t) => { const found = findAgentFolder(t.name); return found !== null && !mine.has(found); })) {
+    throw new MainAgentSetupError('name_taken');
+  }
 
   const main = loadConfig(lead);
   if (!main.cwd) throw new MainAgentSetupError('workspace_unavailable');

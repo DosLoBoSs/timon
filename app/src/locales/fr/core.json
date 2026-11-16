@@ -1654,6 +1654,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} s'appelle maintenant {name}. Vérifiez {count} trigger(s) dont le filtre teste l'ancien nom par motif ou sous-chaîne : {names}",
     "renameOpenTriggers": "Ouvrir les triggers",
+    "invalidName": "Nom invalide. Utilisez des lettres et des chiffres de n'importe quelle langue, ainsi que . _ -, sans espace ni emoji, en commençant par une lettre ou un chiffre (80 octets au plus, environ 26 caractères chinois).",
     "autoFitView": "Auto-ajuster la vue",
     "poleProjects": "{count} projet(s)",
     "newPole": "Nouveau pôle",

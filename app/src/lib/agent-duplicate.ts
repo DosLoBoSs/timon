@@ -10,24 +10,22 @@
  */
 
 import type { SkillAttachment } from './skill-attachments';
-
-/** Same alphabet as the daemon's `validName`. */
-export const AGENT_NAME_RE = /^[A-Za-z0-9._-]+$/;
+import { agentNameKey, isValidAgentName, normalizeAgentName } from './agent-name-rule';
 
 export type DuplicateNameProblem = 'empty' | 'invalid' | 'taken';
 
 /**
  * Why `name` cannot be the copy's name, or null. The match on existing names
- * ignores case: a case-insensitive disk (Windows, macOS) would merge two
+ * ignores case and Unicode normalisation: a case-insensitive disk (Windows, macOS) would merge two
  * folders that differ only by it, and `POST /api/agents` upserts — a taken name
  * would overwrite the other agent.
  */
 export function duplicateNameProblem(name: string, existing: readonly string[]): DuplicateNameProblem | null {
-  const trimmed = name.trim();
+  const trimmed = normalizeAgentName(name.trim());
   if (!trimmed) return 'empty';
-  if (!AGENT_NAME_RE.test(trimmed)) return 'invalid';
-  const lower = trimmed.toLowerCase();
-  if (existing.some((n) => n.toLowerCase() === lower)) return 'taken';
+  if (!isValidAgentName(trimmed)) return 'invalid';
+  const key = agentNameKey(trimmed);
+  if (existing.some((n) => agentNameKey(n) === key)) return 'taken';
   return null;
 }
 
@@ -157,7 +155,7 @@ async function copyOwnAttachments(own: SkillAttachment[], name: string, fetcher:
  * meantime would be overwritten), never trusting the dialog's own check.
  */
 export async function duplicateAgent(sourceName: string, newName: string, fetcher: Fetcher = fetch): Promise<DuplicateResult> {
-  const name = newName.trim();
+  const name = normalizeAgentName(newName.trim());
   try {
     const problem = duplicateNameProblem(name, await listAgentNames(fetcher));
     if (problem) return { ok: false, problem };

@@ -21,6 +21,7 @@
     "user_not_found": "User not found.",
     "team_not_found": "Team not found.",
     "agent_not_found": "Agent not found.",
+    "agent_name_taken": "An agent named {name} already exists. Names that differ only by case or accent encoding are the same agent.",
     "mission_not_found": "This mission no longer exists.",
     "mission_not_running": "No agent is running for this mission.",
     "todo_not_found": "This idea no longer exists.",

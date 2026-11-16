@@ -56,6 +56,7 @@ import { readdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import type { TimonConfig } from '../config/schema.js';
+import { isValidAgentName } from '../agent-name.js';
 import { PROTECTED_HOME_DIRS } from '../backends/credential-home-dirs.js';
 import { BACKEND_HOME_DIRS } from '../backends/builtin-declarations.js';
 
@@ -436,6 +437,15 @@ export function isFenceSegment(value: string): boolean {
   return FENCE_SEGMENT.test(value);
 }
 
+/**
+ * An agent name the fence may turn into a folder name: a plain segment, or
+ * any name the agent rule accepts (`马斯克`, `_main`, `_eph-…`). Both refuse a
+ * `.` first, so `.agents` stays out of any agent's reach, and a separator.
+ */
+export function isFenceAgent(value: string): boolean {
+  return isFenceSegment(value) || isValidAgentName(value);
+}
+
 /** The mission's own temporary folder, its `TMPDIR` once fenced; the caller checks `missionId` with `isFenceSegment`. */
 export function missionTmpDir(timonHome: string, missionId: string): string {
   return join(timonHome, 'tmp', 'missions', missionId);
@@ -455,7 +465,7 @@ const AGENT_CACHES = '.agents';
  * cannot plant a package that this agent's MCP servers then run, and the
  * user's own `~/.npm`, which programs outside Timon read, stays out of reach.
  * Under `provider-cache/` because it is a cache: never exported, rebuilt on
- * demand. The caller checks `agent` with `isFenceSegment`.
+ * demand. The caller checks `agent` with `isFenceAgent`.
  */
 export function agentPackageCacheDir(timonHome: string, agent: string): string {
   return join(timonHome, 'provider-cache', AGENT_CACHES, agent);
@@ -651,7 +661,9 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
   for (const dir of target.gitDirs ?? []) workspaceGrant(dir);
 
   const missionId = segment('mission id', target.missionId);
-  const agent = segment('agent name', target.agent);
+  const agent = target.agent !== undefined && target.agent !== '' && isFenceAgent(target.agent)
+    ? target.agent
+    : segment('agent name', target.agent);
   const project = segment('project slug', target.project);
   const account = segment('account id', target.account);
   const plugin = segment('provider plugin id', target.providerPlugin);

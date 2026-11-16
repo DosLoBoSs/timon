@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isValidAgentName, normalizeAgentName } from '../agent-name.js';
 import { runPluginRequest } from './als.js';
 import { integrationRegistries, integrationRequestIdentity } from './integration-host.js';
 import { callIntegration, integrationJson, parseIntegrationValue } from './integration-primitives.js';
@@ -27,8 +28,10 @@ function jsonObject(value: unknown): PluginJsonObject {
   return parsed;
 }
 function agentName(value: unknown): string {
-  if (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(value)) throw new IntegrationQueueError(400, 'Invalid connection agent');
-  return value;
+  const name = typeof value === 'string' ? normalizeAgentName(value) : '';
+  // Plugins never act as the daemon's own `_main` or `_eph-…` agents.
+  if (!isValidAgentName(name) || name.startsWith('_')) throw new IntegrationQueueError(400, 'Invalid connection agent');
+  return name;
 }
 function secretReferences(value: unknown): Record<string, string> {
   const parsed = jsonObject(value);

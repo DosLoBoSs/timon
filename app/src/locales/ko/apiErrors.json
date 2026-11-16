@@ -18,6 +18,7 @@
     "user_not_found": "사용자를 찾을 수 없습니다.",
     "team_not_found": "팀을 찾을 수 없습니다.",
     "agent_not_found": "에이전트를 찾을 수 없습니다.",
+    "agent_name_taken": "{name} 이름의 에이전트가 이미 있습니다. 대소문자나 악센트 인코딩만 다른 이름은 같은 에이전트입니다.",
     "mission_not_found": "이 미션은 더 이상 존재하지 않습니다.",
     "mission_not_running": "이 미션을 실행 중인 에이전트가 없습니다.",
     "todo_not_found": "이 아이디어는 더 이상 존재하지 않습니다.",

@@ -22,7 +22,7 @@ import { z } from 'zod';
 import { CONFIG_FILE, config, setConfig } from '../../config/load.js';
 import { FenceExceptionSchema, FencePathSchema, type TimonConfig } from '../../config/schema.js';
 import { missionIsolationNow } from '../../doctor.js';
-import { isFenceSegment } from '../../host/isolation.js';
+import { isFenceAgent } from '../../host/isolation.js';
 import type { DoctorReport } from '../../plugins/contract/system.js';
 import { auditRequest } from '../../users/audit-actor.js';
 import { forbidden, isPersonAuth } from '../../users/identity.js';
@@ -49,7 +49,7 @@ const PathBody = FencePathSchema.refine((path) => path.length <= MAX_PATH_LENGTH
 });
 const ExceptionBody = FenceExceptionSchema.extend({ writable: z.array(PathBody).max(MAX_PATHS).default([]) });
 /** The names the fence would act on (`resolveFence` ignores any other). */
-const NameKey = z.string().refine(isFenceSegment, { message: 'must be a plain agent name or project slug' });
+const NameKey = z.string().refine(isFenceAgent, { message: 'must be a plain agent name or project slug' });
 const ExceptionMap = z.record(NameKey, ExceptionBody).refine((map) => Object.keys(map).length <= MAX_EXCEPTIONS, {
   message: `at most ${MAX_EXCEPTIONS} entries`,
 });

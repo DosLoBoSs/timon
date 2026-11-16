@@ -30,7 +30,8 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { z } from 'zod';
-import { canonicalAgentName, loadConfig, validName, type AgentConfig } from '../agent-config.js';
+import { canonicalAgentName, isValidAgentName, loadConfig, validName, type AgentConfig } from '../agent-config.js';
+import { agentNameKey, normalizeAgentName } from '../agent-name.js';
 import { getRole } from '../agent-roles.js';
 import { isBackendName } from '../backends/index.js';
 import { dbApi } from '../db.js';
@@ -92,7 +93,8 @@ export type ScopedAgents = {
 
 /** Agents created by plugins never take a name starting with `_` or `.`:
  *  `_main` and the `_eph-*` agents are the daemon's own. */
-const NameSchema = z.string().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, 'invalid agent name');
+const NameSchema = z.string().min(1).max(100).transform(normalizeAgentName)
+  .refine((name) => isValidAgentName(name) && !name.startsWith('_'), 'invalid agent name');
 
 const FieldsSchema = z.object({
   systemPrompt: z.string().max(200_000),
@@ -138,7 +140,9 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
 
 /** An agent name a plugin may address, canonical, or `null`. */
 export function addressableAgentName(name: unknown): string | null {
-  return typeof name === 'string' && NameSchema.safeParse(name).success ? canonicalAgentName(name) : null;
+  if (typeof name !== 'string') return null;
+  const parsed = NameSchema.safeParse(name);
+  return parsed.success ? canonicalAgentName(parsed.data) : null;
 }
 
 /**
@@ -345,7 +349,7 @@ export function agentsFor(scope: AgentCallerScope): ScopedAgents {
       // Names are resolved case-insensitively (`create` refuses `Foo` next to
       // `foo`), whatever the file system says; the agent itself may change case.
       const clash = canonicalAgentName(fresh);
-      if (clash.toLowerCase() !== target.toLowerCase() && existsSync(agentDir(clash))) {
+      if (agentNameKey(clash) !== agentNameKey(target) && existsSync(agentDir(clash))) {
         throw new PluginAgentError('conflict', `agent already exists: ${fresh}`);
       }
       const result = renameAgentKeepingSeat(target, fresh);

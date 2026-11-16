@@ -1884,6 +1884,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} ora è {name}. Controlla {count} trigger il cui filtro corrisponde al vecchio nome per pattern o sottostringa: {names}",
     "renameOpenTriggers": "Apri i trigger",
+    "invalidName": "Nome non valido. Usa lettere e cifre di qualsiasi lingua, più . _ -, senza spazi né emoji, iniziando con una lettera o una cifra (al massimo 80 byte, circa 26 caratteri cinesi).",
     "autoFitView": "Adatta la vista",
     "poleProjects": "{count} progetto/i",
     "newPole": "Nuovo polo",

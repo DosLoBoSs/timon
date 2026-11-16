@@ -65,6 +65,10 @@ test('a name is refused when empty, malformed, or taken (any case)', () => {
   assert.equal(duplicateNameProblem('my agent', []), 'invalid');
   assert.equal(duplicateNameProblem('Alice.Coder', ['alice.coder']), 'taken');
   assert.equal(duplicateNameProblem('alice.coder-2', ['alice.coder']), null);
+  assert.equal(duplicateNameProblem('马斯克', ['alice.coder']), null, 'any script');
+  assert.equal(duplicateNameProblem('Zoe\u0308', ['zo\u00eb']), 'taken', 'decomposed or composed, one name');
+  assert.equal(duplicateNameProblem('CON', []), 'invalid');
+  assert.equal(duplicateNameProblem('😀', []), 'invalid');
 });
 
 test('the copy body carries config and prompt, and none of the protected keys', () => {

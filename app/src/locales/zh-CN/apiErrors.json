@@ -19,6 +19,7 @@
     "user_not_found": "未找到用户。",
     "team_not_found": "未找到团队。",
     "agent_not_found": "未找到智能体。",
+    "agent_name_taken": "已存在名为 {name} 的智能体。仅大小写或重音编码不同的名称视为同一个智能体。",
     "mission_not_found": "此任务会话已不存在。",
     "mission_not_running": "此任务会话没有正在运行的智能体。",
     "todo_not_found": "此想法已不存在。",
