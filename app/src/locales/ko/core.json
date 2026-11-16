@@ -873,8 +873,6 @@
     "notActivated": "Free 사용 중 — 계정을 추가하려면 라이선스가 필요합니다",
     "activate": "활성화",
     "offlineSince": "{date}부터 라이선스 서버에 연결할 수 없습니다 — 오프라인 유예 기간 동안은 유료 권한을 계속 쓸 수 있으며, 그 후 Timon은 Free로 돌아갑니다.",
-    "buildEndsSoon": "이 베타 빌드는 {date}에 작동을 멈춥니다. 그 전에 최신 버전을 설치하세요.",
-    "buildEndsUrgent": "이 베타 빌드는 {date}에 작동을 멈춥니다. 지금 최신 버전을 설치하세요.",
     "licenseEndsSoon": "라이선스가 {date}에 종료됩니다. 그 전에 새 키를 입력하세요.",
     "licenseEndsUrgent": "라이선스가 {date}에 종료됩니다. 지금 새 키를 입력하세요."
   },

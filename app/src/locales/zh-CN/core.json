@@ -903,8 +903,6 @@
     "notActivated": "当前使用免费版，添加账号需要许可证",
     "activate": "激活",
     "offlineSince": "自 {date} 起无法连接许可证服务器。离线宽限期内仍可使用付费权益，宽限期结束后 Timon 将恢复为免费版。",
-    "buildEndsSoon": "此测试版本将于 {date} 停止运行。请在此之前安装最新版本。",
-    "buildEndsUrgent": "此测试版本将于 {date} 停止运行。请立即安装最新版本。",
     "licenseEndsSoon": "你的许可证将于 {date} 到期。请在此之前输入新密钥。",
     "licenseEndsUrgent": "你的许可证将于 {date} 到期。请立即输入新密钥。"
   },
@@ -4556,18 +4554,10 @@
     "empty": "没有智能体"
   },
   "updates": {
-    "banner": {
-      "available": "Timon {version} 已发布，当前版本为 {installed}。",
-      "buildEnds": "此构建将于 {date} 停止运行。",
-      "downloadLinux": "下载 Linux 版（{format}）",
-      "downloadMac": "下载 macOS 版（{format}）",
-      "downloadWindows": "下载 Windows 版（{format}）",
-      "downloadPage": "下载页面",
-      "notes": "更新内容",
-      "hideNotes": "隐藏更新说明",
-      "noNotes": "此版本未发布更新说明。",
-      "fullNotes": "完整更新日志",
-      "later": "稍后再说"
+    "notice": {
+      "available": "Timon {version} 已发布",
+      "update": "更新",
+      "buildEnds": "此构建将于 {date} 停止运行。"
     },
     "download": {
       "start": "下载并验证",

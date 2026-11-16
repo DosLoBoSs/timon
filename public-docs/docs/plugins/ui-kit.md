@@ -36,7 +36,7 @@ Timon serves these modules to the browser; nothing installs them. To type-check 
 | `useTaskForm` | The `task.form` occupant's host: the task (or none), the agents, `submit`, the attachment actions, `finish`, `close`, `titleId` (API 14; see [Slots](slots.md#special-surfaces)) |
 | `useDirectoryBrowser` | The `directory.picker` occupant's host: `mode` (`directory` or `file`), `accept`, `initialPath`, `opening`, `read` (one level of the active machine's disk), `choose`, `cancel` (API 15; see [Slots](slots.md#special-surfaces)) |
 | `useConfirmDialog` | The `confirm.dialog` occupant's host: `title`, `description`, `confirmLabel`, `cancelLabel`, `destructive`, `confirm`, `cancel` (API 15; see [Slots](slots.md#special-surfaces)) |
-| `useUpdateStatus` | The `updates.banner` occupant's host: `installed`, `channel`, `offer`, `installers`, `buildExpiresAt`, `later`, `download` (desktop app only) (API 15; see [Slots](slots.md#special-surfaces)) |
+| `useUpdateStatus` | Deprecated since API 16: answers `null`, the `updates.banner` slot is no longer painted (see [Slots](slots.md#special-surfaces)) |
 | `useAppCard` | The `apps.card` occupant's host: `app`, `status`, `consentUrl`, `vaultOff`, `connect`, `disconnect` (API 15; see [Slots](slots.md#special-surfaces)) |
 | `useMcpTab` | The Connectors tab around an `mcp.featured` section: `{ query }`, its search (API 15; see [Slots](slots.md#special-surfaces)) |
 | `usePageToc` | The `page.toc` occupant's host: `entries` (`id`, `label`, `level`, `count`), `active`, `go(id)` (API 15; see [Slots](slots.md#special-surfaces)) |

@@ -662,8 +662,6 @@
     "notActivated": "Free is active — additional accounts need a license",
     "activate": "Activate",
     "offlineSince": "License server unreachable since {date} — paid rights remain available during the offline tolerance, then Timon returns to Free.",
-    "buildEndsSoon": "This beta build stops running on {date}. Install the latest version before then.",
-    "buildEndsUrgent": "This beta build stops running on {date}. Install the latest version now.",
     "licenseEndsSoon": "Your licence ends on {date}. Enter a new key before then.",
     "licenseEndsUrgent": "Your licence ends on {date}. Enter a new key now."
   },
@@ -4297,18 +4295,10 @@
     "empty": "No agent"
   },
   "updates": {
-    "banner": {
-      "available": "Timon {version} is available — you run {installed}.",
-      "buildEnds": "This build stops running on {date}.",
-      "downloadLinux": "Download for Linux ({format})",
-      "downloadMac": "Download for macOS ({format})",
-      "downloadWindows": "Download for Windows ({format})",
-      "downloadPage": "Download page",
-      "notes": "What's new",
-      "hideNotes": "Hide notes",
-      "noNotes": "No notes were published with this version.",
-      "fullNotes": "Full changelog",
-      "later": "Later"
+    "notice": {
+      "available": "Timon {version} is available",
+      "update": "Update",
+      "buildEnds": "This build stops running on {date}."
     },
     "download": {
       "start": "Download and verify",

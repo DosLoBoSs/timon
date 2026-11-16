@@ -159,7 +159,7 @@ test('only a beta build that is not valid is locked, and the reason says what to
 
 test('both locales carry the lock screen and the end-date banners', () => {
   const keys = [
-    'license.buildEndsSoon', 'license.buildEndsUrgent', 'license.licenseEndsSoon', 'license.licenseEndsUrgent',
+    'license.licenseEndsSoon', 'license.licenseEndsUrgent',
     'betaLock.build_expired_title', 'betaLock.build_expired', 'betaLock.build_expired_undated', 'betaLock.beta_ended_title',
     'betaLock.beta_ended', 'betaLock.other_title', 'betaLock.other', 'betaLock.keyTitle', 'betaLock.submit', 'betaLock.notAdmin',
     'betaLock.export', 'betaLock.exported', 'betaLock.exportFailed', 'betaLock.exportAdminOnly', 'betaLock.signOut',

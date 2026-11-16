@@ -219,8 +219,8 @@ export const BUNDLED_IDENTITY: Readonly<Record<string, BundledIdentity>> = Objec
   '@timon/tts': identity('behavior'),
   '@timon/gpt-live': identity('behavior'),
   '@timon/video-factory': widget(['chat.right.widget']),
-  // Its client half paints the "new version" banner, the default occupant of `updates.banner`.
-  '@timon/updates': identity('behavior', { slots: ['updates.banner'] }),
+  // Its client half is a source of `notices`: a newer version and the end of this build, as one card.
+  '@timon/updates': identity('behavior', { slots: ['notices'] }),
   // Its client half paints the Privacy pane of the settings.
   '@timon/telemetry': identity('behavior', { slots: ['settings.section'] }),
   // Host half only for now: the settings page and the switcher come with its client half (P3d).
