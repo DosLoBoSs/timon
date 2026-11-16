@@ -1,8 +1,4 @@
 {
-  "app/src/app/(main)/dashboard/dashboard-client.tsx": {
-    "jsxText": 4,
-    "jsxAttr": 8
-  },
   "app/src/app/(main)/license/license-client.tsx": {
     "jsxAttr": 1
   },
@@ -16,10 +12,6 @@
   "app/src/app/(main)/messages/messages-client.tsx": {
     "jsxText": 1
   },
-  "app/src/app/(main)/missions/missions-client.tsx": {
-    "jsxText": 34,
-    "jsxAttr": 12
-  },
   "app/src/app/(main)/pipelines/pipelines-client.tsx": {
     "jsxText": 15,
     "jsxAttr": 1
@@ -30,16 +22,8 @@
   "app/src/app/agents/agents-client.tsx": {
     "jsxText": 8
   },
-  "app/src/app/chat/chat-client.tsx": {
-    "jsxText": 2,
-    "jsxAttr": 1,
-    "french": 1
-  },
   "app/src/app/events/page.tsx": {
     "jsxText": 3
-  },
-  "app/src/app/multichat/mission-picker.tsx": {
-    "jsxText": 4
   },
   "app/src/app/remote/sessions/page.tsx": {
     "jsxText": 12
@@ -57,30 +41,14 @@
   "app/src/components/chat/composer.tsx": {
     "jsxText": 3
   },
-  "app/src/components/chat/file-browser.tsx": {
-    "jsxText": 2,
-    "jsxAttr": 4
-  },
-  "app/src/components/chat/file-editor-overlay.tsx": {
-    "jsxText": 4
-  },
   "app/src/components/chat/mcp-card.tsx": {
     "jsxText": 2
-  },
-  "app/src/components/chat/mission-card.tsx": {
-    "jsxText": 11
   },
   "app/src/components/chat/skills-card.tsx": {
     "jsxText": 2
   },
   "app/src/components/chat/tool-call.tsx": {
     "jsxText": 3
-  },
-  "app/src/components/cockpit/hud-clock.tsx": {
-    "french": 3
-  },
-  "app/src/components/cockpit/voice-sphere.tsx": {
-    "french": 2
   },
   "app/src/components/mobile-agent-list.tsx": {
     "jsxText": 1
@@ -96,7 +64,7 @@
     "jsxAttr": 1
   },
   "app/src/components/project-edit-dialog.tsx": {
-    "jsxAttr": 6
+    "jsxAttr": 3
   },
   "app/src/components/role-manager.tsx": {
     "jsxText": 1,
@@ -114,29 +82,14 @@
   "app/src/components/ui/dialog.tsx": {
     "jsxText": 1
   },
-  "app/src/components/ui/sheet.tsx": {
-    "jsxText": 1
-  },
-  "app/src/components/video-factory-panel.tsx": {
-    "jsxText": 2
-  },
   "app/src/lib/emoji-data.ts": {
     "french": 6
-  },
-  "app/src/lib/humanize-tool.ts": {
-    "french": 22
   },
   "app/src/lib/module-off-reason.ts": {
     "french": 1
   },
   "app/src/lib/plugin-host/plugin-boundary.tsx": {
     "jsxText": 2
-  },
-  "app/src/lib/plugin-host/slot-root.tsx": {
-    "jsxText": 1
-  },
-  "app/src/lib/plugin-host/slots.ts": {
-    "french": 5
   },
   "app/src/plugins-client/backends/claude-token.tsx": {
     "jsxAttr": 1
@@ -184,12 +137,6 @@
   },
   "app/src/plugins-client/ui-theme-glass-tuning.tsx": {
     "jsxText": 1
-  },
-  "app/src/plugins-client/ui-theme-tokens.ts": {
-    "french": 1
-  },
-  "app/src/plugins-client/ui-theme-variants.ts": {
-    "french": 1
   },
   "app/src/plugins-client/vault/cockpit-vault-graph-tile.tsx": {
     "jsxText": 2
