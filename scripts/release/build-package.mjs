@@ -367,6 +367,18 @@ function git(args, cwd) {
   return run.stdout;
 }
 
+/**
+ * The environment of a build step: the caller's, without the release key
+ * variables (PEM text or file names), plus the step's own. Every dependency's
+ * install script runs under it, and a variable is what such a script reads
+ * first; the one step that signs gets the key files from its plan.
+ */
+export function stepEnv(env, step) {
+  const clean = { ...env };
+  for (const name of [...Object.values(KEY_PEM_ENV), ...Object.values(KEY_FILE_ENV)]) delete clean[name];
+  return { ...clean, ...step.env };
+}
+
 export function runBuildStep(step, platform = process.platform) {
   // Windows ships npm as npm.cmd, which Node only spawns through a shell since
   // CVE-2024-27980. Each argument is quoted to keep paths with spaces whole.
@@ -375,7 +387,7 @@ export function runBuildStep(step, platform = process.platform) {
   // path rather than let an output directory become shell code.
   if (win && step.args.some((arg) => /["%!^&|<>\r\n]/.test(arg))) throw new Error(`${step.label}: unsafe Windows build argument`);
   const args = win ? step.args.map((arg) => `"${arg}"`) : step.args;
-  const run = spawnSync(win ? 'npm.cmd' : 'npm', args, { cwd: step.cwd, env: { ...process.env, ...step.env }, stdio: 'inherit', shell: win, timeout: STEP_TIMEOUT, killSignal: 'SIGKILL' });
+  const run = spawnSync(win ? 'npm.cmd' : 'npm', args, { cwd: step.cwd, env: stepEnv(process.env, step), stdio: 'inherit', shell: win, timeout: STEP_TIMEOUT, killSignal: 'SIGKILL' });
   if (run.error) throw new Error(`${step.label}: ${run.error.message}`);
   if (run.status !== 0) throw new Error(`${step.label} failed (exit ${run.status ?? run.signal})`);
 }

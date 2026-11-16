@@ -13,7 +13,7 @@ import {
   DEFAULT_OUTPUT, KEY_FILE_ENV, KEY_PEM_ENV, PACKAGES, SUMS_FILE, SUMMARY_FILE,
   buildPlan, buildSummary, checkKeyLocation, checksumsText, compareRelease, describe, distTarget, foreignChanges, hashFile,
   inspect, materializeKeys, osName, outputPaths, parseArgs, releaseKind, resolveKeys, selectInstallers, setVersion,
-  signingEnv, validateBuildSummary, versionOf, writeOutputs,
+  signingEnv, stepEnv, validateBuildSummary, versionOf, writeOutputs,
 } from './build-package.mjs';
 
 const scratch = () => mkdtempSync(join(tmpdir(), 'build-package-'));
@@ -153,6 +153,26 @@ test('buildPlan: installs, builds, then packages into the work folder', () => {
   assert.equal(dist.env[KEY_FILE_ENV.privateKey], keys.privateKey);
   assert.equal(dist.env[KEY_FILE_ENV.publicKey], keys.publicKey);
   for (const step of plan.slice(0, -1)) assert.equal(step.env[KEY_FILE_ENV.privateKey], undefined);
+});
+
+test('stepEnv keeps the release key variables from every step but the signing one', () => {
+  const plan = buildPlan({ checkout: join(tmpdir(), 'co'), platform: 'linux', keys: { privateKey: '/k/priv.pem', publicKey: '/k/pub.pem' }, work: join(tmpdir(), 'w'), signing: signingEnv({}, 'linux') });
+  const caller = {
+    PATH: '/usr/bin', NODE_ENV: 'production',
+    [KEY_PEM_ENV.privateKey]: 'PRIVATE PEM', [KEY_PEM_ENV.publicKey]: 'PUBLIC PEM',
+    [KEY_FILE_ENV.privateKey]: '/elsewhere/priv.pem', [KEY_FILE_ENV.publicKey]: '/elsewhere/pub.pem',
+  };
+  for (const step of plan.slice(0, -1)) {
+    const env = stepEnv(caller, step);
+    for (const name of [...Object.values(KEY_PEM_ENV), ...Object.values(KEY_FILE_ENV)]) assert.equal(env[name], undefined, `${step.label} sees ${name}`);
+    assert.equal(env.PATH, '/usr/bin');
+    assert.equal(env.NODE_ENV, step.env.NODE_ENV);
+  }
+  const dist = stepEnv(caller, plan.at(-1));
+  assert.equal(dist[KEY_PEM_ENV.privateKey], undefined, 'the PEM text never reaches electron-builder');
+  assert.equal(dist[KEY_FILE_ENV.privateKey], '/k/priv.pem');
+  assert.equal(dist[KEY_FILE_ENV.publicKey], '/k/pub.pem');
+  assert.equal(caller[KEY_PEM_ENV.privateKey], 'PRIVATE PEM', 'the caller keeps its own environment');
 });
 
 test('selectInstallers keeps the installers of the OS, sorted, with their format', () => {
