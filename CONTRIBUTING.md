@@ -105,7 +105,8 @@ licence and its attack surface: justify it in the pull request.
   `changes/README.md`). Do not edit `CHANGELOG.md`: the release writes it from
   the fragments, and two pull requests then never conflict on it. A change that
   alters what users do also updates `public-docs/`.
-- Do not bump versions: releases are cut by the maintainers.
+- Do not bump versions: releases are cut by the maintainers, as described in
+  [`RELEASING.md`](RELEASING.md).
 - Every change reaches `main` through a pull request, the maintainers' own
   included: nobody pushes to `main`. Start your branch from an up-to-date
   `main`; a pull request is merged once the required checks are green.
