@@ -83,7 +83,7 @@ type _UsageWindow = Assert<Equals<UsageWindow, Sdk.UsageWindow>>;
 type _AccountUsage = Assert<Equals<AccountUsage, Sdk.AccountUsage>>;
 type _UsageEntry = Assert<Equals<UsageEntry, Sdk.UsageEntry>>;
 
-// Notice cards (`lib/notices.ts`, client API 16).
+// Notice cards (`lib/notices.ts`, client API 17).
 type _NoticeTone = Assert<Equals<NoticeTone, Sdk.NoticeTone>>;
 type _NoticeAction = Assert<Equals<NoticeAction, Sdk.NoticeAction>>;
 type _NoticeInput = Assert<Equals<NoticeInput, Sdk.NoticeInput>>;

@@ -6,7 +6,7 @@
  * (`update-flow.ts`).
  *
  * `useUpdateStatus()` is the hook a former `updates.banner` occupant read.
- * That slot is no longer painted since client API 16 (docs/SDK-COMPAT.md
+ * That slot is no longer painted since client API 17 (docs/SDK-COMPAT.md
  * §115), so nothing provides the context to a plugin and the hook answers
  * `null`, as it always did outside the slot. Kept exported: a plugin built
  * against API 15 still loads.
@@ -41,7 +41,7 @@ const UpdateStatusContext = createContext<UpdateStatusValue | null>(null);
 
 export const UpdateStatusProvider = UpdateStatusContext.Provider;
 
-/** Deprecated (client API 16): `null`, the `updates.banner` slot is no longer painted. */
+/** Deprecated (client API 17): `null`, the `updates.banner` slot is no longer painted. */
 export function useUpdateStatus(): UpdateStatusValue | null {
   return useContext(UpdateStatusContext);
 }

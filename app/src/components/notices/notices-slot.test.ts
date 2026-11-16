@@ -333,7 +333,7 @@ test('the examples/plugin-notice template pushes its card and paints every card,
     const manifest = JSON.parse(readFileSync(resolve(process.cwd(), '..', 'examples', 'plugin-notice', 'package.json'), 'utf8')) as {
       timon: { id: string; apiVersion: number; client: { slots: string[] } };
     };
-    assert.equal(manifest.timon.apiVersion, 16);
+    assert.equal(manifest.timon.apiVersion, 17);
     const ctx = m.pluginContext(manifest.timon.id, manifest.timon.client.slots);
     await m.React.act(async () => { example.apply(ctx); });
     await m.until(() => document.querySelector('[data-compact-notice="welcome"]') !== null, 'the template painted its card');

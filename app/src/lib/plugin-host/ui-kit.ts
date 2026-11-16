@@ -121,7 +121,7 @@ export const UI_KIT = {
   // A secret an agent asks its user for (client API 15): what a
   // `chat.secret` occupant renders, and its two gestures.
   useSecretRequest,
-  // Deprecated since client API 16: the `updates.banner` slot is no longer
+  // Deprecated since client API 17: the `updates.banner` slot is no longer
   // painted, so this answers `null`. Kept so an API 15 plugin still loads.
   useUpdateStatus,
   // The composer's prompt history (client API 12): a `chat.composer`
@@ -201,17 +201,17 @@ export const UI_KIT = {
   // The mascot configurator (client API 15, `agent.lookstyler`): the look being edited, the
   // change, the agent's name and role, the states to try, the closed lists and a random look.
   useLookStyler,
-  // The page of one provider (client API 16, `settings.provider.section`): the provider on
+  // The page of one provider (client API 17, `settings.provider.section`): the provider on
   // screen, its status, `refresh` and `back`; the frame the product's sections use, and
   // its row (a title and a status at the left, one action and a "…" menu at the right).
   useProviderPage, ProviderSection, ProviderSettingRow,
-  // One provider's row (client API 16, `providers.row`): the provider it is painted for, how
+  // One provider's row (client API 17, `providers.row`): the provider it is painted for, how
   // to open its page, the surface's action; and the host, to paint rows of your own.
   useProviderRow, ProviderRow,
-  // The bottom-left cards (client API 16): what a `notices` entry pushes its cards with,
+  // The bottom-left cards (client API 17): what a `notices` entry pushes its cards with,
   // and the card a `notices.card` occupant paints, with its gestures (close, act).
   useNotices, useNotice,
-  // The update window (client API 16, `updates.dialog`): the version, its highlights and
+  // The update window (client API 17, `updates.dialog`): the version, its highlights and
   // changelog, the download and the gestures of the step it is at.
   useUpdateDialog,
 };

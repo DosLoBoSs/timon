@@ -446,12 +446,12 @@ declare module '@timon/ui' {
     size: number;
   };
   /**
-   * @deprecated Since client API 16 the `updates.banner` slot is no longer
+   * @deprecated Since client API 17 the `updates.banner` slot is no longer
    * painted: a newer Timon is a notice card of `@timon/updates`. Nothing
    * provides this value to a plugin any more, so it answers `null`. Push your
    * own card with `ctx.notices`, or restyle every card through `notices.card`.
    *
-   * Before API 16: the newer Timon the daemon verified against the signed
+   * Before API 17: the newer Timon the daemon verified against the signed
    * release list, as the `updates.banner` slot received it. `offer.notes` is
    * plain text. `installers` are the ones for this browser's system, the
    * first to download first. `later()` hid this version only. `download` was
@@ -501,7 +501,7 @@ declare module '@timon/ui' {
    * with the command that installs it; `not_writable`: the AppImage's folder
    * cannot be written, the file stays in Timon's data folder; `none`: no
    * verified installer is left on disk, nothing was tried — offer `start()`
-   * again. Since the silent installation (client API 16): `restarting` also
+   * again. Since the silent installation (client API 17): `restarting` also
    * follows a `.pkg`, `.deb` or Windows installer that installs without
    * leaving the app; `cancelled`: the person dismissed the system's password
    * prompt, nothing changed — show "Install" again, no error.
@@ -512,7 +512,7 @@ declare module '@timon/ui' {
     | { status: 'guided'; command: string; opened: boolean }
     | { status: 'failed'; message: string | null };
 
-  /** A notice card as it is painted (client API 16): `NoticeInput` with its defaults and its owner. */
+  /** A notice card as it is painted (client API 17): `NoticeInput` with its defaults and its owner. */
   export type Notice = {
     id: string;
     pluginId: string;
@@ -523,7 +523,7 @@ declare module '@timon/ui' {
     dismissible: boolean;
   };
   /**
-   * What an entry of the `notices` slot pushes its cards with (client API 16).
+   * What an entry of the `notices` slot pushes its cards with (client API 17).
    * The entry is mounted once and paints nothing; it pushes from an effect,
    * which is where a rule that needs React state lives (a plugin with nothing
    * to watch uses `ctx.notices.push` from `apply`). `notices`: this plugin's
@@ -543,7 +543,7 @@ declare module '@timon/ui' {
     remove(id: string): void;
   } | null;
   /**
-   * The card a `notices.card` occupant paints (client API 16): the host paints
+   * The card a `notices.card` occupant paints (client API 17): the host paints
    * the slot once per visible card and keeps the frame (bottom-left, stacked,
    * at most three). Render `title` and `body` as text, never as HTML; offer
    * `dismiss()` only when `notice.dismissible`; call `act(index)` for a click
@@ -556,7 +556,7 @@ declare module '@timon/ui' {
     act(index: number): void;
   } | null;
 
-  /** A gesture of the update window (client API 16): a button, or a link to open in a new tab when `href` is set. */
+  /** A gesture of the update window (client API 17): a button, or a link to open in a new tab when `href` is set. */
   export type UpdateDialogAction = {
     label: string;
     /** What the gesture is: `download`, `cancel`, `retry`, `install`, `install-anyway`, `wait`, `installer`… */
@@ -565,7 +565,7 @@ declare module '@timon/ui' {
     href: string | null;
   };
   /**
-   * The update window an `updates.dialog` occupant paints (client API 16).
+   * The update window an `updates.dialog` occupant paints (client API 17).
    * Opened by the update card and Settings › System › Updates; the host keeps
    * the dialog (named "Timon <version>": do not add a `DialogTitle`), the focus,
    * Escape, and the update flow. `highlights` are plain text, written by hand at
