@@ -233,6 +233,11 @@ test('secrets: floor, pattern, no whitespace; the reason never repeats the value
   assert.ok(reason && !reason.includes('my-leaked-value'));
 });
 
+test('secrets: a declared pattern that backtracks out of control refuses the paste instead of freezing the daemon', () => {
+  const slow = scheme({ ...github, secret: { sources: ['provided'], minLength: 20, pattern: '(.*.*)*!$' } });
+  assert.match(invalidSecret(slow, 'abcdefghijklmnopqrstuvwxyz0123456789') ?? '', /too slow/);
+});
+
 test('handshakes: an echo or a fixed reply, only for the declared field and value', () => {
   const slackLike = scheme({
     ...github,
