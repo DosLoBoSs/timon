@@ -69,7 +69,7 @@ Clicking **Restart and install** or **Install** is your approval of the update: 
 - **Check**: asks now. When the check cannot reach the list, the row says **Check failed** and the button becomes **Retry**;
 - **Update**, when a newer version is out: opens the update window, as the card does.
 
-The **…** menu next to it links the release notes and the installer for a download by hand (from a browser, or for a Timon running without a window), and turns the automatic check on or off. Checking and turning the check on or off need the right to change settings: an account without it sees the state only.
+The **…** menu next to it links the release notes and the installer for a download by hand (from a browser, or for a Timon running without a window), and turns the automatic check on or off. Checking and turning the check on or off need the right to change settings: an account without it sees the state only. **Show closed cards again**, in the same menu and open to every account, brings back the cards you closed at the bottom left (announcements, the GitHub star, a version put off), on all your devices.
 
 From a terminal:
 
@@ -88,7 +88,7 @@ The environment variable `TIMON_UPDATES_CHECK=0` overrides both. Turned off, Tim
 
 ### Announcements
 
-With the same check, Timon reads a signed list of announcements on `timon-ai.com` and shows each one as a card at the bottom left, with **Learn more** when it has a link. A list whose signature does not check out, an expired one or one older than the last list read is ignored. Close a card and it does not come back, on any of your devices. To stop them, switch off **Announcements** in the **…** menu of **Settings › System › Updates**, or set it in `timon.config.json`:
+With the same check, Timon reads a signed list of announcements on `timon-ai.com` and shows each one as a card at the bottom left, with **Learn more** when it has a link. A list whose signature does not check out, an expired one or one older than the last list read is ignored. Close a card and it does not come back, on any of your devices, until you choose **Show closed cards again**. To stop them, switch off **Announcements** in the **…** menu of **Settings › System › Updates**, or set it in `timon.config.json`:
 
 ```json
 { "settings": { "TIMON_NOTICES_CHECK": false } }
