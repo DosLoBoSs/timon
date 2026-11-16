@@ -38,7 +38,7 @@ Timon keeps everything in one data directory, the *Timon home*. In these docs `~
 | Configuration file | `~/.timon/timon.config.json` | `~/.timon/timon.config.json` | `%USERPROFILE%\.timon\timon.config.json` |
 | Agents (`config.json`, `system-prompt.md`, `memory/`) | `~/.timon/agents/<name>/` | `~/.timon/agents/<name>/` | `%USERPROFILE%\.timon\agents\<name>\` |
 | Project settings and memory (not your source code) | `~/.timon/projects/<slug>/` | `~/.timon/projects/<slug>/` | `%USERPROFILE%\.timon\projects\<slug>\` |
-| Default working folder of the agents created during setup | `~/.timon/workspace/` | `~/.timon/workspace/` | `%USERPROFILE%\.timon\workspace\` |
+| Default working folder of the agents created during setup | `~/.timon/workspace/home/` | `~/.timon/workspace/home/` | `%USERPROFILE%\.timon\workspace\home\` |
 | Installed plugins | `~/.timon/plugins/` | `~/.timon/plugins/` | `%USERPROFILE%\.timon\plugins\` |
 | Custom LLM backends | `~/.timon/backends/<id>.json` | `~/.timon/backends/<id>.json` | `%USERPROFILE%\.timon\backends\<id>.json` |
 | Logs (one file per day: `daemon-<date>.log`, `desktop-<date>.log`) | `~/.timon/tmp/` | `~/.timon/tmp/` | `%USERPROFILE%\.timon\tmp\` |

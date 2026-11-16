@@ -368,7 +368,7 @@ export const TimonConfigSchema = z.object({
   edition: EditionSchema.default('expert').describe("Requested edition; the effective edition remains constrained by the licence."),
   // No default: an absent key means agents seeded by onboarding work in
   // `<TIMON_HOME>/workspace`, never in a folder guessed from one machine.
-  workspacesRoot: z.string().optional().describe("Working folder of the agents created during onboarding; when unset, they use the workspace folder inside the Timon home."),
+  workspacesRoot: z.string().optional().describe("Working folder of the agents created during onboarding; when unset, they share the `home` folder inside the workspace folder of the Timon home."),
   daemon: DaemonSchema.prefault({}).describe("Daemon process and listener configuration."),
   host: HostSchema.prefault({}).describe("Host capabilities and binary configuration."),
   app: AppSchema.prefault({}).describe("Web app served as a daemon-managed child process."),

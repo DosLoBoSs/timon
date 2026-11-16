@@ -26,6 +26,8 @@ Inside the fence, a mission:
 - cannot open Unix sockets: Docker, `ssh-agent` (so no `git push` over SSH from a mission), the desktop session bus and the display server are out of its reach, because each of them would run what the mission asks for outside the fence. On Linux the session bus is also the way to the system keychain, so a CLI that keeps its sign-in only there finds none in a mission: Antigravity is signed in with a command that saves its sign-in in its own folder instead ([Antigravity](antigravity.md#set-it-up)). An exception opens them for one agent or project;
 - keeps the network: the internet, your local network and Timon's own interface, where it acts with the permissions of the account that started it.
 
+When `workspacesRoot` is not set, the agents created during setup without a project folder work in `~/.timon/workspace/home`, and the demo project lives in `~/.timon/workspace/timon-demo`. A mission never receives the `~/.timon/workspace` folder itself, which holds the other agents' folders, with one exception: an agent whose working folder is exactly that folder, as setup made it up to version 0.1.8, keeps it, for reading and writing. Its missions then also reach the other folders in it, and the daemon log says so once for each such agent. Give that agent a project folder, or a folder inside `~/.timon/workspace`, to fence it more tightly.
+
 Codex and Claude Code have sandboxes of their own, which cannot run inside another one. In a fenced mission, Timon turns them off and the fence takes over: for Codex, it applies the permission level you chose, so a read-only mission cannot write its working folder either. Full access does not open your home folder for writing.
 
 ## What it does not cover
