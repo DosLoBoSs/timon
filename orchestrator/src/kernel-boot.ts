@@ -90,6 +90,7 @@ import { closePluginSecretCards } from './secrets/plugins.js';
 import { attachBundledReconciler, createBundledReconciler } from './kernel/bundled-reload.js';
 import { PluginLoader } from './plugins/loader.js';
 import { closePluginSpawnCards, narrowLivePluginGrants } from './plugins/policy.js';
+import { narrowLiveDeveloperMode } from './plugins/install.js';
 import { settlePluginPackage } from './plugins/package-binding.js';
 import { closePluginLaunchCard } from './backends/launch-card.js';
 import { unsignedPluginsAllowed } from './plugins/pubkey.js';
@@ -243,8 +244,9 @@ export async function boot(opts: { listen?: boolean; catalog?: readonly ModuleDe
       // A provider's update waits until no mission is running on its backends.
       backendsInFlight: () => liveMissionBackends(),
       onFailure: (id, message) => notifyPluginFailure(id, message),
-      // `timon plugin remove` edits the file from another process (TODO #663).
-      beforePass: () => narrowLivePluginGrants(),
+      // `timon plugin remove` edits the file from another process (TODO #663),
+      // and so does an operator who closes developer mode by hand.
+      beforePass: () => { narrowLivePluginGrants(); narrowLiveDeveloperMode(); },
       // A package gone without `timon plugin remove` leaves its grants behind (TODO #671).
       settlePackage: (id, pkg) => { settlePluginPackage(id, pkg); },
       // The remover already closed them in the database; only the daemon can
