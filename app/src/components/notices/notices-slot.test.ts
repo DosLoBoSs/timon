@@ -318,6 +318,8 @@ test('the GitHub star waits for five different days of use, then offers the repo
     await m.React.act(async () => { m.slots.register({ slot: 'notices', pluginId: '@timon/settings', key: 'github-star' }, GitHubStarNotice); });
     await m.until(() => cards().includes('@timon/settings:github-star'), 'the star card');
     assert.match(document.querySelector('[data-notice]')?.textContent ?? '', /A star on GitHub\?/);
+    assert.equal(document.querySelector('[data-notice-card]')?.getAttribute('data-notice-visual'), 'github');
+    assert.equal(document.querySelector('[data-notice-action="0"]')?.textContent, 'Star on GitHub');
     await m.click(document.querySelector('[data-notice-action="0"]'));
     assert.deepEqual(m.opened, [GITHUB_REPOSITORY_URL]);
     await m.until(() => cards().length === 0, 'closed after starring');
@@ -399,8 +401,8 @@ test('the settings module registers the card and the star, and the root layout m
 test('the signed feed: its notices become cards, as text, a link opens and closes, a withdrawn one leaves', async () => {
   const { FeedNotices, UPDATES_NOTICES_URL } = await import('../updates/feed-notices');
   let feed: unknown[] = [
-    { id: 'live-1', tone: 'info', title: '<img src=x onerror="window.__pwned=1">', body: 'Thursday\n<b>6 pm</b>', link: 'https://timon-ai.com/live', endsAt: null },
-    { id: 'plain', tone: 'warning', title: 'Maintenance', body: 'Sunday.', link: 'javascript:alert(1)', endsAt: null },
+    { id: 'live-1', tone: 'info', icon: 'youtube', title: '<img src=x onerror="window.__pwned=1">', body: 'Thursday\n<b>6 pm</b>', link: 'https://timon-ai.com/live', endsAt: null },
+    { id: 'plain', tone: 'warning', icon: 'https://evil.example/x.svg', title: 'Maintenance', body: 'Sunday.', link: 'javascript:alert(1)', endsAt: null },
     { id: 'over', tone: 'info', title: 'Gone', body: 'Already over.', link: null, endsAt: '2000-01-01T00:00:00.000Z' },
   ];
   const m = await mount({ routes: { [UPDATES_NOTICES_URL]: () => Response.json({ notices: feed }) } });
@@ -415,6 +417,8 @@ test('the signed feed: its notices become cards, as text, a link opens and close
     assert.equal((globalThis as { __pwned?: number }).__pwned, undefined);
     const plain = document.querySelector('[data-notice="@timon/updates:feed.plain"]')!;
     assert.ok(!plain.querySelector('[data-notice-action]'), 'a link that is not https gives no action');
+    assert.equal(live.querySelector('[data-notice-card]')?.getAttribute('data-notice-visual'), 'youtube', 'the feed names its logo');
+    assert.equal(plain.querySelector('[data-notice-card]')?.getAttribute('data-notice-visual'), 'warning', 'an unknown logo falls back to the tone');
     await m.click(live.querySelector('[data-notice-action="0"]'));
     assert.deepEqual(m.opened, ['https://timon-ai.com/live']);
     await m.until(() => cards().length === 1, 'closed after the link');

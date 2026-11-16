@@ -14,7 +14,7 @@
 
 import { useEffect } from 'react';
 import { t } from '@/lib/i18n';
-import type { NoticeTone } from '@/lib/notices';
+import { NOTICE_ICONS, type NoticeIcon, type NoticeTone } from '@/lib/notices';
 import { useNotices } from '@/components/notices/notice-context';
 
 export const UPDATES_NOTICES_URL = '/api/ui/updates/notices';
@@ -22,7 +22,9 @@ export const UPDATES_NOTICES_URL = '/api/ui/updates/notices';
 export const FEED_NOTICE_PREFIX = 'feed.';
 export const FEED_REFRESH_MS = 30 * 60_000;
 
-type FeedNotice = { id: string; tone: NoticeTone; title: string; body: string; link: string | null; endsAt: string | null };
+type FeedNotice = {
+  id: string; tone: NoticeTone; icon: NoticeIcon | null; title: string; body: string; link: string | null; endsAt: string | null;
+};
 
 const TONES: readonly NoticeTone[] = ['info', 'warning', 'success'];
 
@@ -33,7 +35,9 @@ function asFeedNotice(raw: unknown): FeedNotice | null {
   if (!TONES.includes(n.tone as NoticeTone)) return null;
   const link = typeof n.link === 'string' && n.link.startsWith('https://') ? n.link : null;
   const endsAt = typeof n.endsAt === 'string' ? n.endsAt : null;
-  return { id: n.id, tone: n.tone as NoticeTone, title: n.title, body: n.body, link, endsAt };
+  // A daemon newer than this app may name a logo it does not know: the tone's icon then.
+  const icon = NOTICE_ICONS.includes(n.icon as NoticeIcon) ? n.icon as NoticeIcon : null;
+  return { id: n.id, tone: n.tone as NoticeTone, icon, title: n.title, body: n.body, link, endsAt };
 }
 
 export function FeedNotices(): null {
@@ -63,6 +67,7 @@ export function FeedNotices(): null {
           push({
             id,
             tone: notice.tone,
+            ...(notice.icon ? { icon: notice.icon } : {}),
             title: notice.title,
             body: notice.body,
             actions: notice.link ? [{ label: t('notices.feed.open'), href: notice.link, dismiss: true }] : [],

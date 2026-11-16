@@ -64,6 +64,7 @@ export function GitHubStarNotice(): null {
     push({
       id: GITHUB_STAR_NOTICE_ID,
       tone: 'info',
+      icon: 'github',
       title: t('notices.githubStar.title'),
       actions: [{ label: t('notices.githubStar.action'), href: GITHUB_REPOSITORY_URL, dismiss: true }],
       dismissible: true,

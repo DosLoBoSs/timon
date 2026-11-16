@@ -166,7 +166,10 @@ async function mount(status: UpdateStatus | null, { dismissed = [], shell = null
 const card = (key = CARD) => document.querySelector(`[data-notice="${key}"]`);
 const text = (key = CARD) => card(key)?.textContent ?? '';
 const action = (index: number, key = CARD) => card(key)?.querySelector(`[data-notice-action="${index}"]`) ?? null;
-const labels = (key = CARD) => Array.from(card(key)?.querySelectorAll('[data-notice-action]') ?? [], (el) => el.textContent);
+/** In the notice's order, main action first; the card paints it last, at the bottom right. */
+const labels = (key = CARD) => Array.from(card(key)?.querySelectorAll('[data-notice-action]') ?? [])
+  .sort((a, b) => Number(a.getAttribute('data-notice-action')) - Number(b.getAttribute('data-notice-action')))
+  .map((el) => el.textContent);
 const windowEl = () => document.querySelector('[data-update-dialog]');
 
 test('the deprecated updates.banner slot still loads a plugin, says so once, and paints nothing', async () => {
@@ -209,6 +212,7 @@ test('in a browser the card says the version, its one action opens the window, w
   try {
     await m.until(() => card() !== null, 'the update card');
     assert.equal(card()?.querySelector('[data-notice-card]')?.getAttribute('data-notice-card'), 'info');
+    assert.equal(card()?.querySelector('[data-notice-card]')?.getAttribute('data-notice-visual'), 'timon', 'the Timon mark');
     assert.match(text(), /^Timon 0\.1\.8-rc\.1 is available/);
     assert.deepEqual(labels(), ['Update']);
     await m.click(action(0));
@@ -282,6 +286,7 @@ test('a build about to stop makes the card a warning that says when; alone, it i
     await alone.until(() => card(`@timon/updates:build-ends-${day}`) !== null, 'the end of the build alone');
     assert.match(text(`@timon/updates:build-ends-${day}`), /This build stops running on/);
     assert.deepEqual(labels(`@timon/updates:build-ends-${day}`), []);
+    assert.equal(card(`@timon/updates:build-ends-${day}`)?.querySelector('[data-notice-card]')?.getAttribute('data-notice-visual'), 'warning', 'the tone\'s icon');
   } finally {
     await alone.unmount();
   }
