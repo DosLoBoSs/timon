@@ -14,11 +14,22 @@
  * top-level navigation the desktop hands to the system browser): SECURITY.md
  * §6.4.2 says what holds and what does not.
  *
- * `'unsafe-inline'` scripts stay allowed: Next's App Router writes its flight
- * data inline, and the policy is about egress — code already running in the
- * realm is not what a script source list confines. `'wasm-unsafe-eval'` lets a
- * page engine compile WebAssembly (whisper.cpp, onnxruntime-web) without
- * opening `eval`; dev alone adds `'unsafe-eval'` for Next's hot reload.
+ * Inline scripts run only with the response's nonce (TODO #1002): a fresh one
+ * per request (`createScriptNonce`), written into the request's own
+ * `content-security-policy` header too, which is where Next's App Router reads
+ * the nonce it puts on its flight data and bootstrap scripts; the root layout
+ * reads it back (`scriptNonceOf`) for the scripts it writes itself. Markup
+ * injected into a page can no longer start a script, and a plugin's browser
+ * half loads as a module from the app's origin (`'self'`), never inline.
+ * `'wasm-unsafe-eval'` lets a page engine compile WebAssembly (whisper.cpp,
+ * onnxruntime-web) without opening `eval`; dev alone adds `'unsafe-eval'` for
+ * Next's hot reload.
+ *
+ * One route keeps `'unsafe-inline'`: a conversation document
+ * (`inlineScriptsAllowed`). Its HTML is an agent's, inline scripts included,
+ * and it never runs in the app's realm: the daemon's `sandbox` directive,
+ * enforced by the proxy (`ui-document-headers.ts`), makes it an opaque origin
+ * with no access to the session.
  */
 import type { ServerResponse } from 'node:http';
 import { readDictationDecl } from './dictation/declaration';
@@ -66,13 +77,51 @@ export interface PolicyOptions {
   readonly dev: boolean;
   /** The request's `Host`: some WebKit builds do not match `'self'` against `ws:`/`wss:`. */
   readonly selfHost?: string | null;
+  /** This response's nonce (`createScriptNonce`): the inline scripts it may run. */
+  readonly nonce?: string | null;
+  /** Inline scripts without a nonce: a conversation document only (`inlineScriptsAllowed`). */
+  readonly inlineScripts?: boolean;
 }
 
-export function contentSecurityPolicy({ egressHosts, dev, selfHost }: PolicyOptions): string {
+/** The grammar Next accepts for a nonce (`getScriptNonceFromHeader`): base64, URL-safe or not. */
+const NONCE_RE = /^[A-Za-z0-9+/_-]{16,}={0,2}$/;
+
+/** 128 random bits, base64: what CSP asks of a nonce. Web Crypto, so the edge runtime has it too. */
+export function createScriptNonce(): string {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+/** The nonce `script-src` names in `policy`, as Next reads it from the request. */
+export function scriptNonceOf(policy: string | null | undefined): string | undefined {
+  if (!policy) return undefined;
+  const script = policy.split(';').map((d) => d.trim()).find((d) => d.startsWith('script-src'));
+  for (const source of script?.split(/\s+/).slice(1) ?? []) {
+    const match = /^'nonce-(.+)'$/.exec(source);
+    if (match && NONCE_RE.test(match[1]!)) return match[1];
+  }
+  return undefined;
+}
+
+/** A conversation document's HTML, relayed from the daemon (`api/ui/ui-documents/[id]/document`).
+ *  The id is the daemon's UUID: nothing else on the path matches. */
+const INLINE_SCRIPT_ROUTE_RE = /^\/api\/ui\/ui-documents\/[A-Za-z0-9-]{1,64}\/document(?:\?|$)/;
+
+export function inlineScriptsAllowed(url: string | undefined): boolean {
+  return typeof url === 'string' && INLINE_SCRIPT_ROUTE_RE.test(url);
+}
+
+export function contentSecurityPolicy({ egressHosts, dev, selfHost, nonce, inlineScripts }: PolicyOptions): string {
   const connect = ["'self'", 'data:', 'blob:'];
   if (selfHost && SELF_HOST_RE.test(selfHost)) connect.push(`ws://${selfHost}`, `wss://${selfHost}`);
   for (const host of egressHosts) connect.push(`https://${host}`, `wss://${host}`);
-  const script = ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'", 'blob:'];
+  const script = ["'self'"];
+  // A nonce next to `'unsafe-inline'` would make the browser ignore the
+  // latter: the document route gets the keyword alone.
+  if (inlineScripts) script.push("'unsafe-inline'");
+  else if (nonce && NONCE_RE.test(nonce)) script.push(`'nonce-${nonce}'`);
+  script.push("'wasm-unsafe-eval'", 'blob:');
   if (dev) script.push("'unsafe-eval'");
   return [
     "default-src 'self'",
