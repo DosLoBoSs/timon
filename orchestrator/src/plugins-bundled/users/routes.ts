@@ -46,6 +46,7 @@ import {
 import { assertLicenseCompatible } from '../../license/compliance.js';
 import { LicenseCapabilityError } from '../../license/capabilities.js';
 import { resolveChromeChoice } from '../../users/surfaces.js';
+import { installationTheme } from '../../users/public-theme.js';
 import { MODEL_FAVORITES_MAX, ModelFavoritesBodySchema } from '../../users/model-favorites.js';
 import { onboardingStep } from '../../onboarding-events.js';
 import { PLAN_PRESET_NAME_MAX, PLAN_PRESETS_MAX, PlanPresetsBodySchema } from '../../users/plan-presets.js';
@@ -266,6 +267,15 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
    */
   app.get('/api/auth/account-provider', (_req, res) => {
     res.json({ provider: accountProviderHolder() });
+  });
+
+  /**
+   * The installation's palette, for the pages shown before a session exists
+   * (sign-in, invitation). Public, and only ever the built-in Timon theme or
+   * the product's: no account, no third-party id (`users/public-theme.ts`).
+   */
+  app.get('/api/auth/theme', (req, res) => {
+    res.json({ theme: installationTheme(galleryPlugins(loaderFromApp(req.app))) });
   });
 
   /**
