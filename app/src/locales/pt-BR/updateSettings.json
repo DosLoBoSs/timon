@@ -26,8 +26,9 @@
       "download": "Baixar o instalador",
       "automaticOff": "Desativar a verificação automática",
       "automaticOn": "Ativar a verificação automática",
+      "notices": "Anúncios",
       "saveFailed": "Não foi possível salvar a configuração.",
-      "lockedEnv": "A variável de ambiente TIMON_UPDATES_CHECK decide isso.",
+      "lockedEnv": "A variável de ambiente {key} decide isso.",
       "lockedConfig": "O timon.config.json decide isso."
     }
   }

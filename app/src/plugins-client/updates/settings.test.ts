@@ -25,7 +25,8 @@ const OFFER: UpdateStatus = {
 
 type Answer = { status: number; body: unknown };
 
-async function mount({ status, canWrite, check }: { status: UpdateStatus; canWrite: boolean; check?: () => Answer }) {
+async function mount({ status, canWrite, check, notices = true }: { status: UpdateStatus; canWrite: boolean; check?: () => Answer; notices?: boolean }) {
+  let noticesValue = notices;
   const { JSDOM } = await import('jsdom');
   const options = { url: 'http://localhost/', pretendToBeVisual: true, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Chrome/130' };
   const dom = new JSDOM('<html><body><div id="root"></div></body></html>', options as ConstructorParameters<typeof JSDOM>[1]);
@@ -35,7 +36,9 @@ async function mount({ status, canWrite, check }: { status: UpdateStatus; canWri
     Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
   };
   for (const key of ['window', 'self', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'Event', 'MouseEvent',
-    'MutationObserver', 'DocumentFragment', 'sessionStorage', 'localStorage'] as const) {
+    'MutationObserver', 'DocumentFragment', 'sessionStorage', 'localStorage',
+    // The "…" menu (Radix: portal, focus scope, typeahead) reads these too.
+    'NodeFilter', 'CustomEvent', 'KeyboardEvent', 'FocusEvent', 'requestAnimationFrame', 'cancelAnimationFrame'] as const) {
     const value = (dom.window as unknown as Record<string, unknown>)[key];
     if (value !== undefined) install(key, value);
   }
@@ -49,6 +52,15 @@ async function mount({ status, canWrite, check }: { status: UpdateStatus; canWri
     if (url === '/api/ui/updates/check') {
       const answer = check?.() ?? { status: 200, body: status };
       return Response.json(answer.body, { status: answer.status });
+    }
+    if (url === '/api/ui/settings') {
+      if (init?.method === 'PUT') {
+        const body = JSON.parse(String(init.body)) as { key: string; value: boolean };
+        requests[requests.length - 1] += ` ${body.key}=${String(body.value)}`;
+        if (body.key === 'TIMON_NOTICES_CHECK') noticesValue = body.value;
+        return Response.json({ ok: true, setting: { key: body.key, value: body.value, source: 'db' } });
+      }
+      return Response.json({ settings: [{ key: 'TIMON_UPDATES_CHECK', value: status.enabled }, { key: 'TIMON_NOTICES_CHECK', value: noticesValue }] });
     }
     if (url === '/api/ui/auth/me') {
       return Response.json({ user: { id: 'u1', email: 'a@example.com', name: 'A', status: 'active', is_superadmin: false, created_at: 0, last_login_at: null, avatar_url: null }, needsSetup: false, prefs: {}, can: { 'settings:write': canWrite } });
@@ -78,6 +90,8 @@ async function mount({ status, canWrite, check }: { status: UpdateStatus; canWri
   };
   const unmount = async () => {
     await React.act(async () => { root.unmount(); });
+    // An open menu's focus scope dispatches its unmount event on a zero timeout: let it land in this DOM.
+    await React.act(async () => { await new Promise((r) => setTimeout(r, 0)); });
     store.resetUpdateStoreForTests();
     opener.resetUpdateDialogForTests();
     setLocale(previousLocale);
@@ -87,11 +101,19 @@ async function mount({ status, canWrite, check }: { status: UpdateStatus; canWri
       else delete (globalThis as Record<string, unknown>)[k];
     }
   };
-  return { React, opener, until, click, unmount, requests };
+  const openMenu = async () => {
+    const trigger = document.querySelector('[data-row-menu]');
+    assert.ok(trigger, 'the "…" button');
+    await React.act(async () => {
+      trigger.dispatchEvent(new window.MouseEvent('pointerdown', { bubbles: true, button: 0 }));
+    });
+  };
+  return { React, opener, until, click, openMenu, unmount, requests };
 }
 
 const row = () => document.querySelector('[data-update-settings]');
 const action = () => document.querySelector('[data-update-settings-action]');
+const noticesSwitch = () => document.querySelector('[data-update-settings-notices]');
 
 test('up to date: the version, when it was checked, and "Check" asking the daemon', async () => {
   const m = await mount({ status: UP_TO_DATE, canWrite: true });
@@ -145,6 +167,56 @@ test('a newer version: "Update" opens the shared update flow, else links the ins
     await m.until(() => action()?.tagName === 'BUTTON', 'the button');
     await m.click(action());
     assert.equal(opened, 1);
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('"Announcements" in the menu: a switch that writes TIMON_NOTICES_CHECK', async () => {
+  const m = await mount({ status: UP_TO_DATE, canWrite: true, notices: false });
+  try {
+    await m.until(() => m.requests.includes('GET /api/ui/settings'), 'the settings read');
+    await m.until(() => row()?.getAttribute('data-update-settings') === 'upToDate', 'the status');
+    await m.openMenu();
+    await m.until(() => noticesSwitch()?.getAttribute('data-update-settings-notices') === 'off', 'the switch, off');
+    const item = noticesSwitch();
+    assert.equal(item?.getAttribute('role'), 'menuitemcheckbox');
+    assert.equal(item?.getAttribute('aria-checked'), 'false');
+    assert.equal(item?.hasAttribute('data-disabled'), false);
+    assert.match(item?.textContent ?? '', /Announcements/);
+    await m.click(item);
+    await m.until(() => m.requests.includes('PUT /api/ui/settings TIMON_NOTICES_CHECK=true'), 'the write');
+    await m.until(() => noticesSwitch()?.getAttribute('aria-checked') === 'true', 'the switch, on');
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('the update check off: "Announcements" shows off and cannot be moved', async () => {
+  const m = await mount({ status: { ...UP_TO_DATE, enabled: false, state: 'off' }, canWrite: true, notices: true });
+  try {
+    await m.until(() => m.requests.includes('GET /api/ui/settings'), 'the settings read');
+    await m.until(() => row()?.getAttribute('data-update-settings') === 'off', 'the status');
+    await m.openMenu();
+    await m.until(() => noticesSwitch() !== null, 'the switch');
+    const item = noticesSwitch();
+    assert.equal(item?.getAttribute('aria-checked'), 'false');
+    assert.equal(item?.hasAttribute('data-disabled'), true);
+    await m.click(item);
+    assert.equal(m.requests.some((r) => r.startsWith('PUT /api/ui/settings')), false);
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('without settings:write: no "Announcements" switch, no settings read', async () => {
+  const m = await mount({ status: UP_TO_DATE, canWrite: false });
+  try {
+    await m.until(() => row()?.getAttribute('data-update-settings') === 'upToDate', 'the status');
+    await m.openMenu();
+    await m.until(() => document.querySelector('[data-update-settings-notes]') !== null, 'the menu');
+    assert.equal(noticesSwitch(), null);
+    assert.equal(m.requests.includes('GET /api/ui/settings'), false);
   } finally {
     await m.unmount();
   }

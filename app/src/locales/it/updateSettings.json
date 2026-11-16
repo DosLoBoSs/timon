@@ -26,8 +26,9 @@
       "download": "Scarica il programma di installazione",
       "automaticOff": "Disattiva il controllo automatico",
       "automaticOn": "Attiva il controllo automatico",
+      "notices": "Annunci",
       "saveFailed": "Impossibile salvare l'impostazione.",
-      "lockedEnv": "Lo decide la variabile d'ambiente TIMON_UPDATES_CHECK.",
+      "lockedEnv": "Lo decide la variabile d'ambiente {key}.",
       "lockedConfig": "Lo decide timon.config.json."
     }
   }

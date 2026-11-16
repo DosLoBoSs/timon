@@ -26,8 +26,9 @@
       "download": "Pobierz instalator",
       "automaticOff": "Wyłącz automatyczne sprawdzanie",
       "automaticOn": "Włącz automatyczne sprawdzanie",
+      "notices": "Ogłoszenia",
       "saveFailed": "Nie udało się zapisać ustawienia.",
-      "lockedEnv": "Decyduje o tym zmienna środowiskowa TIMON_UPDATES_CHECK.",
+      "lockedEnv": "Decyduje o tym zmienna środowiskowa {key}.",
       "lockedConfig": "Decyduje o tym timon.config.json."
     }
   }

@@ -163,8 +163,9 @@ const KEY_PLACEMENT: Readonly<Record<string, Placement>> = {
   TIMON_BACKUP_MAX_AGE_DAYS: { category: 'system', tab: 'backup' },
   TIMON_AGENT_TRASH_ENABLED: { category: 'system', tab: 'backup' },
   TIMON_AGENT_TRASH_RETENTION_DAYS: { category: 'system', tab: 'backup' },
-  // Switched from the "…" menu of the Updates pane, not as a row of its own under Plugins.
+  // Switched from the "…" menu of the Updates pane, not as rows of their own under Plugins.
   TIMON_UPDATES_CHECK: { category: 'system', tab: 'updates' },
+  TIMON_NOTICES_CHECK: { category: 'system', tab: 'updates' },
 };
 
 /** Bundled plugins whose settings belong to a functional category. */

@@ -26,8 +26,9 @@
       "download": "Download the installer",
       "automaticOff": "Turn off automatic check",
       "automaticOn": "Turn on automatic check",
+      "notices": "Announcements",
       "saveFailed": "The setting could not be saved.",
-      "lockedEnv": "The TIMON_UPDATES_CHECK environment variable decides this.",
+      "lockedEnv": "The {key} environment variable decides this.",
       "lockedConfig": "timon.config.json decides this."
     }
   }

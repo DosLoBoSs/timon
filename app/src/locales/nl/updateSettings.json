@@ -26,8 +26,9 @@
       "download": "Installatieprogramma downloaden",
       "automaticOff": "Automatische controle uitzetten",
       "automaticOn": "Automatische controle aanzetten",
+      "notices": "Aankondigingen",
       "saveFailed": "De instelling kon niet worden opgeslagen.",
-      "lockedEnv": "De omgevingsvariabele TIMON_UPDATES_CHECK bepaalt dit.",
+      "lockedEnv": "De omgevingsvariabele {key} bepaalt dit.",
       "lockedConfig": "timon.config.json bepaalt dit."
     }
   }

@@ -26,8 +26,9 @@
       "download": "설치 프로그램 다운로드",
       "automaticOff": "자동 확인 끄기",
       "automaticOn": "자동 확인 켜기",
+      "notices": "공지",
       "saveFailed": "설정을 저장하지 못했습니다.",
-      "lockedEnv": "환경 변수 TIMON_UPDATES_CHECK가 결정합니다.",
+      "lockedEnv": "환경 변수 {key}가 결정합니다.",
       "lockedConfig": "timon.config.json이 결정합니다."
     }
   }

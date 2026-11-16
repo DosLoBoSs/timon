@@ -5,7 +5,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CHANGELOG_URL, INSTALL_PAGE_URL, manualInstallerUrl, releaseNotesUrl, settingLockedBy, updateRowView,
+  CHANGELOG_URL, INSTALL_PAGE_URL, manualInstallerUrl, noticesSettingValue, noticesSwitchView, releaseNotesUrl,
+  settingLockedBy, updateRowView,
 } from './update-settings';
 import type { UpdateStatus } from './updates';
 
@@ -88,4 +89,19 @@ test('a switch the environment or the config file decides is reported as such', 
   assert.equal(settingLockedBy({ ok: true, setting: { source: 'config' } }), 'config');
   assert.equal(settingLockedBy({ ok: true, setting: { source: 'db' } }), null);
   assert.equal(settingLockedBy(null), null);
+});
+
+test('the announcements switch follows its setting, and the update check off turns it off and locks it', () => {
+  assert.deepEqual(noticesSwitchView({ updatesEnabled: true, notices: true }), { on: true, disabled: false });
+  assert.deepEqual(noticesSwitchView({ updatesEnabled: true, notices: false }), { on: false, disabled: false });
+  assert.deepEqual(noticesSwitchView({ updatesEnabled: true, notices: null }), { on: true, disabled: false });
+  assert.deepEqual(noticesSwitchView({ updatesEnabled: false, notices: true }), { on: false, disabled: true });
+});
+
+test('the announcements value is read from the settings list', () => {
+  const body = { settings: [{ key: 'TIMON_UPDATES_CHECK', value: true }, { key: 'TIMON_NOTICES_CHECK', value: false }] };
+  assert.equal(noticesSettingValue(body), false);
+  assert.equal(noticesSettingValue({ settings: [{ key: 'TIMON_NOTICES_CHECK', value: 'yes' }] }), null);
+  assert.equal(noticesSettingValue({ settings: [] }), null);
+  assert.equal(noticesSettingValue(null), null);
 });

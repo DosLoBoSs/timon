@@ -4,7 +4,9 @@
  * Settings › System › Updates, the pane of `@timon/updates`: one row, the
  * version and its state at the left, one action at the right ("Check",
  * "Retry" or "Update"), the rest in its "…" menu — the release notes, the
- * installer to download by hand, and the automatic check switched on or off.
+ * installer to download by hand, the automatic check switched on or off, and
+ * the "Announcements" switch (`TIMON_NOTICES_CHECK`), off and locked while the
+ * check is off since that stops the feed too.
  *
  * "Update" goes through `openUpdateDialog()`, the same door as the update
  * card; while nothing provides it, the row links the installer instead.
@@ -22,11 +24,13 @@ import { formatRelativeTime } from '@/lib/intl';
 import { t } from '@/lib/i18n';
 import { openUpdateDialog, useUpdateDialogProvided } from '@/lib/update-open';
 import {
-  manualInstallerUrl, releaseNotesUrl, settingLockedBy, updateRowView, type UpdateRowStatus,
+  manualInstallerUrl, NOTICES_SETTING, noticesSettingValue, noticesSwitchView, releaseNotesUrl, settingLockedBy,
+  updateRowView, type UpdateRowStatus,
 } from '@/lib/update-settings';
 import { checkForUpdatesNow, loadUpdateStatus, useUpdateStore } from '@/lib/updates';
 
 const UPDATES_SETTING = 'TIMON_UPDATES_CHECK';
+const SETTINGS_URL = '/api/ui/settings';
 /** "checked 2 h ago" moves on while the pane stays open. */
 const CLOCK_MS = 60_000;
 
@@ -52,12 +56,26 @@ function statusText(status: UpdateRowStatus, now: number): string {
   }
 }
 
+/** The look of `Switch`, drawn inside a menu item: a real switch there would nest a button in a button. */
+function SwitchGlyph({ on }: { on: boolean }): ReactElement {
+  return (
+    <span
+      aria-hidden
+      data-state={on ? 'checked' : 'unchecked'}
+      className="ml-auto inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent shadow-sm transition-colors data-[state=checked]:bg-primary data-[state=unchecked]:bg-foreground/[0.3] dark:data-[state=unchecked]:bg-foreground/[0.22]"
+    >
+      <span className={`block size-4 rounded-full bg-surface-3 shadow-lg transition-transform ${on ? 'translate-x-4' : 'translate-x-0'}`} />
+    </span>
+  );
+}
+
 export function UpdatesSettings(): ReactElement {
   const store = useUpdateStore();
   const me = useMe();
   const provided = useUpdateDialogProvided();
   const [checkFailed, setCheckFailed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [notices, setNotices] = useState<boolean | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -72,6 +90,20 @@ export function UpdatesSettings(): ReactElement {
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
   const installerUrl = manualInstallerUrl(status, userAgent);
 
+  const loadNotices = useCallback(async () => {
+    try {
+      const res = await fetch(SETTINGS_URL, { cache: 'no-store' });
+      setNotices(res.ok ? noticesSettingValue(await res.json().catch(() => null)) : null);
+    } catch {
+      setNotices(null);
+    }
+  }, []);
+
+  // Only an account that may switch it reads the settings: the switch is all this value feeds.
+  useEffect(() => {
+    if (canWrite) void loadNotices();
+  }, [canWrite, loadNotices]);
+
   const check = useCallback(async () => {
     setCheckFailed(false);
     const answered = await checkForUpdatesNow();
@@ -79,24 +111,25 @@ export function UpdatesSettings(): ReactElement {
     if (!answered) setCheckFailed(true);
   }, []);
 
-  const setAutomatic = useCallback(async (enabled: boolean) => {
+  const save = useCallback(async (key: string, enabled: boolean) => {
     setSaving(true);
     try {
-      const res = await fetch('/api/ui/settings', {
+      const res = await fetch(SETTINGS_URL, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ key: UPDATES_SETTING, value: enabled }),
+        body: JSON.stringify({ key, value: enabled }),
       });
       if (!res.ok) { toast.error(t('updates.settings.saveFailed')); return; }
       const locked = settingLockedBy(await res.json().catch(() => null));
-      if (locked) toast.error(t(locked === 'env' ? 'updates.settings.lockedEnv' : 'updates.settings.lockedConfig'));
-      await loadUpdateStatus();
+      if (locked === 'env') toast.error(t('updates.settings.lockedEnv', { key }));
+      else if (locked === 'config') toast.error(t('updates.settings.lockedConfig'));
+      await (key === NOTICES_SETTING ? loadNotices() : loadUpdateStatus());
     } catch {
       toast.error(t('updates.settings.saveFailed'));
     } finally {
       setSaving(false);
     }
-  }, []);
+  }, [loadNotices]);
 
   const title = view.version
     ? t(view.available ? 'updates.settings.titleAvailable' : 'updates.settings.title', { version: view.version })
@@ -136,6 +169,7 @@ export function UpdatesSettings(): ReactElement {
   }
 
   const enabled = status?.enabled ?? true;
+  const announcements = noticesSwitchView({ updatesEnabled: enabled, notices });
   const menu = (
     <>
       <DropdownMenuItem asChild>
@@ -149,9 +183,22 @@ export function UpdatesSettings(): ReactElement {
         </a>
       </DropdownMenuItem>
       {canWrite && status && status.state !== 'dev' ? (
-        <DropdownMenuItem disabled={saving} onSelect={() => { void setAutomatic(!enabled); }} data-update-settings-automatic={enabled ? 'on' : 'off'}>
-          {t(enabled ? 'updates.settings.automaticOff' : 'updates.settings.automaticOn')}
-        </DropdownMenuItem>
+        <>
+          <DropdownMenuItem disabled={saving} onSelect={() => { void save(UPDATES_SETTING, !enabled); }} data-update-settings-automatic={enabled ? 'on' : 'off'}>
+            {t(enabled ? 'updates.settings.automaticOff' : 'updates.settings.automaticOn')}
+          </DropdownMenuItem>
+          {/* Kept open on select: the switch is seen moving. */}
+          <DropdownMenuItem
+            role="menuitemcheckbox"
+            aria-checked={announcements.on}
+            disabled={saving || announcements.disabled}
+            onSelect={(event) => { event.preventDefault(); void save(NOTICES_SETTING, !announcements.on); }}
+            data-update-settings-notices={announcements.on ? 'on' : 'off'}
+          >
+            {t('updates.settings.notices')}
+            <SwitchGlyph on={announcements.on} />
+          </DropdownMenuItem>
+        </>
       ) : null}
     </>
   );
