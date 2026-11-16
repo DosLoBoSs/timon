@@ -4583,6 +4583,7 @@
       "missions": "{count, plural, other {有 # 个任务会话正在运行}}。{count, plural, other {现在安装会停止这些会话}}。",
       "wait": "等待",
       "installAnyway": "仍然安装",
+      "installing": "正在安装…",
       "restarting": "Timon 正在重启并切换到新版本…",
       "closing": "安装程序已打开。Timon 将退出，以便安装新版本。",
       "pkgOpened": "请按照安装程序的提示操作，然后退出并重新打开 Timon。",

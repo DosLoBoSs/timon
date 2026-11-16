@@ -5,6 +5,7 @@ import { offerFromStatus, sha256Of, type DownloadState, type UpdateDownloader } 
 import {
   DaemonAnswerError, debInstallCommand, missionsAtStake, replaceAppImage, type AppImageReplacement, type DaemonGet, type MissionCount,
 } from './update-install.js';
+import type { SilentInput, SilentOutcome } from './update-installer.js';
 
 /**
  * "Download" on the new-version banner, in the desktop app (docs/AUTO-UPDATE.md
@@ -46,8 +47,13 @@ export type InstallOutcome =
   | { status: 'missions'; count: number }
   /** No verified installer on disk. */
   | { status: 'none' }
-  /** The AppImage was replaced: the shell quits and the new one starts. */
+  /**
+   * The new version is installed or being installed silently: the shell quits
+   * and the new one starts (AppImage, `.pkg`, `.deb`, or the NSIS installer's own restart).
+   */
   | { status: 'restarting' }
+  /** The person dismissed the system's password prompt: nothing changed, the verified file is still ready. */
+  | { status: 'cancelled' }
   /** The AppImage's folder cannot be written: the verified file is in Timon's data folder. */
   | { status: 'not_writable' }
   /** A `.deb`: the package was handed to the system (`opened`), and this command installs it. */
@@ -110,6 +116,12 @@ export type UpdateControllerDeps = {
   relaunchAppImage?: (appImage: string) => Promise<() => void>;
   /** Quits the shell, as its own menu does. */
   quit?: () => void;
+  /** Installs without the person leaving the app (`update-installer.ts`); absent, the assisted flow only. */
+  silentInstall?: (input: SilentInput) => Promise<SilentOutcome>;
+  /** The administrator prompt's line on macOS, for this version. */
+  adminPrompt?: (version: string) => string;
+  /** Starts this shell again once it has quit (`app.relaunch`): the installed package's new version. */
+  relaunch?: () => void;
   log?: (line: string) => void;
 };
 
@@ -152,11 +164,21 @@ export class UpdateController {
   }
 
   /**
-   * Installs the verified file, the system's way (docs/AUTO-UPDATE.md §5).
-   * Running missions are counted first: unless the person confirmed, a
-   * running mission stops everything here and its count is returned.
+   * Installs the verified file (docs/AUTO-UPDATE.md §5, §10): silently when
+   * the system allows it (NSIS `/S`, the macOS administrator prompt, pkexec),
+   * else the system's own installer opens for the person. Running missions
+   * are counted first: unless the person confirmed, a running mission stops
+   * everything here and its count is returned. One installation at a time: a
+   * second gesture while a password prompt is open gets the first one's answer.
    */
-  async install(confirmed: boolean): Promise<InstallOutcome> {
+  install(confirmed: boolean): Promise<InstallOutcome> {
+    this.installing ??= this.installOnce(confirmed).finally(() => { this.installing = null; });
+    return this.installing;
+  }
+
+  private installing: Promise<InstallOutcome> | null = null;
+
+  private async installOnce(confirmed: boolean): Promise<InstallOutcome> {
     const ready = this.deps.downloader.ready();
     if (!ready) return { status: 'none' };
     if (!confirmed) {
@@ -191,6 +213,13 @@ export class UpdateController {
       quit();
       return { status: 'restarting' };
     }
+    if (format === 'nsis' || format === 'pkg' || format === 'deb') {
+      const silent = await this.silent(format, ready.path, sha256, ready.offer.version);
+      if (silent === 'restarting' || silent === 'cancelled') return { status: silent };
+      // A silent install that failed on the bytes must not end in opening them.
+      const changedSince = await this.unchanged(ready.path, sha256);
+      if (changedSince) return { status: 'failed', message: changedSince };
+    }
     if (format === 'deb') {
       const error = await this.deps.openPath(ready.path);
       if (error) log(`the .deb did not open in the system: ${error}`);
@@ -205,6 +234,44 @@ export class UpdateController {
       return { status: 'closing' };
     }
     return { status: 'opened' };
+  }
+
+  /**
+   * The silent path (docs/AUTO-UPDATE.md §10): `restarting` once the shell
+   * quits into the new version, `cancelled` when the person dismissed the
+   * prompt, `assisted` when the installer must be opened for them instead.
+   */
+  private async silent(format: 'nsis' | 'pkg' | 'deb', path: string, sha256: string, version: string): Promise<'restarting' | 'cancelled' | 'assisted'> {
+    const { silentInstall, quit } = this.deps;
+    const log = (line: string): void => { this.deps.log?.(`[updates] ${line}`); };
+    if (!silentInstall || !quit) return 'assisted';
+    // Windows hands over to a process that outlives this one; macOS and Linux install here, then restart.
+    const relaunch = format === 'nsis' ? null : this.deps.relaunch;
+    if (format !== 'nsis' && !relaunch) return 'assisted';
+    const prompt = this.deps.adminPrompt?.(version) ?? `Timon needs your password to install version ${version}.`;
+    let outcome: SilentOutcome;
+    try {
+      outcome = await silentInstall({ format, path, sha256, prompt });
+    } catch (error) {
+      outcome = { status: 'failed', reason: (error as Error).message };
+    }
+    switch (outcome.status) {
+      case 'handed_over':
+        log(`silent installer ${version} started: quitting, it starts Timon again`);
+        quit();
+        return 'restarting';
+      case 'installed':
+        log(`${format} ${version} installed: restarting`);
+        relaunch?.();
+        quit();
+        return 'restarting';
+      case 'cancelled':
+        log(`${format} ${version}: the administrator prompt was dismissed`);
+        return 'cancelled';
+      default:
+        log(`${format} ${version} not installed silently (${outcome.status}: ${outcome.reason}): opening the installer`);
+        return 'assisted';
+    }
   }
 
   async open(target: 'folder' | 'installer'): Promise<OpenOutcome> {

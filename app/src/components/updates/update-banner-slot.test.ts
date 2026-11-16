@@ -411,3 +411,25 @@ test('the updates module registers the product banner as the fallback, and the t
   const index = readFileSync(resolve(process.cwd(), 'src', 'plugins-client', 'index.ts'), 'utf8');
   assert.match(index, /updatesClient,/);
 });
+
+test('Install: the system\'s password prompt shows Installing…; dismissing it goes back to Install, without an error', async () => {
+  let answer: (outcome: unknown) => void = () => undefined;
+  const pending = new Promise((resolve) => { answer = resolve; });
+  const shell = fakeShell({ phase: 'ready', version: '0.1.8-rc.1', name: 'Timon-0.1.8-rc.1.pkg', format: 'pkg', total: 1 }, { installs: [pending] });
+  const m = await mount(OFFER_STATUS, { shell });
+  try {
+    await m.registerProduct();
+    await m.until(() => document.querySelector('[data-update-install]') !== null, 'the install button');
+    await m.click(document.querySelector('[data-update-install]'));
+    await m.until(() => document.querySelector('[data-update-installing]') !== null, 'the installation under way');
+    assert.equal(document.querySelector('[data-update-installing]')?.textContent, 'Installing…');
+    assert.equal((document.querySelector('[data-update-install]') as HTMLButtonElement).disabled, true);
+    await m.React.act(async () => { answer({ status: 'cancelled' }); await pending; });
+    await m.until(() => document.querySelector('[data-update-installing]') === null, 'the prompt dismissed');
+    assert.equal((document.querySelector('[data-update-install]') as HTMLButtonElement).disabled, false);
+    assert.equal(document.querySelector('[role="alert"]'), null, 'nothing alarming');
+    assert.equal(document.querySelector('[data-update-installed]'), null);
+  } finally {
+    await m.unmount();
+  }
+});

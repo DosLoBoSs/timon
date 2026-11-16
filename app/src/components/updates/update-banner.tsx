@@ -126,6 +126,7 @@ function InstallResult({ outcome, control, onWait, onConfirm, onDownloadAgain }:
         </>
       );
     case 'unsupported':
+    case 'cancelled':
       return null;
     case 'failed':
       return <span role="alert" data-update-installed="failed">{t('updates.download.installFailed')}</span>;
@@ -157,6 +158,8 @@ function DesktopDownload({ control }: { control: UpdateDownloadControl }): React
       setInstalling(false);
       // A desktop older than the installation step: open the installer as before.
       if (result.status === 'unsupported') { setOutcome(null); open(control.openInstaller); return; }
+      // The password prompt was dismissed: back to "Install", nothing to report.
+      if (result.status === 'cancelled') { setOutcome(null); return; }
       setOutcome(result);
     });
   };
@@ -188,6 +191,7 @@ function DesktopDownload({ control }: { control: UpdateDownloadControl }): React
         <button type="button" className={`${linkClass} font-semibold`} disabled={installing} onClick={() => { install(false); }} data-update-install="">
           {state.format === 'appimage' ? t('updates.download.installRestart') : t('updates.download.install')}
         </button>
+        {installing && <span data-update-installing="">{t('updates.download.installing')}</span>}
         <button type="button" className={linkClass} onClick={() => { open(control.openFolder); }} data-update-open-folder="">
           {t('updates.download.openFolder')}
         </button>

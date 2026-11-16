@@ -99,6 +99,7 @@ import { UpdateWindow } from './update-window.js';
 import { UpdateDownloader } from './update-download.js';
 import { UPDATE_CHANNELS, UpdateController, localDaemonGet, registerUpdateIpc } from './update-ipc.js';
 import { missionsAtStake, readMissionCount, removeAppImageBackup } from './update-install.js';
+import { nodeInstallerSystem, silentInstall } from './update-installer.js';
 import { aboutCopy, readThirdPartyNotices, registerAboutIpc, thirdPartyNoticesPath } from './about.js';
 import { showAboutWindow } from './about-window.js';
 import { appMenuTemplate, newWindowCopy, newWindowShortcut } from './app-menu.js';
@@ -1795,6 +1796,9 @@ if (!app.requestSingleInstanceLock({ build: ownBuild } satisfies LaunchData)) {
       appImage: process.platform === 'linux' ? process.env.APPIMAGE ?? null : null,
       relaunchAppImage: (appImage) => queueAppImageRelaunch(appImage, relaunchOptions(process.platform, process.env, process.argv).args, desktopHome),
       quit: () => app.quit(),
+      silentInstall: (input) => silentInstall(input, nodeInstallerSystem(process.execPath)),
+      adminPrompt: (version) => shellText(uiLocale())('update.adminPrompt', { version }),
+      relaunch: () => { app.relaunch({ args: relaunchOptions(process.platform, process.env, process.argv).args }); },
       showItemInFolder: (path) => shell.showItemInFolder(path),
       openPath: (path) => shell.openPath(path),
       log: (line) => console.log(line),

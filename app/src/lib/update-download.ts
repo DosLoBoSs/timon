@@ -31,10 +31,12 @@ export type UpdateOpenOutcome = { status: 'opened' | 'none' | 'unsupported' } | 
  * What `install` did (P3). `missions`: nothing, `count` missions run and
  * installing would stop them — ask, then `install(true)`. `unsupported`: an
  * older desktop that cannot install; open the installer instead.
+ * `cancelled`: the person dismissed the system's password prompt; nothing
+ * changed and the verified file is still ready.
  */
 export type UpdateInstallOutcome =
   | { status: 'missions'; count: number }
-  | { status: 'restarting' | 'not_writable' | 'opened' | 'closing' | 'none' | 'unsupported' }
+  | { status: 'restarting' | 'not_writable' | 'opened' | 'closing' | 'none' | 'unsupported' | 'cancelled' }
   | { status: 'guided'; command: string; opened: boolean }
   | { status: 'failed'; message: string | null };
 
@@ -77,7 +79,7 @@ function parseOutcome(value: unknown): UpdateOpenOutcome {
   return { status: 'failed', message: typeof message === 'string' ? message : null };
 }
 
-const INSTALL_STATUSES = new Set(['restarting', 'not_writable', 'opened', 'closing', 'none', 'unsupported']);
+const INSTALL_STATUSES = new Set(['restarting', 'not_writable', 'opened', 'closing', 'none', 'unsupported', 'cancelled']);
 
 export function parseInstallOutcome(value: unknown): UpdateInstallOutcome {
   const read = value && typeof value === 'object' ? value as Record<string, unknown> : {};

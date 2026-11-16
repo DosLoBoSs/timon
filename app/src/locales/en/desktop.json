@@ -136,6 +136,7 @@
       "missions": "{count, plural, one {# mission is running} other {# missions are running}} on Timon {from}. Updating now stops {count, plural, one {it} other {them}}. Wait quits this window and leaves {count, plural, one {it} other {them}} running: open Timon again once {count, plural, one {it is} other {they are}} done.",
       "wait": "Wait",
       "approveAnyway": "Update anyway",
+      "adminPrompt": "Timon needs your password to install version {version}.",
       "notes": "Release notes",
       "changelog": "View changelog",
       "downgrade": "Return to the previous version",

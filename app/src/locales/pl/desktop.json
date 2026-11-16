@@ -144,6 +144,7 @@
       "missions": "{count, plural, one {# misja działa} few {# misje działają} many {# misji działa} other {# misji działa}} w Timon {from}. Aktualizacja teraz {count, plural, one {ją zatrzyma} other {je zatrzyma}}. Czekaj zamyka to okno i pozwala {count, plural, one {jej} other {im}} działać dalej: otwórz Timon ponownie, gdy {count, plural, one {się zakończy} other {się zakończą}}.",
       "wait": "Czekaj",
       "approveAnyway": "Aktualizuj mimo to",
+      "adminPrompt": "Timon potrzebuje hasła, aby zainstalować wersję {version}.",
       "notes": "Informacje o wydaniu",
       "changelog": "Zobacz dziennik zmian",
       "downgrade": "Wróć do poprzedniej wersji",

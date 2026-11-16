@@ -144,6 +144,7 @@
       "missions": "{count, plural, one {# missie loopt} other {# missies lopen}} op Timon {from}. Nu bijwerken stopt {count, plural, one {deze} other {ze}}. Wachten sluit dit venster en laat {count, plural, one {deze} other {ze}} doorlopen: open Timon opnieuw zodra {count, plural, one {deze klaar is} other {ze klaar zijn}}.",
       "wait": "Wachten",
       "approveAnyway": "Toch bijwerken",
+      "adminPrompt": "Timon heeft uw wachtwoord nodig om versie {version} te installeren.",
       "notes": "Releasenotes",
       "changelog": "Wijzigingslogboek bekijken",
       "downgrade": "Terug naar de vorige versie",
