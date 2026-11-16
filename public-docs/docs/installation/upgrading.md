@@ -91,6 +91,16 @@ The check reads a signed list of releases on `timon-ai.com`. The request carries
 
 The environment variable `TIMON_UPDATES_CHECK=0` overrides both. Turned off, Timon makes no request at all. Checking needs neither a valid licence nor an unexpired build: a build near its end can always find its successor.
 
+### Announcements
+
+With the same check, Timon reads a signed list of announcements on `timon-ai.com` and shows each one as a card at the bottom left, with **Learn more** when it has a link. A list whose signature does not check out, an expired one or one older than the last list read is ignored. Close a card and it does not come back, on any of your devices. To stop them, switch off **Settings › Plugins › Timon updates › Show Timon announcements**, or set it in `timon.config.json`:
+
+```json
+{ "settings": { "TIMON_NOTICES_CHECK": false } }
+```
+
+With the update check off, no announcement is read either.
+
 ## When a beta build ends
 
 A beta build has an end date, and a paid licence may have one too. Fourteen days before either, a banner tells you; it turns red for the last three days. When a newer version is already out, the update banner gives the build's end date instead. A licence that ends does not stop Timon: it continues on Free. After the build's end date, Timon shows a full-screen notice instead of the app: **This build has expired**, install a newer build.

@@ -19,7 +19,7 @@ import { waitUntil } from '../../lib/test-wait';
 
 type Mounted = Awaited<ReturnType<typeof mount>>;
 
-async function mount({ dismissed = [] as string[], session = true, usageDays = [] as string[] } = {}) {
+async function mount({ dismissed = [] as string[], session = true, usageDays = [] as string[], routes = {} as Record<string, () => Response> } = {}) {
   const { JSDOM } = await import('jsdom');
   const dom = new JSDOM('<html><body><div id="root"></div></body></html>', { url: 'http://localhost/', pretendToBeVisual: true });
   const saved = new Map<string, PropertyDescriptor | undefined>();
@@ -50,6 +50,8 @@ async function mount({ dismissed = [] as string[], session = true, usageDays = [
       }
       return Response.json({ dismissed: [...server] });
     }
+    const route = routes[url];
+    if (route) return route();
     return Response.json({}, { status: 404 });
   });
 
@@ -359,4 +361,35 @@ test('the settings module registers the card and the star, and the root layout m
   assert.match(client, /ctx\.register\(\{ slot: NOTICES_SLOT, key: 'github-star' \}, GitHubStarNotice\)/);
   const layout = readFileSync(resolve(process.cwd(), 'src', 'app', 'layout.tsx'), 'utf8');
   assert.match(layout, /<NoticesHost \/>/);
+});
+
+test('the signed feed: its notices become cards, as text, a link opens and closes, a withdrawn one leaves', async () => {
+  const { FeedNotices, UPDATES_NOTICES_URL } = await import('../updates/feed-notices');
+  let feed: unknown[] = [
+    { id: 'live-1', tone: 'info', title: '<img src=x onerror="window.__pwned=1">', body: 'Thursday\n<b>6 pm</b>', link: 'https://timon-ai.com/live', endsAt: null },
+    { id: 'plain', tone: 'warning', title: 'Maintenance', body: 'Sunday.', link: 'javascript:alert(1)', endsAt: null },
+    { id: 'over', tone: 'info', title: 'Gone', body: 'Already over.', link: null, endsAt: '2000-01-01T00:00:00.000Z' },
+  ];
+  const m = await mount({ routes: { [UPDATES_NOTICES_URL]: () => Response.json({ notices: feed }) } });
+  try {
+    await settle(m);
+    await m.React.act(async () => { m.slots.register({ slot: 'notices', pluginId: '@timon/updates', key: 'feed' }, FeedNotices); });
+    await m.until(() => cards().length === 2, 'the two live notices');
+    assert.deepEqual(cards(), ['@timon/updates:feed.plain', '@timon/updates:feed.live-1'], 'warnings first; the ended one never shows');
+    const live = document.querySelector('[data-notice="@timon/updates:feed.live-1"]')!;
+    assert.match(live.textContent ?? '', /<img src=x/);
+    assert.ok(!live.querySelector('img') && !live.querySelector('b'), 'title and body are text');
+    assert.equal((globalThis as { __pwned?: number }).__pwned, undefined);
+    const plain = document.querySelector('[data-notice="@timon/updates:feed.plain"]')!;
+    assert.ok(!plain.querySelector('[data-notice-action]'), 'a link that is not https gives no action');
+    await m.click(live.querySelector('[data-notice-action="0"]'));
+    assert.deepEqual(m.opened, ['https://timon-ai.com/live']);
+    await m.until(() => cards().length === 1, 'closed after the link');
+    assert.deepEqual(m.posts, [{ id: '@timon/updates:feed.live-1' }]);
+    feed = [];
+    await m.React.act(async () => { document.dispatchEvent(new m.dom.window.Event('visibilitychange')); });
+    await m.until(() => cards().length === 0, 'the withdrawn notice taken down');
+  } finally {
+    await m.unmount();
+  }
 });

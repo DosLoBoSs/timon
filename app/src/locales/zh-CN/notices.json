@@ -5,6 +5,9 @@
     "githubStar": {
       "title": "在 GitHub 上点个星？",
       "action": "点个星"
+    },
+    "feed": {
+      "open": "了解更多"
     }
   }
 }

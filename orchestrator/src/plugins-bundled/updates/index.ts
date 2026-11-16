@@ -5,9 +5,13 @@
  * `update_available` and leaves one notification per version. It downloads
  * and installs nothing: the banner links to the installer.
  *
+ * It also reads the signed notice feed, `timon-notices.json` (§10), whose
+ * announcements the app shows as notice cards.
+ *
  * Tier `std`: on by default. `TIMON_UPDATES_CHECK` (env > config > settings >
- * default on) stops every request; a build run from the sources (`dev`) and
- * the test runner never check.
+ * default on) stops every request, the notice feed's included;
+ * `TIMON_NOTICES_CHECK` stops the notice feed alone. A build run from the
+ * sources (`dev`) and the test runner never check.
  */
 import type { Context } from '@deepseek-ai/cordis';
 import type { ModuleManifest } from '../../kernel/registry.js';
@@ -20,6 +24,7 @@ import { TIMON_HOME } from '../../paths.js';
 import { settingBool } from '../../settings.js';
 import { UpdateChecker, stateFileIn, type UpdateOffer } from './checker.js';
 import { activeReleaseKeyring } from './keyring.js';
+import { NoticesFeed, noticesStateFileIn } from './notices-checker.js';
 import { registerRoutes } from './routes.js';
 
 export const manifest: ModuleManifest = {
@@ -32,6 +37,12 @@ export const name = manifest.name;
 export const inject = manifest.inject;
 
 export const UPDATES_SETTING = 'TIMON_UPDATES_CHECK';
+/**
+ * A neighbour of the update check rather than the same switch: turning the
+ * update check off keeps its promise of no request at all, while a person who
+ * wants updates but no announcements turns this one off alone.
+ */
+export const NOTICES_SETTING = 'TIMON_NOTICES_CHECK';
 /** First check once the daemon has settled, spread over a minute so a fleet started together does not hit the site together. */
 const FIRST_CHECK_MIN_MS = 30_000;
 const FIRST_CHECK_JITTER_MS = 60_000;
@@ -41,6 +52,18 @@ const TICK_MS = 10 * 60_000;
 
 function checksAllowed(): boolean {
   return buildInfo().channel !== 'dev' && settingBool(UPDATES_SETTING);
+}
+
+const noticesEnabled = (): boolean => settingBool(UPDATES_SETTING) && settingBool(NOTICES_SETTING);
+
+export function createNoticesFeed(): NoticesFeed {
+  return new NoticesFeed({
+    enabled: noticesEnabled,
+    channel: () => buildInfo().channel,
+    installed: timonVersion,
+    keyring: activeReleaseKeyring,
+    stateFile: noticesStateFileIn(TIMON_HOME),
+  });
 }
 
 export function createChecker(): UpdateChecker {
@@ -70,20 +93,29 @@ export function announce(target: UpdateChecker, offer: UpdateOffer, channel: 'be
 
 export function apply(ctx: Context): void {
   const checker = createChecker();
+  const feed = createNoticesFeed();
   registerRoutes(ctx.http.router(), {
     status: () => checker.status(),
     check: () => checker.check(),
     missions: () => ({ live: liveMissionCount(), working: workingMissionCount() }),
+    notices: () => feed.notices(),
   });
 
   // Not under the test runner: a suite that boots the kernel must not reach timon-ai.com.
   if (process.env.NODE_TEST_CONTEXT) return;
   let lastAttempt = 0;
+  let lastNoticesAttempt = 0;
   const tick = (): void => {
     // Off or a source build: the clock is not even read, so switching it on checks at the next tick.
-    if (!checksAllowed() || Date.now() - lastAttempt < CHECK_INTERVAL_MS) return;
-    lastAttempt = Date.now();
-    void checker.check();
+    if (!checksAllowed()) return;
+    if (Date.now() - lastAttempt >= CHECK_INTERVAL_MS) {
+      lastAttempt = Date.now();
+      void checker.check();
+    }
+    if (noticesEnabled() && Date.now() - lastNoticesAttempt >= CHECK_INTERVAL_MS) {
+      lastNoticesAttempt = Date.now();
+      void feed.refresh();
+    }
   };
   ctx.timeout(tick, FIRST_CHECK_MIN_MS + Math.floor(Math.random() * FIRST_CHECK_JITTER_MS));
   ctx.interval(tick, TICK_MS);

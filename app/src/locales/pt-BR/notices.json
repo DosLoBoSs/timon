@@ -5,6 +5,9 @@
     "githubStar": {
       "title": "Uma estrela no GitHub?",
       "action": "Dar uma estrela"
+    },
+    "feed": {
+      "open": "Saiba mais"
     }
   }
 }
