@@ -84,8 +84,8 @@ assert.ok(adaCookie);
 
 // TODO #560: the UI greys the Git buttons on `can`, so it must say no to an
 // account without the grant, and follow the grant both ways.
-const NONE = { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false, 'providers:manage': false, 'providers:accounts': false };
-const ALL = { 'projects:manage': true, 'agents:manage': true, 'agents:privileged-config': true, 'providers:manage': true, 'providers:accounts': true };
+const NONE = { 'projects:manage': false, 'agents:manage': false, 'agents:privileged-config': false, 'providers:manage': false, 'providers:accounts': false, 'settings:write': false };
+const ALL = { 'projects:manage': true, 'agents:manage': true, 'agents:privileged-config': true, 'providers:manage': true, 'providers:accounts': true, 'settings:write': true };
 const canOf = async (opts: { cookie?: string; bearer?: string }) =>
   ((await call('GET', '/api/auth/me', opts)).json as { can: Record<string, boolean> }).can;
 
@@ -165,4 +165,22 @@ test('GET /api/auth/me says whether the caller holds agents:manage', async () =>
     grantTestPermissions(dbApi, adaId, []);
   }
   assert.equal((await canOf({ cookie: adaCookie }))['agents:manage'], false);
+});
+
+// Settings › System › Updates hides "Check now" and its switch on it (POST /api/updates/check).
+test('GET /api/auth/me says whether the caller holds settings:write', async () => {
+  assert.equal((await canOf({}))['settings:write'], false);
+  assert.equal((await canOf({ cookie: adaCookie }))['settings:write'], false);
+  grantTestPermissions(dbApi, adaId, ['settings']);
+  try {
+    assert.equal((await canOf({ cookie: adaCookie }))['settings:write'], false, 'reading the settings does not write them');
+  } finally {
+    grantTestPermissions(dbApi, adaId, []);
+  }
+  grantTestPermissions(dbApi, adaId, ['settings:write']);
+  try {
+    assert.deepEqual(await canOf({ cookie: adaCookie }), { ...NONE, 'settings:write': true });
+  } finally {
+    grantTestPermissions(dbApi, adaId, []);
+  }
 });

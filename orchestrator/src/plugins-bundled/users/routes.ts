@@ -157,9 +157,12 @@ function notifySuperadmins(title: string, body: string): void {
  * (skill-attachment-routes.ts, TODO #620, #693).
  * `providers:manage` / `providers:accounts` give the level of the Providers
  * screen (`users/provider-access.ts`): which of it the app paints at all.
+ * `settings:write` hides "Check now" and the automatic-check switch of
+ * Settings › System › Updates from a member who would only get a 403.
  */
 export const ME_CAN_PERMISSIONS = [
   'projects:manage', 'agents:manage', 'agents:privileged-config', 'providers:manage', 'providers:accounts',
+  'settings:write',
 ] as const;
 export type MeCan = Record<(typeof ME_CAN_PERMISSIONS)[number], boolean>;
 
