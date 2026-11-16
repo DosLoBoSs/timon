@@ -4486,6 +4486,62 @@
     "clear": "Wyczyść",
     "empty": "Brak agentów"
   },
+  "updates": {
+    "notice": {
+      "available": "Timon {version} jest dostępny",
+      "update": "Zaktualizuj",
+      "buildEnds": "Ta wersja przestanie działać {date}."
+    },
+    "download": {
+      "start": "Pobierz i zweryfikuj",
+      "progress": "Pobieranie… {percent} ({received} z {total})",
+      "cancel": "Anuluj",
+      "verifying": "Weryfikowanie instalatora…",
+      "ready": "{name} został pobrany i zweryfikowany.",
+      "openInstaller": "Otwórz instalator",
+      "openFolder": "Pokaż w folderze",
+      "openFailed": "System nie mógł go otworzyć. Użyj opcji Pokaż w folderze.",
+      "retry": "Spróbuj ponownie",
+      "resume": "Wznów",
+      "install": "Zainstaluj",
+      "installRestart": "Zainstaluj i uruchom ponownie",
+      "missions": "{count, plural, one {Trwa # misja} few {Trwają # misje} many {Trwa # misji} other {Trwa # misji}}. Instalacja teraz {count, plural, one {ją zatrzyma} other {je zatrzyma}}.",
+      "wait": "Poczekaj",
+      "installAnyway": "Zainstaluj mimo to",
+      "installing": "Instalowanie…",
+      "restarting": "Timon uruchamia się ponownie w nowej wersji…",
+      "closing": "Instalator jest otwarty. Timon zamyka się, aby można go było zastąpić.",
+      "pkgOpened": "Postępuj zgodnie z instalatorem, a następnie zamknij i ponownie otwórz Timon.",
+      "debGuided": "Menedżer oprogramowania otworzy pakiet. Jeśli go nie zainstaluje, uruchom to polecenie w terminalu, a następnie ponownie otwórz Timon:",
+      "debNotOpened": "Uruchom to polecenie w terminalu, aby zainstalować pakiet, a następnie ponownie otwórz Timon:",
+      "copyCommand": "Kopiuj",
+      "copied": "Skopiowano",
+      "notWritable": "Nie można zapisywać w folderze Twojego AppImage. Nowy AppImage jest w folderze danych Timon: zastąp nim swój.",
+      "installFailed": "Instalacja się nie rozpoczęła. Twoja obecna wersja się nie zmieniła.",
+      "installNone": "Zweryfikowanego instalatora nie ma już na tym komputerze. Pobierz go ponownie, aby go zainstalować.",
+      "downloadAgain": "Pobierz ponownie",
+      "error": {
+        "noOffer": "Dla tego komputera nie opublikowano instalatora.",
+        "daemon": "Usługa Timon nie odpowiedziała. Spróbuj ponownie za chwilę.",
+        "network": "Pobieranie zostało przerwane.",
+        "http": "Serwer pobierania odrzucił żądanie.",
+        "insecure": "Pobieranie zostało przekierowane na niebezpieczny adres i zatrzymane.",
+        "integrity": "Plik nie odpowiada opublikowanemu instalatorowi i został usunięty.",
+        "diskFull": "Za mało miejsca na dysku, aby pobrać instalator.",
+        "filesystem": "Nie udało się zapisać instalatora w folderze danych Timon."
+      }
+    },
+    "dialog": {
+      "title": "Timon {version}",
+      "changelog": "Zobacz pełną listę zmian",
+      "download": "Pobierz",
+      "install": "Uruchom ponownie i zainstaluj",
+      "verified": "Pobrano i zweryfikowano",
+      "installer": "Pobierz instalator",
+      "allInstallers": "Wszystkie instalatory",
+      "progress": "Postęp pobierania"
+    }
+  },
   "mcpTab": {
     "yourServers": "Twoje serwery MCP"
   }

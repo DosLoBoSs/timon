@@ -4486,6 +4486,62 @@
     "clear": "Limpar",
     "empty": "Nenhum agente"
   },
+  "updates": {
+    "notice": {
+      "available": "Timon {version} está disponível",
+      "update": "Atualizar",
+      "buildEnds": "Esta versão para de funcionar em {date}."
+    },
+    "download": {
+      "start": "Baixar e verificar",
+      "progress": "Baixando… {percent} ({received} de {total})",
+      "cancel": "Cancelar",
+      "verifying": "Verificando o instalador…",
+      "ready": "{name} foi baixado e verificado.",
+      "openInstaller": "Abrir o instalador",
+      "openFolder": "Mostrar na pasta",
+      "openFailed": "O sistema não conseguiu abri-lo. Use Mostrar na pasta.",
+      "retry": "Tentar novamente",
+      "resume": "Retomar",
+      "install": "Instalar",
+      "installRestart": "Instalar e reiniciar",
+      "missions": "{count, plural, one {# missão está em andamento} other {# missões estão em andamento}}. Instalar agora {count, plural, one {a interrompe} other {as interrompe}}.",
+      "wait": "Aguardar",
+      "installAnyway": "Instalar mesmo assim",
+      "installing": "Instalando…",
+      "restarting": "O Timon está reiniciando na nova versão…",
+      "closing": "O instalador está aberto. O Timon fecha para poder ser substituído.",
+      "pkgOpened": "Siga o instalador e depois feche e reabra o Timon.",
+      "debGuided": "Seu gerenciador de software abre o pacote. Se ele não o instalar, execute este comando em um terminal e depois reabra o Timon:",
+      "debNotOpened": "Execute este comando em um terminal para instalar o pacote e depois reabra o Timon:",
+      "copyCommand": "Copiar",
+      "copied": "Copiado",
+      "notWritable": "Não é possível gravar na pasta do seu AppImage. O novo AppImage está na pasta de dados do Timon: substitua o seu por ele.",
+      "installFailed": "A instalação não começou. Sua versão atual não mudou.",
+      "installNone": "O instalador verificado não está mais neste computador. Baixe-o novamente para instalá-lo.",
+      "downloadAgain": "Baixar novamente",
+      "error": {
+        "noOffer": "Nenhum instalador foi publicado para este computador.",
+        "daemon": "O serviço do Timon não respondeu. Tente novamente em instantes.",
+        "network": "O download foi interrompido.",
+        "http": "O servidor de download recusou a solicitação.",
+        "insecure": "O download foi redirecionado para um endereço inseguro e foi interrompido.",
+        "integrity": "O arquivo não corresponde ao instalador publicado e foi excluído.",
+        "diskFull": "Não há espaço em disco suficiente para baixar o instalador.",
+        "filesystem": "Não foi possível salvar o instalador na pasta de dados do Timon."
+      }
+    },
+    "dialog": {
+      "title": "Timon {version}",
+      "changelog": "Ver o changelog completo",
+      "download": "Baixar",
+      "install": "Reiniciar e instalar",
+      "verified": "Baixado e verificado",
+      "installer": "Baixar o instalador",
+      "allInstallers": "Todos os instaladores",
+      "progress": "Progresso do download"
+    }
+  },
   "mcpTab": {
     "yourServers": "Seus servidores MCP"
   }
