@@ -443,6 +443,7 @@ test('the examples/plugin-notice template pushes its card and paints every card,
     const ctx = m.pluginContext(manifest.timon.id, manifest.timon.client.slots);
     await m.React.act(async () => { example.apply(ctx); });
     await m.until(() => document.querySelector('[data-compact-notice="welcome"]') !== null, 'the template painted its card');
+    assert.equal(document.querySelector('[data-compact-notice="welcome"]')?.getAttribute('data-compact-icon'), 'timon', 'the template reads `icon`');
     assert.ok(!document.querySelector('[data-notice-card]'), 'the product card is not painted under it');
 
     await m.click(document.querySelector('[data-compact-dismiss]'));
