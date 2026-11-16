@@ -1,0 +1,34 @@
+{
+  "updates": {
+    "settings": {
+      "section": "Version",
+      "title": "Timon {version}",
+      "titleAvailable": "Timon {version} available",
+      "titleUnknown": "Timon",
+      "status": {
+        "upToDate": "Up to date",
+        "upToDateAt": "Up to date · checked {ago}",
+        "installed": "{installed} installed",
+        "installedAt": "{installed} installed · checked {ago}",
+        "unchecked": "Not checked yet",
+        "checking": "Checking…",
+        "failed": "Check failed",
+        "off": "Automatic check off",
+        "dev": "Source build, not checked",
+        "unknown": "Status unavailable"
+      },
+      "check": "Check",
+      "retry": "Retry",
+      "checking": "Checking…",
+      "update": "Update",
+      "more": "More update actions",
+      "notes": "Release notes",
+      "download": "Download the installer",
+      "automaticOff": "Turn off automatic check",
+      "automaticOn": "Turn on automatic check",
+      "saveFailed": "The setting could not be saved.",
+      "lockedEnv": "The TIMON_UPDATES_CHECK environment variable decides this.",
+      "lockedConfig": "timon.config.json decides this."
+    }
+  }
+}

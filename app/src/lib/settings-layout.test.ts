@@ -232,3 +232,18 @@ test('the instructions have a category of their own, third in the list', () => {
   assert.equal(resolveSettingsTarget({ category: 'instructions', tab: null }, layout)?.tab.id, 'preamble');
   assert.equal(parseSettingsParam('instructions')?.category, 'instructions');
 });
+
+test('the Updates pane sits under System, after Installation, for every account', () => {
+  const plugins = [{ id: '@timon/updates', origin: 'occupant' as const, label: 'Timon updates' }];
+  const row: SettingsRowLike = { key: 'TIMON_UPDATES_CHECK', group: 'Misc', advanced: false, owner: '@timon/updates' };
+  assert.deepEqual(placeSetting(row), { category: 'system', tab: 'updates' });
+  const admin = buildSettingsLayout(input({ superadmin: true, rows: [row], plugins }));
+  assert.deepEqual(tabIds(admin, 'system'), ['installation', 'updates', 'security']);
+  const member = buildSettingsLayout(input({ rows: [row], plugins }));
+  assert.deepEqual(tabIds(member, 'system'), ['updates']);
+  // Its switch is in the pane's menu: no tab of its own under Plugins.
+  assert.equal(member.some((c) => c.id === 'plugins'), false);
+  // The module off: its pane goes, and its row with it.
+  const off = buildSettingsLayout(input({ rows: [row], plugins: [], pluginStates: new Map([['@timon/updates', 'disabled']]) }));
+  assert.equal(off.some((c) => c.id === 'system'), false);
+});

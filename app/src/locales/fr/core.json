@@ -1406,6 +1406,7 @@
       },
       "system": {
         "installation": "Installation",
+        "updates": "Mises à jour",
         "security": "Sécurité",
         "backup": "Sauvegardes et corbeille",
         "diagnostics": "Diagnostic",
@@ -1472,6 +1473,7 @@
       },
       "system": {
         "installation": "version à propos installation service daemon tâche launchagent systemd chemin données dossier journal log port export import sauvegarde mise à jour",
+        "updates": "mise à jour mettre à jour nouvelle version vérifier télécharger installeur notes changelog automatique",
         "security": "sécurité isolation clôture bac à sable confinement landlock seatbelt mission sockets unix docker ssh agent exception imposer",
         "backup": "sauvegarde sauvegardes archive nuit restaurer garder rétention jours corbeille agent supprimé récupérer annuler purger backup trash",
         "diagnostics": "journaux logs débogage divers infra dépannage",

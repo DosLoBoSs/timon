@@ -96,6 +96,9 @@ export const STATIC_TABS: Readonly<Record<SettingsCategoryId, readonly StaticTab
   system: [
     // How Timon runs on the machine (TODO #333): superadmin only.
     { id: 'installation', kind: 'native', pane: 'installation' },
+    // The version and its update: every signed-in account sees it, only
+    // `settings:write` checks or switches the check (the pane of `@timon/updates`).
+    { id: 'updates', kind: 'plugin', pluginId: '@timon/updates' },
     // The mission fence (GHSA-f58g): superadmin only, like the machine it guards.
     { id: 'security', kind: 'native', pane: 'isolation' },
     // The safety net (TODO #476): nightly backup retention, and the agent
@@ -160,6 +163,8 @@ const KEY_PLACEMENT: Readonly<Record<string, Placement>> = {
   TIMON_BACKUP_MAX_AGE_DAYS: { category: 'system', tab: 'backup' },
   TIMON_AGENT_TRASH_ENABLED: { category: 'system', tab: 'backup' },
   TIMON_AGENT_TRASH_RETENTION_DAYS: { category: 'system', tab: 'backup' },
+  // Switched from the "…" menu of the Updates pane, not as a row of its own under Plugins.
+  TIMON_UPDATES_CHECK: { category: 'system', tab: 'updates' },
 };
 
 /** Bundled plugins whose settings belong to a functional category. */
