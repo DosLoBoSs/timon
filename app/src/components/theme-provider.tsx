@@ -63,11 +63,14 @@ export function ThemeProvider({
   initialScheme = DEFAULT_USER_PREFS.scheme,
   initialAppearance = DEFAULT_APPEARANCE,
   initialTheme = null,
+  nonce,
 }: {
   children: ReactNode;
   initialScheme?: ColorScheme;
   initialAppearance?: NativeAppearance;
   initialTheme?: string | null;
+  /** The response's script nonce: next-themes writes an inline script. */
+  nonce?: string;
 }) {
   const pathname = usePathname();
   const revision = useRef(0);
@@ -124,6 +127,7 @@ export function ThemeProvider({
         forcedTheme={applied}
         enableSystem={false}
         themes={['light', 'dark']}
+        nonce={nonce}
       >
         {children}
       </NextThemesProvider>

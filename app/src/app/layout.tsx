@@ -47,6 +47,8 @@ import { LastRouteRecorder } from '@/components/machines/last-route-recorder';
 import { LocaleProvider } from '@/components/locale-provider';
 import { applyRequestLocale } from '@/lib/locale-server';
 import { localeDirection } from '@/lib/i18n';
+import { headers } from 'next/headers';
+import { CSP_HEADER, scriptNonceOf } from '@/lib/content-security-policy';
 import '@/styles/globals.css';
 
 export const dynamic = 'force-dynamic';
@@ -153,6 +155,9 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const instance = instanceIdentity();
+  // The response's script nonce, put on the request by the server
+  // (`ui/window-csp.ts`): without it, the inline scripts below never run.
+  const nonce = scriptNonceOf((await headers()).get(CSP_HEADER));
   // The language first: the Server Components below read it from this module
   // graph, and `LocaleProvider` carries it to the client one and the browser.
   const locale = await applyRequestLocale();
@@ -176,7 +181,7 @@ export default async function RootLayout({
           <Suspense fallback={null}>
           <LocaleProvider locale={locale}>
           <InstanceProvider value={instance}>
-            <ThemeProvider initialScheme={scheme} initialAppearance={initialAppearance} initialTheme={me.theme}>
+            <ThemeProvider initialScheme={scheme} initialAppearance={initialAppearance} initialTheme={me.theme} nonce={nonce}>
               <ThemeFloor appearance={initialAppearance} theme={me.theme} />
               <MachineBlockedScreen name={machine.name} reason={machine.reason} apiLevel={machine.apiLevel} />
             </ThemeProvider>
@@ -194,7 +199,7 @@ export default async function RootLayout({
           <Suspense fallback={null}>
           <LocaleProvider locale={locale}>
           <InstanceProvider value={instance}>
-            <ThemeProvider initialScheme={scheme} initialAppearance={initialAppearance} initialTheme={me.theme}>
+            <ThemeProvider initialScheme={scheme} initialAppearance={initialAppearance} initialTheme={me.theme} nonce={nonce}>
               <ThemeFloor appearance={initialAppearance} theme={me.theme} />
               {/* The licence follows the active machine: a remote one's lock
                   offers the way back to this computer. */}
@@ -248,7 +253,9 @@ export default async function RootLayout({
       data-nav-pinned={navPinned ? '' : undefined}
     >
       <head>
-        <script type="importmap" dangerouslySetInnerHTML={{ __html: JSON.stringify({ imports: PLATFORM_MODULES }) }} />
+        {/* The browser hides a nonce once the element is in the page:
+            `suppressHydrationWarning` keeps React from calling that a mismatch. */}
+        <script type="importmap" nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify({ imports: PLATFORM_MODULES }) }} />
         {/* Onboarding opens dark for everyone, and it must do so BEFORE the
             first paint: the scheme is resolved on the server from the account
             preference, which does not exist yet during a first run. Same
@@ -258,6 +265,8 @@ export default async function RootLayout({
             `suppressHydrationWarning` on <html> is what lets the
             class differ from the server's. */}
         <script
+          nonce={nonce}
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: `(function(){try{var a=${JSON.stringify(FIRST_RUN_ALLOWED)};var p=location.pathname.replace(/[/]+$/,'')||'/';if(!a.some(function(x){return p===x||p.indexOf(x+'/')===0;}))return;var s=null;try{s=sessionStorage.getItem(${JSON.stringify(FIRST_RUN_SCHEME_KEY)});}catch(e){}var l=s==='light';var c=document.documentElement.classList;c.toggle('light',l);c.toggle('dark',!l);}catch(e){}})()` }}
         />
       </head>
@@ -302,7 +311,7 @@ export default async function RootLayout({
             if it applied to <body>, the panel, which is also its child,
             would shift along with it. */}
         <div id="timon-shell">
-        <ThemeProvider initialScheme={scheme} initialAppearance={initialAppearance} initialTheme={me.theme}>
+        <ThemeProvider initialScheme={scheme} initialAppearance={initialAppearance} initialTheme={me.theme} nonce={nonce}>
         <BackgroundProvider>
           {/* Inside ThemeProvider so `.light` / `dark` exist on <html>
               when the two palettes apply. Tokens live on :root, so login

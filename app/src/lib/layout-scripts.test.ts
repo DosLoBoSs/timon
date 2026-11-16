@@ -8,6 +8,8 @@ import ts from 'typescript';
 import { FIRST_RUN_ALLOWED, FIRST_RUN_SCHEME_KEY, schemeFollowsSystem } from './first-run-gate';
 import { PLATFORM_MODULES } from './plugin-host/modules';
 
+const NONCE = 'q2xV0rN6aYk3f8Lm1PzT4w==';
+
 // Compile the actual JSX nodes: inspecting the template's source text misses
 // escaping lost when the server evaluates it before sending HTML.
 function layoutScripts(): string[] {
@@ -19,10 +21,12 @@ function layoutScripts(): string[] {
       const compiled = ts.transpileModule(`(${node.getText(source)})`, {
         compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
       }).outputText;
-      const element = runInNewContext(compiled, { React, FIRST_RUN_ALLOWED, FIRST_RUN_SCHEME_KEY, PLATFORM_MODULES }) as React.ReactElement;
+      const element = runInNewContext(compiled, { React, FIRST_RUN_ALLOWED, FIRST_RUN_SCHEME_KEY, PLATFORM_MODULES, nonce: NONCE }) as React.ReactElement;
       const html = renderToStaticMarkup(element);
       const match = /^<script([^>]*)>([\s\S]*)<\/script>$/.exec(html);
       assert.ok(match, 'each inline script must survive HTML serialization');
+      // `script-src` has no `'unsafe-inline'`: without the nonce it never runs.
+      assert.ok(match[1]?.includes(`nonce="${NONCE}"`), 'each inline script carries the response nonce');
       if (match[1]?.includes('type="importmap"')) JSON.parse(match[2]!);
       else scripts.push(match[2]!);
     }
