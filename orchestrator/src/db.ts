@@ -9023,6 +9023,37 @@ export const dbApi = {
     return db.prepare(`DELETE FROM secret_access WHERE at < ?`).run(cutoff).changes;
   },
 
+  /**
+   * Deletes up to `batch` events older than `cutoff` from `table` (the hot one,
+   * or the cold archive when it is attached), with the text the history search
+   * copied from them. A running mission's events are never touched: its
+   * conversation is still in use. Returns how many events went.
+   */
+  pruneEventsBatch(table: 'events' | 'archive.events', cutoff: number, batch: number): number {
+    const ids = (db.prepare(
+      `SELECT id FROM ${table} WHERE timestamp < ?
+         AND mission_id NOT IN (SELECT id FROM missions WHERE status = 'running')
+       ORDER BY id LIMIT ?`,
+    ).all(cutoff, batch) as { id: number }[]).map((r) => r.id);
+    if (!ids.length) return 0;
+    const list = ids.join(','); // integers read from the database: nothing to escape
+    db.transaction(() => {
+      db.exec(`DELETE FROM mission_search WHERE event_id IN (${list})`);
+      db.exec(`DELETE FROM ${table} WHERE id IN (${list})`);
+    })();
+    return ids.length;
+  },
+
+  /** Whether the cold events archive is attached to this connection. */
+  eventsArchiveAttached(): boolean {
+    return (db.prepare(`PRAGMA database_list`).all() as { name: string }[]).some((d) => d.name === 'archive');
+  },
+
+  /** Deletes the raw learnings captured before `cutoff`. Returns how many went. */
+  pruneLearnings(cutoff: number): number {
+    return db.prepare(`DELETE FROM learnings WHERE ts < ?`).run(cutoff).changes;
+  },
+
   // ── users & sessions (Phase M.1) ──────────────────────────────────────────
   createUser(input: {
     id?: string;
