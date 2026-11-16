@@ -126,7 +126,7 @@ test('a member without settings:write sees the state, not the button', async () 
   try {
     await m.until(() => row()?.getAttribute('data-update-settings') === 'upToDate', 'the status');
     await m.React.act(async () => { await new Promise((r) => setTimeout(r, 10)); });
-    assert.equal(action(), null);
+    assert.ok(!action(), 'no action for a member without settings:write');
     assert.equal(m.requests.includes('POST /api/ui/updates/check'), false);
   } finally {
     await m.unmount();
