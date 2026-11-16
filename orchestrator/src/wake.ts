@@ -72,6 +72,7 @@ import { existsSync } from 'node:fs';
 import { bus, type BusEvent } from './bus.js';
 import { CRASH_LOOP_HARD_CEILING, MAX_SYSTEM_REQUEUES, dbApi, type TaskRow, type AgentMessageRow, type MissionRow } from './db.js';
 import { diedOfSystemCause } from './crash-loop.js';
+import { isRequeueableInterruption, requeueBackoffMs, toInterruptionReason } from './interruption.js';
 import { presentInboxDigest, isUrgentReturn, returnPayloadOf, type ReturnPayload } from './wake-digest.js';
 import { planTodoClosure } from './todo-closure.js';
 import { originOfDigest, type UserEventOrigin } from './user-origin.js';
@@ -1148,6 +1149,46 @@ export function representBlockedTasks(): number {
   return presented;
 }
 
+/** How recent a system death must be for the boot sweep to replay its task. */
+export const BOOT_REQUEUE_MAX_AGE_MS = 24 * 60 * 60_000;
+
+/**
+ * Boot pass that sends back to PENDING the tasks a recent system death left
+ * BLOCKED once their automatic retries ran out (TIM-0149). A restart often
+ * removes the very cause (a reboot that killed the missions, an overloaded
+ * backend), and those tasks otherwise waited for a human to notice them.
+ *
+ * Bounded so a restart never turns into a spending spree:
+ *   - only a replayable cause (`isRequeueableInterruption`): a quota, an auth
+ *     failure or a stop is not cured by a restart;
+ *   - only a task blocked for less than `BOOT_REQUEUE_MAX_AGE_MS`: an update
+ *     must not replay weeks-old work (stale reviews cost credits). `updated_at`
+ *     stands for the block time: a BLOCKED task is rarely written to again;
+ *   - only under `CRASH_LOOP_HARD_CEILING` deaths. The count is never reset
+ *     here and each new death still adds one, so a task gets at most a couple
+ *     of boot replays before only a human can restart it (TIM-0065).
+ *
+ * Runs before `representBlockedTasks`, so a replayed task is not also handed
+ * to its pilot as blocked. Returns how many tasks it requeued.
+ */
+export function requeueRecentSystemDeaths(now: number = Date.now()): number {
+  let requeued = 0;
+  for (const t of dbApi.listTasks('BLOCKED')) {
+    if (isMirrorTask(t)) continue;
+    const reason = toInterruptionReason(t.interrupted_reason);
+    if (!reason || !isRequeueableInterruption(reason)) continue;
+    if (now - t.updated_at >= BOOT_REQUEUE_MAX_AGE_MS) continue;
+    const deaths = t.requeue_count ?? 0;
+    if (deaths >= CRASH_LOOP_HARD_CEILING) continue;
+    dbApi.updateTaskStatus(t.id, 'PENDING');
+    // Same backoff as an agent's requeue: an overloaded backend may still be.
+    dbApi.deferTask(t.id, now + requeueBackoffMs(Math.max(1, deaths)));
+    console.log(`[wake] boot: task ${t.id} requeued after a system death (${reason}, ${deaths}/${CRASH_LOOP_HARD_CEILING} deaths)`);
+    requeued++;
+  }
+  return requeued;
+}
+
 /**
  * TO DO ideas this closure settles, for the pilot: without it the orchestrator
  * goes on ticking them by hand. Read from the PLAN — the chain applies it a
@@ -1539,6 +1580,12 @@ export function startWake(): () => void {
   // otherwise it stays BLOCKED forever (the bug the user hit). The
   // task_blocked recap comes from `orchestrator-wake` → excluded from the inbox sweep above,
   // hence this dedicated pass. handleTaskBlocked honours the anti-loop.
+  try {
+    const requeued = requeueRecentSystemDeaths();
+    if (requeued) console.log(`[wake] boot: ${requeued} task(s) BLOCKED by a system death requeued`);
+  } catch (err) {
+    console.error(`[wake] boot requeue-sweep error: ${(err as Error).message}`);
+  }
   try {
     const presented = representBlockedTasks();
     if (presented) console.log(`[wake] boot: ${presented} task(s) BLOCKED re-presented`);
