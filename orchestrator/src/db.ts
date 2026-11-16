@@ -4802,7 +4802,7 @@ export const dbApi = {
   updateTaskStatus(
     id: string,
     status: TaskStatus,
-    opts: { blockedReason?: string | null; doneComment?: string | null } = {},
+    opts: { blockedReason?: string | null; doneComment?: string | null; byPerson?: boolean } = {},
   ): void {
     const prev = getTaskStmt.get(id) as TaskRow | undefined;
     // §7, at the entry rather than at the SQL: `guardMergeDone` reads the text
@@ -4824,7 +4824,12 @@ export const dbApi = {
     // Sha extracted from the comment (merger fallback) → we persist it for audit. New
     if (g.mergedSha) setTaskMergedShaStmt.run(g.mergedSha, Date.now(), id);
     if (g.status === 'BLOCKED' && prev?.status !== 'BLOCKED') {
-      bus.publish({ kind: 'task_blocked', taskId: id, reason: g.blockedReason });
+      // A person who blocks a task has decided its fate: the pilot owes them
+      // nothing, so no return is pending — neither the blockage recap nor the
+      // death of the stopped mission, nor a re-presentation at the next boot
+      // (the same marker `scope-stop.ts` writes).
+      if (opts.byPerson) markReturnNotifiedStmt.run(1, id);
+      bus.publish({ kind: 'task_blocked', taskId: id, reason: g.blockedReason, ...(opts.byPerson ? { byPerson: true } : {}) });
     }
     if (g.status !== 'BLOCKED' && prev?.status === 'BLOCKED') {
       bus.publish({ kind: 'task_unblocked', taskId: id });
@@ -5323,6 +5328,22 @@ export const dbApi = {
   },
   isTaskReturnNotified(id: string): boolean {
     return ((getTaskStmt.get(id) as TaskRow | undefined)?.return_notified ?? 0) === 1;
+  },
+  /** Status of the latest recap the wake loop wrote about each of these tasks
+   *  (`pending`, `delivered`, `expired`…); a task without one is absent. One
+   *  scan for the whole list: the boot sweep asks about every BLOCKED task. */
+  latestTaskRecapStatus(sender: string, taskIds: readonly string[]): Map<string, string> {
+    const out = new Map<string, string>();
+    if (taskIds.length === 0) return out;
+    const rows = db.prepare(
+      `SELECT json_extract(payload, '$.task_id') AS task_id, status FROM agent_messages
+        WHERE from_agent = ? AND json_valid(payload)
+          AND json_extract(payload, '$.kind') = 'wake_recap'
+          AND json_extract(payload, '$.task_id') IN (SELECT value FROM json_each(?))
+        ORDER BY created_at ASC, rowid ASC`,
+    ).all(sender, JSON.stringify(taskIds)) as { task_id: string; status: string }[];
+    for (const r of rows) out.set(r.task_id, r.status);
+    return out;
   },
   /** Mark (or unmark) this mission's work return as already delivered to its pilot.
    *  Scoped to the CURRENT TURN: cleared when a turn starts, set when the return
