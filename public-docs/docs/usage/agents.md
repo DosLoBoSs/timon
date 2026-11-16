@@ -193,6 +193,8 @@ The options and the order of your pinned tabs belong to your account, like your 
 
 One orchestrator receives what Timon says on its own: the wake recaps (a blocked task, the end of a batch) and the notifications. A fresh install starts with `_main`; renaming it during setup keeps it in that seat.
 
+A blocked task is reported to its orchestrator once, not again after a restart. A task you block yourself from the Kanban board is not reported at all: the decision is yours, so no orchestrator is woken to act on it.
+
 To give the seat to another orchestrator, for example one you created yourself, right-click its avatar in the chat card and choose **Set as main orchestrator**. It must have the orchestrator role, belong to no project and not be temporary; Timon says why when it is refused. The change takes effect for the next recap.
 
 The agent that holds the seat cannot be removed: designate another orchestrator first, then remove the old one.
