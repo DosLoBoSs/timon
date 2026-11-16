@@ -52,7 +52,7 @@ Manifest identity of this plugin.
 
 > **notices**: `object`
 
-API 16: the bottom-left notice cards. `push` shows a card, or updates the
+API 17: the bottom-left notice cards. `push` shows a card, or updates the
 one this plugin pushed with the same `id`; a card the account closed stays
 closed (pushing it again shows nothing). Throws on an invalid notice. At
 most three cards show at once, warnings first. `remove` takes a card off

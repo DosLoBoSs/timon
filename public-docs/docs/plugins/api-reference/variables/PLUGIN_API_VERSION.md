@@ -3,4 +3,4 @@
 
 # Variable: PLUGIN\_API\_VERSION
 
-> `const` **PLUGIN\_API\_VERSION**: `16` = `16`
+> `const` **PLUGIN\_API\_VERSION**: `17` = `17`

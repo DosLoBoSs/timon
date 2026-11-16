@@ -5,7 +5,7 @@
 
 > **NoticeAction** = `object`
 
-One button of a notice card (client API 16). `href`: a page of the app
+One button of a notice card (client API 17). `href`: a page of the app
 (`/settings`) or an `https:` / `http:` address, opened in a new window.
 `dismiss`: the click also closes the card for good, as its × does. An
 action needs at least one of `onSelect`, `href`, `dismiss: true`.

@@ -5,4 +5,4 @@
 
 > **NoticeTone** = `"info"` \| `"warning"` \| `"success"`
 
-How a notice card reads (client API 16).
+How a notice card reads (client API 17).
