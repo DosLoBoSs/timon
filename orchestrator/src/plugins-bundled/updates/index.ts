@@ -46,9 +46,14 @@ export const NOTICES_SETTING = 'TIMON_NOTICES_CHECK';
 /** First check once the daemon has settled, spread over a minute so a fleet started together does not hit the site together. */
 const FIRST_CHECK_MIN_MS = 30_000;
 const FIRST_CHECK_JITTER_MS = 60_000;
+/** Between two successful checks; a failed one is retried sooner (`checkDelayAfter`, checker.ts). */
 export const CHECK_INTERVAL_MS = 6 * 3_600_000;
-/** A short tick that only looks at the clock: switching the setting back on applies without a restart. */
-const TICK_MS = 10 * 60_000;
+/**
+ * A short tick that only looks at the clock: switching the setting back on
+ * applies without a restart, and the 15 min retry after a failure is not
+ * stretched by the tick.
+ */
+const TICK_MS = 60_000;
 
 function checksAllowed(): boolean {
   return buildInfo().channel !== 'dev' && settingBool(UPDATES_SETTING);
@@ -103,15 +108,12 @@ export function apply(ctx: Context): void {
 
   // Not under the test runner: a suite that boots the kernel must not reach timon-ai.com.
   if (process.env.NODE_TEST_CONTEXT) return;
-  let lastAttempt = 0;
   let lastNoticesAttempt = 0;
   const tick = (): void => {
     // Off or a source build: the clock is not even read, so switching it on checks at the next tick.
     if (!checksAllowed()) return;
-    if (Date.now() - lastAttempt >= CHECK_INTERVAL_MS) {
-      lastAttempt = Date.now();
-      void checker.check();
-    }
+    // The checker keeps the schedule: a failure brings the next check closer, and a check asked by the desktop or by hand pushes it back.
+    if (Date.now() >= checker.nextCheckAt(CHECK_INTERVAL_MS)) void checker.check();
     if (noticesEnabled() && Date.now() - lastNoticesAttempt >= CHECK_INTERVAL_MS) {
       lastNoticesAttempt = Date.now();
       void feed.refresh();

@@ -31,6 +31,20 @@ export const USER_AGENT = 'Timon-Updater';
 const FETCH_TIMEOUT_MS = 15_000;
 const MAX_REDIRECTS = 5;
 
+/**
+ * Wait before the next check after this many failures in a row: a manifest
+ * not yet online or a site briefly down must not hide a release for the whole
+ * normal interval. Each wait is four times the previous one, from 15 min, and
+ * never beyond the interval itself.
+ */
+const FIRST_RETRY_MS = 15 * 60_000;
+const RETRY_GROWTH = 4;
+
+export function checkDelayAfter(consecutiveFailures: number, intervalMs: number): number {
+  if (consecutiveFailures <= 0) return intervalMs;
+  return Math.min(intervalMs, FIRST_RETRY_MS * RETRY_GROWTH ** (consecutiveFailures - 1));
+}
+
 export type UpdateState = 'off' | 'dev' | 'unchecked' | 'up_to_date' | 'available' | 'failed';
 
 export type UpdateArtifact = {
@@ -185,6 +199,9 @@ export class UpdateChecker {
   private lastVerdict: 'up_to_date' | 'available' | 'failed' | null = null;
   private checkedAt: string | null = null;
   private running: Promise<UpdateStatus> | null = null;
+  /** Start of the last check that left the machine, whoever asked for it; 0 before the first. */
+  private lastAttemptAt = 0;
+  private consecutiveFailures = 0;
 
   constructor(private readonly deps: CheckerDeps) {}
 
@@ -235,6 +252,16 @@ export class UpdateChecker {
     };
   }
 
+  /**
+   * When the scheduled check is due, in epoch ms: the normal interval after a
+   * success, a short backoff after a failure (`checkDelayAfter`). A check asked
+   * by hand or by the desktop counts too, so the schedule never repeats it at once.
+   */
+  nextCheckAt(intervalMs: number): number {
+    if (this.lastAttemptAt === 0) return 0;
+    return this.lastAttemptAt + checkDelayAfter(this.consecutiveFailures, intervalMs);
+  }
+
   /** One check; concurrent callers share it. Never throws. */
   check(): Promise<UpdateStatus> {
     if (this.running) return this.running;
@@ -245,6 +272,7 @@ export class UpdateChecker {
   private async run(): Promise<UpdateStatus> {
     // Off or a source build: not a single request leaves the machine.
     if (this.blocked()) return this.status();
+    this.lastAttemptAt = this.now().getTime();
     const log = this.deps.log ?? ((message: string) => console.warn(`[updates] ${message}`));
     try {
       const installed = this.deps.installed();
@@ -274,10 +302,12 @@ export class UpdateChecker {
       this.offerExpiresAt = Date.parse(payload.expiresAt);
       this.lastVerdict = offer ? 'available' : 'up_to_date';
       this.checkedAt = this.now().toISOString();
+      this.consecutiveFailures = 0;
       if (offer && picked && offer.version !== known) this.deps.onOffer?.(offer, picked.from);
     } catch (error) {
       this.lastVerdict = 'failed';
       this.checkedAt = this.now().toISOString();
+      this.consecutiveFailures += 1;
       log(`no update known: ${(error as Error).message}`);
     }
     return this.status();
