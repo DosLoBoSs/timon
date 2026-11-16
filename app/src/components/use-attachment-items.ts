@@ -39,6 +39,14 @@ export type AttachmentItems<A extends StoredAttachment, Id> = {
   sendQueued: (ownerId: Id) => Promise<string[]>;
 };
 
+export type AttachmentItemsOptions<A extends StoredAttachment, Id> = {
+  /**
+   * Whether a listed file belongs to another owner than `ownerId` (an
+   * iteration's task shows its root's files, which it cannot remove).
+   */
+  inheritedOf?: (attachment: A, ownerId: Id) => boolean;
+};
+
 function heldBy<A extends StoredAttachment>(items: readonly AttachmentItem<A>[]): { count: number; bytes: number } {
   let bytes = 0;
   for (const item of items) bytes += item.state === 'stored' ? item.attachment.size : item.file.size;
@@ -53,6 +61,7 @@ export function useAttachmentItems<A extends StoredAttachment, Id>(
   ownerId: Id | null,
   gestures: AttachmentGestures<A, Id>,
   owner: 'task' | 'todo',
+  options: AttachmentItemsOptions<A, Id> = {},
 ): AttachmentItems<A, Id> {
   const [items, setItems] = useState<AttachmentItem<A>[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
@@ -61,6 +70,8 @@ export function useAttachmentItems<A extends StoredAttachment, Id>(
   // A host may hand a new object on every render: the calls are read when made.
   const calls = useRef(gestures);
   calls.current = gestures;
+  const inheritedOf = useRef(options.inheritedOf);
+  inheritedOf.current = options.inheritedOf;
 
   useEffect(() => {
     setItems([]);
@@ -68,7 +79,10 @@ export function useAttachmentItems<A extends StoredAttachment, Id>(
     let cancelled = false;
     calls.current.list(ownerId).then((list) => {
       if (cancelled) return;
-      setItems(list.map((attachment) => ({ key: attachment.id, state: 'stored', attachment, inherited: false })));
+      const inherited = inheritedOf.current;
+      setItems(list.map((attachment) => ({
+        key: attachment.id, state: 'stored', attachment, inherited: inherited ? inherited(attachment, ownerId) : false,
+      })));
     }).catch(() => { if (!cancelled) setErrors([t('taskForm.attachments.loadFailed')]); });
     return () => { cancelled = true; };
   }, [ownerId]);
