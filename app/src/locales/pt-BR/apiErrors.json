@@ -18,6 +18,7 @@
     "user_not_found": "Usuário não encontrado.",
     "team_not_found": "Equipe não encontrada.",
     "agent_not_found": "Agente não encontrado.",
+    "agent_name_taken": "Já existe um agente chamado {name}. Nomes que diferem apenas em maiúsculas ou na codificação dos acentos são o mesmo agente.",
     "mission_not_found": "Esta missão não existe mais.",
     "mission_not_running": "Nenhum agente está em execução para esta missão.",
     "todo_not_found": "Esta ideia não existe mais.",

@@ -1914,6 +1914,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} 已更名为 {name}。有 {count} 个触发器的筛选条件通过模式或子字符串匹配旧名称，请检查：{names}",
     "renameOpenTriggers": "打开触发器",
+    "invalidName": "名称无效。请使用任意语言的字母和数字，以及 . _ -，不含空格或表情符号，并以字母或数字开头（最多 80 字节，约 26 个汉字）。",
     "autoFitView": "自动适应视图",
     "poleProjects": "{count} 个项目",
     "newPole": "新建项目组",

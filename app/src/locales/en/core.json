@@ -1654,6 +1654,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} is now {name}. Check {count} trigger(s) whose filter matches the old name by pattern or substring: {names}",
     "renameOpenTriggers": "Open triggers",
+    "invalidName": "Invalid name. Use letters and digits in any language, plus . _ -, with no spaces or emoji, starting with a letter or a digit (80 bytes at most, about 26 Chinese characters).",
     "autoFitView": "Auto-fit view",
     "poleProjects": "{count} project(s)",
     "newPole": "New pole",

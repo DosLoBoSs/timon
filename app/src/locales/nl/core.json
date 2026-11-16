@@ -1884,6 +1884,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} heet nu {name}. Controleer {count} trigger(s) waarvan het filter de oude naam via een patroon of deeltekst raakt: {names}",
     "renameOpenTriggers": "Triggers openen",
+    "invalidName": "Ongeldige naam. Gebruik letters en cijfers in elke taal, plus . _ -, zonder spaties of emoji, beginnend met een letter of cijfer (maximaal 80 bytes, ongeveer 26 Chinese tekens).",
     "autoFitView": "Weergave automatisch passend maken",
     "poleProjects": "{count} project(en)",
     "newPole": "Nieuwe pool",

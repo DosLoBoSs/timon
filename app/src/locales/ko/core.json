@@ -1884,6 +1884,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old}은(는) 이제 {name}입니다. 필터가 패턴이나 부분 문자열로 이전 이름과 일치하는 트리거 {count}개를 확인하세요: {names}",
     "renameOpenTriggers": "트리거 열기",
+    "invalidName": "이름이 올바르지 않습니다. 모든 언어의 문자와 숫자, 그리고 . _ - 를 사용하고, 공백이나 이모지 없이 문자나 숫자로 시작하세요(최대 80바이트, 한자 약 26자).",
     "autoFitView": "보기 자동 맞춤",
     "poleProjects": "프로젝트 {count}개",
     "newPole": "새 폴",

@@ -1884,6 +1884,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} nazywa się teraz {name}. Sprawdź wyzwalacze, których filtr pasuje do starej nazwy przez wzorzec lub fragment ({count}): {names}",
     "renameOpenTriggers": "Otwórz wyzwalacze",
+    "invalidName": "Nieprawidłowa nazwa. Użyj liter i cyfr w dowolnym języku oraz . _ -, bez spacji i emoji, zaczynając od litery lub cyfry (maksymalnie 80 bajtów, około 26 znaków chińskich).",
     "autoFitView": "Automatyczne dopasowanie widoku",
     "poleProjects": "{count} {count, plural, one {projekt} few {projekty} many {projektów} other {projektu}}",
     "newPole": "Nowy biegun",

@@ -1884,6 +1884,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} agora é {name}. Verifique {count} gatilho(s) cujo filtro corresponde ao nome antigo por padrão ou trecho: {names}",
     "renameOpenTriggers": "Abrir gatilhos",
+    "invalidName": "Nome inválido. Use letras e números de qualquer idioma, além de . _ -, sem espaços nem emojis, começando por uma letra ou um número (no máximo 80 bytes, cerca de 26 caracteres chineses).",
     "autoFitView": "Ajustar a visualização",
     "poleProjects": "{count} projeto(s)",
     "newPole": "Novo polo",

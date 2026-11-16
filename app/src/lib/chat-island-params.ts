@@ -6,12 +6,11 @@
 
 import { EGRESS_DEEP_LINK_PARAM } from './egress';
 import { allLeaves, routeParams, type IslandContent, type IslandParams, type IslandTree } from './island-tree';
+import { isValidAgentName, normalizeAgentName } from './agent-name-rule';
 
 export const CHAT_ISLAND_KEY = 'chat';
 export const CHAT_ISLAND_TYPE = `@timon/missions:${CHAT_ISLAND_KEY}`;
 
-// The daemon's own rule for an agent name (`agent-config.ts`).
-const AGENT = /^[A-Za-z0-9._-]{1,128}$/;
 const MISSION = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 /**
@@ -21,8 +20,10 @@ const MISSION = /^[A-Za-z0-9_.:-]{1,128}$/;
  */
 export function parseChatIslandParams(raw: unknown): IslandParams | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { agent, missionId, fresh } = raw as Record<string, unknown>;
-  if (typeof agent !== 'string' || !AGENT.test(agent)) return null;
+  const { agent: rawAgent, missionId, fresh } = raw as Record<string, unknown>;
+  // The daemon's own rule for an agent name (`agent-name-rule.ts`), in NFC as it stores them.
+  const agent = typeof rawAgent === 'string' ? normalizeAgentName(rawAgent) : '';
+  if (!isValidAgentName(agent)) return null;
   if (missionId !== undefined && missionId !== null && (typeof missionId !== 'string' || !MISSION.test(missionId))) return null;
   const mission = typeof missionId === 'string' ? missionId : null;
   // A fresh chat is one that has no mission yet.
@@ -41,7 +42,7 @@ export function chatIslandShown(
   missionId: string,
   owner: string,
 ): { agent: string; missionId: string; fresh: false } | null {
-  const agent = AGENT.test(owner) ? owner : current.agent;
+  const agent = isValidAgentName(owner) ? owner : current.agent;
   if (current.agent === agent && current.missionId === missionId) return null;
   return { agent, missionId, fresh: false };
 }
@@ -61,7 +62,7 @@ export type RouteChat = { agent: string; missionId: string };
  * page shows the view's own agent, which the URL already says.
  */
 export function routeChatParams(view: string, shown: RouteChat | null): IslandParams {
-  if (!shown || shown.agent === view || !AGENT.test(view) || !AGENT.test(shown.agent) || !MISSION.test(shown.missionId)) return {};
+  if (!shown || shown.agent === view || !isValidAgentName(view) || !isValidAgentName(shown.agent) || !MISSION.test(shown.missionId)) return {};
   return { view, agent: shown.agent, missionId: shown.missionId };
 }
 
