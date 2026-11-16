@@ -99,6 +99,7 @@ import { UpdateWindow } from './update-window.js';
 import { consentApproves, grantUpdateConsent, revokeUpdateConsent, takeUpdateConsent } from './update-consent.js';
 import { UpdateDownloader } from './update-download.js';
 import { UPDATE_CHANNELS, UpdateController, localDaemonGet, registerUpdateIpc } from './update-ipc.js';
+import { checkLocalUpdatesIfStale } from './update-freshness.js';
 import { missionsAtStake, readMissionCount, removeAppImageBackup } from './update-install.js';
 import { nodeInstallerSystem, silentInstall } from './update-installer.js';
 import { aboutCopy, readThirdPartyNotices, registerAboutIpc, thirdPartyNoticesPath } from './about.js';
@@ -771,12 +772,18 @@ function openDetachedWindow(caller: AppWindow, url: string, machineId: string | 
  * up on the web app (TODO #485). Waking it runs alongside the startup view's
  * wait rather than before it, so the window never opens later for it.
  */
-/** Once the daemon answers, it hears that the app opened (anonymous usage statistics). */
+/**
+ * Once the daemon answers, it hears that the app opened (anonymous usage
+ * statistics), and checks for updates again if its last success is stale.
+ */
 function noteDesktopOpened(cfg: DesktopConfig): void {
   if (!daemonUp) return;
   void reportDesktopOpened(originOf(cfg.daemon.listen), cfg.home, app.getVersion())
     .then((line) => console.log(`[desktop] opening reported → ${line}`))
     .catch(() => { /* never thrown, see telemetry-ping.ts */ });
+  void checkLocalUpdatesIfStale(originOf(cfg.daemon.listen), cfg.home)
+    .then((line) => console.log(`[desktop] update check on connection → ${line}`))
+    .catch(() => { /* never thrown, see update-freshness.ts */ });
 }
 
 function rearmAppIfDown(cfg: DesktopConfig, uiUrl: string): void {
