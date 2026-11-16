@@ -85,6 +85,16 @@ function transcript(codes: Record<string, number>): string {
 const backslashNames = (dir: string) => readdirSync(dir).filter((name) => name.includes('\\'));
 const backslashNamesAtStart = new Set(backslashNames(process.cwd()));
 
+/**
+ * After writing the unit, the Linux path reads `systemctl show` back and only
+ * trusts POSIX paths there (`readEffectiveUnit`). The fixture's supervisor
+ * echoes the temporary directories, which are `C:\…` on a Windows runner: the
+ * unit is then judged foreign and the install refused. That code runs on Linux
+ * only, so the tests that need it to accept the unit are skipped on Windows.
+ */
+const SYSTEMD_IDENTITY = process.platform === 'win32'
+  && 'the systemd unit identity is read as POSIX paths, which a Windows temporary directory is not';
+
 function fixture(platform: NodeJS.Platform, exec?: (n: string, a: string[]) => ExecResult): ServiceOpts {
   const homeDir = mkdtempSync(join(tmpdir(), 'timon-service-test-'));
   const installDir = join(homeDir, 'timon', 'orchestrator');
@@ -122,7 +132,7 @@ function fixture(platform: NodeJS.Platform, exec?: (n: string, a: string[]) => E
   };
 }
 
-test('linux: the shipped template is rendered, linger is enabled on the user\'s answer, the unit is started', () => {
+test('linux: the shipped template is rendered, linger is enabled on the user\'s answer, the unit is started', { skip: SYSTEMD_IDENTITY }, () => {
   const calls: string[][] = [];
   const opts = fixture('linux', (n, a) => {
     calls.push([n, ...a]);
@@ -142,7 +152,7 @@ test('linux: the shipped template is rendered, linger is enabled on the user\'s 
   assert.deepEqual(calls[2], ['systemctl', '--user', 'enable', '--now', LINUX_UNIT]);
 });
 
-test('linux: without the user\'s answer, lingering is never touched (audit F2)', () => {
+test('linux: without the user\'s answer, lingering is never touched (audit F2)', { skip: SYSTEMD_IDENTITY }, () => {
   const calls: string[][] = [];
   const opts = fixture('linux', (n, a) => {
     calls.push([n, ...a]);
@@ -158,7 +168,7 @@ test('linux: without the user\'s answer, lingering is never touched (audit F2)',
  * was already on: left on, the daemon would outlive the logout the user just
  * declined. Turned off, and the result says what else that stops.
  */
-test('linux: an explicit "session" turns an existing lingering off and says what else stops (audit F2)', () => {
+test('linux: an explicit "session" turns an existing lingering off and says what else stops (audit F2)', { skip: SYSTEMD_IDENTITY }, () => {
   let linger = 'yes';
   const calls: string[][] = [];
   const opts = fixture('linux', (n, a) => {
@@ -180,7 +190,7 @@ test('linux: an explicit "session" turns an existing lingering off and says what
   assert.equal(after.lingering, false);
 });
 
-test('linux: an explicit "session" with lingering already off changes nothing', () => {
+test('linux: an explicit "session" with lingering already off changes nothing', { skip: SYSTEMD_IDENTITY }, () => {
   const calls: string[][] = [];
   const opts = fixture('linux', (n, a) => {
     calls.push([n, ...a]);
@@ -192,7 +202,7 @@ test('linux: an explicit "session" with lingering already off changes nothing', 
   assert.doesNotMatch(res.lines.join('\n'), /other user services/);
 });
 
-test('linux: a "session" only read from the file (a later reinstall) leaves a lingering switched on since', () => {
+test('linux: a "session" only read from the file (a later reinstall) leaves a lingering switched on since', { skip: SYSTEMD_IDENTITY }, () => {
   const calls: string[][] = [];
   const opts = fixture('linux', (n, a) => {
     calls.push([n, ...a]);
@@ -203,7 +213,7 @@ test('linux: a "session" only read from the file (a later reinstall) leaves a li
   assert.ok(!calls.some((c) => c[0] === 'loginctl'), JSON.stringify(calls));
 });
 
-test('linux: a lingering that will not go off is said, and the install still stands', () => {
+test('linux: a lingering that will not go off is said, and the install still stands', { skip: SYSTEMD_IDENTITY }, () => {
   const opts = fixture('linux', (n, a) => {
     if (n === 'loginctl' && a[0] === 'disable-linger') return { code: 1, stdout: '', stderr: 'Access denied' };
     return { code: 0, stdout: n === 'loginctl' ? 'yes\n' : '', stderr: '' };
@@ -213,7 +223,7 @@ test('linux: a lingering that will not go off is said, and the install still sta
   assert.match(res.lines.join('\n'), /lingering could not be turned off \(Access denied\): Timon keeps running after you log out/);
 });
 
-test('linux: the recorded answer is what an install with no explicit one follows', () => {
+test('linux: the recorded answer is what an install with no explicit one follows', { skip: SYSTEMD_IDENTITY }, () => {
   const calls: string[][] = [];
   const opts = fixture('linux', (n, a) => {
     calls.push([n, ...a]);
@@ -266,7 +276,7 @@ test('windows: changing the answer records it and asks for the task to be regist
   assert.deepEqual(calls, [], 'nothing runs before the reinstall, which elevates once');
 });
 
-test('linux status reads lingering from loginctl: "not logged in or lingering" is a no', () => {
+test('linux status reads lingering from loginctl: "not logged in or lingering" is a no', { skip: SYSTEMD_IDENTITY }, () => {
   const read = (linger: ExecResult) => {
     const opts = fixture('linux', (n) => (n === 'loginctl' ? linger : { code: 0, stdout: '', stderr: '' }));
     assert.equal(installService({ ...opts, sessionMode: null }).ok, true);
@@ -301,7 +311,7 @@ test('linux: enable returning zero does not validate a malformed unit', () => {
   assert.match(result.reason!, /Cannot verify/);
 });
 
-test('linux: repair the known packaged template, but refuse foreign units, changed commands and drop-ins', () => {
+test('linux: repair the known packaged template, but refuse foreign units, changed commands and drop-ins', { skip: SYSTEMD_IDENTITY }, () => {
   for (const scenario of ['ours', 'foreign', 'command', 'drop-in', 'unavailable']) {
     const base = fixture('linux');
     const opts = { ...packagedServiceOptions(base, '/package/timon', 3110), pendingHandover: true };
@@ -1018,7 +1028,7 @@ test('windows: un schtasks qui refuse remonte le refus, pas un succès', () => {
   assert.ok(res.lines.join(' ').includes('Access is denied.'));
 });
 
-test('uninstall removes the unit and never touches TIMON_HOME', () => {
+test('uninstall removes the unit and never touches TIMON_HOME', { skip: SYSTEMD_IDENTITY }, () => {
   const calls: string[][] = [];
   const opts = fixture('linux', (n, a) => {
     calls.push([n, ...a]);
@@ -1090,7 +1100,7 @@ test('linux: the unit PATH starts with the agent CLI directories the shell found
   assert.equal(renderUnit({ ...opts }).match(/^Environment=PATH=.*$/m)?.[0], 'Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin');
 });
 
-test('status: « enregistré » et « tourne » sont deux réponses distinctes', () => {
+test('status: « enregistré » et « tourne » sont deux réponses distinctes', { skip: SYSTEMD_IDENTITY }, () => {
   // Unit écrite, mais systemd la dit inactive : installée, pas démarrée. C'est
   // l'état exact d'un premier lancement empaqueté, où le daemon embarqué tient
   // encore le port.
@@ -1154,7 +1164,7 @@ test('linux: stale definitions and unavailable supervisors fail closed', () => {
   }
 });
 
-test('linux: quoted paths, home specifiers and the legacy default are recognized', () => {
+test('linux: quoted paths, home specifiers and the legacy default are recognized', { skip: SYSTEMD_IDENTITY }, () => {
   const opts = fixture('linux');
   for (const home of [opts.timonHome, '%h/.timon']) {
     opts.exec = () => ({ code: 0, stderr: '', stdout: supervised(opts, home) });
@@ -1197,7 +1207,7 @@ function previousRelease(runningFrom: (opts: ServiceOpts) => string) {
   return { opts, file, old, calls };
 }
 
-test('linux upgrade: the unit of a previous release is ours, rewritten, and its daemon restarted', () => {
+test('linux upgrade: the unit of a previous release is ours, rewritten, and its daemon restarted', { skip: SYSTEMD_IDENTITY }, () => {
   const { opts, file, calls } = previousRelease((o) => join(o.releasesRoot!, 'old-release', 'resources', 'orchestrator'));
   const result = installService(opts);
   assert.equal(result.ok, true, result.lines.join('\n'));
@@ -1209,7 +1219,7 @@ test('linux upgrade: the unit of a previous release is ours, rewritten, and its 
   assert.equal(acts[enable + 1], `systemctl --user restart ${opts.unitName}`);
 });
 
-test('linux upgrade: a first install does not restart, and nothing outside our releases is adopted', () => {
+test('linux upgrade: a first install does not restart, and nothing outside our releases is adopted', { skip: SYSTEMD_IDENTITY }, () => {
   const first = previousRelease((o) => o.installDir);
   first.opts.restart = false;
   assert.equal(installService(first.opts).ok, true);
@@ -1544,7 +1554,7 @@ test('windows: start enables the task, runs it, and clears the marker', () => {
   assert.equal(existsSync(marker), true, 'a service that did not start is still stopped');
 });
 
-test('linux: stop and start go through systemctl, the unit stays enabled, the marker follows', () => {
+test('linux: stop and start go through systemctl, the unit stays enabled, the marker follows', { skip: SYSTEMD_IDENTITY }, () => {
   const calls: string[][] = [];
   const opts = fixture('linux', (n, a) => { calls.push([n, ...a]); return { code: 0, stdout: '', stderr: '' }; });
   assert.equal(installService(opts).ok, true);
