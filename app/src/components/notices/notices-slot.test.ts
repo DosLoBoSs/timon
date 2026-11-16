@@ -109,7 +109,7 @@ test('a pushed card shows once the closed list is read, as text, and leaves with
     assert.deepEqual(cards(), ['acme:hello']);
     const card = document.querySelector('[data-notice-card]')!;
     assert.equal(card.getAttribute('data-notice-card'), 'warning');
-    assert.equal(document.querySelector('[data-notice] img'), null, 'the title is text');
+    assert.ok(!document.querySelector('[data-notice] img'), 'the title is text');
     assert.match(card.textContent ?? '', /<b>two<\/b>/);
     assert.equal((globalThis as { __pwned?: number }).__pwned, undefined);
 
@@ -170,7 +170,7 @@ test('a closed card is remembered by the daemon and stays closed; one closed els
     });
     await m.until(() => cards().length === 2, 'two cards');
     assert.deepEqual(cards(), ['acme:here', 'acme:sticky']);
-    assert.equal(document.querySelector('[data-notice="acme:sticky"] [data-notice-dismiss]'), null, 'no × when not dismissible');
+    assert.ok(!document.querySelector('[data-notice="acme:sticky"] [data-notice-dismiss]'), 'no × when not dismissible');
 
     await m.click(document.querySelector('[data-notice="acme:here"] [data-notice-dismiss]'));
     await m.until(() => m.posts.length === 1, 'the closing sent');
@@ -335,7 +335,7 @@ test('the examples/plugin-notice template pushes its card and paints every card,
     const ctx = m.pluginContext(manifest.timon.id, manifest.timon.client.slots);
     await m.React.act(async () => { example.apply(ctx); });
     await m.until(() => document.querySelector('[data-compact-notice="welcome"]') !== null, 'the template painted its card');
-    assert.equal(document.querySelector('[data-notice-card]'), null, 'the product card is not painted under it');
+    assert.ok(!document.querySelector('[data-notice-card]'), 'the product card is not painted under it');
 
     await m.click(document.querySelector('[data-compact-dismiss]'));
     await m.until(() => cards().length === 0, 'closed');
