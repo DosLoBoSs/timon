@@ -430,6 +430,22 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
   });
 
   /**
+   * Shows the closed cards again: forgets the caller's list, never another
+   * account's (the identity comes from the session alone, the request has no
+   * body). Same authentication as the write above.
+   */
+  app.delete('/api/prefs/dismissed-notices', (req, res) => {
+    const auth = requireAuth(req, res);
+    if (!auth) return;
+    const userId = auth.user?.id;
+    if (!userId) {
+      forbidden(req, res, { kind: 'account_required' });
+      return;
+    }
+    res.json({ dismissed: dbApi.userDismissedNoticesClear(userId) });
+  });
+
+  /**
    * The one-time token an exposed install asks for at first setup. Operator
    * only (daemon-token): printed by `timon setup-token`. Never a browser route.
    */
