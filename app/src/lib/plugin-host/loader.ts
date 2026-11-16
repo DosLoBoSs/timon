@@ -18,6 +18,7 @@ import { activeMachineId } from '@/lib/machines/machine-storage';
 import { LOCAL_MACHINE_ID } from '@/lib/machines/machine-id';
 import { grantClientPermissions } from './plugin-permissions';
 import { typedBinaryInit } from './plugin-api-body';
+import { reservedRouteSegment } from './reserved-routes';
 
 export type PublicPlugin = {
   id: string;
@@ -204,6 +205,15 @@ export function clientContext(id: string, declaredSlots: readonly string[], subs
         if (!isSlotAdmissible(declaredSlots, options.slot)) throw slotAdmissionError(id, options.slot, declaredSlots);
         if (options.slot === 'root' && !mayOccupyRoot) {
           throw new Error(`Plugin ${id} is not allowed in slot root: replacing the whole interface is reserved to a layout, under a licence that includes White Label.`);
+        }
+        if (options.slot === 'page') {
+          // The catch-all paints a `page` entry by path: a key that is no
+          // path would only ever match `next-router`, the Next tree itself.
+          if (!options.key?.startsWith('/')) {
+            throw new Error(`Plugin ${id}: a page registers under its route (\`/acme\`), not \`${options.key ?? ''}\`.`);
+          }
+          const reserved = reservedRouteSegment(options.key);
+          if (reserved) throw new Error(`Plugin ${id} cannot register page ${options.key}: \`${reserved}\` is a route of the product.`);
         }
         const dispose = register({ ...options, pluginId: id }, Component);
         effects.push(dispose);
