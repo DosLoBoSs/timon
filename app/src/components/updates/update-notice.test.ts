@@ -5,8 +5,9 @@
  * `openUpdateDialog()`; closing it is "later" for that version, per account;
  * the end of the build turns it into a warning, or is a card of its own; the
  * desktop flow (download, verify, install, missions first) runs inside it;
- * and the deprecated `updates.banner` slot still loads a plugin but paints
- * nothing.
+ * "Update" opens the update window (`updates.dialog`), which runs the same
+ * flow with the release's highlights; and the deprecated `updates.banner`
+ * slot still loads a plugin but paints nothing.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -72,12 +73,17 @@ async function mount(status: UpdateStatus | null, { dismissed = [], shell = null
     if (!saved.has(key)) saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
     Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
   };
-  for (const key of ['window', 'self', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'Event', 'MouseEvent',
-    'MutationObserver', 'DocumentFragment', 'sessionStorage', 'localStorage'] as const) {
+  // The update window is a Radix dialog: focus, Escape and its portal need these too.
+  for (const key of ['window', 'self', 'document', 'navigator', 'HTMLElement', 'HTMLInputElement', 'HTMLButtonElement',
+    'Element', 'Node', 'NodeFilter', 'MutationObserver', 'CustomEvent', 'Event', 'KeyboardEvent', 'MouseEvent',
+    'PointerEvent', 'FocusEvent', 'DocumentFragment', 'ShadowRoot', 'sessionStorage', 'localStorage'] as const) {
     const value = (dom.window as unknown as Record<string, unknown>)[key];
     if (value !== undefined) install(key, value);
   }
   install('getComputedStyle', dom.window.getComputedStyle.bind(dom.window));
+  install('requestAnimationFrame', dom.window.requestAnimationFrame.bind(dom.window));
+  install('cancelAnimationFrame', dom.window.cancelAnimationFrame.bind(dom.window));
+  install('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   install('IS_REACT_ACT_ENVIRONMENT', true);
   if (shell) Object.assign(dom.window, { timonDesktop: { restartAfterSetup: async () => undefined, updates: shell.bridge } });
   const opened: string[] = [];
@@ -140,6 +146,8 @@ async function mount(status: UpdateStatus | null, { dismissed = [], shell = null
   };
   const unmount = async () => {
     await React.act(async () => { root.unmount(); });
+    // An open window gives its focus back on a timer: let it run before jsdom goes.
+    await React.act(async () => { await new Promise((r) => setTimeout(r, 10)); });
     store.resetUpdateStoreForTests();
     notices.resetNoticesForTests();
     dialog.resetUpdateDialogForTests();
@@ -158,6 +166,7 @@ const card = (key = CARD) => document.querySelector(`[data-notice="${key}"]`);
 const text = (key = CARD) => card(key)?.textContent ?? '';
 const action = (index: number, key = CARD) => card(key)?.querySelector(`[data-notice-action="${index}"]`) ?? null;
 const labels = (key = CARD) => Array.from(card(key)?.querySelectorAll('[data-notice-action]') ?? [], (el) => el.textContent);
+const windowEl = () => document.querySelector('[data-update-dialog]');
 
 test('the deprecated updates.banner slot still loads a plugin, says so once, and paints nothing', async () => {
   const m = await mount(OFFER_STATUS);
@@ -194,7 +203,7 @@ test('no offer, or no right to read it: no update card', async () => {
   }
 });
 
-test('in a browser the card says the version, its one action opens the installer of this system', async () => {
+test('in a browser the card says the version, its one action opens the window, which links the installer of this system', async () => {
   const m = await mount(OFFER_STATUS);
   try {
     await m.until(() => card() !== null, 'the update card');
@@ -202,7 +211,10 @@ test('in a browser the card says the version, its one action opens the installer
     assert.match(text(), /^Timon 0\.1\.8-rc\.1 is available/);
     assert.deepEqual(labels(), ['Update']);
     await m.click(action(0));
-    assert.deepEqual(m.opened, [OFFER_STATUS.available!.artifacts[1]!.url], 'the AppImage, through openUpdateDialog()');
+    await m.until(() => windowEl() !== null, 'the update window');
+    const link = windowEl()?.querySelector('[data-update-dialog-action="installer"]');
+    assert.equal(link?.getAttribute('href'), OFFER_STATUS.available!.artifacts[1]!.url, 'the AppImage, through openUpdateDialog()');
+    assert.deepEqual(m.opened, [], 'nothing downloads by itself');
     assert.ok(card(), 'the action leaves the card');
   } finally {
     await m.unmount();
@@ -283,14 +295,17 @@ test('a build about to stop makes the card a warning that says when; alone, it i
   }
 });
 
-test('in the desktop app Update starts the shell\'s download: progress, cancel, refusal, then Install', async () => {
+test('in the desktop app Update opens the window, which starts the shell\'s download: the card follows it — progress, cancel, refusal, then Install', async () => {
   const shell = fakeShell();
   const m = await mount(OFFER_STATUS, { shell });
   try {
     await m.until(() => labels().join() === 'Update', 'the card');
     await m.click(action(0));
+    await m.until(() => windowEl() !== null, 'the update window');
     assert.deepEqual(shell.calls.filter(([name]) => name === 'start'), [['start']], 'no URL, path or version crosses');
     assert.deepEqual(m.opened, [], 'the shell downloads, not the browser');
+    await m.React.act(async () => { (document.activeElement ?? windowEl()!).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
+    await m.until(() => windowEl() === null, 'the window closed');
 
     const base = { version: '0.1.8-rc.1', name: 'Timon.AppImage', format: 'appimage' };
     await m.React.act(async () => { shell.push({ phase: 'downloading', ...base, received: 50_000_000, total: 200_000_000 }); });
@@ -402,32 +417,175 @@ test('Install: the system\'s password prompt shows Installing…; dismissing it 
   }
 });
 
-test('openUpdateDialog() from elsewhere runs the card\'s flow; a window registered later takes over, and gives it back', async () => {
+test('openUpdateDialog() from elsewhere opens the window; a flow registered later takes over, and gives it back', async () => {
   const shell = fakeShell();
   const m = await mount(OFFER_STATUS, { shell });
   try {
     await m.until(() => card() !== null, 'the update card');
-    assert.equal(m.dialog.openUpdateDialog(), true, 'the card provides the flow');
+    await m.React.act(async () => { assert.equal(m.dialog.openUpdateDialog(), true, 'the card\'s source provides the window'); });
+    await m.until(() => windowEl() !== null, 'the update window');
     assert.deepEqual(shell.calls.filter(([name]) => name === 'start'), [['start']]);
-    const windowOpened: string[] = [];
-    const dispose = m.dialog.provideUpdateDialog(() => { windowOpened.push('window'); });
+    await m.React.act(async () => { (document.activeElement ?? windowEl()!).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
+    await m.until(() => windowEl() === null, 'the window closed');
+    const otherOpened: string[] = [];
+    const dispose = m.dialog.provideUpdateDialog(() => { otherOpened.push('other'); });
     await m.click(action(0));
-    assert.deepEqual(windowOpened, ['window'], 'the card\'s Update opens the newer flow');
+    assert.deepEqual(otherOpened, ['other'], 'the card\'s Update opens the newer flow');
     dispose();
     await m.click(action(0));
-    assert.equal(shell.calls.filter(([name]) => name === 'start').length, 2);
+    await m.until(() => windowEl() !== null, 'the window again');
   } finally {
     await m.unmount();
   }
 });
 
-test('the updates module registers the card source, and the banner is gone from the top bar', () => {
+test('the updates module registers the card source and the window\'s fallback, and the banner is gone from the top bar', () => {
   const client = readFileSync(resolve(process.cwd(), 'src', 'plugins-client', 'updates.tsx'), 'utf8');
   assert.match(client, /ctx\.register\(\{ slot: NOTICES_SLOT, key: 'update' \}, UpdateNotice\)/);
+  assert.match(client, /ctx\.register\(\{ slot: UPDATE_DIALOG_SLOT, fallback: true \}, ProductUpdateDialog\)/);
   assert.doesNotMatch(client, /UPDATES_BANNER_SLOT/);
   const topbar = readFileSync(resolve(process.cwd(), 'src', 'components', 'topbar.tsx'), 'utf8');
   assert.doesNotMatch(topbar, /Update/);
   assert.equal(existsSync(resolve(process.cwd(), 'src', 'components', 'updates', 'update-banner.tsx')), false);
   const index = readFileSync(resolve(process.cwd(), 'src', 'plugins-client', 'index.ts'), 'utf8');
   assert.match(index, /updatesClient,/);
+});
+
+// The update window the card opens (docs/AUTO-UPDATE.md §10, volet E).
+
+const HIGHLIGHTED: UpdateStatus = {
+  ...OFFER_STATUS,
+  available: {
+    ...OFFER_STATUS.available!,
+    publishedAt: '2026-11-20T10:00:00.000Z',
+    notes: '### Highlights\n- Updates install **from the app**\n- A notice card at the bottom left\n- Faster boot\n\n### Added\n- Not a highlight\n',
+  },
+};
+const inWindow = (selector: string) => windowEl()?.querySelector(selector) ?? null;
+const windowActions = () => Array.from(windowEl()?.querySelectorAll('[data-update-dialog-action]') ?? [], (el) => el.textContent);
+const windowAction = (marker: string) => inWindow(`[data-update-dialog-action="${marker}"]`);
+const escape = async (m: Awaited<ReturnType<typeof mount>>) => {
+  await m.React.act(async () => { (document.activeElement ?? windowEl()!).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
+  await m.until(() => windowEl() === null, 'the window closed');
+};
+
+test('the window: Timon x.y.z and its date, the highlights as text, the full changelog; without highlights, the link alone', async () => {
+  const m = await mount(HIGHLIGHTED);
+  try {
+    await m.until(() => card() !== null, 'the update card');
+    await m.click(action(0));
+    await m.until(() => windowEl() !== null, 'the update window');
+    const { formatDate } = await import('@/lib/intl');
+    assert.match(inWindow('[data-update-dialog-body]')?.textContent ?? '', new RegExp(`^Timon 0\\.1\\.8-rc\\.1${formatDate('2026-11-20T10:00:00.000Z', 'long')}`));
+    assert.equal(windowEl()?.getAttribute('role'), 'dialog');
+    assert.equal(document.getElementById(windowEl()?.getAttribute('aria-labelledby') ?? '')?.textContent, 'Timon 0.1.8-rc.1', 'named for assistive technology');
+    assert.deepEqual(Array.from(windowEl()?.querySelectorAll('[data-update-highlights] li') ?? [], (li) => li.textContent),
+      ['Updates install from the app', 'A notice card at the bottom left', 'Faster boot']);
+    assert.equal(inWindow('[data-update-changelog]')?.getAttribute('href'), 'https://docs.timon-ai.com/changelog');
+    assert.equal(inWindow('[data-update-changelog]')?.textContent, 'See the full changelog');
+    assert.deepEqual(windowActions(), ['Download the installer'], 'a browser downloads nothing: one link');
+    assert.ok(!inWindow('[role="progressbar"]'));
+  } finally {
+    await m.unmount();
+  }
+  const bare = await mount(OFFER_STATUS);
+  try {
+    await bare.until(() => card() !== null, 'the update card');
+    await bare.click(action(0));
+    await bare.until(() => windowEl() !== null, 'the update window');
+    assert.ok(!inWindow('[data-update-highlights]'), 'no section, no list');
+    assert.ok(inWindow('[data-update-changelog]'), 'the changelog link stays');
+  } finally {
+    await bare.unmount();
+  }
+});
+
+test('the window in the desktop app: progress in bytes and %, verified, then Restart and install calls install(false)', async () => {
+  const shell = fakeShell(undefined, { installs: [{ status: 'restarting' }] });
+  const m = await mount(HIGHLIGHTED, { shell });
+  try {
+    await m.until(() => labels().join() === 'Update', 'the card');
+    await m.click(action(0));
+    await m.until(() => windowEl() !== null, 'the update window');
+    assert.deepEqual(shell.calls.filter(([name]) => name === 'start'), [['start']], 'opening the window downloads');
+
+    const base = { version: '0.1.8-rc.1', name: 'Timon.AppImage', format: 'appimage' };
+    await m.React.act(async () => { shell.push({ phase: 'downloading', ...base, received: 50_000_000, total: 200_000_000 }); });
+    await m.until(() => /Downloading… 25%/.test(inWindow('[data-update-line]')?.textContent ?? ''), 'the progress');
+    assert.match(inWindow('[data-update-line]')?.textContent ?? '', /\(50 MB of 200 MB\)/);
+    assert.equal(inWindow('[role="progressbar"]')?.getAttribute('aria-valuenow'), '25');
+    assert.deepEqual(windowActions(), ['Cancel']);
+    // Cancelled from the window, it stays cancelled while the window is open.
+    await m.click(windowAction('cancel'));
+    await m.React.act(async () => { shell.push({ phase: 'idle' }); });
+    await m.until(() => windowActions().join() === 'Download', 'Download again, by hand');
+    assert.equal(shell.calls.filter(([name]) => name === 'start').length, 1);
+    await m.click(windowAction('download'));
+    assert.equal(shell.calls.filter(([name]) => name === 'start').length, 2);
+
+    await m.React.act(async () => { shell.push({ phase: 'verifying', ...base, total: 200_000_000 }); });
+    await m.until(() => /Verifying/.test(inWindow('[data-update-line]')?.textContent ?? ''), 'the verification');
+    await m.React.act(async () => { shell.push({ phase: 'ready', ...base, total: 200_000_000 }); });
+    await m.until(() => windowActions().join() === 'Restart and install', 'the verified file');
+    assert.equal(inWindow('[data-update-line]')?.textContent, 'Downloaded and verified');
+    assert.equal(inWindow('[role="progressbar"]')?.getAttribute('aria-valuenow'), '100');
+    await m.click(windowAction('install'));
+    await m.until(() => /restarting/.test(inWindow('[data-update-line]')?.textContent ?? ''), 'what follows');
+    assert.deepEqual(shell.calls.filter(([name]) => name === 'install'), [['install', false]]);
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('the window\'s guard: N missions running, Wait asks nothing, Install anyway confirms', async () => {
+  const shell = fakeShell({ phase: 'ready', version: '0.1.8-rc.1', name: 'Timon.Setup.exe', format: 'nsis', total: 1 }, {
+    installs: [{ status: 'missions', count: 3 }, { status: 'missions', count: 3 }, { status: 'closing' }],
+  });
+  const m = await mount(OFFER_STATUS, { shell });
+  const installs = () => shell.calls.filter(([name]) => name === 'install');
+  try {
+    await m.until(() => labels().join() === 'Install', 'the card at the verified file');
+    await m.React.act(async () => { m.dialog.openUpdateDialog(); });
+    await m.until(() => windowActions().join() === 'Restart and install', 'the window');
+    assert.deepEqual(shell.calls.filter(([name]) => name === 'start'), [], 'a verified file is not downloaded again');
+    await m.click(windowAction('install'));
+    await m.until(() => /3 missions are running/.test(inWindow('[data-update-line]')?.textContent ?? ''), 'the running missions');
+    assert.equal(inWindow('[data-update-line]')?.getAttribute('role'), 'alert');
+    // The main gesture last, at the right.
+    assert.deepEqual(windowActions(), ['Wait', 'Install anyway']);
+    await m.click(windowAction('wait'));
+    await m.until(() => windowActions().join() === 'Restart and install', 'back');
+    assert.equal(installs().length, 1);
+    await m.click(windowAction('install'));
+    await m.until(() => windowActions().join() === 'Wait,Install anyway', 'asked again');
+    await m.click(windowAction('install-anyway'));
+    await m.until(() => /closes so it can be replaced/.test(inWindow('[data-update-line]')?.textContent ?? ''), 'the installer runs');
+    assert.deepEqual(installs(), [['install', false], ['install', false], ['install', true]]);
+    // The card says the same thing: one flow.
+    assert.match(text(), /closes so it can be replaced/);
+    await escape(m);
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('a plugin that takes updates.dialog paints the window from useUpdateDialog(); the host still names it', async () => {
+  const m = await mount(HIGHLIGHTED);
+  try {
+    await m.until(() => card() !== null, 'the update card');
+    const { useUpdateDialog } = await import('./update-dialog-context');
+    const Mine = () => {
+      const value = useUpdateDialog();
+      return value ? m.React.createElement('p', { 'data-mine': value.step }, `${value.version}: ${value.highlights.length}`) : null;
+    };
+    await m.React.act(async () => { m.slots.register({ slot: 'updates.dialog', pluginId: 'acme-window' }, Mine); });
+    await m.click(action(0));
+    await m.until(() => inWindow('[data-mine]') !== null, 'the plugin\'s window');
+    assert.equal(inWindow('[data-mine]')?.textContent, '0.1.8-rc.1: 3');
+    assert.equal(inWindow('[data-mine]')?.getAttribute('data-mine'), 'offer');
+    assert.ok(!inWindow('[data-update-dialog-body]'), 'the product\'s window is replaced');
+    assert.equal(document.getElementById(windowEl()?.getAttribute('aria-labelledby') ?? '')?.textContent, 'Timon 0.1.8-rc.1');
+  } finally {
+    await m.unmount();
+  }
 });

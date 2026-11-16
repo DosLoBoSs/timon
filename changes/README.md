@@ -33,6 +33,13 @@ A `known-issue` fragment is not deleted at a release: it is listed in every
 version until it is fixed. The pull request that fixes it deletes the fragment
 and adds a `fixed` one.
 
+## Highlights are not fragments
+
+The 3 to 5 lines that head the app's update window are chosen by the
+maintainer when the version is released: once `scripts/bump-version.mjs` has
+written the section, add a `### Highlights` list at its top, by hand. A
+fragment never carries one.
+
 ## Check
 
 ```bash

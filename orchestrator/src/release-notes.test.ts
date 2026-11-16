@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createReleaseNotes, readReleaseNotes, selectReleaseNotes } from '../../desktop/scripts/release-notes.mjs';
+import { createReleaseNotes, highlightsOf, readReleaseNotes, selectReleaseNotes } from '../../desktop/scripts/release-notes.mjs';
 const changelog = '# Internal preamble\n## [Unreleased]\n- Preview\n## [1.2.0] — 2026-09-20\n- Second\n## [1.0.0] — 2026-09-01\n- First\n';
 test('extracts version interval with missing boundaries and ignores Unreleased', () => {
   const notes = createReleaseNotes(changelog, '1.3.0');
@@ -77,4 +77,14 @@ test('only the newest release shown keeps its known issues', () => {
   assert.match(shown[0]!.content, /Still open/);
   assert.doesNotMatch(shown[1]!.content, /Known issues|Vault key ignored/);
   assert.match(shown[1]!.content, /Old fix[\s\S]*### Changed\n- Kept/);
+});
+test('the hand-written highlights travel in the version\'s notes and are read back as bullets', () => {
+  const md = '## [1.3.0] — 2026-11-20\n### Highlights\n- Updates install from the app\n* A notice card at the bottom left\n\n### Added\n- Other\n'
+    + '## [1.2.0] — 2026-09-20\n### Added\n- Second\n';
+  const notes = createReleaseNotes(md, '1.3.0');
+  const content = notes.entries[0]!.content;
+  assert.match(content, /^### Highlights\n- Updates install from the app/);
+  assert.deepEqual(highlightsOf(content), ['Updates install from the app', 'A notice card at the bottom left']);
+  assert.deepEqual(highlightsOf(notes.entries[1]!.content), [], 'no section: no highlights');
+  assert.deepEqual(highlightsOf(''), []);
 });

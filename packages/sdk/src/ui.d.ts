@@ -556,6 +556,45 @@ declare module '@timon/ui' {
     act(index: number): void;
   } | null;
 
+  /** A gesture of the update window (client API 16): a button, or a link to open in a new tab when `href` is set. */
+  export type UpdateDialogAction = {
+    label: string;
+    /** What the gesture is: `download`, `cancel`, `retry`, `install`, `install-anyway`, `wait`, `installer`… */
+    marker: string;
+    run(): void;
+    href: string | null;
+  };
+  /**
+   * The update window an `updates.dialog` occupant paints (client API 16).
+   * Opened by the update card and Settings › System › Updates; the host keeps
+   * the dialog (named "Timon <version>": do not add a `DialogTitle`), the focus,
+   * Escape, and the update flow. `highlights` are plain text, written by hand at
+   * the release, at most five, possibly none: then show `notesUrl` alone.
+   * `download` is the desktop app's download (`null` in a browser or a window
+   * on another machine, where `actions` links the installer). `step` says where
+   * the flow stands (`offer`, `idle`, `downloading`, `verifying`,
+   * `download-failed`, `ready`, `missions`, `installing`, `restarting`, …);
+   * `line` and `command` are what to say under it, `alert` whether it is a
+   * refusal. Paint `actions` as they come, the main one first, and call `run()`
+   * — or open `href` — on a click. At `missions` they are "Install anyway" and
+   * "Wait": the running missions stop only on the first. `null` outside the
+   * window.
+   */
+  export function useUpdateDialog(): {
+    version: string;
+    publishedAt: string;
+    installed: string;
+    highlights: string[];
+    notesUrl: string;
+    download: UpdateDownloadState | null;
+    step: string;
+    line: string | null;
+    command: string | null;
+    alert: boolean;
+    actions: UpdateDialogAction[];
+    close(): void;
+  } | null;
+
   /** `older` = ↑, `newer` = ↓ (client API 12). */
   export type PromptHistoryDirection = 'older' | 'newer';
   /**

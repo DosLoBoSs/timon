@@ -34,6 +34,26 @@ export function parseChangelog(markdown) {
   return entries.map(entry => ({ ...entry, content: entry.content.trim() }));
 }
 
+/**
+ * The hand-written highlights of a version: the bullets of its `### Highlights`
+ * subsection, which the maintainer writes at the bump (docs/AUTO-UPDATE.md §10).
+ * They travel inside the notes as they are; the app's update window reads them
+ * back out of the plain text. Empty when the section has none.
+ */
+export const HIGHLIGHTS_HEADING = '### Highlights';
+export function highlightsOf(content) {
+  const lines = String(content ?? '').replace(/\r\n?/g, '\n').split('\n');
+  const start = lines.findIndex(line => /^###\s+Highlights\s*$/i.test(line.trim()));
+  if (start < 0) return [];
+  const items = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^#{1,6}\s/.test(line)) break;
+    const bullet = line.match(/^\s*[-*+]\s+(.*\S)\s*$/);
+    if (bullet) items.push(bullet[1]);
+  }
+  return items;
+}
+
 export function createReleaseNotes(markdown, packageVersion) {
   const sections = parseChangelog(markdown);
   const entries = [];

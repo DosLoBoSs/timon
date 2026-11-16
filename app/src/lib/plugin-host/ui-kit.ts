@@ -55,6 +55,7 @@ import { uiDocumentUrl } from '@/lib/ui-documents';
 import { useSecretRequest } from '@/components/chat/secret-request-card';
 import { useUpdateStatus } from '@/components/updates/update-status-context';
 import { useNotice, useNotices } from '@/components/notices/notice-context';
+import { useUpdateDialog } from '@/components/updates/update-dialog-context';
 import { canRecallPrompt, isTextareaWrapped, usePromptHistory } from '@/lib/prompt-history';
 import { MessageActionButton, useChatMessage, useComposerReply } from '@/components/chat/message-actions';
 import { useModelPicker } from '@/components/model-picker/picker-context';
@@ -210,6 +211,9 @@ export const UI_KIT = {
   // The bottom-left cards (client API 16): what a `notices` entry pushes its cards with,
   // and the card a `notices.card` occupant paints, with its gestures (close, act).
   useNotices, useNotice,
+  // The update window (client API 16, `updates.dialog`): the version, its highlights and
+  // changelog, the download and the gestures of the step it is at.
+  useUpdateDialog,
 };
 
 /**

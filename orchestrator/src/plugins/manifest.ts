@@ -91,7 +91,8 @@ import { reservedRouteSegment } from './reserved-routes.js';
  * new export opens a new wave. No member of `PluginContext` changes
  * (docs/SDK-COMPAT.md §112). Same wave: the bottom-left notice cards, in the
  * browser only — `ctx.notices` (`push`, `remove`), the `notices` and
- * `notices.card` slots, `useNotices` and `useNotice` (§114).
+ * `notices.card` slots, `useNotices` and `useNotice` (§114). Same wave: the
+ * `updates.dialog` slot and `useUpdateDialog`, the update window (§116).
  */
 export const PLUGIN_API_VERSION = 16;
 

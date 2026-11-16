@@ -4338,6 +4338,15 @@
         "diskFull": "Not enough disk space to download the installer.",
         "filesystem": "The installer could not be saved in Timon's data folder."
       }
+    },
+    "dialog": {
+      "title": "Timon {version}",
+      "changelog": "See the full changelog",
+      "download": "Download",
+      "install": "Restart and install",
+      "verified": "Downloaded and verified",
+      "installer": "Download the installer",
+      "progress": "Download progress"
     }
   },
   "missionIsolation": {

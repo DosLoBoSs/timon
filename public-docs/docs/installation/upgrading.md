@@ -35,21 +35,23 @@ Secrets and backend sign-ins are not in the archive: reconnect your backends and
 
 Timon checks whether a newer version is published for its channel: at startup, then every 6 hours. A beta build is offered release candidates as well as final versions; a stable build is offered final versions only, and never a version older than or equal to the one you run.
 
-When one is out, a card at the bottom left of the app says **Timon x.y.z is available**, with one button, **Update**. In a browser, **Update** downloads the installer for the system you are using (`.pkg` on macOS, AppImage on Linux, the setup program on Windows; on a phone, the release notes). Its **×** puts it off: that version is not announced again, on any device of your account, and the next one is.
+When one is out, a card at the bottom left of the app says **Timon x.y.z is available**, with one button, **Update**. Its **×** puts it off: that version is not announced again, on any device of your account, and the next one is.
+
+**Update** opens the update window: **Timon x.y.z** and its release date, the release's highlights, and **See the full changelog**. Below them, in a browser, **Download the installer** downloads the installer for the system you are using (`.pkg` on macOS, AppImage on Linux, the setup program on Windows; on a phone, the release notes).
 
 The new version also appears in the notification centre, once per version. Installing what you downloaded follows [Apply the update](#apply-the-update) below; the app installs nothing until you click **Install**.
 
 ### Download it from the desktop app
 
-In the desktop app, **Update** downloads the installer through the app itself. The app downloads the installer for this computer (`.pkg` on macOS, the setup program on Windows, the AppImage or `.deb` you installed on Linux), shows its progress, and checks it against the size and checksum published in the signed list before keeping it. A file that does not match is deleted. **Cancel** stops the download and deletes what was received; an interrupted download resumes where it stopped (**Resume**).
+In the desktop app, the update window downloads the installer through the app itself as soon as it opens; close it and the download goes on, shown on the card. The app downloads the installer for this computer (`.pkg` on macOS, the setup program on Windows, the AppImage or `.deb` you installed on Linux), shows its progress (percent and size), and checks it against the size and checksum published in the signed list before keeping it. A file that does not match is deleted. **Cancel** stops the download and deletes what was received; an interrupted download resumes where it stopped (**Resume**).
 
-Once verified, the card offers **Install** (**Install and restart** for an AppImage), which installs it the way your system installs software — see [Install it from the desktop app](#install-it-from-the-desktop-app). The file is kept in the `updates` folder of your data directory (for example `~/.timon/updates/0.1.8/`); only the latest version downloaded is kept there.
+Once verified, the window says **Downloaded and verified** and offers **Restart and install** (the card offers **Install**, or **Install and restart** for an AppImage), which installs it the way your system installs software — see [Install it from the desktop app](#install-it-from-the-desktop-app). The file is kept in the `updates` folder of your data directory (for example `~/.timon/updates/0.1.8/`); only the latest version downloaded is kept there.
 
-The download needs room for the installer plus a small margin; when the disk is too full, the card says so and nothing is written. Like the check, it sends no licence, account or machine identifier. A browser, or a desktop window showing another machine, keeps the plain download link.
+The download needs room for the installer plus a small margin; when the disk is too full, the window and the card say so and nothing is written. Like the check, it sends no licence, account or machine identifier. A browser, or a desktop window showing another machine, keeps the plain download link.
 
 ### Install it from the desktop app
 
-**Install** first counts the missions running on this computer. When some are, the card says how many: **Wait** leaves everything as it is (install later, once they are done), **Install anyway** goes on and they stop when the service moves to the new version. Then, depending on the package:
+**Restart and install** (or **Install** on the card) first counts the missions running on this computer. When some are, the window and the card say how many: **Wait** leaves everything as it is (install later, once they are done), **Install anyway** goes on and they stop when the service moves to the new version. Then, depending on the package:
 
 - **AppImage**: the AppImage you launched is replaced by the verified one, in the same folder and under the same name, and Timon restarts on it. The previous file stays next to it, hidden, as `.<name>.previous`, until the new version has started; if the replacement or the restart fails, your current AppImage is left as it was. When the AppImage's folder is not writable, nothing is replaced: the new AppImage stays in the `updates` folder for you to move;
 - **`.deb`**: Timon asks your system for administrator rights (the password dialog of your desktop), installs the package and restarts on it. Without that dialog (no `pkexec`, a server session) or when the installation fails, the package opens in your software manager and the card shows the command that installs it (`sudo apt install '…/timon_<version>_amd64.deb'`) with a **Copy** button;
@@ -58,14 +60,14 @@ The download needs room for the installer plus a small margin; when the disk is 
 
 Before anything runs with administrator rights, the installer is checked once more against the signed checksum. Closing the password dialog changes nothing: the card offers **Install** again.
 
-Clicking **Install** is your approval of the update: when the new version starts, it saves a copy of your data in `backups/pre-<version>/`, then migrates them, and only shows its progress. That approval holds for this exact update, on its first start, for one day. If the installation did not happen (password dialog closed, an error), it is withdrawn. A package installed another way (by hand, another version, more than a day later) asks for your approval, as in [Apply the update](#apply-the-update).
+Clicking **Restart and install** or **Install** is your approval of the update: when the new version starts, it saves a copy of your data in `backups/pre-<version>/`, then migrates them, and only shows its progress. That approval holds for this exact update, on its first start, for one day. If the installation did not happen (password dialog closed, an error), it is withdrawn. A package installed another way (by hand, another version, more than a day later) asks for your approval, as in [Apply the update](#apply-the-update).
 
 ### From the settings
 
 **Settings › System › Updates** shows the version you run and its state, for example **Up to date · checked 2 hr. ago**, with one button:
 
 - **Check**: asks now. When the check cannot reach the list, the row says **Check failed** and the button becomes **Retry**;
-- **Update**, when a newer version is out: opens the same update flow as the notice.
+- **Update**, when a newer version is out: opens the update window, as the card does.
 
 The **…** menu next to it links the release notes and the installer for a download by hand (from a browser, or for a Timon running without a window), and turns the automatic check on or off. Checking and turning the check on or off need the right to change settings: an account without it sees the state only.
 

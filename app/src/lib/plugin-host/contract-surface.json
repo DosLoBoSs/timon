@@ -675,6 +675,10 @@
       "useNotices": {
         "type": "export",
         "since": 16
+      },
+      "useUpdateDialog": {
+        "type": "export",
+        "since": 16
       }
     },
     "api.js": {

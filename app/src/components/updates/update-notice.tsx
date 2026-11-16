@@ -6,8 +6,9 @@
  * `notices` slot, registered by the client half of `@timon/updates`.
  *
  * "Timon x.y.z is available", one main gesture, "Update", which goes through
- * `openUpdateDialog()`: this card provides today's flow (the shell's download,
- * then the installation), the update window will provide its own. Closing the
+ * `openUpdateDialog()` and opens the update window (`update-dialog.tsx`),
+ * which this source provides and mounts: the card and the window run one flow,
+ * so a download started in the window goes on in the card. Closing the
  * card is "later" for that version: its id carries the version, and the host
  * remembers it per account. A build about to stop running turns the card into
  * a warning that says when, back when the end becomes urgent even if the offer
@@ -33,6 +34,7 @@ import { formatDate } from '@/lib/intl';
 import { t } from '@/lib/i18n';
 import type { UpdateStatusValue } from './update-status-context';
 import { useUpdateFlow, type UpdateFlowView } from './update-flow';
+import { UpdateDialogHost, updateDialogValue } from './update-dialog';
 
 export const UPDATE_NOTICE_PREFIX = 'update-';
 export const BUILD_END_NOTICE_PREFIX = 'build-ends-';
@@ -85,8 +87,8 @@ function noticeSignature(notice: NoticeInput | null): string {
   return notice ? JSON.stringify({ ...notice, actions: notice.actions?.map((action) => action.label) }) : '';
 }
 
-/** The product's source in the `notices` slot. Paints nothing. */
-export function UpdateNotice(): null {
+/** The product's source in the `notices` slot: pushes the card, and mounts the update window it opens. */
+export function UpdateNotice(): ReactElement {
   const notices = useNotices();
   const push = notices?.push;
   const remove = notices?.remove;
@@ -102,7 +104,23 @@ export function UpdateNotice(): null {
   const { view, begin } = useUpdateFlow(value, open);
   useEffect(() => { beginRef.current = begin; }, [begin]);
   const offered = value !== null;
-  useEffect(() => (offered ? provideUpdateDialog(() => beginRef.current()) : undefined), [offered]);
+  const [windowOpen, setWindowOpen] = useState(false);
+  useEffect(() => (offered ? provideUpdateDialog(() => { setWindowOpen(true); }) : undefined), [offered]);
+  useEffect(() => { if (!offered) setWindowOpen(false); }, [offered]);
+
+  // Opening the window is "update now": the download starts, once per opening —
+  // cancelled from the window, it stays cancelled until asked again.
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (!windowOpen) { startedRef.current = false; return; }
+    if (startedRef.current || !download) return;
+    startedRef.current = true;
+    if (download.state.phase === 'idle') download.start();
+  }, [download, windowOpen]);
+  const dialog = useMemo(
+    () => (value && view ? updateDialogValue(value, view, () => { setWindowOpen(false); }) : null),
+    [value, view],
+  );
 
   const notice = updateNotice(offer, view, ending);
   // The handlers change at every render; the card calls the latest ones.
@@ -120,7 +138,7 @@ export function UpdateNotice(): null {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [push, signature]);
   useEffect(() => (remove && id ? () => remove(id) : undefined), [id, remove]);
-  return null;
+  return <UpdateDialogHost open={windowOpen} onOpenChange={setWindowOpen} value={dialog} />;
 }
 
 /**
