@@ -70,3 +70,35 @@ export function cwdProblem(path: string, stat: (path: string) => Stats = statSyn
   if (check.error === 'not-a-directory') return 'cwd is not a directory';
   return 'cwd not found';
 }
+
+/**
+ * A mission refused before launch because its working directory cannot be
+ * used. Node reports a missing `cwd` as `spawn <binary> ENOENT`, which blames a
+ * binary that is installed and sends the user reinstalling it, and the launch
+ * paths read that error as a backend crash: a replay, then a switch to another
+ * backend that fails the same way. Thrown before any of that, with the folder
+ * named: the path is the one the user registered, not an internal of the daemon.
+ */
+export class CwdUnusableError extends Error {
+  readonly path: string;
+  readonly error: CwdError;
+  /** The raw errno (`ENOENT`, `EPERM`…), `NOT_A_DIRECTORY` when the path is a file. */
+  readonly code: string;
+  constructor(path: string, error: CwdError, code: string) {
+    super(error === 'denied'
+      ? `working directory access denied (${code}): ${path}`
+      : error === 'not-a-directory'
+        ? `working directory is not a directory: ${path}`
+        : `working directory not found: ${path}`);
+    this.name = 'CwdUnusableError';
+    this.path = path;
+    this.error = error;
+    this.code = code;
+  }
+}
+
+/** Throws `CwdUnusableError` when `path` cannot be a process's working directory. */
+export function assertUsableCwd(path: string, stat: (path: string) => Stats = statSync): void {
+  const check = checkCwd(path, stat);
+  if (!check.ok) throw new CwdUnusableError(path, check.error, check.code);
+}
