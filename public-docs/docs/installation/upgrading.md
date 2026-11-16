@@ -93,13 +93,13 @@ The environment variable `TIMON_UPDATES_CHECK=0` overrides both. Turned off, Tim
 
 ### Announcements
 
-With the same check, Timon reads a signed list of announcements on `timon-ai.com` and shows each one as a card at the bottom left, with **Learn more** when it has a link. A list whose signature does not check out, an expired one or one older than the last list read is ignored. Close a card and it does not come back, on any of your devices. To stop them, switch off **Settings › Plugins › Timon updates › Show Timon announcements**, or set it in `timon.config.json`:
+With the same check, Timon reads a signed list of announcements on `timon-ai.com` and shows each one as a card at the bottom left, with **Learn more** when it has a link. A list whose signature does not check out, an expired one or one older than the last list read is ignored. Close a card and it does not come back, on any of your devices. To stop them, switch off **Announcements** in the **…** menu of **Settings › System › Updates**, or set it in `timon.config.json`:
 
 ```json
 { "settings": { "TIMON_NOTICES_CHECK": false } }
 ```
 
-With the update check off, no announcement is read either.
+With the update check off, no announcement is read either, and the **Announcements** switch stays off.
 
 ## When a beta build ends
 
