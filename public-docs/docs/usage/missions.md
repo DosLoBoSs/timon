@@ -342,6 +342,8 @@ If Google ever answers "Couldn't sign you in — This browser or app may not be 
 
 The dialog opens once for each refusal: close it and it stays closed. The strip shown above the refusal page, and the browser's options menu, open it again.
 
+An agent cannot run **Sign in with Chrome** itself. When it lands on Google's refusal page, it asks you to run it, then carries on once you say the sign-in is copied.
+
 Chrome has to be installed on that computer, outside a snap or flatpak package (their sandbox cannot keep a Timon profile). If none is found, the dialog says so; you can point Timon at another one with the **Chrome used to sign in** setting (`TIMON_CHROME_PATH`, in Settings under Misc, or as an environment variable). The window opens on the computer that runs Timon, so from a phone or another computer you need to be in front of it.
 
 Only cookies are copied. A site that keeps its sign-in in the page's own storage (many apps built on Firebase do) is not signed in by **Sign in with Chrome**.
