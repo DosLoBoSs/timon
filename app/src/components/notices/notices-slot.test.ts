@@ -127,6 +127,37 @@ test('a pushed card shows once the closed list is read, as text, and leaves with
   }
 });
 
+test('the product card: a brand logo or the tone\'s icon, the main action filled at the bottom right', async () => {
+  const m = await mount();
+  try {
+    await settle(m);
+    const ctx = m.pluginContext('acme');
+    await m.React.act(async () => {
+      ctx.notices.push({
+        id: 'chat', icon: 'discord', title: 'Join the community',
+        actions: [{ label: 'Join', href: 'https://discord.example/x' }, { label: 'Later', dismiss: true }],
+      });
+      ctx.notices.push({ id: 'plain', title: 'Plain' });
+      ctx.notices.push({ id: 'late', icon: 'timon', tone: 'warning', title: 'Late' });
+    });
+    await m.until(() => cards().length === 3, 'three cards');
+    const visual = (key: string) => document.querySelector(`[data-notice="acme:${key}"] [data-notice-card]`)?.getAttribute('data-notice-visual');
+    assert.equal(visual('chat'), 'discord');
+    assert.equal(visual('plain'), 'info', 'without icon, the tone\'s');
+    assert.equal(visual('late'), 'timon');
+    assert.ok(document.querySelector('[data-notice="acme:chat"] [data-notice-glyph] svg'), 'the logo is drawn inline');
+    assert.ok(!document.querySelector('[data-notice] img'), 'no image is loaded');
+    const late = document.querySelector<HTMLElement>('[data-notice="acme:late"] [data-notice-card]')!;
+    assert.equal(late.style.getPropertyValue('--notice-accent'), '#f59e0b', 'a warning keeps the amber accent whatever its logo');
+    const order = Array.from(document.querySelectorAll('[data-notice="acme:chat"] [data-notice-action]'), (el) => el.getAttribute('data-notice-action'));
+    assert.deepEqual(order, ['1', '0'], 'the main action comes last, in the corner');
+    assert.equal(m.notices.visibleNotices().find((n) => n.id === 'chat')?.icon, 'discord');
+    assert.equal(m.notices.visibleNotices().find((n) => n.id === 'plain')?.icon, null);
+  } finally {
+    await m.unmount();
+  }
+});
+
 test('nothing shows without a session, nor before the closed list is read', async () => {
   const m = await mount({ session: false });
   try {
@@ -223,6 +254,8 @@ test('an invalid notice is refused with its reason', async () => {
     refused({ id: 'bad id', title: 'X' }, /id/);
     refused({ id: 'x', title: '' }, /title/);
     refused({ id: 'x', title: 'X', tone: 'error' }, /tone/);
+    refused({ id: 'x', title: 'X', icon: 'mastodon' }, /icon/);
+    refused({ id: 'x', title: 'X', icon: 'https://evil.example/logo.svg' }, /icon/);
     refused({ id: 'x', title: 'X', actions: [{ label: 'Nothing' }] }, /onSelect/);
     refused({ id: 'x', title: 'X', actions: [1, 2, 3].map((n) => ({ label: `A${n}`, dismiss: true })) }, /at most/);
     assert.equal(m.notices.visibleNotices().length, 0);
