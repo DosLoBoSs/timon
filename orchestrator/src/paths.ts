@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { join, resolve as resolvePath, sep } from 'node:path';
+import { basename, dirname, join, resolve as resolvePath, sep } from 'node:path';
 
 /**
  * Guard: under the test runner, `TIMON_HOME` is MANDATORY, and it is
@@ -86,7 +86,22 @@ export const BUILTIN_ROLE_OVERRIDES_FILE = join(TIMON_HOME, 'role-prompt-overrid
 export const TRASH_DIR = join(TIMON_HOME, 'trash');
 export const AGENT_TRASH_DIR = join(TRASH_DIR, 'agents');
 
-export const agentDir = (name: string) => join(AGENTS_DIR, name);
+/**
+ * `agents/<name>/`, refusing a name that would land anywhere but a direct child
+ * of `agents/`: `..` is the Timon home itself, and a delete or a write there
+ * reaches every agent at once. `validName` already refuses these; this guard
+ * covers a caller that skipped it. Dots-only names are refused outright, not
+ * only through `resolve`: Windows strips trailing dots from a path segment, so
+ * `...` opens `agents/` there even though `path.win32` keeps it as a segment.
+ */
+export function agentDir(name: string): string {
+  const dir = resolvePath(AGENTS_DIR, name);
+  if (!name || /^\.+$/.test(name) || /[\\/\0]/.test(name)
+    || dirname(dir) !== resolvePath(AGENTS_DIR) || basename(dir) !== name) {
+    throw new Error(`invalid agent name: ${JSON.stringify(name)}`);
+  }
+  return join(AGENTS_DIR, name);
+}
 export const agentSystemPrompt = (name: string) => join(agentDir(name), 'system-prompt.md');
 export const agentConfig = (name: string) => join(agentDir(name), 'config.json');
 export const agentMemoryDir = (name: string) => join(agentDir(name), 'memory');

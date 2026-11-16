@@ -272,8 +272,15 @@ export function loadIdentityDocs(agentName: string): { name: string; content: st
   } catch { return []; }
 }
 
-const NAME_RE = /^[A-Za-z0-9._-]+$/;
+// No leading dot: `.` and `..` are path segments, not folders of `agents/`,
+// and a hidden folder is not an agent. `_` stays a valid first character
+// (`_main`, the ephemeral `_eph-…` agents).
+const NAME_RE = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
+
+export function isValidAgentName(name: string): boolean {
+  return NAME_RE.test(name);
+}
 
 export function validName(name: string): void {
-  if (!NAME_RE.test(name)) throw new Error(`invalid agent name: ${name}`);
+  if (!isValidAgentName(name)) throw new Error(`invalid agent name: ${name}`);
 }
