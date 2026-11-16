@@ -27,7 +27,10 @@ export type HostPolicy = { open: true } | { open: false; names: ReadonlySet<stri
  * Names that resolve on this machine only, whatever a public DNS answers:
  * `.localhost` (RFC 6761, Traefik's `timon.localhost`) is mapped to the
  * loopback by the browser itself, and a `.ts.net` name is published by
- * Tailscale alone, onto tailnet addresses (`tailscale serve`).
+ * Tailscale alone, onto tailnet addresses (`tailscale serve`). `.internal` is
+ * not among them: it is reserved for private networks, so a LAN or corporate
+ * resolver may answer it. Unlike the daemon, the app admits no `.internal`
+ * name at all: nothing reaches it as `host.docker.internal`.
  */
 function reservedName(name: string): boolean {
   return name === 'localhost' || name.endsWith('.localhost') || name.endsWith('.ts.net');
