@@ -20,6 +20,7 @@ import {
 } from '../../resources.js';
 import { notifyMissionResourceKill } from '../../agent.js';
 import { createNotification } from '../../notifications.js';
+import { onDaemonShutdown } from '../../daemon-shutdown.js';
 
 export const manifest: ModuleManifest = {
   name: '@timon/resources-guard',
@@ -50,15 +51,10 @@ export function apply(ctx: Context): void {
 
   // Clean shutdown: the scopes are no longer in the service's cgroup,
   // systemd won't take them down. A `systemctl stop` without this leaves
-  // agents running with no orchestrator to read them.
-  ctx.effect(() => {
-    const onSignal = () => {
-      try { stopMissionScopes(); } catch { /* best-effort, exit anyway */ }
-      process.exit(0);
-    };
-    for (const sig of ['SIGTERM', 'SIGINT'] as const) process.on(sig, onSignal);
-    return () => {
-      for (const sig of ['SIGTERM', 'SIGINT'] as const) process.off(sig, onSignal);
-    };
-  });
+  // agents running with no orchestrator to read them. A step of the daemon's
+  // common stop (`daemon-shutdown.ts`), which runs it before releasing the
+  // modules and exits whether this module is there or not.
+  ctx.effect(() => onDaemonShutdown(() => {
+    try { stopMissionScopes(); } catch { /* best-effort, the stop goes on */ }
+  }));
 }
