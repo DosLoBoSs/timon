@@ -342,7 +342,7 @@ Everything written for the orchestrator (task id, full comment, review JSON) sit
 
 ## When a task keeps failing
 
-A task whose mission stops before the agent closed it (crash, timeout, process killed) is retried on its own up to three times, a few minutes apart. After that it stays **Blocked**, and its reason shows the last error the CLI reported, for example a missing sign-in or a CLI that cannot be found.
+A task whose mission stops before the agent closed it (crash, timeout, process killed) is retried on its own up to three times, a few minutes apart. After that it stays **Blocked**, and its reason shows the last error the CLI reported, for example a missing sign-in or a CLI that cannot be found, and ends by saying that automatic retries are over and how to restart the task. Restarting Timon does not retry it again.
 
 An agent can no longer restart such a task as it is: it has to change its agent, backend or model in the same update (clearing a backend or model the task was pinned to counts, the project's default then applies), and its restart waits a few minutes. After six failures, only you can restart it, by setting it back to Pending from the Kanban or with `timon task update <id> --status PENDING` in a terminal. Your restart starts at once and gives the task a fresh set of retries. Fix the cause shown in the reason first: restarting a task without changing anything gives the same failure.
 
