@@ -165,6 +165,19 @@ export function isRequeueableInterruption(reason: InterruptionReason): boolean {
 }
 
 /**
+ * Sentence appended to the reason of a task whose automatic requeues ran out
+ * (TIM-0149). The death sentence alone says "NOT a business block", which read
+ * next to a BLOCKED status as a contradiction: testers waited for a replay that
+ * the cap had already ruled out, restart after restart. This says the replays
+ * are over and gives the one gesture that restarts the task.
+ */
+export function describeExhaustedRequeues(taskId: string, deaths: number): string {
+  return `Automatic retries are exhausted (${deaths} system deaths in a row): Timon will not replay `
+    + `this task on its own any more. Once the cause is dealt with, restart it by hand: move it back `
+    + `to Pending on the board, or run \`timon task update ${taskId} --status PENDING\`.`;
+}
+
+/**
  * Delay before replaying a task requeued after a system death.
  *
  * WHY (night of 2026-09-01). The backend returned every mission in 295 ms; the

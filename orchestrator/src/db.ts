@@ -44,6 +44,7 @@ import { bus, type TaskDeletedSnapshot } from './bus.js';
 import {
   BACKEND_FALLBACK_REASONS,
   countsTowardCrashLoop,
+  describeExhaustedRequeues,
   isRequeueableInterruption,
   requeueBackoffMs,
   toInterruptionReason,
@@ -5186,7 +5187,12 @@ export const dbApi = {
     // Counted BEFORE the block: `task_blocked` wakes the pilot synchronously,
     // and its recap reads this count to say whether a requeue is still open.
     if (countsTowardCrashLoop(reason)) countSystemDeathStmt.run(id);
-    blockOnInterruption(id, reason, blockedReason, quotaResetsAt);
+    // At the cap the reason has to say the replays are over, or a replayable
+    // cause on a BLOCKED task reads as a requeue still to come (TIM-0149).
+    const reasonText = requeueable
+      ? `${blockedReason} ${describeExhaustedRequeues(id, attempt)}`
+      : blockedReason;
+    blockOnInterruption(id, reason, reasonText, quotaResetsAt);
     // Cap reached: this is no longer a fluke, the caller must warn a human.
     return requeueable ? 'escalated' : 'blocked';
   },
