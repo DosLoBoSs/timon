@@ -249,3 +249,97 @@ test('disposing a reconciler cancels queued changes before loader effects', asyn
   assert.deepEqual(await reconciler.reconcile(), []);
   assert.equal(updates, 0);
 });
+
+/**
+ * TIM-0147: after a reboot read the licence as off, the licence came back but
+ * kanban and every module that depends on it stayed off. The reconciler had
+ * recorded the new tree BEFORE asking the loader for it, so an update that
+ * failed once was never tried again.
+ */
+const CHAIN: readonly ModuleDescriptor[] = [
+  { id: '@timon/db', name: './plugins-bundled/db/index.js', tier: 'core' },
+  { id: '@timon/kanban', name: './kanban.js', tier: 'std', licensed: true },
+  { id: '@timon/triggers', name: './triggers.js', tier: 'std', dependsOn: ['@timon/kanban'] },
+  { id: '@timon/routines', name: './routines.js', tier: 'std', dependsOn: ['@timon/kanban'] },
+];
+const KANBAN_LICENCE = {
+  ...paidTestLicense(), modules: ['@timon/kanban'], plugins: [],
+};
+
+function flakyChain(failures: Record<string, number>, retryMs?: number) {
+  writeFileSync(CONFIG_FILE, '{}\n');
+  resetConfig();
+  setLicenseState(RESTRICTED_PAID);
+  const calls: string[] = [];
+  const left = { ...failures };
+  const ctx = {
+    loader: {
+      update: async (id: string, patch: { disabled: boolean }) => {
+        if ((left[id] ?? 0) > 0) {
+          left[id]! -= 1;
+          calls.push(`${id}:failed`);
+          throw new Error('fiber refused to start');
+        }
+        calls.push(`${id}=${patch.disabled ? 'off' : 'on'}`);
+      },
+    },
+  } as unknown as Context;
+  return { ctx, calls };
+}
+
+test('a module whose recomposition failed is tried again, with the modules depending on it', async () => {
+  const { ctx, calls } = flakyChain({ '@timon/kanban': 1 });
+  const { config } = await import('../config/load.js');
+  const decisions = planEntries(CHAIN, { config: config(), capabilities: [], licensed: [] });
+  assert.equal(decisions.find((d) => d.id === '@timon/triggers')?.disabled, true, 'off by cascade at boot');
+  const reconciler = createBundledReconciler(ctx, { catalog: CHAIN, capabilities: [], decisions, retryMs: 60_000 });
+  try {
+    setLicenseState(KANBAN_LICENCE);
+    assert.deepEqual(await reconciler.reconcile(), [], 'nothing came back: kanban failed, its dependents waited');
+    assert.deepEqual(calls, ['@timon/kanban:failed'], 'dependents are not switched on over a missing kanban');
+
+    // Same licence, same configuration: only the failure makes it a change.
+    assert.deepEqual(await reconciler.reconcile(), ['@timon/kanban', '@timon/triggers', '@timon/routines']);
+    assert.deepEqual(calls.slice(1), ['@timon/kanban=on', '@timon/triggers=on', '@timon/routines=on']);
+    assert.deepEqual(await reconciler.reconcile(), [], 'once applied, nothing is redone');
+  } finally {
+    reconciler.dispose();
+  }
+});
+
+test('a failed recomposition retries on its own, without a new licence or config event', async () => {
+  const { ctx, calls } = flakyChain({ '@timon/kanban': 2 });
+  const { config } = await import('../config/load.js');
+  const decisions = planEntries(CHAIN, { config: config(), capabilities: [], licensed: [] });
+  const reconciler = createBundledReconciler(ctx, { catalog: CHAIN, capabilities: [], decisions, retryMs: 10 });
+  try {
+    setLicenseState(KANBAN_LICENCE);
+    await reconciler.reconcile();
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline && !calls.includes('@timon/routines=on')) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.deepEqual(calls, [
+      '@timon/kanban:failed', '@timon/kanban:failed',
+      '@timon/kanban=on', '@timon/triggers=on', '@timon/routines=on',
+    ]);
+  } finally {
+    reconciler.dispose();
+  }
+});
+
+test('a module that keeps failing does not hold back the switch-off of another', async () => {
+  const { ctx, calls } = flakyChain({ '@timon/kanban': 1 });
+  const { config } = await import('../config/load.js');
+  setLicenseState(KANBAN_LICENCE);
+  const decisions = planEntries(CHAIN, { config: config(), capabilities: [], licensed: ['@timon/kanban'] });
+  const reconciler = createBundledReconciler(ctx, { catalog: CHAIN, capabilities: [], decisions, retryMs: 60_000 });
+  try {
+    setLicenseState(RESTRICTED_PAID);
+    assert.deepEqual(await reconciler.reconcile(), ['@timon/triggers', '@timon/routines']);
+    assert.deepEqual(calls, ['@timon/kanban:failed', '@timon/triggers=off', '@timon/routines=off']);
+    assert.deepEqual(await reconciler.reconcile(), ['@timon/kanban']);
+  } finally {
+    reconciler.dispose();
+  }
+});

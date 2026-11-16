@@ -46,7 +46,15 @@ export type BundledReconcilerOptions = {
   decisions: readonly EntryDecision[];
   /** Called once per reconciliation that changed something. */
   onChange?: (changed: string[]) => void;
+  /**
+   * First delay before a module whose recomposition failed is tried again,
+   * doubled at each consecutive failure up to `RETRY_MAX_MS`. Tests shorten it.
+   */
+  retryMs?: number;
 };
+
+const RETRY_MS = 30_000;
+const RETRY_MAX_MS = 5 * 60_000;
 
 /** True when two decisions ask the loader for a different tree. */
 function differs(a: EntryDecision, b: EntryDecision): boolean {
@@ -60,6 +68,26 @@ export function createBundledReconciler(ctx: Context, opts: BundledReconcilerOpt
   let disposed = false;
   let pending: NodeJS.Timeout | null = null;
   let listener: (() => void) | null = null;
+  let retry: NodeJS.Timeout | null = null;
+  let retryDelay = opts.retryMs ?? RETRY_MS;
+
+  /**
+   * Nothing else would wake the reconciler for a module that failed: the
+   * licence and the configuration that asked for it have not changed again.
+   * Without this, a module the loader refused to bring back stayed off until
+   * someone ran `timon module enable` by hand (TIM-0147).
+   */
+  function scheduleRetry(failed: readonly string[]): void {
+    if (disposed || retry) return;
+    const delay = retryDelay;
+    retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
+    console.warn(`[kernel] retrying ${failed.join(', ')} in ${Math.round(delay / 1000)} s`);
+    retry = setTimeout(() => {
+      retry = null;
+      reconciler.reconcile().catch((err: Error) => console.warn('[kernel] recomposition:', err.message));
+    }, delay);
+    retry.unref();
+  }
 
   async function run(): Promise<string[]> {
     if (disposed) return [];
@@ -96,18 +124,35 @@ export function createBundledReconciler(ctx: Context, opts: BundledReconcilerOpt
       const previous = before.get(d.id);
       return previous ? differs(previous, d) : true;
     });
-    current = next;
     // Set even without a tier change: `/api/capabilities` and the gallery
     // read the REAL state, and a reason that moves (licence, capability) must show
     // there. It is an assignment, not a recomposition.
     setLiveDecisions(next, [...opts.capabilities], edition);
-    if (!changed.length) return [];
+    if (!changed.length) {
+      current = next;
+      return [];
+    }
 
+    // `current` is what the loader really holds, so a module only moves to its
+    // new decision once its update went through. Advancing it before the loop
+    // made a failed update look applied: the next reconciliation saw nothing
+    // to change and never tried again (TIM-0147).
+    const failed = new Set<string>();
+    const deps = new Map(opts.catalog.map((m) => [m.id, m.dependsOn ?? []]));
     for (const decision of changed) {
       if (disposed) return [];
       // A `clientOnly` module (ui-layout) has no fiber: its toggle lives
       // entirely in the capabilities, which the front just received.
       if (decision.clientOnly) continue;
+      // Switching on a module whose dependency could not come back would
+      // leave its fiber waiting on a service that is not there: it waits for
+      // the retry with its dependency instead. Switching off never waits.
+      const blocker = decision.disabled ? undefined : (deps.get(decision.id) ?? []).find((id) => failed.has(id));
+      if (blocker !== undefined) {
+        failed.add(decision.id);
+        console.warn(`[kernel] ${decision.id} : waiting for ${blocker} to recompose`);
+        continue;
+      }
       try {
         await ctx.loader.update(decision.id, {
           disabled: decision.disabled,
@@ -117,12 +162,26 @@ export function createBundledReconciler(ctx: Context, opts: BundledReconcilerOpt
         // Steady state, not boot: a module that refuses to recompose does not
         // bring the daemon down. At boot, an `apply` that throws still fails
         // the start — the activation audit says so.
+        failed.add(decision.id);
         console.warn(`[kernel] ${decision.id} : recomposition impossible — ${(err as Error).message}`);
       }
     }
+    if (disposed) return [];
 
-    const ids = changed.map((d) => d.id);
-    console.log(`[kernel] modules recomposed live: ${changed.map((d) => `${d.id}=${d.disabled ? 'off' : 'on'}`).join(', ')}`);
+    // A failed module keeps its previous decision (or none, if it is new to
+    // the tree), so it still differs from the plan at the next pass.
+    current = next.flatMap((d) => {
+      if (!failed.has(d.id)) return [d];
+      const previous = before.get(d.id);
+      return previous ? [previous] : [];
+    });
+    if (failed.size) scheduleRetry([...failed]);
+    else retryDelay = opts.retryMs ?? RETRY_MS;
+
+    const applied = changed.filter((d) => !failed.has(d.id));
+    if (!applied.length) return [];
+    const ids = applied.map((d) => d.id);
+    console.log(`[kernel] modules recomposed live: ${applied.map((d) => `${d.id}=${d.disabled ? 'off' : 'on'}`).join(', ')}`);
     opts.onChange?.(ids);
     return ids;
   }
@@ -160,6 +219,8 @@ export function createBundledReconciler(ctx: Context, opts: BundledReconcilerOpt
       disposed = true;
       if (pending) clearTimeout(pending);
       pending = null;
+      if (retry) clearTimeout(retry);
+      retry = null;
       if (listener) unwatchFile(CONFIG_FILE, listener);
       listener = null;
       watching = false;
