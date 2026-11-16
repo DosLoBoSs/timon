@@ -23,7 +23,7 @@ await import('../tests/helpers/claude-provider.js');
 const {
   deleteAgent, getAgent, listAgents, readDoc, readMemory, renameAgent, restoreAgent, upsertAgent, writeDoc, writeMemory,
 } = await import('./agent.js');
-const { canonicalAgentName, findAgentFolder } = await import('./agent-config.js');
+const { canonicalAgentName, findAgentFolder, resolveAgentFolder } = await import('./agent-config.js');
 const { AGENT_NAME_MAX_BYTES, isValidAgentName, toAgentName } = await import('./agent-name.js');
 const { listAgentTrash } = await import('./agent-trash.js');
 const { AGENTS_DIR, agentDir } = await import('./paths.js');
@@ -127,10 +127,36 @@ test('the full life of a Chinese-named agent, the home intact', () => {
   homeIntact();
 });
 
-test('the fence gives a Chinese-named agent its own folders', () => {
-  assert.equal(isFenceAgent('马斯克'), true);
-  assert.equal(isFenceAgent('.agents'), false);
-  assert.equal(isFenceAgent('..'), false);
+test('a name resolves to the real folder entry, whatever the disk ignores', () => {
+  // The entries a case- and normalisation-insensitive disk (Windows, APFS)
+  // lists: there, `foo` and the decomposed `Zoë` exist as paths, yet the
+  // folder is named otherwise, and the real entry is what must come back.
+  const entries = ['Foo', 'Zoë', '马斯克'];
+  assert.equal(resolveAgentFolder('foo', entries), 'Foo');
+  assert.equal(resolveAgentFolder('FOO', entries), 'Foo');
+  assert.equal(resolveAgentFolder(nfd('Zoë'), entries), 'Zoë');
+  assert.equal(resolveAgentFolder(nfd('ZOË'), entries), 'Zoë');
+  assert.equal(resolveAgentFolder('马斯克', entries), '马斯克');
+  assert.equal(resolveAgentFolder('bar', entries), null);
+  // Two legacy folders differing only by case on a case-sensitive disk each keep their name.
+  assert.equal(resolveAgentFolder('foo', ['Foo', 'foo']), 'foo');
+  assert.equal(resolveAgentFolder('Foo', ['foo', 'Foo']), 'Foo');
+});
+
+test('canonicalAgentName hands back the entry on disk, never the typed form', () => {
+  upsertAgent({ name: 'Canon', system_prompt: 'p', config: { role: 'coder' } });
+  upsertAgent({ name: 'Zoé', system_prompt: 'p', config: { role: 'coder' } });
+  assert.equal(canonicalAgentName('canon'), 'Canon');
+  assert.equal(canonicalAgentName(nfd('zoé')), 'Zoé');
+  assert.equal(canonicalAgentName(nfd('Inconnu-é')), 'Inconnu-é', 'unknown: the name in NFC');
+  assert.throws(() => canonicalAgentName('../x'), /invalid agent name/);
+  assert.equal(deleteAgent('Canon', { purge: true }), true);
+  assert.equal(deleteAgent('Zoé', { purge: true }), true);
+});
+
+test('the fence gives a Chinese-named agent and the daemon `_` agents their own folders', () => {
+  for (const name of ['马斯克', 'Zoë', '_main', '_eph-1a2b3c', 'timon.coder']) assert.equal(isFenceAgent(name), true, name);
+  for (const name of ['.agents', '.', '..', '-x', 'a/b', 'a\\b', '']) assert.equal(isFenceAgent(name), false, name);
 });
 
 test('the HTTP routes take a percent-encoded Chinese name, composed or not', async () => {

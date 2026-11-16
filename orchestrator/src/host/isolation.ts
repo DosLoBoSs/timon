@@ -438,13 +438,12 @@ export function isFenceSegment(value: string): boolean {
 }
 
 /**
- * An agent name the fence may turn into a folder name: a plain segment, or a
- * name in another script (`马斯克`) that the agent rule accepts. Still never
- * `.` first, so `.agents` stays out of any agent's reach, and still a letter
- * or a digit first, as before, so the daemon's `_` agents keep their grants.
+ * An agent name the fence may turn into a folder name: a plain segment, or
+ * any name the agent rule accepts (`马斯克`, `_main`, `_eph-…`). Both refuse a
+ * `.` first, so `.agents` stays out of any agent's reach, and a separator.
  */
 export function isFenceAgent(value: string): boolean {
-  return isFenceSegment(value) || (isValidAgentName(value) && /^[\p{L}\p{N}]/u.test(value));
+  return isFenceSegment(value) || isValidAgentName(value);
 }
 
 /** The mission's own temporary folder, its `TMPDIR` once fenced; the caller checks `missionId` with `isFenceSegment`. */

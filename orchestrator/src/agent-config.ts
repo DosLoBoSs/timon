@@ -198,14 +198,15 @@ export function stripProtectedKeys(cfg: AgentConfig): AgentConfig {
  *  CASE-INSENSITIVELY and whatever its Unicode normalisation. On Linux the FS
  *  is case-sensitive, so a task created for `timon.main` did not find the real
  *  agent `TIMON.main` → spawn failing with "Missing system prompt" → BLOCKED in
- *  a loop. We canonicalise at the resolution point: if the folder exists as is
- *  → fast path; otherwise AGENTS_DIR is scanned for a match in NFC and lower
- *  case and the real name is returned; otherwise the name is returned in NFC
+ *  a loop. We canonicalise at the resolution point by reading the real entries
+ *  of AGENTS_DIR: an `existsSync` shortcut would answer yes for `foo` when the
+ *  folder is `Foo` on Windows or macOS (and for a decomposed name on APFS),
+ *  and hand back a name that matches no entry. Unknown → the name in NFC
  *  (lets the clear error come up for a real unknown, and keeps the literal
  *  name for the CREATION of a new agent). */
 export function canonicalAgentName(name: string): string {
-  if (existsSync(agentDir(name))) return name; // already the right case
-  return findAgentFolder(name) ?? name.normalize('NFC');
+  agentDir(name); // a path, not a name, still throws here as it always did
+  return resolveAgentFolder(name, agentFolderEntries()) ?? name.normalize('NFC');
 }
 
 /**
@@ -216,13 +217,28 @@ export function canonicalAgentName(name: string): string {
  * apart: a creation under such a name is refused.
  */
 export function findAgentFolder(name: string): string | null {
+  return resolveAgentFolder(name, agentFolderEntries());
+}
+
+/**
+ * The entry of `entries` that `name` designates: the exact entry first (two
+ * legacy folders differing only by case on a case-sensitive disk each keep
+ * their own name), otherwise the one equal in NFC and lower case, otherwise
+ * null. Pure, so the rule is tested without depending on the test machine's
+ * file system.
+ */
+export function resolveAgentFolder(name: string, entries: readonly string[]): string | null {
+  if (entries.includes(name)) return name;
   const key = agentNameKey(name);
+  return entries.find((entry) => agentNameKey(entry) === key) ?? null;
+}
+
+function agentFolderEntries(): string[] {
   try {
-    for (const entry of readdirSync(AGENTS_DIR)) {
-      if (agentNameKey(entry) === key) return entry;
-    }
-  } catch { /* AGENTS_DIR missing: nothing to find */ }
-  return null;
+    return readdirSync(AGENTS_DIR);
+  } catch {
+    return []; // AGENTS_DIR missing: nothing to find
+  }
 }
 
 export function loadConfig(agentName: string): AgentConfig {
