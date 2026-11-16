@@ -5,6 +5,9 @@
     "githubStar": {
       "title": "GitHub でスターを付けませんか？",
       "action": "スターを付ける"
+    },
+    "feed": {
+      "open": "詳細を見る"
     }
   }
 }
