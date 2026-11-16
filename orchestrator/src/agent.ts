@@ -1812,11 +1812,22 @@ export async function spawnAgent(
     // the thread's `spawn_failed` notice names the folder.
     const cause = err instanceof BackendExhaustedError
       ? interruptionForCooldown(err.backend)
-      : err instanceof CwdUnusableError ? null : 'crash';
+      : launchFailureCause(err);
     dbApi.finishMission(missionId, 'failed', -1, cause);
     throw err;
   }
   return missionId;
+}
+
+/**
+ * Cause recorded when a turn throws before its process runs. A working
+ * directory that is gone is no system death (TIM-0148): a replay would find
+ * it gone too, so it is left uncaused and the task is surfaced to a person
+ * instead of requeued. Shared by the first launch, the resume, the permission
+ * relaunch and the steer restart, so none of them reads it as a crash.
+ */
+function launchFailureCause(err: unknown): InterruptionReason | null {
+  return err instanceof CwdUnusableError ? null : 'crash';
 }
 
 /**
@@ -2848,7 +2859,7 @@ async function relaunchWithPermissionMode(
         presentation,
       });
     } catch (err) {
-      dbApi.finishMission(missionId, 'failed', -1, 'crash');
+      dbApi.finishMission(missionId, 'failed', -1, launchFailureCause(err));
       throw err;
     }
     return 'delivered';
@@ -2929,8 +2940,9 @@ export async function respawnWithResume(
   } catch (err) {
     // Explicit cause: the exception happened AT LAUNCH (missing system
     // prompt, binary not found…). It's a crash, not a mystery — saying so
-    // avoids finishMission's `unknown` net flattening it.
-    dbApi.finishMission(missionId, 'failed', -1, 'crash');
+    // avoids finishMission's `unknown` net flattening it. A folder that is
+    // gone is the exception (`launchFailureCause`).
+    dbApi.finishMission(missionId, 'failed', -1, launchFailureCause(err));
     throw err;
   }
   return true;
@@ -3971,7 +3983,7 @@ async function restartTurnWith(
         presentation,
       });
     } catch (err) {
-      dbApi.finishMission(missionId, 'failed', -1, 'crash');
+      dbApi.finishMission(missionId, 'failed', -1, launchFailureCause(err));
       throw err;
     }
     return { outcome: 'steered', method: 'restart' };

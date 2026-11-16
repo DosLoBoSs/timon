@@ -1,7 +1,7 @@
 {
   "apiErrors": {
     "mission_fence_refused": "Timon a refusé de lancer cette mission : l'isolation des missions est réglée sur obligatoire, et cette machine ne peut pas la clôturer. Changez le mode dans les réglages de sécurité, ou corrigez ce que signale le diagnostic.",
-    "cwd_unusable": "Timon n'a pas pu lancer cette mission : son dossier de travail {path} est introuvable ou ne peut pas être ouvert. Restaure le dossier, ou change le dossier de l'agent ou de son projet.",
+    "cwd_unusable": "Timon n'a pas pu lancer cette mission : son dossier de travail {path} est introuvable ou ne peut pas être ouvert. Restaurez le dossier, ou changez celui de l'agent ou de son projet.",
     "unknown": "Une erreur est survenue.",
     "http_status": "HTTP {status}",
     "module_unavailable": "Cette fonctionnalité n'est pas disponible sur cette installation : le module qui la sert est désactivé ou absent.",
