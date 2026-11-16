@@ -12,6 +12,26 @@
 import { lstatSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { agentPackageCacheDir, isFenceAgent } from './host/isolation.js';
+import type { NodeRuntime } from './host/node-runtime.js';
+
+/** The orchestrator folder this code runs from: `src/` or `dist/` sit right below it, `bin/` beside them. */
+const ORCHESTRATOR_ROOT = resolve(import.meta.dirname, '..');
+
+/**
+ * What the daemon runs from, for the fence (`FenceTarget.runtime`): its own
+ * executable, its orchestrator folder, whose `bin/` holds the Timon MCP
+ * servers, and the Node those servers start with (`nodeRuntime`, the one
+ * `backends/provider-mcp.ts` writes in the MCP configuration). A bare command
+ * name is looked up on PATH and says nothing about a folder: left out.
+ */
+export function daemonRuntimePaths(
+  mcpNode: NodeRuntime,
+  execPath: string = process.execPath,
+  orchestratorRoot: string = ORCHESTRATOR_ROOT,
+): string[] {
+  const paths = [execPath, orchestratorRoot, mcpNode.command].filter((path) => isAbsolute(path));
+  return [...new Set(paths)];
+}
 
 export type GitDirsFs = {
   /** What sits at `path`, links not followed: a folder, a file, or nothing. */

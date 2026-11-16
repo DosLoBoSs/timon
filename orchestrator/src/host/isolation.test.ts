@@ -668,3 +668,182 @@ test('fence: the Timon home is matched without case on macOS and Windows, with c
   const linux = resolveFence(cfg(), { timonHome, home, platform: 'linux', realpath: (path: string) => path, cwd: handed.cwd });
   assert.ok(linux.rw.includes(handed.cwd));
 });
+
+/* ── The release a packaged daemon runs from (`FenceTarget.runtime`) ────────── */
+
+const { runtimeReleaseOf } = await import('./isolation.js');
+
+const RELEASES = `${TH}/desktop-runtime/releases`;
+/** The Linux layout of a staged release: `resources/node/node`, `resources/orchestrator`. */
+const linuxRuntime = (release: string) => [
+  `${RELEASES}/${release}/resources/node/node`,
+  `${RELEASES}/${release}/resources/orchestrator`,
+];
+
+test('fence: the release the daemon runs from is readable and executable, never writable', () => {
+  const policy = resolveFence(cfg(), fullTarget({ runtime: linuxRuntime('9.9.9') }));
+  const release = `${RELEASES}/9.9.9`;
+  assert.ok(policy.ro.includes(release));
+  assert.ok(policy.exec.includes(release));
+  assert.ok(!policy.rw.some((path) => path === release || path.startsWith(`${release}/`)));
+  for (const path of [
+    `${release}/resources/node/node`,
+    `${release}/resources/orchestrator/bin/timon-mcp.mjs`,
+    `${release}/resources/orchestrator/bin/permission-mcp.mjs`,
+    `${release}/resources/orchestrator/bin/browser-mcp.mjs`,
+    `${release}/resources/orchestrator/node_modules/better-sqlite3/build/Release/better_sqlite3.node`,
+  ]) {
+    assert.equal(access(policy, path), 'rx', path);
+  }
+  assert.equal(policy.ignored.length, 0, JSON.stringify(policy.ignored));
+});
+
+test('fence: no other release, nor the rest of the desktop runtime, nor a private entry is opened with it', () => {
+  const policy = resolveFence(cfg(), fullTarget({ runtime: linuxRuntime('9.9.9') }));
+  for (const path of [
+    `${RELEASES}/9.9.8/resources/node/node`,
+    `${RELEASES}/9.9.8/resources/orchestrator/bin/timon-mcp.mjs`,
+    `${RELEASES}/9.9.99/resources/node/node`,
+    RELEASES,
+    `${TH}/desktop-runtime`,
+    `${TH}/desktop-runtime/active-release`,
+  ]) {
+    assert.equal(access(policy, path), 'none', path);
+  }
+  for (const name of FRAMING_REFUSED) {
+    assert.equal(access(policy, `${TH}/${name}`), 'none', `${name} must stay out of the projection`);
+  }
+  assert.equal(access(policy, TH), 'none');
+});
+
+test('fence: the macOS bundle layout opens its release the same way', () => {
+  const release = `${RELEASES}/0.1.8-1a2b3c4d5e6f`;
+  const resources = `${release}/Timon.app/Contents/Resources`;
+  const policy = resolveFence(cfg(), fullTarget({
+    platform: 'darwin', runtime: [`${resources}/node/node`, `${resources}/orchestrator`],
+  }));
+  assert.ok(policy.ro.includes(release) && policy.exec.includes(release));
+  assert.equal(access(policy, `${resources}/orchestrator/bin/timon-mcp.mjs`), 'rx');
+  assert.equal(access(policy, `${release}/Timon.app/Contents/MacOS/Timon`), 'rx');
+  assert.equal(access(policy, `${RELEASES}/0.1.7-0a0b0c0d0e0f/Timon.app/Contents/Resources/node/node`), 'none');
+});
+
+test('fence: a daemon running from elsewhere opens nothing in the Timon home', () => {
+  const bare = resolveFence(cfg(), fullTarget());
+  for (const runtime of [
+    ['/usr/bin/node', '/opt/timon/orchestrator'],
+    [`${FAKE_HOME}/code/timon/orchestrator`],
+    [`${TH}/desktop-runtime`, RELEASES, `${TH}/desktop-runtime/active-release`],
+    [`${TH}/worktrees/task-9/orchestrator`],
+    [`${RELEASES}/.hidden/resources/node/node`],
+  ]) {
+    const policy = resolveFence(cfg(), fullTarget({ runtime }));
+    assert.deepEqual(policy.ro, bare.ro, JSON.stringify(runtime));
+    assert.deepEqual(policy.exec, bare.exec, JSON.stringify(runtime));
+    assert.equal(access(policy, `${RELEASES}/9.9.9/resources/node/node`), 'none');
+  }
+});
+
+test('fence: a path a mission hands over never opens the desktop runtime', () => {
+  const release = `${RELEASES}/9.9.9`;
+  const handed = resolveFence(cfg(), fullTarget({
+    cwd: release, gitDirs: [release], timonRead: [release], pluginDirs: [release],
+  }));
+  assert.equal(handed.ignored.filter((i) => i.path === release).length, 4);
+  assert.equal(access(handed, `${release}/resources/node/node`), 'none');
+  // `host.isolation` grants nothing there either.
+  const viaConfig = resolveFence(cfg({ writable: [release], allow: [release], readOnly: [release] }), fullTarget());
+  assert.equal(access(viaConfig, `${release}/resources/node/node`), 'none');
+});
+
+test('runtimeReleaseOf: the release folder below desktop-runtime/releases, nothing else', () => {
+  assert.equal(runtimeReleaseOf(TH, `${RELEASES}/9.9.9/resources/node/node`), `${RELEASES}/9.9.9`);
+  assert.equal(runtimeReleaseOf(TH, `${RELEASES}/9.9.9`), `${RELEASES}/9.9.9`);
+  assert.equal(runtimeReleaseOf(TH, RELEASES), null);
+  assert.equal(runtimeReleaseOf(TH, `${RELEASES}/../active-release`), null);
+  assert.equal(runtimeReleaseOf(TH, `${RELEASES}/-x/node`), null);
+  assert.equal(runtimeReleaseOf(TH, '/usr/bin/node'), null);
+});
+
+test('fence: a release that a link leads elsewhere in the Timon home is not opened', { skip: linkSkip }, () => {
+  const releases = join(LTH, 'desktop-runtime', 'releases');
+  mkdirSync(join(releases, '9.9.9', 'resources', 'node'), { recursive: true });
+  writeFileSync(join(releases, '9.9.9', 'resources', 'node', 'node'), '');
+  writeFileSync(join(LTH, 'backend-accounts', 'acc-other', 'x'), '');
+  symlinkSync(join(LTH, 'backend-accounts', 'acc-other'), join(releases, '9.9.7'), 'dir');
+  const real = resolveFence(cfg(), linkTarget({ runtime: [join(releases, '9.9.9', 'resources', 'node', 'node')] }));
+  assert.equal(access(real, join(releases, '9.9.9', 'resources', 'node', 'node')), 'rx');
+  // The link resolves into another account's folder: no release there, nothing granted.
+  const linked = resolveFence(cfg(), linkTarget({ runtime: [join(releases, '9.9.7', 'x')] }));
+  assert.equal(access(linked, join(LTH, 'backend-accounts', 'acc-other', 'x')), 'none');
+  assert.equal(access(linked, join(releases, '9.9.9', 'resources', 'node', 'node')), 'none');
+});
+
+/* ── The `workspace` folder itself, as setup made it an agent's folder ──────── */
+
+const WS = `${TH}/workspace`;
+
+test('fence: an agent whose configured folder is the workspace folder itself keeps it, read and write', () => {
+  const policy = resolveFence(cfg(), fullTarget({ cwd: WS, agentCwd: WS, gitDirs: [] }));
+  assert.ok(policy.rw.includes(WS), 'the working directory is granted whole');
+  assert.equal(policy.sharedWorkspace, WS);
+  assert.equal(access(policy, `${WS}/notes.md`), 'rw');
+  assert.equal(policy.ignored.filter((i) => i.path === WS).length, 0, 'not dropped');
+  // Nothing refused is reopened with it.
+  for (const name of FRAMING_REFUSED) assert.equal(access(policy, `${TH}/${name}`), 'none', `${name} stays refused`);
+  for (const path of [TH, `${TH}/worktrees/task-2/a`, `${TH}/backend-accounts/acc-other/x`, `${TH}/agents/timon.main/SOUL.md`]) {
+    assert.equal(access(policy, path), 'none', `${path} stays refused`);
+  }
+  // A read-only level grants it read-only, like any working directory.
+  const reading = resolveFence(cfg(), fullTarget({ cwd: WS, agentCwd: WS, gitDirs: [], workspace: 'ro' }));
+  assert.equal(access(reading, `${WS}/notes.md`), 'rx');
+});
+
+test('fence: the workspace folder itself stays refused when it is not the agent\'s configured folder', () => {
+  const cases: Array<[string, Record<string, unknown>]> = [
+    ['no configured folder', { cwd: WS }],
+    ['another configured folder', { cwd: WS, agentCwd: `${WS}/home` }],
+    ['handed as a git directory', { cwd: `${WS}/home`, agentCwd: WS, gitDirs: [WS] }],
+    ['handed as a file', { cwd: `${WS}/home`, agentCwd: WS, timonRead: [WS] }],
+    ['a task worktree run by that agent', { cwd: `${TH}/worktrees/task-1`, agentCwd: WS }],
+  ];
+  for (const [label, over] of cases) {
+    const policy = resolveFence(cfg(), fullTarget({ gitDirs: [], timonRead: [], ...over }));
+    assert.equal(access(policy, `${WS}/other-agent/x`), 'none', `${label}: the other folders stay refused`);
+    assert.ok(!policy.rw.includes(WS) && !policy.ro.includes(WS), `${label}: workspace not granted`);
+    assert.equal(policy.sharedWorkspace, undefined, label);
+  }
+  // A configured folder never reopens another zone root nor the home, even when it is the working directory.
+  for (const path of [TH, `${TH}/worktrees`, `${TH}/backend-accounts`, `${TH}/tmp`, `${TH}/workflows`]) {
+    const policy = resolveFence(cfg(), fullTarget({ cwd: path, agentCwd: path, gitDirs: [] }));
+    assert.ok(policy.ignored.some((i) => i.path === path), `${path} must be dropped`);
+    assert.equal(policy.sharedWorkspace, undefined);
+  }
+  // The configuration cannot name it either.
+  const viaConfig = resolveFence(cfg({ writable: [WS] }), fullTarget({ agentCwd: WS }));
+  assert.equal(access(viaConfig, `${WS}/x`), 'none');
+});
+
+test('fence: the workspace exception follows links and case like every grant', { skip: linkSkip }, () => {
+  const ws = join(LTH, 'workspace');
+  mkdirSync(join(ws, 'home'), { recursive: true });
+  symlinkSync(ws, join(LINKS, 'to-workspace'), 'dir');
+  // The configured folder spelled through a link is the same folder.
+  const linked = resolveFence(cfg(), linkTarget({ cwd: ws, agentCwd: join(LINKS, 'to-workspace') }));
+  assert.equal(linked.sharedWorkspace, ws);
+  // A link inside it leading to the workspace folder is the workspace folder, but only for its own agent.
+  symlinkSync(ws, join(LTH, 'worktrees', 'task-1', 'to-ws'), 'dir');
+  const other = resolveFence(cfg(), linkTarget({ cwd: join(LTH, 'worktrees', 'task-1', 'to-ws'), agentCwd: join(LTH, 'worktrees', 'task-1') }));
+  assert.equal(other.sharedWorkspace, undefined);
+  assert.ok(!other.rw.includes(ws));
+});
+
+test('fence: the workspace exception matches without case on macOS', () => {
+  const home = resolve('/Users/tester');
+  const timonHome = join(home, '.timon');
+  const policy = resolveFence(cfg(), {
+    timonHome, home, platform: 'darwin', realpath: (path: string) => path,
+    cwd: join(timonHome, 'Workspace'), agentCwd: join(timonHome, 'workspace'),
+  });
+  assert.equal(policy.sharedWorkspace, join(timonHome, 'Workspace'));
+});

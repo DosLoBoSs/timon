@@ -276,6 +276,7 @@ import {
   canonicalAgentName,
   findAgentFolder,
   loadConfig,
+  configuredAgentCwd,
   loadSoul,
   loadIdentityDocs,
   loadSystemPrompt,
@@ -1883,6 +1884,10 @@ function missionFenceTarget(input: {
   const attachments = join(chatAttachmentsRoot(), input.missionId);
   return {
     agent: input.agentName,
+    // Read again from the agent's config file: `cfg.cwd` may by now be a
+    // task's worktree, and only the agent's own folder earns the shared
+    // `workspace` exception of the fence.
+    agentCwd: configuredAgentCwd(input.agentName),
     project: input.project || undefined,
     account: splitBackendInstance(input.backend).accountId ?? undefined,
     providerPlugin: backendOwnerPlugin(input.backend) ?? undefined,

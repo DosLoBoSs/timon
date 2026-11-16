@@ -28,7 +28,7 @@ import { toAgentName } from './agent-name.js';
 import { dbApi } from './db.js';
 import { MAIN_AGENT_KEY, mainAgentName, setMainAgentName } from './main-agent.js';
 import { readTeamState, teamOnboardingPending, writeTeamState } from './onboarding-team-state.js';
-import { WORKSPACE_DIR, agentDir } from './paths.js';
+import { ONBOARDING_WORKSPACE_DIR, agentDir } from './paths.js';
 import { isServedIconUrl } from './uploads.js';
 
 /** Marks step 3 as answered. Separate from the team state: the two steps fail
@@ -165,7 +165,7 @@ export function applyMainAgentName(rawName: string): string {
     if (!saved || typeof saved !== 'object') throw new MainAgentSetupError('workspace_unavailable');
     const savedRoot = typeof saved.workspacesRoot === 'string' ? saved.workspacesRoot : '';
     const rawRoot = savedRoot || config().workspacesRoot;
-    const root = rawRoot ? expandTilde(rawRoot) : WORKSPACE_DIR;
+    const root = rawRoot ? expandTilde(rawRoot) : ONBOARDING_WORKSPACE_DIR;
     if (!isAbsolute(root)) throw new MainAgentSetupError('workspace_unavailable');
     try {
       mkdirSync(root, { recursive: true });

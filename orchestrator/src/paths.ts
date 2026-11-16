@@ -67,9 +67,15 @@ export const INTEGRATIONS_DB_PATH = join(TIMON_HOME, 'integrations.db');
  *  plugin that serves the accounts to read once (`users/legacy-account-tables.ts`).
  *  `config` zone: an export carries it to an install that has not run the plugin yet. */
 export const LEGACY_ACCOUNT_TABLES_FILE = join(TIMON_HOME, 'legacy-account-tables.json');
-/** Fallback `cwd` of the agents onboarding seeds when the config names no
- *  `workspacesRoot`: inside the Timon home, never the user's home itself. */
+/** The Timon home's folder of working folders, used when the config names no
+ *  `workspacesRoot`: inside the Timon home, never the user's home itself. An
+ *  agent works in a folder INSIDE it (`ONBOARDING_WORKSPACE_DIR`, the demo
+ *  project's): the fence never hands a mission this folder, which lists the
+ *  others, but to an agent configured in it before 0.1.9. */
 export const WORKSPACE_DIR = join(TIMON_HOME, 'workspace');
+/** Fallback `cwd` of the main agent and the team onboarding seeds: one folder
+ *  they share, named apart from the agents so a rename leaves it right. */
+export const ONBOARDING_WORKSPACE_DIR = join(WORKSPACE_DIR, 'home');
 /** The user's instructions sent to every agent (see `global-instructions.ts`). */
 export const GLOBAL_INSTRUCTIONS_FILE = join(TIMON_HOME, 'global-instructions.md');
 /** Inbound channels (`telegram.json`…), read by the app and by the

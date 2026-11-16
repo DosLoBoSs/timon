@@ -22,6 +22,8 @@ import { SANDBOX_EXEC } from './host/seatbelt.js';
 import { createLinuxHost } from './host/linux.js';
 import { hasSystemd } from './host/systemd.js';
 import type { FencePolicy } from './host/isolation.js';
+import { TIMON_HOME, WORKSPACE_DIR, agentDir } from './paths.js';
+import { configuredAgentCwd } from './agent-config.js';
 import type { HostFence, HostFenceProbe, HostFenceWitness } from './host/types.js';
 import {
   fenceLaunchFailure, launchErrorStatus, missionLaunchErrorBody, fenceMissionCommand, fencePolicyFile, fenceWitnessFailure, hostFenceStatus, MissionFenceRefusedError, noteFenceLaunchFailure,
@@ -228,6 +230,36 @@ test('a grant the policy dropped is reported, never silently lost', () => {
   assert.ok(warnings.some((l) => l.includes(`fence grant on ${join(TH, 'daemon-token')} dropped`)));
 });
 
+test('an agent set up in the workspace folder itself keeps it, said once in the log', () => {
+  // The real temporary home of this process: the agent's config file is what the launch reads.
+  mkdirSync(WORKSPACE_DIR, { recursive: true });
+  mkdirSync(agentDir('woody'), { recursive: true });
+  writeFileSync(join(agentDir('woody'), 'config.json'), JSON.stringify({ cwd: WORKSPACE_DIR }));
+  const fence = fakeFence({ available: true });
+  const warnings: string[] = [];
+  const launch = () => fenceMissionCommand('/usr/bin/grok', [], 'u-ws', {
+    timonHome: TIMON_HOME, cwd: WORKSPACE_DIR, agentCwd: configuredAgentCwd('woody'),
+    agent: 'woody', missionId: 'dddddddd-0000-4000-8000-000000000004', platform: 'linux',
+  }, { mode: 'auto', fence, warn: (l) => warnings.push(l) });
+  launch();
+  const policy = fence.policies[0];
+  const workspace = realpathSync(WORKSPACE_DIR);
+  assert.ok(policy?.rw.includes(workspace), 'the working directory is granted, read and write');
+  assert.equal(policy?.ignored.filter((i) => i.path === WORKSPACE_DIR).length, 0, 'not dropped');
+  assert.ok(!warnings.some((l) => l.includes('dropped')), warnings.join('\n'));
+  assert.equal(warnings.filter((l) => l.includes('"woody"') && l.includes('project folder')).length, 1);
+  launch();
+  assert.equal(warnings.filter((l) => l.includes('"woody"')).length, 1, 'once per agent');
+
+  // The same folder handed by a task or a mission, not by the agent's config, stays refused.
+  writeFileSync(join(agentDir('woody'), 'config.json'), JSON.stringify({ cwd: join(WORKSPACE_DIR, 'woody') }));
+  fenceMissionCommand('/usr/bin/grok', [], 'u-ws2', {
+    timonHome: TIMON_HOME, cwd: WORKSPACE_DIR, agentCwd: configuredAgentCwd('woody'), agent: 'woody', platform: 'linux',
+  }, { mode: 'auto', fence, warn: (l) => warnings.push(l) });
+  assert.ok(!fence.policies.at(-1)?.rw.includes(workspace));
+  assert.ok(warnings.some((l) => l.includes(`fence grant on ${WORKSPACE_DIR} dropped`)));
+});
+
 test('the wrapper\'s own probe carries no mission: nothing to fence, the line is unchanged', () => {
   const launch = wrapMissionLaunch('true', [], 'probe000');
   assert.equal(launch.fence, null);
@@ -294,6 +326,24 @@ test('the agent\'s package cache is made before the policy, granted, and handed 
   assert.ok(existsSync(cache));
   assert.ok(fence.policies[0]?.rw.includes(cache));
   assert.ok(!fence.policies[0]?.rw.some((p) => p === join(TH, 'provider-cache') || p === join(TH, 'provider-cache', '.agents')));
+});
+
+test('the release the daemon runs from reaches the policy, readable and executable', () => {
+  const release = join(TH, 'desktop-runtime', 'releases', '9.9.9');
+  const node = join(release, 'resources', 'node', 'node');
+  mkdirSync(join(release, 'resources', 'node'), { recursive: true });
+  mkdirSync(join(TH, 'desktop-runtime', 'releases', '9.9.8'), { recursive: true });
+  writeFileSync(node, '');
+  const fence = fakeFence({ available: true });
+  fenceMissionCommand('/usr/bin/claude', [], 'unit-7', { ...TARGET, runtime: [node] }, { mode: 'auto', fence, warn: () => {} });
+  const policy = fence.policies[0];
+  assert.ok(policy?.ro.includes(release) && policy.exec.includes(release));
+  assert.ok(!policy.rw.some((p) => p.startsWith(join(TH, 'desktop-runtime'))));
+  assert.ok(![...policy.ro, ...policy.exec].includes(join(TH, 'desktop-runtime', 'releases', '9.9.8')));
+  // Unnamed, the daemon's own paths are used: here, a Node and a checkout outside the Timon home.
+  const bare = fakeFence({ available: true });
+  fenceMissionCommand('/usr/bin/claude', [], 'unit-8', TARGET, { mode: 'auto', fence: bare, warn: () => {} });
+  assert.ok(!bare.policies[0]?.ro.some((p) => p.startsWith(join(TH, 'desktop-runtime'))));
 });
 
 test('a name alone never creates an agent folder, nor a package cache', () => {

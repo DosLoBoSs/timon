@@ -133,6 +133,10 @@ export const MISSION_TIMON_ZONES = Object.freeze({
    *  attachments, the code of a plugin's MCP server), never writable — except
    *  the mission's own agent memory. */
   readable: Object.freeze(['agents', 'skills', 'projects', 'uploads', 'plugins']),
+  /** Readable and executable, never writable, and only the one release a
+   *  packaged daemon runs from (`desktop-runtime/releases/<id>`): its Node and
+   *  its scripts start the mission's own Timon MCP servers. */
+  runtime: Object.freeze(['desktop-runtime']),
   /** Never granted, read or write: secrets, the database, the configuration
    *  the daemon executes, sessions and other tenants' state. */
   refused: Object.freeze([
@@ -358,6 +362,14 @@ export type FenceTarget = {
   /** Working directory of the mission: writable wherever it is, unless `workspace` is `ro`. */
   cwd?: string | undefined;
   /**
+   * The working directory the agent's own config file holds, read by the
+   * daemon at launch: never a task's worktree, a provider's choice or a path a
+   * mission hands over. Its one use: an agent whose folder is the Timon home's
+   * `workspace` itself, as the setup of 0.1.8 and earlier made them, keeps
+   * that folder (`sharedWorkspace` of the policy).
+   */
+  agentCwd?: string | undefined;
+  /**
    * `ro` when the level the mission runs at writes nothing (a CLI whose own
    * read-only sandbox the fence replaces): the working directory and its git
    * directories are granted read-only. The CLI's own state (its scratch
@@ -384,6 +396,14 @@ export type FenceTarget = {
   gitDirs?: readonly string[] | undefined;
   /** Install folders of the plugins whose MCP servers the mission runs: readable and executable. */
   pluginDirs?: readonly string[] | undefined;
+  /**
+   * What the daemon itself runs from: its executable, its orchestrator folder,
+   * the Node it starts MCP servers with. A packaged install on macOS and Linux
+   * runs from a copy under `desktop-runtime/releases/<id>` of the Timon home;
+   * that release, and no other, is readable and executable, never writable.
+   * A path outside the Timon home needs nothing: the system is readable.
+   */
+  runtime?: readonly string[] | undefined;
   /** Further paths under the Timon home the daemon hands the mission (chat attachments): readable. */
   timonRead?: readonly string[] | undefined;
   /** Top-level entries of the Timon home: refused copies get named. Listed from the folder when absent. */
@@ -415,6 +435,12 @@ export type FencePolicy = {
   unixSockets: 'deny' | 'allow';
   /** Grants dropped because they would open what a mission never reaches, with the reason. */
   ignored: ReadonlyArray<{ path: string; reason: string }>;
+  /**
+   * The Timon home's `workspace` folder when it was granted whole, because it
+   * is the agent's configured folder (`FenceTarget.agentCwd`): the agent then
+   * reaches every other folder of `workspace` too. Absent otherwise.
+   */
+  sharedWorkspace?: string | undefined;
 };
 
 /** Folders every program of the platform writes to (`/dev/null`, a temporary file). */
@@ -481,9 +507,32 @@ export function agentPackageCacheDir(timonHome: string, agent: string): string {
  *   directory, a file or a plugin folder), which a mission may have chosen:
  *   an agent's `cwd` is only checked for existence, and a mission holding
  *   `agents:manage` sets it;
- * - `config`: `host.isolation`, which grants nothing inside the Timon home.
+ * - `config`: `host.isolation`, which grants nothing inside the Timon home;
+ * - `runtime`: the release folder the daemon runs from, read-only, derived
+ *   from the daemon's own executable and code, never from a mission;
+ * - `agent-workspace`: the mission's working directory when it is the
+ *   `workspace` folder itself AND the agent's configured folder. Checked as a
+ *   `mission` grant, but for the depth of that one folder: agents set up by
+ *   0.1.8 and earlier were given it, and lost their own folder to the fence.
  */
-type GrantSource = 'own' | 'own-memory' | 'mission' | 'config';
+type GrantSource = 'own' | 'own-memory' | 'mission' | 'config' | 'runtime' | 'agent-workspace';
+
+/** The Timon home's folder of shared working folders (`WORKSPACE_DIR` of `paths.ts`). */
+const WORKSPACE_ENTRY = 'workspace';
+
+/** Where a packaged install keeps its releases, below the Timon home (`host/packaged-service.ts`). */
+const RUNTIME_RELEASES = Object.freeze(['desktop-runtime', 'releases']);
+
+/**
+ * The release folder `path` sits in, `<timonHome>/desktop-runtime/releases/<id>`,
+ * or null when it sits in none. Pure path arithmetic on both arguments as given.
+ */
+export function runtimeReleaseOf(timonHome: string, path: string): string | null {
+  const releases = join(timonHome, ...RUNTIME_RELEASES);
+  if (!contains(releases, path) || path === releases) return null;
+  const id = relative(releases, path).split(sep)[0] ?? '';
+  return FENCE_SEGMENT.test(id) ? join(releases, id) : null;
+}
 
 /**
  * Zones of the Timon home where a handed-over path never lands, by their
@@ -528,12 +577,19 @@ function timonGrantProblem(timonHome: string, path: string, access: 'ro' | 'rw',
   const segments = relative(timonHome, path).split(sep);
   const first = segments[0] ?? '';
   if (isRefusedTimonEntry(first)) return `"${first}" holds private state a mission never reaches`;
+  if (source === 'runtime') {
+    const release = MISSION_TIMON_ZONES.runtime.includes(first) && segments[1] === RUNTIME_RELEASES[1]
+      && segments.length === 3 && FENCE_SEGMENT.test(segments[2] ?? '');
+    if (!release) return 'only one release folder of the desktop runtime is opened, to run the daemon\'s own code';
+    return access === 'ro' ? null : 'the release the daemon runs from is never writable';
+  }
   const writable = MISSION_TIMON_ZONES.writable.includes(first);
   if (access === 'rw' && !writable && source !== 'own-memory') return `"${first}" is never writable from a mission`;
   if (!writable && !MISSION_TIMON_ZONES.readable.includes(first)) return `"${first}" is not one of the mission zones`;
-  if (source !== 'mission') return null;
+  if (source !== 'mission' && source !== 'agent-workspace') return null;
   const owner = OWNER_ZONES.find((zone) => zone.every((name, i) => segments[i] === name));
   if (owner) return `"${owner.join('/')}" holds other accounts' or missions' folders; the fence grants the mission's own one`;
+  if (source === 'agent-workspace' && segments.length === 1 && first === WORKSPACE_ENTRY) return null;
   const depth = HANDED_DEPTH[first] ?? Number.POSITIVE_INFINITY;
   if (segments.length - 1 < depth) return `"${segments.join('/')}" lists other missions' folders; only a folder ${depth} level(s) inside "${first}" is handed over`;
   return null;
@@ -630,7 +686,7 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
     // A folder the fence builds from the mission's identity is granted under
     // that name only: a link in it pointing elsewhere in the Timon home would
     // reopen what the identity checks closed.
-    const redirected = (source === 'own' || source === 'own-memory')
+    const redirected = (source === 'own' || source === 'own-memory' || source === 'runtime')
       && contains(foldedHome, folded) && folded !== fold(path);
     const problem = redirected
       ? 'a link leads it elsewhere in the Timon home'
@@ -653,11 +709,22 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
   const workspace = target.workspace === 'ro' ? 'ro' : 'rw';
   // A read-only level still runs the project's commands, as the CLI's own
   // read-only sandbox did: the workspace stays executable, every write refused.
-  const workspaceGrant = (path: string): void => {
-    const granted = grant(resolve(path), workspace, 'mission');
+  const workspaceGrant = (path: string, source: GrantSource = 'mission'): string | null => {
+    const granted = grant(resolve(path), workspace, source);
     if (granted && workspace === 'ro') exec.add(granted);
+    return granted;
   };
-  if (target.cwd) workspaceGrant(target.cwd);
+  // The `workspace` folder whole, only when the working directory AND the
+  // agent's configured folder both resolve to it: a task's worktree, a
+  // provider's own folder or any other handed path keeps the depth rule.
+  const sharedRoot = fold(join(timonHome, WORKSPACE_ENTRY));
+  const isSharedRoot = (path: string | undefined): boolean => {
+    if (!path) return false;
+    const resolved = resolveLinks(resolve(path));
+    return resolved !== null && fold(resolved) === sharedRoot;
+  };
+  const shared = isSharedRoot(target.cwd) && isSharedRoot(target.agentCwd);
+  const sharedWorkspace = target.cwd ? workspaceGrant(target.cwd, shared ? 'agent-workspace' : 'mission') : null;
   for (const dir of target.gitDirs ?? []) workspaceGrant(dir);
 
   const missionId = segment('mission id', target.missionId);
@@ -707,6 +774,18 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
   );
   for (const dir of target.pluginDirs ?? []) {
     const granted = grant(resolve(dir), 'ro', 'mission', pluginFolder);
+    if (granted) exec.add(granted);
+  }
+  // A packaged daemon runs from a release copied into the Timon home, and the
+  // mission's Timon MCP servers start with that release's Node and scripts:
+  // without it, every one of them fails to start (EACCES, EPERM). Only the
+  // release a path of the daemon resolves into is opened; the other releases,
+  // and `desktop-runtime` itself, stay refused with the rest of the home.
+  for (const raw of target.runtime ?? []) {
+    const resolved = resolveLinks(resolve(raw));
+    const release = resolved === null ? null : runtimeReleaseOf(timonHome, resolved);
+    if (release === null || ro.has(release)) continue;
+    const granted = grant(release, 'ro', 'runtime');
     if (granted) exec.add(granted);
   }
 
@@ -762,6 +841,7 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
     denyUnderTimonHome: timonRefusedPaths(timonHome, target.timonHomeEntries ?? listTimonHome(timonHome)),
     unixSockets: exceptions.unixSockets,
     ignored,
+    ...(shared && sharedWorkspace ? { sharedWorkspace } : {}),
   };
 }
 
