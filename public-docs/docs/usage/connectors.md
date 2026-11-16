@@ -35,6 +35,8 @@ If you added an MCP server called `app-<name>` by hand, the matching card shows 
 
 **New MCP**, in the tab's toolbar, opens the MCP server form. There you can add any MCP server: a remote address with its own headers, or a program that runs on your machine.
 
+The headers of a remote server, an API key for example, are not written into the agents' configuration: the agent talks to Timon, which adds the headers when it relays each call to the server. This needs the secrets vault. If it is switched off, a remote server with headers is not given to agents until you switch the vault back on.
+
 ## What a connector receives
 
 A connector receives what your agents send it: the requests they make and the data they include. The publisher processes that data under its own privacy policy and terms, linked from each card. Timon only lists servers whose publisher is verified by the official MCP registry. Each one is reviewed before it ships, and its address and sign-in are checked. The publishers' logos ship with Timon, so nothing is loaded from a publisher's site to display them.
