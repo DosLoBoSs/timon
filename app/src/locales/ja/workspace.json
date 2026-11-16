@@ -254,7 +254,7 @@
       "name": "名前",
       "url": "URL",
       "urlPlaceholder": "git@gitlab.com:team/project.git",
-      "urlHint": "SSH (git@host:path または ssh://)、認証情報なしの HTTPS、git://、file://、またはこのマシン上のフォルダー。",
+      "urlHint": "SSH (git@host:path または ssh://)、認証情報なしの HTTPS、git://、file://、またはこのマシン上でエージェントが書き込めないフォルダー。",
       "issue": {
         "name": "英字、数字、ドット、ハイフン、アンダースコアで、ハイフンから始めないでください。",
         "credentials": "URL にユーザー名やトークンを入れないでください: SSH キーまたは git の認証ヘルパーを使ってください。",
