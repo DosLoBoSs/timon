@@ -36,6 +36,8 @@ transcripts/
 # from it.
 desktop/build-resources/
 desktop/release/
+# Installers, checksums and build summaries of scripts/release/build-package.mjs.
+dist-release/
 
 # A build's channel and expiry: written into the build worktree by the release
 # scripts, never committed (a commit would carry it into the next build, with

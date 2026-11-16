@@ -1,0 +1,410 @@
+# Builds, signs and publishes a final version of Timon, from main only.
+#
+# It starts when a push to main changes orchestrator/package.json, which the
+# merge of a version bump does. The first job goes on only when the version
+# changed with that push, is final (x.y.z, never an rc) and has no tag yet;
+# every other push touching the file ends there. A manual run (Actions tab,
+# "Run workflow", on main) rebuilds the version main carries, for a release
+# whose build failed.
+#
+#   check    reads the version and refuses a bad request in a minute, before
+#            three runners spend an hour each on it; pins the commit.
+#   build    one job per system, in the `release-build` environment, which
+#            holds the Ed25519 release pair: the daemon inside each package is
+#            signed with it, and the packaged app checks that signature at
+#            every start. Channel stable, no expiry. One failed system stops
+#            the release: a channel names one version for every system.
+#   attest   build provenance of the installers, apart from the build.
+#   draft    gathers the three builds and creates (or completes) the draft
+#            release with the workflow token. No key: a draft writes no
+#            manifest.
+#   publish  waits for a maintainer's approval (the `release` environment),
+#            publishes the release, which puts the tag on the built commit,
+#            signs the two release lists with the manifest keys, and opens the
+#            pull request that brings them to main, with its auto-merge on.
+#
+# The pull request is opened with RELEASE_PR_TOKEN, a token of its own: one
+# opened with the workflow token would start no workflow, so its checks would
+# never run and it could never merge.
+#
+# What reaches what:
+#   - no step gets a secret it does not use, through `env:` on that step only;
+#   - the build gets the Ed25519 pair and no GitHub token: the checkouts keep
+#     no credential and build-package.mjs passes `--publish never`. It does
+#     run npm ci, so the pair is within reach of the locked dependencies'
+#     install scripts; build-package.mjs keeps the key variables out of their
+#     environment, and the key files exist only for the build's duration;
+#   - the attestation token never shares a job with npm or the built code;
+#   - the manifest keys and the pull request token live in the approved job
+#     only, which installs nothing: it runs publish.mjs (plain Node, no
+#     dependency), git and gh.
+# A fork or a pull request reaches none of it: there is no pull_request
+# trigger, the first job requires this repository and main, and the two
+# environments only deploy from main.
+#
+# Every value reaches a script through an environment variable, never pasted
+# into it: `${{ }}` inside `run:` would turn a value into shell code.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [orchestrator/package.json]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One release at a time, never cancelled half-way: a release whose draft is
+# made but not yet published must finish, or be finished by a manual run.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    name: decide whether to release
+    if: github.repository == 'ai-timon/timon' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      release: ${{ steps.decide.outputs.release }}
+      version: ${{ steps.decide.outputs.version }}
+      sha: ${{ steps.decide.outputs.sha }}
+      node: ${{ steps.pin.outputs.node }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: src
+          persist-credentials: false
+
+      - name: Read the version and decide
+        id: decide
+        working-directory: src
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::unexpected commit id"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          version=$(jq -r .version orchestrator/package.json)
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::notice::orchestrator/package.json carries $version, not a final version: nothing to release"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT" = push ]; then
+            if [[ ! "$BEFORE" =~ ^[0-9a-f]{40}$ ]] || [[ "$BEFORE" =~ ^0+$ ]] || ! git fetch --quiet --no-tags --depth=1 origin "$BEFORE"; then
+              echo "::error::cannot read the version main had before this push; start the workflow by hand to release $version"
+              exit 1
+            fi
+            previous=$(git show "$BEFORE:orchestrator/package.json" | jq -r .version)
+            if [ "$previous" = "$version" ]; then
+              echo "::notice::the version is still $version: nothing to release"
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Version $previous -> $version"
+          fi
+          # Anonymous read of a public repository: the checkout kept no credential.
+          if [ -n "$(git ls-remote --tags origin "refs/tags/v$version")" ]; then
+            echo "::warning::the tag v$version already exists: $version is released, nothing to do"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version from $sha"
+
+      - name: Pin the Node version
+        id: pin
+        if: steps.decide.outputs.release == 'true'
+        working-directory: src
+        run: |
+          # The Node the packaged daemon runs on: native modules compiled by
+          # npm ci must match its ABI.
+          node=$(jq -r .version desktop/scripts/node-runtime.json)
+          [[ "$node" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::unexpected Node version in desktop/scripts/node-runtime.json"; exit 1; }
+          echo "node=$node" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.decide.outputs.release == 'true'
+        with:
+          node-version: ${{ steps.pin.outputs.node }}
+          package-manager-cache: false
+
+      # The dry run needs a key pair to exist, not the release one.
+      - name: Throwaway signing keys
+        if: steps.decide.outputs.release == 'true'
+        run: node src/scripts/release/throwaway-keys.mjs "$RUNNER_TEMP"
+
+      # Refuses what the builds would refuse an hour later: package versions
+      # that disagree, a version that is not the checkout's.
+      - name: Dry run of the package build
+        if: steps.decide.outputs.release == 'true'
+        working-directory: src
+        env:
+          VERSION: ${{ steps.decide.outputs.version }}
+        run: node scripts/release/build-package.mjs --version "$VERSION" --channel stable --no-expiry --output ../release-output --dry-run
+
+  build:
+    name: build · ${{ matrix.os }}
+    needs: check
+    if: needs.check.outputs.release == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ${{ matrix.runner }}
+    environment: release-build
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        # macOS: Apple Silicon only, as the release candidates.
+        include:
+          - { os: linux, runner: ubuntu-latest }
+          - { os: mac, runner: macos-latest }
+          - { os: windows, runner: windows-latest }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.sha }}
+          path: src
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ needs.check.outputs.node }}
+          cache: npm
+          cache-dependency-path: |
+            src/orchestrator/package-lock.json
+            src/app/package-lock.json
+            src/desktop/package-lock.json
+
+      # A pair other than the pinned one would give packages whose updates no
+      # installed Timon accepts: stop before an hour of build. Once is enough,
+      # the pair is the same everywhere, and fail-fast stops the other systems.
+      - name: Check the signing key is the one the clients pin
+        if: matrix.os == 'linux'
+        working-directory: src
+        env:
+          TIMON_RELEASE_PUBLIC_KEY: ${{ secrets.TIMON_RELEASE_PUBLIC_KEY }}
+        run: |
+          node --input-type=module -e '
+            import { join } from "node:path";
+            import { pathToFileURL } from "node:url";
+            const load = (file) => import(pathToFileURL(join(process.cwd(), ...file.split("/"))).href);
+            const { keyIdFor } = await load("scripts/release-manifest.mjs");
+            const { readPinnedKeyIds } = await load("scripts/release/publish.mjs");
+            const pinned = readPinnedKeyIds(process.cwd()).ed25519;
+            let id = null;
+            try { id = keyIdFor(process.env.TIMON_RELEASE_PUBLIC_KEY); } catch { id = null; }
+            if (!id || id !== pinned) {
+              console.error(`::error::the release-build public key is ${id ?? "missing or unreadable"}, the clients pin ${pinned}`);
+              process.exit(1);
+            }
+            console.log(`release key ${id}, pinned by the clients`);
+          '
+
+      - name: Build the package
+        working-directory: src
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          TIMON_RELEASE_PRIVATE_KEY: ${{ secrets.TIMON_RELEASE_PRIVATE_KEY }}
+          TIMON_RELEASE_PUBLIC_KEY: ${{ secrets.TIMON_RELEASE_PUBLIC_KEY }}
+        run: node scripts/release/build-package.mjs --version "$VERSION" --channel stable --no-expiry --output ../release-output
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: timon-${{ needs.check.outputs.version }}-${{ matrix.os }}
+          path: release-output/${{ needs.check.outputs.version }}/${{ matrix.os }}/
+          if-no-files-found: error
+          # An approval waits 30 days at most.
+          retention-days: 30
+          # Installers are already compressed.
+          compression-level: 0
+
+  # Apart from the build: the OIDC token that signs the attestation never
+  # shares a job with npm or the built code.
+  attest:
+    name: attest · ${{ matrix.os }}
+    needs: [check, build]
+    if: needs.check.outputs.release == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [linux, mac, windows]
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: timon-${{ needs.check.outputs.version }}-${{ matrix.os }}
+          path: installers
+
+      # Attests only what the build listed and hashed.
+      - name: Check the installers against their sums
+        working-directory: installers
+        run: |
+          [ -s SHA256SUMS ] || { echo "::error::no SHA256SUMS in the artifact"; exit 1; }
+          sha256sum --strict -c SHA256SUMS
+          # 64 hex digits and two spaces, then the name (which may hold spaces).
+          listed=$(cut -c67- SHA256SUMS | sort)
+          present=$(find . -type f ! -name SHA256SUMS ! -name build-summary.json | sed 's|^\./||' | sort)
+          if [ "$listed" != "$present" ]; then
+            echo "::error::the artifact and its SHA256SUMS do not name the same files"
+            diff <(echo "$listed") <(echo "$present") || true
+            exit 1
+          fi
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            installers/*
+            !installers/SHA256SUMS
+            !installers/build-summary.json
+          create-storage-record: false
+
+  draft:
+    name: draft release
+    needs: [check, build, attest]
+    if: needs.check.outputs.release == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.sha }}
+          path: src
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ needs.check.outputs.node }}
+          package-manager-cache: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: timon-${{ needs.check.outputs.version }}-*
+          path: downloads
+
+      # publish.mjs reads <input>/<version>/<os>/, the layout of the builds.
+      - name: Lay out the three builds
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          mkdir -p "input/$VERSION"
+          for os in linux mac windows; do mv "downloads/timon-$VERSION-$os" "input/$VERSION/$os"; done
+
+      - name: Create or complete the draft release
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: node src/scripts/release/publish.mjs --version "$VERSION" --input input --draft
+
+  publish:
+    name: publish the release
+    needs: [check, draft]
+    if: needs.check.outputs.release == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      # The publication script and the notes, from the built commit.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.sha }}
+          path: src
+          persist-credentials: false
+
+      # main as it is now, after the approval: the release lists in force,
+      # which the next ones carry over, and the base of their pull request.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: site
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ needs.check.outputs.node }}
+          package-manager-cache: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: timon-${{ needs.check.outputs.version }}-*
+          path: downloads
+
+      - name: Lay out the three builds
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          mkdir -p "input/$VERSION"
+          for os in linux mac windows; do mv "downloads/timon-$VERSION-$os" "input/$VERSION/$os"; done
+
+      # Signs both lists in memory and checks them against the keys the
+      # clients pin before anything is published; then publishes the draft,
+      # which tags the built commit, and writes the lists into site/.
+      - name: Publish the release and sign the release lists
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          TIMON_RELEASE_ED25519_KEY: ${{ secrets.TIMON_RELEASE_ED25519_KEY }}
+          TIMON_RELEASE_P256_KEY: ${{ secrets.TIMON_RELEASE_P256_KEY }}
+        run: node src/scripts/release/publish.mjs --version "$VERSION" --input input --manifests-dir site
+
+      - name: Check that only the release lists changed
+        working-directory: site
+        run: |
+          changed=$(git status --porcelain --untracked-files=all | cut -c4- | sort)
+          if [ "$changed" != "$(printf 'releases-install.json\nreleases.json')" ]; then
+            echo "::error::expected the two release lists to change, found:"
+            echo "$changed"
+            exit 1
+          fi
+
+      # git and gh only. The branch is this version's own: a run that starts
+      # again replaces it rather than stacking a second pull request.
+      - name: Open the pull request of the release lists, merged once its checks pass
+        working-directory: site
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN }}
+        run: |
+          [ -n "$GH_TOKEN" ] || { echo "::error::RELEASE_PR_TOKEN is not set in the release environment"; exit 1; }
+          branch="chore/releases-$VERSION"
+          title="chore(release): publish the $VERSION release lists"
+          git switch --quiet -c "$branch"
+          git add releases.json releases-install.json
+          git -c user.name=Timon -c user.email=contact@timon-ai.com -c commit.gpgsign=false commit --quiet \
+            -m "$title" \
+            -m "The signed list read by installed apps, and the one read by the one-line installers, which also carries the P-256 signature."
+          head=$(git rev-parse HEAD)
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push --quiet --force origin "HEAD:refs/heads/$branch"
+          number=$(gh pr list -R "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            url=$(gh pr create -R "$REPO" --base main --head "$branch" --title "$title" \
+              --body "The signed release lists of Timon $VERSION, written by the release workflow once the release was published ($RUN_URL). Merged automatically once the required checks pass.")
+            number=${url##*/}
+          fi
+          [[ "$number" =~ ^[0-9]+$ ]] || { echo "::error::no pull request number"; exit 1; }
+          gh pr merge -R "$REPO" "$number" --auto --merge --match-head-commit "$head"
+          echo "Pull request #$number: auto-merge on"
