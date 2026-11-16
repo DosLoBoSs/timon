@@ -67,6 +67,13 @@ export type InstallOutcome =
 const DAEMON_TIMEOUT_MS = 10_000;
 
 /**
+ * The outcomes after which the new version may start: installed, handed to a
+ * silent installer, or the system's installer opened by this click. Any other
+ * outcome installed nothing.
+ */
+const CONSENT_KEPT: ReadonlySet<InstallOutcome['status']> = new Set(['restarting', 'closing', 'opened', 'guided']);
+
+/**
  * A `GET` to this machine's daemon, as the operator. Throws when it cannot be
  * asked (`DaemonAnswerError` for an HTTP status): the token never leaves the
  * loopback.
@@ -122,6 +129,12 @@ export type UpdateControllerDeps = {
   adminPrompt?: (version: string) => string;
   /** Starts this shell again once it has quit (`app.relaunch`): the installed package's new version. */
   relaunch?: () => void;
+  /**
+   * The person's click approves the data migration of this exact transition
+   * (`update-consent.ts`): granted before the installer starts, revoked when
+   * nothing was installed.
+   */
+  consent?: { grant: (transition: { from: string; to: string }) => void; revoke: () => void };
   log?: (line: string) => void;
 };
 
@@ -172,11 +185,28 @@ export class UpdateController {
    * second gesture while a password prompt is open gets the first one's answer.
    */
   install(confirmed: boolean): Promise<InstallOutcome> {
-    this.installing ??= this.installOnce(confirmed).finally(() => { this.installing = null; });
+    this.installing ??= this.installOnce(confirmed)
+      .then((outcome) => {
+        // Only an installation under way keeps the consent: the new version takes it at its first launch.
+        if (this.granted && !CONSENT_KEPT.has(outcome.status)) this.consent('revoke', () => this.deps.consent?.revoke());
+        return outcome;
+      })
+      .finally(() => { this.installing = null; this.granted = false; });
     return this.installing;
   }
 
+  /** A consent that cannot be written or removed costs the approval screen, never the installation. */
+  private consent(action: 'grant' | 'revoke', run: () => void): void {
+    try {
+      run();
+    } catch (error) {
+      this.deps.log?.(`[updates] update consent not ${action === 'grant' ? 'written' : 'removed'}: ${(error as Error).message}`);
+    }
+  }
+
   private installing: Promise<InstallOutcome> | null = null;
+  /** This gesture wrote a consent: what it installed decides whether it stays. */
+  private granted = false;
 
   private async installOnce(confirmed: boolean): Promise<InstallOutcome> {
     const ready = this.deps.downloader.ready();
@@ -187,6 +217,8 @@ export class UpdateController {
     }
     const changed = await this.unchanged(ready.path, ready.offer.artifact.sha256);
     if (changed) return { status: 'failed', message: changed };
+    this.granted = true;
+    this.consent('grant', () => this.deps.consent?.grant({ from: this.deps.installed, to: ready.offer.version }));
     const { format, sha256 } = ready.offer.artifact;
     const log = (line: string): void => { this.deps.log?.(`[updates] ${line}`); };
     if (format === 'appimage') {

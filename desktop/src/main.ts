@@ -96,6 +96,7 @@ import { BROWSER_ATTACH_CHANNEL, BROWSER_DETACH_CHANNEL, trustedBrowserSender } 
 
 import { DaemonStartTimeoutError, updateOffer, finishUpdate, updateCopy, updateFailureDialog, unmanagedDaemon, type UpdateStage } from './data-update.js';
 import { UpdateWindow } from './update-window.js';
+import { grantUpdateConsent, revokeUpdateConsent } from './update-consent.js';
 import { UpdateDownloader } from './update-download.js';
 import { UPDATE_CHANNELS, UpdateController, localDaemonGet, registerUpdateIpc } from './update-ipc.js';
 import { missionsAtStake, readMissionCount, removeAppImageBackup } from './update-install.js';
@@ -1799,6 +1800,10 @@ if (!app.requestSingleInstanceLock({ build: ownBuild } satisfies LaunchData)) {
       silentInstall: (input) => silentInstall(input, nodeInstallerSystem(process.execPath)),
       adminPrompt: (version) => shellText(uiLocale())('update.adminPrompt', { version }),
       relaunch: () => { app.relaunch({ args: relaunchOptions(process.platform, process.env, process.argv).args }); },
+      consent: {
+        grant: (transition) => { grantUpdateConsent(loadDesktopConfig(desktopHome, { packaged: app.isPackaged }).home, transition); },
+        revoke: () => { revokeUpdateConsent(loadDesktopConfig(desktopHome, { packaged: app.isPackaged }).home); },
+      },
       showItemInFolder: (path) => shell.showItemInFolder(path),
       openPath: (path) => shell.openPath(path),
       log: (line) => console.log(line),
