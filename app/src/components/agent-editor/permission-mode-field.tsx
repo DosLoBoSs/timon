@@ -19,7 +19,16 @@ import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 import { unsupportedModeRunsAs } from '@/lib/backends';
 
-export const PERMISSION_MODES = ['auto', 'acceptEdits', 'plan', 'bypassPermissions'] as const;
+// `default` is listed because it is what an agent without a stored mode runs
+// in (claude gets no `--permission-mode`, the daemon reads `default`): leaving
+// it out made the editor check `auto` on such an agent while the mission asked
+// before every sensitive tool.
+export const PERMISSION_MODES = ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions'] as const;
+
+/** The mode an agent runs in, as the daemon resolves an empty `permission_mode`. */
+export function agentPermissionMode(stored: string | null | undefined): string {
+  return stored || 'default';
+}
 
 export function PermissionModeField({
   value,
