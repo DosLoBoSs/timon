@@ -263,6 +263,33 @@ test('--draft uploads and keeps the release a draft without a manifest; the next
   } finally { w.cleanup(); }
 });
 
+test('--draft goes without the manifest keys; a published release still needs them', async () => {
+  const s = secrets();
+  const w = workspace('0.1.9');
+  const keyless = { GITHUB_REPOSITORY: REPO, GH_TOKEN: TOKEN };
+  try {
+    const github = fakeGithub();
+    const { result, out } = await run(w, ['--draft'], { env: keyless, github });
+    assert.equal(result.published, false);
+    assert.equal(github.releases[0].draft, true);
+    assert.equal(github.uploads.length, 5);
+    assert.deepEqual(readdirSync(w.manifests), []);
+    assert.match(out, /a draft run signs no manifest/);
+    assert.doesNotMatch(out, /\[dry-run\]/);
+    // Without --draft, the keys are required before anything is sent.
+    await refused(w, /both signing keys are required/, { env: keyless });
+    // The approved run publishes the keyless draft without uploading again.
+    const { result: second } = await run(w, [], { env: s.env, github });
+    assert.equal(second.published, true);
+    assert.equal(github.uploads.length, 5);
+
+    const published = fakeGithub({ releases: [{ id: 7, tag_name: 'v0.1.9', draft: false, prerelease: false, assets: [] }], tags: { 'v0.1.9': COMMIT } });
+    await assert.rejects(run(w, ['--draft'], { env: keyless, github: published }), /already published: its manifests need/);
+    assert.deepEqual(published.uploads, [], 'nothing uploaded to a published release by a keyless run');
+    assert.deepEqual(readdirSync(w.manifests).sort(), [INSTALL_RELEASES_FILE, RELEASES_FILE], 'only the approved run wrote manifests');
+  } finally { w.cleanup(); }
+});
+
 test('a published asset with other bytes, or a tag on another commit, stops the run without a manifest', async () => {
   const s = secrets();
   const w = workspace('0.1.9');

@@ -28,7 +28,8 @@
  *  - TIMON_RELEASE_ED25519_KEY and TIMON_RELEASE_P256_KEY, the private halves
  *    of the release pair and of the installers' pair: the PKCS#8 PEM text of
  *    the key files, or its base64 on one line. The public halves derive from
- *    them.
+ *    them. A `--draft` run writes no manifest and may go without them, so the
+ *    job that prepares a draft never holds the keys that sign for every user.
  * Secrets never reach the disk, an argument, a log line or an error: the
  * token goes in an Authorization header only, the keys stay KeyObjects, and
  * every line printed or thrown is redacted against all of them.
@@ -492,7 +493,7 @@ export async function publish({ version, builds, config, keys, p256, pins = null
   const assets = planAssets(builds, { repo: config.repo, tag });
   const notes = notesFor(changelog, version);
   const entry = channelEntry({ version, assets, notes, publishedAt: now.toISOString() });
-  if (!dryRun && (!keys || !p256)) throw new Error(`both signing keys are required to publish: set ${ED25519_KEY_ENV} and ${P256_KEY_ENV}`);
+  if (!dryRun && !draft && (!keys || !p256)) throw new Error(`both signing keys are required to publish: set ${ED25519_KEY_ENV} and ${P256_KEY_ENV}`);
   const signed = signManifests({ entry, previousFile, keys, p256, pins, now, validDays });
   const target = join(manifestsDir, RELEASES_FILE);
   const installTarget = join(manifestsDir, INSTALL_RELEASES_FILE);
@@ -503,7 +504,7 @@ export async function publish({ version, builds, config, keys, p256, pins = null
   if (signed.envelope) {
     say(`${RELEASES_FILE}: keyId ${keys.keyId}, changes ${signed.changed.join(' + ')}, valid until ${signed.payload.expiresAt}`);
     for (const [name, channel] of Object.entries(signed.payload.channels)) say(`  ${name}: ${channel.version}`);
-  } else say(`[dry-run] ${ED25519_KEY_ENV} not set: the manifests would not be signed`);
+  } else say(dryRun ? `[dry-run] ${ED25519_KEY_ENV} not set: the manifests would not be signed` : `${ED25519_KEY_ENV} not set: a draft run signs no manifest`);
   if (signed.installEnvelope) say(`${INSTALL_RELEASES_FILE}: P-256 keyId ${p256.keyId}`);
   else if (signed.envelope) say(`[dry-run] ${P256_KEY_ENV} not set: ${INSTALL_RELEASES_FILE} would not be signed`);
 
@@ -521,6 +522,9 @@ export async function publish({ version, builds, config, keys, p256, pins = null
     release = await github.createDraft({ tag, commit, name: `Timon ${version}`, body: entry.notes || `Timon ${version}`, prerelease });
     say(`created ${tag} as a draft`);
   } else say(`completing ${tag} (${release.draft ? 'draft' : 'published'})`);
+  // A published release gets its manifests in this run, which a keyless
+  // draft run cannot sign: stop before touching its assets.
+  if (!release.draft && !signed.installEnvelope) throw new Error(`${tag} is already published: its manifests need ${ED25519_KEY_ENV} and ${P256_KEY_ENV}, run without --draft`);
   const present = new Map((await github.listAssets(release.id)).map((asset) => [asset.name, asset]));
   for (const asset of assets) {
     const remote = present.get(asset.asset);
@@ -564,7 +568,7 @@ export async function main(args = process.argv.slice(2), { env = process.env, ro
     if (!config) throw new Error(`${REPO_ENV} is not set: it names the repository that receives the release (<owner>/<name>)`);
     const builds = await verifyBuilds(opts.input, opts.version);
     const keyPairs = keysFromEnv(env);
-    if (!opts.dryRun && (!keyPairs.keys || !keyPairs.p256)) throw new Error(`both signing keys are required to publish: set ${ED25519_KEY_ENV} and ${P256_KEY_ENV}`);
+    if (!opts.dryRun && !opts.draft && (!keyPairs.keys || !keyPairs.p256)) throw new Error(`both signing keys are required to publish: set ${ED25519_KEY_ENV} and ${P256_KEY_ENV}`);
     const changelog = readChangelog(root, builds[0].commit, env);
     return await publish({
       version: opts.version, builds, config, ...keyPairs, pins: pins === undefined ? readPinnedKeyIds(root) : pins, changelog,
