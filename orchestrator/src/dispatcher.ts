@@ -345,8 +345,10 @@ export function worktreeDirective(
     `Do NOT run \`npm ci\`, \`npm install\`, \`npm rebuild\` or \`electron-rebuild\` ` +
     `in this worktree: they can erase or overwrite the live repository's dependencies ` +
     `and stop the daemon and running missions. This overrides generic installation advice. ` +
-    `Run typechecks and tests directly from each package with its local tsc/tsx ` +
-    `(\`npx tsc --noEmit\`); never use a global TypeScript compiler. ` +
+    `Run typechecks and tests from each package with its local tools: its own ` +
+    `\`typecheck\` and \`test\` scripts when it has them (\`npm run typecheck\`, \`npm test\`), ` +
+    `because their pre-steps generate files git ignores, which a fresh worktree does not have; ` +
+    `otherwise its local tsc (\`npx tsc --noEmit\`). Never use a global TypeScript compiler. ` +
     `If dependencies are missing, report the missing prerequisite instead of installing them.`,
   ];
   const refresh = lastRefresh.get(task.id);
