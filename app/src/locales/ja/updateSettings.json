@@ -26,8 +26,9 @@
       "download": "インストーラーをダウンロード",
       "automaticOff": "自動確認をオフにする",
       "automaticOn": "自動確認をオンにする",
+      "notices": "お知らせ",
       "saveFailed": "設定を保存できませんでした。",
-      "lockedEnv": "環境変数 TIMON_UPDATES_CHECK で決まっています。",
+      "lockedEnv": "環境変数 {key} で決まっています。",
       "lockedConfig": "timon.config.json で決まっています。"
     }
   }

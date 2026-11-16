@@ -26,8 +26,9 @@
       "download": "Installationsprogramm herunterladen",
       "automaticOff": "Automatische Prüfung ausschalten",
       "automaticOn": "Automatische Prüfung einschalten",
+      "notices": "Ankündigungen",
       "saveFailed": "Die Einstellung konnte nicht gespeichert werden.",
-      "lockedEnv": "Die Umgebungsvariable TIMON_UPDATES_CHECK legt dies fest.",
+      "lockedEnv": "Die Umgebungsvariable {key} legt dies fest.",
       "lockedConfig": "timon.config.json legt dies fest."
     }
   }

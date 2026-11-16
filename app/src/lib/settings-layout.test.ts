@@ -236,14 +236,16 @@ test('the instructions have a category of their own, third in the list', () => {
 test('the Updates pane sits under System, after Installation, for every account', () => {
   const plugins = [{ id: '@timon/updates', origin: 'occupant' as const, label: 'Timon updates' }];
   const row: SettingsRowLike = { key: 'TIMON_UPDATES_CHECK', group: 'Misc', advanced: false, owner: '@timon/updates' };
+  const notices: SettingsRowLike = { key: 'TIMON_NOTICES_CHECK', group: 'Misc', advanced: false, owner: '@timon/updates' };
   assert.deepEqual(placeSetting(row), { category: 'system', tab: 'updates' });
-  const admin = buildSettingsLayout(input({ superadmin: true, rows: [row], plugins }));
+  assert.deepEqual(placeSetting(notices), { category: 'system', tab: 'updates' });
+  const admin = buildSettingsLayout(input({ superadmin: true, rows: [row, notices], plugins }));
   assert.deepEqual(tabIds(admin, 'system'), ['installation', 'updates', 'security']);
-  const member = buildSettingsLayout(input({ rows: [row], plugins }));
+  const member = buildSettingsLayout(input({ rows: [row, notices], plugins }));
   assert.deepEqual(tabIds(member, 'system'), ['updates']);
-  // Its switch is in the pane's menu: no tab of its own under Plugins.
+  // Both switches are in the pane's menu: no tab of their own under Plugins.
   assert.equal(member.some((c) => c.id === 'plugins'), false);
-  // The module off: its pane goes, and its row with it.
-  const off = buildSettingsLayout(input({ rows: [row], plugins: [], pluginStates: new Map([['@timon/updates', 'disabled']]) }));
+  // The module off: its pane goes, and its rows with it.
+  const off = buildSettingsLayout(input({ rows: [row, notices], plugins: [], pluginStates: new Map([['@timon/updates', 'disabled']]) }));
   assert.equal(off.some((c) => c.id === 'system'), false);
 });

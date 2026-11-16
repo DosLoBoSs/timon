@@ -92,3 +92,26 @@ export function settingLockedBy(body: unknown): 'env' | 'config' | null {
   const source = setting?.source;
   return source === 'env' || source === 'config' ? source : null;
 }
+
+export const NOTICES_SETTING = 'TIMON_NOTICES_CHECK';
+
+/** The value of `TIMON_NOTICES_CHECK` in `GET /api/ui/settings`, or `null` when the answer does not carry it. */
+export function noticesSettingValue(body: unknown): boolean | null {
+  const settings = body && typeof body === 'object' ? (body as { settings?: unknown }).settings : undefined;
+  if (!Array.isArray(settings)) return null;
+  const row: unknown = settings.find((s: unknown) => !!s && typeof s === 'object' && (s as { key?: unknown }).key === NOTICES_SETTING);
+  const value = row && typeof row === 'object' ? (row as { value?: unknown }).value : undefined;
+  return typeof value === 'boolean' ? value : null;
+}
+
+export type NoticesSwitchView = { on: boolean; disabled: boolean };
+
+/**
+ * The "Announcements" switch: the update check off stops the feed too
+ * (docs/AUTO-UPDATE.md §10), so the switch shows off and cannot be moved
+ * until the check is back on. An unknown value reads as the default, on.
+ */
+export function noticesSwitchView({ updatesEnabled, notices }: { updatesEnabled: boolean; notices: boolean | null }): NoticesSwitchView {
+  if (!updatesEnabled) return { on: false, disabled: true };
+  return { on: notices ?? true, disabled: false };
+}
