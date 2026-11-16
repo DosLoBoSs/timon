@@ -324,6 +324,8 @@ timon task done TASK_ID --comment-file result.md --merged-sha FULL_MERGE_SHA
 
 Only close work after it is actually complete. A `code-self` task requires the full 40-character merge SHA. Use `timon task block TASK_ID --reason "…"` when a real blocker remains.
 
+Timon checks a `merge` task before closing it as done: the branch it integrates must be in its base branch, and the merge SHA must be in the base, contain that branch and not be recorded already on another task. Otherwise the closing is refused with what to do. When the branch was already in the base before the merge task started, close it with the full SHA of the branch head.
+
 Add `--summary "…"` (or the `summary` field of `kanban_mark_as_done`): one or two plain sentences saying what changed, for the person reading the chat. The comment stays the full report for the orchestrator.
 
 ## Task returns in the chat
