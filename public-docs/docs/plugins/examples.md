@@ -3,7 +3,7 @@ title: Example cookbook
 sidebar_position: 18
 ---
 
-41 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
+40 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
 
 Obtain the example tree with your developer distribution. There is no public repository link. Use a licensed test instance and follow [Testing](testing.md) before installing third-party code.
 
@@ -918,38 +918,6 @@ function TwoStepConfirm() {
 
 export function apply(ctx) {
   return ctx.slots.register({ slot: 'confirm.dialog' }, TwoStepConfirm)
-}
-```
-
-## Replace the new-version banner {#update-banner}
-
-Source: `examples/plugin-update-banner`. Manifest ID: `example-update-banner`. Minimum API: **15**.
-
-API 15. One registration in the single updates.banner slot replaces the banner that announces a newer Timon with one compact line. Timon paints the slot only while a newer version is published for the build's channel and the person has not put it off. The component reads everything from useUpdateStatus(): the installed version, the offer with its plain-text notes, the installers for this browser's system (the first one to download first) and later(), which hides that version only. While it is shown, Timon's own build-expiry notice steps aside, so the banner says when the build stops. Remove the plugin and Timon's own banner comes back.
-
-Permissions: none. Read the [related guide](slots.md).
-
-`timon plugin add ./examples/plugin-update-banner` installs this package on the target instance.
-
-From `examples/plugin-update-banner/lib/client.js`, line 29 (excerpt):
-
-```js
-function CompactUpdateBanner() {
-  const update = useUpdateStatus()
-  if (!update) return null
-  const target = update.installers[0]
-  const ends = update.buildExpiresAt ? ` (${new Date(update.buildExpiresAt).toLocaleDateString()})` : ''
-  return React.createElement('div', { role: 'status', className: 'flex shrink-0 items-center justify-center gap-3 bg-muted px-3 py-1 text-xs', 'data-compact-update': update.offer.version },
-    React.createElement('span', { className: 'font-semibold' }, t('line', { version: update.offer.version }) + ends),
-    React.createElement('a', {
-      className: 'underline', href: target ? target.url : update.offer.notesUrl, target: '_blank', rel: 'noopener noreferrer',
-      'data-compact-download': target ? target.key : '',
-    }, target ? t('download') : t('page')),
-    React.createElement('button', { type: 'button', className: 'underline', onClick: update.later, 'data-compact-later': '' }, t('later')))
-}
-
-export function apply(ctx) {
-  return ctx.slots.register({ slot: 'updates.banner' }, CompactUpdateBanner)
 }
 ```
 
