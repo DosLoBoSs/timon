@@ -10,8 +10,9 @@
  * then the installation), the update window will provide its own. Closing the
  * card is "later" for that version: its id carries the version, and the host
  * remembers it per account. A build about to stop running turns the card into
- * a warning that says when; with nothing newer published it is a card of its
- * own, back when the end becomes urgent.
+ * a warning that says when, back when the end becomes urgent even if the offer
+ * was put off; with nothing newer published it is a card of its own, back at
+ * the same stage.
  *
  * The lock screen of an ended build mounts no plugin host: it paints the same
  * flow with `LockScreenUpdateOffer`, which cannot be put off.
@@ -65,7 +66,8 @@ export function updateNotice(offer: UpdateOffer | null, view: UpdateFlowView | n
   if (offer && view) {
     const lines = [ending ? buildEnds(ending) : null, view.line, view.command].filter((line): line is string => !!line);
     return {
-      id: `${UPDATE_NOTICE_PREFIX}${offer.version}`,
+      // As the end's own card: an offer put off weeks before comes back once the end is urgent.
+      id: `${UPDATE_NOTICE_PREFIX}${offer.version}${ending?.urgent ? '-urgent' : ''}`,
       tone: ending || view.alert ? 'warning' : 'info',
       title: t('updates.notice.available', { version: offer.version }),
       // A long command path must not get the whole card refused.

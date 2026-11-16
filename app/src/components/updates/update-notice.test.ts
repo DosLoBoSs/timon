@@ -262,6 +262,25 @@ test('a build about to stop makes the card a warning that says when; alone, it i
   } finally {
     await urgent.unmount();
   }
+  // The offer put off while the end was weeks away comes back, as a warning, once the end is urgent.
+  const putOff = await mount(OFFER_STATUS, { buildExpiresAt: ending, dismissed: [CARD] });
+  try {
+    await putOff.settle();
+    assert.ok(!card(), 'the offer stays put off while the end is not urgent');
+  } finally {
+    await putOff.unmount();
+  }
+  const back = await mount(OFFER_STATUS, { buildExpiresAt: soon, dismissed: [CARD] });
+  try {
+    await back.until(() => card(`${CARD}-urgent`) !== null, 'the offer back at the urgent stage');
+    assert.equal(card(`${CARD}-urgent`)?.querySelector('[data-notice-card]')?.getAttribute('data-notice-card'), 'warning');
+    const { formatDate } = await import('@/lib/intl');
+    const date = formatDate(soon, { year: 'numeric', month: 'numeric', day: 'numeric' });
+    assert.ok(text(`${CARD}-urgent`).includes(`This build stops running on ${date}.`), 'the date said');
+    assert.deepEqual(labels(`${CARD}-urgent`), ['Update']);
+  } finally {
+    await back.unmount();
+  }
 });
 
 test('in the desktop app Update starts the shell\'s download: progress, cancel, refusal, then Install', async () => {
