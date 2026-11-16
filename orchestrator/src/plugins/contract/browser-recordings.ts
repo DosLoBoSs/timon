@@ -11,7 +11,9 @@ export type RecordedStepType =
   | 'newTab'
   | 'switchTab'
   | 'closeTab'
-  | 'credential';
+  | 'credential'
+  /** The user acted inside an embedded frame, which is never recorded: `origin` names the frame's site. */
+  | 'frame';
 export type RecordingStopReason = 'user' | 'idle' | 'limit' | 'profile-stopped';
 
 // Moved from `browser-recording-rules.ts`, which re-exports it (TODO #512, volet 3).

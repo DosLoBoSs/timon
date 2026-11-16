@@ -1264,7 +1264,7 @@ calling \`setup_finish\` again.
     // The conversion mission of a browser recording (TODO #461): started by
     // `@timon/browser-recording`'s learn route, which hands it this id.
     id: 'learn-browser-recording',
-    version: 5,
+    version: 6,
     content: `---
 name: learn-browser-recording
 description: Turn ONE reviewed recording of the user's built-in browser into a Timon skill that replays the flow with the timon-browser tools. Applied by the conversion mission Timon starts from the browser panel's "Learn" button; the recording id is in the brief.
@@ -1337,7 +1337,7 @@ Each step: \`n\` (its number), \`t\` (seconds since the first step), \`type\`,
 (\`password\` | \`otp\` | \`card\`), \`param\` (a parameter name the user chose
 at review), \`url\`, \`openerTabId\`, \`origin\`.
 
-Types: \`navigate click input enter switchTab newTab closeTab credential secret\`.
+Types: \`navigate click input enter switchTab newTab closeTab credential secret frame\`.
 
 The raw steps exist only while this mission runs: Timon deletes them when the
 mission ends. So keep everything you need from that one answer, and finish the
@@ -1361,6 +1361,8 @@ Merge the noise:
 
 - a \`click\` that only focuses the field an \`input\` fills next;
 - several \`input\` steps on the same field (keep the last value);
+- several \`frame\` steps in a row on the same \`origin\` (one manual part,
+  one pause);
 - a \`navigate\` that a \`click\` or \`enter\` just caused (it is the result to
   check with \`wait_for\`, not an action to replay);
 - a \`navigate\` whose \`url\` carries \`{SECRET:…}\` (a sign-in callback, a
@@ -1399,6 +1401,17 @@ the page found by its URL origin or title, never by its recorded \`tabId\`.
   themselves in the shared browser; it never asks for the value, never reads it
   back, never fills it. Then it checks the page moved on. Put \`attended: true\`
   in Requirements: such a skill needs a person and cannot run as a routine.
+- \`frame\` step: the user acted by hand inside an embedded frame of
+  \`origin\` (a payment form, a captcha, a sign-in widget). The recorder never
+  sees inside a frame, so nothing of what they did there is known. Treat it
+  exactly like a one-time code: a **PAUSE** step at that point. The skill asks
+  the user, with the \`question\` tool and a single "Done" option, to do that
+  part themselves in the shared browser (name the site of the frame, and what
+  the steps around it suggest: "enter the card details in the payment form");
+  it never asks for what they typed, never clicks, fills or reads inside the
+  frame, then checks the page moved on. Put \`attended: true\` in
+  Requirements: such a skill cannot run without a person. A frame step with
+  no \`origin\` is still a pause.
 
 ## 5. Write the skill
 
@@ -1459,11 +1472,13 @@ Quick Reference: the recorded selectors and visible names, as hints only.
 Pitfalls, when relevant: popups and new tabs (\`list_pages\`,
 \`select_page\`), file uploads (\`upload_file\` after opening the site's file
 picker), drag and drop (\`drag\`), JavaScript dialogs (\`handle_dialog\`),
-iframes (not recorded: the user may have to do that part), sites that change
-their layout.
+iframes (never recorded: each \`frame\` step is a pause for the user, never an
+action to automate), sites that change their layout.
 
 ## 6. Verify before you write it
 
+- Every \`frame\` step of the recording is a PAUSE in your draft, and the
+  draft says \`attended: true\`.
 - Search your draft for every \`{SECRET:\` and \`{PARAM:\` placeholder: each
   one must be a pause or a parameter, never a value to type. Search it for
   anything that looks like a secret: \`sk-\`, \`ghp_\`, \`github_pat_\`,

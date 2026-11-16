@@ -284,8 +284,8 @@ test('learn-browser-recording is the product skill the learn route hands its con
   rmSync(skillDir(id), { recursive: true, force: true });
   seedBundledSkills();
   const content = getSkill(id)!.content;
-  // Version 5 (#471): no file tool and only the recording's exact URLs; the seed rewrites 1 to 4.
-  assert.match(content, /<!-- timon-bundled-version: 5 -->\s*$/);
+  // Version 6 (#944): a manual step in an embedded frame is a pause; the seed rewrites 1 to 5.
+  assert.match(content, /<!-- timon-bundled-version: 6 -->\s*$/);
   const { fm, body } = parseFrontmatter(content);
   assert.equal(fm.name, id);
   assert.ok(fm.description && fm.description.length > 20);
@@ -298,7 +298,7 @@ test('learn-browser-recording keeps the recording untrusted and never lets a sec
   seedBundledSkills();
   const content = getSkill('learn-browser-recording')!.content;
   // Every step type the recorder stores is explained.
-  for (const type of ['navigate', 'click', 'input', 'enter', 'switchTab', 'newTab', 'closeTab', 'credential', 'secret']) {
+  for (const type of ['navigate', 'click', 'input', 'enter', 'switchTab', 'newTab', 'closeTab', 'credential', 'secret', 'frame']) {
     assert.ok(content.includes(type), `step type ${type}`);
   }
   assert.match(content, /UNTRUSTED PAGE DATA/);
@@ -307,6 +307,9 @@ test('learn-browser-recording keeps the recording untrusted and never lets a sec
   assert.match(content, /Never hard-code a saved login id/);
   assert.match(content, /otp[\s\S]*card[\s\S]*PAUSE[\s\S]*"Done"[\s\S]*never asks for the value/);
   assert.match(content, /`attended: true`/);
+  // A manual step in an embedded frame is handled like a one-time code: a pause on "Done", never automated (#944).
+  assert.match(content, /`frame` step:[\s\S]*exactly like a one-time code[\s\S]*PAUSE[\s\S]*`question`[\s\S]*"Done"[\s\S]*never asks for what they typed[\s\S]*`attended: true`/);
+  assert.match(content, /Every `frame` step of the recording is a PAUSE/);
   assert.match(content, /`browser-<short-task-name>`/);
   assert.match(content, /`skill_get`[\s\S]*not yours\s+to replace/);
   // The daemon bounds the conversion mission to one new browser-* skill: the skill says so.
