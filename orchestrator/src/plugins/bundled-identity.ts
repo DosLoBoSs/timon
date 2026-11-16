@@ -134,8 +134,9 @@ const widget = (slots: readonly string[] = ['cockpit.widget']): BundledIdentity 
  */
 export const BUNDLED_IDENTITY: Readonly<Record<string, BundledIdentity>> = Object.freeze({
   '@timon/db': identity('behavior'),
-  // Also the default occupant of two boot slots: the folder browser and the confirmation dialog.
-  '@timon/settings': page('/settings', ['nav.item', 'settings.resources', 'directory.picker', 'confirm.dialog']),
+  // Also the default occupant of the folder browser, the confirmation dialog and the notice card,
+  // and the source of the product's own notices (`notices`).
+  '@timon/settings': page('/settings', ['nav.item', 'settings.resources', 'directory.picker', 'confirm.dialog', 'notices', 'notices.card']),
   '@timon/http': page('/dashboard'),
   '@timon/users': identity('behavior'),
   '@timon/plugins': page('/plugins'),

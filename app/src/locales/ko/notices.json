@@ -1,0 +1,10 @@
+{
+  "notices": {
+    "region": "알림",
+    "close": "닫기",
+    "githubStar": {
+      "title": "GitHub에 별을 남겨 주실래요?",
+      "action": "별 남기기"
+    }
+  }
+}

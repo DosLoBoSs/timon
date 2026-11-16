@@ -514,6 +514,50 @@ declare module '@timon/ui' {
     | { status: 'guided'; command: string; opened: boolean }
     | { status: 'failed'; message: string | null };
 
+  /** A notice card as it is painted (client API 16): `NoticeInput` with its defaults and its owner. */
+  export type Notice = {
+    id: string;
+    pluginId: string;
+    tone: 'info' | 'warning' | 'success';
+    title: string;
+    body: string | null;
+    actions: readonly { label: string; onSelect?: () => void; href?: string; dismiss?: boolean }[];
+    dismissible: boolean;
+  };
+  /**
+   * What an entry of the `notices` slot pushes its cards with (client API 16).
+   * The entry is mounted once and paints nothing; it pushes from an effect,
+   * which is where a rule that needs React state lives (a plugin with nothing
+   * to watch uses `ctx.notices.push` from `apply`). `notices`: this plugin's
+   * cards still up. `push` and `remove` behave as `ctx.notices`, and the
+   * cards leave with the entry. `null` outside a `notices` entry.
+   */
+  export function useNotices(): {
+    notices: Notice[];
+    push(notice: {
+      id: string;
+      tone?: 'info' | 'warning' | 'success';
+      title: string;
+      body?: string;
+      actions?: readonly { label: string; onSelect?: () => void; href?: string; dismiss?: boolean }[];
+      dismissible?: boolean;
+    }): void;
+    remove(id: string): void;
+  } | null;
+  /**
+   * The card a `notices.card` occupant paints (client API 16): the host paints
+   * the slot once per visible card and keeps the frame (bottom-left, stacked,
+   * at most three). Render `title` and `body` as text, never as HTML; offer
+   * `dismiss()` only when `notice.dismissible`; call `act(index)` for a click
+   * on `notice.actions[index]` — it runs `onSelect`, opens `href`, and closes
+   * the card for good when the action says `dismiss`. `null` outside a card.
+   */
+  export function useNotice(): {
+    notice: Notice;
+    dismiss(): void;
+    act(index: number): void;
+  } | null;
+
   /** `older` = ↑, `newer` = ↓ (client API 12). */
   export type PromptHistoryDirection = 'older' | 'newer';
   /**

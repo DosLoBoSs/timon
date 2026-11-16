@@ -1,0 +1,10 @@
+{
+  "notices": {
+    "region": "Avisos",
+    "close": "Cerrar",
+    "githubStar": {
+      "title": "¿Una estrella en GitHub?",
+      "action": "Dar una estrella"
+    }
+  }
+}

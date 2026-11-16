@@ -1,0 +1,10 @@
+{
+  "notices": {
+    "region": "Komunikaty",
+    "close": "Zamknij",
+    "githubStar": {
+      "title": "Gwiazdka na GitHubie?",
+      "action": "Daj gwiazdkę"
+    }
+  }
+}

@@ -89,7 +89,9 @@ import { reservedRouteSegment } from './reserved-routes.js';
  * `settings.provider.section` occupant is painted for, on the page of one
  * provider in Settings › AI models › Providers. API 15 shipped in 0.1.7, so a
  * new export opens a new wave. No member of `PluginContext` changes
- * (docs/SDK-COMPAT.md §112).
+ * (docs/SDK-COMPAT.md §112). Same wave: the bottom-left notice cards, in the
+ * browser only — `ctx.notices` (`push`, `remove`), the `notices` and
+ * `notices.card` slots, `useNotices` and `useNotice` (§114).
  */
 export const PLUGIN_API_VERSION = 16;
 

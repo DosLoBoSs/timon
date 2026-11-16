@@ -74,3 +74,28 @@ await ctx.notifications.dismiss(unread[0].id);                              // t
 - **Which notifications.** In a request, the calling account's (an account holding `notifications:read:all` sees everyone's); in a job, those your plugin owns. A notification outside that view answers as if it did not exist: `dismiss` returns `false`.
 - **Dismissing** closes the system notification on the user's devices too, like the button in the centre. Raising a notification stays `ctx.notify` (permission `notify`).
 - **Errors** throw `PluginNotificationError` with a `code`: `invalid`, `module_disabled` (the notification centre is switched off).
+
+## Notice cards
+
+The notification centre keeps a history; a **notice card** asks for attention now, at the bottom left of the interface, until an action or its × takes it away. It lives in the browser half, needs no permission, and requires `apiVersion: 16`:
+
+```js
+export function apply(ctx) {
+  ctx.notices.push({
+    id: 'welcome',
+    tone: 'info',                 // 'info' | 'warning' | 'success', default 'info'
+    title: 'Acme is connected',   // up to 120 characters, plain text
+    body: 'Your boards sync every hour.', // optional, up to 400 characters
+    actions: [{ label: 'Open Acme', href: '/acme' }], // two at most
+    dismissible: true,            // default true: the × closes it for good
+  })
+}
+```
+
+- `push` shows the card, or updates the one your plugin pushed with the same `id`. Throws when the notice is invalid, with the reason.
+- An action needs `onSelect`, `href` or `dismiss: true`. `href` is a page of the app (`/settings`) or an `https:` address, opened in a new window; `dismiss: true` closes the card for good after the click. An action without it leaves the card up: call `ctx.notices.remove(id)` when you are done with it.
+- A closed card stays closed for the person's account, on every client: pushing the same `id` again shows nothing. Put a version in the `id` (`update-1.4.0`) for a card that must come back each version.
+- `remove(id)` takes the card off the screen without closing it for good. Your cards also leave when your plugin is switched off.
+- At most three cards show at once, warnings first: keep cards rare, short, and with one clear action.
+
+A card that depends on React state comes from an entry of the `notices` slot, which pushes with `useNotices()`; how every card is painted is the `notices.card` slot. Both are described in [Slots](slots.md#special-surfaces); template: `examples/plugin-notice`.

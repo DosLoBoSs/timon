@@ -1,0 +1,24 @@
+{
+  "name": "@timon-ai/plugin-notice",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": { "./client": "./lib/client.js" },
+  "files": ["lib", "README.md", "SIGNATURE"],
+  "timon": {
+    "id": "example-notice",
+    "apiVersion": 16,
+    "kind": "behavior",
+    "label": "Compact notices",
+    "description": "Pushes a welcome card at the bottom left, and paints every notice card as one compact line.",
+    "permissions": [],
+    "client": {
+      "slots": ["notices.card"],
+      "external": ["react", "@timon/ui"],
+      "mode": "esm"
+    },
+    "settings": [],
+    "license": { "required": false }
+  }
+}
