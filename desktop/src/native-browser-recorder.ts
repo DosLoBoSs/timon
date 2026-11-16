@@ -35,7 +35,7 @@ const SECRET_AUTOCOMPLETE = new RegExp(SECRET_AUTOCOMPLETE_PATTERN, 'i');
 const SECRET_PLACEHOLDER = /^\{SECRET:[^{}]*\}$/;
 
 export type RecordingStepType = 'click' | 'input' | 'secret' | 'enter' | 'navigate'
-  | 'newTab' | 'switchTab' | 'closeTab' | 'credential';
+  | 'newTab' | 'switchTab' | 'closeTab' | 'credential' | 'frame';
 export type SecretKind = 'password' | 'otp' | 'card';
 export type SecretHint = 'api-key' | 'jwt' | 'card-number' | 'high-entropy';
 export type RecordingStopReason = 'user' | 'idle' | 'limit' | 'profile-stopped';
@@ -213,7 +213,7 @@ export function maskUrl(raw: string): string {
 // ---------------------------------------------------------------------------------------------
 // Page events (what the preload sends) to steps.
 
-const PAGE_EVENT_TYPES = new Set(['click', 'input', 'enter']);
+const PAGE_EVENT_TYPES = new Set(['click', 'input', 'enter', 'frame']);
 const BUTTON_INPUT_TYPES = new Set(['button', 'submit', 'reset', 'image']);
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
@@ -260,6 +260,14 @@ export function normalizePageEvent(raw: unknown, context: { t: number; tabId: st
   const role = tokenOf(raw.role);
   const name = stringOf(raw.name, 120);
   const step: RecordingStep = { t: context.t, type: type as RecordingStepType, tabId: context.tabId };
+  if (type === 'frame') {
+    // The user acted inside an embedded frame (#944): the step says where, never what.
+    step.selector = selectorFor({ selector: raw.selector, tag });
+    if (tag) step.tag = tag;
+    if (name && !isSecretPlaceholder(name)) step.name = name;
+    if (isRecordableUrl(raw.origin)) step.origin = new URL(raw.origin).origin;
+    return step;
+  }
   if (type === 'click') {
     const text = isFieldClick(tag, inputType, autocomplete) ? '' : stringOf(raw.text, 120);
     step.selector = selectorFor({ selector: raw.selector, tag, text });

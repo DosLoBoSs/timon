@@ -61,6 +61,8 @@ contextBridge.exposeInMainWorld('__timonNativePrompt', (message: string, default
   const INTERACTIVE = 'a,button,input,select,textarea,label,summary,[role=button],[role=link],[role=menuitem],[role=tab],[role=checkbox],[role=radio],[role=option],[role=switch]';
   // A "show password" toggle turns the field into text before `change`: remember what was secret.
   const everSecret = new WeakSet<Element>();
+  // The frame the last manual step names, until a step of the page itself ends that stay (#944).
+  let lastFrame: Element | null = null;
   let recording = false;
   try { recording = ipcRenderer.sendSync('timon:record-state') === true; } catch { /* Never break the page. */ }
   ipcRenderer.on('timon:record-toggle', (_event: unknown, active: unknown) => { recording = active === true; });
@@ -145,6 +147,7 @@ contextBridge.exposeInMainWorld('__timonNativePrompt', (message: string, default
     return first instanceof Element ? first : null;
   };
   const send = (payload: Record<string, unknown>) => {
+    if (payload.type !== 'frame') lastFrame = null;
     try { ipcRenderer.send('timon:record-event', payload); } catch { /* Never break the page. */ }
   };
 
@@ -180,6 +183,39 @@ contextBridge.exposeInMainWorld('__timonNativePrompt', (message: string, default
     if (!recording || !event.isTrusted || event.key !== 'Enter' || event.isComposing) return;
     const target = targetOf(event);
     send({ type: 'enter', ...(target ? { selector: cssPath(target), tag: target.nodeName.toLowerCase(), inputType: typeOf(target) } : {}) });
+  }, true);
+
+  // Embedded frames (#944). This preload runs in the main frame only, so what the user does inside
+  // an iframe (a payment form, a captcha, a sign-in widget) never reaches it, and the frame is never
+  // read. The one trace is the page's window losing the focus to an iframe: it becomes a manual step
+  // naming the frame's origin alone, since a payment frame's address carries keys in its query and
+  // fragment. One step per stay in the same frame; a step of the page itself ends the stay.
+  const FRAME_TAGS = ['IFRAME', 'FRAME'];
+  const focusedFrame = () => {
+    let element: Element | null = document.activeElement;
+    while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement;
+    return element && FRAME_TAGS.includes(element.nodeName) ? element : null;
+  };
+  const frameOrigin = (frame: Element) => {
+    const src = String((frame as HTMLIFrameElement).src ?? '');
+    try {
+      // No address, about:blank or srcdoc: the frame shares the page's origin, and is reported too.
+      const own = !src || /^about:/i.test(src) || frame.hasAttribute('srcdoc');
+      const origin = new URL(own ? location.href : src, location.href).origin;
+      return /^https?:\/\//.test(origin) ? origin : '';
+    } catch { return ''; }
+  };
+  window.addEventListener('blur', (event) => {
+    // An element's blur reaches this capture listener too: only the window's own counts.
+    if (!recording || !event.isTrusted || event.target !== window) return;
+    // Chromium hands the focus to the iframe around this event: read it once the event is over.
+    setTimeout(() => {
+      const frame = focusedFrame();
+      if (!recording || !frame || frame === lastFrame) return;
+      lastFrame = frame;
+      const { selector, tag, name } = describe(frame);
+      send({ type: 'frame', selector, tag, name, origin: frameOrigin(frame) });
+    }, 0);
   }, true);
 
   // Annotator (TODO #468). While the user annotates, every pointer gesture stops here, before any

@@ -109,7 +109,16 @@ function load(initialState: unknown = false, annotateState: unknown = false) {
   const annotated: Array<Record<string, unknown>> = [];
   const listeners = new Map<string, Array<{ listener: (event: unknown) => void; options: unknown }>>();
   const ipcListeners = new Map<string, (event: unknown, value: unknown) => void>();
-  const document = { getElementById: () => null, documentElement: null as FakeElement | null, elementFromPoint: (): FakeElement | null => null };
+  const document = { getElementById: () => null, documentElement: null as FakeElement | null, elementFromPoint: (): FakeElement | null => null,
+    activeElement: null as FakeElement | null };
+  const page = {
+    innerWidth: 1366, innerHeight: 768, scrollX: 0, scrollY: 250,
+    addEventListener: (type: string, listener: (event: unknown) => void, options: unknown) => {
+      const capture = typeof options === 'object' && options ? (options as { capture?: unknown }).capture : options;
+      assert.equal(capture, true, `${type} listens in capture`);
+      listeners.set(type, [...listeners.get(type) ?? [], { listener, options }]);
+    },
+  };
   runInNewContext(compiled, {
     exports: {},
     require: (name: string) => {
@@ -131,19 +140,13 @@ function load(initialState: unknown = false, annotateState: unknown = false) {
         },
       };
     },
-    window: {
-      innerWidth: 1366, innerHeight: 768, scrollX: 0, scrollY: 250,
-      addEventListener: (type: string, listener: (event: unknown) => void, options: unknown) => {
-        const capture = typeof options === 'object' && options ? (options as { capture?: unknown }).capture : options;
-        assert.equal(capture, true, `${type} listens in capture`);
-        listeners.set(type, [...listeners.get(type) ?? [], { listener, options }]);
-      },
-    },
+    window: page,
+    location: { href: 'https://shop.example/checkout?cart=42#pay' },
     document,
     CSS: { escape: (value: string) => value.replace(/[^A-Za-z0-9_-]/g, '\\$&') },
     Element: FakeElement,
     HTMLSelectElement: FakeSelect,
-    WeakRef, setTimeout, setInterval, clearInterval,
+    WeakRef, URL, setTimeout, setInterval, clearInterval,
   });
   const event = (type: string, target: FakeElement, extra: Record<string, unknown> = {}): FakeEvent => {
     const fake: FakeEvent = { type, isTrusted: true, composedPath: () => [target], cancelable: true, stopped: false, prevented: false,
@@ -162,7 +165,13 @@ function load(initialState: unknown = false, annotateState: unknown = false) {
   const annotate = (active: unknown) => ipcListeners.get(BROWSER_ANNOTATE_TOGGLE_CHANNEL)!({}, active);
   const pickAt = (request: unknown) => ipcListeners.get(BROWSER_ANNOTATE_PICK_AT_CHANNEL)!({}, request);
   const track = (anchors: unknown) => ipcListeners.get(BROWSER_ANNOTATE_TRACK_CHANNEL)!({}, anchors);
-  return { capabilities, syncCalls, mainWorld, sent, annotated, listeners, dispatch, toggle, annotate, pickAt, track, document };
+  /** The page's window loses the focus (to an iframe when `activeElement` is one), then the deferred read runs. */
+  const blurWindow = async (extra: Record<string, unknown> = {}) => {
+    const fake = event('blur', new FakeElement('BODY'), { target: page, ...extra });
+    for (const { listener } of listeners.get('blur') ?? []) listener(fake);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  return { capabilities, syncCalls, mainWorld, sent, annotated, listeners, dispatch, toggle, annotate, pickAt, track, document, blurWindow };
 }
 
 test('browser preload exposes only the synchronous prompt capability to the page', () => {
@@ -170,7 +179,7 @@ test('browser preload exposes only the synchronous prompt capability to the page
   assert.deepEqual([...capabilities.keys()], ['__timonNativePrompt']);
   assert.equal(capabilities.get('__timonNativePrompt')!('Question', 'Default'), 'answer');
   assert.deepEqual(syncCalls, [[BROWSER_RECORD_STATE_CHANNEL], [BROWSER_ANNOTATE_STATE_CHANNEL], [BROWSER_PROMPT_CHANNEL, 'Question', 'Default']]);
-  assert.deepEqual([...listeners.keys()].sort(), ['auxclick', 'change', 'click', 'contextmenu', 'dblclick', 'input', 'keydown', 'keyup',
+  assert.deepEqual([...listeners.keys()].sort(), ['auxclick', 'blur', 'change', 'click', 'contextmenu', 'dblclick', 'input', 'keydown', 'keyup',
     'mousedown', 'mouseup', 'pointerdown', 'pointermove', 'pointerup', 'resize', 'scroll', 'touchcancel', 'touchend', 'touchmove', 'touchstart']);
 });
 
@@ -293,6 +302,53 @@ test('only Enter is recorded among keys, not while an IME composes', () => {
   dispatch('keydown', field, { key: 'Enter', isComposing: true });
   dispatch('keydown', field, { key: 'Enter' });
   assert.deepEqual(sent.map((event) => event.type), ['enter']);
+});
+
+test('the focus leaving for an iframe is one manual step naming the frame origin, never its address (#944)', async () => {
+  const { sent, dispatch, document, blurWindow, toggle } = load(true);
+  const stripe = new FakeElement('IFRAME', { name: 'card', title: 'Secure card payment input frame' });
+  Object.assign(stripe, { src: 'https://js.stripe.com/v3/elements-inner-card.html?key=pk_live_abc#apiKey=pk_live_abc' });
+  document.activeElement = stripe;
+  await blurWindow();
+  assert.deepEqual(sent.map((event) => ({ ...event })), [{ type: 'frame', selector: 'iframe[name="card"]', tag: 'iframe',
+    name: 'Secure card payment input frame', origin: 'https://js.stripe.com' }]);
+  assert.ok(!JSON.stringify(sent).includes('pk_live'), 'neither the query nor the fragment of the frame leaves');
+
+  // Still in the same frame (the window focused and blurred again, nothing of the page recorded): no second step.
+  await blurWindow();
+  assert.equal(sent.length, 1);
+  // A step of the page itself ends the stay: coming back to the frame is a new manual step.
+  const button = new FakeElement('BUTTON', { id: 'next' });
+  button.id = 'next';
+  dispatch('click', button);
+  await blurWindow();
+  assert.deepEqual(sent.map((event) => event.type), ['frame', 'click', 'frame']);
+  // Another frame is another stay.
+  const captcha = new FakeElement('IFRAME', { title: 'reCAPTCHA' });
+  Object.assign(captcha, { src: 'https://www.google.com/recaptcha/api2/anchor?k=site-key' });
+  document.activeElement = captcha;
+  await blurWindow();
+  assert.equal(sent.at(-1)!.origin, 'https://www.google.com');
+
+  // A frame of the page's own site is reported too; a frame with no address carries the page's origin.
+  const own = new FakeElement('IFRAME', { id: 'login' });
+  own.id = 'login';
+  Object.assign(own, { src: '' });
+  document.activeElement = own;
+  await blurWindow();
+  assert.deepEqual({ ...sent.at(-1)! }, { type: 'frame', selector: 'iframe#login', tag: 'iframe', name: '', origin: 'https://shop.example' });
+
+  // Off the record, a forged blur, an element's blur, or a focus that is not a frame: nothing.
+  const count = sent.length;
+  document.activeElement = stripe;
+  await blurWindow({ isTrusted: false });
+  await blurWindow({ target: new FakeElement('INPUT') });
+  document.activeElement = new FakeElement('INPUT');
+  await blurWindow();
+  toggle(false);
+  document.activeElement = captcha;
+  await blurWindow();
+  assert.equal(sent.length, count);
 });
 
 test('the preload copies the exact secret rule of native-browser-recorder.ts', () => {
