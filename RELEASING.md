@@ -123,6 +123,56 @@ pair made on the runner. Such a package starts and runs normally and takes a
 published update, but it is not a trusted build: it must never be published.
 Release the version with *Release* instead.
 
+## Publish an announcement
+
+An announcement reaches the installed apps without a release: a signed list,
+`timon-notices.json`, that the website serves from `main` and the apps show as
+cards at the bottom left. It is signed with the release key, under a signature
+of its own, so it can never pass for a release list.
+
+Write the notices in a file outside the repository:
+
+```json
+{
+  "notices": [
+    {
+      "id": "live-demo-2026-12",
+      "tone": "info",
+      "title": "Live demo on Thursday",
+      "body": "Agents and plugins, one hour.",
+      "link": "https://timon-ai.com/live",
+      "endsAt": "2026-12-04T19:00:00Z"
+    }
+  ]
+}
+```
+
+`id`, `tone` (`info`, `warning`, `success`), `title` (one line, 120 characters)
+and `body` (plain text, 400 characters) are required. Optional: `link` (`https:`
+only), `startsAt` and `endsAt`, `channels` (`["beta"]`, `["stable"]`),
+`minVersion` and `maxVersion` (inclusive). Twenty notices at most; a list with
+none takes every earlier one down. Then, at the root of an up-to-date `main`:
+
+```bash
+node scripts/release/sign-notices.mjs --source ~/notices.json --dry-run     # check it
+TIMON_RELEASE_ED25519_KEY="$(cat <release key>)" \
+  node scripts/release/sign-notices.mjs --source ~/notices.json [--valid-days 30]
+```
+
+`--key-file <pem>` reads the key from a file instead; it must lie outside any
+checkout. The script refuses a key the clients do not pin, and a list that is
+not newer than the `timon-notices.json` it replaces (verified first). Open a
+pull request that changes `timon-notices.json` only. Once merged, check what
+the website serves:
+
+```bash
+curl -fsS https://timon-ai.com/.well-known/timon-notices.json | cmp - timon-notices.json && echo ok
+```
+
+The list expires (30 days by default): after that, the apps show none of it.
+Closing a card is remembered by its `id`: to show a notice again, give it a new
+one.
+
 ## Environments and secrets
 
 | Environment | Reviewers | Deploys from | Secrets |
