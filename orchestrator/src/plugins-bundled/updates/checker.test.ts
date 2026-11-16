@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as reference from '../../../../scripts/release-manifest.mjs';
 import type { BuildChannel } from '../../build-info.js';
-import { UpdateChecker, USER_AGENT, entryFor, type FetchLike, type UpdateOffer } from './checker.js';
+import { UpdateChecker, USER_AGENT, checkDelayAfter, entryFor, type FetchLike, type UpdateOffer } from './checker.js';
 import { RELEASES_SIGNATURE_DOMAIN, RELEASES_URL, type ReleasePublicKey } from './manifest.js';
 
 type Entry = Parameters<typeof reference.composeReleasesPayload>[0]['entry'];
@@ -305,4 +305,43 @@ test('concurrent checks share one request', async () => {
   const [x, y] = await Promise.all([c.instance.check(), c.instance.check()]);
   assert.deepEqual(x, y);
   assert.equal(c.calls.length, 1);
+});
+
+const MIN = 60_000;
+const INTERVAL = 6 * 60 * MIN;
+
+test('a failed check is retried after 15 min, then 1 h, never beyond the normal interval', async () => {
+  const { text } = manifest(['0.1.8'], at);
+  let fail = true;
+  const c = checker({ now: at, response: () => (fail ? new Response('not yet', { status: 503 }) : new Response(text)) });
+  assert.equal(c.instance.nextCheckAt(INTERVAL), 0, 'never checked: due at once');
+
+  assert.equal((await c.instance.check()).state, 'failed');
+  assert.equal(c.instance.nextCheckAt(INTERVAL), at.getTime() + 15 * MIN);
+
+  const second = new Date(at.getTime() + 15 * MIN);
+  c.setNow(second);
+  await c.instance.check();
+  assert.equal(c.instance.nextCheckAt(INTERVAL), second.getTime() + 60 * MIN);
+
+  // Further failures keep growing, capped at the normal interval.
+  assert.deepEqual([3, 4, 5, 20].map((n) => checkDelayAfter(n, INTERVAL)), [4 * 60 * MIN, INTERVAL, INTERVAL, INTERVAL]);
+  assert.equal(checkDelayAfter(1, 10 * MIN), 10 * MIN, 'a backoff never waits longer than the interval');
+
+  const third = new Date(second.getTime() + 60 * MIN);
+  c.setNow(third);
+  fail = false;
+  assert.equal((await c.instance.check()).state, 'available');
+  assert.equal(c.instance.nextCheckAt(INTERVAL), third.getTime() + INTERVAL, 'a success goes back to the normal interval');
+  assert.equal(c.calls.length, 3);
+});
+
+test('a check asked by hand counts in the schedule; one switched off does not', async () => {
+  const { text } = manifest(['0.1.8'], at);
+  const c = checker({ now: at, body: () => text, enabled: false });
+  await c.instance.check();
+  assert.equal(c.instance.nextCheckAt(INTERVAL), 0, 'no request left: the schedule is untouched');
+  c.settings.enabled = true;
+  await c.instance.check();
+  assert.equal(c.instance.nextCheckAt(INTERVAL), at.getTime() + INTERVAL);
 });
