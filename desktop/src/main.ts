@@ -378,7 +378,9 @@ function watchDisplays(): void {
 /** Every page of a window covers its whole content area; Electron sizes views in DIPs, so a change of display density needs nothing more. */
 function layoutPages(record: AppWindow): void {
   if (record.window.isDestroyed()) return;
-  const [width = 0, height = 0] = record.window.getContentSize();
+  const { width, height } = record.window.getContentBounds();
+  // A window on its way to or from the screen reports an empty area: sizing the pages to it would blank them until the next event.
+  if (width <= 0 || height <= 0) return;
   for (const page of record.pages.list()) page.view.view.setBounds({ x: 0, y: 0, width, height });
 }
 
@@ -654,11 +656,21 @@ function createWindow(url: string, begin: 'service' | 'interface', opening: Wind
   w.webContents.on('will-navigate', (event) => event.preventDefault());
   // The pages follow the window's content area: no view resizes on its own.
   const relayout = () => layoutPages(record);
+  // On Linux these events fire before the window manager applies the new size (TIM-0150): the size read then is the old one,
+  // so the pages are laid out again once it has landed.
+  const relayoutSettled = () => {
+    relayout();
+    setImmediate(relayout);
+    setTimeout(relayout, 100);
+  };
+  // The size actually applied to the content area, whatever event announced it.
+  w.contentView.on('bounds-changed', relayout);
   w.on('resize', () => { relayout(); layoutKeeper?.changed(); });
-  w.on('maximize', relayout);
-  w.on('unmaximize', relayout);
-  w.on('enter-full-screen', relayout);
-  w.on('leave-full-screen', relayout);
+  w.on('resized', relayoutSettled);
+  w.on('maximize', relayoutSettled);
+  w.on('unmaximize', relayoutSettled);
+  w.on('enter-full-screen', relayoutSettled);
+  w.on('leave-full-screen', relayoutSettled);
   w.on('restore', relayout);
   w.on('move', () => layoutKeeper?.changed());
   watchDisplays();

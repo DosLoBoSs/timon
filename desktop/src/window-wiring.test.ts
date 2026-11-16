@@ -318,7 +318,7 @@ function pageWorld(options: { refuse?: Set<string> } = {}) {
   let nextId = 100;
   const window = {
     webContents: { id: 1, isFocused: () => false },
-    isDestroyed: () => false, isFocused: () => true, getContentSize: () => [1200, 800],
+    isDestroyed: () => false, isFocused: () => true, getContentBounds: () => ({ x: 40, y: 30, width: 1200, height: 800 }),
     contentView: {
       addChildView: (view: unknown, index: number) => { children.splice(index, 0, view); },
       removeChildView: (view: unknown) => { const at = children.indexOf(view); if (at >= 0) children.splice(at, 1); },
@@ -389,6 +389,68 @@ test('V4: switching shows the machine\'s page and hides the other one, alive and
   assert.equal(world.record.machineId, 'a');
   assert.equal(a.view.view.webContents.isDestroyed(), false);
   assert.deepEqual(world.log, []);
+});
+
+test('TIM-0150: a window reporting an empty content area leaves its pages at their last size', () => {
+  const world = pageWorld();
+  const page = world.enter('a');
+  const sized = JSON.stringify(page.view.view.bounds);
+  (world.record.window as { getContentBounds: () => unknown }).getContentBounds = () => ({ x: 0, y: 0, width: 0, height: 0 });
+  (world.context.layoutPages as (r: unknown) => void)(world.record);
+  assert.equal(JSON.stringify(page.view.view.bounds), sized);
+});
+
+/** `createWindow` run against a fake window: the listeners it registers, and its timers held until `flush`. */
+function windowWiring() {
+  type Listener = () => void;
+  const on = (into: Map<string, Listener[]>) => (event: string, listener: Listener) => { into.set(event, [...(into.get(event) ?? []), listener]); };
+  const windowEvents = new Map<string, Listener[]>();
+  const viewEvents = new Map<string, Listener[]>();
+  class FakeBrowserWindow {
+    webContents = { id: 7, setWindowOpenHandler: () => {}, on: () => {} };
+    contentView = { on: on(viewEvents) };
+    on = on(windowEvents);
+    maximize() {}
+    setFullScreen() {}
+    isDestroyed() { return false; }
+  }
+  const layouts: unknown[] = [];
+  const timers: { kind: string; delay: number; run: Listener }[] = [];
+  const context: Record<string, unknown> = {
+    BrowserWindow: FakeBrowserWindow, URL, console: { log: () => {} },
+    windows: new WindowRegistry<unknown, unknown>(), ViewPool, browserOwners: new Map<number, number>(),
+    releaseCheckWindowRetired: false, windowOrigin: '', desktopHome: '/home', DISPLAY_NAME: 'Timon', APP_ICON_PATH: '/icon.png',
+    windowScheme: () => 'dark', windowBackground: () => '#000000',
+    layoutKeeper: { changed: () => {} }, watchDisplays: () => {}, enterMachine: () => null,
+    layoutPages: (record: unknown) => { layouts.push(record); },
+    setImmediate: (run: Listener) => { timers.push({ kind: 'immediate', delay: 0, run }); },
+    setTimeout: (run: Listener, delay: number) => { timers.push({ kind: 'timeout', delay, run }); },
+  };
+  runInNewContext(compile(functionText('createWindow')), context);
+  const opening = { machineId: null, placement: { width: 1200, height: 800 } };
+  (context.createWindow as (url: string, begin: string, opening: unknown) => unknown)(`${ORIGIN}/`, 'interface', opening);
+  const emit = (from: Map<string, Listener[]>, event: string) => { for (const listener of from.get(event) ?? []) listener(); };
+  const flush = () => { for (const timer of timers.splice(0)) timer.run(); };
+  return { windowEvents, viewEvents, layouts, timers, emit, flush };
+}
+
+test('TIM-0150: the pages follow the size the window manager actually applies to the content area', () => {
+  const wiring = windowWiring();
+  assert.equal(wiring.viewEvents.get('bounds-changed')?.length, 1);
+  wiring.emit(wiring.viewEvents, 'bounds-changed');
+  assert.equal(wiring.layouts.length, 1);
+  assert.equal(wiring.timers.length, 0);
+});
+
+test('TIM-0150: maximize, full screen and the end of a resize lay the pages out again once the new size has landed', () => {
+  for (const event of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen', 'resized']) {
+    const wiring = windowWiring();
+    wiring.emit(wiring.windowEvents, event);
+    assert.equal(wiring.layouts.length, 1, `${event}: laid out at once`);
+    assert.deepEqual(wiring.timers.map((timer) => [timer.kind, timer.delay]), [['immediate', 0], ['timeout', 100]], `${event}: and twice later`);
+    wiring.flush();
+    assert.equal(wiring.layouts.length, 3, event);
+  }
 });
 
 test('TODO #760: the window remembers the page of the machine on screen, for the layout to reopen it', () => {
