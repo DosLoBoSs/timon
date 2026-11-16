@@ -140,7 +140,7 @@ test('no expression is pasted into a shell script: inputs reach run blocks throu
 test('the build matrix covers the three systems and keeps going when one fails', () => {
   const build = jobs().get('build').join('\n');
   assert.match(build, /fail-fast:\s*false/);
-  for (const [os, runner] of [['linux', 'ubuntu-latest'], ['mac', 'macos-latest'], ['windows', 'windows-latest']]) {
+  for (const [os, runner] of [['linux', 'ubuntu-latest'], ['mac', '\\[self-hosted, macOS, ARM64, timon-release\\]'], ['windows', 'windows-latest']]) {
     assert.match(build, new RegExp(`\\{ os: ${os}, runner: ${runner} \\}`));
   }
   assert.match(build, /scripts\/release\/build-package\.mjs/);
