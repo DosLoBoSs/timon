@@ -11,15 +11,14 @@ import '../test-home.js';
 import { paidTestLicense } from '../../tests/helpers/paid-license.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { createPublicKey, generateKeyPairSync } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const { unsignedPluginsAllowed, PLUGIN_PUBLIC_KEYS } = await import('./pubkey.js');
 const { verifyPluginDirectory } = await import('./signature.js');
+const { signPluginFolder } = await import('./sign.js');
 const { licenseState, setLicenseState } = await import('../license/runtime.js');
 const { unlicensed } = await import('../license/license.js');
 const { betaLocked } = await import('../license/build-policy.js');
@@ -112,28 +111,10 @@ test('with the production key shipped, an unset setting resolves closed on a lic
   assert.equal(unsignedPluginsAllowed(true), true);
 });
 
-const SIGN_SCRIPT = fileURLToPath(new URL('../../scripts/sign-plugin.mjs', import.meta.url));
+/** What npm ships of the fixture below: every file, as for a packed folder. */
+const SHIPPED = async () => ({ files: ['lib/index.js', 'package.json'] });
 
-/**
- * The script runs under a throwaway home so it reads a test key, never the
- * real one: `os.homedir()` follows HOME on POSIX and USERPROFILE on Windows.
- */
-function signWithScript(pluginDir: string, privatePem: string, env: Record<string, string> = {}): string {
-  const home = mkdtempSync(join(tmpdir(), 'timon-sign-home-'));
-  try {
-    mkdirSync(join(home, '.timon-signing'));
-    writeFileSync(join(home, '.timon-signing', 'plugins.key'), privatePem, { mode: 0o600 });
-    const childEnv: NodeJS.ProcessEnv = { ...process.env, HOME: home, USERPROFILE: home, ...env };
-    if (!('TIMON_PLUGIN_SIGNING_KEY_ID' in env)) delete childEnv.TIMON_PLUGIN_SIGNING_KEY_ID;
-    const run = spawnSync(process.execPath, [SIGN_SCRIPT, pluginDir], { env: childEnv, encoding: 'utf8' });
-    assert.equal(run.status, 0, run.stderr);
-    return readFileSync(join(pluginDir, 'SIGNATURE'), 'utf8');
-  } finally {
-    rmSync(home, { recursive: true, force: true });
-  }
-}
-
-test('sign-plugin.mjs signs under the production key id by default, and the daemon verifies it', () => {
+test('`timon plugin sign` signs under the production key id by default, and the daemon verifies it', async () => {
   const pair = generateKeyPairSync('ed25519');
   const privatePem = pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
   const publicPem = pair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
@@ -143,7 +124,7 @@ test('sign-plugin.mjs signs under the production key id by default, and the daem
     writeFileSync(join(dir, 'package.json'), '{"name":"signed-fixture","version":"1.0.0"}\n');
     writeFileSync(join(dir, 'lib', 'index.js'), 'export const apply = () => {};\n');
 
-    const signature = JSON.parse(signWithScript(dir, privatePem)) as { keyId: string };
+    const signature = await signPluginFolder(dir, { privateKey: privatePem, pack: SHIPPED });
     assert.equal(signature.keyId, PRODUCTION_KEY_ID);
 
     const keys = [{ keyId: PRODUCTION_KEY_ID, publicKey: publicPem }];
@@ -160,7 +141,7 @@ test('sign-plugin.mjs signs under the production key id by default, and the daem
     assert.equal(altered.ok ? '' : altered.code, 'tampered');
 
     // An expired key no longer admits what it signed.
-    signWithScript(dir, privatePem);
+    await signPluginFolder(dir, { privateKey: privatePem, pack: SHIPPED });
     const expired = verifyPluginDirectory(dir, [{ ...keys[0]!, expiresAt: '2026-01-01T00:00:00.000Z' }]);
     assert.equal(expired.ok ? '' : expired.code, 'unsigned');
   } finally {

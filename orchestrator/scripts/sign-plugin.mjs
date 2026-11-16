@@ -1,36 +1,50 @@
 #!/usr/bin/env node
-import { createHash, sign } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+/**
+ * `timon plugin sign <dir>`: signs the files `npm pack` ships with the key of
+ * ~/.timon-signing/plugins.key. The work is in dist/plugins/sign.js, which
+ * shares its file lister with `timon plugin check`.
+ */
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { resolve, join, relative, sep } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = resolve(process.argv[2] || '');
+function fail(message, code = 1) {
+  process.stderr.write(`timon plugin sign: ${message}\n`);
+  process.exit(code);
+}
+
+if (!process.argv[2]) fail('usage: timon plugin sign <plugin-dir>', 64);
+const dir = resolve(process.argv[2]);
 const keyFile = join(homedir(), '.timon-signing', 'plugins.key');
-const keyId = process.env.TIMON_PLUGIN_SIGNING_KEY_ID || 'timon-plugins-2026-11';
-if (!process.argv[2]) throw new Error('usage: sign-plugin.mjs <plugin-dir>');
 if (!existsSync(keyFile)) {
-  throw new Error(`private key missing: ${keyFile} — create an Ed25519 key outside the repo (chmod 0600)`);
+  fail(`private key missing: ${keyFile} — create an Ed25519 key outside the repository (chmod 0600)`);
 }
 
-function filesBelow(dir = root) {
-  const out = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...filesBelow(path));
-    else if (entry.isFile() && !(dir === root && entry.name === 'SIGNATURE')) out.push(path);
-    else if (entry.isSymbolicLink()) throw new Error(`symbolic link not allowed: ${relative(root, path)}`);
+const moduleUrl = new URL('../dist/plugins/sign.js', import.meta.url);
+let mod;
+try {
+  mod = await import(moduleUrl.href);
+} catch (e) {
+  if (e?.code === 'ERR_MODULE_NOT_FOUND' && String(e.message).includes(fileURLToPath(moduleUrl))) {
+    fail('dist/plugins/sign.js not found — run `npm run build` in orchestrator/.');
   }
-  return out;
+  throw e;
 }
 
-const digest = createHash('sha256');
-for (const file of filesBelow().sort((a, b) => relative(root, a).localeCompare(relative(root, b)))) {
-  digest.update(relative(root, file).split(sep).join('/'));
-  digest.update('\0');
-  digest.update(readFileSync(file));
-  digest.update('\0');
+try {
+  const out = await mod.signPluginFolder(dir, {
+    privateKey: readFileSync(keyFile, 'utf8'),
+    keyId: process.env.TIMON_PLUGIN_SIGNING_KEY_ID || undefined,
+  });
+  process.stdout.write(`SIGNATURE written (${out.keyId}, ${out.hash}): ${out.files.length} file(s), the ones npm pack ships\n`);
+  if (!out.signatureShips) {
+    process.stderr.write(
+      'warning: npm pack does not ship SIGNATURE: an archive packed from this folder reaches the recipient unsigned.\n'
+      + 'Add "SIGNATURE" to `files` in package.json, then sign again.\n',
+    );
+  }
+} catch (e) {
+  if (e?.name === 'PluginSignError') fail(e.message);
+  throw e;
 }
-const hash = digest.digest('hex');
-const sig = sign(null, Buffer.from(hash, 'hex'), readFileSync(keyFile, 'utf8')).toString('base64');
-writeFileSync(join(root, 'SIGNATURE'), `${JSON.stringify({ alg: 'ed25519', keyId, hash, sig }, null, 2)}\n`, { mode: 0o644 });
-process.stdout.write(`SIGNATURE written (${keyId}, ${hash})\n`);
