@@ -100,6 +100,9 @@ registerFileProfile('local-file', {
 // A file of the backends folder that does not even parse: still the person's provider, blocked, with the reason.
 mkdirSync(dirname(localBackendFile('broken-endpoint')), { recursive: true });
 writeFileSync(localBackendFile('broken-endpoint'), '{ not json');
+// A file that takes the id of a product backend, and one whose name is no id: listed apart from any backend.
+writeFileSync(join(dirname(localBackendFile('broken-endpoint')), 'claude.json'), JSON.stringify({ id: 'claude', dialect: 'codex', label: 'Not Claude' }));
+writeFileSync(join(dirname(localBackendFile('broken-endpoint')), 'my backend.json'), '{}');
 reloadLocalBackends();
 
 // Two agents run on the hand-added backend: the page header says so.
@@ -198,6 +201,21 @@ test('one record per provider: plugins, split multi-backend plugins, hand-added 
   assert.equal(broken.status, 'blocked');
   assert.deepEqual(broken.backends.map((b) => [b.id, b.reason]), [['broken-endpoint', 'not valid JSON']]);
 
+  const taken = byId.get('user:claude.json');
+  assert.ok(taken, 'a file whose id is taken is listed');
+  assert.equal(taken.name, 'claude.json', 'under its file name, not as the backend that owns the id');
+  assert.equal(taken.status, 'blocked');
+  assert.equal(taken.agentCount, 0, "the owner's agents are not its own");
+  assert.deepEqual(taken.programs, []);
+  assert.deepEqual(taken.backends.map((b) => [b.id, b.reason]), [['claude.json', 'id claude is already taken by a built-in, plugin or local-file backend — choose another id']]);
+  assert.ok(claude.backends.every((b) => b.reason === null || !b.reason.includes('already taken')), "the file's reason stays off the owner");
+
+  const misnamed = providers.find((p) => p.name === 'my backend.json');
+  assert.ok(misnamed, 'a file whose name is no id is listed');
+  assert.match(misnamed.id, /^user:my-backend\.[0-9a-f]{8}\.json$/, 'under an id the page route accepts');
+  assert.equal(misnamed.status, 'blocked');
+  assert.match(misnamed.backends[0]!.reason ?? '', /file name must be <id>\.json/);
+
   const agent = byId.get('catalog:acme-acp')!;
   assert.equal(agent.origin, 'catalog');
   assert.equal(agent.status, 'blocked', 'an install whose files changed is blocked, not offered for sign-in');
@@ -216,5 +234,13 @@ test('one provider by id; unknown is 404, malformed is 400', async () => {
   assert.equal(one.json.provider!.id, 'provider-claude');
   assert.equal((await call(`/${encodeURIComponent('user:my-endpoint')}`)).json.provider!.origin, 'user');
   assert.equal((await call('/no-such-provider')).status, 404);
+  // The page of a blocked file opens, whatever its file is named.
+  const listed = (await call('')).json.providers!;
+  for (const name of ['claude.json', 'my backend.json']) {
+    const id = listed.find((p) => p.name === name)!.id;
+    const page = await call(`/${encodeURIComponent(id)}`);
+    assert.equal(page.status, 200, name);
+    assert.equal(page.json.provider!.status, 'blocked');
+  }
   assert.equal((await call(`/${encodeURIComponent('<script>')}`)).status, 400);
 });
