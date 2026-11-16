@@ -430,3 +430,60 @@ test('a Node copied into the running release starts a script of that release ins
   assert.equal(granted.code, 0, granted.stderr);
   assert.deepEqual(JSON.parse(granted.stdout), { node, writeRelease: 'EACCES', readOtherRelease: 'EACCES' });
 });
+
+const WORKSPACE_SCRIPT = String.raw`
+const fs = require('node:fs'), path = require('node:path');
+const [WS, TH] = process.argv.slice(1);
+const out = {};
+const t = (name, fn) => { try { fn(); out[name] = 'ok'; } catch (e) { out[name] = e.code || String(e.message); } };
+t('readCwd', () => fs.readdirSync(process.cwd()));
+t('readFile', () => fs.readFileSync(path.join(WS, 'notes.md')));
+t('writeFile', () => fs.writeFileSync(path.join(WS, 'out.txt'), 'x'));
+t('readToken', () => fs.readFileSync(path.join(TH, 'daemon-token')));
+t('readOtherWorktree', () => fs.readFileSync(path.join(TH, 'worktrees', 'm2', 'notes')));
+process.stdout.write(JSON.stringify(out));
+`;
+
+test('an agent whose folder is the workspace folder itself reads and writes it under the fence, and nothing private', { skip }, async () => {
+  const runtime = process.env.XDG_RUNTIME_DIR;
+  const base = runtime && existsSync(runtime) ? runtime : tmpdir();
+  const root = realpathSync(mkdtempSync(join(base, 'landlock-workspace-')));
+  after(() => rmSync(root, { recursive: true, force: true }));
+  const home = join(root, 'home');
+  const th = join(home, '.timon');
+  const workspace = join(th, 'workspace');
+  for (const dir of [workspace, join(th, 'worktrees', 'm2')]) mkdirSync(dir, { recursive: true });
+  writeFileSync(join(workspace, 'notes.md'), '# notes');
+  writeFileSync(join(th, 'daemon-token'), 'FAKE-TOKEN');
+  writeFileSync(join(th, 'worktrees', 'm2', 'notes'), 'other mission');
+
+  const fence = createLandlockFence({ status: () => ({ state: 'ready', binary: FENCE as string, abi: PROBE?.abi ?? 0, seccomp: true }), fs: LANDLOCK_FS });
+  assert.equal(fence.probe().available, true);
+  const run = async (agentCwd: string | undefined) => {
+    const policy = resolveFence(cfg({ readOnly: [home] }), {
+      timonHome: th, home, platform: 'linux', cwd: workspace, agentCwd, missionId: MISSION, agent: 'woody',
+    });
+    const launch = fence.wrap(policy, process.execPath, ['-e', WORKSPACE_SCRIPT, workspace, th], join(th, 'run', 'fence', 'workspace.policy'));
+    const child = spawn(launch.cmd, launch.args, { cwd: workspace, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8'); });
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+    const code = await new Promise<number | null>((resolve) => child.on('close', resolve));
+    return { code, stdout, stderr };
+  };
+
+  // Without the agent's own folder named, the 0.1.8 failure: its working directory is refused.
+  const refused = await run(undefined);
+  assert.equal(refused.code, 0, refused.stderr);
+  const before = JSON.parse(refused.stdout) as Record<string, string>;
+  assert.equal(before.readFile, 'EACCES');
+  assert.equal(before.writeFile, 'EACCES');
+
+  const granted = await run(workspace);
+  assert.equal(granted.code, 0, granted.stderr);
+  assert.deepEqual(JSON.parse(granted.stdout), {
+    readCwd: 'ok', readFile: 'ok', writeFile: 'ok', readToken: 'EACCES', readOtherWorktree: 'EACCES',
+  });
+  assert.equal(readFileSync(join(workspace, 'out.txt'), 'utf8'), 'x');
+});

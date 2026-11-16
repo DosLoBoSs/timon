@@ -536,6 +536,8 @@ let reportedFence: string | null = null;
 
 /** Causes of an unfenced launch already told to the log in this daemon life. */
 const warnedUnfenced = new Set<string>();
+/** Agents already named in the log as running in the whole `workspace` folder: once per agent. */
+const notedSharedWorkspace = new Set<string>();
 
 function reportFenceReady(mechanism: FenceMechanism, abi: number): void {
   const key = `${mechanism}:${abi}`;
@@ -655,6 +657,12 @@ export function fenceMissionCommand(
   );
   for (const { path, reason } of policy.ignored) {
     if (reason !== UNRESOLVED_GRANT) warn(`${label} fence grant on ${path} dropped: ${reason}`);
+  }
+  const sharedKey = target.agent ?? '';
+  if (policy.sharedWorkspace && !notedSharedWorkspace.has(sharedKey)) {
+    notedSharedWorkspace.add(sharedKey);
+    warn(`${label} agent "${target.agent ?? '?'}" works in ${policy.sharedWorkspace} itself, which the fence grants whole for compatibility: `
+      + 'its missions also reach the other folders in it. Give the agent a project folder (a folder inside it) for a stricter fence.');
   }
   const policyFile = fencePolicyFile(target.timonHome, unit);
   try {

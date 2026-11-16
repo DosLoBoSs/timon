@@ -14,7 +14,7 @@ Generated from the configuration schema and the loader's environment override ta
 | `version` | 1 | 1 | Configuration schema version. | — |
 | `profile` | "linux-desktop" &#124; "linux-server" &#124; "macos" &#124; "windows" | "linux-desktop" | Host platform profile. | — |
 | `edition` | "expert" &#124; "lite" | "expert" | Requested edition; the effective edition remains constrained by the licence. | — |
-| `workspacesRoot` | string | Not set | Working folder of the agents created during onboarding; when unset, they use the workspace folder inside the Timon home. | — |
+| `workspacesRoot` | string | Not set | Working folder of the agents created during onboarding; when unset, they share the `home` folder inside the workspace folder of the Timon home. | — |
 | `daemon` | object | See child fields | Daemon process and listener configuration. | — |
 | `daemon.listen` | object | See child fields | Network listener configuration. | — |
 | `daemon.listen.host` | string | "127.0.0.1" | Listener address; use loopback for local-only access. | — |

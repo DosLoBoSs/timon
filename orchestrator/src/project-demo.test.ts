@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -30,6 +30,9 @@ test('creates the repository in the working folder and registers the project', (
   assert.ok(existsSync(join(dir, 'test', 'greet.test.js')));
   assert.ok(dbApi.getProjectRow(DEMO_PROJECT_SLUG));
   assert.ok(r.project.cwd && r.project.cwd.endsWith(DEMO_PROJECT_SLUG));
+  // A folder inside the workspace folder, never that folder itself: the fence never hands it over.
+  assert.equal(r.project.cwd, realpathSync(dir));
+  assert.notEqual(r.project.cwd, realpathSync(WORKSPACE_DIR));
   // Its orchestrator, then its coder, in the project's folder: the tour opens
   // the chat next, and the Agents page draws main → orchestrator → coder.
   assert.equal(r.orchestrator, 'timon-demo.main');

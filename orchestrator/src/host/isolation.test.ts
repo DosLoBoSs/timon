@@ -778,3 +778,72 @@ test('fence: a release that a link leads elsewhere in the Timon home is not open
   assert.equal(access(linked, join(LTH, 'backend-accounts', 'acc-other', 'x')), 'none');
   assert.equal(access(linked, join(releases, '9.9.9', 'resources', 'node', 'node')), 'none');
 });
+
+/* ── The `workspace` folder itself, as setup made it an agent's folder ──────── */
+
+const WS = `${TH}/workspace`;
+
+test('fence: an agent whose configured folder is the workspace folder itself keeps it, read and write', () => {
+  const policy = resolveFence(cfg(), fullTarget({ cwd: WS, agentCwd: WS, gitDirs: [] }));
+  assert.ok(policy.rw.includes(WS), 'the working directory is granted whole');
+  assert.equal(policy.sharedWorkspace, WS);
+  assert.equal(access(policy, `${WS}/notes.md`), 'rw');
+  assert.equal(policy.ignored.filter((i) => i.path === WS).length, 0, 'not dropped');
+  // Nothing refused is reopened with it.
+  for (const name of FRAMING_REFUSED) assert.equal(access(policy, `${TH}/${name}`), 'none', `${name} stays refused`);
+  for (const path of [TH, `${TH}/worktrees/task-2/a`, `${TH}/backend-accounts/acc-other/x`, `${TH}/agents/timon.main/SOUL.md`]) {
+    assert.equal(access(policy, path), 'none', `${path} stays refused`);
+  }
+  // A read-only level grants it read-only, like any working directory.
+  const reading = resolveFence(cfg(), fullTarget({ cwd: WS, agentCwd: WS, gitDirs: [], workspace: 'ro' }));
+  assert.equal(access(reading, `${WS}/notes.md`), 'rx');
+});
+
+test('fence: the workspace folder itself stays refused when it is not the agent\'s configured folder', () => {
+  const cases: Array<[string, Record<string, unknown>]> = [
+    ['no configured folder', { cwd: WS }],
+    ['another configured folder', { cwd: WS, agentCwd: `${WS}/home` }],
+    ['handed as a git directory', { cwd: `${WS}/home`, agentCwd: WS, gitDirs: [WS] }],
+    ['handed as a file', { cwd: `${WS}/home`, agentCwd: WS, timonRead: [WS] }],
+    ['a task worktree run by that agent', { cwd: `${TH}/worktrees/task-1`, agentCwd: WS }],
+  ];
+  for (const [label, over] of cases) {
+    const policy = resolveFence(cfg(), fullTarget({ gitDirs: [], timonRead: [], ...over }));
+    assert.equal(access(policy, `${WS}/other-agent/x`), 'none', `${label}: the other folders stay refused`);
+    assert.ok(!policy.rw.includes(WS) && !policy.ro.includes(WS), `${label}: workspace not granted`);
+    assert.equal(policy.sharedWorkspace, undefined, label);
+  }
+  // A configured folder never reopens another zone root nor the home, even when it is the working directory.
+  for (const path of [TH, `${TH}/worktrees`, `${TH}/backend-accounts`, `${TH}/tmp`, `${TH}/workflows`]) {
+    const policy = resolveFence(cfg(), fullTarget({ cwd: path, agentCwd: path, gitDirs: [] }));
+    assert.ok(policy.ignored.some((i) => i.path === path), `${path} must be dropped`);
+    assert.equal(policy.sharedWorkspace, undefined);
+  }
+  // The configuration cannot name it either.
+  const viaConfig = resolveFence(cfg({ writable: [WS] }), fullTarget({ agentCwd: WS }));
+  assert.equal(access(viaConfig, `${WS}/x`), 'none');
+});
+
+test('fence: the workspace exception follows links and case like every grant', { skip: linkSkip }, () => {
+  const ws = join(LTH, 'workspace');
+  mkdirSync(join(ws, 'home'), { recursive: true });
+  symlinkSync(ws, join(LINKS, 'to-workspace'), 'dir');
+  // The configured folder spelled through a link is the same folder.
+  const linked = resolveFence(cfg(), linkTarget({ cwd: ws, agentCwd: join(LINKS, 'to-workspace') }));
+  assert.equal(linked.sharedWorkspace, ws);
+  // A link inside it leading to the workspace folder is the workspace folder, but only for its own agent.
+  symlinkSync(ws, join(LTH, 'worktrees', 'task-1', 'to-ws'), 'dir');
+  const other = resolveFence(cfg(), linkTarget({ cwd: join(LTH, 'worktrees', 'task-1', 'to-ws'), agentCwd: join(LTH, 'worktrees', 'task-1') }));
+  assert.equal(other.sharedWorkspace, undefined);
+  assert.ok(!other.rw.includes(ws));
+});
+
+test('fence: the workspace exception matches without case on macOS', () => {
+  const home = resolve('/Users/tester');
+  const timonHome = join(home, '.timon');
+  const policy = resolveFence(cfg(), {
+    timonHome, home, platform: 'darwin', realpath: (path: string) => path,
+    cwd: join(timonHome, 'Workspace'), agentCwd: join(timonHome, 'workspace'),
+  });
+  assert.equal(policy.sharedWorkspace, join(timonHome, 'Workspace'));
+});

@@ -247,6 +247,20 @@ export function loadConfig(agentName: string): AgentConfig {
   return JSON.parse(readFileSync(path, 'utf8')) as AgentConfig;
 }
 
+/**
+ * The working directory the agent's config file holds, read fresh: never a
+ * task's worktree a mission switched to. Undefined when the file holds none or
+ * cannot be read. The fence trusts it for one thing only (`FenceTarget.agentCwd`).
+ */
+export function configuredAgentCwd(agentName: string): string | undefined {
+  try {
+    const cwd = loadConfig(agentName).cwd;
+    return typeof cwd === 'string' && cwd !== '' ? cwd : undefined;
+  } catch {
+    return undefined; // an unreadable config: no exception, the depth rule applies
+  }
+}
+
 export function loadSystemPrompt(agentName: string): string {
   const path = agentSystemPrompt(canonicalAgentName(agentName));
   if (!existsSync(path)) {

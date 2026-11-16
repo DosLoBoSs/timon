@@ -6,7 +6,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import express from 'express';
 
-const { AGENTS_DIR, TIMON_HOME, PROJECTS_DIR } = await import('./paths.js');
+const { AGENTS_DIR, TIMON_HOME, PROJECTS_DIR, WORKSPACE_DIR, ONBOARDING_WORKSPACE_DIR } = await import('./paths.js');
 const { CONFIG_FILE } = await import('./config/load.js');
 const { db, dbApi } = await import('./db.js');
 const { seedDefaultAgent, getAgent, listAgents, patchAgentConfig, deleteAgent } = await import('./agent.js');
@@ -117,7 +117,7 @@ test('an unreadable config file is workspace_unavailable, not a crash', () => {
   } finally { host.bin = original; }
 });
 
-test('without a workspacesRoot the team works in the Timon home, never the user home', () => {
+test('without a workspacesRoot the team shares a folder inside the workspace folder, never the user home', () => {
   reset(); seedDefaultAgent();
   writeFileSync(CONFIG_FILE, JSON.stringify({}));
   const host = getHost();
@@ -125,10 +125,26 @@ test('without a workspacesRoot the team works in the Timon home, never the user 
   host.bin = ((name: string) => { if (name === 'codex') return '/test/codex'; throw new Error('absent'); }) as typeof host.bin;
   try {
     applyTeam('team');
+    // The workspace folder itself lists every agent's folder: the fence never hands it over.
     for (const name of ['assistant', 'researcher', 'writer', 'developer']) {
-      assert.equal(getAgent(name)!.cwd, realpathSync(join(TIMON_HOME, 'workspace')));
+      assert.equal(getAgent(name)!.cwd, realpathSync(ONBOARDING_WORKSPACE_DIR));
+      assert.notEqual(getAgent(name)!.cwd, realpathSync(WORKSPACE_DIR));
       assert.notEqual(getAgent(name)!.cwd, homedir());
     }
+    assert.equal(ONBOARDING_WORKSPACE_DIR, join(WORKSPACE_DIR, 'home'));
+  } finally { host.bin = original; }
+});
+
+test('with a workspacesRoot the team works in that folder, as before', () => {
+  reset(); seedDefaultAgent();
+  const root = join(TIMON_HOME, 'chosen-root');
+  writeFileSync(CONFIG_FILE, JSON.stringify({ workspacesRoot: root }));
+  const host = getHost();
+  const original = host.bin;
+  host.bin = ((name: string) => { if (name === 'codex') return '/test/codex'; throw new Error('absent'); }) as typeof host.bin;
+  try {
+    applyTeam('team');
+    for (const name of ['assistant', 'researcher', 'writer', 'developer']) assert.equal(getAgent(name)!.cwd, realpathSync(root));
   } finally { host.bin = original; }
 });
 
