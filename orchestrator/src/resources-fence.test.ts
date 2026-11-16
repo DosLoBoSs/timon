@@ -296,6 +296,24 @@ test('the agent\'s package cache is made before the policy, granted, and handed 
   assert.ok(!fence.policies[0]?.rw.some((p) => p === join(TH, 'provider-cache') || p === join(TH, 'provider-cache', '.agents')));
 });
 
+test('the release the daemon runs from reaches the policy, readable and executable', () => {
+  const release = join(TH, 'desktop-runtime', 'releases', '9.9.9');
+  const node = join(release, 'resources', 'node', 'node');
+  mkdirSync(join(release, 'resources', 'node'), { recursive: true });
+  mkdirSync(join(TH, 'desktop-runtime', 'releases', '9.9.8'), { recursive: true });
+  writeFileSync(node, '');
+  const fence = fakeFence({ available: true });
+  fenceMissionCommand('/usr/bin/claude', [], 'unit-7', { ...TARGET, runtime: [node] }, { mode: 'auto', fence, warn: () => {} });
+  const policy = fence.policies[0];
+  assert.ok(policy?.ro.includes(release) && policy.exec.includes(release));
+  assert.ok(!policy.rw.some((p) => p.startsWith(join(TH, 'desktop-runtime'))));
+  assert.ok(![...policy.ro, ...policy.exec].includes(join(TH, 'desktop-runtime', 'releases', '9.9.8')));
+  // Unnamed, the daemon's own paths are used: here, a Node and a checkout outside the Timon home.
+  const bare = fakeFence({ available: true });
+  fenceMissionCommand('/usr/bin/claude', [], 'unit-8', TARGET, { mode: 'auto', fence: bare, warn: () => {} });
+  assert.ok(!bare.policies[0]?.ro.some((p) => p.startsWith(join(TH, 'desktop-runtime'))));
+});
+
 test('a name alone never creates an agent folder, nor a package cache', () => {
   const launch = fenceMissionCommand('/usr/bin/claude', [], 'unit-5', { ...TARGET, agent: 'nobody' }, { mode: 'auto', fence: fakeFence({ available: true }), warn: () => {} });
   assert.equal(existsSync(join(TH, 'agents', 'nobody')), false);

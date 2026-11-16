@@ -8,12 +8,14 @@ import '../test-home.js';
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync, copyFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, posix } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TimonConfigSchema } from '../config/schema.js';
-import { FENCE_POLICY_HEADER, findFenceBinary, probeFence, type FencePolicy as LauncherPolicy, type FenceStatus } from './fence.js';
+import { FENCE_EXIT, FENCE_POLICY_HEADER, findFenceBinary, probeFence, type FencePolicy as LauncherPolicy, type FenceStatus } from './fence.js';
 import { fenceAccess, resolveFence, type FencePolicy } from './isolation.js';
 import {
   createLandlockFence, LANDLOCK_FS, LandlockRenderError, landlockProbe, renderLandlockPolicy,
@@ -186,6 +188,35 @@ test('the write list and the read-only list of the configuration are rendered to
   assertFaithful(policy, rules, FAKE.paths);
 });
 
+test('the release the daemon runs from becomes one read-only rule, the other releases none', () => {
+  const releases = `${TH}/desktop-runtime/releases`;
+  const withRuntime = tree({
+    '/': ['usr', 'tmp', 'dev', 'home'],
+    '/home': ['u'],
+    [HOME]: ['.timon'],
+    [TH]: ['daemon-token', 'worktrees', 'desktop-runtime'],
+    [`${TH}/worktrees`]: ['task-1'],
+    [`${TH}/desktop-runtime`]: ['releases', 'active-release'],
+    [releases]: ['9.9.9', '9.9.8'],
+    [`${releases}/9.9.9`]: ['resources'],
+    [`${releases}/9.9.9/resources`]: ['node', 'orchestrator'],
+    [`${releases}/9.9.9/resources/node`]: ['node'],
+    [`${releases}/9.9.8`]: ['resources'],
+  });
+  const policy = resolveFence(cfg(), {
+    timonHome: TH, home: HOME, platform: 'linux', cwd: `${TH}/worktrees/task-1`, missionId: MISSION,
+    realpath: withRuntime.realpath, runtime: [`${releases}/9.9.9/resources/node/node`, `${releases}/9.9.9/resources/orchestrator`],
+  });
+  const rules = renderLandlockPolicy(policy, withRuntime);
+  assertFaithful(policy, rules, withRuntime.paths);
+  // Read-only under Landlock carries execute.
+  assert.ok(rules.readOnly.includes(`${releases}/9.9.9`));
+  assert.ok(![...rules.readWrite].some((path) => path.startsWith(`${TH}/desktop-runtime`)));
+  for (const path of [`${releases}/9.9.8/resources`, releases, `${TH}/desktop-runtime/active-release`, `${TH}/daemon-token`]) {
+    assert.equal(landlockLevel(rules, path), 'none', path);
+  }
+});
+
 test('a policy needing more rules than the ceiling is refused, not truncated', () => {
   assert.throws(() => renderLandlockPolicy(fakePolicy(), { ...FAKE, maxRules: 5 }), LandlockRenderError);
   assert.throws(() => renderLandlockPolicy(resolveFence(cfg({ filesystem: 'off' }), { timonHome: TH }), FAKE), /off/);
@@ -341,4 +372,61 @@ test('a mission under the rendered policy reaches its own folders and nothing pr
   for (const allowed of ['readOwnSoul', 'writeOwnMemory', 'readHomeFile', 'writeWorktree', 'writeTmp', 'writeGitDir', 'runSystemBinary']) {
     assert.equal(out[allowed], 'ok', allowed);
   }
+});
+
+const RELEASE_SCRIPT = String.raw`
+const fs = require('node:fs'), path = require('node:path');
+const [RELEASE, OTHER] = process.argv.slice(2);
+const out = { node: process.execPath };
+const t = (name, fn) => { try { fn(); out[name] = 'ok'; } catch (e) { out[name] = e.code || String(e.message); } };
+t('writeRelease', () => fs.writeFileSync(path.join(RELEASE, 'resources', 'orchestrator', 'bin', 'planted.mjs'), 'x'));
+t('readOtherRelease', () => fs.readFileSync(path.join(OTHER, 'resources', 'orchestrator', 'bin', 'timon-mcp.mjs')));
+process.stdout.write(JSON.stringify(out));
+`;
+
+test('a Node copied into the running release starts a script of that release inside the fence', { skip }, async () => {
+  const runtime = process.env.XDG_RUNTIME_DIR;
+  const base = runtime && existsSync(runtime) ? runtime : tmpdir();
+  const root = realpathSync(mkdtempSync(join(base, 'landlock-release-')));
+  after(() => rmSync(root, { recursive: true, force: true }));
+  const home = join(root, 'home');
+  const th = join(home, '.timon');
+  const worktree = join(th, 'worktrees', 'm1');
+  const release = join(th, 'desktop-runtime', 'releases', '9.9.9');
+  const other = join(th, 'desktop-runtime', 'releases', '9.9.8');
+  const node = join(release, 'resources', 'node', 'node');
+  const script = join(release, 'resources', 'orchestrator', 'bin', 'probe.cjs');
+  for (const dir of [worktree, dirname(node), dirname(script), join(other, 'resources', 'orchestrator', 'bin')]) mkdirSync(dir, { recursive: true });
+  // A hard link costs nothing when the test folder shares the disk of the Node running the tests.
+  const source = realpathSync(process.execPath);
+  try { linkSync(source, node); } catch { copyFileSync(source, node); }
+  chmodSync(node, 0o755);
+  writeFileSync(script, RELEASE_SCRIPT);
+  writeFileSync(join(other, 'resources', 'orchestrator', 'bin', 'timon-mcp.mjs'), '// other release');
+
+  const fence = createLandlockFence({ status: () => ({ state: 'ready', binary: FENCE as string, abi: PROBE?.abi ?? 0, seccomp: true }), fs: LANDLOCK_FS });
+  assert.equal(fence.probe().available, true);
+  const run = async (runtimePaths: string[] | undefined) => {
+    const policy = resolveFence(cfg({ readOnly: [home] }), {
+      timonHome: th, home, platform: 'linux', cwd: worktree, missionId: MISSION, runtime: runtimePaths,
+    });
+    const launch = fence.wrap(policy, node, [script, release, other], join(th, 'run', 'fence', 'release.policy'));
+    const child = spawn(launch.cmd, launch.args, { cwd: worktree, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8'); });
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+    const code = await new Promise<number | null>((resolve) => child.on('close', resolve));
+    return { code, stdout, stderr };
+  };
+
+  // Without the grant, the launcher cannot even exec the release's Node: the 0.1.8 failure.
+  const refused = await run(undefined);
+  assert.equal(refused.code, FENCE_EXIT.execFailed);
+  assert.match(refused.stderr, /cannot execute .*Permission denied/);
+  assert.equal(refused.stdout, '');
+
+  const granted = await run([node, join(release, 'resources', 'orchestrator')]);
+  assert.equal(granted.code, 0, granted.stderr);
+  assert.deepEqual(JSON.parse(granted.stdout), { node, writeRelease: 'EACCES', readOtherRelease: 'EACCES' });
 });
