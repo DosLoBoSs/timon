@@ -33,7 +33,7 @@ Secrets and backend sign-ins are not in the archive: reconnect your backends and
 
 ## Know when a new version is out
 
-Timon checks whether a newer version is published for its channel: at startup, then every 6 hours. A beta build is offered release candidates as well as final versions; a stable build is offered final versions only, and never a version older than or equal to the one you run.
+Timon checks whether a newer version is published for its channel: at startup, then every 6 hours. A check that fails, because the site cannot be reached for instance, is tried again after 15 minutes, then after 1 hour, and so on up to the 6 hours. Opening the desktop app also checks again when the last successful check is more than 30 minutes old. A beta build is offered release candidates as well as final versions; a stable build is offered final versions only, and never a version older than or equal to the one you run.
 
 When one is out, a card at the bottom left of the app says **Timon x.y.z is available**, with one button, **Update**. Its **×** puts it off: that version is not announced again, on any device of your account, and the next one is.
 
