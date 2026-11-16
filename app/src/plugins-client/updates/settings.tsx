@@ -24,7 +24,7 @@ import { formatRelativeTime } from '@/lib/intl';
 import { t } from '@/lib/i18n';
 import { openUpdateDialog, useUpdateDialogProvided } from '@/lib/update-open';
 import {
-  manualInstallerUrl, NOTICES_SETTING, noticesSettingValue, noticesSwitchView, releaseNotesUrl, settingLockedBy,
+  manualInstallerLink, NOTICES_SETTING, noticesSettingValue, noticesSwitchView, releaseNotesUrl, settingLockedBy,
   updateRowView, type UpdateRowStatus,
 } from '@/lib/update-settings';
 import { checkForUpdatesNow, loadUpdateStatus, useUpdateStore } from '@/lib/updates';
@@ -88,7 +88,7 @@ export function UpdatesSettings(): ReactElement {
   const { status } = store;
   const view = updateRowView({ status, checking: store.checking, checkFailed, canWrite });
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
-  const installerUrl = manualInstallerUrl(status, userAgent);
+  const installer = manualInstallerLink(status, userAgent);
 
   const loadNotices = useCallback(async () => {
     try {
@@ -144,7 +144,7 @@ export function UpdatesSettings(): ReactElement {
       </Button>
     ) : (
       <Button asChild size="sm" className="h-8 gap-1.5">
-        <a href={installerUrl} target="_blank" rel="noopener noreferrer" data-update-settings-action="update">
+        <a href={installer.href} target="_blank" rel="noopener noreferrer" data-update-settings-action="update">
           <ArrowUpCircle className="size-3.5" aria-hidden />
           {t('updates.settings.update')}
         </a>
@@ -178,8 +178,8 @@ export function UpdatesSettings(): ReactElement {
         </a>
       </DropdownMenuItem>
       <DropdownMenuItem asChild>
-        <a href={installerUrl} target="_blank" rel="noopener noreferrer" data-update-settings-download="">
-          {t('updates.settings.download')}<ExternalLink className="ml-auto size-3" aria-hidden />
+        <a href={installer.href} target="_blank" rel="noopener noreferrer" data-update-settings-download="">
+          {t(installer.forThisSystem ? 'updates.settings.download' : 'updates.settings.allInstallers')}<ExternalLink className="ml-auto size-3" aria-hidden />
         </a>
       </DropdownMenuItem>
       {canWrite && status && status.state !== 'dev' ? (

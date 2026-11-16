@@ -37,7 +37,7 @@ Timon checks whether a newer version is published for its channel: at startup, t
 
 When one is out, a card at the bottom left of the app says **Timon x.y.z is available**, with one button, **Update**. Its **×** puts it off: that version is not announced again, on any device of your account, and the next one is.
 
-**Update** opens the update window: **Timon x.y.z** and its release date, the release's highlights, and **See the full changelog**. Below them, in a browser, **Download the installer** downloads the installer for the system you are using (`.pkg` on macOS, AppImage on Linux, the setup program on Windows; on a phone, the release notes).
+**Update** opens the update window: **Timon x.y.z** and its release date, the release's highlights, and **See the full changelog**. Below them, in a browser, **Download the installer** downloads the installer for the system you are using (`.pkg` on macOS, AppImage on Linux, the setup program on Windows). On a phone, or a system with no installer published, it reads **All installers** and opens the page that lists them.
 
 The new version also appears in the notification centre, once per version. Installing what you downloaded follows [Apply the update](#apply-the-update) below; the app installs nothing until you click **Install**.
 

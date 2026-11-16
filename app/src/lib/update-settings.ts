@@ -9,7 +9,7 @@
  * back on.
  */
 import { BRAND } from './brand';
-import { clientOs, installersFor, type UpdateStatus } from './updates';
+import { clientOs, installersFor, type UpdateArtifact, type UpdateStatus } from './updates';
 
 export type UpdateRowAction = 'check' | 'retry' | 'checking' | 'update' | 'none';
 
@@ -76,14 +76,23 @@ export function releaseNotesUrl(status: UpdateStatus | null): string {
 }
 
 /**
- * The installer the menu links for a download by hand (a browser, a server
- * without a window): the offered version's for this browser's system, else the
- * install page.
+ * Where a version is fetched by hand (a browser, a window on another machine):
+ * the installer of this system, else the install page that lists them all —
+ * never the release notes, which install nothing. The one answer the update
+ * card, the update window and Settings › System › Updates share; its label
+ * follows `forThisSystem`.
  */
-export function manualInstallerUrl(status: UpdateStatus | null, userAgent: string): string {
+export type InstallerLink = { href: string; forThisSystem: boolean };
+
+export function installerLink(installers: readonly UpdateArtifact[]): InstallerLink {
+  const first = installers[0];
+  return first ? { href: first.url, forThisSystem: true } : { href: INSTALL_PAGE_URL, forThisSystem: false };
+}
+
+/** The link the menu offers, from the daemon's status and this browser's system. */
+export function manualInstallerLink(status: UpdateStatus | null, userAgent: string): InstallerLink {
   const offer = status?.state === 'available' ? status.available : null;
-  if (!offer || !status) return INSTALL_PAGE_URL;
-  return installersFor(offer, clientOs(userAgent), status.host)[0]?.url ?? INSTALL_PAGE_URL;
+  return installerLink(offer && status ? installersFor(offer, clientOs(userAgent), status.host) : []);
 }
 
 /** `PUT /api/ui/settings` answers the resolved setting: env and config win over a value written here. */

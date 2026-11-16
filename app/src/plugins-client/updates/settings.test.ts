@@ -172,6 +172,25 @@ test('a newer version: "Update" opens the shared update flow, else links the ins
   }
 });
 
+test('the menu names the link by where it goes: this system\'s installer, else every installer', async () => {
+  const download = () => document.querySelector('[data-update-settings-download]');
+  for (const [status, state, label, href] of [
+    [OFFER, 'available', 'Download the installer', 'https://example.com/Timon.AppImage'],
+    [UP_TO_DATE, 'upToDate', 'All installers', 'https://timon-ai.com/install'],
+  ] as const) {
+    const m = await mount({ status, canWrite: false });
+    try {
+      await m.until(() => row()?.getAttribute('data-update-settings') === state, 'the status');
+      await m.openMenu();
+      await m.until(() => download() !== null, 'the menu');
+      assert.equal(download()?.textContent, label);
+      assert.equal(download()?.getAttribute('href'), href);
+    } finally {
+      await m.unmount();
+    }
+  }
+});
+
 test('"Announcements" in the menu: a switch that writes TIMON_NOTICES_CHECK', async () => {
   const m = await mount({ status: UP_TO_DATE, canWrite: true, notices: false });
   try {
