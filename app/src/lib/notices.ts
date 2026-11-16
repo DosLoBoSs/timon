@@ -22,6 +22,14 @@ import { useMemo, useSyncExternalStore } from 'react';
 export type NoticeTone = 'info' | 'warning' | 'success';
 
 /**
+ * A brand logo the card draws in place of the tone's icon. A closed list of
+ * logos the app carries itself: a plugin or the signed feed names one, never
+ * an address, so a card cannot make the app load an image.
+ */
+export type NoticeIcon = 'github' | 'discord' | 'timon' | 'x' | 'youtube';
+export const NOTICE_ICONS: readonly NoticeIcon[] = ['github', 'discord', 'timon', 'x', 'youtube'];
+
+/**
  * One button of a card. `href`: a page of the app (`/settings`) or an
  * `https:` / `http:` address, opened in a new window. `dismiss`: the click
  * also closes the card for good, as its × does.
@@ -33,10 +41,11 @@ export type NoticeAction = {
   dismiss?: boolean;
 };
 
-/** What a plugin pushes. `tone` defaults to `info`, `dismissible` to `true`. */
+/** What a plugin pushes. `tone` defaults to `info`, `dismissible` to `true`; no `icon`: the tone's. */
 export type NoticeInput = {
   id: string;
   tone?: NoticeTone;
+  icon?: NoticeIcon;
   title: string;
   body?: string;
   actions?: readonly NoticeAction[];
@@ -48,6 +57,7 @@ export type Notice = {
   id: string;
   pluginId: string;
   tone: NoticeTone;
+  icon: NoticeIcon | null;
   title: string;
   body: string | null;
   actions: readonly NoticeAction[];
@@ -100,6 +110,7 @@ export function noticeProblem(input: unknown): string | null {
   const n = input as Record<string, unknown>;
   if (typeof n.id !== 'string' || !NOTICE_ID_RE.test(n.id)) return '`id` must be 1-96 letters, digits, `.`, `_`, `:` or `-`';
   if (n.tone !== undefined && !TONES.includes(n.tone as NoticeTone)) return '`tone` must be info, warning or success';
+  if (n.icon !== undefined && !NOTICE_ICONS.includes(n.icon as NoticeIcon)) return `\`icon\` must be one of ${NOTICE_ICONS.join(', ')}`;
   if (typeof n.title !== 'string' || !n.title.trim() || n.title.length > NOTICE_TITLE_MAX) return `\`title\` must be 1-${NOTICE_TITLE_MAX} characters`;
   if (n.body !== undefined && (typeof n.body !== 'string' || n.body.length > NOTICE_BODY_MAX)) return `\`body\` must be at most ${NOTICE_BODY_MAX} characters`;
   if (n.dismissible !== undefined && typeof n.dismissible !== 'boolean') return '`dismissible` must be a boolean';
@@ -132,6 +143,7 @@ export function pushNotice(pluginId: string, origin: string, input: NoticeInput)
     id: input.id,
     pluginId,
     tone: input.tone ?? 'info',
+    icon: input.icon ?? null,
     title: input.title,
     body: input.body?.trim() ? input.body : null,
     actions: (input.actions ?? []).map((a) => ({ ...a })),
@@ -158,7 +170,7 @@ export function clearNoticesFrom(origin: string): void {
 
 function strip(entry: Entry): Notice {
   return {
-    id: entry.id, pluginId: entry.pluginId, tone: entry.tone, title: entry.title, body: entry.body,
+    id: entry.id, pluginId: entry.pluginId, tone: entry.tone, icon: entry.icon, title: entry.title, body: entry.body,
     actions: entry.actions, dismissible: entry.dismissible,
   };
 }
