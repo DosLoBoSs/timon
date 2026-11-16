@@ -4,7 +4,7 @@ import { useMemo, useSyncExternalStore, type ComponentType, type ReactNode } fro
 
 import { cn } from '@/lib/utils';
 import { Tile } from '@/components/tile';
-import { zoneDefautDuSlot } from '@/components/cockpit/cockpit-zones';
+import { defaultZoneForSlot } from '@/components/cockpit/cockpit-zones';
 import type { WidgetProps } from './widget-props';
 import { PluginBoundary } from '@/lib/plugin-host/plugin-boundary';
 import { slotNature } from '@/lib/plugin-host/slot-compat';
@@ -115,7 +115,7 @@ export function useWidgetCatalog(): Catalogue {
     const entrees = catalogueWidgets(
       [],
       inscriptions.map((i) => i.entree),
-      zoneDefautDuSlot,
+      defaultZoneForSlot,
     );
     const composants = new Map(inscriptions.map((i) => [i.composant.id, i.composant]));
 

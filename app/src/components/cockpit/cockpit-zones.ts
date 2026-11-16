@@ -12,8 +12,8 @@
 import type { ZoneId } from '@/components/widget-host/widget-layout';
 
 export const COCKPIT_SLOT = 'cockpit.widget';
-export const COCKPIT_RAIL_GAUCHE: ZoneId = 'gauche';
-export const COCKPIT_RAIL_DROITE: ZoneId = 'droite';
+export const COCKPIT_LEFT_RAIL: ZoneId = 'gauche';
+export const COCKPIT_RIGHT_RAIL: ZoneId = 'droite';
 /**
  * The centre, third zone of the same slot.
  *
@@ -22,9 +22,9 @@ export const COCKPIT_RAIL_DROITE: ZoneId = 'droite';
  * anyone: it is a zone like the rails, where the user puts the widget they
  * want, starting with an instance of `@timon/agent-chat`.
  */
-export const COCKPIT_CENTRE: ZoneId = 'centre';
+export const COCKPIT_CENTER: ZoneId = 'centre';
 
 /** The zone a widget lands in the first time, from the slot it occupies. */
-export function zoneDefautDuSlot(slot: string): ZoneId {
-  return slot === COCKPIT_SLOT ? COCKPIT_RAIL_GAUCHE : slot;
+export function defaultZoneForSlot(slot: string): ZoneId {
+  return slot === COCKPIT_SLOT ? COCKPIT_LEFT_RAIL : slot;
 }

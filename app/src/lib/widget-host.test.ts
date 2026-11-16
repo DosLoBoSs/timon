@@ -35,7 +35,7 @@ import {
   type EntreeCatalogue,
   type EntreeSlotWidget,
 } from '../components/widget-host/widget-catalog';
-import { zoneDefautDuSlot } from '../components/cockpit/cockpit-zones';
+import { defaultZoneForSlot } from '../components/cockpit/cockpit-zones';
 import { loadLayout, saveLayout } from './ui-layout-store';
 import { isZoneVisible, type Capabilities } from './capabilities';
 
@@ -412,7 +412,7 @@ function inscription(
 }
 
 test('a slot entry becomes a catalogue entry, placed after the native ones', () => {
-  const catalogue = catalogueWidgets(NATIFS, [inscription('example-widget')], zoneDefautDuSlot);
+  const catalogue = catalogueWidgets(NATIFS, [inscription('example-widget')], defaultZoneForSlot);
   const ajoute = catalogue.at(-1);
 
   assert.equal(catalogue.length, NATIFS.length + 1);
@@ -436,7 +436,7 @@ test('the palette can tell two homonymous widgets apart by their surface', () =>
   const [cockpit, chat] = catalogueWidgets([], [
     { ...inscription('@timon/missions', 'cockpit.widget', 'recent'), options: { title: 'Missions' } },
     { ...inscription('@timon/missions', 'chat.left.widget', 'Missions', 2), options: { title: 'Missions' } },
-  ], zoneDefautDuSlot);
+  ], defaultZoneForSlot);
 
   assert.ok(cockpit && chat);
   assert.equal(cockpit.titre, chat.titre);
@@ -464,7 +464,7 @@ test('an unknown slot shows itself, a native widget shows no plugin', () => {
 });
 
 test('a widget slot other than the cockpit names its own zone', () => {
-  const [entree] = catalogueWidgets([], [inscription('p', 'sidebar.right.widget')], zoneDefautDuSlot);
+  const [entree] = catalogueWidgets([], [inscription('p', 'sidebar.right.widget')], defaultZoneForSlot);
   assert.equal(entree?.railDefaut, 'sidebar.right.widget');
 });
 
@@ -504,7 +504,7 @@ test('a registration declares its title, its heights and its first zone', () => 
   const [entree] = catalogueWidgets([], [{
     ...inscription('vault', 'cockpit.widget', 'vault-graph'),
     options: { title: 'Vault', zone: 'droite', height: 420, minHeight: 200 },
-  }], zoneDefautDuSlot);
+  }], defaultZoneForSlot);
 
   assert.equal(entree?.titre, 'Vault');
   assert.equal(entree?.railDefaut, 'droite');
@@ -513,7 +513,7 @@ test('a registration declares its title, its heights and its first zone', () => 
 });
 
 test('a plugin widget places, moves and is taken out like a native one', () => {
-  const catalogue = catalogueWidgets(NATIFS, [inscription('acme')], zoneDefautDuSlot);
+  const catalogue = catalogueWidgets(NATIFS, [inscription('acme')], defaultZoneForSlot);
   const id = 'plugin:acme';
   const pose = fusionnerLayout(null, catalogue);
   assert.deepEqual(placement(pose), ['gauche:a', 'gauche:b', 'gauche:c', `gauche:${id}`, 'droite:d']);
@@ -536,7 +536,7 @@ test('a stored placement waits for a plugin that has not registered yet', () => 
     { id: 'a', rail: 'droite', rang: 0, hauteur: 200 },
     { id: 'plugin:acme', rail: 'droite', rang: 1, hauteur: 300 },
   ];
-  const sansPlugin = catalogueWidgets(NATIFS, [], zoneDefautDuSlot);
+  const sansPlugin = catalogueWidgets(NATIFS, [], defaultZoneForSlot);
 
   assert.equal(fusionnerLayout(stocke, sansPlugin).some((w) => w.id === 'plugin:acme'), false);
   assert.deepEqual(orphelins(stocke, sansPlugin).map((w) => w.id), ['plugin:acme']);
@@ -548,7 +548,7 @@ test('a stored placement waits for a plugin that has not registered yet', () => 
   ];
 
   // Le plugin s'enregistre enfin : sa place et sa hauteur sont intactes.
-  const avecPlugin = catalogueWidgets(NATIFS, [inscription('acme')], zoneDefautDuSlot);
+  const avecPlugin = catalogueWidgets(NATIFS, [inscription('acme')], defaultZoneForSlot);
   const revenu = fusionnerLayout(ecrit, avecPlugin).find((w) => w.id === 'plugin:acme');
   assert.equal(revenu?.rail, 'droite');
   assert.equal(revenu?.hauteur, 300);
@@ -556,7 +556,7 @@ test('a stored placement waits for a plugin that has not registered yet', () => 
 });
 
 test('an entry the catalogue claims is never an orphan, and a corrupt one is dropped', () => {
-  const catalogue = catalogueWidgets(NATIFS, [], zoneDefautDuSlot);
+  const catalogue = catalogueWidgets(NATIFS, [], defaultZoneForSlot);
   const stocke = [
     { id: 'a', rail: 'gauche', rang: 0, hauteur: 200 },
     { id: 'plugin:x', rail: 'gauche', rang: 1 },

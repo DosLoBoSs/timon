@@ -17,7 +17,7 @@
  * `timon export`, exactly like the placement it is meaningless without.
  */
 
-import { COCKPIT_CENTRE } from '@/components/cockpit/cockpit-zones';
+import { COCKPIT_CENTER } from '@/components/cockpit/cockpit-zones';
 import { MAIN_AGENT_CARD_ID } from '@/lib/main-agent-card';
 import { mainAgentOf, type MainAgentCandidate } from '@/lib/main-agent';
 import { loadLayout, saveLayout } from '@/lib/ui-layout-store';
@@ -72,7 +72,7 @@ export type AgentChatInstance = {
  * agent or deleting it writes the list and the seed never comes back.
  */
 export function grainePourAgent(agent: string): AgentChatInstance {
-  return { id: MAIN_AGENT_CARD_ID, agent, title: '', avatar: '', zone: COCKPIT_CENTRE, subAgents: [] };
+  return { id: MAIN_AGENT_CARD_ID, agent, title: '', avatar: '', zone: COCKPIT_CENTER, subAgents: [] };
 }
 
 /** Summary of an installed agent, as `/api/agents` gives it. */

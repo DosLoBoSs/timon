@@ -8,7 +8,7 @@ import { mountBundledClients } from '@/plugins-client/mount';
 import { UI_LAYOUT_MODULE } from '@/plugins-client/ui-layout';
 import { catalogueWidgets, type EntreeSlotWidget } from '../components/widget-host/widget-catalog';
 import { fusionnerLayout, orphelins, widgetsDuRail, type WidgetLayout } from '../components/widget-host/widget-layout';
-import { zoneDefautDuSlot } from '../components/cockpit/cockpit-zones';
+import { defaultZoneForSlot } from '../components/cockpit/cockpit-zones';
 import { mergeWorkspaceWidgets } from '../components/widget-host/widget-defaults';
 import { NAV_SECONDARY_ORDER } from '@/plugins-client/nav';
 import {
@@ -121,7 +121,7 @@ function catalogueDesTuiles() {
     slot: 'cockpit.widget',
     options: e.widget,
   }));
-  return catalogueWidgets([], entrees, zoneDefautDuSlot);
+  return catalogueWidgets([], entrees, defaultZoneForSlot);
 }
 
 test('the cockpit cards keep their placement id, title, rail and heights', () => {

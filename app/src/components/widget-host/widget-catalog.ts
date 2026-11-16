@@ -97,7 +97,7 @@ function formerIdsOf(pluginId: string, options: WidgetOptions | undefined): stri
  * Natives come first and keep their default ranks; plugin widgets are added
  * after them, in the order the registry reports them.
  *
- * `zoneDefautDuSlot` translates a slot into a first-placement zone. It is
+ * `defaultZoneForSlot` translates a slot into a first-placement zone. It is
  * injected, as `estAffichable` is into `widgetsAdmisParConfig`: the only known
  * exception is the cockpit, whose two rails share the `cockpit.widget` slot
  * (see `widget-dnd.ts`), and that knowledge belongs to the cockpit, not to the
@@ -108,7 +108,7 @@ function formerIdsOf(pluginId: string, options: WidgetOptions | undefined): stri
 export function catalogueWidgets(
   natifs: readonly EntreeCatalogue[],
   entrees: readonly EntreeSlotWidget[],
-  zoneDefautDuSlot: (slot: string) => ZoneId = (slot) => slot,
+  defaultZoneForSlot: (slot: string) => ZoneId = (slot) => slot,
 ): EntreeCatalogue[] {
   const catalogue = [...natifs];
   const vus = new Set(catalogue.map((e) => e.id));
@@ -142,7 +142,7 @@ export function catalogueWidgets(
       // cannot give it when two zones share it (the cockpit rails). Nothing checks
       // it here: the model does not know which zones are mounted, and a missing
       // zone simply leaves the card waiting for it.
-      railDefaut: options?.zone ?? zoneDefautDuSlot(entree.slot),
+      railDefaut: options?.zone ?? defaultZoneForSlot(entree.slot),
       rangDefaut: catalogue.length,
     });
   }

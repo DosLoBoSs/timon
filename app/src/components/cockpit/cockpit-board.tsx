@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { COCKPIT_CENTRE, COCKPIT_RAIL_DROITE, COCKPIT_RAIL_GAUCHE, COCKPIT_SLOT } from './cockpit-zones';
+import { COCKPIT_CENTER, COCKPIT_RIGHT_RAIL, COCKPIT_LEFT_RAIL, COCKPIT_SLOT } from './cockpit-zones';
 import { WidgetZone } from '@/components/widget-host/widget-zone';
 import { t } from '@/lib/i18n';
 
@@ -48,7 +48,7 @@ export function CockpitBoard() {
           aria-label={t('cockpit.board.centerZone')}
         >
           <WidgetZone
-            zone={COCKPIT_CENTRE}
+            zone={COCKPIT_CENTER}
             slot={RAIL_SLOT}
             label={t('cockpit.board.centerZone')}
             className={CENTRE_CLASSES}
@@ -60,13 +60,13 @@ export function CockpitBoard() {
             siblings of the central pane, as before. */}
         <div className="order-2 flex h-full w-full shrink-0 snap-start flex-col gap-3 overflow-y-auto overscroll-contain p-2 md:contents">
           <WidgetZone
-            zone={COCKPIT_RAIL_GAUCHE}
+            zone={COCKPIT_LEFT_RAIL}
             slot={RAIL_SLOT}
             label={t('cockpit.board.leftRail')}
             className={cn(RAIL_BASE, 'md:order-1 md:w-[min(26vw,320px)]')}
           />
           <WidgetZone
-            zone={COCKPIT_RAIL_DROITE}
+            zone={COCKPIT_RIGHT_RAIL}
             slot={RAIL_SLOT}
             label={t('cockpit.board.rightRail')}
             className={cn(RAIL_BASE, 'md:order-3 md:w-[min(27vw,340px)]')}
