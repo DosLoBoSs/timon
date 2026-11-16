@@ -4,12 +4,15 @@
  * refused by the engine — malformed, forged, stale, replayed with a changed
  * header. Official vectors of each service live in `webhook-formats.test.ts`.
  */
+import '../test-home.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, createHmac, generateKeyPairSync, sign } from 'node:crypto';
 import {
   WebhookSchemeSchema, handshakeReply, invalidSecret, proofHeaders, schemeLevel, verifyWithScheme, type WebhookScheme,
 } from './webhook-schemes.js';
+import { pluginPatternAlertsSettled } from '../bounded-regex.js';
+import { dbApi } from '../db.js';
 
 const NOW = 1_800_000_000_000;
 const SECRET = 'a-shared-secret-of-32-characters';
@@ -20,6 +23,7 @@ function scheme(raw: Record<string, unknown>): WebhookScheme {
   return parsed.data;
 }
 const secretRule = { sources: ['provided'], minLength: 16 };
+const OWNER = { pluginId: 'acme-hooks', format: 'standard' };
 const github = scheme({
   kind: 'hmac', algorithm: 'sha256', encoding: 'hex',
   signature: { format: 'single', header: 'x-sig', prefix: 'sha256=' },
@@ -202,9 +206,9 @@ test('ed25519: RFC 8032 test 1, then a timestamped signature with a strict encod
   assert.equal(verifyWithScheme(discordLike, pubHex, body, { 'x-ed': sig, 'x-ed-ts': String(Number(t) + 1) }, NOW).ok, false);
   assert.equal(verifyWithScheme(discordLike, pubHex, body, { 'x-ed': `${sig}00`, 'x-ed-ts': t }, NOW).ok, false);
   assert.deepEqual(verifyWithScheme(discordLike, pubHex, body, { 'x-ed': sig, 'x-ed-ts': t }, NOW + 600_000), { ok: false, reason: 'stale_timestamp' });
-  assert.equal(invalidSecret(discordLike, pubHex), null);
-  assert.notEqual(invalidSecret(discordLike, pubHex.slice(2)), null);
-  assert.notEqual(invalidSecret(discordLike, 'z'.repeat(64)), null);
+  assert.equal(invalidSecret(discordLike, pubHex, OWNER), null);
+  assert.notEqual(invalidSecret(discordLike, pubHex.slice(2), OWNER), null);
+  assert.notEqual(invalidSecret(discordLike, 'z'.repeat(64), OWNER), null);
 });
 
 test('json timestamp: read from the signed body, in its declared unit and window', () => {
@@ -225,17 +229,54 @@ test('json timestamp: read from the signed body, in its declared unit and window
 
 test('secrets: floor, pattern, no whitespace; the reason never repeats the value', () => {
   const withPattern = scheme({ ...github, secret: { sources: ['provided'], minLength: 20, pattern: '^whsec_' } });
-  assert.match(invalidSecret(withPattern, 'whsec_short') ?? '', /too short/);
-  assert.match(invalidSecret(withPattern, 'not-a-stripe-secret-at-all') ?? '', /does not look/);
-  assert.match(invalidSecret(withPattern, 'whsec_with a space inside it') ?? '', /spaces/);
-  assert.equal(invalidSecret(withPattern, 'whsec_abcdefghijklmnopqrstuvwxyz'), null);
-  const reason = invalidSecret(withPattern, 'my-leaked-value-123456');
+  assert.match(invalidSecret(withPattern, 'whsec_short', OWNER) ?? '', /too short/);
+  assert.match(invalidSecret(withPattern, 'not-a-stripe-secret-at-all', OWNER) ?? '', /does not look/);
+  assert.match(invalidSecret(withPattern, 'whsec_with a space inside it', OWNER) ?? '', /spaces/);
+  assert.equal(invalidSecret(withPattern, 'whsec_abcdefghijklmnopqrstuvwxyz', OWNER), null);
+  const reason = invalidSecret(withPattern, 'my-leaked-value-123456', OWNER);
   assert.ok(reason && !reason.includes('my-leaked-value'));
 });
 
-test('secrets: a declared pattern that backtracks out of control refuses the paste instead of freezing the daemon', () => {
+const alertsOf = (pluginId: string) => dbApi.listActiveNotifications('alert').filter((n) => n.source === `plugin:${pluginId}`);
+
+test('secrets: a declared pattern that backtracks out of control is skipped, alerted once, and not run again (TODO #1003)', async () => {
+  const owner = { pluginId: 'acme-slow-secret', format: 'standard' };
   const slow = scheme({ ...github, secret: { sources: ['provided'], minLength: 20, pattern: '(.*.*)*!$' } });
-  assert.match(invalidSecret(slow, 'abcdefghijklmnopqrstuvwxyz0123456789') ?? '', /too slow/);
+  assert.equal(invalidSecret(slow, 'abcdefghijklmnopqrstuvwxyz0123456789', owner), null, 'the paste goes on without the shape check');
+  const started = Date.now();
+  assert.equal(invalidSecret(slow, 'abcdefghijklmnopqrstuvwxyz0123456789', owner), null);
+  assert.ok(Date.now() - started < 10_000, 'the second paste does not pay the time limit again');
+  await pluginPatternAlertsSettled();
+  const alerts = alertsOf(owner.pluginId);
+  assert.equal(alerts.length, 1, 'one alert for two pastes');
+  const [alert] = alerts;
+  assert.ok(alert);
+  assert.equal(alert.urgent, 0);
+  assert.match(alert.title, /acme-slow-secret.*webhook secret pattern.*standard/);
+  assert.match(alert.body ?? '', /ran past 250 ms/);
+  assert.equal(`${alert.title} ${alert.body ?? ''}`.includes('abcdefghij'), false, 'the tested value is never written');
+
+  // Proof the pattern is not run again: `x…x` would be refused by `^(a+)+$` in a few microseconds.
+  const anchored = scheme({ ...github, secret: { sources: ['provided'], minLength: 20, pattern: '^(a+)+$' } });
+  const other = { pluginId: 'acme-other-secret', format: 'standard' };
+  assert.equal(invalidSecret(anchored, 'a'.repeat(40) + '!', owner), null, 'timed out: skipped');
+  assert.equal(invalidSecret(anchored, 'x'.repeat(24), owner), null, 'off for this plugin: not evaluated');
+  assert.match(invalidSecret(anchored, 'x'.repeat(24), other) ?? '', /does not look/, 'another plugin still runs its own check');
+  await pluginPatternAlertsSettled();
+  assert.equal(alertsOf(owner.pluginId).length, 2, 'one alert per pattern');
+  assert.equal(alertsOf(other.pluginId).length, 0);
+});
+
+test('secrets: a pattern that is not a regular expression is skipped and alerted once', async () => {
+  const owner = { pluginId: 'acme-broken-secret', format: 'standard' };
+  // Past the schema (which refuses it) the engine must still not throw.
+  const broken = { ...github, secret: { sources: ['provided'], minLength: 20, pattern: '(' } } as WebhookScheme;
+  assert.equal(invalidSecret(broken, 'abcdefghijklmnopqrstuvwxyz', owner), null);
+  assert.equal(invalidSecret(broken, 'abcdefghijklmnopqrstuvwxyz', owner), null);
+  await pluginPatternAlertsSettled();
+  const alerts = alertsOf(owner.pluginId);
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0]?.body ?? '', /not a valid regular expression/);
 });
 
 test('handshakes: an echo or a fixed reply, only for the declared field and value', () => {
