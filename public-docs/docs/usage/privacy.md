@@ -30,6 +30,7 @@ Each event carries the Timon version, whether it is the installed app or Timon r
 - the licence page being viewed and its purchase link being opened, and an account that could not be added because of the licence;
 - whether the previous run of Timon ended normally or not, and how long starting and loading the app took;
 - an AI subscription reaching its usage limit (which provider and which window, for example *5 hours*);
+- an agent moving to its backup AI provider when its own one is unavailable: which provider it left and which one it moved to, nothing else;
 - when an agent asks you a question or a permission: what kind of request, whether it was allowed, refused or expired, and roughly how long it waited — never what it asked;
 - tasks being completed: their kind, roughly how long they took, a review's verdict and whether the work was merged;
 - the first time you reach a step such as your first agent, project or completed task, and how many days ago Timon was installed, in ranges;

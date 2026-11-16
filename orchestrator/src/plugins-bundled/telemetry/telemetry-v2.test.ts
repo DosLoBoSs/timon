@@ -555,3 +555,44 @@ test('collector: a usage kind answer is announced for its account; wizard steps 
   ]);
   for (const [name, props] of emitted) assert.ok(validateEvent(name, props), `${name} passes the catalogue`);
 });
+
+test('collector: a fallback move is reported provider to provider; an account or a custom provider never leaves', async () => {
+  const { TelemetryCollector } = await import('./collector.js');
+  const { builtinProviderIds } = await import('../../backends/builtin-declarations.js');
+  const [first, other] = builtinProviderIds();
+  assert.ok(first && other);
+  const emitted: [string, Record<string, unknown>][] = [];
+  const collector = new TelemetryCollector({ ...noMission, now: () => 0 }, (name, props) => emitted.push([name, props]));
+  collector.handle({ kind: 'backend_fallback', fromBackend: first, toBackend: other });
+  collector.handle({ kind: 'backend_fallback', fromBackend: `${first}@${MARKER}`, toBackend: first });
+  collector.handle({ kind: 'backend_fallback', fromBackend: MARKER, toBackend: other });
+  collector.handle({ kind: 'backend_fallback', fromBackend: null, toBackend: other });
+  assert.deepEqual(emitted, [
+    ['fallback_used', { from_backend: first, to_backend: other }],
+    // Another account of the same provider: kept, it is a move all the same.
+    ['fallback_used', { from_backend: first, to_backend: first }],
+    ['fallback_used', { from_backend: 'other', to_backend: other }],
+    ['fallback_used', { from_backend: 'other', to_backend: other }],
+  ]);
+  for (const [name, props] of emitted) assert.ok(validateEvent(name, props), `${name} passes the catalogue`);
+  assert.ok(!JSON.stringify(emitted).includes(MARKER));
+  assert.equal(validateEvent('fallback_used', { from_backend: first, to_backend: other, model: 'x' }), null, 'closed shape');
+});
+
+test('a backend_fallback published on the bus reaches the destination as fallback_used', async () => {
+  const { bus } = await import('../../bus.js');
+  const { builtinProviderIds } = await import('../../backends/builtin-declarations.js');
+  const [first, other] = builtinProviderIds();
+  const { rt, sent } = start();
+  try {
+    bus.publish({ kind: 'backend_fallback', fromBackend: `${first!}@${MARKER}`, toBackend: other! });
+    await rt.flushNow();
+    const used = sent.filter((p) => p.name === 'fallback_used');
+    assert.equal(used.length, 1);
+    assert.equal(used[0]!.properties.from_backend, first);
+    assert.equal(used[0]!.properties.to_backend, other);
+    assert.ok(!JSON.stringify(sent).includes(MARKER));
+  } finally {
+    await rt.dispose();
+  }
+});
