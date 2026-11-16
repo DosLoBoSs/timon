@@ -35,8 +35,6 @@
       "tooLarge": "{name} : trop volumineux (15 Mo au plus).",
       "typeRefused": "{name} : ce type de fichier n’est pas accepté.",
       "quota": "{name} : la tâche contient déjà autant de fichiers que possible (20 fichiers, 100 Mo).",
-      "failed": "{name} : envoi impossible ({error}).",
-      "removeFailed": "Impossible de retirer {name} : {error}",
       "loadFailed": "Impossible de lire les fichiers joints.",
       "dismiss": "Masquer",
       "partial": "Tâche enregistrée, mais certains fichiers n’ont pas pu être envoyés : {names}",

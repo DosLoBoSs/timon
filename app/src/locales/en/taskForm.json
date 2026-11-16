@@ -35,8 +35,6 @@
       "tooLarge": "{name}: too large (15 MB at most).",
       "typeRefused": "{name}: this type of file is not accepted.",
       "quota": "{name}: the task already holds as many files as it can (20 files, 100 MB).",
-      "failed": "{name}: could not be sent ({error}).",
-      "removeFailed": "Could not remove {name}: {error}",
       "loadFailed": "Could not read the attached files.",
       "dismiss": "Dismiss",
       "partial": "Task saved, but some files could not be sent: {names}",

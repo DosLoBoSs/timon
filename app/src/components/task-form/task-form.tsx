@@ -30,7 +30,8 @@ import { canMarkMerged } from '@/lib/mark-merged';
 import { DateTimePicker } from '@/components/date-time-picker';
 import { WorktreeDetachSection } from '@/components/worktree-detach-section';
 import { canDetachWorktree } from '@/lib/worktree-detach';
-import { precheckTaskAttachment, type TaskAttachment, type TaskAttachmentRefusal } from '@/lib/task-attachments';
+import type { TaskAttachment } from '@/lib/task-attachments';
+import { useAttachmentItems } from '@/components/use-attachment-items';
 import { DetailShell } from '@/components/detail-shell';
 import { useTaskForm, type TaskFormAgent, type TaskFormValue } from './task-form-context';
 import {
@@ -39,7 +40,7 @@ import {
 } from './task-form-model';
 import {
   AgentPicker, AttachmentsField, ChoiceSelect, type ChoiceOption, ChipToggles, DepsList, DescriptionField, Field,
-  FIELD_PAPER_CLASS, INPUT_CLASS, PAPER_CLASS, StatusLabel, type AttachmentItem, type DepCandidate,
+  FIELD_PAPER_CLASS, INPUT_CLASS, PAPER_CLASS, StatusLabel, type DepCandidate,
 } from './task-form-parts';
 
 type SkillSummary = { id: string };
@@ -53,23 +54,9 @@ function mergeAgents(given: readonly TaskFormAgent[], read: readonly TaskFormAge
   return named;
 }
 
-function refusalText(name: string, refusal: TaskAttachmentRefusal): string {
-  if (refusal.code === 'attachment_too_large') return t('taskForm.attachments.tooLarge', { name });
-  if (refusal.code === 'attachment_type_refused' || refusal.code === 'attachment_content_mismatch') {
-    return t('taskForm.attachments.typeRefused', { name });
-  }
-  if (refusal.code === 'attachment_quota') return t('taskForm.attachments.quota', { name });
-  return t('taskForm.attachments.failed', { name, error: refusal.message ?? '' });
-}
-
-function heldBy(items: readonly AttachmentItem[]): { count: number; bytes: number } {
-  let bytes = 0;
-  for (const item of items) bytes += item.state === 'stored' ? item.attachment.size : item.file.size;
-  return { count: items.length, bytes };
-}
-
-function revokePreview(item: AttachmentItem): void {
-  if (item.state !== 'stored' && item.preview) URL.revokeObjectURL(item.preview);
+/** A file listed under an iteration's task but owned by the chain's root: shown, not removable. */
+function inheritedFromRoot(attachment: TaskAttachment, taskId: string): boolean {
+  return attachment.task_id !== taskId;
 }
 
 export function ProductTaskForm(): ReactElement | null {
@@ -95,12 +82,8 @@ function TaskForm({ host }: { host: TaskFormValue }): ReactElement {
   const [problems, setProblems] = useState<FormProblem[]>([]);
   const [saving, setSaving] = useState(false);
   const [filters, setFilters] = useState({ deps: '', skills: '' });
-  const [items, setItems] = useState<AttachmentItem[]>([]);
-  const [attachmentErrors, setAttachmentErrors] = useState<string[]>([]);
   const titleInput = useRef<HTMLInputElement>(null);
   const tabButtons = useRef<Partial<Record<TaskFormTab, HTMLButtonElement | null>>>({});
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
 
   useEffect(() => {
     let cancelled = false;
@@ -126,19 +109,7 @@ function TaskForm({ host }: { host: TaskFormValue }): ReactElement {
 
   // An edited task's files, its own and those inherited from the chain's root.
   const taskId = isEdit ? task.id : null;
-  const listAttachments = host.attachments.list;
-  useEffect(() => {
-    if (!taskId) return;
-    let cancelled = false;
-    listAttachments(taskId).then((list) => {
-      if (cancelled) return;
-      setItems(list.map((attachment) => ({ key: attachment.id, state: 'stored', attachment, inherited: attachment.task_id !== taskId })));
-    }).catch(() => { if (!cancelled) setAttachmentErrors([t('taskForm.attachments.loadFailed')]); });
-    return () => { cancelled = true; };
-  }, [taskId, listAttachments]);
-
-  // Local previews of files not sent yet are released with the form.
-  useEffect(() => () => { itemsRef.current.forEach(revokePreview); }, []);
+  const files = useAttachmentItems(taskId, host.attachments, 'task', { inheritedOf: inheritedFromRoot });
 
   const update = useCallback(<K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -155,7 +126,7 @@ function TaskForm({ host }: { host: TaskFormValue }): ReactElement {
     () => existingTasks.filter((x) => x.id !== task?.id && (x.status !== 'DONE' || form.deps.includes(x.id))),
     [existingTasks, task?.id, form.deps],
   );
-  const counts = tabCounts(form, items.length);
+  const counts = tabCounts(form, files.items.length);
 
   // The TO DO idea the task carries out, read for its text.
   const todoId = /^[1-9]\d*$/.test(form.todo_id.trim()) ? Number(form.todo_id.trim()) : null;
@@ -171,7 +142,6 @@ function TaskForm({ host }: { host: TaskFormValue }): ReactElement {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [todoId]);
-  const uploading = items.some((item) => item.state === 'uploading');
 
   // ── Model ────────────────────────────────────────────────────────────────
   const pick = taskModelPick(catalog, form.backend_override, form.model_override);
@@ -179,50 +149,6 @@ function TaskForm({ host }: { host: TaskFormValue }): ReactElement {
   const fallbackNever = form.fallback_backend_override === NO_FALLBACK;
   const fallbackPick = fallbackNever ? null : taskModelPick(catalog, form.fallback_backend_override, form.fallback_model_override);
   const target = { agent: form.agent_name, project: agent?.project };
-
-  // ── Attachments ──────────────────────────────────────────────────────────
-  const addFiles = (files: File[]) => {
-    const refused: string[] = [];
-    const accepted: AttachmentItem[] = [];
-    let held = heldBy(itemsRef.current);
-    for (const file of files) {
-      const refusal = precheckTaskAttachment(file, held);
-      if (refusal) { refused.push(refusalText(file.name, refusal)); continue; }
-      held = { count: held.count + 1, bytes: held.bytes + file.size };
-      const preview = file.type.startsWith('image/') && typeof URL.createObjectURL === 'function' ? URL.createObjectURL(file) : null;
-      accepted.push({ key: `local-${crypto.randomUUID()}`, state: taskId ? 'uploading' : 'queued', file, preview });
-    }
-    setAttachmentErrors(refused);
-    if (accepted.length === 0) return;
-    setItems((list) => [...list, ...accepted]);
-    if (!taskId) return;
-    // An edited task exists: each file is sent at once, the form stays usable meanwhile.
-    for (const item of accepted) {
-      if (item.state === 'stored') continue;
-      void host.attachments.upload(taskId, item.file).then((r) => {
-        revokePreview(item);
-        if (r.ok) {
-          setItems((list) => list.map((x) => (x.key === item.key ? { key: r.attachment.id, state: 'stored', attachment: r.attachment, inherited: false } : x)));
-        } else {
-          setItems((list) => list.filter((x) => x.key !== item.key));
-          setAttachmentErrors((errors) => [...errors, refusalText(item.file.name, r.refusal)]);
-        }
-      });
-    }
-  };
-
-  const removeItem = (item: AttachmentItem) => {
-    if (item.state !== 'stored') {
-      revokePreview(item);
-      setItems((list) => list.filter((x) => x.key !== item.key));
-      return;
-    }
-    const name = item.attachment.name;
-    void host.attachments.remove(item.attachment).then((r) => {
-      if (r.ok) setItems((list) => list.filter((x) => x.key !== item.key));
-      else toast.error(t('taskForm.attachments.removeFailed', { name, error: r.refusal.message ?? r.refusal.code }));
-    });
-  };
 
   // ── Submit ───────────────────────────────────────────────────────────────
   async function submit(e: { preventDefault(): void }) {
@@ -244,12 +170,7 @@ function TaskForm({ host }: { host: TaskFormValue }): ReactElement {
       return;
     }
     // Files dropped before the task existed go now that it has an id.
-    const failed: string[] = [];
-    for (const item of itemsRef.current) {
-      if (item.state !== 'queued') continue;
-      const r = await host.attachments.upload(result.id, item.file);
-      if (!r.ok) failed.push(item.file.name);
-    }
+    const failed = await files.sendQueued(result.id);
     toast.success(isEdit ? t('taskForm.toast.updated') : t('taskForm.toast.created'));
     if (failed.length > 0) toast.error(t('taskForm.attachments.partial', { names: failed.join(', ') }));
     host.finish();
@@ -348,8 +269,8 @@ function TaskForm({ host }: { host: TaskFormValue }): ReactElement {
             <p data-task-todo="" className="line-clamp-3 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">{todoText}</p>
           )}
           <SummaryRow label={t('taskForm.summary.status')}><StatusLabel status={isEdit ? task.status ?? null : null} /></SummaryRow>
-          {items.length > 0 && (
-            <SummaryRow label={t('taskForm.summary.attachments')}><span className="tabular-nums">{items.length}</span></SummaryRow>
+          {files.items.length > 0 && (
+            <SummaryRow label={t('taskForm.summary.attachments')}><span className="tabular-nums">{files.items.length}</span></SummaryRow>
           )}
         </dl>
       </section>
@@ -469,7 +390,7 @@ function TaskForm({ host }: { host: TaskFormValue }): ReactElement {
       )}
       <div className="ml-auto flex items-center gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={host.close}>{t('taskForm.cancel')}</Button>
-        <Button type="submit" size="sm" disabled={saving || uploading}>
+        <Button type="submit" size="sm" disabled={saving || files.uploading}>
           {saving ? (isEdit ? t('taskForm.saving') : t('taskForm.creating')) : isEdit ? t('taskForm.save') : t('taskForm.create')}
         </Button>
       </div>
@@ -497,12 +418,12 @@ function TaskForm({ host }: { host: TaskFormValue }): ReactElement {
         )}
         attachments={(
           <AttachmentsField
-            items={items}
-            errors={attachmentErrors}
+            items={files.items}
+            errors={files.errors}
             url={host.attachments.url}
-            onAdd={addFiles}
-            onRemove={removeItem}
-            onDismissErrors={() => setAttachmentErrors([])}
+            onAdd={files.add}
+            onRemove={files.remove}
+            onDismissErrors={files.dismissErrors}
             disabled={saving}
           />
         )}

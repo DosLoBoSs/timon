@@ -74,8 +74,6 @@
       "tooLarge": "{name}: grande demais (15 MB no máximo).",
       "typeRefused": "{name}: este tipo de arquivo não é aceito.",
       "quota": "{name}: a tarefa já tem o máximo de arquivos permitido (20 arquivos, 100 MB).",
-      "failed": "{name}: não foi possível enviar ({error}).",
-      "removeFailed": "Não foi possível remover {name}: {error}",
       "loadFailed": "Não foi possível ler os arquivos anexados.",
       "dismiss": "Dispensar",
       "partial": "Tarefa salva, mas alguns arquivos não puderam ser enviados: {names}"

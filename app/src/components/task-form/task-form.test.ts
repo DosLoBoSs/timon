@@ -30,7 +30,10 @@ const STORED: TaskAttachment = {
 
 type Call = { method: string; url: string; body: Record<string, unknown> | null };
 
-async function mount(opts: { task?: TaskFormSource | null; attachments?: TaskAttachment[] } = {}) {
+/** The daemon's own English text, which must never reach the screen. */
+const DAEMON_TEXT = 'EIO: write failed at /var/lib/store';
+
+async function mount(opts: { task?: TaskFormSource | null; attachments?: TaskAttachment[]; refuse?: boolean } = {}) {
   const { JSDOM } = await import('jsdom');
   const dom = new JSDOM('<button id="opener">open</button><div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
   const saved = new Map<string, PropertyDescriptor | undefined>();
@@ -64,6 +67,9 @@ async function mount(opts: { task?: TaskFormSource | null; attachments?: TaskAtt
     if (url === '/api/ui/skills') return json({ skills: [{ id: 'tdd' }, { id: 'git-publish' }] });
     if (url === '/api/ui/mcp') return json({ servers: [] });
     if (/\/attachments$/.test(url) && method === 'GET') return json({ attachments: stored });
+    if (opts.refuse && /\/attachments(\/[^/]+)?$/.test(url) && method !== 'GET') {
+      return json({ error: DAEMON_TEXT, code: 'attachment_failed' }, 500);
+    }
     if (/\/attachments$/.test(url) && method === 'POST') {
       const taskId = /\/api\/ui\/tasks\/([^/]+)\//.exec(url)![1]!;
       return json({ attachment: { ...STORED, id: `a-${calls.length}`, task_id: taskId, name: String(body?.name) } }, 201);
@@ -289,6 +295,22 @@ test('an edited task lists its files, sends a new one at once and removes one', 
     await m.click(m.$('[aria-label="Remove mockup.png"]'));
     await m.until(() => !m.$('[data-attachment="mockup.png"]'), 'the removal');
     assert.ok(m.calls.some((c) => c.method === 'DELETE' && c.url === `/api/ui/tasks/root/attachments/${STORED.id}`));
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('a refused upload or removal is told in the interface\'s words, never the daemon\'s', async () => {
+  const m = await mount({ task: TASK, attachments: [STORED], refuse: true });
+  try {
+    await m.until(() => !!m.$('[data-attachment="mockup.png"]'), 'the stored file');
+    await m.addFiles([new File(['# notes'], 'notes.md', { type: 'text/markdown' })]);
+    await m.until(() => /notes\.md: could not be sent\./.test(m.$('[role="alert"]')?.textContent ?? ''), 'the upload refusal');
+    assert.equal(m.$('[data-attachment="notes.md"]'), null, 'the refused file left the list');
+    await m.click(m.$('[aria-label="Remove mockup.png"]'));
+    await m.until(() => /Could not remove mockup\.png\./.test(m.$('[role="alert"]')?.textContent ?? ''), 'the removal refusal');
+    assert.ok(m.$('[data-attachment="mockup.png"]'), 'the refused removal keeps the file');
+    assert.ok(!document.body.textContent?.includes(DAEMON_TEXT), 'the daemon text stays off screen');
   } finally {
     await m.unmount();
   }

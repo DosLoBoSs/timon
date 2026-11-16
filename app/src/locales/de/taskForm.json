@@ -74,8 +74,6 @@
       "tooLarge": "{name}: zu groß (höchstens 15 MB).",
       "typeRefused": "{name}: Dieser Dateityp wird nicht akzeptiert.",
       "quota": "{name}: Die Aufgabe enthält bereits so viele Dateien wie möglich (20 Dateien, 100 MB).",
-      "failed": "{name}: konnte nicht gesendet werden ({error}).",
-      "removeFailed": "{name} konnte nicht entfernt werden: {error}",
       "loadFailed": "Die angehängten Dateien konnten nicht gelesen werden.",
       "dismiss": "Ausblenden",
       "partial": "Aufgabe gespeichert, aber einige Dateien konnten nicht gesendet werden: {names}"

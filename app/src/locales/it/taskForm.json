@@ -74,8 +74,6 @@
       "tooLarge": "{name}: troppo grande (15 MB al massimo).",
       "typeRefused": "{name}: questo tipo di file non è accettato.",
       "quota": "{name}: l’attività contiene già il massimo di file consentito (20 file, 100 MB).",
-      "failed": "{name}: impossibile inviarlo ({error}).",
-      "removeFailed": "Impossibile rimuovere {name}: {error}",
       "loadFailed": "Impossibile leggere i file allegati.",
       "dismiss": "Ignora",
       "partial": "Attività salvata, ma alcuni file non sono stati inviati: {names}"
