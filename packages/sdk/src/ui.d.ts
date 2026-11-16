@@ -503,11 +503,14 @@ declare module '@timon/ui' {
    * with the command that installs it; `not_writable`: the AppImage's folder
    * cannot be written, the file stays in Timon's data folder; `none`: no
    * verified installer is left on disk, nothing was tried — offer `start()`
-   * again.
+   * again. Since the silent installation (client API 16): `restarting` also
+   * follows a `.pkg`, `.deb` or Windows installer that installs without
+   * leaving the app; `cancelled`: the person dismissed the system's password
+   * prompt, nothing changed — show "Install" again, no error.
    */
   export type UpdateInstallOutcome =
     | { status: 'missions'; count: number }
-    | { status: 'restarting' | 'not_writable' | 'opened' | 'closing' | 'none' | 'unsupported' }
+    | { status: 'restarting' | 'not_writable' | 'opened' | 'closing' | 'none' | 'unsupported' | 'cancelled' }
     | { status: 'guided'; command: string; opened: boolean }
     | { status: 'failed'; message: string | null };
 

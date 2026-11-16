@@ -4324,6 +4324,7 @@
       "missions": "{count, plural, one {# mission is running} other {# missions are running}}. Installing now stops {count, plural, one {it} other {them}}.",
       "wait": "Wait",
       "installAnyway": "Install anyway",
+      "installing": "Installing…",
       "restarting": "Timon is restarting on the new version…",
       "closing": "The installer is open. Timon closes so it can be replaced.",
       "pkgOpened": "Follow the installer, then quit and reopen Timon.",
