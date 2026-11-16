@@ -17,6 +17,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, isAbsolute, join } from 'node:path';
 import { getHost } from './host/index.js';
+import { localGitPath, localRemoteProblem } from './host/git-neutral.js';
 import { checkCwd, reportOf, resolveProjectCwd, usableReport, type CwdReport } from './project-cwd.js';
 import { checkRemoteUrl, redactUrlCredentials, REMOTE_URL_MESSAGES } from './git-remote-url.js';
 import { resolveRepoCwd } from './project-repos.js';
@@ -801,9 +802,21 @@ export async function listRemotes(slug: string, repo?: string): Promise<GitRemot
   return readRemotes(await repoCwd(slug, repo));
 }
 
-function assertRemoteUrl(url: string): string {
+/**
+ * The URL to save, or why not. A local remote is held to the rule the
+ * daemon's git applies at every push and fetch (`neutralGitCall`): saved in a
+ * place a mission writes, it could never be reached, so it is refused here
+ * with that reason rather than saved and then failing each time.
+ */
+function assertRemoteUrl(url: string, cwd: string): string {
   const checked = checkRemoteUrl(url);
   if (!checked.ok) throw new Error(REMOTE_URL_MESSAGES[checked.reason]);
+  if (checked.kind === 'file' || checked.kind === 'path') {
+    const path = localGitPath(checked.url);
+    const problem = path === null ? 'not a local path' : localRemoteProblem(path, { cwd });
+    // The reason names a folder of Timon or of the fence, never the URL.
+    if (problem) throw new Error(`a local remote must be a repository no agent can write (${problem}): Timon's git would refuse to push to it or fetch from it`);
+  }
   return checked.url;
 }
 
@@ -835,8 +848,8 @@ export async function addRemote(
   opts: { name: string; url: string; check?: boolean },
   repo?: string,
 ): Promise<RemoteChange> {
-  const url = assertRemoteUrl(opts.url);
   const cwd = await repoCwd(slug, repo);
+  const url = assertRemoteUrl(opts.url, cwd);
   // `--`: neither the name nor the url can ever be read as an option.
   const r = await run('git', ['remote', 'add', '--', opts.name, url], cwd);
   if (!r.ok) throw new Error(`git remote add failed: ${failure(r)}`);
@@ -849,8 +862,8 @@ export async function setRemoteUrl(
   opts: { name: string; url: string; check?: boolean },
   repo?: string,
 ): Promise<RemoteChange> {
-  const url = assertRemoteUrl(opts.url);
   const cwd = await repoCwd(slug, repo);
+  const url = assertRemoteUrl(opts.url, cwd);
   await assertRemoteExists(cwd, opts.name);
   const r = await run('git', ['remote', 'set-url', '--', opts.name, url], cwd);
   if (!r.ok) throw new Error(`git remote set-url failed: ${failure(r)}`);
