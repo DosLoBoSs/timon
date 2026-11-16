@@ -31,6 +31,8 @@ The default model is **Muse Spark 1.3 (free)**, which opencode offers without an
 
 Opening that list starts opencode briefly, which leaves one empty session in opencode's own history. A model change applies from the next mission or conversation, not in the middle of one.
 
+If opencode does not take the model or thinking level a mission asks for, the mission still runs, and its thread says which model was asked, which one actually answers and why opencode refused it.
+
 ## What agents can do
 
 **opencode decides its own tool permissions.** Timon shows no Allow / Deny card for it and cannot restrict what it does inside your project. opencode refuses, for example, a write outside the project folder on its own, without asking. The agent editor flags this with a "manages its own permissions" badge and greys out the permission mode, which opencode ignores. To change what opencode may do, edit the `permission` key of its `opencode.json` configuration file (see opencode's documentation on permissions). Choose opencode for an agent you are comfortable letting work with opencode's own rules.
