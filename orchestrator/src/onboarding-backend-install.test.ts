@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 
 await import('../tests/helpers/paid-license.js');
 const { desktopBundled, PROVIDER_CLI_NAMES, runInstallBackend, setupBackends } = await import('./onboarding.js');
-const { installBackendPlanFor } = await import('./host/machine.js');
+const { installBackendPlanFor, RESOLVED_BIN_ENV } = await import('./host/machine.js');
 
 const NO_VERSION = () => ({ version: null, latest: null, updateAvailable: false, unsupportedVersion: false });
 
@@ -129,6 +129,18 @@ test('a failed Copilot update on Windows is a failed job, though the CLI is stil
   assert.equal(failed.ok, false);
   assert.match(failed.reason ?? '', /network unreachable \(exit 1\)/);
   assert.match(failed.lines[0] ?? '', / → 1$/);
+});
+
+test('the installer is told the copy the daemon resolved, unless it is a desktop app\'s own', async () => {
+  const envs: NodeJS.ProcessEnv[] = [];
+  const ok = async (_command: string, _args: string[], env: NodeJS.ProcessEnv) => { envs.push(env); return { code: 0, stdout: '', stderr: '' }; };
+  await runInstallBackend('copilot', 'linux', ok, () => '/home/ann/.nvm/versions/node/v21.0.0-rc.1/bin/copilot');
+  assert.equal(envs[0]![RESOLVED_BIN_ENV], '/home/ann/.nvm/versions/node/v21.0.0-rc.1/bin/copilot');
+  // Install on such a card is for a standalone copy: the line must not update the app's.
+  await runInstallBackend('codex', 'darwin', ok, () => '/Applications/Codex.app/Contents/Resources/codex');
+  assert.equal(RESOLVED_BIN_ENV in envs[1]!, false);
+  await runInstallBackend('claude', 'linux', ok, () => null);
+  assert.equal(RESOLVED_BIN_ENV in envs[2]!, false);
 });
 
 test('a CLI shipped inside a desktop app is flagged, so Install stays offered', () => {

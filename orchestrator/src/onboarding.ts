@@ -322,7 +322,8 @@ export async function setupBackendsNow(): Promise<SetupBackend[]> {
  *
  * `exec` gets the installer's complete environment: the daemon's, plus the
  * copy of the CLI it resolved before the run (`RESOLVED_BIN_ENV`), so that an
- * "Update" line updates the copy the card shows.
+ * "Update" line updates the copy the card shows. Not a copy inside a desktop
+ * app: its card offers Install, for a standalone copy next to the app's.
  */
 export async function runInstallBackend(
   name: InstallableBackend,
@@ -333,7 +334,9 @@ export async function runInstallBackend(
   const plan = installBackendPlanFor(name, platform);
   if (!plan) return { ok: false, lines: [], command: null, reason: `${name} has no official installer on this operating system` };
   const [command, ...args] = plan.argv as [string, ...string[]];
-  const res = await exec(command, args, installerEnv(process.env, locate(name)));
+  const found = locate(name);
+  const resolved = found && !desktopBundled(name, found, platform) ? found : null;
+  const res = await exec(command, args, installerEnv(process.env, resolved));
   if (res.code !== 0) {
     return { ok: false, lines: [`${plan.display} → ${res.code}`], command: plan.display, reason: failureReason(res) };
   }

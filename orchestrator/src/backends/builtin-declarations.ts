@@ -51,7 +51,8 @@ export type BuiltinBinaryDeclaration = Omit<ProviderBinaryDeclaration, 'desktopB
    *
    * The line runs with `TIMON_RESOLVED_BIN` (`RESOLVED_BIN_ENV`, `host/machine.ts`)
    * set to the copy of the CLI the daemon resolved, a `host.binaries.<cli>` pin
-   * first, and unset when it found none: an "Update" line reads it to update
+   * first, and unset when it found none or only a desktop app's own copy: an
+   * "Update" line reads it to update
    * that copy rather than search for one. The same line is shown for pasting
    * into a terminal, where the variable is unset: it must work without it.
    */
