@@ -82,6 +82,8 @@ import { config } from './config/load.js';
 import { apiError } from './api-error.js';
 import { CwdUnusableError } from './cwd-check.js';
 import { getHost } from './host/index.js';
+import { nodeRuntime } from './host/node-runtime.js';
+import { daemonRuntimePaths } from './mission-fence-target.js';
 import { FENCE_EXIT, fenceLaunchDecision, type FenceStatus } from './host/fence.js';
 import {
   agentPackageCacheDir, isFenceAgent, isFenceSegment, missionTmpDir, resolveFence, type FenceMode, type FenceTarget, type IsolationTarget,
@@ -645,9 +647,11 @@ export function fenceMissionCommand(
     warn(`${label} the CLI's sandbox level option (${options.nestedSandbox?.level?.flag ?? ''}) is not in its launch: its own sandbox may fail inside the fence`);
   }
   const workspace = nested.readOnly || target.workspace === 'ro' ? 'ro' : 'rw';
+  // The daemon's own release is what the mission's Timon MCP servers run from.
+  const runtime = target.runtime ?? daemonRuntimePaths(nodeRuntime(cfg));
   const policy = resolveFence(
     { ...cfg, host: { ...cfg.host, isolation: { ...cfg.host.isolation, filesystem: mode } } },
-    { ...target, workspace },
+    { ...target, workspace, runtime },
   );
   for (const { path, reason } of policy.ignored) {
     if (reason !== UNRESOLVED_GRANT) warn(`${label} fence grant on ${path} dropped: ${reason}`);

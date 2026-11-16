@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, utimesSync, writeFile
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  pluginPackageDirs, purgeMissionTmpDirs, purgeOrphanAgentPackageCaches, removeAgentPackageCache, worktreeGitDirs,
+  daemonRuntimePaths, pluginPackageDirs, purgeMissionTmpDirs, purgeOrphanAgentPackageCaches, removeAgentPackageCache, worktreeGitDirs,
 } from './mission-fence-target.js';
 
 /** A home holding a main checkout, a linked worktree of it, and a folder a mission could aim at. */
@@ -151,4 +151,23 @@ test('the package caches of agents that no longer exist are swept, the others ke
   assert.deepEqual(removed, ['gone']);
   assert.ok(existsSync(join(caches, 'alive', 'npm')));
   assert.deepEqual(purgeOrphanAgentPackageCaches(join(th, 'absent'), () => false), []);
+});
+
+test('the daemon\'s runtime: its executable, its orchestrator folder and the Node of its MCP servers', () => {
+  const release = '/home/u/.timon/desktop-runtime/releases/9.9.9/resources';
+  // The shipped Node runs the daemon and its MCP servers: named once.
+  assert.deepEqual(
+    daemonRuntimePaths({ command: `${release}/node/node`, env: {} }, `${release}/node/node`, `${release}/orchestrator`),
+    [`${release}/node/node`, `${release}/orchestrator`],
+  );
+  // A Node the configuration names is where the MCP servers start: it is named too.
+  assert.deepEqual(
+    daemonRuntimePaths({ command: '/opt/node/bin/node', env: {} }, `${release}/node/node`, `${release}/orchestrator`),
+    [`${release}/node/node`, `${release}/orchestrator`, '/opt/node/bin/node'],
+  );
+  // A bare command is looked up on PATH: no folder to infer.
+  assert.deepEqual(daemonRuntimePaths({ command: 'node', env: {} }, '/usr/bin/node', '/src/timon/orchestrator'), ['/usr/bin/node', '/src/timon/orchestrator']);
+  // By default, the orchestrator folder is the one this code runs from, which holds the MCP scripts.
+  const [, root] = daemonRuntimePaths({ command: 'node', env: {} });
+  assert.ok(root && existsSync(join(root, 'bin', 'timon-mcp.mjs')) && existsSync(join(root, 'bin', 'permission-mcp.mjs')));
 });

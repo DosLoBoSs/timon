@@ -133,6 +133,10 @@ export const MISSION_TIMON_ZONES = Object.freeze({
    *  attachments, the code of a plugin's MCP server), never writable — except
    *  the mission's own agent memory. */
   readable: Object.freeze(['agents', 'skills', 'projects', 'uploads', 'plugins']),
+  /** Readable and executable, never writable, and only the one release a
+   *  packaged daemon runs from (`desktop-runtime/releases/<id>`): its Node and
+   *  its scripts start the mission's own Timon MCP servers. */
+  runtime: Object.freeze(['desktop-runtime']),
   /** Never granted, read or write: secrets, the database, the configuration
    *  the daemon executes, sessions and other tenants' state. */
   refused: Object.freeze([
@@ -384,6 +388,14 @@ export type FenceTarget = {
   gitDirs?: readonly string[] | undefined;
   /** Install folders of the plugins whose MCP servers the mission runs: readable and executable. */
   pluginDirs?: readonly string[] | undefined;
+  /**
+   * What the daemon itself runs from: its executable, its orchestrator folder,
+   * the Node it starts MCP servers with. A packaged install on macOS and Linux
+   * runs from a copy under `desktop-runtime/releases/<id>` of the Timon home;
+   * that release, and no other, is readable and executable, never writable.
+   * A path outside the Timon home needs nothing: the system is readable.
+   */
+  runtime?: readonly string[] | undefined;
   /** Further paths under the Timon home the daemon hands the mission (chat attachments): readable. */
   timonRead?: readonly string[] | undefined;
   /** Top-level entries of the Timon home: refused copies get named. Listed from the folder when absent. */
@@ -481,9 +493,25 @@ export function agentPackageCacheDir(timonHome: string, agent: string): string {
  *   directory, a file or a plugin folder), which a mission may have chosen:
  *   an agent's `cwd` is only checked for existence, and a mission holding
  *   `agents:manage` sets it;
- * - `config`: `host.isolation`, which grants nothing inside the Timon home.
+ * - `config`: `host.isolation`, which grants nothing inside the Timon home;
+ * - `runtime`: the release folder the daemon runs from, read-only, derived
+ *   from the daemon's own executable and code, never from a mission.
  */
-type GrantSource = 'own' | 'own-memory' | 'mission' | 'config';
+type GrantSource = 'own' | 'own-memory' | 'mission' | 'config' | 'runtime';
+
+/** Where a packaged install keeps its releases, below the Timon home (`host/packaged-service.ts`). */
+const RUNTIME_RELEASES = Object.freeze(['desktop-runtime', 'releases']);
+
+/**
+ * The release folder `path` sits in, `<timonHome>/desktop-runtime/releases/<id>`,
+ * or null when it sits in none. Pure path arithmetic on both arguments as given.
+ */
+export function runtimeReleaseOf(timonHome: string, path: string): string | null {
+  const releases = join(timonHome, ...RUNTIME_RELEASES);
+  if (!contains(releases, path) || path === releases) return null;
+  const id = relative(releases, path).split(sep)[0] ?? '';
+  return FENCE_SEGMENT.test(id) ? join(releases, id) : null;
+}
 
 /**
  * Zones of the Timon home where a handed-over path never lands, by their
@@ -528,6 +556,12 @@ function timonGrantProblem(timonHome: string, path: string, access: 'ro' | 'rw',
   const segments = relative(timonHome, path).split(sep);
   const first = segments[0] ?? '';
   if (isRefusedTimonEntry(first)) return `"${first}" holds private state a mission never reaches`;
+  if (source === 'runtime') {
+    const release = MISSION_TIMON_ZONES.runtime.includes(first) && segments[1] === RUNTIME_RELEASES[1]
+      && segments.length === 3 && FENCE_SEGMENT.test(segments[2] ?? '');
+    if (!release) return 'only one release folder of the desktop runtime is opened, to run the daemon\'s own code';
+    return access === 'ro' ? null : 'the release the daemon runs from is never writable';
+  }
   const writable = MISSION_TIMON_ZONES.writable.includes(first);
   if (access === 'rw' && !writable && source !== 'own-memory') return `"${first}" is never writable from a mission`;
   if (!writable && !MISSION_TIMON_ZONES.readable.includes(first)) return `"${first}" is not one of the mission zones`;
@@ -630,7 +664,7 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
     // A folder the fence builds from the mission's identity is granted under
     // that name only: a link in it pointing elsewhere in the Timon home would
     // reopen what the identity checks closed.
-    const redirected = (source === 'own' || source === 'own-memory')
+    const redirected = (source === 'own' || source === 'own-memory' || source === 'runtime')
       && contains(foldedHome, folded) && folded !== fold(path);
     const problem = redirected
       ? 'a link leads it elsewhere in the Timon home'
@@ -707,6 +741,18 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
   );
   for (const dir of target.pluginDirs ?? []) {
     const granted = grant(resolve(dir), 'ro', 'mission', pluginFolder);
+    if (granted) exec.add(granted);
+  }
+  // A packaged daemon runs from a release copied into the Timon home, and the
+  // mission's Timon MCP servers start with that release's Node and scripts:
+  // without it, every one of them fails to start (EACCES, EPERM). Only the
+  // release a path of the daemon resolves into is opened; the other releases,
+  // and `desktop-runtime` itself, stay refused with the rest of the home.
+  for (const raw of target.runtime ?? []) {
+    const resolved = resolveLinks(resolve(raw));
+    const release = resolved === null ? null : runtimeReleaseOf(timonHome, resolved);
+    if (release === null || ro.has(release)) continue;
+    const granted = grant(release, 'ro', 'runtime');
     if (granted) exec.add(granted);
   }
 

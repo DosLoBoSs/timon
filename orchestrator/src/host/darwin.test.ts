@@ -89,6 +89,36 @@ test('a dropped grant is reported, and the profile is still written without it',
   assert.doesNotMatch(text, /allow file-read-data file-write\* \(subpath "\/Users\/tester\/\.timon\/secrets\.env"\)/);
 });
 
+test('the release the daemon runs from is rendered readable and executable, never writable, and no other', () => {
+  const timonHome = '/Users/tester/.timon';
+  const releases = `${timonHome}/desktop-runtime/releases`;
+  const resources = `${releases}/9.9.9/Timon.app/Contents/Resources`;
+  const policy = resolveFence(cfg(), {
+    timonHome, cwd: `${timonHome}/worktrees/m1`, home: '/Users/tester', platform: 'darwin', missionId: 'm1',
+    realpath: (path) => path, runtime: [`${resources}/node/node`, `${resources}/orchestrator`],
+  });
+  let text = '';
+  createSeatbeltFence({ realpath: (path) => path, writeProfile: (_file, profile) => { text = profile; } })
+    .wrap(policy, '/opt/bin/claude', [], '/p.sb');
+  const lines = text.split('\n');
+  const release = `"${releases}/9.9.9"`;
+  const at = (rule: string) => {
+    const index = lines.indexOf(rule);
+    assert.ok(index >= 0, `missing: ${rule}`);
+    return index;
+  };
+  const refuseHome = at(`(deny file-read-data file-write* (subpath "${timonHome}"))`);
+  const refuseHomeExec = at(`(deny process-exec* (subpath "${timonHome}"))`);
+  // Later rules win: the release's are emitted after the refusal of the home.
+  assert.ok(at(`(allow file-read-data (subpath ${release}))`) > refuseHome);
+  assert.ok(at(`(deny file-write* (subpath ${release}))`) > refuseHome);
+  assert.ok(at(`(allow process-exec* (subpath ${release}))`) > refuseHomeExec);
+  assert.doesNotMatch(text, /allow file-read-data file-write\* \(subpath "[^"]*desktop-runtime/);
+  assert.doesNotMatch(text, /9\.9\.8|"\/Users\/tester\/\.timon\/desktop-runtime"/);
+  // Native modules are mapped executable: the profile allows it by default and never takes it back.
+  assert.doesNotMatch(text, /file-map-executable/);
+});
+
 test('the default writer keeps the profile owner-only', { skip: process.platform === 'win32' && 'POSIX modes' }, () => {
   const dir = mkdtempSync(join(tmpdir(), 'darwin-fence-'));
   const file = join(dir, 'fence', 'm1.sb');
