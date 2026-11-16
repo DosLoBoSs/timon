@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { Script } from 'node:vm';
-import { writeEngine } from './native-browser-smoke.fixture.js';
+import { SHELL_LOCALES_DIR, writeEngine } from './native-browser-smoke.fixture.js';
 
 /**
  * The annotation bubble of TODO #481, end to end in a real Electron: the real engine, tab preload,
@@ -51,6 +51,8 @@ const PAGE = '<!doctype html><meta charset="utf-8"><title>Shop</title><script>'
 (async () => {
   await app.whenReady();
   app.dock?.hide();
+  // Read from this temporary folder, the shell would find no language and show its keys.
+  (await import('./shell-i18n.js')).useShellLocales(process.env.TIMON_SMOKE_LOCALES);
   const { NativeBrowserEngine } = await import('./native-browser.js');
   // The daemon, as far as the bubble sees it: the four routes it calls, answered from the engine's own queue.
   const sealed = new Map();
@@ -236,7 +238,7 @@ async function runSmoke(): Promise<Report> {
     await writeEngine(root, { preloads: ['native-browser-preload', 'native-browser-bubble-preload'] });
     new Script(fixture, { filename: 'smoke.cjs' });
     await writeFile(join(root, 'smoke.cjs'), fixture);
-    const env: NodeJS.ProcessEnv = { ...process.env, TIMON_HOME: root };
+    const env: NodeJS.ProcessEnv = { ...process.env, TIMON_HOME: root, TIMON_SMOKE_LOCALES: SHELL_LOCALES_DIR };
     delete env.ELECTRON_RUN_AS_NODE;
     const { stdout } = await promisify(execFile)(electron, [join(root, 'smoke.cjs')], {
       env, timeout: 90_000, killSignal: 'SIGKILL', maxBuffer: 4 * 1024 * 1024,
