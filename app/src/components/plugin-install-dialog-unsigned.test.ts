@@ -27,7 +27,7 @@ test('unsigned sheet: developer mode off, on in place, and a confirmation before
   install('AsyncLocalStorage', AsyncLocalStorage);
   install('IS_REACT_ACT_ENVIRONMENT', true);
 
-  type State = { requested: boolean; effective: boolean; available: boolean; blockedBy: 'plugin_composition_fixed' | null };
+  type State = { requested: boolean; effective: boolean; available: boolean; blockedBy: 'plugin_composition_fixed' | 'license_required' | null };
   let developer: State = { requested: false, effective: false, available: true, blockedBy: null };
   const puts: unknown[] = [];
   install('fetch', async (input: string, init?: RequestInit) => {
@@ -132,6 +132,14 @@ test('unsigned sheet: developer mode off, on in place, and a confirmation before
     assert.equal(button('Turn on developer mode'), undefined);
     assert.match(notice()?.textContent ?? '', /fixed plugin composition/);
     assert.ok(button('Open developer mode settings'));
+
+    // A locked beta install holds no licence: the reason says so, not "your licence".
+    developer = { requested: false, effective: false, available: false, blockedBy: 'license_required' };
+    await render(preview({ token: 'f'.repeat(48) }));
+    await settle();
+    assert.equal(button('Turn on developer mode'), undefined);
+    assert.match(notice()?.textContent ?? '', /no licence in force/);
+    assert.doesNotMatch(notice()?.textContent ?? '', /Your licence/);
   } finally {
     answerConfirmsForTests(null);
     await React.act(async () => root.unmount());
