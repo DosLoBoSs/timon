@@ -31,7 +31,7 @@ Nothing is written to disk while you record: if you quit Timon in the middle, th
 
 ## Review
 
-The review lists every step: **Go to**, **Click**, **Type**, **Press Enter**, **New tab**, **Switch tab**, **Close tab**, **Saved login**, and masked **Secret field** steps.
+The review lists every step: **Go to**, **Click**, **Type**, **Press Enter**, **New tab**, **Switch tab**, **Close tab**, **Saved login**, masked **Secret field** steps, and **Manual step: embedded frame** steps (see [Limits](#limits)).
 
 Steps in amber are marked **Possible secret**: a value that looks like an API key, an access token, a card number or a password typed into an ordinary field. For each one, choose:
 
@@ -72,7 +72,7 @@ The desktop app must be running on the computer that runs the built-in browser, 
 ## Limits
 
 - **One-time codes and card details need you.** The skill never stores them: it pauses and asks you to type them yourself in the shared browser, then carries on once you answer **Done**. A skill with such a pause needs someone in front of the screen and cannot run as an unattended routine.
-- **Frames inside a page are not recorded.** Actions inside an embedded frame, such as a payment form or a captcha box, do not appear in the recording. Do these steps by hand when the skill runs, or describe them to the agent.
+- **Frames inside a page are done by hand.** Timon never sees what you do inside an embedded frame, such as a card payment form, a captcha box or a "Sign in with…" widget, even one from the same site. When you act in one, the recording gets a **Manual step: embedded frame** step naming the frame's site (never its full address), shown in amber in the review. Like a one-time code, the learned skill pauses at that step and asks you to do that part yourself in the shared browser, then carries on once you answer **Done**: such a skill needs someone in front of the screen and cannot run as an unattended routine. You can rename the step to describe what to do there.
 - **Sign-in in several pages.** A saved login is filled only on a page that has the password field. A sign-in that asks for the user name on one page and the password on the next may need you.
 - **Websites change.** The skill describes what to look for rather than replaying exact positions, but a redesigned site can still break it. Record the flow again and learn it once more.
 - **Retention.** A recording you do not learn is deleted after 7 days. Change this in **Settings → Access & network → Browser** (**Keep unlearned browser recordings**; 0 keeps recordings until you delete them).
