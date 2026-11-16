@@ -951,6 +951,8 @@ Triggers (source → filter → actions, run unattended):
   timon trigger proposals [--status pending|applied|dismissed]
                                              scripts agents asked for, waiting for you
   timon trigger approve|reject <proposal-id> creates the trigger as yours, or drops it (never from a mission)
+  timon trigger approve-script <id|slug>     approves its scripts' files as they are now; a run whose files
+                                             changed since the last approval is refused (never from a mission)
   timon trigger test <id|slug> [--payload JSON] [--header Name:Value ...] [--execute]
                                              dry run unless --execute
   timon trigger remove <id|slug>
@@ -2996,6 +2998,17 @@ async function cmdTriggerDecide(decision, argv) {
   else process.stdout.write(`proposal ${id} ${j.proposal.status}\n`);
 }
 
+async function cmdTriggerApproveScript(argv) {
+  const ref = argv[0];
+  if (!ref) { process.stderr.write('usage: timon trigger approve-script <id|slug>\n'); process.exit(64); }
+  const id = await resolveTriggerId(ref);
+  const j = await http('POST', `/api/triggers/${encodeURIComponent(id)}/approve-script`);
+  process.stdout.write(`trigger ${id}: scripts approved as they are now\n`);
+  for (const pin of j.approved ?? []) {
+    process.stdout.write(`  ${pin.command} (${pin.cwd})${pin.files.length ? `: ${pin.files.join(', ')}` : ''}\n`);
+  }
+}
+
 async function cmdTriggerRemove(argv) {
   const ref = argv[0];
   if (!ref) { process.stderr.write('usage: timon trigger remove <id|slug>\n'); process.exit(64); }
@@ -3013,10 +3026,11 @@ async function cmdTrigger(argv) {
     case 'proposals': return cmdTriggerProposals(rest);
     case 'approve': return cmdTriggerDecide('approve', rest);
     case 'reject':  return cmdTriggerDecide('reject', rest);
+    case 'approve-script': return cmdTriggerApproveScript(rest);
     case 'remove':
     case 'rm':     return cmdTriggerRemove(rest);
     default:
-      process.stderr.write('usage: timon trigger <list|create|test|remove|proposals|approve|reject> …\n');
+      process.stderr.write('usage: timon trigger <list|create|test|remove|proposals|approve|reject|approve-script> …\n');
       process.exit(64);
   }
 }
