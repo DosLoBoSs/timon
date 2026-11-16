@@ -64,8 +64,30 @@ test('rc.yml never asks for contents: write, and writes only what the attestatio
   assert.match(text, /^permissions:\n {2}contents: read\n/m, 'the workflow default is contents: read');
   for (const [name, body] of jobs()) {
     assert.ok(body.some((line) => /^ {4}permissions:/.test(line)), `job ${name} declares no permissions`);
-    if (name !== 'build') assert.ok(!body.some((line) => /:\s*write\s*$/.test(line.replace(/#.*$/, ''))), `job ${name} writes`);
+    if (name !== 'attest') assert.ok(!body.some((line) => /:\s*write\s*$/.test(line.replace(/#.*$/, ''))), `job ${name} writes`);
   }
+});
+
+test('the attestation token never shares a job with npm or the built code', () => {
+  const found = jobs();
+  const build = found.get('build').join('\n');
+  assert.doesNotMatch(build, /id-token|attestations:/, 'the build job holds an attestation permission');
+  assert.doesNotMatch(build, /attest-build-provenance/, 'the build job attests');
+  const attest = found.get('attest');
+  assert.ok(attest, 'no attest job');
+  const body = attest.map((line) => line.replace(/(^|\s)#.*$/, '')).join('\n');
+  assert.match(body, /id-token:\s*write/);
+  assert.match(body, /attestations:\s*write/);
+  assert.match(body, /actions\/attest-build-provenance@/);
+  assert.doesNotMatch(body, /actions\/checkout@/, 'the attest job checks out code');
+  assert.doesNotMatch(body, /actions\/setup-node@/, 'the attest job installs Node');
+  assert.doesNotMatch(body, /\bnpm\b|\bnpx\b|\bnode\b/, 'the attest job runs Node code');
+  assert.match(body, /needs:\s*\[validate, build\]/);
+  assert.match(body, /fail-fast:\s*false/);
+  // The installers are checked against the sums the build wrote before anything is attested.
+  assert.match(body, /sha256sum --strict -c SHA256SUMS/);
+  assert.ok(body.indexOf('sha256sum') < body.indexOf('attest-build-provenance'), 'the sums are checked after the attestation');
+  assert.match(body, /create-storage-record:\s*false/);
 });
 
 test('rc.yml references no secret and hands no token to the build', () => {
@@ -103,7 +125,7 @@ test('every checkout leaves no credential behind', () => {
 
 test('every job has a time limit', () => {
   const found = jobs();
-  assert.deepEqual([...found.keys()], ['validate', 'build', 'summary']);
+  assert.deepEqual([...found.keys()], ['validate', 'build', 'attest', 'summary']);
   for (const [name, body] of found) {
     const limit = body.map((line) => /^ {4}timeout-minutes:\s*(\d+)\s*$/.exec(line)?.[1]).find(Boolean);
     assert.ok(limit, `job ${name} has no timeout-minutes`);
@@ -122,7 +144,6 @@ test('the build matrix covers the three systems and keeps going when one fails',
     assert.match(build, new RegExp(`\\{ os: ${os}, runner: ${runner} \\}`));
   }
   assert.match(build, /scripts\/release\/build-package\.mjs/);
-  assert.match(build, /actions\/attest-build-provenance@/);
   assert.match(build, /actions\/upload-artifact@/);
 });
 

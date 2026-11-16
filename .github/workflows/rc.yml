@@ -19,9 +19,14 @@
 #
 # No token reaches the build: scripts/release/build-package.mjs passes
 # `--publish never` to electron-builder, and the checkouts keep no credential.
-# The only write permissions are the attestation's, on the build jobs. The
-# provenance attestation names the commit this workflow runs from; with
-# another `ref`, the commit actually built is the one in build-summary.json.
+# The only write permissions are the attestation's, on the attest jobs, which
+# run no checkout, no npm and none of the built code: the build jobs run
+# hundreds of dependency scripts, and an OIDC token within their reach would
+# let any of them attest a digest of its choosing. The attest jobs take the
+# uploaded installers and check them against the SHA256SUMS their build wrote
+# before attesting them. The provenance attestation names the commit this
+# workflow runs from; with another `ref`, the commit actually built is the one
+# in build-summary.json.
 #
 # Every input is read through an environment variable, never pasted into a
 # script: `${{ }}` inside `run:` would turn an input into shell code.
@@ -158,8 +163,6 @@ jobs:
     timeout-minutes: 150
     permissions:
       contents: read
-      id-token: write
-      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -202,19 +205,13 @@ jobs:
           if [ "$EXPIRES" = never ]; then args+=(--no-expiry); else args+=(--expires "$EXPIRES"); fi
           node scripts/release/build-package.mjs "${args[@]}"
 
+      # node:path rather than dirname: the variable holds a Windows path on
+      # the Windows runner.
       - name: Remove the throwaway keys
         if: always()
         shell: bash
         run: |
-          if [ -n "${TIMON_RELEASE_PRIVATE_KEY_FILE:-}" ]; then rm -rf "$(dirname "$TIMON_RELEASE_PRIVATE_KEY_FILE")"; fi
-
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: |
-            rc-output/${{ inputs.version }}/${{ matrix.os }}/*
-            !rc-output/${{ inputs.version }}/${{ matrix.os }}/SHA256SUMS
-            !rc-output/${{ inputs.version }}/${{ matrix.os }}/build-summary.json
-          create-storage-record: false
+          node -e 'const f = process.env.TIMON_RELEASE_PRIVATE_KEY_FILE; if (f) require("node:fs").rmSync(require("node:path").dirname(f), { recursive: true, force: true });'
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -235,9 +232,63 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # Apart from the build: the OIDC token that signs the attestation never
+  # shares a job with npm or the built code. One job per system, so a system
+  # whose build failed leaves the others attested.
+  attest:
+    name: attest · ${{ matrix.os }}
+    needs: [validate, build]
+    if: ${{ !cancelled() && needs.validate.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [linux, mac, windows]
+    steps:
+      # Missing when this system's build failed: the job then ends without
+      # attesting, and the recap reports the system as absent.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        id: download
+        continue-on-error: true
+        with:
+          name: timon-${{ inputs.version }}-${{ matrix.os }}
+          path: installers
+
+      # Attests only what the build listed and hashed: a file the sums do not
+      # name, or one that does not match them, stops the attestation.
+      - name: Check the installers against their sums
+        if: ${{ steps.download.outcome == 'success' }}
+        shell: bash
+        working-directory: installers
+        run: |
+          [ -s SHA256SUMS ] || { echo "::error::no SHA256SUMS in the artifact"; exit 1; }
+          sha256sum --strict -c SHA256SUMS
+          # 64 hex digits and two spaces, then the name (which may hold spaces).
+          listed=$(cut -c67- SHA256SUMS | sort)
+          present=$(find . -type f ! -name SHA256SUMS ! -name build-summary.json | sed 's|^\./||' | sort)
+          if [ "$listed" != "$present" ]; then
+            echo "::error::the artifact and its SHA256SUMS do not name the same files"
+            diff <(echo "$listed") <(echo "$present") || true
+            exit 1
+          fi
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        if: ${{ steps.download.outcome == 'success' }}
+        with:
+          subject-path: |
+            installers/*
+            !installers/SHA256SUMS
+            !installers/build-summary.json
+          create-storage-record: false
+
   summary:
     name: recap
-    needs: [validate, build]
+    needs: [validate, build, attest]
     # Also after a failed system: the recap says which ones arrived.
     if: ${{ !cancelled() && needs.validate.result == 'success' }}
     runs-on: ubuntu-latest
