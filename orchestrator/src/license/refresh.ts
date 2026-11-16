@@ -164,6 +164,24 @@ function publish(state: LicenseState): void {
   bus.publish({ kind: 'license_changed', status: state.status, reason: state.reason, offlineSince: state.offlineSince });
 }
 
+/**
+ * The cause of a failed renewal, worded for the log and the alert: which side
+ * failed is what tells a network not ready yet from a server that answered.
+ * Built from the status, the error code and the transport's own error code —
+ * never the request, which carries the activation key.
+ */
+export function describeRenewFailure(err: unknown): string {
+  if (err instanceof LicenseServerError) {
+    if (err.status === 429) return 'rate limited by the license server (429)';
+    if (err.status === 0) return `license server not usable: ${err.code}`;
+    return `license server answered ${err.status} ${err.code}`;
+  }
+  const e = err as { name?: unknown; message?: unknown; cause?: { code?: unknown } } | null;
+  if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return 'network: license server did not answer in time';
+  const code = typeof e?.cause?.code === 'string' ? e.cause.code : null;
+  return `network: ${code ?? (typeof e?.message === 'string' ? e.message : 'unreachable')}`;
+}
+
 function refusalReason(code: string): 'revoked' | 'expired' | 'deactivated' | null {
   if (code === 'revoked') return 'revoked';
   if (code === 'expired') return 'expired';
@@ -176,6 +194,7 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
   const notify = deps.notify ?? defaultNotify;
   let offlineSince: number | null = null;
   let warnedOffline = false;
+  let alertedStillOff = false;
 
   /** Tells the rest of the daemon what `before` became, once per change. */
   const announce = async (before: LicenseState, after: LicenseState): Promise<void> => {
@@ -204,7 +223,30 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
   const apply = async (state: LicenseState): Promise<void> => {
     const before = licenseState();
     setLicenseState(state);
+    if (licenseState().status === 'valid') alertedStillOff = false;
     await announce(before, licenseState());
+  };
+
+  /**
+   * A licence that is off while an activation key is there, and a renewal that
+   * could not settle it. `goOff` only speaks when a VALID licence goes off: a
+   * boot that read the licence as off, then failed to renew it, stayed silent
+   * while the dispatcher and the routines were down for an hour (TIM-0147).
+   * Once per episode; a licence valid again re-arms it.
+   */
+  const alertStillOff = (cause: string): void => {
+    const state = licenseState();
+    if (state.status === 'valid' || state.reason === 'build_expired' || alertedStillOff) return;
+    alertedStillOff = true;
+    const minutes = Math.round((readLicenseStore().every ?? DEFAULT_EVERY_SECONDS) / 60);
+    console.warn(`[license] licence still not valid (${state.reason}) and its renewal failed: ${cause}`);
+    // Only a locked beta build gets here: `tick` never renews a licence that
+    // fell back to local Free, which keeps every module anyway.
+    notify({
+      title: 'Licence not renewed',
+      body: `Timon could not renew its licence (${cause}); the modules your licence covers stay off until it goes through. It tries again every ${minutes} min.`,
+      urgent: true,
+    });
   };
 
   const goOff = async (reason: LicenseReason, detail: string): Promise<void> => {
@@ -268,18 +310,20 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
       await apply(state);
     } catch (err) {
       if (revision !== licenseRevision() || key !== readLicenseKey()) return;
+      const cause = describeRenewFailure(err);
       if (err instanceof LicenseServerError && err.isRefusal) {
-        if (err.status === 429) return; // rate limited: not an answer about the licence
+        console.warn(`[license] renew failed: ${cause}`);
+        if (err.status === 429) { alertStillOff(cause); return; } // rate limited: not an answer about the licence
         if (err.status === 409 && err.code === 'device_mismatch') {
           rememberRefusal('invalid:machine');
           await goOff('invalid:machine', 'another machine holds this device id (device_mismatch)');
           return;
         }
         const reason = refusalReason(err.code);
-        if (reason) { rememberRefusal(reason); await goOff(reason, `license server answered ${err.status} ${err.code}`); return; }
-        // A refusal we do not know how to read (400 invalid_request…): log,
-        // change nothing — the local tick keeps the expiry honest.
-        console.warn(`[license] renew refused: ${err.status} ${err.code}`);
+        if (reason) { rememberRefusal(reason); await goOff(reason, cause); return; }
+        // A refusal we do not know how to read (400 invalid_request…): change
+        // nothing — the local tick keeps the expiry honest.
+        alertStillOff(cause);
         return;
       }
       // Unreachable, 5xx, unsigned: offline. The token stays good until the
@@ -298,7 +342,8 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
         const left = Math.max(0, Math.round((until - now()) / 3_600_000));
         notify({ title: 'Licence server unreachable', body: `No contact since ${new Date(offlineSince).toISOString()}. The licence stays valid for about ${left} h more.`, urgent: false });
       }
-      console.warn(`[license] renew failed (${(err as Error).message}); offline since ${new Date(offlineSince).toISOString()}`);
+      console.warn(`[license] renew failed: ${cause}; offline since ${new Date(offlineSince).toISOString()}`);
+      alertStillOff(cause);
     }
   };
 
