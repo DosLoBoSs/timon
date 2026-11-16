@@ -3,7 +3,7 @@ title: Example cookbook
 sidebar_position: 18
 ---
 
-40 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
+41 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
 
 Obtain the example tree with your developer distribution. There is no public repository link. Use a licensed test instance and follow [Testing](testing.md) before installing third-party code.
 
@@ -1047,6 +1047,42 @@ function CompactAppCard() {
 
 export function apply(ctx) {
   return ctx.slots.register({ slot: 'apps.card' }, CompactAppCard)
+}
+```
+
+## Replace the update window {#update-dialog}
+
+Source: `examples/plugin-update-dialog`. Manifest ID: `example-update-dialog`. Minimum API: **16**.
+
+API 16. One registration in the single updates.dialog slot replaces the window that Update opens, from the update card and from Settings › System › Updates, here with a compact one. The component reads useUpdateDialog(): the version and its date, the highlights written by hand at the release (plain text, possibly none), the changelog link, the desktop app's download, the step the update flow is at with its line, and the actions of that step, each with run() or an href. Timon keeps the dialog around it, named with the version, and runs the flow: the download, its verification, the running missions asked about first, then the installation. Remove the plugin and Timon's own window comes back.
+
+Permissions: none. Read the [related guide](slots.md).
+
+`timon plugin add ./examples/plugin-update-dialog` installs this package on the target instance.
+
+From `examples/plugin-update-dialog/lib/client.js`, line 28 (excerpt):
+
+```js
+function CompactUpdateWindow() {
+  const value = useUpdateDialog()
+  if (!value) return null
+  const { download } = value
+  const progress = download && download.phase === 'downloading' && download.total > 0
+    ? t('progress', { percent: formatPercent(download.received / download.total), total: formatBytes(download.total) })
+    : null
+  return React.createElement('div', { className: 'flex flex-col gap-3 text-sm', 'data-compact-update': value.step },
+    React.createElement('p', { 'aria-hidden': true, className: 'm-0 text-base font-semibold' }, t('title', { version: value.version })),
+    value.highlights.map((item, index) => React.createElement('p', { key: index, className: 'm-0' }, item)),
+    React.createElement('a', { href: value.notesUrl, target: '_blank', rel: 'noopener noreferrer', className: 'text-primary' }, t('changelog')),
+    progress || value.line ? React.createElement('p', { className: 'm-0 tabular-nums text-muted-foreground' }, progress || value.line) : null,
+    React.createElement('div', { className: 'flex flex-wrap gap-2' },
+      value.actions.map((action, index) => action.href
+        ? React.createElement('a', { key: action.marker, href: action.href, target: '_blank', rel: 'noopener noreferrer', className: 'text-primary' }, action.label)
+        : React.createElement(Button, { key: action.marker, size: 'sm', variant: index === 0 ? 'default' : 'ghost', onClick: action.run }, action.label))))
+}
+
+export function apply(ctx) {
+  return ctx.slots.register({ slot: 'updates.dialog' }, CompactUpdateWindow)
 }
 ```
 

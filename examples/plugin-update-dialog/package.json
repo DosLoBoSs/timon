@@ -1,0 +1,24 @@
+{
+  "name": "@timon-ai/plugin-update-dialog",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": { "./client": "./lib/client.js" },
+  "files": ["lib", "README.md", "SIGNATURE"],
+  "timon": {
+    "id": "example-update-dialog",
+    "apiVersion": 16,
+    "kind": "behavior",
+    "label": "Compact update window",
+    "description": "Replaces Timon's update window with a compact one: the version, its highlights and one row of gestures.",
+    "permissions": [],
+    "client": {
+      "slots": ["updates.dialog"],
+      "external": ["react", "@timon/ui"],
+      "mode": "esm"
+    },
+    "settings": [],
+    "license": { "required": false }
+  }
+}
