@@ -149,6 +149,8 @@
       "changelog": "Wijzigingslogboek bekijken",
       "downgrade": "Terug naar de vorige versie",
       "working": "Goedkeuring gegeven. De dienst voorbereiden…",
+      "progressTitle": "Timon bijwerken naar {to}",
+      "preparing": "De update voorbereiden…",
       "waiting": "Je gegevens worden geback-upt en gemigreerd. Dit kan enkele minuten duren…",
       "ready": "Timon starten…",
       "partial": "Gedeeltelijke back-up",

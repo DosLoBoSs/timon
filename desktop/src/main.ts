@@ -96,7 +96,7 @@ import { BROWSER_ATTACH_CHANNEL, BROWSER_DETACH_CHANNEL, trustedBrowserSender } 
 
 import { DaemonStartTimeoutError, updateOffer, finishUpdate, updateCopy, updateFailureDialog, unmanagedDaemon, type UpdateStage } from './data-update.js';
 import { UpdateWindow } from './update-window.js';
-import { grantUpdateConsent, revokeUpdateConsent } from './update-consent.js';
+import { consentApproves, grantUpdateConsent, revokeUpdateConsent, takeUpdateConsent } from './update-consent.js';
 import { UpdateDownloader } from './update-download.js';
 import { UPDATE_CHANNELS, UpdateController, localDaemonGet, registerUpdateIpc } from './update-ipc.js';
 import { missionsAtStake, readMissionCount, removeAppImageBackup } from './update-install.js';
@@ -1369,16 +1369,23 @@ async function main(): Promise<void> {
       offer = null;
     } else console.log('[desktop] update offer: shown');
   } else console.log('[desktop] update offer: none');
+  // Taken at every packaged launch, offer or not: a consent is good for one launch only.
+  const consent = app.isPackaged ? takeUpdateConsent(cfg.home) : null;
   if (offer) {
+    // "Restart and install" approved this exact transition, after counting the missions:
+    // the same approval goes to the daemon below, the window only shows its progress.
+    const preApproved = consentApproves(consent, offer);
+    if (consent) console.log(`[desktop] update consent ${consent.from} -> ${consent.to}: ${preApproved ? 'approves this update' : 'does not match, asking'}`);
     // Asked to the daemon that runs now, the installed version's: approving moves its service.
     const installedDaemon = localDaemonGet(originOf(cfg.daemon.listen), cfg.home);
     updateWindow = new UpdateWindow(offer,
       join(process.resourcesPath, 'orchestrator', 'scripts', 'release-notes.json'), uiLocale(),
       windowScheme(desktopHome),
-      () => readMissionCount(installedDaemon).then(missionsAtStake));
+      preApproved ? undefined : () => readMissionCount(installedDaemon).then(missionsAtStake),
+      preApproved);
     if (!await updateWindow.choice) { console.log('[desktop] update declined: quitting'); app.quit(); return; }
     updateApproved = true;
-  }
+  } else if (consent) console.log(`[desktop] update consent ${consent.from} -> ${consent.to}: no update to approve, dropped`);
   // Past the approval, the new AppImage has started: the one it replaced is no longer needed.
   if (process.platform === 'linux') {
     void removeAppImageBackup(process.env.APPIMAGE).catch((error: unknown) => console.warn('[desktop] previous AppImage not removed', error));

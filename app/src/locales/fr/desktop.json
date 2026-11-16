@@ -141,6 +141,8 @@
       "changelog": "Voir le changelog",
       "downgrade": "Revenir à la version précédente",
       "working": "Accord acquis. Préparation du service…",
+      "progressTitle": "Mise à jour de Timon vers {to}",
+      "preparing": "Préparation de la mise à jour…",
       "waiting": "Copie de sauvegarde puis migration en cours. Cela peut prendre plusieurs minutes…",
       "ready": "Démarrage de Timon…",
       "partial": "Sauvegarde partielle",

@@ -108,6 +108,9 @@ export function updateCopy(locale: string) {
     missions: (count: number, from: string) => t('update.missions', { count, from }),
     wait: t('update.wait'), approveAnyway: t('update.approveAnyway'), notes: t('update.notes'), changelog: t('update.changelog'), downgrade: t('update.downgrade'),
     working: t('update.working'), waiting: t('update.waiting'),
+    /** The update approved by "Restart and install": a progress, no question (docs/AUTO-UPDATE.md §10). */
+    progressTitle: (o: UpdateOffer) => t('update.progressTitle', { from: o.from, to: o.to }),
+    preparing: t('update.preparing'),
     ready: t('update.ready'), partial: t('update.partial'),
     phases: {
       scanning: t('update.phases.scanning'), database: t('update.phases.database'), plugins: t('update.phases.plugins'),
@@ -181,6 +184,23 @@ export function updatePage(offer: UpdateOffer, notesPath: string, locale: string
 ${entries.length ? `<section><h2>${escape(copy.notes)}</h2>${entries.map(n => `<h3>${escape(n.version)}${n.date ? ` · ${escape(n.date)}` : ''}</h3><div class="notes">${renderNotes(n.content)}</div>`).join('')}</section>` : ''}
 <div id="progress-area"><p id="status" role="status" aria-live="polite"></p><progress id="progress" hidden></progress></div>
 <footer><a class="button" id="quit" role="button" href="timon-update:quit">${escape(copy.quit)}</a><a class="button primary" id="approve" role="button" href="timon-update:approve">${escape(copy.approve)}</a></footer></main></html>` };
+}
+
+/**
+ * The update the person already approved by clicking "Restart and install":
+ * its title and a progress, nothing to read or choose. The `pre-<version>`
+ * copy is still taken; only the question is gone.
+ */
+export function updateProgressPage(offer: UpdateOffer, locale: string, scheme: 'light' | 'dark' = 'dark'): { html: string; links: string[] } {
+  const THEME = themeFor(scheme);
+  const copy = updateCopy(locale);
+  const { tag, dir } = shellText(locale);
+  return { links: [], html: `<!doctype html><html lang="${tag}" dir="${dir}"><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'">
+<title>${escape(copy.progressTitle(offer))}</title><style>
+:root{color-scheme:${scheme}}*{box-sizing:border-box}body{margin:0;background:${THEME.background};color:${THEME.foreground};font:15px/1.6 system-ui,sans-serif}main{max-width:560px;margin:auto;padding:48px 32px}h1{font-size:22px;line-height:1.3;margin:0 0 24px}progress{width:100%;accent-color:${THEME.primary}}#status{white-space:pre-wrap;color:${THEME.muted}}
+</style><main><h1>${escape(copy.progressTitle(offer))}</h1>
+<div id="progress-area"><p id="status" role="status" aria-live="polite">${escape(copy.preparing)}</p><progress id="progress"></progress></div></main></html>` };
 }
 
 // A synchronous plugin backup can exceed fetch's default header timeout.

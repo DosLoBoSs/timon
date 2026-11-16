@@ -149,6 +149,8 @@
       "changelog": "Änderungsprotokoll ansehen",
       "downgrade": "Zur vorherigen Version zurückkehren",
       "working": "Freigabe erteilt. Dienst wird vorbereitet…",
+      "progressTitle": "Timon wird auf {to} aktualisiert",
+      "preparing": "Aktualisierung wird vorbereitet…",
       "waiting": "Deine Daten werden gesichert und migriert. Das kann einige Minuten dauern…",
       "ready": "Timon wird gestartet…",
       "partial": "Teilsicherung",
