@@ -47,7 +47,7 @@ test('all worktree briefs protect shared dependencies, including retries and cro
         const brief = worktreeDirective(task, wt);
         assert.ok(brief.includes(repo));
         assert.match(brief, /Do NOT run/);
-        for (const command of ['npm ci', 'npm install', 'npm rebuild', 'electron-rebuild', 'npx tsc --noEmit']) {
+        for (const command of ['npm ci', 'npm install', 'npm rebuild', 'electron-rebuild', 'npm run typecheck', 'npx tsc --noEmit']) {
           assert.ok(brief.includes(command), `${type} retry=${retry}: ${command}`);
         }
         assert.match(brief, /overrides generic installation advice/);

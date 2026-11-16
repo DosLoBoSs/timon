@@ -14,6 +14,8 @@ export type SpawnFailedPayload = {
   backend?: unknown;
   binary?: unknown;
   cause?: unknown;
+  /** The working directory refused before launch (`cwd_*` causes). */
+  cwd?: unknown;
 };
 
 function text(value: unknown, fallback: string): string {
@@ -30,6 +32,12 @@ export function spawnFailureNotice(payload: SpawnFailedPayload): string {
     backend: text(payload.backend, '?'),
     binary: text(payload.binary, '?'),
   };
+  // The folder, not the CLI: naming a binary here sent a tester reinstalling one
+  // that was there (TIM-0148).
+  const cwd = { cwd: text(payload.cwd, '?') };
+  if (payload.cause === 'cwd_missing') return t('chatPage.spawnFailedCwdMissing', cwd);
+  if (payload.cause === 'cwd_denied') return t('chatPage.spawnFailedCwdDenied', cwd);
+  if (payload.cause === 'cwd_not_directory') return t('chatPage.spawnFailedCwdNotDirectory', cwd);
   if (payload.cause === 'missing') return t('chatPage.spawnFailedMissing', vars);
   if (payload.cause === 'not_executable') return t('chatPage.spawnFailedNotExecutable', vars);
   return t('chatPage.spawnFailedUnknown', vars);

@@ -237,7 +237,7 @@ If your provider genuinely needs a variable this leaves out, tell us the
 provider and the variable: the list is part of the product, and it grows with
 real ones.
 
-A file that is refused, malformed, or named differently from its `id` is listed in **Settings → AI models → Providers** as **Blocked**; its page says why. It never prevents Timon from starting.
+A file that is refused, malformed, or named differently from its `id` is listed in **Settings → AI models → Providers** as **Blocked**; its page says why. So is a file whose `id` is already taken, or whose name is not a valid id (a space, a capital letter): it is listed under its file name, and nothing on its page changes the backend that owns the id. It never prevents Timon from starting.
 
 ## Through a LiteLLM proxy
 

@@ -38,6 +38,7 @@ import {
 } from './native-browser-bubble.js';
 import { AnnotationOverlay } from './native-browser-annotation-overlay.js';
 import { CHROME_SHIM_SOURCE } from './native-browser-chrome-shim.js';
+import { isValidAgentName, normalizeAgentName } from './agent-name-rule.js';
 
 interface BrowserTab {
   id: string; view: WebContentsView; uiWaiters: Set<() => void>;
@@ -132,14 +133,15 @@ export interface NativeBrowserEngineOptions {
 }
 
 const isQueued = (capture: AnnotationCapture): capture is QueuedCapture => (capture as Partial<QueuedCapture>).queued === true;
-const AGENT_NAME = /^[A-Za-z0-9._-]{1,128}$/;
 const MISSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The conversation an attach names, or null: the daemon checks it again before posting anything. */
 function conversationOf(value: unknown): BubbleConversation | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const { agent, mission, fresh } = value as Record<string, unknown>;
-  if (typeof agent !== 'string' || !AGENT_NAME.test(agent)) return null;
+  const { agent: rawAgent, mission, fresh } = value as Record<string, unknown>;
+  // The daemon's agent name rule, any script, in NFC as the daemon stores names.
+  const agent = typeof rawAgent === 'string' ? normalizeAgentName(rawAgent) : '';
+  if (!isValidAgentName(agent)) return null;
   if (mission !== undefined && mission !== null && (typeof mission !== 'string' || !MISSION_ID.test(mission))) return null;
   if (typeof mission === 'string') return { agent, mission: mission.toLowerCase() };
   return { agent, mission: null, ...(fresh === true ? { fresh: true } : {}) };

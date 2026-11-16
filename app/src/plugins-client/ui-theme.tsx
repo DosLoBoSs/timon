@@ -5,7 +5,7 @@ import React, { useEffect, useState, useSyncExternalStore, type ReactElement } f
 import type { BundledClientPlugin } from './types';
 import { THEME_TOKENS_CSS } from './ui-theme-tokens';
 import { useInitialAppearance, useInitialTheme } from '@/components/theme-provider';
-import { pluginsSynced, subscribePluginSync } from '@/lib/plugin-host/loader';
+import { pluginsListed, subscribePluginSync } from '@/lib/plugin-host/loader';
 import { useWorkspaceLayout } from '@/components/workspace-layout-provider';
 import { loadLayout } from '@/lib/ui-layout-store';
 import { APPEARANCE_SCOPE, APPEARANCE_EVENT, readNativeAppearance, appearanceCss, type NativeAppearance } from './ui-theme-variants';
@@ -21,7 +21,7 @@ export const UI_THEME_MODULE = '@timon/ui-theme';
 /** Re-exported: the palette used to live here, and tests import it from here. */
 export { THEME_TOKENS_CSS };
 
-const notSyncedOnServer = (): boolean => false;
+const notListedOnServer = (): boolean => false;
 
 /**
  * Default occupant of the `theme` slot. The `<style>` is deliberately NOT in
@@ -34,12 +34,17 @@ const notSyncedOnServer = (): boolean => false;
  * with the installation's accent, would beat the floor for the time the
  * expected theme's bundle takes to load, and the onboarding flashed the old
  * colours before Timon's. The floor carries the same tokens meanwhile (and
- * Timon's, `ThemeFloor`). Once synced, a theme that claimed the slot has
- * replaced this occupant; one that never came leaves it to paint.
+ * Timon's, `ThemeFloor`). Once the plugin list is read, a theme that claimed
+ * the slot has replaced this occupant; one that never came leaves it to paint.
+ *
+ * A page without a session never reads that list (401): the sign-in page
+ * painted the product's blue over the Timon floor as soon as the loader gave
+ * up. There the floor stays alone, with the installation's theme the server
+ * resolved (`GET /api/auth/theme`, `app/layout.tsx`).
  */
 export function ThemeRoot(): ReactElement | null {
   const expected = useInitialTheme();
-  const synced = useSyncExternalStore(subscribePluginSync, pluginsSynced, notSyncedOnServer);
+  const listed = useSyncExternalStore(subscribePluginSync, pluginsListed, notListedOnServer);
   const { owner } = useWorkspaceLayout();
   const initialAppearance = useInitialAppearance();
   const [appearance, setAppearance] = useState<NativeAppearance>(initialAppearance);
@@ -53,7 +58,7 @@ export function ThemeRoot(): ReactElement | null {
     window.addEventListener(APPEARANCE_EVENT, onChange);
     return () => { alive = false; window.removeEventListener(APPEARANCE_EVENT, onChange); };
   }, [owner]);
-  if (!synced && expected !== null && expected !== UI_THEME_MODULE) return null;
+  if (!listed && expected !== null && expected !== UI_THEME_MODULE) return null;
   return (
     <style
       id={THEME_TOKENS_STYLE_ID}

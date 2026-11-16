@@ -1,7 +1,7 @@
 /**
  * Tray icon resolution (TIM-0019), kept free of Electron so it can be tested.
  *
- * The files come from `assets/tray/` (see `scripts/generate-tray-icons.py`).
+ * The files come from `assets/tray/`, generated with the other brand icons.
  * Each OS wants its own shape: a multi-size `.ico` on Windows, a monochrome
  * template on macOS (recoloured for light and dark menu bars), a 24 px PNG on
  * Linux. `@2x` variants next to the PNGs are picked up by `nativeImage`.

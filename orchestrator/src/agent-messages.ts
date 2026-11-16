@@ -88,6 +88,14 @@ export type SendMessageInput = {
  * `to_agent` exactly, so a message filed under a different case would sit
  * there forever.
  */
+/** Whether the wake loop delivers `row` to its recipient as a turn: the same
+ *  rule as `wake.ts callsForTurn` for what an agent can send (a work return
+ *  payload is written by the system, never by an agent). Kept local so this
+ *  module does not pull the wake loop in. */
+function reachesPilotMission(row: AgentMessageRow): boolean {
+  return row.kind === 'request' || (row.kind === 'response' && !!row.in_reply_to);
+}
+
 export function sendAgentMessage(
   input: SendMessageInput,
   enqueue: (m: SendMessageInput) => AgentMessageRow = dbApi.enqueueMessage,
@@ -101,7 +109,8 @@ export function sendAgentMessage(
   // process) would stack a second return behind the message the pilot has just
   // read. Only a message going from a mission UP to its own pilot counts — an
   // agent writing to a peer has reported nothing. Posted AFTER the enqueue: a
-  // refused message has delivered no return.
+  // refused message has delivered no return. And only when the message is
+  // delivered as a turn (see the guard at the end).
   const reportsToPilot = !!sender.parent_agent
     && input.fromAgent === sender.agent_name
     && canonicalAgentName(sender.parent_agent) === toAgent
@@ -152,6 +161,11 @@ export function sendAgentMessage(
     }
     return enqueue({ ...message, toAgent });
   })();
-  if (reportsToPilot) dbApi.markMissionReturnNotified(sender.id);
+  // Only a message the pilot will actually be handed stands in for the return.
+  // A free `msg` or `notification` never calls for a turn (`wake.ts
+  // callsForTurn`): it waits in the inbox, unpinned, until the 2 h expiry. A
+  // reviewer that posted its verdict that way set the marker, the end-of-turn
+  // return stayed silent, and the pilot never received anything (11/11/2026).
+  if (reportsToPilot && reachesPilotMission(sent)) dbApi.markMissionReturnNotified(sender.id);
   return sent;
 }

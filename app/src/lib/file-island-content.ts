@@ -1,4 +1,5 @@
 import type { IslandContent, IslandParams } from './island-tree';
+import { isValidAgentName, normalizeAgentName } from './agent-name-rule';
 
 /**
  * The file content type of the island workspace, named apart from its
@@ -13,8 +14,6 @@ export function fileIslandContent(agentId: string, path: string, { external = fa
   return { type: FILE_ISLAND_TYPE, params: { agentId, path, mode, external } };
 }
 
-/** Same shape as the daemon's agent name segment. */
-const AGENT = /^[A-Za-z0-9._-]{1,128}$/;
 /** Leaves room for the other params under the 1 KiB a tab may store. */
 const MAX_PATH = 900;
 
@@ -25,8 +24,10 @@ const MAX_PATH = 900;
  */
 export function parseFileIslandParams(raw: unknown): IslandParams | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { agentId, path: rawPath, mode, external } = raw as Record<string, unknown>;
-  if (typeof agentId !== 'string' || !AGENT.test(agentId) || agentId === '.' || agentId === '..') return null;
+  const { agentId: rawAgent, path: rawPath, mode, external } = raw as Record<string, unknown>;
+  // The daemon's own rule for an agent name, in NFC as it stores them.
+  const agentId = typeof rawAgent === 'string' ? normalizeAgentName(rawAgent) : '';
+  if (!isValidAgentName(agentId)) return null;
   if (typeof rawPath !== 'string' || rawPath.length === 0 || rawPath.length > MAX_PATH || rawPath.includes('\0')) return null;
   const outside = external === true;
   const path = normalizeFilePath(rawPath, outside);

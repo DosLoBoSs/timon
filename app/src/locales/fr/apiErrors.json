@@ -1,6 +1,7 @@
 {
   "apiErrors": {
     "mission_fence_refused": "Timon a refusé de lancer cette mission : l'isolation des missions est réglée sur obligatoire, et cette machine ne peut pas la clôturer. Changez le mode dans les réglages de sécurité, ou corrigez ce que signale le diagnostic.",
+    "cwd_unusable": "Timon n'a pas pu lancer cette mission : son dossier de travail {path} est introuvable ou ne peut pas être ouvert. Restaurez le dossier, ou changez celui de l'agent ou de son projet.",
     "unknown": "Une erreur est survenue.",
     "http_status": "HTTP {status}",
     "module_unavailable": "Cette fonctionnalité n'est pas disponible sur cette installation : le module qui la sert est désactivé ou absent.",
@@ -20,6 +21,7 @@
     "user_not_found": "Utilisateur introuvable.",
     "team_not_found": "Équipe introuvable.",
     "agent_not_found": "Agent introuvable.",
+    "agent_name_taken": "Un agent nommé {name} existe déjà. Deux noms qui ne diffèrent que par la casse ou l'encodage des accents désignent le même agent.",
     "mission_not_found": "Cette mission n'existe plus.",
     "mission_not_running": "Aucun agent ne tourne pour cette mission.",
     "todo_not_found": "Cette idée n'existe plus.",

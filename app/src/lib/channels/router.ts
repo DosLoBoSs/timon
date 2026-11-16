@@ -7,7 +7,8 @@ export function routeMessage(
   defaultAgent: string,
   routing?: Record<string, string>,
 ): { agent: string; cleanedText: string } {
-  const match = text.match(/^\s*(@[\w-]+)\s+([\s\S]*)$/);
+  // A tag in any script (`@马斯克`), as agent names are, compared in NFC.
+  const match = text.normalize('NFC').match(/^\s*(@[\p{L}\p{M}\p{N}_-]+)\s+([\s\S]*)$/u);
   if (!match) return { agent: defaultAgent, cleanedText: text };
   const tag = match[1]!;
   const rest = match[2]!;

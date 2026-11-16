@@ -176,6 +176,13 @@ test('grok gets xAI\'s own installer on every machine, never a package-manager g
   assert.equal(installCommandFor('claude', { platform: 'linux', packageManager: 'apt' }), 'npm install -g @anthropic-ai/claude-code');
 });
 
+test('a provider install script runs non-interactive on Windows, so a vendor prompt fails instead of hanging', () => {
+  const plan = installPlanFor('grok', { platform: 'win32', packageManager: null });
+  assert.ok(plan);
+  assert.deepEqual(plan.argv.slice(0, 6), ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command']);
+  assert.match(plan.display, /^powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "irm https:\/\/x\.ai\/cli\/install\.ps1 \| iex"$/);
+});
+
 test('TIM-0022: winget installs unattended, off the msstore source', () => {
   const plan = installPlanFor('node', { platform: 'win32', packageManager: null });
   assert.ok(plan);

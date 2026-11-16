@@ -34,6 +34,7 @@ import { ConfirmDialogHost } from '@/components/confirm-dialog/confirm-dialog';
 import { APPEARANCE_SCOPE, DEFAULT_APPEARANCE, effectiveGlass, readNativeAppearance } from '@/plugins-client/ui-theme-variants';
 import { BACKGROUND_SCOPE } from '@/components/background/background-model';
 import { DEFAULT_USER_PREFS, type ColorScheme } from '@/lib/auth';
+import { readPublicTheme } from '@/lib/public-theme';
 import { fetchForRender, resolveLayoutSeeds, resolveWorkspace } from '@/lib/ui/server-workspace';
 import { LayoutSeedsProvider } from '@/components/layout-seeds';
 import { navPinnedOf, sharedNavScope } from '@/lib/workspace-scope';
@@ -114,11 +115,15 @@ async function loadInitialMe(): Promise<{ scheme: ColorScheme; owner: string | n
     const res = await fetchForRender('/api/auth/me', localTarget());
     if (!res.ok) return { scheme: DEFAULT_USER_PREFS.scheme, owner: null, theme: DEFAULT_USER_PREFS.theme };
     const body = (await res.json()) as { prefs?: { scheme?: unknown; theme?: unknown }; user?: { id?: unknown } | null };
+    const owner = typeof body.user?.id === 'string' ? body.user.id : null;
+    // The theme the page is painted with before the plugins mount (`ThemeFloor`).
+    const theme = typeof body.prefs?.theme === 'string' && body.prefs.theme ? body.prefs.theme : DEFAULT_USER_PREFS.theme;
     return {
       scheme: body.prefs?.scheme === 'light' ? 'light' : 'dark',
-      owner: typeof body.user?.id === 'string' ? body.user.id : null,
-      // The theme the page is painted with before the plugins mount (`ThemeFloor`).
-      theme: typeof body.prefs?.theme === 'string' && body.prefs.theme ? body.prefs.theme : DEFAULT_USER_PREFS.theme,
+      owner,
+      // No session, no plugin will ever paint the page: it wears the
+      // installation's theme, from the floor alone (`ThemeRoot`).
+      theme: owner ? theme : await readPublicTheme((path) => fetchForRender(path, localTarget()), theme),
     };
   } catch {
     return { scheme: DEFAULT_USER_PREFS.scheme, owner: null, theme: DEFAULT_USER_PREFS.theme };

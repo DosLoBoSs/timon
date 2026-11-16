@@ -14,9 +14,10 @@
  */
 import { LicenseCapabilityError, assertCompositionMutable, fixedComposition, withCompositionWrite } from '../license/capabilities.js';
 import { mutationLicenseState } from '../license/runtime.js';
+import type { LicenseState } from '../license/license.js';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { CONFIG_FILE, config, setConfig } from '../config/load.js';
+import { CONFIG_FILE, config, loadConfig, setConfig } from '../config/load.js';
 import { BRAND } from '../brand.js';
 import { whiteLabelAllowed } from '../license/capabilities.js';
 import { applyBuildPolicy } from '../license/build-policy.js';
@@ -937,19 +938,30 @@ export function setPluginEnabled(
  * effect, so the switch is greyed out before a click rather than after. Both
  * go through `unsignedPluginsAllowed`, never a copy of its licence rule.
  *
- * `blockedBy` has a single reason because the rule has a single refusal in
- * practice: every state without rights in force that the daemon produces is
- * either the local Free tier (admitted) or the locked beta state (a fixed
- * composition), and a valid licence is refused only when its composition is
- * fixed. `developer-routes.test.ts` pins that invariant on the real producers;
- * a new state that breaks it must add its own reason here and in the switch.
+ * The rule has a single refusal in practice: every state without rights in
+ * force that the daemon produces is either the local Free tier (admitted) or
+ * the locked beta state (a fixed composition), and a valid licence is refused
+ * only when its composition is fixed. `developer-routes.test.ts` pins that
+ * invariant on the real producers; a new state that breaks it must add its own
+ * reason here and in the switch. `blockedBy` still tells the two fixed
+ * compositions apart, because the person has different things to do: a
+ * licence that fixes the plugins is a plan to change, a locked beta install
+ * has no licence at all, and reading "your licence" there describes one it
+ * does not hold.
  */
+export type DeveloperModeRefusal = 'plugin_composition_fixed' | 'license_required';
+
 export type DeveloperModeState = {
   requested: boolean;
   effective: boolean;
   available: boolean;
-  blockedBy: 'plugin_composition_fixed' | null;
+  blockedBy: DeveloperModeRefusal | null;
 };
+
+function developerModeRefusal(state: LicenseState): DeveloperModeRefusal | null {
+  if (!fixedComposition(state)) return null;
+  return state.status === 'valid' || state.localFree === true ? 'plugin_composition_fixed' : 'license_required';
+}
 
 export function developerModeState(): DeveloperModeState {
   const setting = config().developer.unsignedPlugins;
@@ -960,7 +972,7 @@ export function developerModeState(): DeveloperModeState {
     available,
     // Named after the rule's answer, never ahead of it: should the rule one day
     // admit a fixed composition, the switch opens with it.
-    blockedBy: !available && fixedComposition(mutationLicenseState()) ? 'plugin_composition_fixed' : null,
+    blockedBy: available ? null : developerModeRefusal(mutationLicenseState()),
   };
 }
 
@@ -971,15 +983,20 @@ export function developerModeState(): DeveloperModeState {
  * next `loader.update()` would still judge with the boot's value.
  *
  * Turning it off only narrows what loads, so it is allowed under any licence.
- * Turning it on is refused with `plugin_composition_fixed` when the admission
- * rule shuts a fixed composition out, the only refusal it has today; should
- * another appear, the wish is kept and `developerModeState` reports it as not
- * effective.
+ * Turning it on is refused when the admission rule shuts a fixed composition
+ * out, the only refusal it has today, with the code `developerModeState`
+ * reports; should another appear, the wish is kept and `developerModeState`
+ * reports it as not effective.
  * `false` is written, not deleted: an explicit refusal, whatever default the
  * key registry would resolve.
  */
 export function setUnsignedPluginsSetting(enabled: boolean, file: string = CONFIG_FILE): void {
-  if (enabled && !unsignedPluginsAllowed(true) && fixedComposition(mutationLicenseState())) {
+  const refusal = enabled && !unsignedPluginsAllowed(true) ? developerModeRefusal(mutationLicenseState()) : null;
+  if (refusal === 'license_required') {
+    throw new LicenseCapabilityError('license_required',
+      'This installation has no licence in force: developer mode cannot be turned on.');
+  }
+  if (refusal === 'plugin_composition_fixed') {
     throw new LicenseCapabilityError('plugin_composition_fixed',
       'This licence includes a fixed plugin composition: developer mode cannot be turned on.');
   }
@@ -993,6 +1010,30 @@ export function setUnsignedPluginsSetting(enabled: boolean, file: string = CONFI
     const live = config();
     setConfig({ ...live, developer: { ...live.developer, unsignedPlugins: enabled } });
   }
+}
+
+/** How far a value opens developer mode: `true` > unset (open only with no key) > `false`. */
+const UNSIGNED_OPENNESS = (value: boolean | undefined): number => (value === true ? 2 : value === undefined ? 1 : 0);
+
+/**
+ * Closes developer mode in this process when the operator's file closed it
+ * by hand: the loader's watcher runs a pass on every change of
+ * `timon.config.json`, but `config()` holds the copy read at boot, so an
+ * unsigned plugin would keep running until the next restart.
+ *
+ * Narrows only, like `narrowLivePluginGrants`: a hand edit that OPENS the mode
+ * still waits for a restart. What the switch refuses to an agent — admitting
+ * the plugin it has just written — must not come back through a file write
+ * that applies at once. An unreadable file says nothing about what the
+ * operator meant: nothing moves.
+ */
+export function narrowLiveDeveloperMode(file: string = CONFIG_FILE): void {
+  if (!existsSync(file)) return;
+  let disk: boolean | undefined;
+  try { disk = loadConfig(file, { readonly: true }).developer.unsignedPlugins; } catch { return; }
+  const live = config();
+  if (UNSIGNED_OPENNESS(disk) >= UNSIGNED_OPENNESS(live.developer.unsignedPlugins)) return;
+  setConfig({ ...live, developer: { ...live.developer, unsignedPlugins: disk } });
 }
 
 /** Offline inventory: what is installed, and what the config says about it. */

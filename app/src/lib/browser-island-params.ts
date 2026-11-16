@@ -1,6 +1,6 @@
 import type { IslandParams } from '@/lib/island-tree';
+import { isValidAgentName, normalizeAgentName } from './agent-name-rule';
 
-const AGENT = /^[A-Za-z0-9._-]{1,128}$/;
 const MISSION = /^[A-Za-z0-9-]{1,64}$/;
 
 /** `{ agent, mission, display }`. A `profile` handed by a source is dropped: the daemon
@@ -8,8 +8,10 @@ const MISSION = /^[A-Za-z0-9-]{1,64}$/;
  *  the island so registering it does not load the browser view. */
 export function parseBrowserIslandParams(raw: unknown): IslandParams | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { agent, mission, display } = raw as Record<string, unknown>;
-  if (typeof agent !== 'string' || !AGENT.test(agent) || agent === '.' || agent === '..') return null;
+  const { agent: rawAgent, mission, display } = raw as Record<string, unknown>;
+  // The daemon's own rule for an agent name, in NFC as it stores them.
+  const agent = typeof rawAgent === 'string' ? normalizeAgentName(rawAgent) : '';
+  if (!isValidAgentName(agent)) return null;
   return {
     agent,
     mission: typeof mission === 'string' && MISSION.test(mission) ? mission : null,

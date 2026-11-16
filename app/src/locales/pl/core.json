@@ -1884,6 +1884,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} nazywa się teraz {name}. Sprawdź wyzwalacze, których filtr pasuje do starej nazwy przez wzorzec lub fragment ({count}): {names}",
     "renameOpenTriggers": "Otwórz wyzwalacze",
+    "invalidName": "Nieprawidłowa nazwa. Użyj liter i cyfr w dowolnym języku oraz . _ -, bez spacji i emoji, zaczynając od litery lub cyfry (maksymalnie 80 bajtów, około 26 znaków chińskich).",
     "autoFitView": "Automatyczne dopasowanie widoku",
     "poleProjects": "{count} {count, plural, one {projekt} few {projekty} many {projektów} other {projektu}}",
     "newPole": "Nowy biegun",
@@ -2029,6 +2030,9 @@
     "contextTailOnly": "podsumowanie nie powiodło się — przeszedł tylko KONIEC transkrypcji{reason}",
     "backendNotice": "backend {from}{target} — {ctx}",
     "backendSwitchFailed": "Nie udało się przełączyć z {from} na {target}: {reason}. Rozmowa zostaje na {from}, możesz spróbować ponownie.",
+    "modelNotApplied": "{backend} nie przyjął modelu {model}: {reason}. Ta misja działa na {active}.",
+    "modelNotAppliedDefault": "{backend} nie przyjął modelu {model}: {reason}. Ta misja działa na domyślnym modelu agenta.",
+    "effortNotApplied": "{backend} nie przyjął poziomu rozumowania {effort}: {reason}. Obowiązuje domyślny poziom modelu.",
     "sessionlessTurn": "{backend} nie przechowuje sesji: każda wiadomość zaczyna się bez wcześniejszych tur.",
     "askUserUnrenderable": "Nie udało się wyświetlić formularza pytań agenta — {defect}",
     "invalidPayload": "nieprawidłowe dane",

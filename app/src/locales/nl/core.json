@@ -1884,6 +1884,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} heet nu {name}. Controleer {count} trigger(s) waarvan het filter de oude naam via een patroon of deeltekst raakt: {names}",
     "renameOpenTriggers": "Triggers openen",
+    "invalidName": "Ongeldige naam. Gebruik letters en cijfers in elke taal, plus . _ -, zonder spaties of emoji, beginnend met een letter of cijfer (maximaal 80 bytes, ongeveer 26 Chinese tekens).",
     "autoFitView": "Weergave automatisch passend maken",
     "poleProjects": "{count} project(en)",
     "newPole": "Nieuwe pool",
@@ -2029,6 +2030,9 @@
     "contextTailOnly": "samenvatting mislukt — alleen het EINDE van het transcript is doorgekomen{reason}",
     "backendNotice": "backend {from}{target} — {ctx}",
     "backendSwitchFailed": "Kan niet wisselen van {from} naar {target}: {reason}. Het gesprek blijft op {from}, je kunt het opnieuw proberen.",
+    "modelNotApplied": "{backend} heeft het model {model} niet overgenomen: {reason}. Deze missie draait op {active}.",
+    "modelNotAppliedDefault": "{backend} heeft het model {model} niet overgenomen: {reason}. Deze missie draait op het standaardmodel van de agent.",
+    "effortNotApplied": "{backend} heeft het denkniveau {effort} niet overgenomen: {reason}. Het standaardniveau van het model geldt.",
     "sessionlessTurn": "{backend} houdt geen sessie bij: elk bericht begint zonder de eerdere beurten.",
     "askUserUnrenderable": "Het vraagformulier van de agent kon niet worden getoond — {defect}",
     "invalidPayload": "ongeldige payload",

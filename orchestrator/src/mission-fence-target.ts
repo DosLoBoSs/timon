@@ -11,7 +11,7 @@
  */
 import { lstatSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { agentPackageCacheDir, isFenceSegment } from './host/isolation.js';
+import { agentPackageCacheDir, isFenceAgent } from './host/isolation.js';
 
 export type GitDirsFs = {
   /** What sits at `path`, links not followed: a folder, a file, or nothing. */
@@ -190,7 +190,7 @@ export function purgeMissionTmpDirs(
  * the same name packages the old one's missions wrote. Best effort.
  */
 export function removeAgentPackageCache(timonHome: string, agent: string): void {
-  if (!isFenceSegment(agent)) return;
+  if (!isFenceAgent(agent)) return;
   const dir = agentPackageCacheDir(timonHome, agent);
   try {
     rmSync(dir, { recursive: true, force: true });

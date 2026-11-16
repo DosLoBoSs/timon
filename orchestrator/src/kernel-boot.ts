@@ -72,6 +72,7 @@ import { reportBackendBinaries } from './backends/binary-check.js';
 import { expectProviders, providersLoaded } from './backends/registry.js';
 import { dbApi } from './db.js';
 import { noticeSuspendedAccounts } from './users/suspended-accounts.js';
+import { upgradeAuth } from './users/upgrade-auth.js';
 import { liveMissionBackends, reattachRemoteMissions, startReaper, sweepZombieMissions } from './agent.js';
 import { startReconcile } from './reconcile.js';
 import { createHttpPlugin } from './kernel/http-service.js';
@@ -89,6 +90,7 @@ import { closePluginSecretCards } from './secrets/plugins.js';
 import { attachBundledReconciler, createBundledReconciler } from './kernel/bundled-reload.js';
 import { PluginLoader } from './plugins/loader.js';
 import { closePluginSpawnCards, narrowLivePluginGrants } from './plugins/policy.js';
+import { narrowLiveDeveloperMode } from './plugins/install.js';
 import { settlePluginPackage } from './plugins/package-binding.js';
 import { closePluginLaunchCard } from './backends/launch-card.js';
 import { unsignedPluginsAllowed } from './plugins/pubkey.js';
@@ -197,7 +199,7 @@ export async function boot(opts: { listen?: boolean; catalog?: readonly ModuleDe
   ctx.baseUrl = new URL('./', import.meta.url).href;
 
   await ctx.plugin(Timer);
-  await ctx.plugin(createHttpPlugin(app));
+  await ctx.plugin(createHttpPlugin(app, { upgradeAuth }));
   await ctx.plugin(createHostPlugin(host));
   await ctx.plugin({ name: 'timon-bus-bridge', apply: applyBusBridge });
   await ctx.plugin(Loader);
@@ -242,8 +244,9 @@ export async function boot(opts: { listen?: boolean; catalog?: readonly ModuleDe
       // A provider's update waits until no mission is running on its backends.
       backendsInFlight: () => liveMissionBackends(),
       onFailure: (id, message) => notifyPluginFailure(id, message),
-      // `timon plugin remove` edits the file from another process (TODO #663).
-      beforePass: () => narrowLivePluginGrants(),
+      // `timon plugin remove` edits the file from another process (TODO #663),
+      // and so does an operator who closes developer mode by hand.
+      beforePass: () => { narrowLivePluginGrants(); narrowLiveDeveloperMode(); },
       // A package gone without `timon plugin remove` leaves its grants behind (TODO #671).
       settlePackage: (id, pkg) => { settlePluginPackage(id, pkg); },
       // The remover already closed them in the database; only the daemon can

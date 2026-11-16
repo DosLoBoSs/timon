@@ -195,8 +195,16 @@ test('a waiting update asks again only once a mission is gone, and stops asking 
     writePlugin(env.root, '1.0.1', 'two');
 
     let reconciles = 0;
+    // The pass the timer starts, kept so the test waits for its real end: a
+    // fixed number of event-loop turns is not enough on a loaded machine.
     const realUpdate = env.loader.update.bind(env.loader);
-    t.mock.method(env.loader, 'update', () => { reconciles += 1; return realUpdate(); });
+    let timerPass: ReturnType<typeof realUpdate> = Promise.resolve([]);
+    t.mock.method(env.loader, 'update', () => {
+      reconciles += 1;
+      const pass = realUpdate();
+      timerPass = pass;
+      return pass;
+    });
     t.mock.timers.enable({ apis: ['setTimeout'] });
 
     // First pass defers and arms the timer.
@@ -212,8 +220,9 @@ test('a waiting update asks again only once a mission is gone, and stops asking 
     busy = false;
     t.mock.timers.tick(5_000);
     assert.equal(reconciles, 1);
-    await new Promise((done) => setImmediate(done));
-    await new Promise((done) => setImmediate(done));
+    const landed = await timerPass;
+    assert.equal(landed[0]?.reason, null, 'the waiting update lands once the mission is gone');
+    assert.equal(await tagOf(), 'two');
 
     // A second update, deferred again, then the plugin is switched off.
     busy = true;

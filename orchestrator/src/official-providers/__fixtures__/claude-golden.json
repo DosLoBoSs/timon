@@ -22,7 +22,7 @@
       "--permission-prompt-tool",
       "mcp__timon_ask__request",
       "--disallowedTools",
-      "AskUserQuestion,Task,Agent,advisor"
+      "AskUserQuestion,Task,Agent,advisor,ListAgents,SendMessage,RemoteTrigger,PushNotification"
     ],
     "systemPrompt": "System prompt witness.",
     "stdin": "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Hello.\"},{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/png\",\"data\":\"dGVzdA==\"}}]}}\n"
@@ -48,7 +48,7 @@
       "--permission-prompt-tool",
       "mcp__timon_ask__request",
       "--disallowedTools",
-      "AskUserQuestion,Task,Agent,advisor",
+      "AskUserQuestion,Task,Agent,advisor,ListAgents,SendMessage,RemoteTrigger,PushNotification",
       "--resume",
       "session-old",
       "--add-dir",
@@ -76,7 +76,7 @@
       "--mcp-config",
       "{\"mcpServers\":{\"timon_ask\":{\"command\":\"node\",\"args\":[\"<permission-mcp>\"],\"env\":{\"TIMON_ORCH_URL\":\"http://localhost:3000\",\"TIMON_ASK_FORMS_ONLY\":\"1\"}},\"timon\":{\"command\":\"node\",\"args\":[\"<timon-mcp>\"],\"env\":{\"TIMON_ORCH_URL\":\"http://localhost:3000\",\"TIMON_HOME\":\"<HOME>\"}},\"grepai\":{\"command\":\"grepai\",\"args\":[\"mcp-serve\"]}}}",
       "--disallowedTools",
-      "AskUserQuestion,Task,Agent,advisor"
+      "AskUserQuestion,Task,Agent,advisor,ListAgents,SendMessage,RemoteTrigger,PushNotification"
     ],
     "systemPrompt": "System prompt witness.",
     "stdin": "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Hello.\"},{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/png\",\"data\":\"dGVzdA==\"}}]}}\n"
@@ -98,7 +98,7 @@
       "--mcp-config",
       "{\"mcpServers\":{\"grepai\":{\"command\":\"grepai\",\"args\":[\"mcp-serve\"]}}}",
       "--disallowedTools",
-      "AskUserQuestion,Task,Agent,advisor"
+      "AskUserQuestion,Task,Agent,advisor,ListAgents,SendMessage,RemoteTrigger,PushNotification"
     ],
     "systemPrompt": "System prompt witness.",
     "stdin": "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Hello.\"},{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/png\",\"data\":\"dGVzdA==\"}}]}}\n"

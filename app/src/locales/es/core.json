@@ -1884,6 +1884,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} ahora es {name}. Revisa {count} disparador(es) cuyo filtro coincide con el nombre antiguo por patrón o subcadena: {names}",
     "renameOpenTriggers": "Abrir disparadores",
+    "invalidName": "Nombre no válido. Usa letras y cifras de cualquier idioma, además de . _ -, sin espacios ni emojis, empezando por una letra o una cifra (80 bytes como máximo, unos 26 caracteres chinos).",
     "autoFitView": "Ajustar la vista",
     "poleProjects": "{count} proyecto(s)",
     "newPole": "Nuevo polo",
@@ -2029,6 +2030,9 @@
     "contextTailOnly": "el resumen falló — solo pasó el FINAL de la transcripción{reason}",
     "backendNotice": "backend {from}{target} — {ctx}",
     "backendSwitchFailed": "No se pudo cambiar de {from} a {target}: {reason}. La conversación se queda en {from}; puedes volver a intentarlo.",
+    "modelNotApplied": "{backend} no aceptó el modelo {model}: {reason}. Esta misión se ejecuta con {active}.",
+    "modelNotAppliedDefault": "{backend} no aceptó el modelo {model}: {reason}. Esta misión se ejecuta con el modelo predeterminado del agente.",
+    "effortNotApplied": "{backend} no aceptó el nivel de razonamiento {effort}: {reason}. Se aplica el nivel predeterminado del modelo.",
     "sessionlessTurn": "{backend} no guarda sesión: cada mensaje empieza sin los turnos anteriores.",
     "askUserUnrenderable": "No se pudo mostrar el formulario de preguntas del agente — {defect}",
     "invalidPayload": "carga útil no válida",

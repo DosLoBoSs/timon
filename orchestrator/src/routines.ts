@@ -20,13 +20,16 @@
  * so two coinciding ticks do not recreate the same task.
  */
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { CronExpressionParser } from 'cron-parser';
 import { db, dbApi, type RoutineRow, type TaskType } from './db.js';
 import { exportTimon, type ExportResult } from './export.js';
+import { bus } from './bus.js';
+import { closePushForAnchor, createNotification } from './notifications.js';
 import { TIMON_HOME } from './paths.js';
 import { settingInt } from './settings.js';
+import { formatBytes, freeBytes } from './storage-failure.js';
 import { scheduleCadenceProblem } from './triggers/schema.js';
 import { recordDelivery } from './triggers/store.js';
 import { assertSpawnAllowed } from './plugins/policy.js';
@@ -127,6 +130,21 @@ const BACKUP_PROMPT =
   'timon export --out ~/.timon/backups/timon-<date>.tar.gz every night at 03:30, '
   + 'then prune by TIMON_BACKUP_KEEP and TIMON_BACKUP_MAX_AGE_DAYS.';
 const BACKUP_ARCHIVE_RE = /^timon-(\d{4})-(\d{2})-(\d{2})\.tar\.gz$/;
+/**
+ * An export is written under this suffix and renamed once complete: a `tar`
+ * cut short by a full disk must never carry the archive's name, or it would
+ * count as the newest backup and push valid ones out of the kept window.
+ */
+export const BACKUP_PARTIAL_SUFFIX = '.partial';
+/** Database snapshots taken by hand before a rebuild (`VACUUM INTO`), several GB each. */
+const PRE_REBUILD_RE = /^pre-rebuild-(\d{4})-(\d{2})-(\d{2})\.db$/;
+/** Free space asked before an export, as a multiple of the newest archive. */
+export const BACKUP_SPACE_FACTOR = 1.5;
+/** Consecutive failed nights before the user is alerted. */
+export const BACKUP_ALERT_AFTER_FAILURES = 3;
+export const BACKUP_FAILURES_KEY = 'backup.consecutive_failures';
+/** One card at a time for the backup, whatever the cause. */
+export const BACKUP_ALERT_ANCHOR = 'backup:nightly';
 const DAY_MS = 86_400_000;
 
 export function backupsDir(home: string = TIMON_HOME): string {
@@ -168,9 +186,9 @@ export function backupRetention(): BackupRetention {
   };
 }
 
-/** Local midnight of the day an archive name carries (the cron is local too). */
-function archiveDay(name: string): number | null {
-  const m = BACKUP_ARCHIVE_RE.exec(name);
+/** Local midnight of the day a file name carries (the cron is local too). */
+function archiveDay(name: string, re: RegExp = BACKUP_ARCHIVE_RE): number | null {
+  const m = re.exec(name);
   if (!m) return null;
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
 }
@@ -179,7 +197,13 @@ function archiveDay(name: string): number | null {
  * Keeps the `keep` newest archives (name order = date order) and drops those
  * older than `maxAgeDays`. The newest archive survives both rules: a clock set
  * wrong, or a max age shorter than the gap since the last backup, must never
- * leave the folder empty. Returns the names removed.
+ * leave the folder empty. Only complete archives count: an export in progress
+ * or cut short carries `.partial` and is never one of the `keep`.
+ *
+ * A `pre-rebuild-<date>.db` snapshot follows the archives: it goes once `keep`
+ * archives are newer than it, or once it is past `maxAgeDays` with at least
+ * one newer archive. Nightly failures therefore never remove it.
+ * Returns the names removed.
  */
 export function pruneBackupArchives(
   dir: string = backupsDir(),
@@ -189,16 +213,116 @@ export function pruneBackupArchives(
   const { keep, maxAgeDays } = typeof retention === 'number' ? { keep: retention, maxAgeDays: 0 } : retention;
   const cutoff = maxAgeDays > 0 ? now.getTime() - maxAgeDays * DAY_MS : null;
   const dropped: string[] = [];
+  const keptDays: number[] = [];
   listBackupArchives(dir).forEach((file, index) => {
-    if (index === 0) return;
     const day = archiveDay(file.name);
     const tooMany = index >= Math.max(1, keep);
     const tooOld = cutoff !== null && day !== null && day < cutoff;
-    if (!tooMany && !tooOld) return;
+    if (index === 0 || (!tooMany && !tooOld)) {
+      if (day !== null) keptDays.push(day);
+      return;
+    }
     rmSync(join(dir, file.name));
     dropped.push(file.name);
   });
+  const snapshots = existsSync(dir) ? readdirSync(dir).filter((n) => PRE_REBUILD_RE.test(n)) : [];
+  for (const name of snapshots) {
+    const day = archiveDay(name, PRE_REBUILD_RE);
+    if (day === null) continue;
+    const newer = keptDays.filter((d) => d > day).length;
+    const outOfWindow = newer >= Math.max(1, keep);
+    const tooOld = cutoff !== null && day < cutoff && newer >= 1;
+    if (!outOfWindow && !tooOld) continue;
+    rmSync(join(dir, name), { force: true });
+    dropped.push(name);
+  }
   return dropped;
+}
+
+/** Leftovers of an export the daemon did not finish (killed, power cut). */
+function removePartialArchives(dir: string): string[] {
+  const partials = readdirSync(dir).filter((n) =>
+    n.endsWith(BACKUP_PARTIAL_SUFFIX) && BACKUP_ARCHIVE_RE.test(n.slice(0, -BACKUP_PARTIAL_SUFFIX.length)));
+  for (const name of partials) rmSync(join(dir, name), { force: true });
+  return partials;
+}
+
+/** Thrown before the export when the disk cannot hold the next archive. */
+export class BackupSpaceError extends Error {
+  constructor(readonly needed: number, readonly free: number, readonly dir: string) {
+    super(`not enough free space for the nightly backup in ${dir}: ${formatBytes(free)} free, about ${formatBytes(needed)} needed`);
+    this.name = 'BackupSpaceError';
+  }
+}
+
+/**
+ * The next archive is about the size of the newest one; half again on top
+ * leaves room for growth. No archive yet, or a filesystem that cannot tell its
+ * free space: nothing to compare, the export is tried.
+ */
+function assertBackupSpace(dir: string, free: (dir: string) => number | null): void {
+  const newest = listBackupArchives(dir)[0];
+  if (!newest) return;
+  const available = free(dir);
+  if (available === null) return;
+  const needed = Math.ceil(newest.bytes * BACKUP_SPACE_FACTOR);
+  if (available < needed) throw new BackupSpaceError(needed, available, dir);
+}
+
+function backupFailureCount(): number {
+  const raw = Number(dbApi.getAllSettings()[BACKUP_FAILURES_KEY] ?? 0);
+  return Number.isInteger(raw) && raw > 0 ? raw : 0;
+}
+
+function hasOpenBackupAlert(): boolean {
+  return dbApi.listActiveNotificationsByAnchorPrefix(BACKUP_ALERT_ANCHOR, 'alert')
+    .some((n) => n.anchor === BACKUP_ALERT_ANCHOR);
+}
+
+function raiseBackupAlert(title: string, body: string): void {
+  // A card the user has not dismissed yet is enough; a dismissed one comes back
+  // the next failed night.
+  if (hasOpenBackupAlert()) return;
+  createNotification({ type: 'alert', title, body, source: 'backup', anchor: BACKUP_ALERT_ANCHOR });
+}
+
+/**
+ * Every failed night counts, persisted so a restart does not reset it. A disk
+ * too full is alerted at once: it will not heal by itself. Any other cause is
+ * alerted from the third night in a row, so one bad night stays quiet.
+ * Never throws: the caller is already handling the backup's own error.
+ */
+function noteBackupFailure(err: unknown): void {
+  try {
+    const failures = backupFailureCount() + 1;
+    dbApi.setSetting(BACKUP_FAILURES_KEY, String(failures));
+    const message = err instanceof Error ? err.message : String(err);
+    if (err instanceof BackupSpaceError) {
+      raiseBackupAlert(
+        'Nightly backup skipped: disk almost full',
+        `${message}. Free some space on this disk; older backups can be deleted from the backups folder.`,
+      );
+    } else if (failures >= BACKUP_ALERT_AFTER_FAILURES) {
+      raiseBackupAlert(
+        `Nightly backup failed ${failures} nights in a row`,
+        `Last error: ${message}. No new backup has been written since the first of these failures.`,
+      );
+    }
+  } catch (noteErr) {
+    console.error(`[routines] backup failure not recorded: ${(noteErr as Error).message}`);
+  }
+}
+
+function noteBackupSuccess(): void {
+  try {
+    if (backupFailureCount() > 0) dbApi.deleteSetting(BACKUP_FAILURES_KEY);
+    if (dbApi.dismissNotificationsByAnchor(BACKUP_ALERT_ANCHOR, 'alert') > 0) {
+      closePushForAnchor(BACKUP_ALERT_ANCHOR);
+      bus.publish({ kind: 'notifications_changed', ownerUserId: null });
+    }
+  } catch (err) {
+    console.error(`[routines] backup success not recorded: ${(err as Error).message}`);
+  }
 }
 
 export type BackupStatus = {
@@ -291,20 +415,47 @@ export function applyBackupDefault(): 'created' | 'kept' | 'already' {
  * Archive under `$TIMON_HOME/backups/` (never a test's real `~/.timon`:
  * `TIMON_HOME` is the process's). Secrets excluded, like `timon export`.
  */
-export function runNightlyBackup(when: Date = new Date()): ExportResult {
+export function runNightlyBackup(
+  when: Date = new Date(),
+  deps: { freeBytes?: (dir: string) => number | null; exportArchive?: typeof exportTimon } = {},
+): ExportResult {
   const dir = backupsDir();
   mkdirSync(dir, { recursive: true });
-  const result = exportTimon({
-    out: join(dir, backupArchiveName(when)),
-    home: TIMON_HOME,
-    vacuumInto: (dest) => {
-      db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`);
-    },
-  });
   // `when` is the clock of this backup: the age limit counts from it.
-  const pruned = pruneBackupArchives(dir, backupRetention(), when);
-  if (pruned.length) console.log(`[routines] backup prune: ${pruned.join(', ')}`);
-  return result;
+  const prune = (): void => {
+    const pruned = pruneBackupArchives(dir, backupRetention(), when);
+    if (pruned.length) console.log(`[routines] backup prune: ${pruned.join(', ')}`);
+  };
+  const out = join(dir, backupArchiveName(when));
+  const partial = `${out}${BACKUP_PARTIAL_SUFFIX}`;
+  try {
+    const stale = removePartialArchives(dir);
+    if (stale.length) console.log(`[routines] backup: removed unfinished ${stale.join(', ')}`);
+    // Before the export as well: once the disk is full no export succeeds, and a
+    // prune that only followed a success would never free it again.
+    prune();
+    assertBackupSpace(dir, deps.freeBytes ?? freeBytes);
+    let result: ExportResult;
+    try {
+      result = (deps.exportArchive ?? exportTimon)({
+        out: partial,
+        home: TIMON_HOME,
+        vacuumInto: (dest) => {
+          db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`);
+        },
+      });
+      renameSync(partial, out);
+    } catch (err) {
+      rmSync(partial, { force: true });
+      throw err;
+    }
+    noteBackupSuccess();
+    prune();
+    return { ...result, out };
+  } catch (err) {
+    noteBackupFailure(err);
+    throw err;
+  }
 }
 
 /**

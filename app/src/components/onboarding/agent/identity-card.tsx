@@ -17,7 +17,12 @@ import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { ModelOption } from '../agent-draft';
 
-/** Long enough for a name, short enough for the card. */
+/**
+ * Long enough for a name, short enough for the card. `maxLength` counts UTF-16
+ * units, and one unit is at most 3 bytes of UTF-8: 24 of them stay within the
+ * 80 bytes an agent name may hold (`AGENT_NAME_MAX_BYTES`) in any script, so
+ * what the field takes is never cut when it becomes the agent's name.
+ */
 export const AGENT_NAME_MAX = 24;
 
 export type IdentityCardProps = {

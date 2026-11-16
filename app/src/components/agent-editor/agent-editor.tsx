@@ -26,10 +26,11 @@ import { startAgentEditorDiagnostic } from '@/lib/agent-editor-diagnostic';
 import { BrowserProfileSelect } from '@/components/browser-profile-select';
 import { ModelPickerPanel, type ModelPick } from '@/components/model-picker';
 import { SelfPermissionsBadge } from '@/components/self-permissions-badge';
-import { PermissionModeField } from './permission-mode-field';
+import { agentPermissionMode, PermissionModeField } from './permission-mode-field';
 import { AgentApprovals } from '@/components/agent-editor/agent-approvals';
 import { BackendLimitsBadge } from '@/components/backend-limits-badge';
 import { t } from '@/lib/i18n';
+import { isValidAgentName, normalizeAgentName } from '@/lib/agent-name-rule';
 import { renameFollowUps } from '@/lib/agent-rename';
 import { TRIGGERS_ROUTE } from '@/plugins-client/triggers/model';
 import { BRAND } from '@/lib/brand';
@@ -294,7 +295,7 @@ function toDraft(a: AgentSummary, cat: BackendCatalog): Draft {
     backend,
     model: a.model || defaultModelFor(cat, backend),
     reasoningEffort: a.reasoning_effort ?? '',
-    mode: a.permission_mode || 'auto',
+    mode: agentPermissionMode(a.permission_mode),
     allowed: [...(a.allowed_tools || [])],
     denied: [...(a.denied_tools || [])],
     skills: [...(a.skills || [])],
@@ -831,14 +832,16 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
 
   async function save() {
     if (!draft) return;
-    if (!draft.name || !/^[A-Za-z0-9._-]+$/.test(draft.name)) {
-      toast.error("Invalid name. Use letters, digits, '.', '_', '-'.");
+    // Stored in NFC, as the daemon does: a name typed decomposed is the same agent.
+    const name = normalizeAgentName(draft.name.trim());
+    if (!isValidAgentName(name)) {
+      toast.error(t('agentsPage.invalidName'));
       return;
     }
     setSaving(true);
     try {
       const body = {
-        name: draft.name,
+        name: name,
         system_prompt: draft.systemPrompt,
         config: {
           cwd: draft.cwd || undefined,
@@ -876,11 +879,11 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
       // updates DB/roles.json) BEFORE the upsert — otherwise the upsert would
       // create a clone under the new name and leave the old one behind
       // (rename = clone bug).
-      if (selected?.name && selected.name !== draft.name) {
+      if (selected?.name && selected.name !== name) {
         const rr = await fetch('/api/ui/agents/' + encodeURIComponent(selected.name) + '/rename', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ newName: draft.name }),
+          body: JSON.stringify({ newName: name }),
         });
         if (!rr.ok) {
           const j = await rr.json().catch(() => ({}));
@@ -890,7 +893,7 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
         const followUps = renameFollowUps(await rr.json().catch(() => null));
         if (followUps.triggers.length) {
           toast.warning(t('agentsPage.renameTriggersToCheck', {
-            old: selected.name, name: draft.name, count: followUps.triggers.length, names: followUps.triggers.join(', '),
+            old: selected.name, name: name, count: followUps.triggers.length, names: followUps.triggers.join(', '),
           }), {
             duration: 20_000,
             action: { label: t('agentsPage.renameOpenTriggers'), onClick: () => window.location.assign(`${TRIGGERS_ROUTE}?tab=events`) },
@@ -904,11 +907,11 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
         body: JSON.stringify(body),
       });
       if (!r.ok) throw new Error(await r.text());
-      await syncSkillAttachments(draft.name, draft.skills);
-      toast.success('Saved to ~/.timon/agents/' + draft.name + '/');
+      await syncSkillAttachments(name, draft.skills);
+      toast.success('Saved to ~/.timon/agents/' + name + '/');
       announceAgentsChanged();
       const list = await fetchAll();
-      const row = list.find((a) => a.name === draft.name);
+      const row = list.find((a) => a.name === name);
       if (row) {
         // The list row carries no system_prompt content: rebuilding the draft
         // from it alone blanked the Identity box right after Save (TIM-0027).
@@ -916,7 +919,7 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
         const shown = fresh.system_prompt == null ? { ...fresh, system_prompt: draft.systemPrompt } : fresh;
         setSelected(shown);
         setDraft(toDraft(shown, catalog));
-        await loadSkillState(draft.name);
+        await loadSkillState(name);
       }
       setDirty(false);
     } catch (e) {

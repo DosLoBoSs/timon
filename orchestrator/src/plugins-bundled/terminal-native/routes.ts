@@ -6,6 +6,7 @@
  *
  * Routes extracted verbatim from `index.ts` (step 1.4).
  */
+import { normalizeAgentNameParam } from '../../agent-name-param.js';
 import type { Router } from 'express';
 import { RevealUnavailableError, revealAgentPath } from '../../files.js';
 import {
@@ -19,6 +20,7 @@ import {
 import { apiError } from '../../api-error.js';
 
 export function registerRoutes(app: Router): void {
+  normalizeAgentNameParam(app);
   app.post('/api/agents/:name/files/reveal', async (req, res) => {
     // `client: 'desktop'` is the Electron app saying it can show the path on
     // the user's desktop itself when this daemon has no session to do it in.

@@ -7,7 +7,7 @@ sidebar_position: 10
 | --- | --- | --- |
 | Mission fails with a missing executable | CLI location and service PATH | Open the provider in **Settings → AI models → Providers**: install it from **Program**, or set its path under **Program → Advanced** (applies without a restart); click **Check again** after installing it yourself (during setup: **Re-detect** in the Prerequisites panel) |
 | CLI launches but authentication fails | Sign-in under the daemon's OS account | Authenticate the CLI directly, then retry a small mission |
-| Mission fails before producing output | Agent's working directory | Use an existing absolute host path accessible to the daemon |
+| Mission fails before producing output, with "its working directory … does not exist" | Agent's or project's folder was moved or deleted | Restore the folder, or set an existing absolute path accessible to the daemon on the agent or the project, then retry the task: Timon blocks it instead of retrying |
 | UI cannot reach the daemon | Address, port and authentication | Compare the app's daemon URL with the actual listener |
 | Web interface does not open from another computer or phone | It listens on the loopback by default | See [Remote access to the web interface](remote-access.md) |
 | Address already in use | Host app and Compose app both enabled | Keep one web-app serving mode |

@@ -1,7 +1,8 @@
 /**
  * A `research` task linked to a TODO or a trigger gets no `doc` follow-up: its
  * report already lives in the TODO. A hand-launched research and the other
- * types are unchanged.
+ * types are unchanged. A `chore` opened by a routine gets none either: it
+ * replays the same job on every tick.
  */
 import './test-home.js';
 import { test } from 'node:test';
@@ -22,11 +23,12 @@ mkdirSync(agentDir('acme.librarian'), { recursive: true });
 writeFileSync(join(agentDir('acme.librarian'), 'config.json'), JSON.stringify({ role: 'librarian', project: PROJECT }));
 writeFileSync(join(agentDir('acme.librarian'), 'system-prompt.md'), 'librarian');
 
-async function docFor(type: TaskRow['type'], link: { todoId?: number; triggerId?: string } = {}): Promise<TaskRow | undefined> {
+async function docFor(type: TaskRow['type'], link: { todoId?: number; triggerId?: string; routineId?: string } = {}): Promise<TaskRow | undefined> {
   const id = randomUUID();
   dbApi.createTask(id, `${type} task`, 'acme.worker', { type, project: PROJECT });
   if (link.todoId !== undefined) dbApi.setTaskTodoId(id, link.todoId);
   if (link.triggerId !== undefined) db.prepare(`UPDATE tasks SET trigger_id = ? WHERE id = ?`).run(link.triggerId, id);
+  if (link.routineId !== undefined) dbApi.setTaskRoutine(id, link.routineId);
   dbApi.updateTaskStatus(id, 'DONE', { doneComment: 'done' });
   await maybeCreateDocTask(dbApi.getTask(id)!);
   return dbApi.listTasks().find((t) => t.type === 'doc' && t.deps.includes(id));
@@ -47,4 +49,13 @@ test('a hand-launched research keeps its doc', async () => {
 test('code and chore tasks are unchanged', async () => {
   assert.ok(await docFor('code', { todoId: 42 }));
   assert.ok(await docFor('chore'));
+});
+
+test('a chore opened by a routine gets no doc', async () => {
+  assert.equal(await docFor('chore', { routineId: 'rtn-1' }), undefined);
+});
+
+test('a code or research task opened by a routine keeps its doc', async () => {
+  assert.ok(await docFor('code', { routineId: 'rtn-1' }));
+  assert.ok(await docFor('research', { routineId: 'rtn-1' }));
 });

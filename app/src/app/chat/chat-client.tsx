@@ -150,6 +150,7 @@ import {
 import { ProviderRetryNotice } from '@/components/chat/provider-retry-notice';
 import { backendFailureNotice, type BackendFailedPayload } from '@/lib/backend-failure-notice';
 import { backendSwitchFailureNotice, type BackendSwitchFailedPayload } from '@/lib/backend-switch-failure-notice';
+import { modelNotAppliedNotice, type ModelNotAppliedPayload } from '@/lib/model-not-applied-notice';
 import { sessionlessTurnNotice, type SessionlessTurnPayload } from '@/lib/sessionless-turn-notice';
 import { createStreamPresentation } from '@/lib/stream-presentation';
 import { StreamingMarkdown } from '@/components/chat/streaming-markdown';
@@ -3671,6 +3672,18 @@ export function ChatClient({
       setThinkingHint(null);
       return;
     }
+    // The agent kept another model or thinking level than the one asked for.
+    // Emitted as the session opens, before the turn runs: the turn goes on, so
+    // neither the bubble nor the thinking indicator is closed here.
+    if (meta.type === 'model_not_applied') {
+      const notice = modelNotAppliedNotice(payload as ModelNotAppliedPayload);
+      if (!notice) return;
+      setMessages((m) => [
+        ...m,
+        { id: crypto.randomUUID(), role: 'notice', t: fmtTimeAt(meta.timestamp), content: '', notice },
+      ]);
+      return;
+    }
     // Model change mid-mission (POST /api/missions/:id/model). Persisted
     // trace: the thread must say from where the responses change model,
     // otherwise a shift in tone or quality becomes inexplicable on
@@ -5729,13 +5742,15 @@ export function ChatClient({
     () => ({
       currentSessionId,
       stats,
+      backend: effBackend,
+      model: effModel,
       agentTodos,
       allSkills,
       onToggleSkill: toggleSkill,
       allMcp,
       onToggleMcp: toggleMcp,
     }),
-    [currentSessionId, stats, agentTodos, allSkills, toggleSkill, allMcp, toggleMcp],
+    [currentSessionId, stats, effBackend, effModel, agentTodos, allSkills, toggleSkill, allMcp, toggleMcp],
   );
   useLayoutEffect(() => {
     if (!chrome) return;

@@ -19,7 +19,7 @@ test('the official installers: per user, no Node, one line that works in CMD too
   const win = installBackendPlanFor('claude', 'win32')!;
   assert.equal(win.argv[0], 'powershell');
   assert.equal(win.argv.at(-1), 'irm https://claude.ai/install.ps1 | iex');
-  assert.equal(win.display, 'powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://claude.ai/install.ps1 | iex"');
+  assert.equal(win.display, 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "irm https://claude.ai/install.ps1 | iex"');
   for (const name of ['claude', 'codex', 'grok', 'copilot'] as const) {
     for (const platform of ['linux', 'darwin', 'win32'] as const) assert.equal(installBackendPlanFor(name, platform)?.elevated, false);
   }
@@ -52,7 +52,7 @@ test('more vendors, each with its own documented line, and none made up', () => 
   // pi.dev gives both sides; the installer writes `pi` itself, the CLI the provider drives over RPC.
   assert.equal(installBackendPlanFor('pi', 'linux')?.display, 'curl -fsSL https://pi.dev/install.sh | sh');
   assert.equal(installBackendPlanFor('pi', 'darwin')?.display, 'curl -fsSL https://pi.dev/install.sh | sh');
-  assert.deepEqual(installBackendPlanFor('pi', 'win32')?.argv, ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', 'irm https://pi.dev/install.ps1 | iex']);
+  assert.deepEqual(installBackendPlanFor('pi', 'win32')?.argv, ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', 'irm https://pi.dev/install.ps1 | iex']);
   for (const platform of ['linux', 'darwin', 'win32'] as const) assert.equal(installBackendPlanFor('pi', platform)?.elevated, false);
 });
 
@@ -78,7 +78,7 @@ test('a provider without an installer is a card with its vendor\'s page, never a
 });
 
 test('Antigravity: Google\'s own installer on each system, and its sign-in on the resolved path', () => {
-  for (const [platform, installer] of [['linux', 'curl -fsSL https://antigravity.google/cli/install.sh | bash'], ['win32', 'powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://antigravity.google/cli/install.ps1 | iex"']] as const) {
+  for (const [platform, installer] of [['linux', 'curl -fsSL https://antigravity.google/cli/install.sh | bash'], ['win32', 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "irm https://antigravity.google/cli/install.ps1 | iex"']] as const) {
     const card = setupBackends(platform, () => null, () => null, NO_VERSION).find((b) => b.name === 'agy')!;
     assert.equal(card.installable, true, platform);
     assert.equal(card.installCommand, installer, platform);

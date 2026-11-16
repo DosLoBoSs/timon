@@ -24,7 +24,9 @@ import { readMeta } from '../../projects.js';
 import { isKnownCwd } from '../../terminal.js';
 import { auditRequest } from '../../users/audit-actor.js';
 import { trackDeviceConnection } from '../../users/device-connections.js';
-import { decideAccess, denialStatus, isSameOriginUpgrade, upgradeAuth } from './access.js';
+import { decideAccess, denialStatus, isSameOriginUpgrade } from './access.js';
+import type { RequestAuth } from '../../users/identity.js';
+import type { UpgradeRoute } from '../../kernel/http-service.js';
 import { TerminalLimitError, type ServerMessage } from '../../terminal-host/sessions.js';
 import { loadNodePty } from '../../terminal-host/pty.js';
 import { defaultCwd, resolveShell, shellEnv } from './shell.js';
@@ -158,25 +160,24 @@ function peerIp(req: IncomingMessage): string | null {
 }
 
 /**
- * The upgrade handler for `@timon/http`. Every check happens BEFORE the
- * WebSocket handshake completes: a refused client gets a plain HTTP status
- * and never a socket.
+ * The upgrade route for `@timon/http`. The kernel resolved the identity and
+ * refused an anonymous upgrade already (`auth: 'required'`); every other
+ * check happens here, BEFORE the WebSocket handshake completes: a refused
+ * client gets a plain HTTP status and never a socket.
  */
-export function createUpgradeHandler(sessions: SessionStore): {
-  handle: (req: IncomingMessage, socket: Duplex, head: Buffer) => boolean;
-  close: () => void;
-} {
+export function createUpgradeHandler(sessions: SessionStore): UpgradeRoute & { close: () => void } {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 });
 
-  const handle = (req: IncomingMessage, socket: Duplex, head: Buffer): boolean => {
+  const handle = (req: IncomingMessage, socket: Duplex, head: Buffer, auth: RequestAuth | undefined): void => {
     const id = matchTerminalWsPath(req.url);
-    if (!id) return false;
-    if (!isSameOriginUpgrade(req)) { refuse(socket, 403, 'Forbidden'); return true; }
-    const auth = upgradeAuth(req);
+    if (!id) { socket.destroy(); return; }
+    if (!isSameOriginUpgrade(req)) { refuse(socket, 403, 'Forbidden'); return; }
+    // Any identity is not enough for a shell: a person, with the permission,
+    // and the setting on (`access.ts`).
     const access = decideAccess(auth);
     if ('denied' in access) {
       refuse(socket, denialStatus(access.denied), access.denied === 'unauthorized' ? 'Unauthorized' : 'Forbidden');
-      return true;
+      return;
     }
     const ownerId = access.user.id;
     const deviceId = auth?.kind === 'device' ? auth.deviceId : undefined;
@@ -194,10 +195,11 @@ export function createUpgradeHandler(sessions: SessionStore): {
         dbApi.insertAuditLog({ userId: ownerId, actor: null, action: 'terminal.attach', target: id, ip: peerIp(req) });
       });
     }, () => refuse(socket, 503, 'Service Unavailable'));
-    return true;
   };
 
   return {
+    match: (req) => matchTerminalWsPath(req.url) !== null,
+    auth: 'required',
     handle,
     close: () => {
       for (const ws of wss.clients) ws.terminate();

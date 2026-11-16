@@ -95,6 +95,8 @@ Any Git server works — GitHub, GitLab, Gitea, Forgejo, Bitbucket or your own. 
 | Git protocol | `git://git.example.com/project.git` |
 | Local | `file:///srv/git/project.git`, or an absolute folder on this machine |
 
+A local repository must sit in a folder agents cannot write: not in the Timon data folder, the project's own folder, a folder your [isolation settings](mission-isolation.md) let agents write, nor, while missions are isolated, the system's temporary folder. Timon refuses such a remote when you save it, and says why.
+
 **A URL never carries a secret.** An HTTPS URL with a user name or a token in it is refused, before it leaves the field. Secrets stay with Git:
 
 - **SSH** — a key in `~/.ssh` of the account the daemon runs under, usable without a passphrase prompt: Timon's daemon runs in the background and may not reach the SSH agent of your desktop session. The server's host key must already be known: connect once from a terminal (`ssh -T git@gitlab.com`) to accept it.

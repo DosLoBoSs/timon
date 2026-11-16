@@ -18,6 +18,7 @@
     "user_not_found": "Gebruiker niet gevonden.",
     "team_not_found": "Team niet gevonden.",
     "agent_not_found": "Agent niet gevonden.",
+    "agent_name_taken": "Er bestaat al een agent met de naam {name}. Namen die alleen in hoofdletters of in de codering van accenten verschillen, zijn dezelfde agent.",
     "mission_not_found": "Deze missie bestaat niet meer.",
     "mission_not_running": "Er draait geen agent voor deze missie.",
     "todo_not_found": "Dit idee bestaat niet meer.",

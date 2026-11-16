@@ -23,6 +23,7 @@ import {
 import { listAgents, spawnAgent } from '../../agent.js';
 import { conversionAgentRefusal } from '../../users/conversion-mission.js';
 import { canonicalAgentName } from '../../agent-config.js';
+import { isValidAgentName, normalizeAgentName } from '../../agent-name.js';
 import { agentDir } from '../../paths.js';
 import { mainAgentName } from '../../main-agent.js';
 
@@ -33,7 +34,7 @@ const ProfileParam = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
 const RecordingParam = z.string().regex(/^br-[0-9a-f-]{36}$/);
 const ControlBody = z.object({ clientId: z.string().regex(/^[a-zA-Z0-9_-]{8,128}$/).optional() }).strict();
 const LearnBody = z.object({
-  agent: z.string().regex(/^[A-Za-z0-9._-]{1,128}$/).optional(),
+  agent: z.string().max(128).transform(normalizeAgentName).refine(isValidAgentName).optional(),
   // The final submission of the learned flow is an external action: confirmed unless chosen here.
   autoSubmit: z.boolean().optional(),
 }).strict();

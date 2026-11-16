@@ -207,7 +207,7 @@ function declaredInstallPlan(binary: string, machine: Machine): InstallPlan | nu
     case 'script': {
       if (machine.platform === 'win32') {
         if (!plan.windows) return null;
-        return { display: `powershell -NoProfile -ExecutionPolicy Bypass -Command "${plan.windows}"`, argv: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', plan.windows], elevated: false };
+        return { display: `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "${plan.windows}"`, argv: ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', plan.windows], elevated: false };
       }
       return plan.posix ? { display: plan.posix, argv: ['/bin/sh', '-c', plan.posix], elevated: false } : null;
     }
@@ -300,8 +300,8 @@ export function installBackendPlanFor(binary: InstallableBackend, platform: Node
   // The vendor documents no installer for this OS (opencode on Windows): the card links to its page.
   if (platform === 'win32') {
     if (!installer.windows) return null;
-    const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', installer.windows];
-    return { display: `powershell -NoProfile -ExecutionPolicy Bypass -Command "${installer.windows}"`, argv: ['powershell', ...args], elevated: false };
+    const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', installer.windows];
+    return { display: `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "${installer.windows}"`, argv: ['powershell', ...args], elevated: false };
   }
   if (!installer.posix) return null;
   return { display: installer.posix, argv: ['/bin/sh', '-c', installer.posix], elevated: false };

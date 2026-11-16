@@ -1914,6 +1914,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} 已更名为 {name}。有 {count} 个触发器的筛选条件通过模式或子字符串匹配旧名称，请检查：{names}",
     "renameOpenTriggers": "打开触发器",
+    "invalidName": "名称无效。请使用任意语言的字母和数字，以及 . _ -，不含空格或表情符号，并以字母或数字开头（最多 80 字节，约 26 个汉字）。",
     "autoFitView": "自动适应视图",
     "poleProjects": "{count} 个项目",
     "newPole": "新建项目组",
@@ -2059,6 +2060,9 @@
     "contextTailOnly": "生成摘要失败，仅传递了对话记录的末尾{reason}",
     "backendNotice": "后端 {from}{target} — {ctx}",
     "backendSwitchFailed": "无法从 {from} 切换到 {target}：{reason}。对话仍使用 {from}，你可以重试。",
+    "modelNotApplied": "{backend} 未采用模型 {model}：{reason}。此任务正在使用 {active} 运行。",
+    "modelNotAppliedDefault": "{backend} 未采用模型 {model}：{reason}。此任务正在使用代理的默认模型运行。",
+    "effortNotApplied": "{backend} 未采用思考级别 {effort}：{reason}。将使用模型的默认级别。",
     "sessionlessTurn": "{backend} 不保留会话，每条消息都不会沿用之前轮次的上下文。",
     "askUserUnrenderable": "无法显示智能体的提问表单 — {defect}",
     "invalidPayload": "数据无效",

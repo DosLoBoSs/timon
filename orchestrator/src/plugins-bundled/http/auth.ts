@@ -69,6 +69,8 @@ const PUBLIC_ENDPOINTS: readonly { method: string; path: RegExp }[] = [
   { method: 'GET', path: /^\/api\/auth\/me$/ },
   // Only the id of the plugin that serves accounts: the invitation page asks it before any session exists.
   { method: 'GET', path: /^\/api\/auth\/account-provider$/ },
+  // Only which of two built-in palettes the sign-in page wears (`users/public-theme.ts`).
+  { method: 'GET', path: /^\/api\/auth\/theme$/ },
   { method: 'POST', path: /^\/api\/auth\/setup$/ },
   // Email codes (`docs/EMAIL-CODES.md`): the caller has no session by
   // definition. Setup ones answer 409 once an account exists; the reset ones

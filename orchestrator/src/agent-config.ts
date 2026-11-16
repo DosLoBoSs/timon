@@ -12,6 +12,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { AGENTS_DIR, agentConfig, agentDir, agentSystemPrompt } from './paths.js';
+import { agentNameKey, isValidAgentName } from './agent-name.js';
 import type { BackendName } from './backends/types.js';
 import type { AgentRoleId } from './agent-roles.js';
 import type { AgentAvatarMode, AgentLook } from './agent-look.js';
@@ -194,22 +195,50 @@ export function stripProtectedKeys(cfg: AgentConfig): AgentConfig {
 }
 
 /** Resolves an agent name to the EXACT name of its on-disk folder,
- *  CASE-INSENSITIVELY. On Linux the FS is case-sensitive, so a task
- *  created for `timon.main` did not find the real agent `TIMON.main` → spawn
- *  failing with "Missing system prompt" → BLOCKED in a loop. We canonicalise at the
- *  resolution point: if the folder exists as is → fast path; otherwise AGENTS_DIR
- *  is scanned for a case-insensitive match and the real name is returned; otherwise the
- *  name is returned unchanged (lets the clear error come up for a real unknown,
- *  and keeps the literal name for the CREATION of a new agent). */
+ *  CASE-INSENSITIVELY and whatever its Unicode normalisation. On Linux the FS
+ *  is case-sensitive, so a task created for `timon.main` did not find the real
+ *  agent `TIMON.main` → spawn failing with "Missing system prompt" → BLOCKED in
+ *  a loop. We canonicalise at the resolution point by reading the real entries
+ *  of AGENTS_DIR: an `existsSync` shortcut would answer yes for `foo` when the
+ *  folder is `Foo` on Windows or macOS (and for a decomposed name on APFS),
+ *  and hand back a name that matches no entry. Unknown → the name in NFC
+ *  (lets the clear error come up for a real unknown, and keeps the literal
+ *  name for the CREATION of a new agent). */
 export function canonicalAgentName(name: string): string {
-  if (existsSync(agentDir(name))) return name; // already the right case
-  const lower = name.toLowerCase();
+  agentDir(name); // a path, not a name, still throws here as it always did
+  return resolveAgentFolder(name, agentFolderEntries()) ?? name.normalize('NFC');
+}
+
+/**
+ * The existing agent folder `name` designates once case and Unicode
+ * normalisation are set aside (`Foo` for `foo`, an accented letter typed
+ * decomposed for the composed one), or null. A case-insensitive disk would merge the two
+ * folders, and a case-sensitive one would hold two agents nobody can tell
+ * apart: a creation under such a name is refused.
+ */
+export function findAgentFolder(name: string): string | null {
+  return resolveAgentFolder(name, agentFolderEntries());
+}
+
+/**
+ * The entry of `entries` that `name` designates: the exact entry first (two
+ * legacy folders differing only by case on a case-sensitive disk each keep
+ * their own name), otherwise the one equal in NFC and lower case, otherwise
+ * null. Pure, so the rule is tested without depending on the test machine's
+ * file system.
+ */
+export function resolveAgentFolder(name: string, entries: readonly string[]): string | null {
+  if (entries.includes(name)) return name;
+  const key = agentNameKey(name);
+  return entries.find((entry) => agentNameKey(entry) === key) ?? null;
+}
+
+function agentFolderEntries(): string[] {
   try {
-    for (const entry of readdirSync(AGENTS_DIR)) {
-      if (entry.toLowerCase() === lower) return entry;
-    }
-  } catch { /* AGENTS_DIR missing: nothing to canonicalise */ }
-  return name;
+    return readdirSync(AGENTS_DIR);
+  } catch {
+    return []; // AGENTS_DIR missing: nothing to find
+  }
 }
 
 export function loadConfig(agentName: string): AgentConfig {
@@ -272,8 +301,12 @@ export function loadIdentityDocs(agentName: string): { name: string; content: st
   } catch { return []; }
 }
 
-const NAME_RE = /^[A-Za-z0-9._-]+$/;
+// The rule lives in `agent-name.ts`, shared with the web and desktop clients.
+// No leading dot: `.` and `..` are path segments, not folders of `agents/`,
+// and a hidden folder is not an agent. `_` stays a valid first character
+// (`_main`, the ephemeral `_eph-…` agents).
+export { isValidAgentName };
 
 export function validName(name: string): void {
-  if (!NAME_RE.test(name)) throw new Error(`invalid agent name: ${name}`);
+  if (!isValidAgentName(name)) throw new Error(`invalid agent name: ${name}`);
 }

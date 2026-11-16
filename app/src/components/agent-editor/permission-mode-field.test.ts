@@ -24,7 +24,7 @@ test('the mode is frozen with a warning only when the backend ignores it', async
   const { createRoot } = await import('react-dom/client');
   const root = createRoot(document.getElementById('root')!);
   try {
-    const { PermissionModeField } = await import('./permission-mode-field');
+    const { agentPermissionMode, PermissionModeField } = await import('./permission-mode-field');
     const picked: string[] = [];
     const render = (ignored: boolean) => React.act(async () => {
       root.render(React.createElement(PermissionModeField, { value: 'auto', onChange: (m: string) => picked.push(m), ignored }));
@@ -67,8 +67,11 @@ test('the mode is frozen with a warning only when the backend ignores it', async
     assert.ok(!document.querySelector('[data-permission-mode-runs-as]'), 'a supported mode needs no note');
     // No list (claude): every mode, no note.
     await show('auto', null);
-    assert.deepEqual(offered(), ['auto', 'acceptEdits', 'plan', 'bypassPermissions']);
+    assert.deepEqual(offered(), ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions']);
     assert.ok(!document.querySelector('[data-permission-mode-runs-as]'));
+    // An agent with no stored mode runs in claude's `default`: that is what is checked.
+    await show(agentPermissionMode(undefined), null);
+    assert.equal(document.querySelector('[aria-checked="true"]')?.textContent, 'default');
   } finally {
     await React.act(async () => { root.unmount(); });
     for (const [key, descriptor] of saved) {
@@ -77,4 +80,13 @@ test('the mode is frozen with a warning only when the backend ignores it', async
     }
     dom.window.close();
   }
+});
+
+test('an empty stored mode reads as default, a stored one as itself', async () => {
+  const { agentPermissionMode } = await import('./permission-mode-field');
+  assert.equal(agentPermissionMode(undefined), 'default');
+  assert.equal(agentPermissionMode(null), 'default');
+  assert.equal(agentPermissionMode(''), 'default');
+  assert.equal(agentPermissionMode('auto'), 'auto');
+  assert.equal(agentPermissionMode('plan'), 'plan');
 });

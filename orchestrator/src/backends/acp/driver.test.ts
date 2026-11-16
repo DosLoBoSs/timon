@@ -20,7 +20,7 @@ process.env.TIMON_HOME = TMP_HOME;
 process.env.PORT = '3010';
 process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
 
-const { AcpSessionDriver } = await import('./driver.js');
+const { AcpSessionDriver, MODEL_NOT_APPLIED } = await import('./driver.js');
 type DriverOptions = ConstructorParameters<typeof AcpSessionDriver>[0];
 
 const FAKE = join(dirname(fileURLToPath(import.meta.url)), '__fixtures__', 'fake-acp-agent.mjs');
@@ -371,6 +371,87 @@ test('the model the session already runs is not re-selected', async () => {
   events.length = 0;
   await driver.prompt('model');
   assert.equal(said(events), 'model:null');
+});
+
+function initPayload(events: NormalizedEvent[]): Record<string, unknown> {
+  const init = events.find((e) => e.type === 'system');
+  assert.ok(init, 'the session opens with an init event');
+  return init.payload as Record<string, unknown>;
+}
+
+function notApplied(events: NormalizedEvent[]): Array<Record<string, unknown>> {
+  return events.filter((e) => e.type === MODEL_NOT_APPLIED).map((e) => e.payload as Record<string, unknown>);
+}
+
+test('the init event says which model was asked and which one runs', async () => {
+  const { driver, events } = launch({ model: 'b' });
+  await driver.start();
+  const init = initPayload(events);
+  assert.equal(init.model, 'b');
+  assert.equal(init.requested_model, 'b');
+  assert.deepEqual(notApplied(events), []);
+});
+
+test('an agent that refuses set_model gets the model through its model config option (opencode)', async () => {
+  const { driver, events } = launch({ model: 'b', env: { FAKE_ACP_NO_SET_MODEL: '1' } });
+  await driver.start();
+  assert.equal(initPayload(events).model, 'b');
+  assert.deepEqual(notApplied(events), []);
+  events.length = 0;
+  await driver.prompt('model');
+  assert.equal(said(events), 'model:b');
+});
+
+test('a model no way can select is said in the thread, with the one that runs, and the mission starts', async () => {
+  const { driver, events } = launch({ model: 'b', env: { FAKE_ACP_NO_SET_MODEL: '1', FAKE_ACP_NO_CONFIG: '1' } });
+  await driver.start();
+  const init = initPayload(events);
+  assert.equal(init.model, 'a', 'the init reports the model the agent kept');
+  assert.equal(init.requested_model, 'b');
+  const [notice, ...more] = notApplied(events);
+  assert.deepEqual(more, []);
+  assert.equal(notice!.backend, 'fake');
+  assert.equal(notice!.requested_model, 'b');
+  assert.equal(notice!.active_model, 'a');
+  assert.match(String(notice!.model_reason), /Method not found/);
+  assert.equal('requested_effort' in notice!, false);
+  events.length = 0;
+  await driver.prompt('model');
+  assert.equal(said(events), 'model:null');
+});
+
+test('a model id the agent does not know is refused through the config option too, and said', async () => {
+  const { driver, events } = launch({ model: 'zzz', env: { FAKE_ACP_NO_SET_MODEL: '1' } });
+  await driver.start();
+  const [notice] = notApplied(events);
+  assert.equal(notice!.requested_model, 'zzz');
+  assert.equal(notice!.active_model, 'a');
+  assert.match(String(notice!.model_reason), /invalid option model=zzz/);
+});
+
+test('a refused thinking level is said in the thread', async () => {
+  const { driver, events } = launch({ model: 'b', reasoningEffort: 'high' });
+  await driver.start();
+  const [notice, ...more] = notApplied(events);
+  assert.deepEqual(more, []);
+  assert.equal(notice!.requested_effort, 'high');
+  assert.match(String(notice!.effort_reason), /invalid option/);
+  assert.equal('requested_model' in notice!, false, 'the model itself was applied');
+});
+
+test('setModel between turns falls back on the model config option when set_model is refused', async () => {
+  const { driver, events } = launch({ env: { FAKE_ACP_NO_SET_MODEL: '1' } });
+  await driver.start();
+  assert.equal(await driver.setModel!('b'), true);
+  events.length = 0;
+  await driver.prompt('model');
+  assert.equal(said(events), 'model:b');
+});
+
+test('setModel answers false when no way selects the model', async () => {
+  const { driver } = launch({ env: { FAKE_ACP_NO_SET_MODEL: '1', FAKE_ACP_NO_CONFIG: '1' } });
+  await driver.start();
+  assert.equal(await driver.setModel!('b'), false);
 });
 
 test('setModel switches between turns and refuses during one', async () => {

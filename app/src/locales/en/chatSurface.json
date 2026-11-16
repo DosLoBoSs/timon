@@ -62,6 +62,20 @@
       "truncated": "First lines only: the file goes on.",
       "changed": "Not run: {paths} changed after this card showed it. The agent was asked to request again.",
       "remembered": "A remembered approval holds only while these files stay as shown here."
+    },
+    "missionCard": {
+      "id": "id",
+      "status": "status",
+      "started": "started",
+      "cost": "cost",
+      "tokens": "tokens",
+      "session": "session",
+      "provider": "provider",
+      "model": "model",
+      "agent": "agent",
+      "empty": "No active mission yet. Type a message to create one.",
+      "newConversation": "New conv",
+      "memory": "Memory"
     }
   }
 }

@@ -65,6 +65,7 @@ import {
 } from './backends/index.js';
 import { ROLE_REGISTRY, getRole, withCurrentCloseFlags, type AgentRoleId } from './agent-roles.js';
 import type { InterruptionReason } from './interruption.js';
+import { assertUsableCwd, CwdUnusableError } from './cwd-check.js';
 import { catalogKeeping, mascotPartCatalog, parseAgentAvatar, parseAgentLook, readAgentAvatar, readAgentLook, type AgentAvatarMode, type AgentLook } from './agent-look.js';
 import { bestRateLimit } from './rate-limit.js';
 import {
@@ -273,10 +274,12 @@ import {
   type AgentConfig,
   stripProtectedKeys,
   canonicalAgentName,
+  findAgentFolder,
   loadConfig,
   loadSoul,
   loadIdentityDocs,
   loadSystemPrompt,
+  isValidAgentName,
   validName,
 } from './agent-config.js';
 
@@ -1806,13 +1809,27 @@ export async function spawnAgent(
     // avoids finishMission's `unknown` net flattening it. Except for
     // exhausted quota, which isn't a failure: the dispatcher reads this
     // cause to decide whether to replay the task or switch the series.
+    // Nor is a working directory that is gone (TIM-0148): no system death, no
+    // replay would find it either. Left uncaused, the row reads `unknown` and
+    // the thread's `spawn_failed` notice names the folder.
     const cause = err instanceof BackendExhaustedError
       ? interruptionForCooldown(err.backend)
-      : 'crash';
+      : launchFailureCause(err);
     dbApi.finishMission(missionId, 'failed', -1, cause);
     throw err;
   }
   return missionId;
+}
+
+/**
+ * Cause recorded when a turn throws before its process runs. A working
+ * directory that is gone is no system death (TIM-0148): a replay would find
+ * it gone too, so it is left uncaused and the task is surfaced to a person
+ * instead of requeued. Shared by the first launch, the resume, the permission
+ * relaunch and the steer restart, so none of them reads it as a crash.
+ */
+function launchFailureCause(err: unknown): InterruptionReason | null {
+  return err instanceof CwdUnusableError ? null : 'crash';
 }
 
 /**
@@ -1938,6 +1955,8 @@ async function spawnMissionProcess(
   // exception here.
   const host = getHost();
   const cwd = spec.cwd ?? cfg.cwd;
+  // `spawnTurn` checked the agent's folder; a provider may launch elsewhere.
+  if (spec.cwd && spec.cwd !== cfg.cwd) refuseUnusableCwd(missionId, backend.name, spec.cwd);
   // Filesystem masking target (audit finding #4): the mission's own directory
   // and the credentials of the backend it actually runs on are the two things
   // a deny list must never swallow. Inert on the current scope launcher —
@@ -2158,6 +2177,11 @@ async function spawnTurn(args: {
       cfg.backend = launch.backend as AgentConfig['backend'];
     }
   }
+  // WORKING DIRECTORY (TIM-0148). Checked before the quota guard and anything
+  // else that depends on the backend: a folder that is gone fails every backend
+  // the same way, so it must never read as a dry backend to switch away from.
+  // A remote backend runs nowhere near this disk and has no cwd to check here.
+  if (cfg.cwd && !isRemoteBackend(cfg.backend)) refuseUnusableCwd(missionId, cfg.backend ?? defaultBackendName(), cfg.cwd);
   // QUOTA GUARD (incident 2026-08-22). The wake-loop did check the
   // exhausted-quota registry before waking a mission — but only it.
   // Every other path that relaunches a turn (answering a permission, a
@@ -2837,7 +2861,7 @@ async function relaunchWithPermissionMode(
         presentation,
       });
     } catch (err) {
-      dbApi.finishMission(missionId, 'failed', -1, 'crash');
+      dbApi.finishMission(missionId, 'failed', -1, launchFailureCause(err));
       throw err;
     }
     return 'delivered';
@@ -2918,8 +2942,9 @@ export async function respawnWithResume(
   } catch (err) {
     // Explicit cause: the exception happened AT LAUNCH (missing system
     // prompt, binary not found…). It's a crash, not a mystery — saying so
-    // avoids finishMission's `unknown` net flattening it.
-    dbApi.finishMission(missionId, 'failed', -1, 'crash');
+    // avoids finishMission's `unknown` net flattening it. A folder that is
+    // gone is the exception (`launchFailureCause`).
+    dbApi.finishMission(missionId, 'failed', -1, launchFailureCause(err));
     throw err;
   }
   return true;
@@ -3960,7 +3985,7 @@ async function restartTurnWith(
         presentation,
       });
     } catch (err) {
-      dbApi.finishMission(missionId, 'failed', -1, 'crash');
+      dbApi.finishMission(missionId, 'failed', -1, launchFailureCause(err));
       throw err;
     }
     return { outcome: 'steered', method: 'restart' };
@@ -4080,6 +4105,40 @@ function logSpawnFailed(
     // Never let the notice swallow the finalisation that follows it: a mission
     // left `running` with no process is worse than a mission without a notice.
     console.warn(`[agent] could not record the spawn failure: ${(insertErr as Error).message}`);
+  }
+}
+
+/** Whether `name` resolves to a backend with no local process. An unknown or
+ *  refused name is not remote: `getBackend` throws again, with its reason, at launch. */
+function isRemoteBackend(name: BackendName | undefined | null): boolean {
+  try {
+    return !!getBackend(name).openRemoteSession;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Refuses a launch whose working directory cannot be used, with a notice in the
+ * thread naming the folder (TIM-0148). Without it Node reports the folder as
+ * `spawn <binary> ENOENT`: the `spawn_failed` notice then blamed an installed
+ * CLI, and the mission died as a `crash` that the dispatcher replayed.
+ */
+function refuseUnusableCwd(missionId: string, backendName: string, cwd: string): void {
+  try {
+    assertUsableCwd(cwd);
+  } catch (err) {
+    if (!(err instanceof CwdUnusableError)) throw err;
+    process.stderr.write(`[${backendName}:${missionId.slice(0, 8)}] launch refused: ${err.message}\n`);
+    const cause = err.error === 'denied' ? 'cwd_denied' : err.error === 'not-a-directory' ? 'cwd_not_directory' : 'cwd_missing';
+    const body = { type: 'spawn_failed', backend: backendName, binary: null, cause, cwd: err.path, code: err.code };
+    try {
+      const row = dbApi.insertEvent(missionId, 'spawn_failed', body);
+      bus.publish({ kind: 'event', missionId, type: 'spawn_failed', timestamp: row.timestamp, payload: body });
+    } catch (insertErr) {
+      console.warn(`[agent] could not record the refused launch: ${(insertErr as Error).message}`);
+    }
+    throw err;
   }
 }
 
@@ -4828,6 +4887,13 @@ export function upsertAgent(input: {
   system_prompt: string;
   config?: AgentConfig;
 }, opts: { createdBy?: string } = {}): AgentDetails {
+  // Before any read: `existed` below would otherwise load the files of
+  // whatever folder the name resolves to.
+  validName(input.name);
+  // `foo` next to `Foo`, or a decomposed accent next to the composed one: one
+  // folder on Windows and macOS, two agents nobody can tell apart on Linux.
+  const clash = findAgentFolder(input.name);
+  if (clash !== null && clash !== input.name) throw new Error(`agent "${clash}" already exists`);
   const config = stripProtectedKeys(input.config ?? {});
   // Checked skills are attachments now, never a config.json field.
   const sentSkills = takeSentSkills(config);
@@ -5215,7 +5281,11 @@ function renameAgentLocked(oldName: string, newName: string): RenameResult {
   validName(newName);
   if (oldName === newName) return { ok: true };
   if (!existsSync(agentDir(oldName))) return { ok: false, error: `agent not found: ${oldName}` };
-  if (existsSync(agentDir(newName))) return { ok: false, error: `agent "${newName}" already exists` };
+  // Only a change of case of the agent itself may land on a name that matches
+  // an existing folder once case and normalisation are set aside.
+  const clash = findAgentFolder(newName);
+  if (clash !== null && clash !== oldName) return { ok: false, error: `agent "${clash}" already exists` };
+  if (clash === null && existsSync(agentDir(newName))) return { ok: false, error: `agent "${newName}" already exists` };
   for (const r of running.values()) {
     if (r.agentName === oldName) {
       return { ok: false, error: `mission in progress for ${oldName} — stop it before renaming` };
@@ -5744,6 +5814,9 @@ export function listAgents(): AgentSummary[] {
   const entries = readdirSync(AGENTS_DIR);
   const out: AgentSummary[] = [];
   for (const name of entries) {
+    // A hidden folder (`.stfolder` from a sync tool…) is not an agent, and no
+    // route could act on it.
+    if (!isValidAgentName(name)) continue;
     const full = join(AGENTS_DIR, name);
     if (!statSync(full).isDirectory()) continue;
     const cfg = loadConfig(name);

@@ -1,4 +1,5 @@
 import type { TodoProgress, TodoUrgency } from '@/lib/project-todo-tags';
+import type { UrgencyFilterKey } from '@/lib/project-todo-filter';
 
 /** Where the idea lives outside Timon, written by a plugin (`todo_external_ref`). */
 export type ProjectTodoLink = {
@@ -38,3 +39,30 @@ export type ProjectTodo = {
   /** Files attached to the idea; absent from a daemon older than the attachments. */
   attachment_count?: number;
 };
+
+type TodoStatus = ProjectTodo['status'];
+
+/** Counted by the daemon with the list's own filters, past its row limit. */
+export type ProjectTodoCounts = {
+  /** Every filter but the status: what each Open / Done segment would show. */
+  byStatus: Record<TodoStatus, number>;
+  /** Every filter but the status and the urgency: what each type chip would show. */
+  byUrgency: Record<TodoStatus, Record<UrgencyFilterKey, number>>;
+};
+
+/** `GET /api/project-todo`. `counts` and `truncated` are absent from an older daemon. */
+export type ProjectTodoListResponse = {
+  items?: ProjectTodo[];
+  counts?: ProjectTodoCounts;
+  /** More ideas match than the rows sent back. */
+  truncated?: boolean;
+};
+
+/** Rows a TO DO surface asks for at once: the daemon allows up to 1000. */
+export const TODO_SURFACE_LIMIT = 500;
+
+/** Total of one status across every type, whatever the type filter. */
+export function statusTotal(counts: ProjectTodoCounts | null, status: TodoStatus): number {
+  if (!counts) return 0;
+  return Object.values(counts.byUrgency[status]).reduce((sum, n) => sum + n, 0);
+}

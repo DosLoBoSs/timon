@@ -87,6 +87,12 @@ The agent's role is picked in the same tab. There is no separate Role tab.
 
 The **LLM** tab has a **Thinking level** slider over the levels the chosen model supports; the choice is saved with the agent. A higher level makes the model think longer before it answers: slower, and it uses more of your subscription. The same slider sits next to the model name in the chat bar, for an agent pinned to a full model version such as `claude-opus-5-5`. A model with no levels shows no slider. With opencode the levels come from opencode itself, model by model, so the slider appears for the models that have some and the chosen level is applied when the mission starts. With Codex the levels follow those your Codex account lists, read from the cache the Codex CLI keeps (`~/.codex/models_cache.json`); that cache is refreshed when you run `codex` yourself, and without it Timon offers its built-in list. A model of a provider you added shows the control that fits it: a level slider, **low / medium / high** budget steps for a model set by a token budget, or **off / on** for a model with a thinking switch (see [Add a provider](./add-a-provider.md#thinking-setting-of-each-model)).
 
+### Agent names
+
+An agent's name is also the name of its folder, so it follows what every system accepts as a folder name. It can use the letters and digits of any language (Chinese, Japanese, Arabic, Hebrew, Cyrillic, accented letters…), plus `.`, `_` and `-`. It starts with a letter, a digit or `_`, does not end with `.`, and holds no space and no emoji (an agent has its own emoji field). It is limited to 80 bytes: 80 Latin letters, about 40 Cyrillic letters or 26 Chinese characters.
+
+Names Windows reserves for its devices (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`, with or without an extension such as `nul.txt`) are refused on every system, so an agent can move from one machine to another. Two names that differ only by case (`Foo` and `foo`), or by the way an accent is encoded, are the same agent: creating the second one, or renaming another agent to it, is refused. At first run, the name you type for your main agent is turned into one that follows these rules: spaces and other characters become `-`, and letters of any language are kept.
+
 ### Rename an agent
 
 Change the name in the **Identity** tab, or run `timon agent rename <old> <new>` (an agent uses the `agent_rename` tool). The agent keeps its folder, identity docs and memory, and its missions, tasks, routines, triggers, messages, secrets, browser profiles, project roles, reporting lines, workflows, pipelines, chat cards and multichat templates follow the new name. A trigger filter that names the agent exactly is updated, including **contains** or a plain regex such as `^name$` that spells the whole name; any other pattern or substring is left as is, and you are told which triggers to check: on screen and in `triggers_to_check` for the triggers you can see, and through a notification to each trigger's owner. The rename is refused while one of its missions is running, and when another agent already has the new name.
@@ -192,6 +198,8 @@ The options and the order of your pinned tabs belong to your account, like your 
 ## The main orchestrator
 
 One orchestrator receives what Timon says on its own: the wake recaps (a blocked task, the end of a batch) and the notifications. A fresh install starts with `_main`; renaming it during setup keeps it in that seat.
+
+A blocked task is reported to its orchestrator once, not again after a restart. A task you block yourself from the Kanban board is not reported at all: the decision is yours, so no orchestrator is woken to act on it.
 
 To give the seat to another orchestrator, for example one you created yourself, right-click its avatar in the chat card and choose **Set as main orchestrator**. It must have the orchestrator role, belong to no project and not be temporary; Timon says why when it is refused. The change takes effect for the next recap.
 

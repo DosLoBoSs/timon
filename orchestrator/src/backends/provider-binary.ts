@@ -28,6 +28,7 @@ import { getHost } from '../host/index.js';
 import { killProcessTree } from '../host/kill-tree.js';
 import { assertProviderExecAllowed } from '../plugins/policy.js';
 import { assertDeclaredIdentity } from './binary-identity.js';
+import { pluginRegex, type PluginRegex } from '../bounded-regex.js';
 import { systemEnv } from '../secrets/env.js';
 import { redactText } from '../secrets/redact.js';
 import { TIMON_HOME } from '../paths.js';
@@ -194,10 +195,12 @@ export function createProviderBinary(scope: ProviderBinaryScope): { api: Provide
       }
       const resolved = program(name);
     await identified(name, resolved);
-      let ready: RegExp | null = null;
+      let ready: PluginRegex | null = null;
       if (options.ready !== undefined) {
         if (options.ready.length > MAX_READY_PATTERN) throw new ProviderBinaryError(`\`ready\` is over ${MAX_READY_PATTERN} characters`);
-        try { ready = new RegExp(options.ready); } catch { throw new ProviderBinaryError('`ready` is not a regular expression'); }
+        // A pattern that is not one, or that already failed for this plugin, is skipped: the server starts as if none was declared.
+        const pattern = pluginRegex({ pluginId: scope.pluginId, place: 'ready', name }, options.ready);
+        if (!pattern.failed) ready = pattern;
       }
       const child: ChildProcess = getHost().spawn(resolved, [...args], {
         env: childEnv(options.env), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, ...(options.cwd ? { cwd: options.cwd } : {}),
@@ -210,11 +213,14 @@ export function createProviderBinary(scope: ProviderBinaryScope): { api: Provide
         child.once('error', () => { exited = true; resolve({ code: null, signal: null }); });
       });
       let onReady: (() => void) | null = null;
+      let onUnusable: (() => void) | null = null;
       const feed = (chunk: Buffer | string): void => {
         tail = (tail + chunk.toString()).slice(-OUTPUT_TAIL_CHARS);
         if (ready && match === null) {
-          const found = ready.exec(tail);
-          if (found) { match = found[1] ?? found[0]; onReady?.(); }
+          // Never throws, and does not run once off (here or in another server of this plugin): the wait ends instead.
+          const found = ready.firstGroup(tail);
+          if (ready.failed) { onUnusable?.(); return; }
+          if (found !== null) { match = found; onReady?.(); }
         }
       };
       child.stdout?.on('data', feed);
@@ -239,13 +245,16 @@ export function createProviderBinary(scope: ProviderBinaryScope): { api: Provide
 
       if (ready) {
         const wait = clamp(options.readyTimeoutMs, DEFAULT_READY_MS, MAX_READY_MS);
-        const outcome = await new Promise<'ready' | 'exited' | 'timeout'>((resolve) => {
+        const outcome = await new Promise<'ready' | 'exited' | 'timeout' | 'unusable'>((resolve) => {
           const timer = setTimeout(() => resolve('timeout'), wait);
           onReady = () => { clearTimeout(timer); resolve('ready'); };
+          onUnusable = () => { clearTimeout(timer); resolve('unusable'); };
           void exitedPromise.then(() => { clearTimeout(timer); resolve(match === null ? 'exited' : 'ready'); });
           if (match !== null) onReady();
+          else if (ready?.failed) onUnusable();
         });
-        if (outcome !== 'ready') {
+        // The pattern failed on the output: the server is handed over as if it had declared none, `match` left empty.
+        if (outcome !== 'ready' && outcome !== 'unusable') {
           const output = redactText(tail).slice(-500);
           await server.stop();
           throw new ProviderBinaryError(outcome === 'exited'

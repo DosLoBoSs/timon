@@ -11,6 +11,7 @@ import {
   type TaskType,
 } from './db.js';
 import { BackendExhaustedError, spawnAgent, canSpawnMission } from './agent.js';
+import { CwdUnusableError } from './cwd-check.js';
 import { taskProjectSlug } from './task-project.js';
 import { bus } from './bus.js';
 import { loadConfig, type AgentConfig } from './agent.js';
@@ -344,8 +345,10 @@ export function worktreeDirective(
     `Do NOT run \`npm ci\`, \`npm install\`, \`npm rebuild\` or \`electron-rebuild\` ` +
     `in this worktree: they can erase or overwrite the live repository's dependencies ` +
     `and stop the daemon and running missions. This overrides generic installation advice. ` +
-    `Run typechecks and tests directly from each package with its local tsc/tsx ` +
-    `(\`npx tsc --noEmit\`); never use a global TypeScript compiler. ` +
+    `Run typechecks and tests from each package with its local tools: its own ` +
+    `\`typecheck\` and \`test\` scripts when it has them (\`npm run typecheck\`, \`npm test\`), ` +
+    `because their pre-steps generate files git ignores, which a fresh worktree does not have; ` +
+    `otherwise its local tsc (\`npx tsc --noEmit\`). Never use a global TypeScript compiler. ` +
     `If dependencies are missing, report the missing prerequisite instead of installing them.`,
   ];
   const refresh = lastRefresh.get(task.id);
@@ -1157,6 +1160,14 @@ async function dispatch(): Promise<void> {
         blockOnRefusedSpawn(task, err.backend);
         continue;
       }
+      // The agent's folder is gone (TIM-0148): every replay and every backend would
+      // meet the same missing folder. A plain block that names it, for a person to
+      // restore the folder or move the agent: no requeue budget, no fallback.
+      if (err instanceof CwdUnusableError) {
+        spawnFailures.delete(taskId);
+        blockOnUnusableCwd(task, err);
+        continue;
+      }
       // `enforce` without a fence refuses every launch the same way until
       // someone changes the machine or the setting: retrying is noise.
       const fails = err instanceof MissionFenceRefusedError ? MAX_SPAWN_FAILURES : (spawnFailures.get(taskId) ?? 0) + 1;
@@ -1179,6 +1190,16 @@ async function dispatch(): Promise<void> {
       }
     }
   }
+}
+
+/** The block a launch refused for its working directory leads to. No
+ *  `interrupted_reason`: that column says the system failed and drives the
+ *  automatic replays; this one waits for a person. */
+export function blockOnUnusableCwd(task: TaskRow, err: CwdUnusableError): void {
+  const reason = `${err.message[0]!.toUpperCase()}${err.message.slice(1)}. The mission was not started: `
+    + `restore this folder, or change the working directory of the agent or its project, then retry the task.`;
+  console.warn(`[dispatcher] task ${task.id} → BLOCKED: ${reason}`);
+  dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason: reason });
 }
 
 /** The block a spawn refused by the quota guard leads to. Leaves the same way as a
@@ -1296,7 +1317,7 @@ export function lastMissionError(missionId: string): string | null {
     const ev = events[i]!;
     if (ev.type !== 'backend_failed' && ev.type !== 'spawn_failed' && ev.type !== 'assistant') continue;
     let p: {
-      binary?: unknown; cause?: unknown; exitCode?: unknown; stderr?: unknown; error?: unknown;
+      binary?: unknown; cause?: unknown; cwd?: unknown; exitCode?: unknown; stderr?: unknown; error?: unknown;
       message?: { content?: unknown };
     };
     try { p = JSON.parse(ev.payload) as typeof p; } catch { continue; }
@@ -1307,6 +1328,7 @@ export function lastMissionError(missionId: string): string | null {
       const text = parts.map((c) => (typeof c?.text === 'string' ? c.text : '')).join(' ').trim();
       return text ? `the backend reported ${p.error}: ${clip(text)}` : `the backend reported ${p.error}.`;
     }
+    if (ev.type === 'spawn_failed' && typeof p.cwd === 'string') return `the working directory ${p.cwd} could not be used (${String(p.cause ?? 'unknown')}).`;
     if (ev.type === 'spawn_failed') return `the ${String(p.binary ?? 'backend')} CLI could not start (${String(p.cause ?? 'unknown')}).`;
     const stderr = typeof p.stderr === 'string' ? p.stderr.trim() : '';
     const code = p.exitCode === null || p.exitCode === undefined ? 'none' : String(p.exitCode);

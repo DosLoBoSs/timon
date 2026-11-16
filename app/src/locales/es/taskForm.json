@@ -74,8 +74,6 @@
       "tooLarge": "{name}: demasiado grande (15 MB como máximo).",
       "typeRefused": "{name}: este tipo de archivo no se acepta.",
       "quota": "{name}: la tarea ya tiene todos los archivos que admite (20 archivos, 100 MB).",
-      "failed": "{name}: no se pudo enviar ({error}).",
-      "removeFailed": "No se pudo quitar {name}: {error}",
       "loadFailed": "No se pudieron leer los archivos adjuntos.",
       "dismiss": "Descartar",
       "partial": "Tarea guardada, pero no se pudieron enviar algunos archivos: {names}"

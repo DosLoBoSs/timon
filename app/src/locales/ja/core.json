@@ -1884,6 +1884,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} は {name} になりました。古い名前にパターンまたは部分一致でマッチするフィルターを持つトリガー {count} 件を確認してください: {names}",
     "renameOpenTriggers": "トリガーを開く",
+    "invalidName": "名前が無効です。任意の言語の文字と数字、および . _ - を使い、空白や絵文字は使わず、文字か数字で始めてください（最大 80 バイト、漢字で約 26 文字）。",
     "autoFitView": "表示を自動調整",
     "poleProjects": "プロジェクト {count} 件",
     "newPole": "新しいポール",
@@ -2029,6 +2030,9 @@
     "contextTailOnly": "要約に失敗 — トランスクリプトの末尾だけが引き継がれました{reason}",
     "backendNotice": "バックエンド {from}{target} — {ctx}",
     "backendSwitchFailed": "{from} から {target} に切り替えられませんでした: {reason}。会話は {from} のままです。もう一度お試しください。",
+    "modelNotApplied": "{backend} はモデル {model} を受け付けませんでした: {reason}。このミッションは {active} で動作しています。",
+    "modelNotAppliedDefault": "{backend} はモデル {model} を受け付けませんでした: {reason}。このミッションはエージェントの既定モデルで動作しています。",
+    "effortNotApplied": "{backend} は思考レベル {effort} を受け付けませんでした: {reason}。モデルの既定レベルが適用されます。",
     "sessionlessTurn": "{backend} はセッションを保持しません。各メッセージは以前のターンなしで始まります。",
     "askUserUnrenderable": "エージェントの質問フォームを表示できませんでした — {defect}",
     "invalidPayload": "無効なペイロード",

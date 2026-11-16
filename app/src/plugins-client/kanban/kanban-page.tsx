@@ -168,7 +168,10 @@ export function KanbanClient({ defaultAgent }: { defaultAgent?: string }) {
   useEffect(() => {
     if (!todoKey) return;
     let off = false;
-    fetch('/api/ui/project-todo?status=all', { cache: 'no-store' })
+    // By id: the list is a capped page, where an idea past the newest ones
+    // would be missing and its task card would lose its tags.
+    const ids = todoKey.split(',').slice(0, 1000).join(',');
+    fetch(`/api/ui/project-todo?status=all&ids=${ids}&limit=1000`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((j: { items?: ProjectTodo[] }) => {
         if (!off) setTodos(new Map((j.items ?? []).map((item) => [item.id, item])));

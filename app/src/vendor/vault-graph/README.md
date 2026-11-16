@@ -6,14 +6,20 @@ Vendored from [luke321/vault-graph](https://github.com/luke321/vault-graph) (MIT
 
 Timon intercepts the `obsidian://` link of the detail panel to open the note in
 its own popup (`components/vault/vault-note-panel.tsx`), hence the label
-`Ouvrir la note` in place of `Open in Obsidian` in `page.js`. The `href` is left
-untouched: it carries the path the interception reads.
+`tr("openNote")` (English source: `Open note`) in place of `Open in Obsidian` in
+`page.js`. The `href` is left untouched: it carries the path the interception reads.
+
+Every label of `page.js` and `markup.ts` goes through the `vaultGraphSurface`
+messages (`app/src/locales/<tag>/vaultGraphSurface.json`): the host
+(`plugins-client/vault/brain-disc.tsx`) passes them already translated in
+`deps.dictionary`, and a key the dictionary lacks falls back to the English source.
 
 ## Timon's changes to `page.js`
 
 | what | why |
 |---|---|
-| label `Ouvrir la note` in place of `Open in Obsidian` | see above |
+| label `tr("openNote")` in place of `Open in Obsidian` | see above |
+| every label read through `tr(key, vars)` from `deps.dictionary` | the interface follows the reader's language |
 | `mountVaultGraph` returns a `destroy()` on its handle | the mount had no teardown |
 
 The teardown: `mountVaultGraph` created `requestAnimationFrame` loops, three

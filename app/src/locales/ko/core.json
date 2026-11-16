@@ -1884,6 +1884,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old}은(는) 이제 {name}입니다. 필터가 패턴이나 부분 문자열로 이전 이름과 일치하는 트리거 {count}개를 확인하세요: {names}",
     "renameOpenTriggers": "트리거 열기",
+    "invalidName": "이름이 올바르지 않습니다. 모든 언어의 문자와 숫자, 그리고 . _ - 를 사용하고, 공백이나 이모지 없이 문자나 숫자로 시작하세요(최대 80바이트, 한자 약 26자).",
     "autoFitView": "보기 자동 맞춤",
     "poleProjects": "프로젝트 {count}개",
     "newPole": "새 폴",
@@ -2029,6 +2030,9 @@
     "contextTailOnly": "요약 실패 — 대화 기록의 끝부분만 전달됨{reason}",
     "backendNotice": "백엔드 {from}{target} — {ctx}",
     "backendSwitchFailed": "{from}에서 {target}(으)로 전환할 수 없습니다: {reason}. 대화는 {from}에 그대로 있으니 다시 시도할 수 있습니다.",
+    "modelNotApplied": "{backend}이(가) 모델 {model}을(를) 적용하지 않았습니다: {reason}. 이 미션은 {active}(으)로 실행됩니다.",
+    "modelNotAppliedDefault": "{backend}이(가) 모델 {model}을(를) 적용하지 않았습니다: {reason}. 이 미션은 에이전트의 기본 모델로 실행됩니다.",
+    "effortNotApplied": "{backend}이(가) 사고 수준 {effort}을(를) 적용하지 않았습니다: {reason}. 모델의 기본 수준이 적용됩니다.",
     "sessionlessTurn": "{backend}은(는) 세션을 유지하지 않습니다. 각 메시지는 이전 턴 없이 시작됩니다.",
     "askUserUnrenderable": "에이전트의 질문 양식을 표시할 수 없습니다 — {defect}",
     "invalidPayload": "잘못된 페이로드",

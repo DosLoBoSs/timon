@@ -254,7 +254,7 @@
       "name": "Nome",
       "url": "URL",
       "urlPlaceholder": "git@gitlab.com:team/project.git",
-      "urlHint": "SSH (git@host:path o ssh://), HTTPS senza credenziali, git://, file:// o una cartella su questa macchina.",
+      "urlHint": "SSH (git@host:path o ssh://), HTTPS senza credenziali, git://, file:// o una cartella su questa macchina in cui gli agenti non possono scrivere.",
       "issue": {
         "name": "Lettere, cifre, punti, trattini e underscore, senza iniziare con un trattino.",
         "credentials": "Nessun utente o token nell’URL: usa una chiave SSH o il credential helper di git.",

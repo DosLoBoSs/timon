@@ -1884,6 +1884,7 @@
   "agentsPage": {
     "renameTriggersToCheck": "{old} agora é {name}. Verifique {count} gatilho(s) cujo filtro corresponde ao nome antigo por padrão ou trecho: {names}",
     "renameOpenTriggers": "Abrir gatilhos",
+    "invalidName": "Nome inválido. Use letras e números de qualquer idioma, além de . _ -, sem espaços nem emojis, começando por uma letra ou um número (no máximo 80 bytes, cerca de 26 caracteres chineses).",
     "autoFitView": "Ajustar a visualização",
     "poleProjects": "{count} projeto(s)",
     "newPole": "Novo polo",
@@ -2029,6 +2030,9 @@
     "contextTailOnly": "o resumo falhou — apenas o FINAL da transcrição foi transmitido{reason}",
     "backendNotice": "backend {from}{target} — {ctx}",
     "backendSwitchFailed": "Não foi possível trocar de {from} para {target}: {reason}. A conversa continua em {from}, você pode tentar novamente.",
+    "modelNotApplied": "{backend} não aceitou o modelo {model}: {reason}. Esta missão roda em {active}.",
+    "modelNotAppliedDefault": "{backend} não aceitou o modelo {model}: {reason}. Esta missão roda no modelo padrão do agente.",
+    "effortNotApplied": "{backend} não aceitou o nível de raciocínio {effort}: {reason}. Vale o nível padrão do modelo.",
     "sessionlessTurn": "{backend} não mantém sessão: cada mensagem começa sem os turnos anteriores.",
     "askUserUnrenderable": "Não foi possível exibir o formulário de perguntas do agente — {defect}",
     "invalidPayload": "payload inválido",

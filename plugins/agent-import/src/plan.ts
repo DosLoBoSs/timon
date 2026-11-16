@@ -39,8 +39,34 @@ export const ROUTINE_PROMPT_MAX = 20_000;
 /** What `ctx.agents.setAvatar` takes once decoded. */
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 
-const AGENT_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const AGENT_NAME_MAX = 100;
+/**
+ * The daemon's agent name rule (`orchestrator/src/agent-name.ts`, which the
+ * agents facade applies on create): letters, marks and digits of any script
+ * plus `._-`, 80 bytes of UTF-8, no trailing `.`, no Windows device name, and
+ * a letter or a digit first for a plugin. Checked here so the preview says it.
+ */
+const AGENT_NAME_RE = /^[\p{L}\p{N}][\p{L}\p{M}\p{N}._-]*$/u;
+const AGENT_NAME_MAX_BYTES = 80;
+const WINDOWS_RESERVED_RE = /^(?:con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])$/iu;
+const utf8Bytes = (value: string): number => new TextEncoder().encode(value).length;
+const validAgentName = (name: string): boolean => AGENT_NAME_RE.test(name)
+  && utf8Bytes(name) <= AGENT_NAME_MAX_BYTES
+  && !name.endsWith('.')
+  && !WINDOWS_RESERVED_RE.test(name.split('.')[0] ?? '');
+/** The first `max` bytes of `value`, cut between code points, without a trailing `.` or `-`. */
+const clipAgentName = (value: string, max: number): string => {
+  let out = '';
+  for (const char of value) {
+    if (utf8Bytes(out + char) > max) break;
+    out += char;
+  }
+  return out.replace(/[.-]+$/, '');
+};
+const agentWithSuffix = (base: string, n: number): string => {
+  if (n === 1) return base;
+  const tail = `-${n}`;
+  return clipAgentName(base, AGENT_NAME_MAX_BYTES - tail.length) + tail;
+};
 const PREFIX_MAX = 30;
 const SUFFIX_TRIES = 50;
 
@@ -314,14 +340,14 @@ export async function planImport(
     let action: PreviewAgentAction = previous ? 'update' : 'create';
     let finalName = previous ? current!.name : '';
     if (!previous) {
-      let base = `${prefix}.${source.key}`;
+      let base = clipAgentName(`${prefix}.${source.key}`, AGENT_NAME_MAX_BYTES);
       if (choice?.name !== undefined) {
-        if (AGENT_NAME_RE.test(choice.name) && choice.name.length <= AGENT_NAME_MAX) base = choice.name;
+        const chosen = choice.name.normalize('NFC');
+        if (validAgentName(chosen)) base = chosen;
         else notes.push(`"${choice.name.slice(0, 100)}" is not a valid agent name: ${base} is used instead.`);
       }
-      base = base.slice(0, AGENT_NAME_MAX);
       for (let n = 1; n <= SUFFIX_TRIES && !finalName; n += 1) {
-        const candidate = withSuffix(base, n, AGENT_NAME_MAX);
+        const candidate = agentWithSuffix(base, n);
         if (!taken.has(lower(candidate))) finalName = candidate;
       }
       if (!finalName) {

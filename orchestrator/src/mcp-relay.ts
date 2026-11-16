@@ -26,6 +26,7 @@
  * worth nothing off this machine's loopback, nor for another agent or route.
  */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { isValidAgentName } from './agent-name.js';
 import { apiPort } from './api-url.js';
 import { dbApi } from './db.js';
 import { MCP_RELAY_HEADER, MCP_RELAY_PREFIX, mcpRelayRoute } from './mcp-relay-route.js';
@@ -39,11 +40,10 @@ export { MCP_RELAY_HEADER, MCP_RELAY_PREFIX, isMcpRelayRoute, mcpRelayRoute } fr
 const KEY_STORE = '@timon/mcp-relay';
 const KEY_NAME = '@settings/relay-key';
 
-const AGENT_RE = /^[A-Za-z0-9._-]+$/;
 const MISSION_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 export function isMcpRelayAgent(value: string): boolean {
-  return AGENT_RE.test(value);
+  return isValidAgentName(value);
 }
 
 let cachedKey: Buffer | null = null;
@@ -122,7 +122,7 @@ export function mcpRelayLaunchTarget(
   caller: McpRelayCaller,
   options: { key?: Buffer; port?: number } = {},
 ): { url: string; headers: Record<string, string> } | null {
-  if (!AGENT_RE.test(caller.agent)) throw new Error('invalid agent name for an mcp relay');
+  if (!isValidAgentName(caller.agent)) throw new Error('invalid agent name for an mcp relay');
   const key = options.key ?? mcpRelayKey();
   if (!key) return null;
   const route = mcpRelayRoute(server.id, server.url);

@@ -139,6 +139,12 @@ export async function maybeCreateDocTask(task: TaskRow): Promise<void> {
   // hand-launched research (neither link) keeps its doc.
   if (task.type === 'research' && (task.todo_id != null || task.trigger_id != null)) return;
 
+  // A chore opened by a routine is the same job replayed on every tick (a
+  // nightly backup, a cleanup): there is nothing new to record, and the
+  // librarian closed every such doc empty, one wasted mission per run and a
+  // stray return to the pilot. A code or research routine keeps its doc.
+  if (task.type === 'chore' && task.routine_id != null) return;
+
   // "Code only" pipelines: day mode explicitly chosen by the user to
   // go fast, the doc does not have to slot in.
   if (isCodeOnlyPipeline(task.pipeline)) return;

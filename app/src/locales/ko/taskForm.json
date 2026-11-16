@@ -74,8 +74,6 @@
       "tooLarge": "{name}: 너무 큽니다 (최대 15MB).",
       "typeRefused": "{name}: 이 유형의 파일은 허용되지 않습니다.",
       "quota": "{name}: 작업에 담을 수 있는 파일 한도에 도달했습니다 (20개, 100MB).",
-      "failed": "{name}: 보낼 수 없습니다 ({error}).",
-      "removeFailed": "{name}을(를) 제거할 수 없습니다: {error}",
       "loadFailed": "첨부 파일을 읽을 수 없습니다.",
       "dismiss": "닫기",
       "partial": "작업은 저장되었지만 일부 파일을 보낼 수 없습니다: {names}"

@@ -25,11 +25,11 @@ export const FIRST_RUN_THEME: Record<Scheme, Palette> = {
     primaryForeground: '#1a171f', // --primary-foreground 266 15% 10.5%
   },
   light: {
-    background: '#f6f0e9', // --surface-0 32 42% 93.9%
-    foreground: '#1e1618', // --foreground 345 15% 10.2%
-    muted: '#6b5a54', // --muted-foreground 16 12% 37.5%
-    border: '#dccbbb', // --border 29 32% 79.8%
-    chip: '#efe7de', // --surface-chip (--surface-2) 32 35% 90.4%
+    background: '#f3eee8', // --surface-0 33 32% 93.2%
+    foreground: '#251d1f', // --foreground 345 12% 13%
+    muted: '#544945', // --muted-foreground 18 10% 30%
+    border: '#dbd0c5', // --border 30 24% 81.5%
+    chip: '#f0eae2', // --surface-chip (--surface-2) 33 30% 91.4%
     primary: '#b4683f', // --primary 21 48% 47.8%
     primaryForeground: '#fcf9f5', // --primary-foreground 30 60% 97.5%
   },

@@ -974,7 +974,7 @@ Notifications (human center — sidebar canvas):
     --mission-id is auto-injected from TIMON_MISSION_ID if not provided.
 
 PROJECT TO DO (a project's idea notebook — nothing here is ever dispatched):
-  timon project-todo list [--status open|done|promoted|all] [--project SLUG] [--json]
+  timon project-todo list [--status open|done|promoted|all] [--project SLUG] [--limit N] [--json]
   timon project-todo add <text...> [--project SLUG] [--notes TEXT]
   timon project-todo update <id> [<text...>] [--project SLUG] [--notes TEXT] [--status open|done]
   timon project-todo done <id> [--undo]        checks / unchecks the idea
@@ -2992,12 +2992,22 @@ async function cmdWorkflow(argv) {
 async function cmdProjectTodoList(argv) {
   const status = takeFlag(argv, 'status');
   const project = takeFlag(argv, 'project');
+  const limit = takeFlag(argv, 'limit');
   const qs = [];
   if (status) qs.push(`status=${encodeURIComponent(status)}`);
   if (project) qs.push(`project=${encodeURIComponent(project)}`);
+  if (limit) qs.push(`limit=${encodeURIComponent(limit)}`);
   const j = await http('GET', `/api/project-todo${qs.length ? '?' + qs.join('&') : ''}`);
+  // On stderr: `--json` keeps printing the bare array a script expects.
+  const cut = () => {
+    if (!j.truncated) return;
+    const by = (j.counts && j.counts.byStatus) || {};
+    const total = status && status !== 'all' ? by[status] || 0 : (by.open || 0) + (by.done || 0) + (by.promoted || 0);
+    process.stderr.write(`showing ${(j.items || []).length} of ${total} idea(s): narrow with --status / --project, or raise --limit (at most 1000)\n`);
+  };
   if (argv.includes('--json')) {
     process.stdout.write(JSON.stringify(j.items, null, 2) + '\n');
+    cut();
     return;
   }
   for (const it of j.items || []) {
@@ -3006,7 +3016,9 @@ async function cmdProjectTodoList(argv) {
     process.stdout.write(`${box} ${it.id}. ${it.text}${proj}\n`);
     if (it.notes) process.stdout.write(`      ${it.notes}\n`);
   }
-  process.stdout.write(`\n${j.open ?? 0} open idea(s)\n`);
+  const shownOpen = j.counts && j.counts.byStatus ? j.counts.byStatus.open : j.open;
+  process.stdout.write(`\n${shownOpen ?? 0} open idea(s)\n`);
+  cut();
 }
 
 async function cmdProjectTodoAdd(argv) {

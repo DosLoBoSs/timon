@@ -251,7 +251,7 @@ Notifications (human center — sidebar canvas):
     --mission-id is auto-injected from TIMON_MISSION_ID if not provided.
 
 PROJECT TO DO (a project's idea notebook — nothing here is ever dispatched):
-  timon project-todo list [--status open|done|promoted|all] [--project SLUG] [--json]
+  timon project-todo list [--status open|done|promoted|all] [--project SLUG] [--limit N] [--json]
   timon project-todo add <text...> [--project SLUG] [--notes TEXT]
   timon project-todo update <id> [<text...>] [--project SLUG] [--notes TEXT] [--status open|done]
   timon project-todo done <id> [--undo]        checks / unchecks the idea

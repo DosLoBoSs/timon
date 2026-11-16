@@ -30,6 +30,9 @@ import { defaultExcludedMcpIds, deleteMcp, getMcp, listMcp, missionTransport, re
 import { buildAuthorizeUrl, discoverOAuth, dynamicRegister, exchangeCode, OAUTH_CALLBACK_PATH, oauthRedirectUri, oauthReturnPath, pkcePair, putPending, randomState, takePending } from '../../oauth.js';
 import { apiPort } from '../../api-url.js';
 import { agentDir, skillFile } from '../../paths.js';
+import { findAgentFolder, isValidAgentName } from '../../agent-config.js';
+import { normalizeAgentName } from '../../agent-name.js';
+import { normalizeAgentNameParam } from '../../agent-name-param.js';
 import { buildInjections } from '../../prompt-injections.js';
 import { chooseMainAgent, mainAgentName, mainSeatRemovalRefusal, mainSeatState, renameAgentKeepingSeat } from '../../main-agent.js';
 import { missionLiveness, type MissionLiveness } from '../../mission-liveness.js';
@@ -375,6 +378,7 @@ export function ephemeralOwner(req: Pick<express.Request, 'auth'>, sourceMeta: u
 export function registerRoutes(app: express.IRouter): void {
   // The writer of an agent, for the `agent_*` events its write causes.
   app.use('/api/agents', recordWriteOrigin);
+  normalizeAgentNameParam(app);
   app.post('/api/agents/spawn', handleSpawn);
 
   // SECU-USERS U-2: the list feeds every picker, so it stays open — but
@@ -851,8 +855,9 @@ export function registerRoutes(app: express.IRouter): void {
   app.post('/api/agents/:name/rename', (req, res) => {
     if (!req.auth) { res.status(401).json({ error: 'unauthorized' }); return; }
     if (rejectIfDenied(req, res, 'agents:manage')) return;
-    const body = req.body as { newName?: string; name?: string };
-    const newName = (body.newName ?? body.name ?? '').trim();
+    const body = req.body as { newName?: unknown; name?: unknown };
+    const raw = body.newName ?? body.name;
+    const newName = typeof raw === 'string' ? normalizeAgentName(raw.trim()) : '';
     if (!newName) {
       res.status(400).json({ error: 'newName required' });
       return;
@@ -886,9 +891,19 @@ export function registerRoutes(app: express.IRouter): void {
       system_prompt?: string;
       config?: import('../../agent.js').AgentConfig;
     };
-    if (!body.name || typeof body.system_prompt !== 'string') {
+    if (!body.name || typeof body.name !== 'string' || typeof body.system_prompt !== 'string') {
       res.status(400).json({ error: 'name and system_prompt required' });
       return;
+    }
+    body.name = normalizeAgentName(body.name);
+    // An upsert under `foo` next to `Foo` would write a second agent on Linux
+    // and overwrite the first one on Windows and macOS.
+    if (isValidAgentName(body.name)) {
+      const clash = findAgentFolder(body.name);
+      if (clash !== null && clash !== body.name) {
+        res.status(409).json(apiError('agent_name_taken', `agent "${clash}" already exists`, { name: clash }));
+        return;
+      }
     }
     // The agent editor saves through here: same rule as the config PATCH.
     if (body.config && 'icon_url' in body.config && !agentIconUrlSchema.safeParse(body.config.icon_url).success) {
@@ -1056,14 +1071,18 @@ export function registerRoutes(app: express.IRouter): void {
     res.json({ ok: true, main: out.name });
   });
 
+  // Same rule as the rename: an anonymous caller is refused even on the
+  // first-run loopback, where `rejectIfDenied` alone would let it through.
   app.delete('/api/agents/:name', (req, res) => {
+    if (!req.auth) { res.status(401).json({ error: 'unauthorized' }); return; }
     if (rejectIfDenied(req, res, 'agents:manage')) return;
-    const seatRefusal = mainSeatRemovalRefusal(req.params.name);
-    if (seatRefusal) {
-      res.status(409).json({ error: seatRefusal });
-      return;
-    }
     try {
+      // Inside the try: an invalid name throws from the seat lookup, a 400.
+      const seatRefusal = mainSeatRemovalRefusal(req.params.name);
+      if (seatRefusal) {
+        res.status(409).json({ error: seatRefusal });
+        return;
+      }
       const ok = deleteAgent(req.params.name, { deletedBy: deleterLabel(req) });
       if (!ok) {
         res.status(404).json(apiError('agent_not_found', 'agent not found'));

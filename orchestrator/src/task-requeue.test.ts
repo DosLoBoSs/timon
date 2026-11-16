@@ -103,6 +103,20 @@ test('au cap, la task reste BLOCKED et l\'appelant est invité à escalader', ()
   // La mort de trop compte aussi : sans elle, une boucle relancée par le pilote
   // resterait figée au cap (TIM-0065, crash-loop.test.ts).
   assert.equal(after?.requeue_count, MAX_SYSTEM_REQUEUES + 1);
+  // TIM-0149: the death sentence alone says "not a business block", which next
+  // to BLOCKED read as a replay still to come. The reason has to say it is over.
+  assert.match(after?.blocked_reason ?? '', /process tué une fois de trop/);
+  assert.match(after?.blocked_reason ?? '', /Automatic retries are exhausted \(4 system deaths/);
+  assert.ok(
+    after?.blocked_reason?.includes(`timon task update ${id} --status PENDING`),
+    'the reason gives the gesture that restarts the task',
+  );
+});
+
+test('a cause never replayed keeps its reason without the exhausted-retries sentence', () => {
+  const id = runningTask();
+  assert.equal(dbApi.setTaskInterrupted(id, 'permission_denied', 'refused tool'), 'blocked');
+  assert.equal(dbApi.getTask(id)?.blocked_reason, 'refused tool');
 });
 
 test('un blocage MÉTIER n\'est jamais relancé', () => {

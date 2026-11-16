@@ -4,8 +4,9 @@
 import { strict as assert } from 'node:assert';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { IntlMessageFormat } from 'intl-messageformat';
 
@@ -104,4 +105,15 @@ test('writing: dictionaries, manifest and the generated English index; a removed
   rmSync(join(root, 'de'), { recursive: true });
   writeLocales({ sourceDir: root, publicDir, generatedDir });
   assert.equal(existsSync(join(publicDir, 'de.json')), false);
+});
+
+test('typecheck and test generate the locales first: a fresh worktree has no .generated folder', () => {
+  // `src/locales/.generated/` is ignored by git, and `src/lib/i18n.ts` imports it: without
+  // these pre-steps a fresh checkout fails its typecheck, and the failure gets waved off as pre-existing.
+  const manifest = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  for (const script of ['pretypecheck', 'pretest', 'prebuild']) {
+    assert.match(manifest.scripts[script] ?? '', /^node scripts\/build-locales\.mjs\b/, script);
+  }
 });

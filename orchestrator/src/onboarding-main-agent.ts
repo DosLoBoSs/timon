@@ -23,6 +23,8 @@ import { isAbsolute, join } from 'node:path';
 import { CONFIG_FILE, config, expandTilde } from './config/load.js';
 import { z } from 'zod';
 import { getAgent, loadSoul, patchAgentConfig, renameAgent } from './agent.js';
+import { findAgentFolder } from './agent-config.js';
+import { toAgentName } from './agent-name.js';
 import { dbApi } from './db.js';
 import { MAIN_AGENT_KEY, mainAgentName, setMainAgentName } from './main-agent.js';
 import { readTeamState, teamOnboardingPending, writeTeamState } from './onboarding-team-state.js';
@@ -63,21 +65,14 @@ export const MainAgentSchema = z.object({
 export type MainAgentInput = z.infer<typeof MainAgentSchema>;
 
 /**
- * A display name typed by a human → a valid agent name.
+ * A display name typed by a human → a valid agent name (`agent-name.ts`).
  *
- * Agent names are a filesystem identity (`^[A-Za-z0-9._-]+$`), so "Nova the
- * assistant" cannot be one. We convert rather than refuse: the screen shows
- * the result, and refusing a space would be a rule the user has no way to
- * guess.
+ * Agent names are a filesystem identity, so "Nova the assistant" cannot be
+ * one. We convert rather than refuse: the screen shows the result, and
+ * refusing a space would be a rule the user has no way to guess. Letters of
+ * every script stay, accents included; the result is never empty.
  */
-export function toAgentName(raw: string): string {
-  return raw
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^A-Za-z0-9._-]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^[-.]+|[-.]+$/g, '')
-    .slice(0, 48);
-}
+export { toAgentName };
 
 export function mainAgentOnboardingPending(): boolean {
   return teamOnboardingPending() && dbApi.getAllSettings()[MAIN_AGENT_STEP_KEY] !== 'complete';
@@ -152,9 +147,11 @@ export function applyMainAgentName(rawName: string): string {
   if (!current) throw new MainAgentSetupError('main_agent_unavailable');
 
   const display = rawName.trim();
+  // A blank answer is no name; anything else converts, at worst to `agent`.
+  if (!display) throw new MainAgentSetupError('invalid_name');
   const target = toAgentName(display);
-  if (!target) throw new MainAgentSetupError('invalid_name');
-  if (target !== current && existsSync(agentDir(target))) throw new MainAgentSetupError('name_taken');
+  const clash = findAgentFolder(target);
+  if (target !== current && clash !== null && clash !== current) throw new MainAgentSetupError('name_taken');
 
   // Read the wizard's saved config, which may postdate this daemon's boot.
   let cwd = getAgent(current)?.cwd;

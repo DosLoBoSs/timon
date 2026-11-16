@@ -6,7 +6,8 @@
  * applies, after the licence. Only `effective` may say "on": a wish the licence
  * refuses must never read as unsigned code that runs. The only refusal is a
  * fixed plugin composition (the daemon's `DeveloperModeState` says why): Free
- * and paid licences both admit developer mode.
+ * and paid licences both admit developer mode. The locked beta state is one
+ * too, reported as `license_required` because no licence brought it.
  */
 import { fetchCapabilities } from '@/lib/capabilities';
 import { t } from '@/lib/i18n';
@@ -18,7 +19,7 @@ export type DeveloperModeState = {
   effective: boolean;
   /** Turning it on would take effect, licence included. */
   available: boolean;
-  blockedBy: 'plugin_composition_fixed' | null;
+  blockedBy: 'plugin_composition_fixed' | 'license_required' | null;
 };
 
 /** Where the switch lives: Settings › Plugins › Developer mode. */
@@ -36,6 +37,7 @@ export class DeveloperModeError extends Error {
 function errorMessage(status: number, code: string): string {
   if (status === 401) return t('developerMode.errors.unauthenticated');
   if (status === 403 && code === 'plugin_composition_fixed') return t('freeLicense.plugin_composition_fixed');
+  if (status === 403 && code === 'license_required') return t('developerMode.blocked.licenseRequired');
   if (status === 403) return t('developerMode.errors.forbidden');
   return t('developerMode.errors.generic', { status });
 }
@@ -67,7 +69,9 @@ export async function setDeveloperMode(enabled: boolean): Promise<DeveloperModeS
 
 /** Why the switch cannot be turned on, or `null` when it can. */
 export function developerModeBlockedText(state: DeveloperModeState): string | null {
-  return state.blockedBy === 'plugin_composition_fixed' ? t('developerMode.blocked.fixed') : null;
+  if (state.blockedBy === 'plugin_composition_fixed') return t('developerMode.blocked.fixed');
+  if (state.blockedBy === 'license_required') return t('developerMode.blocked.licenseRequired');
+  return null;
 }
 
 function unsignedChild(child: BundleChildPreview): boolean {

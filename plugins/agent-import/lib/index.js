@@ -2982,8 +2982,24 @@ function stripAllowedTools(content) {
 var MEMORY_RULES_PER_AGENT = 64;
 var ROUTINE_PROMPT_MAX = 2e4;
 var AVATAR_MAX_BYTES = 2 * 1024 * 1024;
-var AGENT_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-var AGENT_NAME_MAX = 100;
+var AGENT_NAME_RE = /^[\p{L}\p{N}][\p{L}\p{M}\p{N}._-]*$/u;
+var AGENT_NAME_MAX_BYTES = 80;
+var WINDOWS_RESERVED_RE = /^(?:con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])$/iu;
+var utf8Bytes = (value) => new TextEncoder().encode(value).length;
+var validAgentName = (name2) => AGENT_NAME_RE.test(name2) && utf8Bytes(name2) <= AGENT_NAME_MAX_BYTES && !name2.endsWith(".") && !WINDOWS_RESERVED_RE.test(name2.split(".")[0] ?? "");
+var clipAgentName = (value, max2) => {
+  let out = "";
+  for (const char of value) {
+    if (utf8Bytes(out + char) > max2) break;
+    out += char;
+  }
+  return out.replace(/[.-]+$/, "");
+};
+var agentWithSuffix = (base, n) => {
+  if (n === 1) return base;
+  const tail = `-${n}`;
+  return clipAgentName(base, AGENT_NAME_MAX_BYTES - tail.length) + tail;
+};
 var PREFIX_MAX = 30;
 var SUFFIX_TRIES = 50;
 var sha = (text) => createHash2("sha256").update(text).digest("hex");
@@ -3169,14 +3185,14 @@ async function planImport(ctx, records, manifest, options = {}) {
     let action = previous ? "update" : "create";
     let finalName = previous ? current.name : "";
     if (!previous) {
-      let base = `${prefix}.${source.key}`;
+      let base = clipAgentName(`${prefix}.${source.key}`, AGENT_NAME_MAX_BYTES);
       if (choice?.name !== void 0) {
-        if (AGENT_NAME_RE.test(choice.name) && choice.name.length <= AGENT_NAME_MAX) base = choice.name;
+        const chosen = choice.name.normalize("NFC");
+        if (validAgentName(chosen)) base = chosen;
         else notes.push(`"${choice.name.slice(0, 100)}" is not a valid agent name: ${base} is used instead.`);
       }
-      base = base.slice(0, AGENT_NAME_MAX);
       for (let n = 1; n <= SUFFIX_TRIES && !finalName; n += 1) {
-        const candidate = withSuffix(base, n, AGENT_NAME_MAX);
+        const candidate = agentWithSuffix(base, n);
         if (!taken.has(lower(candidate))) finalName = candidate;
       }
       if (!finalName) {
@@ -4616,7 +4632,10 @@ function crc32(bytes) {
   crc2.update(bytes);
   return crc2.digest();
 }
-var CP850_HIGH = "\xC7\xFC\xE9\xE2\xE4\xE0\xE5\xE7\xEA\xEB\xE8\xEF\xEE\xEC\xC4\xC5\xC9\xE6\xC6\xF4\xF6\xF2\xFB\xF9\xFF\xD6\xDC\xF8\xA3\xD8\xD7\u0192\xE1\xED\xF3\xFA\xF1\xD1\xAA\xBA\xBF\xAE\xAC\xBD\xBC\xA1\xAB\xBB\u2591\u2592\u2593\u2502\u2524\xC1\xC2\xC0\xA9\u2563\u2551\u2557\u255D\xA2\xA5\u2510\u2514\u2534\u252C\u251C\u2500\u253C\xE3\xC3\u255A\u2554\u2569\u2566\u2560\u2550\u256C\xA4\xF0\xD0\xCA\xCB\xC8\u0131\xCD\xCE\xCF\u2518\u250C\u2588\u2584\xA6\xCC\u2580\xD3\xDF\xD4\xD2\xF5\xD5\xB5\xFE\xDE\xDA\xDB\xD9\xFD\xDD\xAF\xB4\xAD\xB1\u2017\xBE\xB6\xA7\xF7\xB8\xB0\xA8\xB7\xB9\xB3\xB2\u25A0\xA0";
+var CP850_HIGH = (
+  // french-ok: the code page's own accented letters, byte for byte
+  "\xC7\xFC\xE9\xE2\xE4\xE0\xE5\xE7\xEA\xEB\xE8\xEF\xEE\xEC\xC4\xC5\xC9\xE6\xC6\xF4\xF6\xF2\xFB\xF9\xFF\xD6\xDC\xF8\xA3\xD8\xD7\u0192\xE1\xED\xF3\xFA\xF1\xD1\xAA\xBA\xBF\xAE\xAC\xBD\xBC\xA1\xAB\xBB\u2591\u2592\u2593\u2502\u2524\xC1\xC2\xC0\xA9\u2563\u2551\u2557\u255D\xA2\xA5\u2510\u2514\u2534\u252C\u251C\u2500\u253C\xE3\xC3\u255A\u2554\u2569\u2566\u2560\u2550\u256C\xA4\xF0\xD0\xCA\xCB\xC8\u0131\xCD\xCE\xCF\u2518\u250C\u2588\u2584\xA6\xCC\u2580\xD3\xDF\xD4\xD2\xF5\xD5\xB5\xFE\xDE\xDA\xDB\xD9\xFD\xDD\xAF\xB4\xAD\xB1\u2017\xBE\xB6\xA7\xF7\xB8\xB0\xA8\xB7\xB9\xB3\xB2\u25A0\xA0"
+);
 var CP850 = Array.from(CP850_HIGH);
 function decodeCp850(bytes) {
   let out = "";
