@@ -189,6 +189,8 @@ test('S4: a server that never says it is ready, or exits first, is an error that
     await assert.rejects(ctx.provider.binary.serve('acme-failing', [], { ready: 'never printed' }), /exited before it was ready: nope/);
     await assert.rejects(ctx.provider.binary.serve('acme-serve', [], { ready: 'x'.repeat(300) }), /over 200 characters/);
     await assert.rejects(ctx.provider.binary.serve('acme-serve', [], { ready: '(' }), /not a regular expression/);
+    // Backtracks for minutes on the server's output: the wait ends, the daemon does not freeze.
+    await assert.rejects(ctx.provider.binary.serve('acme-serve', [], { ready: '(.*.*)*!$' }), /could not be tested .* declare a simpler pattern/);
   } finally {
     restore();
   }

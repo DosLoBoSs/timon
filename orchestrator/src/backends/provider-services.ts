@@ -109,7 +109,10 @@ export type ProviderProbeResult = {
 export type ProviderServeOptions = {
   readonly cwd?: string;
   readonly env?: Readonly<Record<string, string>>;
-  /** A regular expression (source text, up to 200 characters) the server prints when it is ready; its first group, if any, is handed back as `match`. */
+  /**
+   * A regular expression (source text, up to 200 characters) the server prints when it is ready; its first group, if any, is handed back as `match`.
+   * It is tested on the last 16 KB of output with a 250 ms limit: a pattern that runs past it ends the wait with an error.
+   */
   readonly ready?: string;
   /** How long to wait for it. Default 15 000 ms, ceiling 60 000. */
   readonly readyTimeoutMs?: number;
