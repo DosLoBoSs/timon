@@ -3,7 +3,7 @@ title: Example cookbook
 sidebar_position: 18
 ---
 
-40 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
+41 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
 
 Obtain the example tree with your developer distribution. There is no public repository link. Use a licensed test instance and follow [Testing](testing.md) before installing third-party code.
 
@@ -950,6 +950,46 @@ function CompactUpdateBanner() {
 
 export function apply(ctx) {
   return ctx.slots.register({ slot: 'updates.banner' }, CompactUpdateBanner)
+}
+```
+
+## Notice cards at the bottom left {#notice}
+
+Source: `examples/plugin-notice`. Manifest ID: `example-notice`. Minimum API: **16**.
+
+API 16. The bottom-left cards of Timon (a new version, a GitHub star) are open to plugins in two ways, both shown here. From apply, ctx.notices.push({ id, tone, title, body, actions, dismissible }) shows a card under the plugin's name; pushing the same id updates it, ctx.notices.remove(id) takes it away, and a card the person closes stays closed for their account on every client. One registration in the single notices.card slot then replaces how every card is painted, here as one compact line. The component reads useNotice(): the notice, dismiss() and act(index), which runs the action's onSelect, opens its href and closes the card when the action says dismiss. Timon keeps the stack: at most three cards, warnings first. Remove the plugin and its card goes, and Timon's own card comes back.
+
+Permissions: none. Read the [related guide](slots.md).
+
+`timon plugin add ./examples/plugin-notice` installs this package on the target instance.
+
+From `examples/plugin-notice/lib/client.js`, line 26 (excerpt):
+
+```js
+function CompactNotice() {
+  const value = useNotice()
+  if (!value) return null
+  const { notice, dismiss, act } = value
+  return React.createElement('div', { className: 'flex items-center gap-2 px-3 py-2 text-xs', 'data-compact-notice': notice.id },
+    React.createElement('span', { className: 'min-w-0 flex-1 truncate font-medium' }, notice.title),
+    notice.actions.map((action, index) => React.createElement('button', {
+      key: index, type: 'button', className: 'underline', onClick: () => act(index), 'data-compact-action': index,
+    }, action.label)),
+    notice.dismissible
+      ? React.createElement('button', { type: 'button', 'aria-label': t('close'), onClick: dismiss, 'data-compact-dismiss': '' }, '×')
+      : null)
+}
+
+export function apply(ctx) {
+  // A card pushed once, from `apply`: nothing to watch, so no `notices` entry is
+  // needed. Closed, it stays closed for this account; it leaves with the plugin.
+  ctx.notices.push({
+    id: 'welcome',
+    tone: 'success',
+    title: t('welcome'),
+    actions: [{ label: t('docs'), href: 'https://docs.timon-ai.com/plugins/slots' }],
+  })
+  return ctx.slots.register({ slot: 'notices.card' }, CompactNotice)
 }
 ```
 
