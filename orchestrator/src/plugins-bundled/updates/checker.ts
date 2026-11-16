@@ -45,6 +45,24 @@ export function checkDelayAfter(consecutiveFailures: number, intervalMs: number)
   return Math.min(intervalMs, FIRST_RETRY_MS * RETRY_GROWTH ** (consecutiveFailures - 1));
 }
 
+/**
+ * A retry lands up to this share earlier or later than its nominal wait:
+ * daemons that failed together (the site down for everyone) must not all come
+ * back in the same minute.
+ */
+export const RETRY_JITTER = 0.1;
+
+/**
+ * First check once the daemon has settled, spread over a minute so a fleet
+ * started together (a release, a power cut) does not hit the site together.
+ */
+const FIRST_CHECK_MIN_MS = 30_000;
+const FIRST_CHECK_SPREAD_MS = 60_000;
+
+export function firstCheckDelay(random: () => number = Math.random): number {
+  return FIRST_CHECK_MIN_MS + Math.floor(random() * FIRST_CHECK_SPREAD_MS);
+}
+
 export type UpdateState = 'off' | 'dev' | 'unchecked' | 'up_to_date' | 'available' | 'failed';
 
 export type UpdateArtifact = {
@@ -98,6 +116,8 @@ export type CheckerDeps = {
   url?: string;
   platform?: NodeJS.Platform;
   arch?: string;
+  /** In [0, 1), as `Math.random`; a test pins it to read the schedule exactly. */
+  random?: () => number;
   /** A version newly offered by this check (not the one already known). */
   onOffer?: (offer: UpdateOffer, channel: ReleaseChannel) => void;
   log?: (message: string) => void;
@@ -202,6 +222,10 @@ export class UpdateChecker {
   /** Start of the last check that left the machine, whoever asked for it; 0 before the first. */
   private lastAttemptAt = 0;
   private consecutiveFailures = 0;
+  /** Before the first attempt, when it is due; 0 means at once. */
+  private firstDueAt = 0;
+  /** Drawn once per failure, so a tick polling `nextCheckAt` reads a stable date. */
+  private retryJitter = 0;
 
   constructor(private readonly deps: CheckerDeps) {}
 
@@ -256,10 +280,22 @@ export class UpdateChecker {
    * When the scheduled check is due, in epoch ms: the normal interval after a
    * success, a short backoff after a failure (`checkDelayAfter`). A check asked
    * by hand or by the desktop counts too, so the schedule never repeats it at once.
+   * A retry is spread by `RETRY_JITTER` around its nominal wait; the interval
+   * after a success is not, since the first check already spread the phase.
    */
   nextCheckAt(intervalMs: number): number {
-    if (this.lastAttemptAt === 0) return 0;
-    return this.lastAttemptAt + checkDelayAfter(this.consecutiveFailures, intervalMs);
+    if (this.lastAttemptAt === 0) return this.firstDueAt;
+    const delay = checkDelayAfter(this.consecutiveFailures, intervalMs);
+    if (this.consecutiveFailures === 0) return this.lastAttemptAt + delay;
+    return this.lastAttemptAt + Math.round(delay * (1 + this.retryJitter));
+  }
+
+  /**
+   * Holds the scheduled first check for `delayMs` from now. A check asked by
+   * hand or by the desktop still runs at once, and then sets the schedule.
+   */
+  deferFirstCheck(delayMs: number): void {
+    this.firstDueAt = this.now().getTime() + delayMs;
   }
 
   /** One check; concurrent callers share it. Never throws. */
@@ -308,6 +344,7 @@ export class UpdateChecker {
       this.lastVerdict = 'failed';
       this.checkedAt = this.now().toISOString();
       this.consecutiveFailures += 1;
+      this.retryJitter = ((this.deps.random ?? Math.random)() * 2 - 1) * RETRY_JITTER;
       log(`no update known: ${(error as Error).message}`);
     }
     return this.status();

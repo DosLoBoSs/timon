@@ -22,7 +22,7 @@ import { timonVersion } from '../../data-version.js';
 import { createNotification } from '../../notifications.js';
 import { TIMON_HOME } from '../../paths.js';
 import { settingBool } from '../../settings.js';
-import { UpdateChecker, stateFileIn, type UpdateOffer } from './checker.js';
+import { UpdateChecker, firstCheckDelay, stateFileIn, type UpdateOffer } from './checker.js';
 import { activeReleaseKeyring } from './keyring.js';
 import { NoticesFeed, noticesStateFileIn } from './notices-checker.js';
 import { registerRoutes } from './routes.js';
@@ -43,9 +43,6 @@ export const UPDATES_SETTING = 'TIMON_UPDATES_CHECK';
  * wants updates but no announcements turns this one off alone.
  */
 export const NOTICES_SETTING = 'TIMON_NOTICES_CHECK';
-/** First check once the daemon has settled, spread over a minute so a fleet started together does not hit the site together. */
-const FIRST_CHECK_MIN_MS = 30_000;
-const FIRST_CHECK_JITTER_MS = 60_000;
 /** Between two successful checks; a failed one is retried sooner (`checkDelayAfter`, checker.ts). */
 export const CHECK_INTERVAL_MS = 6 * 3_600_000;
 /**
@@ -108,17 +105,22 @@ export function apply(ctx: Context): void {
 
   // Not under the test runner: a suite that boots the kernel must not reach timon-ai.com.
   if (process.env.NODE_TEST_CONTEXT) return;
-  let lastNoticesAttempt = 0;
+  // The checker holds the first check until this spread delay, so the minute
+  // tick cannot run it early; the timeout below runs it on time rather than at
+  // the next tick. The notice feed waits for the same moment.
+  const firstDelay = firstCheckDelay();
+  checker.deferFirstCheck(firstDelay);
+  let noticesDueAt = Date.now() + firstDelay;
   const tick = (): void => {
     // Off or a source build: the clock is not even read, so switching it on checks at the next tick.
     if (!checksAllowed()) return;
     // The checker keeps the schedule: a failure brings the next check closer, and a check asked by the desktop or by hand pushes it back.
     if (Date.now() >= checker.nextCheckAt(CHECK_INTERVAL_MS)) void checker.check();
-    if (noticesEnabled() && Date.now() - lastNoticesAttempt >= CHECK_INTERVAL_MS) {
-      lastNoticesAttempt = Date.now();
+    if (noticesEnabled() && Date.now() >= noticesDueAt) {
+      noticesDueAt = Date.now() + CHECK_INTERVAL_MS;
       void feed.refresh();
     }
   };
-  ctx.timeout(tick, FIRST_CHECK_MIN_MS + Math.floor(Math.random() * FIRST_CHECK_JITTER_MS));
+  ctx.timeout(tick, firstDelay);
   ctx.interval(tick, TICK_MS);
 }
