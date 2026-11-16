@@ -30,7 +30,10 @@
       "notices": "Annunci",
       "saveFailed": "Impossibile salvare l'impostazione.",
       "lockedEnv": "Lo decide la variabile d'ambiente {key}.",
-      "lockedConfig": "Lo decide timon.config.json."
+      "lockedConfig": "Lo decide timon.config.json.",
+      "showClosedNotices": "Mostra di nuovo le schede chiuse",
+      "closedNoticesShown": "Le schede chiuse verranno mostrate di nuovo.",
+      "closedNoticesFailed": "Impossibile mostrare di nuovo le schede chiuse."
     }
   }
 }

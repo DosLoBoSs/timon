@@ -13,3 +13,8 @@ export async function POST(req: Request): Promise<Response> {
   const body = await req.json().catch(() => ({}));
   return proxyJson('POST', '/api/prefs/dismissed-notices', body);
 }
+
+/** Shows the account's closed cards again. No body: the daemon takes the account from the session. */
+export async function DELETE(): Promise<Response> {
+  return proxyJson('DELETE', '/api/prefs/dismissed-notices');
+}

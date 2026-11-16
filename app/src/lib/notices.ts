@@ -22,6 +22,14 @@ import { useMemo, useSyncExternalStore } from 'react';
 export type NoticeTone = 'info' | 'warning' | 'success';
 
 /**
+ * A brand logo the card draws in place of the tone's icon. A closed list of
+ * logos the app carries itself: a plugin or the signed feed names one, never
+ * an address, so a card cannot make the app load an image.
+ */
+export type NoticeIcon = 'github' | 'discord' | 'timon' | 'x' | 'youtube';
+export const NOTICE_ICONS: readonly NoticeIcon[] = ['github', 'discord', 'timon', 'x', 'youtube'];
+
+/**
  * One button of a card. `href`: a page of the app (`/settings`) or an
  * `https:` / `http:` address, opened in a new window. `dismiss`: the click
  * also closes the card for good, as its × does.
@@ -33,10 +41,11 @@ export type NoticeAction = {
   dismiss?: boolean;
 };
 
-/** What a plugin pushes. `tone` defaults to `info`, `dismissible` to `true`. */
+/** What a plugin pushes. `tone` defaults to `info`, `dismissible` to `true`; no `icon`: the tone's. */
 export type NoticeInput = {
   id: string;
   tone?: NoticeTone;
+  icon?: NoticeIcon;
   title: string;
   body?: string;
   actions?: readonly NoticeAction[];
@@ -48,6 +57,7 @@ export type Notice = {
   id: string;
   pluginId: string;
   tone: NoticeTone;
+  icon: NoticeIcon | null;
   title: string;
   body: string | null;
   actions: readonly NoticeAction[];
@@ -70,6 +80,12 @@ type Entry = Notice & { origin: string; seq: number };
 const entries = new Map<string, Entry>();
 /** `null` until the daemon's list was read once. */
 let dismissed: Set<string> | null = null;
+/**
+ * The demonstration cards of `/?notices-preview=1`, shown instead of the real
+ * ones for the life of the page: closings are ignored and nothing is written.
+ */
+let preview: Entry[] | null = null;
+const closedInPreview = new Set<string>();
 let sequence = 0;
 let version = 0;
 const listeners = new Set<() => void>();
@@ -100,6 +116,7 @@ export function noticeProblem(input: unknown): string | null {
   const n = input as Record<string, unknown>;
   if (typeof n.id !== 'string' || !NOTICE_ID_RE.test(n.id)) return '`id` must be 1-96 letters, digits, `.`, `_`, `:` or `-`';
   if (n.tone !== undefined && !TONES.includes(n.tone as NoticeTone)) return '`tone` must be info, warning or success';
+  if (n.icon !== undefined && !NOTICE_ICONS.includes(n.icon as NoticeIcon)) return `\`icon\` must be one of ${NOTICE_ICONS.join(', ')}`;
   if (typeof n.title !== 'string' || !n.title.trim() || n.title.length > NOTICE_TITLE_MAX) return `\`title\` must be 1-${NOTICE_TITLE_MAX} characters`;
   if (n.body !== undefined && (typeof n.body !== 'string' || n.body.length > NOTICE_BODY_MAX)) return `\`body\` must be at most ${NOTICE_BODY_MAX} characters`;
   if (n.dismissible !== undefined && typeof n.dismissible !== 'boolean') return '`dismissible` must be a boolean';
@@ -132,6 +149,7 @@ export function pushNotice(pluginId: string, origin: string, input: NoticeInput)
     id: input.id,
     pluginId,
     tone: input.tone ?? 'info',
+    icon: input.icon ?? null,
     title: input.title,
     body: input.body?.trim() ? input.body : null,
     actions: (input.actions ?? []).map((a) => ({ ...a })),
@@ -158,14 +176,42 @@ export function clearNoticesFrom(origin: string): void {
 
 function strip(entry: Entry): Notice {
   return {
-    id: entry.id, pluginId: entry.pluginId, tone: entry.tone, title: entry.title, body: entry.body,
+    id: entry.id, pluginId: entry.pluginId, tone: entry.tone, icon: entry.icon, title: entry.title, body: entry.body,
     actions: entry.actions, dismissible: entry.dismissible,
   };
+}
+
+/**
+ * Shows these cards instead of the pushed ones until the page is left: the
+ * account's closings are ignored, and closing one here only hides it in this
+ * page. Still nothing without a session, since the closed list must be read
+ * first. Invalid cards are skipped: the preview is the product's own.
+ */
+export function startNoticesPreview(cards: readonly (NoticeInput & { pluginId: string })[]): void {
+  preview = cards.filter((card) => noticeProblem(card) === null).map((card, index) => ({
+    id: card.id,
+    pluginId: card.pluginId,
+    tone: card.tone ?? 'info',
+    icon: card.icon ?? null,
+    title: card.title,
+    body: card.body?.trim() ? card.body : null,
+    actions: (card.actions ?? []).map((a) => ({ ...a })),
+    dismissible: card.dismissible ?? true,
+    origin: 'preview',
+    seq: index,
+  }));
+  closedInPreview.clear();
+  publish();
+}
+
+export function noticesPreviewActive(): boolean {
+  return preview !== null;
 }
 
 /** Every card that may show, in the order they stack: warnings first, then the oldest. */
 export function visibleNotices(): Notice[] {
   if (!dismissed) return [];
+  if (preview) return preview.filter((entry) => !closedInPreview.has(noticeKey(entry.pluginId, entry.id))).map(strip);
   const closed = dismissed;
   return [...entries.entries()]
     .filter(([key]) => !closed.has(key))
@@ -211,6 +257,11 @@ export async function loadDismissedNotices(): Promise<void> {
  */
 export function dismissNotice(pluginId: string, id: string): void {
   const key = noticeKey(pluginId, id);
+  if (preview) {
+    closedInPreview.add(key);
+    publish();
+    return;
+  }
   dismissed = new Set(dismissed ?? []);
   dismissed.add(key);
   publish();
@@ -241,6 +292,23 @@ export function runNoticeAction(notice: Notice, index: number): void {
   if (action.dismiss) dismissNotice(notice.pluginId, notice.id);
 }
 
+/**
+ * Forgets every card the account closed, on every client: the daemon clears
+ * the list, then this page shows them again. `false` when the daemon refused
+ * or could not be reached: nothing changed.
+ */
+export async function resetDismissedNotices(): Promise<boolean> {
+  try {
+    const res = await fetch(DISMISSED_NOTICES_ENDPOINT, { method: 'DELETE' });
+    if (!res.ok) return false;
+  } catch {
+    return false;
+  }
+  dismissed = new Set();
+  publish();
+  return true;
+}
+
 export function subscribeNotices(listener: () => void): () => void {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
@@ -267,6 +335,8 @@ export function usePluginNotices(pluginId: string): Notice[] {
 export function resetNoticesForTests(): void {
   entries.clear();
   dismissed = null;
+  preview = null;
+  closedInPreview.clear();
   sequence = 0;
   publish();
 }

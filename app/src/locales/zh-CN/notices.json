@@ -4,10 +4,21 @@
     "close": "关闭",
     "githubStar": {
       "title": "在 GitHub 上点个星？",
-      "action": "点个星"
+      "action": "在 GitHub 上点个星"
     },
     "feed": {
       "open": "了解更多"
+    },
+    "preview": {
+      "discord": {
+        "title": "加入社区",
+        "body": "与打造 Timon 的人一起交流问题、想法和新闻。",
+        "action": "加入"
+      },
+      "feed": {
+        "title": "周四直播演示",
+        "body": "智能体与插件,一小时。"
+      }
     }
   }
 }

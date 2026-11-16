@@ -84,6 +84,7 @@ export function apply(ctx) {
   ctx.notices.push({
     id: 'welcome',
     tone: 'info',                 // 'info' | 'warning' | 'success', default 'info'
+    icon: 'github',               // optional: 'github' | 'discord' | 'timon' | 'x' | 'youtube'
     title: 'Acme is connected',   // up to 120 characters, plain text
     body: 'Your boards sync every hour.', // optional, up to 400 characters
     actions: [{ label: 'Open Acme', href: '/acme' }], // two at most
@@ -93,8 +94,9 @@ export function apply(ctx) {
 ```
 
 - `push` shows the card, or updates the one your plugin pushed with the same `id`. Throws when the notice is invalid, with the reason.
+- `icon` shows a brand logo at the head of the card instead of the tone's icon, and colours the card's corner with it (a `warning` stays amber). Timon draws the logos itself: the value is one of the names above, never an image address.
 - An action needs `onSelect`, `href` or `dismiss: true`. `href` is a page of the app (`/settings`) or an `https:` address, opened in a new window; `dismiss: true` closes the card for good after the click. An action without it leaves the card up: call `ctx.notices.remove(id)` when you are done with it.
-- A closed card stays closed for the person's account, on every client: pushing the same `id` again shows nothing. Put a version in the `id` (`update-1.4.0`) for a card that must come back each version.
+- A closed card stays closed for the person's account, on every client: pushing the same `id` again shows nothing, until the person chooses **Show closed cards again** in Settings › System › Updates. Put a version in the `id` (`update-1.4.0`) for a card that must come back each version.
 - `remove(id)` takes the card off the screen without closing it for good. Your cards also leave when your plugin is switched off.
 - At most three cards show at once, warnings first: keep cards rare, short, and with one clear action.
 

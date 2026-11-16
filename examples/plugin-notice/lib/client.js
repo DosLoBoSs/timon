@@ -27,7 +27,13 @@ function CompactNotice() {
   const value = useNotice()
   if (!value) return null
   const { notice, dismiss, act } = value
-  return React.createElement('div', { className: 'flex items-center gap-2 px-3 py-2 text-xs', 'data-compact-notice': notice.id },
+  // `icon` names a brand logo (github, discord, timon, x, youtube) or is null:
+  // a replacement may draw its own logo for it, or ignore it.
+  return React.createElement('div', {
+    className: 'flex items-center gap-2 px-3 py-2 text-xs',
+    'data-compact-notice': notice.id,
+    'data-compact-icon': notice.icon ?? notice.tone,
+  },
     React.createElement('span', { className: 'min-w-0 flex-1 truncate font-medium' }, notice.title),
     notice.actions.map((action, index) => React.createElement('button', {
       key: index, type: 'button', className: 'underline', onClick: () => act(index), 'data-compact-action': index,
@@ -40,9 +46,12 @@ function CompactNotice() {
 export function apply(ctx) {
   // A card pushed once, from `apply`: nothing to watch, so no `notices` entry is
   // needed. Closed, it stays closed for this account; it leaves with the plugin.
+  // `icon` is optional: one of the logos the app draws itself, never an image
+  // address. The product's card shows it in its pastille; without it, the tone's icon.
   ctx.notices.push({
     id: 'welcome',
     tone: 'success',
+    icon: 'timon',
     title: t('welcome'),
     actions: [{ label: t('docs'), href: 'https://docs.timon-ai.com/plugins/slots' }],
   })

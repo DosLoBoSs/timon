@@ -62,6 +62,7 @@ async function mount({ status, canWrite, check, notices = true }: { status: Upda
       }
       return Response.json({ settings: [{ key: 'TIMON_UPDATES_CHECK', value: status.enabled }, { key: 'TIMON_NOTICES_CHECK', value: noticesValue }] });
     }
+    if (url === '/api/ui/prefs/dismissed-notices') return Response.json({ dismissed: [] });
     if (url === '/api/ui/auth/me') {
       return Response.json({ user: { id: 'u1', email: 'a@example.com', name: 'A', status: 'active', is_superadmin: false, created_at: 0, last_login_at: null, avatar_url: null }, needsSetup: false, prefs: {}, can: { 'settings:write': canWrite } });
     }
@@ -236,6 +237,21 @@ test('without settings:write: no "Announcements" switch, no settings read', asyn
     await m.until(() => document.querySelector('[data-update-settings-notes]') !== null, 'the menu');
     assert.equal(noticesSwitch(), null);
     assert.equal(m.requests.includes('GET /api/ui/settings'), false);
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('"Show closed cards again" in the menu, for any account: it forgets this account\'s closings', async () => {
+  const m = await mount({ status: UP_TO_DATE, canWrite: false });
+  try {
+    await m.until(() => row()?.getAttribute('data-update-settings') === 'upToDate', 'the status');
+    await m.openMenu();
+    await m.until(() => document.querySelector('[data-update-settings-show-notices]') !== null, 'the entry');
+    assert.match(document.querySelector('[data-update-settings-show-notices]')?.textContent ?? '', /Show closed cards again/);
+    await m.click(document.querySelector('[data-update-settings-show-notices]'));
+    await m.until(() => m.requests.includes('DELETE /api/ui/prefs/dismissed-notices'), 'the reset sent');
+    assert.equal(m.requests.filter((r) => r.startsWith('DELETE ')).length, 1);
   } finally {
     await m.unmount();
   }

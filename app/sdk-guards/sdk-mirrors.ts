@@ -28,7 +28,7 @@ import type {
   IslandContentOptions, IslandParamSpec, SlotChildren, SlotKind, WidgetOptions,
 } from '../src/lib/plugin-host/slots';
 import type { AccountUsage, UsageEntry, UsageWindow } from '../src/lib/plugin-host/usage-types';
-import type { NoticeAction, NoticeInput, NoticeTone } from '../src/lib/notices';
+import type { NoticeAction, NoticeIcon, NoticeInput, NoticeTone } from '../src/lib/notices';
 
 type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
 type Assert<T extends true> = T;
@@ -87,6 +87,7 @@ type _UsageEntry = Assert<Equals<UsageEntry, Sdk.UsageEntry>>;
 type _NoticeTone = Assert<Equals<NoticeTone, Sdk.NoticeTone>>;
 type _NoticeAction = Assert<Equals<NoticeAction, Sdk.NoticeAction>>;
 type _NoticeInput = Assert<Equals<NoticeInput, Sdk.NoticeInput>>;
+type _NoticeIcon = Assert<Equals<NoticeIcon, Sdk.NoticeIcon>>;
 
 // The context (`plugin-host/loader.ts`): the app types it by inference from
 // `clientContext`, the SDK by hand. Same members, at the top and one level

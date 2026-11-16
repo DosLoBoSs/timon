@@ -6,7 +6,8 @@
  * "Retry" or "Update"), the rest in its "…" menu — the release notes, the
  * installer to download by hand, the automatic check switched on or off, and
  * the "Announcements" switch (`TIMON_NOTICES_CHECK`), off and locked while the
- * check is off since that stops the feed too.
+ * check is off since that stops the feed too, and "Show closed cards again",
+ * open to every account since it forgets that account's closings only.
  *
  * "Update" goes through `openUpdateDialog()`, the same door as the update
  * card; while nothing provides it, the row links the installer instead.
@@ -28,6 +29,7 @@ import {
   updateRowView, type UpdateRowStatus,
 } from '@/lib/update-settings';
 import { checkForUpdatesNow, loadUpdateStatus, useUpdateStore } from '@/lib/updates';
+import { resetDismissedNotices } from '@/lib/notices';
 
 const UPDATES_SETTING = 'TIMON_UPDATES_CHECK';
 const SETTINGS_URL = '/api/ui/settings';
@@ -75,6 +77,7 @@ export function UpdatesSettings(): ReactElement {
   const provided = useUpdateDialogProvided();
   const [checkFailed, setCheckFailed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [notices, setNotices] = useState<boolean | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -131,6 +134,16 @@ export function UpdatesSettings(): ReactElement {
     }
   }, [loadNotices]);
 
+  const showClosedNotices = useCallback(async () => {
+    setResetting(true);
+    try {
+      if (await resetDismissedNotices()) toast.success(t('updates.settings.closedNoticesShown'));
+      else toast.error(t('updates.settings.closedNoticesFailed'));
+    } finally {
+      setResetting(false);
+    }
+  }, []);
+
   const title = view.version
     ? t(view.available ? 'updates.settings.titleAvailable' : 'updates.settings.title', { version: view.version })
     : t('updates.settings.titleUnknown');
@@ -181,6 +194,9 @@ export function UpdatesSettings(): ReactElement {
         <a href={installer.href} target="_blank" rel="noopener noreferrer" data-update-settings-download="">
           {t(installer.forThisSystem ? 'updates.settings.download' : 'updates.settings.allInstallers')}<ExternalLink className="ml-auto size-3" aria-hidden />
         </a>
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={resetting} onSelect={() => { void showClosedNotices(); }} data-update-settings-show-notices="">
+        {t('updates.settings.showClosedNotices')}
       </DropdownMenuItem>
       {canWrite && status && status.state !== 'dev' ? (
         <>

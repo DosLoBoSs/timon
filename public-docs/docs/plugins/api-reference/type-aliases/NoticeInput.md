@@ -11,7 +11,7 @@ action or its × takes it away. `id`: 1-96 letters, digits, `.`, `_`, `:` or
 back for each version. `title` up to 120 characters, `body` up to 400, both
 plain text; two actions at most, labels up to 40. `tone` defaults to `info`,
 `dismissible` to `true`: closing is remembered for the account, on every
-client.
+client. `icon`: a brand logo instead of the tone's icon.
 
 ## Properties
 
@@ -30,6 +30,12 @@ client.
 ### dismissible?
 
 > `optional` **dismissible?**: `boolean`
+
+***
+
+### icon?
+
+> `optional` **icon?**: [`NoticeIcon`](NoticeIcon.md)
 
 ***
 

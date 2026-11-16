@@ -34,7 +34,7 @@ const STATUS: UpdateStatus = {
   host: { os: 'linux', arch: 'x64' }, buildExpiresAt: null,
 };
 let checks = 0;
-const NOTICES = [{ id: 'live-1', tone: 'info' as const, title: 'Live demo', body: 'Thursday, 6 pm.', link: 'https://timon-ai.com/live', endsAt: null }];
+const NOTICES = [{ id: 'live-1', tone: 'info' as const, title: 'Live demo', body: 'Thursday, 6 pm.', icon: 'youtube' as const, link: 'https://timon-ai.com/live', endsAt: null }];
 
 const app = express();
 app.use(createDaemonAuthMiddleware({ token: DAEMON_TOKEN, required: false }));

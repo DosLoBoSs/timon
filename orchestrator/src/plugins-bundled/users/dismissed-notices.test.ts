@@ -1,5 +1,5 @@
 /**
- * Closed notices — GET / POST /api/prefs/dismissed-notices. Anonymous is
+ * Closed notices — GET / POST / DELETE /api/prefs/dismissed-notices. Anonymous is
  * refused by the route itself (the witness middleware lets anonymous through,
  * as on a fresh install), two accounts never see each other's list, a
  * daemon-token with no account reads `[]` and cannot write, and the body is
@@ -71,6 +71,7 @@ test('anonymous is refused by the route, on read and on write', async () => {
   assert.equal(dbApi.countUsers(), 0, 'the middleware lets anonymous through only with no account');
   assert.equal((await call('GET')).status, 401);
   assert.equal((await call('POST', { body: { id: '@timon/settings:github-star' } })).status, 401);
+  assert.equal((await call('DELETE')).status, 401);
 });
 
 test('daemon-token without an account: GET is empty, POST is 403', async () => {
@@ -78,6 +79,7 @@ test('daemon-token without an account: GET is empty, POST is 403', async () => {
   assert.equal(get.status, 200);
   assert.deepEqual(get.json.dismissed, []);
   assert.equal((await call('POST', { bearer: TOKEN, body: { id: '@timon/settings:github-star' } })).status, 403);
+  assert.equal((await call('DELETE', { bearer: TOKEN })).status, 403);
 });
 
 test('a closed notice stays closed for its account only', async () => {
@@ -106,6 +108,38 @@ test('a closed notice stays closed for its account only', async () => {
   assert.equal((await call('GET')).status, 401);
   // The chrome prefs of a row created by a dismissal stay the defaults.
   assert.equal(dbApi.userPrefsGet(ada.id).scheme, dbApi.userPrefsGet(null).scheme);
+});
+
+test('showing the closed cards again forgets the caller\'s list, never another account\'s', async () => {
+  const dana = createTestAccount(dbApi, { email: 'dana@example.com', name: 'Dana', passwordHash: 'x', isSuperadmin: false });
+  const eve = createTestAccount(dbApi, { email: 'eve@example.com', name: 'Eve', passwordHash: 'x', isSuperadmin: false });
+  const danaCookie = sessionFor(dana.id);
+  const eveCookie = sessionFor(eve.id);
+  await call('POST', { cookie: danaCookie, body: { id: '@timon/settings:github-star' } });
+  await call('POST', { cookie: eveCookie, body: { id: '@timon/settings:github-star' } });
+  await call('POST', { cookie: eveCookie, body: { id: '@timon/updates:update-0.2.0' } });
+
+  const cleared = await call('DELETE', { cookie: danaCookie });
+  assert.equal(cleared.status, 200);
+  assert.deepEqual(cleared.json.dismissed, []);
+  assert.deepEqual((await call('GET', { cookie: danaCookie })).json.dismissed, []);
+  assert.deepEqual((await call('GET', { cookie: eveCookie })).json.dismissed, ['@timon/settings:github-star', '@timon/updates:update-0.2.0'], 'the other account keeps its list');
+
+  // A body naming someone else changes nothing: the identity is the session's.
+  const res = await fetch(`${base}${PATH}`, {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json', cookie: `${SESSION_COOKIE}=${encodeURIComponent(danaCookie)}` },
+    body: JSON.stringify({ user: eve.id }),
+  });
+  assert.equal(res.status, 200);
+  assert.equal(((await call('GET', { cookie: eveCookie })).json.dismissed as string[]).length, 2);
+
+  // An account that never closed anything: nothing to forget, no row created.
+  const fred = createTestAccount(dbApi, { email: 'fred@example.com', name: 'Fred', passwordHash: 'x', isSuperadmin: false });
+  assert.deepEqual((await call('DELETE', { cookie: sessionFor(fred.id) })).json.dismissed, []);
+  // And closing again after a reset works as before.
+  const again = await call('POST', { cookie: danaCookie, body: { id: '@timon/settings:github-star' } });
+  assert.deepEqual(again.json.dismissed, ['@timon/settings:github-star']);
 });
 
 test('the body is strict', async () => {

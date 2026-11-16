@@ -30,7 +30,10 @@
       "notices": "Anuncios",
       "saveFailed": "No se pudo guardar el ajuste.",
       "lockedEnv": "Lo decide la variable de entorno {key}.",
-      "lockedConfig": "Lo decide timon.config.json."
+      "lockedConfig": "Lo decide timon.config.json.",
+      "showClosedNotices": "Volver a mostrar las tarjetas cerradas",
+      "closedNoticesShown": "Las tarjetas cerradas volverán a mostrarse.",
+      "closedNoticesFailed": "No se pudieron volver a mostrar las tarjetas cerradas."
     }
   }
 }

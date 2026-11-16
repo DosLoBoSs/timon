@@ -4,10 +4,21 @@
     "close": "Sluiten",
     "githubStar": {
       "title": "Een ster op GitHub?",
-      "action": "Geef een ster"
+      "action": "Geef een ster op GitHub"
     },
     "feed": {
       "open": "Meer weten"
+    },
+    "preview": {
+      "discord": {
+        "title": "Doe mee met de community",
+        "body": "Vragen, ideeën en nieuws, met de mensen die Timon bouwen.",
+        "action": "Meedoen"
+      },
+      "feed": {
+        "title": "Live demo op donderdag",
+        "body": "Agents en plug-ins, één uur."
+      }
     }
   }
 }

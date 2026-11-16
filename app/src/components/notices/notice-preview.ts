@@ -1,0 +1,69 @@
+'use client';
+
+/**
+ * The demonstration cards of `/?notices-preview=1`: one of each kind the
+ * product shows, to judge the card's look without waiting five days, an
+ * offer or an announcement. Shown by `NoticesHost` instead of the real cards
+ * for the life of the page, closings ignored, nothing written
+ * (`startNoticesPreview`). Like every card, nothing without a session.
+ *
+ * Their actions open a public page or close the card in this page; none
+ * starts a download or changes a setting.
+ */
+
+import { t } from '@/lib/i18n';
+import { formatDate } from '@/lib/intl';
+import type { NoticeInput } from '@/lib/notices';
+import { GITHUB_REPOSITORY_URL, GITHUB_STAR_NOTICE_ID } from './github-star-notice';
+
+export const NOTICES_PREVIEW_PARAM = 'notices-preview';
+export const DISCORD_INVITE_URL = 'https://discord.gg/ZQGARNcpZ3';
+const PREVIEW_VERSION = '0.2.0';
+const DAY_MS = 86_400_000;
+
+/** Whether this address asks for the preview: `?notices-preview=1`. */
+export function noticesPreviewRequested(search: string): boolean {
+  return new URLSearchParams(search).get(NOTICES_PREVIEW_PARAM) === '1';
+}
+
+export function previewNotices(now: number = Date.now()): (NoticeInput & { pluginId: string })[] {
+  const ends = formatDate(new Date(now + 5 * DAY_MS).toISOString(), { year: 'numeric', month: 'numeric', day: 'numeric' });
+  return [
+    {
+      pluginId: '@timon/settings',
+      id: GITHUB_STAR_NOTICE_ID,
+      icon: 'github',
+      title: t('notices.githubStar.title'),
+      actions: [{ label: t('notices.githubStar.action'), href: GITHUB_REPOSITORY_URL, dismiss: true }],
+    },
+    {
+      pluginId: '@timon/settings',
+      id: 'discord',
+      icon: 'discord',
+      title: t('notices.preview.discord.title'),
+      body: t('notices.preview.discord.body'),
+      actions: [{ label: t('notices.preview.discord.action'), href: DISCORD_INVITE_URL, dismiss: true }],
+    },
+    {
+      pluginId: '@timon/updates',
+      id: `update-${PREVIEW_VERSION}`,
+      icon: 'timon',
+      title: t('updates.notice.available', { version: PREVIEW_VERSION }),
+      actions: [{ label: t('updates.notice.update'), dismiss: true }],
+    },
+    {
+      pluginId: '@timon/updates',
+      id: 'build-ends-preview',
+      tone: 'warning',
+      title: t('updates.notice.buildEnds', { date: ends }),
+    },
+    {
+      pluginId: '@timon/updates',
+      id: 'feed.preview',
+      icon: 'youtube',
+      title: t('notices.preview.feed.title'),
+      body: t('notices.preview.feed.body'),
+      actions: [{ label: t('notices.feed.open'), href: 'https://timon-ai.com/', dismiss: true }],
+    },
+  ];
+}

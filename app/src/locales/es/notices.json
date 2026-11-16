@@ -4,10 +4,21 @@
     "close": "Cerrar",
     "githubStar": {
       "title": "¿Una estrella en GitHub?",
-      "action": "Dar una estrella"
+      "action": "Dar una estrella en GitHub"
     },
     "feed": {
       "open": "Más información"
+    },
+    "preview": {
+      "discord": {
+        "title": "Únete a la comunidad",
+        "body": "Preguntas, ideas y novedades, con quienes construyen Timon.",
+        "action": "Unirse"
+      },
+      "feed": {
+        "title": "Demo en directo el jueves",
+        "body": "Agentes y plugins, una hora."
+      }
     }
   }
 }

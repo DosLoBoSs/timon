@@ -2,11 +2,13 @@ import type { KeyObject } from 'node:crypto';
 import type { ReleaseChannel, ReleasePublicKey } from './release-manifest.mjs';
 
 export type NoticeTone = 'info' | 'warning' | 'success';
+export type NoticeIcon = 'github' | 'discord' | 'timon' | 'x' | 'youtube';
 export interface FeedNotice {
   id: string;
   tone: NoticeTone;
   title: string;
   body: string;
+  icon?: NoticeIcon;
   link?: string;
   startsAt?: string;
   endsAt?: string;
@@ -28,6 +30,7 @@ export const NOTICES_ENVELOPE_MAX: number;
 export const CLOCK_SKEW_MS: number;
 export const DEFAULT_NOTICES_VALID_DAYS: number;
 export const TONES: readonly NoticeTone[];
+export const NOTICE_ICONS: readonly NoticeIcon[];
 export const NOTICE_ID: RegExp;
 export function isNoticeLink(value: unknown): boolean;
 export function validateNoticesPayload(payload: unknown): NoticesPayload;

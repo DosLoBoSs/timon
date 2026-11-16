@@ -517,6 +517,8 @@ declare module '@timon/ui' {
     id: string;
     pluginId: string;
     tone: 'info' | 'warning' | 'success';
+    /** A brand logo to draw instead of the tone's icon; `null`: the tone's. */
+    icon: 'github' | 'discord' | 'timon' | 'x' | 'youtube' | null;
     title: string;
     body: string | null;
     actions: readonly { label: string; onSelect?: () => void; href?: string; dismiss?: boolean }[];
@@ -535,6 +537,7 @@ declare module '@timon/ui' {
     push(notice: {
       id: string;
       tone?: 'info' | 'warning' | 'success';
+      icon?: 'github' | 'discord' | 'timon' | 'x' | 'youtube';
       title: string;
       body?: string;
       actions?: readonly { label: string; onSelect?: () => void; href?: string; dismiss?: boolean }[];

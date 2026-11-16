@@ -30,7 +30,10 @@
       "notices": "Ankündigungen",
       "saveFailed": "Die Einstellung konnte nicht gespeichert werden.",
       "lockedEnv": "Die Umgebungsvariable {key} legt dies fest.",
-      "lockedConfig": "timon.config.json legt dies fest."
+      "lockedConfig": "timon.config.json legt dies fest.",
+      "showClosedNotices": "Geschlossene Karten wieder anzeigen",
+      "closedNoticesShown": "Geschlossene Karten werden wieder angezeigt.",
+      "closedNoticesFailed": "Die geschlossenen Karten konnten nicht wieder angezeigt werden."
     }
   }
 }

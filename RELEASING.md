@@ -140,6 +140,7 @@ Write the notices in a file outside the repository:
       "tone": "info",
       "title": "Live demo on Thursday",
       "body": "Agents and plugins, one hour.",
+      "icon": "youtube",
       "link": "https://timon-ai.com/live",
       "endsAt": "2026-12-04T19:00:00Z"
     }
@@ -148,8 +149,9 @@ Write the notices in a file outside the repository:
 ```
 
 `id`, `tone` (`info`, `warning`, `success`), `title` (one line, 120 characters)
-and `body` (plain text, 400 characters) are required. Optional: `link` (`https:`
-only), `startsAt` and `endsAt`, `channels` (`["beta"]`, `["stable"]`),
+and `body` (plain text, 400 characters) are required. Optional: `icon` (a logo
+the apps draw themselves: `github`, `discord`, `timon`, `x`, `youtube`; without
+it, the tone's icon), `link` (`https:` only), `startsAt` and `endsAt`, `channels` (`["beta"]`, `["stable"]`),
 `minVersion` and `maxVersion` (inclusive). Twenty notices at most; a list with
 none takes every earlier one down. Then, at the root of an up-to-date `main`:
 

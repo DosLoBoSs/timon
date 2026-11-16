@@ -590,6 +590,12 @@ export type PluginApiBinaryBody = Blob | ArrayBuffer | ArrayBufferView;
 export type NoticeTone = 'info' | 'warning' | 'success';
 
 /**
+ * A brand logo a notice card draws in place of its tone's icon (client API
+ * 17). A closed list the app carries itself: no address, no image to load.
+ */
+export type NoticeIcon = 'github' | 'discord' | 'timon' | 'x' | 'youtube';
+
+/**
  * One button of a notice card (client API 17). `href`: a page of the app
  * (`/settings`) or an `https:` / `http:` address, opened in a new window.
  * `dismiss`: the click also closes the card for good, as its × does. An
@@ -609,11 +615,12 @@ export type NoticeAction = {
  * back for each version. `title` up to 120 characters, `body` up to 400, both
  * plain text; two actions at most, labels up to 40. `tone` defaults to `info`,
  * `dismissible` to `true`: closing is remembered for the account, on every
- * client.
+ * client. `icon`: a brand logo instead of the tone's icon.
  */
 export type NoticeInput = {
   id: string;
   tone?: NoticeTone;
+  icon?: NoticeIcon;
   title: string;
   body?: string;
   actions?: readonly NoticeAction[];

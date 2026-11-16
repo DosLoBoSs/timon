@@ -30,7 +30,10 @@
       "notices": "Anúncios",
       "saveFailed": "Não foi possível salvar a configuração.",
       "lockedEnv": "A variável de ambiente {key} decide isso.",
-      "lockedConfig": "O timon.config.json decide isso."
+      "lockedConfig": "O timon.config.json decide isso.",
+      "showClosedNotices": "Mostrar de novo os cartões fechados",
+      "closedNoticesShown": "Os cartões fechados voltarão a aparecer.",
+      "closedNoticesFailed": "Não foi possível mostrar de novo os cartões fechados."
     }
   }
 }

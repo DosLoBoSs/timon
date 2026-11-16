@@ -17,7 +17,7 @@ import type { BuildChannel } from '../../build-info.js';
 import { USER_AGENT, type FetchLike } from './checker.js';
 import { RELEASES_SIGNATURE_DOMAIN, type ReleasePublicKey } from './manifest.js';
 import { NoticesFeed } from './notices-checker.js';
-import { NOTICES_SIGNATURE_DOMAIN, NOTICES_URL, activeNotices, validateNoticesPayload, verifyNoticesFeed } from './notices-feed.js';
+import { NOTICE_ICONS, NOTICES_SIGNATURE_DOMAIN, NOTICES_URL, activeNotices, validateNoticesPayload, verifyNoticesFeed } from './notices-feed.js';
 
 type Notice = reference.FeedNotice;
 
@@ -48,6 +48,7 @@ function agree(text: string, options: { now: Date; minIssuedAt?: string | null }
 }
 
 test('the constants match the release machine', () => {
+  assert.deepEqual([...NOTICE_ICONS], [...reference.NOTICE_ICONS]);
   assert.equal(NOTICES_SIGNATURE_DOMAIN, reference.NOTICES_SIGNATURE_DOMAIN);
   assert.equal(NOTICES_URL, reference.NOTICES_URL);
   assert.notEqual(NOTICES_SIGNATURE_DOMAIN, RELEASES_SIGNATURE_DOMAIN);
@@ -55,7 +56,7 @@ test('the constants match the release machine', () => {
 
 test('both verifiers agree on valid, expired, replayed, tampered and cross-domain feeds', () => {
   const now = new Date(at.getTime() + 60_000);
-  const good = feed([notice({ link: 'https://timon-ai.com/live', channels: ['beta'], minVersion: '0.1.7' })]);
+  const good = feed([notice({ link: 'https://timon-ai.com/live', channels: ['beta'], minVersion: '0.1.7', icon: 'discord' })]);
   assert.equal(agree(good, { now }), 'accepted');
   assert.equal(agree(feed([]), { now }), 'accepted');
   assert.equal(agree(feed([notice()], at, 1), { now: new Date(at.getTime() + DAY) }), 'refused');
@@ -71,6 +72,8 @@ test('both verifiers agree on valid, expired, replayed, tampered and cross-domai
     { ...payload, notices: [notice({ link: 'http://timon-ai.com/' })] },
     { ...payload, notices: [notice({ title: 'a\nb' })] },
     { ...payload, notices: [{ ...notice(), html: '<b>x</b>' }] },
+    { ...payload, notices: [{ ...notice(), icon: 'https://evil.example/logo.svg' }] },
+    { ...payload, notices: [{ ...notice(), icon: 'mastodon' }] },
     { ...payload, notices: [notice(), notice()] },
     { ...payload, schema: 2 },
   ]) assert.equal(agree(signRaw(bad), { now }), 'refused');
@@ -120,10 +123,17 @@ function harness(opts: { response: (url: string) => Response | Promise<Response>
 }
 
 test('a verified feed gives this build its notices; the request carries nothing but a generic User-Agent', async () => {
-  const body = feed([notice({ link: 'https://timon-ai.com/live' }), notice({ id: 'stable-only', channels: ['stable'] })]);
+  const body = feed([
+    notice({ link: 'https://timon-ai.com/live', icon: 'youtube' }),
+    notice({ id: 'stable-only', channels: ['stable'] }),
+    notice({ id: 'plain' }),
+  ]);
   const h = harness({ response: () => new Response(body) });
   await h.instance.refresh();
-  assert.deepEqual(h.instance.notices(), [{ id: 'live-1', tone: 'info', title: 'Live demo', body: 'Thursday, 6 pm.', link: 'https://timon-ai.com/live', endsAt: null }]);
+  assert.deepEqual(h.instance.notices(), [
+    { id: 'live-1', tone: 'info', title: 'Live demo', body: 'Thursday, 6 pm.', icon: 'youtube', link: 'https://timon-ai.com/live', endsAt: null },
+    { id: 'plain', tone: 'info', title: 'Live demo', body: 'Thursday, 6 pm.', icon: null, link: null, endsAt: null },
+  ]);
   assert.equal(h.calls.length, 1);
   const [call] = h.calls;
   assert.equal(call?.url, NOTICES_URL);

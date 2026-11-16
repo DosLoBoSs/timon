@@ -8690,6 +8690,12 @@ export const dbApi = {
     ).run(userId, DEFAULT_USER_PREFS.theme, DEFAULT_USER_PREFS.layout, DEFAULT_USER_PREFS.scheme, Date.now(), JSON.stringify(next));
     return next;
   },
+  /** Forgets every closed notice of the account, and only of it: the cards may show again. No row, nothing to do. */
+  userDismissedNoticesClear(userId: string): string[] {
+    if (!userId) throw new Error('user_prefs.user_id must not be empty');
+    db.prepare(`UPDATE user_prefs SET dismissed_notices=NULL, updated_at=? WHERE user_id=?`).run(Date.now(), userId);
+    return [];
+  },
 
   /** The account's series-planner presets, in their order; `[]` with no account, no row or a malformed value. */
   userPlanPresetsGet(userId: string | null | undefined): PlanPreset[] {

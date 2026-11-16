@@ -71,6 +71,7 @@ export function updateNotice(offer: UpdateOffer | null, view: UpdateFlowView | n
       // As the end's own card: an offer put off weeks before comes back once the end is urgent.
       id: `${UPDATE_NOTICE_PREFIX}${offer.version}${ending?.urgent ? '-urgent' : ''}`,
       tone: ending || view.alert ? 'warning' : 'info',
+      icon: 'timon',
       title: t('updates.notice.available', { version: offer.version }),
       // A long command path must not get the whole card refused.
       body: lines.length > 0 ? lines.join('\n').slice(0, NOTICE_BODY_MAX) : undefined,

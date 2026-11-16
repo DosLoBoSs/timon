@@ -19,9 +19,9 @@ import { waitUntil } from '../../lib/test-wait';
 
 type Mounted = Awaited<ReturnType<typeof mount>>;
 
-async function mount({ dismissed = [] as string[], session = true, usageDays = [] as string[], routes = {} as Record<string, () => Response> } = {}) {
+async function mount({ dismissed = [] as string[], session = true, usageDays = [] as string[], routes = {} as Record<string, () => Response>, url = 'http://localhost/' } = {}) {
   const { JSDOM } = await import('jsdom');
-  const dom = new JSDOM('<html><body><div id="root"></div></body></html>', { url: 'http://localhost/', pretendToBeVisual: true });
+  const dom = new JSDOM('<html><body><div id="root"></div></body></html>', { url, pretendToBeVisual: true });
   const saved = new Map<string, PropertyDescriptor | undefined>();
   const install = (key: string, value: unknown) => {
     if (!saved.has(key)) saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
@@ -39,10 +39,13 @@ async function mount({ dismissed = [] as string[], session = true, usageDays = [
   dom.window.open = ((url: string) => { opened.push(url); return null; }) as typeof dom.window.open;
   const server = new Set(dismissed);
   const posts: unknown[] = [];
+  const writes: string[] = [];
   install('fetch', async (input: string, init?: RequestInit) => {
     const url = String(input);
+    if (init?.method && init.method !== 'GET') writes.push(`${init.method} ${url}`);
     if (url === '/api/ui/prefs/dismissed-notices') {
       if (!session) return Response.json({ error: 'unauthorized' }, { status: 401 });
+      if (init?.method === 'DELETE') server.clear();
       if (init?.method === 'POST') {
         const body = JSON.parse(String(init.body)) as { id: string };
         posts.push(body);
@@ -87,7 +90,7 @@ async function mount({ dismissed = [] as string[], session = true, usageDays = [
       else delete (globalThis as Record<string, unknown>)[k];
     }
   };
-  return { React, slots, notices, ProductNoticeCard, until, click, pluginContext, unmount, posts, opened, server, dom };
+  return { React, slots, notices, ProductNoticeCard, until, click, pluginContext, unmount, posts, writes, opened, server, dom };
 }
 
 const cards = () => Array.from(document.querySelectorAll('[data-notice]'), (el) => el.getAttribute('data-notice'));
@@ -124,6 +127,76 @@ test('a pushed card shows once the closed list is read, as text, and leaves with
     await m.until(() => cards().length === 0, 'the card gone with its plugin');
   } finally {
     await m.unmount();
+  }
+});
+
+test('the product card: a brand logo or the tone\'s icon, the main action filled at the bottom right', async () => {
+  const m = await mount();
+  try {
+    await settle(m);
+    const ctx = m.pluginContext('acme');
+    await m.React.act(async () => {
+      ctx.notices.push({
+        id: 'chat', icon: 'discord', title: 'Join the community',
+        actions: [{ label: 'Join', href: 'https://discord.example/x' }, { label: 'Later', dismiss: true }],
+      });
+      ctx.notices.push({ id: 'plain', title: 'Plain' });
+      ctx.notices.push({ id: 'late', icon: 'timon', tone: 'warning', title: 'Late' });
+    });
+    await m.until(() => cards().length === 3, 'three cards');
+    const visual = (key: string) => document.querySelector(`[data-notice="acme:${key}"] [data-notice-card]`)?.getAttribute('data-notice-visual');
+    assert.equal(visual('chat'), 'discord');
+    assert.equal(visual('plain'), 'info', 'without icon, the tone\'s');
+    assert.equal(visual('late'), 'timon');
+    assert.ok(document.querySelector('[data-notice="acme:chat"] [data-notice-glyph] svg'), 'the logo is drawn inline');
+    assert.ok(!document.querySelector('[data-notice] img'), 'no image is loaded');
+    const late = document.querySelector<HTMLElement>('[data-notice="acme:late"] [data-notice-card]')!;
+    assert.equal(late.style.getPropertyValue('--notice-accent'), '#f59e0b', 'a warning keeps the amber accent whatever its logo');
+    const order = Array.from(document.querySelectorAll('[data-notice="acme:chat"] [data-notice-action]'), (el) => el.getAttribute('data-notice-action'));
+    assert.deepEqual(order, ['1', '0'], 'the main action comes last, in the corner');
+    assert.equal(m.notices.visibleNotices().find((n) => n.id === 'chat')?.icon, 'discord');
+    assert.equal(m.notices.visibleNotices().find((n) => n.id === 'plain')?.icon, null);
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('/?notices-preview=1 shows one card of each kind, closed ones included, and writes nothing', async () => {
+  const m = await mount({ url: 'http://localhost/?notices-preview=1', dismissed: ['@timon/settings:github-star'] });
+  try {
+    const ctx = m.pluginContext('acme');
+    await m.React.act(async () => ctx.notices.push({ id: 'real', title: 'A real card' }));
+    await m.until(() => cards().length === 5, 'the five demonstration cards');
+    assert.deepEqual(cards(), [
+      '@timon/settings:github-star',
+      '@timon/settings:discord',
+      '@timon/updates:update-0.2.0',
+      '@timon/updates:build-ends-preview',
+      '@timon/updates:feed.preview',
+    ], 'more than three, in the demonstration\'s order; the closed star shows; the real card waits');
+    const visuals = Array.from(document.querySelectorAll('[data-notice-card]'), (el) => el.getAttribute('data-notice-visual'));
+    assert.deepEqual(visuals, ['github', 'discord', 'timon', 'warning', 'youtube']);
+    assert.match(document.querySelector('[data-notice="@timon/settings:discord"]')?.textContent ?? '', /Join the community/);
+
+    await m.click(document.querySelector('[data-notice="@timon/settings:discord"] [data-notice-dismiss]'));
+    await m.until(() => cards().length === 4, 'closed in the page');
+    await m.click(document.querySelector('[data-notice="@timon/updates:update-0.2.0"] [data-notice-action="0"]'));
+    await m.until(() => cards().length === 3, 'an action that closes, closed in the page');
+    await m.click(document.querySelector('[data-notice="@timon/settings:github-star"] [data-notice-action="0"]'));
+    assert.deepEqual(m.opened, ['https://github.com/ai-timon/timon']);
+    await m.until(() => cards().length === 2, 'the link opened and the card closed in the page');
+    assert.deepEqual(m.writes, [], 'not a single write');
+    assert.deepEqual([...m.server], ['@timon/settings:github-star'], 'the account\'s list untouched');
+  } finally {
+    await m.unmount();
+  }
+
+  const signedOut = await mount({ url: 'http://localhost/?notices-preview=1', session: false });
+  try {
+    await signedOut.until(() => true, 'a pass');
+    assert.deepEqual(cards(), [], 'no session, no preview');
+  } finally {
+    await signedOut.unmount();
   }
 });
 
@@ -187,6 +260,35 @@ test('a closed card is remembered by the daemon and stays closed; one closed els
   }
 });
 
+test('showing the closed cards again: the daemon forgets them, and they come back in this page', async () => {
+  const m = await mount({ dismissed: ['acme:elsewhere'] });
+  try {
+    const ctx = m.pluginContext('acme');
+    await m.React.act(async () => {
+      ctx.notices.push({ id: 'elsewhere', title: 'Closed on the desktop' });
+      ctx.notices.push({ id: 'here', title: 'Close me' });
+    });
+    await m.until(() => cards().length === 1, 'one card');
+    await m.click(document.querySelector('[data-notice="acme:here"] [data-notice-dismiss]'));
+    await m.until(() => cards().length === 0, 'both closed');
+    let ok = false;
+    await m.React.act(async () => { ok = await m.notices.resetDismissedNotices(); });
+    assert.equal(ok, true);
+    assert.ok(m.writes.includes('DELETE /api/ui/prefs/dismissed-notices'));
+    assert.deepEqual([...m.server], [], 'the account\'s list cleared');
+    await m.until(() => cards().length === 2, 'both back');
+  } finally {
+    await m.unmount();
+  }
+
+  const refused = await mount({ session: false });
+  try {
+    assert.equal(await refused.notices.resetDismissedNotices(), false, 'refused: nothing changed');
+  } finally {
+    await refused.unmount();
+  }
+});
+
 test('an action runs, opens its address, and closes the card for good when it says so', async () => {
   const m = await mount();
   try {
@@ -223,6 +325,8 @@ test('an invalid notice is refused with its reason', async () => {
     refused({ id: 'bad id', title: 'X' }, /id/);
     refused({ id: 'x', title: '' }, /title/);
     refused({ id: 'x', title: 'X', tone: 'error' }, /tone/);
+    refused({ id: 'x', title: 'X', icon: 'mastodon' }, /icon/);
+    refused({ id: 'x', title: 'X', icon: 'https://evil.example/logo.svg' }, /icon/);
     refused({ id: 'x', title: 'X', actions: [{ label: 'Nothing' }] }, /onSelect/);
     refused({ id: 'x', title: 'X', actions: [1, 2, 3].map((n) => ({ label: `A${n}`, dismiss: true })) }, /at most/);
     assert.equal(m.notices.visibleNotices().length, 0);
@@ -285,6 +389,8 @@ test('the GitHub star waits for five different days of use, then offers the repo
     await m.React.act(async () => { m.slots.register({ slot: 'notices', pluginId: '@timon/settings', key: 'github-star' }, GitHubStarNotice); });
     await m.until(() => cards().includes('@timon/settings:github-star'), 'the star card');
     assert.match(document.querySelector('[data-notice]')?.textContent ?? '', /A star on GitHub\?/);
+    assert.equal(document.querySelector('[data-notice-card]')?.getAttribute('data-notice-visual'), 'github');
+    assert.equal(document.querySelector('[data-notice-action="0"]')?.textContent, 'Star on GitHub');
     await m.click(document.querySelector('[data-notice-action="0"]'));
     assert.deepEqual(m.opened, [GITHUB_REPOSITORY_URL]);
     await m.until(() => cards().length === 0, 'closed after starring');
@@ -337,6 +443,7 @@ test('the examples/plugin-notice template pushes its card and paints every card,
     const ctx = m.pluginContext(manifest.timon.id, manifest.timon.client.slots);
     await m.React.act(async () => { example.apply(ctx); });
     await m.until(() => document.querySelector('[data-compact-notice="welcome"]') !== null, 'the template painted its card');
+    assert.equal(document.querySelector('[data-compact-notice="welcome"]')?.getAttribute('data-compact-icon'), 'timon', 'the template reads `icon`');
     assert.ok(!document.querySelector('[data-notice-card]'), 'the product card is not painted under it');
 
     await m.click(document.querySelector('[data-compact-dismiss]'));
@@ -366,8 +473,8 @@ test('the settings module registers the card and the star, and the root layout m
 test('the signed feed: its notices become cards, as text, a link opens and closes, a withdrawn one leaves', async () => {
   const { FeedNotices, UPDATES_NOTICES_URL } = await import('../updates/feed-notices');
   let feed: unknown[] = [
-    { id: 'live-1', tone: 'info', title: '<img src=x onerror="window.__pwned=1">', body: 'Thursday\n<b>6 pm</b>', link: 'https://timon-ai.com/live', endsAt: null },
-    { id: 'plain', tone: 'warning', title: 'Maintenance', body: 'Sunday.', link: 'javascript:alert(1)', endsAt: null },
+    { id: 'live-1', tone: 'info', icon: 'youtube', title: '<img src=x onerror="window.__pwned=1">', body: 'Thursday\n<b>6 pm</b>', link: 'https://timon-ai.com/live', endsAt: null },
+    { id: 'plain', tone: 'warning', icon: 'https://evil.example/x.svg', title: 'Maintenance', body: 'Sunday.', link: 'javascript:alert(1)', endsAt: null },
     { id: 'over', tone: 'info', title: 'Gone', body: 'Already over.', link: null, endsAt: '2000-01-01T00:00:00.000Z' },
   ];
   const m = await mount({ routes: { [UPDATES_NOTICES_URL]: () => Response.json({ notices: feed }) } });
@@ -382,6 +489,8 @@ test('the signed feed: its notices become cards, as text, a link opens and close
     assert.equal((globalThis as { __pwned?: number }).__pwned, undefined);
     const plain = document.querySelector('[data-notice="@timon/updates:feed.plain"]')!;
     assert.ok(!plain.querySelector('[data-notice-action]'), 'a link that is not https gives no action');
+    assert.equal(live.querySelector('[data-notice-card]')?.getAttribute('data-notice-visual'), 'youtube', 'the feed names its logo');
+    assert.equal(plain.querySelector('[data-notice-card]')?.getAttribute('data-notice-visual'), 'warning', 'an unknown logo falls back to the tone');
     await m.click(live.querySelector('[data-notice-action="0"]'));
     assert.deepEqual(m.opened, ['https://timon-ai.com/live']);
     await m.until(() => cards().length === 1, 'closed after the link');

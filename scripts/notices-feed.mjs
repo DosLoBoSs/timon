@@ -14,8 +14,10 @@
  * network.
  *
  * Payload, schema 1:
- *   { schema: 1, issuedAt, expiresAt, notices: [{ id, tone, title, body, link?,
+ *   { schema: 1, issuedAt, expiresAt, notices: [{ id, tone, title, body, icon?, link?,
  *     startsAt?, endsAt?, channels?, minVersion?, maxVersion? }] }
+ * `icon` names a brand logo the apps draw themselves (NOTICE_ICONS): a closed
+ * list, never an address, so a feed cannot make an app load an image.
  * Every object is strict: an unknown field is refused, so a field added later
  * needs a new schema, which builds that only know schema 1 refuse as a whole.
  */
@@ -35,6 +37,8 @@ export const NOTICES_ENVELOPE_MAX = 128 * 1024;
 export const CLOCK_SKEW_MS = 5 * 60_000;
 export const DEFAULT_NOTICES_VALID_DAYS = 30;
 export const TONES = Object.freeze(['info', 'warning', 'success']);
+/** The logos a card can show (app/src/lib/notices.ts): adding one is a new schema, since older apps refuse an unknown value. */
+export const NOTICE_ICONS = Object.freeze(['github', 'discord', 'timon', 'x', 'youtube']);
 
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -43,7 +47,7 @@ export const NOTICE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 // Plain text: no control character but a line break in the body, nothing a terminal or a renderer could act on.
 const TITLE_TEXT = /^[^\u0000-\u001f\u007f]+$/;
 const BODY_TEXT = /^[^\u0000-\u0009\u000b-\u001f\u007f]+$/;
-const NOTICE_FIELDS = ['id', 'tone', 'title', 'body', 'link', 'startsAt', 'endsAt', 'channels', 'minVersion', 'maxVersion'];
+const NOTICE_FIELDS = ['id', 'tone', 'title', 'body', 'icon', 'link', 'startsAt', 'endsAt', 'channels', 'minVersion', 'maxVersion'];
 const NOTICE_REQUIRED = ['id', 'tone', 'title', 'body'];
 
 const fail = (message) => { throw new Error(`timon-notices.json: ${message}`); };
@@ -78,6 +82,7 @@ function validateNotice(notice, where) {
   if (typeof notice.body !== 'string' || !notice.body.trim() || notice.body.length > NOTICE_BODY_MAX || !BODY_TEXT.test(notice.body)) {
     fail(`${where}.body must be plain text of 1-${NOTICE_BODY_MAX} characters`);
   }
+  if (notice.icon !== undefined && !NOTICE_ICONS.includes(notice.icon)) fail(`${where}.icon must be one of ${NOTICE_ICONS.join(', ')}`);
   if (notice.link !== undefined && !isNoticeLink(notice.link)) fail(`${where}.link must be an https: address without credentials`);
   const starts = notice.startsAt === undefined ? null : isoDate(notice.startsAt, `${where}.startsAt`);
   const ends = notice.endsAt === undefined ? null : isoDate(notice.endsAt, `${where}.endsAt`);

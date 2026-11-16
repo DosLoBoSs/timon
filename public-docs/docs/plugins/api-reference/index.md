@@ -52,6 +52,7 @@ contexts are distinct; import these contracts as types in plugin code.
 - [ModelReasoning](type-aliases/ModelReasoning.md)
 - [NormalizedEvent](type-aliases/NormalizedEvent.md)
 - [NoticeAction](type-aliases/NoticeAction.md)
+- [NoticeIcon](type-aliases/NoticeIcon.md)
 - [NoticeInput](type-aliases/NoticeInput.md)
 - [NoticeTone](type-aliases/NoticeTone.md)
 - [PermissionDecision](type-aliases/PermissionDecision.md)

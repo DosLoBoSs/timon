@@ -523,7 +523,7 @@ export const MODEL_PICKER_SLOT = 'model.picker';
 export const PROVIDER_CLI_SLOT = 'providers.cli';
 
 /**
- * Slot of one provider's row (client API 17): logo, name, its one status line,
+ * Slot of one provider's row (client API 16): logo, name, its one status line,
  * "Update available" and the way to its page. Painted by every `ProviderRow`
  * host — the providers list of Settings › AI models and the onboarding's
  * "Your AIs" step — so a replacement changes the row on both at once. A boot

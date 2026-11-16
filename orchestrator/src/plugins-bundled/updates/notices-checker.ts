@@ -22,7 +22,7 @@ import { z } from 'zod';
 import type { BuildChannel } from '../../build-info.js';
 import { fetchManifest, readCapped, type FetchLike } from './checker.js';
 import type { ReleasePublicKey } from './manifest.js';
-import { NOTICES_ENVELOPE_MAX, NOTICES_URL, activeNotices, verifyNoticesFeed, type NoticesPayload } from './notices-feed.js';
+import { NOTICES_ENVELOPE_MAX, NOTICES_URL, activeNotices, verifyNoticesFeed, type NoticeIcon, type NoticesPayload } from './notices-feed.js';
 
 /** What the app receives: text to show as text, a link to open, never to run. */
 export type RemoteNotice = {
@@ -30,6 +30,8 @@ export type RemoteNotice = {
   tone: 'info' | 'warning' | 'success';
   title: string;
   body: string;
+  /** A brand logo the app draws itself, from a closed list; `null`: the tone's icon. */
+  icon: NoticeIcon | null;
   link: string | null;
   endsAt: string | null;
 };
@@ -91,6 +93,7 @@ export class NoticesFeed {
       tone: notice.tone,
       title: notice.title,
       body: notice.body,
+      icon: notice.icon ?? null,
       link: notice.link ?? null,
       endsAt: notice.endsAt ?? null,
     }));

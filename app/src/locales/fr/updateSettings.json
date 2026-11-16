@@ -30,7 +30,10 @@
       "notices": "Annonces",
       "saveFailed": "Le réglage n’a pas pu être enregistré.",
       "lockedEnv": "La variable d’environnement {key} en décide.",
-      "lockedConfig": "timon.config.json en décide."
+      "lockedConfig": "timon.config.json en décide.",
+      "showClosedNotices": "Réafficher les cartes fermées",
+      "closedNoticesShown": "Les cartes fermées s'afficheront de nouveau.",
+      "closedNoticesFailed": "Impossible de réafficher les cartes fermées."
     }
   }
 }

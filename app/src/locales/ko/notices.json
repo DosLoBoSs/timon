@@ -4,10 +4,21 @@
     "close": "닫기",
     "githubStar": {
       "title": "GitHub에 별을 남겨 주실래요?",
-      "action": "별 남기기"
+      "action": "GitHub에서 별 남기기"
     },
     "feed": {
       "open": "자세히 보기"
+    },
+    "preview": {
+      "discord": {
+        "title": "커뮤니티에 참여하세요",
+        "body": "질문, 아이디어, 소식을 Timon을 만드는 사람들과 함께.",
+        "action": "참여하기"
+      },
+      "feed": {
+        "title": "목요일 라이브 데모",
+        "body": "에이전트와 플러그인, 한 시간."
+      }
     }
   }
 }
