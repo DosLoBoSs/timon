@@ -261,6 +261,9 @@
         "worktree": "코드 작업마다 격리된 Git 워크트리 하나",
         "worktreeDetail": "당신의 브랜치 옆에서 작업하며, 브랜치 안에서는 절대 작업하지 않습니다.",
         "engine": "엔진",
+        "effort": "추론 강도",
+        "effortDefault": "모델 기본값",
+        "effortHint": "답하기 전에 얼마나 깊이 생각할지. 높을수록 느려지고 구독 사용량이 늘어납니다.",
         "permissions": "권한",
         "perm": {
           "default": "민감한 도구는 매번 묻기",

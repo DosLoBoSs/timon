@@ -261,6 +261,9 @@
         "worktree": "Un worktree git isolato per ogni task di codice",
         "worktreeDetail": "Lavora accanto al tuo branch, mai al suo interno.",
         "engine": "Motore",
+        "effort": "Sforzo di ragionamento",
+        "effortDefault": "Predefinito del modello",
+        "effortHint": "Quanto riflette prima di rispondere. Più alto è più lento e consuma di più del tuo abbonamento.",
         "permissions": "Permessi",
         "perm": {
           "default": "Chiedere per ogni strumento sensibile",

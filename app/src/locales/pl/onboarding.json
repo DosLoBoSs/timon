@@ -261,6 +261,9 @@
         "worktree": "Osobny, izolowany worktree git dla każdego zadania z kodem",
         "worktreeDetail": "Pracuje obok twojej gałęzi, nigdy w niej.",
         "engine": "Silnik",
+        "effort": "Wysiłek rozumowania",
+        "effortDefault": "Domyślne dla modelu",
+        "effortHint": "Jak intensywnie myśli przed odpowiedzią. Wyżej znaczy wolniej i większe zużycie subskrypcji.",
         "permissions": "Uprawnienia",
         "perm": {
           "default": "Pytaj przy każdym wrażliwym narzędziu",

@@ -266,6 +266,45 @@ test('sheet: an engine that honours only some modes offers only those, and says 
   invalidateBackendCatalog();
 });
 
+test('sheet: the engine tab offers the model\'s reasoning efforts, resets one a new model lacks, and writes it', async () => {
+  const withLevels: BackendCatalog = {
+    ...CATALOG,
+    backends: [{
+      ...CATALOG.backends[0]!,
+      models: [{ slug: 'opus', label: 'Opus', supportedReasoningLevels: ['low', 'high'] }, { slug: 'sonnet', label: 'Sonnet' }],
+    }],
+  };
+  const answer: Answer = (c) => (c.url.startsWith('/api/ui/backends/catalog') ? Response.json(withLevels) : undefined);
+  const { invalidateBackendCatalog } = await import('@/lib/backends');
+  invalidateBackendCatalog();
+  const row = (r: Rendered, label: string): HTMLButtonElement => {
+    const found = Array.from(r.host.querySelectorAll<HTMLButtonElement>('[data-picker-row]')).find((b) => b.textContent?.includes(label));
+    assert.ok(found, `${label} is offered`);
+    return found;
+  };
+  await renderStep('developer', async (r) => {
+    await click(r, '[data-tab="engine"]');
+    // The agent runs on opus: its levels, after the model's default.
+    assert.deepEqual(Array.from(r.host.querySelectorAll('[data-effort]')).map((el) => el.getAttribute('data-effort')), ['', 'low', 'high']);
+    assert.equal(q(r.host, '[data-effort=""]').getAttribute('aria-pressed'), 'true', 'the model\'s default first');
+    await click(r, '[data-effort="high"]');
+    assert.equal(q(r.host, '[data-effort="high"]').getAttribute('aria-pressed'), 'true');
+    await r.react.act(async () => { row(r, 'Sonnet').click(); });
+    await settle(r.react);
+    assert.ok(!r.host.querySelector('[data-effort-section]'), 'a model without levels shows no segment');
+    await r.react.act(async () => { row(r, 'Opus').click(); });
+    await settle(r.react);
+    assert.equal(q(r.host, '[data-effort=""]').getAttribute('aria-pressed'), 'true', 'the level sonnet lacked went back to the default');
+    await click(r, '[data-effort="low"]');
+    await click(r, '[data-create]');
+    await settle(r.react, 40);
+    const patch = patchOf(r.calls);
+    assert.equal(patch?.model, 'opus');
+    assert.equal(patch?.reasoningEffort, 'low');
+  }, answer);
+  invalidateBackendCatalog();
+});
+
 test('sheet: line of work, exact permission mode with its warning, the daemon\'s lists, all written', async () => {
   await renderStep('developer', async (r) => {
     assert.equal(q(r.host, '[data-role="orchestrator"]').getAttribute('aria-pressed'), 'true', 'the sheet opens on the pilot');

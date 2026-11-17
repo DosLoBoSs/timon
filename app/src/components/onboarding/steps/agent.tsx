@@ -200,6 +200,7 @@ export function AgentStep(): ReactElement {
             draft={draft}
             update={update}
             shownModel={model}
+            catalog={catalog}
             skills={catalogs?.skills ?? []}
             mcp={catalogs?.mcp ?? []}
             onPickFolder={() => { void pickFolder(); }}

@@ -261,6 +261,9 @@
         "worktree": "Eén geïsoleerde git-worktree per codetaak",
         "worktreeDetail": "Hij werkt naast je branch, nooit erin.",
         "engine": "Engine",
+        "effort": "Redeneerinspanning",
+        "effortDefault": "Standaard van het model",
+        "effortHint": "Hoe grondig het nadenkt voordat het antwoordt. Hoger is trager en verbruikt meer van je abonnement.",
         "permissions": "Toestemmingen",
         "perm": {
           "default": "Vragen bij elke gevoelige tool",

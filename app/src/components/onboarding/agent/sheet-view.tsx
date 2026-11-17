@@ -7,7 +7,10 @@
  * accounts and search included), the skills and MCP servers the daemon's own
  * lists: none of them is written here. A backend that honours only some
  * permission modes (`supportedModes`) is offered only those, and a mode picked
- * before the engine changed says it runs as plan.
+ * before the engine changed says it runs as plan. Under the picker, the
+ * reasoning effort: the stops of the model's thinking bar (`thinkingBarFor`,
+ * the same as every other selector), shown only when the model has some, and
+ * reset to the model's default when a newly picked model does not take it.
  */
 import type { ReactElement } from 'react';
 import { AlertTriangle, FolderOpen, GitBranch, Plug } from 'lucide-react';
@@ -15,7 +18,9 @@ import { Button } from '@/components/ui/button';
 import { ModelPickerPanel } from '@/components/model-picker';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { unsupportedModeRunsAs } from '@/lib/backends';
+import { unsupportedModeRunsAs, type BackendCatalog } from '@/lib/backends';
+import { thinkingBarFor, thinkingValues } from '@/lib/thinking-bar';
+import { keepEffort } from '@/components/agent-editor/thinking-slider';
 import {
   DEV_ROLES, DEV_TABS, PERMISSION_MODES, toggled,
   type AgentDraft, type ModelChoice,
@@ -28,6 +33,8 @@ export type SheetViewProps = {
   update: UpdateDraft;
   /** The model the agent runs on now: the picker shows it until another is picked. */
   shownModel: ModelChoice | null;
+  /** The backends catalogue: where the effort levels of a model come from. */
+  catalog: BackendCatalog;
   skills: readonly CatalogItem[];
   mcp: readonly CatalogItem[];
   onPickFolder: () => void;
@@ -44,10 +51,11 @@ function Radio({ on }: { on: boolean }): ReactElement {
   );
 }
 
-export function SheetView({ draft, update, shownModel, skills, mcp, onPickFolder, supportedModes = null }: SheetViewProps): ReactElement {
+export function SheetView({ draft, update, shownModel, catalog, skills, mcp, onPickFolder, supportedModes = null }: SheetViewProps): ReactElement {
   const tab = draft.tab;
   const modes = supportedModes ? PERMISSION_MODES.filter((m) => supportedModes.includes(m)) : PERMISSION_MODES;
   const runsAs = unsupportedModeRunsAs(supportedModes, draft.permission);
+  const thinking = shownModel ? thinkingBarFor(catalog, shownModel.backend, shownModel.model) : null;
   return (
     <div data-sheet>
       <div role="tablist" className="mb-[18px] flex gap-[3px] rounded-[13px] bg-card p-1">
@@ -104,13 +112,35 @@ export function SheetView({ draft, update, shownModel, skills, mcp, onPickFolder
         )}
 
         {tab === 'engine' && (
-          <section>
-            <SectionTitle>{t('onboarding.agent.sheet.engine')}</SectionTitle>
-            <ModelPickerPanel
-              value={shownModel ? { backend: shownModel.backend, model: shownModel.model } : null}
-              onChange={(pick) => { if (pick) update((d) => ({ ...d, model: { backend: pick.backend, model: pick.model } })); }}
-            />
-          </section>
+          <>
+            <section>
+              <SectionTitle>{t('onboarding.agent.sheet.engine')}</SectionTitle>
+              <ModelPickerPanel
+                value={shownModel ? { backend: shownModel.backend, model: shownModel.model } : null}
+                onChange={(pick) => {
+                  if (!pick) return;
+                  const values = thinkingValues(thinkingBarFor(catalog, pick.backend, pick.model));
+                  update((d) => ({ ...d, model: { backend: pick.backend, model: pick.model }, effort: keepEffort(d.effort, values) }));
+                }}
+              />
+            </section>
+            {thinking && (
+              <section data-effort-section>
+                <SectionTitle>{t('onboarding.agent.sheet.effort')}</SectionTitle>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('onboarding.agent.sheet.effort')}>
+                  <Chip data-effort="" on={!thinking.stops.some((stop) => stop.value === draft.effort)} onClick={() => update((d) => ({ ...d, effort: '' }))}>
+                    {t('onboarding.agent.sheet.effortDefault')}
+                  </Chip>
+                  {thinking.stops.map((stop) => (
+                    <Chip key={stop.value} data-effort={stop.value} on={draft.effort === stop.value} onClick={() => update((d) => ({ ...d, effort: stop.value }))}>
+                      {stop.label}
+                    </Chip>
+                  ))}
+                </div>
+                <p className="mx-0.5 mt-[7px] text-xs text-muted-foreground">{t('onboarding.agent.sheet.effortHint')}</p>
+              </section>
+            )}
+          </>
         )}
 
         {tab === 'perms' && (

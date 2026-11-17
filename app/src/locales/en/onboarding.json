@@ -261,6 +261,9 @@
         "worktree": "One isolated git worktree per code task",
         "worktreeDetail": "It works beside your branch, never in it.",
         "engine": "Engine",
+        "effort": "Reasoning effort",
+        "effortDefault": "Model default",
+        "effortHint": "How hard it thinks before it answers. Higher is slower and uses more of your subscription.",
         "permissions": "Permissions",
         "perm": {
           "default": "Ask for every sensitive tool",

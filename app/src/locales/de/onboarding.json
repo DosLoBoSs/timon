@@ -261,6 +261,9 @@
         "worktree": "Ein isolierter Git-Worktree pro Code-Aufgabe",
         "worktreeDetail": "Er arbeitet neben deinem Branch, nie darin.",
         "engine": "Engine",
+        "effort": "Denkaufwand",
+        "effortDefault": "Standard des Modells",
+        "effortHint": "Wie gründlich es nachdenkt, bevor es antwortet. Höher ist langsamer und verbraucht mehr von Ihrem Abonnement.",
         "permissions": "Berechtigungen",
         "perm": {
           "default": "Bei jedem sensiblen Tool nachfragen",
