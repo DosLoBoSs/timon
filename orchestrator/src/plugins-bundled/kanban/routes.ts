@@ -1253,9 +1253,11 @@ export function registerRoutes(app: Router): void {
     // A PENDING or running task still belongs to its agent.
     const doneUnmerged = task.status === 'DONE' && !task.merged_commit_sha;
     if (task.status !== 'BLOCKED' && !doneUnmerged) {
-      res.status(409).json(task.merged_commit_sha
+      res.status(409).json(task.status === 'DONE' && task.merged_commit_sha
         ? apiError('task_already_merged', `The task is already merged (${task.merged_commit_sha}).`, { sha: task.merged_commit_sha })
-        : apiError('task_not_blocked', 'Only a blocked task, or a done one without a merge commit, can be marked merged.'));
+        : apiError('task_not_blocked', task.merged_commit_sha
+          ? `The task is already merged (${task.merged_commit_sha}).`
+          : 'Only a blocked task, or a done one without a merge commit, can be marked merged.'));
       return;
     }
     const sha = rawSha.toLowerCase();
