@@ -3697,6 +3697,13 @@
     "rotateFailed": "데몬이 시크릿을 반환하지 않았습니다",
     "rotateOutbound": "새 서명 시크릿",
     "rotateOutboundConfirm": "\"{name}\"에 새 서명 시크릿을 지정하시겠습니까? 수신자는 새 시크릿을 받을 때까지 호출을 거부합니다.",
+    "scriptApproval": {
+      "unapproved": "스크립트 미승인",
+      "changed": "승인 후 스크립트가 변경됨",
+      "reapprove": "다시 승인",
+      "confirm": "\"{name}\"의 스크립트를 현재 상태로 승인할까요? 다음 실행부터 이 파일을 사용합니다.",
+      "done": "스크립트를 승인했습니다"
+    },
     "secret": {
       "title": "Webhook 시크릿",
       "outboundTitle": "보내는 호출의 서명 시크릿",

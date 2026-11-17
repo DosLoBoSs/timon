@@ -14,6 +14,10 @@
  *    agent is refused outright (`plugins-bundled/triggers/routes.ts`);
  *  - argv, no shell, nothing from a payload;
  *  - `cwd` inside a registered project, symlinks resolved, at every run;
+ *  - the local files the command runs fingerprinted when a person saves or
+ *    re-approves the trigger, and checked again before every run: a project
+ *    folder is one missions write in, so a file rewritten since, or a trigger
+ *    saved before this check existed, is refused until a person approves it;
  *  - an environment built from the system whitelist plus the vault secrets it
  *    names — never the daemon's own environment (`secrets/env.ts`);
  *  - a time limit that kills the whole process tree, a bounded output tail,
@@ -23,7 +27,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ChildProcess } from 'node:child_process';
 import { realpathSync } from 'node:fs';
-import { isAbsolute, resolve, sep } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { db, dbApi } from '../db.js';
 import { getHost } from '../host/index.js';
 import { stopProcessGroup } from '../host/kill-tree.js';
@@ -31,9 +35,10 @@ import { createNotification } from '../notifications.js';
 import { TIMON_HOME } from '../paths.js';
 import { secretsEnvFor, systemEnv } from '../secrets/env.js';
 import { redactDeep } from '../secrets/redact.js';
+import { scriptPreviews } from '../script-preview.js';
 import { projectFromRegisteredCwd } from '../task-project.js';
 import { SCRIPT_DEFAULT_TIMEOUT_S, type TriggerAction } from './schema.js';
-import { disableTriggerRow, recordDelivery, type Trigger } from './store.js';
+import { disableTriggerRow, getScriptPins, recordDelivery, type ScriptPin, type Trigger } from './store.js';
 
 export type ScriptAction = Extract<TriggerAction, { type: 'script' }>;
 
@@ -53,12 +58,14 @@ const running = new Map<string, Running>();
 /** `trigger id#action index` of the runs in progress, for `overlap: skip`. */
 const busy = new Set<string>();
 
+export type ScriptPlace = { cwd: string; project: string; root: string };
+
 /**
- * Real path of `cwd` and the project that contains it, or why not. Both sides
- * resolved: a symlink inside a project must not lead out of it, and a project
- * registered through a symlink still matches.
+ * Real path of `cwd`, the project that contains it and that project's real
+ * root, or why not. Both sides resolved: a symlink inside a project must not
+ * lead out of it, and a project registered through a symlink still matches.
  */
-export function scriptCwd(cwd: string): { cwd: string; project: string } | { error: string } {
+export function scriptCwd(cwd: string): ScriptPlace | { error: string } {
   if (!isAbsolute(cwd)) return { error: 'cwd: an absolute path' };
   let real: string;
   try { real = realpathSync(cwd); } catch { return { error: `cwd not found: ${cwd}` }; }
@@ -67,7 +74,165 @@ export function scriptCwd(cwd: string): { cwd: string; project: string } | { err
     try { return [{ slug: row.slug, cwd: realpathSync(row.cwd) }]; } catch { return []; }
   });
   const project = projectFromRegisteredCwd(real, roots);
-  return project ? { cwd: real, project } : { error: `cwd is not inside a registered project: ${cwd}` };
+  const root = roots.find((row) => row.slug === project)?.cwd;
+  return project && root ? { cwd: real, project, root } : { error: `cwd is not inside a registered project: ${cwd}` };
+}
+
+// ── approval ─────────────────────────────────────────────────────────────────
+
+/** What a refused run tells the user to do. */
+function reapprove(triggerId: string): string {
+  return `a person re-approves it with \`timon trigger approve-script ${triggerId}\`, or by saving it again on the Triggers page`;
+}
+
+function quote(word: string): string {
+  return `'${word.split("'").join("'\\''")}'`;
+}
+
+function inside(root: string, path: string): boolean {
+  const rel = relative(root, path);
+  return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel));
+}
+
+export type ScriptFingerprint = Pick<ScriptPin, 'root' | 'real_cwd' | 'state' | 'files'>;
+
+/** What decides which files run: the program, its argv and the folder, as saved. */
+export type ScriptRun = { command: string; args?: readonly string[]; cwd: string };
+
+/**
+ * The local files the action runs, read the way a permission card reads a
+ * shell command (`script-preview.ts`): the program when it is a path, the file
+ * an interpreter or a shell is handed, an npm script, a make target, each with
+ * its SHA-256 (or `absent`, so a file that appears later is a change too). The
+ * argv is quoted into one line run from `cwd`, with the whole project as the
+ * readable folder: a script beside `cwd` is a project file all the same. An
+ * installed program outside the project is not read. Something that cannot be
+ * fingerprinted (outside the project, behind a link leading out, too large,
+ * `$VAR` in a path) is an error: nobody can vouch for it.
+ */
+export function fingerprintScript(action: Pick<ScriptRun, 'command' | 'args'>, place: ScriptPlace): ScriptFingerprint | { error: string } {
+  // A case-folded registration (Windows, macOS) may not contain `cwd` lexically: read from `cwd` alone then.
+  const root = inside(place.root, place.cwd) ? place.root : place.cwd;
+  const line = `cd ${quote(place.cwd)} && ${[action.command, ...(action.args ?? [])].map(quote).join(' ')}`;
+  let read: ReturnType<typeof scriptPreviews>;
+  try {
+    read = scriptPreviews(line, root);
+  } catch (err) {
+    return { error: `what it runs cannot be read: ${(err as Error).message}` };
+  }
+  if (read.state === null) {
+    const why = read.previews.filter((p) => !['ok', 'binary', 'missing'].includes(p.status))
+      .map((p) => `${p.path} (${p.status.replace('_', ' ')})`);
+    return { error: `what it runs cannot be fingerprinted: ${why.length ? why.join(', ') : 'too many files'}` };
+  }
+  return { root, real_cwd: place.cwd, state: read.state, files: read.checks.map((check) => ({ path: check.path, state: check.state })) };
+}
+
+/** Same program, argv and folder: what decides which files run. */
+function sameRun(a: ScriptRun, b: ScriptRun): boolean {
+  return a.command === b.command && a.cwd === b.cwd && JSON.stringify(a.args ?? []) === JSON.stringify(b.args ?? []);
+}
+
+/** The approval recorded for this program, argv and folder, if any. */
+export function pinFor(pins: readonly ScriptPin[], run: ScriptRun): ScriptPin | undefined {
+  return pins.find((pin) => sameRun(pin, run));
+}
+
+/** The approval of `run` as its files are now, or why it cannot be given. */
+export function pinScript(run: ScriptRun, place: ScriptPlace, now: number = Date.now()): ScriptPin | { error: string } {
+  const read = fingerprintScript(run, place);
+  if ('error' in read) return read;
+  return { command: run.command, args: [...(run.args ?? [])], cwd: run.cwd, ...read, approved_at: now };
+}
+
+/**
+ * The fingerprint of every script action, taken now: what a person's save or
+ * re-approval records. `stored`: what the trigger held before this save. An
+ * action left as it was whose files cannot be read today keeps the approval
+ * it had, or stays without one (a folder gone must not stop a rename, and its
+ * runs are refused either way); a new or changed one that cannot be read is
+ * refused.
+ */
+export function pinScripts(
+  actions: readonly TriggerAction[],
+  stored: { actions: readonly TriggerAction[]; pins: readonly ScriptPin[] } = { actions: [], pins: [] },
+  now: number = Date.now(),
+): { pins: ScriptPin[] } | { error: string } {
+  const pins: ScriptPin[] = [];
+  for (const action of actions) {
+    if (action.type !== 'script') continue;
+    const place = scriptCwd(action.cwd);
+    const read = 'error' in place ? place : pinScript(action, place, now);
+    if ('error' in read) {
+      if (stored.actions.some((old) => old.type === 'script' && sameRun(old, action))) {
+        const old = pinFor(stored.pins, action);
+        if (old) pins.push(old);
+        continue;
+      }
+      return { error: `script ${action.command}: ${read.error}` };
+    }
+    pins.push(read);
+  }
+  return { pins };
+}
+
+/** The files whose state differs between the approval and now. */
+function changedFiles(before: ScriptPin['files'], after: ScriptPin['files']): string[] {
+  const was = new Map(before.map((file) => [file.path, file.state]));
+  const is = new Map(after.map((file) => [file.path, file.state]));
+  const paths = new Set([...was.keys(), ...is.keys()]);
+  return [...paths].filter((path) => was.get(path) !== is.get(path)).sort();
+}
+
+/**
+ * Why this run must not start, or null: no approval recorded (a trigger saved
+ * before the check existed is not vouched for by what happens to be on disk
+ * now), its files changed since, or they can no longer be fingerprinted.
+ */
+export function scriptApprovalProblem(triggerId: string, action: ScriptAction, place: ScriptPlace): string | null {
+  return scriptPinProblem(getScriptPins(triggerId), action, place, reapprove(triggerId));
+}
+
+/**
+ * The check behind `scriptApprovalProblem`, on approvals kept elsewhere
+ * (a workflow's script nodes). `hint`: how a person approves it again.
+ */
+export function scriptPinProblem(pins: readonly ScriptPin[], run: ScriptRun, place: ScriptPlace, hint: string): string | null {
+  const pin = pinFor(pins, run);
+  if (!pin) return `script not approved: ${hint}`;
+  const now = fingerprintScript(run, place);
+  if ('error' in now) return `script cannot be checked since it was approved (${now.error}): ${hint}`;
+  if (now.root !== pin.root || now.real_cwd !== pin.real_cwd) return `script folder moved since it was approved: ${hint}`;
+  if (now.state !== pin.state) {
+    const changed = changedFiles(pin.files, now.files);
+    return `script changed since it was approved${changed.length ? ` (${changed.join(', ')})` : ''}: ${hint}`;
+  }
+  return null;
+}
+
+/**
+ * Where a trigger's scripts stand, as the Triggers page shows it: `approved`
+ * when every script would pass `scriptApprovalProblem` now, `unapproved` when
+ * one has no approval recorded, `changed` when one no longer matches it (files
+ * rewritten, folder moved or gone, unreadable). Null: no script action.
+ */
+export type ScriptApprovalState = 'approved' | 'unapproved' | 'changed';
+
+export function scriptApprovalState(
+  actions: readonly TriggerAction[], pins: readonly ScriptPin[],
+): ScriptApprovalState | null {
+  const scripts = actions.filter((action): action is ScriptAction => action.type === 'script');
+  if (!scripts.length) return null;
+  let changed = false;
+  for (const action of scripts) {
+    const pin = pinFor(pins, action);
+    if (!pin) return 'unapproved';
+    if (changed) continue;
+    const place = scriptCwd(action.cwd);
+    const now = 'error' in place ? place : fingerprintScript(action, place);
+    changed = 'error' in now || now.root !== pin.root || now.real_cwd !== pin.real_cwd || now.state !== pin.state;
+  }
+  return changed ? 'changed' : 'approved';
 }
 
 /** The executable as written, a path relative to `cwd` made absolute. */
@@ -125,14 +290,31 @@ function alert(trigger: Trigger, title: string, body: string): void {
   }
 }
 
-function finish(trigger: Trigger, action: ScriptAction, result: ScriptResult, error: string | null): void {
+/** The reason journaled by the last finished run of the trigger. */
+function lastScriptReason(triggerId: string): string | null {
+  const row = db.prepare(
+    `SELECT reason FROM trigger_deliveries WHERE trigger_id = ? AND delivery_key LIKE 'script:%' ORDER BY id DESC LIMIT 1`,
+  ).get(triggerId) as { reason: string | null } | undefined;
+  return row?.reason ?? null;
+}
+
+/**
+ * `unapproved`: the run was refused before it started, because its files are
+ * not the ones a person approved. The user is told even when failure alerts
+ * are off — only they can approve — but once, not at every tick.
+ */
+function finish(trigger: Trigger, action: ScriptAction, result: ScriptResult, error: string | null, unapproved = false): void {
+  const reason = error ? (unapproved ? error : `script: ${error}`) : `script: exit code 0 in ${result.duration_ms} ms`;
+  const repeated = unapproved && lastScriptReason(trigger.id) === reason;
   recordDelivery({
     triggerId: trigger.id, status: error ? 'error' : 'received', deliveryKey: `script:${result.run_id}`,
-    reason: error ? `script: ${error}` : `script: exit code 0 in ${result.duration_ms} ms`,
+    reason,
     result: { type: 'script', ...result },
   });
   if (!error) return;
-  if (action.notify_on_failure !== false) {
+  if (unapproved) {
+    if (!repeated) alert(trigger, `Script not run: ${trigger.name}`, error);
+  } else if (action.notify_on_failure !== false) {
     const output = [result.stderr_tail, result.stdout_tail].filter(Boolean).join('\n\n');
     alert(trigger, `Script failed: ${trigger.name}`, `${error}${output ? `\n\n${tail(output, SCRIPT_TAIL_CHARS)}` : ''}`);
   }
@@ -154,13 +336,16 @@ export function startScript(trigger: Trigger, action: ScriptAction, index: numbe
   if (running.size >= MAX_CONCURRENT_SCRIPTS) return null;
   const runId = randomUUID();
   const startedAt = Date.now();
-  const empty = (error: string): void => {
+  const empty = (error: string, unapproved = false): void => {
     setImmediate(() => finish(trigger, action, {
       run_id: runId, code: null, signal: null, timed_out: false, duration_ms: 0, stdout_tail: '', stderr_tail: '',
-    }, error));
+    }, error, unapproved));
   };
   const place = scriptCwd(action.cwd);
   if ('error' in place) { empty(place.error); return runId; }
+  // Checked right before the spawn, in the same tick: what runs is what was read.
+  const unapproved = scriptApprovalProblem(trigger.id, action, place);
+  if (unapproved) { empty(unapproved, true); return runId; }
   const granted = secretsEnvFor({ project: place.project });
   const missing = (action.env ?? []).filter((name) => !Object.hasOwn(granted, name));
   if (missing.length) { empty(`secret not granted to project ${place.project}: ${missing.join(', ')}`); return runId; }

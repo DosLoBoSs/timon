@@ -3697,6 +3697,13 @@
     "rotateFailed": "Il daemon non ha restituito un segreto",
     "rotateOutbound": "nuovo segreto di firma",
     "rotateOutboundConfirm": "Dare a “{name}” un nuovo segreto di firma? Il destinatario rifiuta le sue chiamate finché non ha il nuovo.",
+    "scriptApproval": {
+      "unapproved": "Script non approvato",
+      "changed": "Script modificato dopo l'approvazione",
+      "reapprove": "Approva di nuovo",
+      "confirm": "Approvare lo script di «{name}» così com'è ora? Le prossime esecuzioni useranno questi file.",
+      "done": "Script approvato"
+    },
     "secret": {
       "title": "Segreto del webhook",
       "outboundTitle": "Segreto di firma delle chiamate che invia",

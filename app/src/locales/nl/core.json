@@ -3697,6 +3697,13 @@
     "rotateFailed": "De daemon gaf geen geheim terug",
     "rotateOutbound": "nieuw ondertekeningsgeheim",
     "rotateOutboundConfirm": "‘{name}’ een nieuw ondertekeningsgeheim geven? De ontvanger weigert zijn aanroepen tot hij het nieuwe heeft.",
+    "scriptApproval": {
+      "unapproved": "Script niet goedgekeurd",
+      "changed": "Script gewijzigd sinds de goedkeuring",
+      "reapprove": "Opnieuw goedkeuren",
+      "confirm": "Het script van \"{name}\" goedkeuren zoals het nu is? De volgende uitvoeringen gebruiken deze bestanden.",
+      "done": "Script goedgekeurd"
+    },
     "secret": {
       "title": "Webhookgeheim",
       "outboundTitle": "Ondertekeningsgeheim van de verstuurde aanroepen",

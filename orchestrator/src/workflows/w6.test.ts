@@ -15,6 +15,7 @@ const { fireTrigger, tickSchedules } = await import('../triggers/engine.js');
 const { getTrigger } = await import('../triggers/store.js');
 const { registerActionProvider } = await import('../triggers/actions.js');
 const { createWorkflowActionProvider } = await import('./native-triggers.js');
+const { pinWorkflowScripts } = await import('./nodes/script.js');
 
 // Schedule, webhook and event nodes are façades of native triggers: the native
 // engine fires them through the `workflow` action, unsupervised here.
@@ -27,6 +28,8 @@ function seed(nodes: unknown[], edges: unknown[] = [], settings: Record<string, 
   const definition = { schemaVersion: 1, nodes, edges, variables: [], settings };
   dbApi.insertWorkflow({ id, slug: `w6-${id.slice(0, 8)}`, name: 'W6 witness', description: null, project: null, owner_user_id: null, draft: JSON.stringify(definition), published_version: 1, enabled: 1, created_at: now, updated_at: now , agent_name: null});
   dbApi.insertWorkflowVersion({ workflow_id: id, version: 1, definition: JSON.stringify(definition), published_at: now, published_by: null });
+  // As a person's publish does: what its script nodes run is approved.
+  pinWorkflowScripts(dbApi.getWorkflow(id)!, { strict: definition.nodes as Array<{ id: string; type: string; config: Record<string, unknown> }> });
   return id;
 }
 

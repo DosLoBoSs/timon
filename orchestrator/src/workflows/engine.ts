@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { db, dbApi, type WorkflowRunNodeRow } from '../db.js';
+import { db, dbApi, type WorkflowRow, type WorkflowRunNodeRow } from '../db.js';
 import { bus } from '../bus.js';
 import { notifyUser, systemMissionId } from '../notify.js';
 import { createNotification, resolveAnchor } from '../notifications.js';
@@ -16,11 +16,9 @@ import { addMemoryRule } from '../memory-rule-add.js';
 import { isSkillId } from '../skill-attachments.js';
 import { getHost } from '../host/index.js';
 import { TIMON_HOME } from '../paths.js';
-import { mkdirSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
 import { secretsEnvFor, systemEnv } from '../secrets/env.js';
 import { redactDeep } from '../secrets/redact.js';
-import { scriptNodeDenied } from './nodes/script.js';
+import { scriptNodeApproval, scriptNodeDenied } from './nodes/script.js';
 import { runHttpNode } from './nodes/http.js';
 import { prepareWorkflowCoordinator, reportToWorkflowCoordinator } from './coordinator.js';
 
@@ -47,6 +45,30 @@ function runPageAnchor(runId: string): string | null {
 // One anchor per question, so answering one human node closes only its own card.
 const humanAnchor = (runId: string, nodeId: string) => { const page = runPageAnchor(runId); return page ? `${page}?node=${encodeURIComponent(nodeId)}` : null; };
 const closeHumanCard = (runId: string, nodeId: string) => { const anchor = humanAnchor(runId, nodeId); if (anchor) resolveAnchor(anchor); };
+
+/**
+ * A script node refused because its files are not the ones a person
+ * approved: only a person can approve them, so they are told even when the
+ * graph handles the failure — but once, not at every run that hits the same refusal.
+ */
+function alertUnapprovedScript(workflow: WorkflowRow, runId: string, nodeId: string, problem: string): void {
+  const reason = String(redactDeep(problem));
+  const last = db.prepare(
+    `SELECT n.error FROM workflow_run_nodes n JOIN workflow_runs r ON r.id = n.run_id
+      WHERE r.workflow_id = ? AND n.node_id = ? AND n.run_id <> ? AND n.ended_at IS NOT NULL
+      ORDER BY n.ended_at DESC LIMIT 1`,
+  ).get(workflow.id, nodeId, runId) as { error: string | null } | undefined;
+  if (last?.error === reason) return;
+  try {
+    const run = dbApi.getWorkflowRun(runId);
+    createNotification({
+      type: 'alert', title: `Script not run: ${workflow.name}`, body: `${nodeId}: ${reason}`,
+      ownerUserId: run?.owner_user_id ?? workflow.owner_user_id, source: `workflow:${workflow.slug}`, anchor: runPageAnchor(runId),
+    });
+  } catch (err) {
+    console.warn(`[workflows] script alert for ${workflow.slug}/${nodeId} not sent: ${(err as Error).message}`);
+  }
+}
 
 function inlineAgentNodes(definition: WorkflowDefinition) {
   return definition.nodes.filter((node) => (node.type === 'agent' || node.type === 'skill') && node.config.identity && !node.config.ref);
@@ -109,9 +131,10 @@ function versionForRun(workflowId: string, draft: boolean | undefined, ownerUser
     return { workflow, version };
   }
   const definition = parseWorkflowDefinition(parseJson(workflow.draft));
-  const number = (workflow.published_version ?? 0) + 1;
-  const version = { workflow_id: workflow.id, version: number, definition: JSON.stringify({ ...definition, draft: true }), published_at: Date.now(), published_by: ownerUserId ?? null };
-  dbApi.insertWorkflowVersion(version);
+  // Frozen under its own number and left unpublished: only a person's publish
+  // moves `published_version`, so the next published run still reads that one.
+  const version = { workflow_id: workflow.id, version: dbApi.nextWorkflowVersion(workflow.id), definition: JSON.stringify({ ...definition, draft: true }), published_at: Date.now(), published_by: ownerUserId ?? null };
+  dbApi.insertWorkflowDraftVersion(version);
   return { workflow, version };
 }
 
@@ -434,13 +457,12 @@ async function runNode(runId: string, nodeId: string, definition: WorkflowDefini
         // someone else than the owner who armed the script.
         const denied = scriptNodeDenied(workflow.owner_user_id) ?? (run.owner_user_id === workflow.owner_user_id ? null : scriptNodeDenied(run.owner_user_id));
         if (denied) throw new Error(denied);
-        const projectCwd = workflow.project ? dbApi.getProjectRow(workflow.project)?.cwd : null;
-        const fallback = join(TIMON_HOME, 'workflows', workflow.slug); mkdirSync(fallback, { recursive: true });
-        const allowed = projectCwd ?? fallback;
-        const cwd = cfg.cwd ? resolve(allowed, cfg.cwd) : allowed;
-        if (cwd !== allowed && !cwd.startsWith(allowed + sep)) throw new Error('script cwd escapes workflow directory');
         const secrets = secretsEnvFor({ agent: `wf.${workflow.slug}.${nodeId}`, project: workflow.project });
         const env = Object.fromEntries((cfg.env ?? []).filter((name) => Object.hasOwn(secrets, name)).map((name) => [name, secrets[name]!])) as NodeJS.ProcessEnv;
+        // Checked right before the spawn, nothing awaited in between: what
+        // runs is what was read, and only what a person approved.
+        const { cwd, problem } = scriptNodeApproval(workflow, cfg);
+        if (problem) { alertUnapprovedScript(workflow, runId, nodeId, problem); throw new Error(problem); }
         // The system whitelist, never the daemon's own environment: the secrets
         // `loadSecretsAtBoot` puts there would reach any program a workflow names
         // (same rule as a trigger's script, `triggers/script-run.ts`).

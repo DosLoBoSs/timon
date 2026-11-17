@@ -103,8 +103,12 @@ function within(parent: string, child: string): boolean {
  * it is refused, and a commit inside a submodule fails under the fence.
  */
 export function worktreeGitDirs(cwd: string, home: string, fs: GitDirsFs = GIT_DIRS_FS): MissionGitDirs {
-  const start = resolve(cwd);
-  const homeDir = resolve(home);
+  // Real paths on both sides: the repository is resolved through links, so a
+  // home (or a working directory) reached through one would otherwise never
+  // compare equal to it, and a dotfiles repository would slip past the guard.
+  // git itself walks up from the real working directory.
+  const start = fs.realpath(cwd) ?? resolve(cwd);
+  const homeDir = fs.realpath(home) ?? resolve(home);
   for (let dir = start; ; dir = dirname(dir)) {
     const dotGit = join(dir, '.git');
     const kind = fs.kind(dotGit);

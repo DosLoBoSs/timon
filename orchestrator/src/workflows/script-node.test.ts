@@ -22,7 +22,7 @@ const { agentDir } = await import('../paths.js');
 const { createRun } = await import('./engine.js');
 const { describeWorkflowError } = await import('./schema.js');
 const { proposeWorkflow } = await import('./proposals.js');
-const { assertScriptNodesAllowed, changedScriptNodes, scriptNodeDenied } = await import('./nodes/script.js');
+const { assertScriptNodesAllowed, changedScriptNodes, pinWorkflowScripts, scriptNodeDenied } = await import('./nodes/script.js');
 const { registerRoutes } = await import('../plugins-bundled/workflows/routes.js');
 
 function account(name: string, permissions: string[], superadmin = false) {
@@ -54,6 +54,9 @@ function seed(owner: string | null, draft: unknown, published?: unknown) {
   const id = randomUUID(); const now = Date.now();
   dbApi.insertWorkflow({ id, slug: `script-${id.slice(0, 8)}`, name: 'Script witness', description: null, project: null, owner_user_id: owner, draft: JSON.stringify(draft), published_version: null, enabled: 1, created_at: now, updated_at: now, agent_name: PILOT });
   if (published) dbApi.insertWorkflowVersion({ workflow_id: id, version: 1, definition: JSON.stringify(published), published_at: now, published_by: null });
+  // As a person's save and publish do: what its script nodes run is approved.
+  const nodesOf = (def: unknown) => (def as { nodes: Array<{ id: string; type: string; config: Record<string, unknown> }> }).nodes;
+  pinWorkflowScripts(dbApi.getWorkflow(id)!, { loose: nodesOf(draft), strict: published ? nodesOf(published) : [] });
   return id;
 }
 

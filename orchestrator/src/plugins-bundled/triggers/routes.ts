@@ -13,6 +13,8 @@
  *                                            actions → shown once (also born, and shown
  *                                            once, when a first `webhook` action is saved)
  *   POST   /api/triggers/:id/test            dry run by default, `execute` to run
+ *   POST   /api/triggers/:id/approve-script  fingerprint its scripts again (a person only);
+ *                                            every trigger answer carries `script_approval`
  *   GET    /api/triggers/:id/deliveries      call journal
  *
  * What a trigger may do is frozen in its `grants` when it is saved: the
@@ -29,6 +31,10 @@
  * on, and changing what an enabled one does switches it off. A person
  * switching one on stamps `approved_at`; the plugin's boot switches off the
  * agent's triggers that run without it — those made before #529 (TODO #572).
+ *
+ * A script runs files from a project folder, where missions write: a person's
+ * save fingerprints what each script runs (`script_pins`), every run checks it
+ * again and refuses a file changed since. Only a person re-approves.
  */
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -50,15 +56,15 @@ import { ACTION_UNAVAILABLE, actionProvider, grantsAllow } from '../../triggers/
 import { nextScheduleAt } from '../../triggers/engine.js';
 import { webhookUrlRefusal } from '../../triggers/outbound.js';
 import {
-  ACTION_PERMISSION, TRIGGER_SOURCES, providedSecretSchema, scheduleCadenceProblem, testTriggerSchema,
+  ACTION_PERMISSION, TRIGGER_SOURCES, actionSchema, providedSecretSchema, scheduleCadenceProblem, testTriggerSchema,
   triggerDefinitionSchema, updateTriggerSchema, type TriggerAction, type TriggerDefinition, type TriggerSource,
 } from '../../triggers/schema.js';
-import { scriptCwd } from '../../triggers/script-run.js';
+import { pinScripts, scriptApprovalState, scriptCwd } from '../../triggers/script-run.js';
 import { generateSecret } from '../../triggers/signature.js';
 import { runTriggerTest } from '../../triggers/test-run.js';
 import {
-  deleteTrigger, getTriggerRow, insertTrigger, listDeliveries, listTriggerRows, parseTrigger,
-  setTriggerOutboundSecret, setTriggerSecret, updateTriggerRow, type TriggerRow,
+  deleteTrigger, getScriptPins, getTriggerRow, insertTrigger, listDeliveries, listTriggerRows, parseTrigger,
+  setScriptPins, setTriggerOutboundSecret, setTriggerSecret, updateTriggerRow, type ScriptPin, type TriggerRow,
 } from '../../triggers/store.js';
 import { unauthenticatedHooksPossible } from '../../triggers/webhook.js';
 import { apiError } from '../../api-error.js';
@@ -105,6 +111,22 @@ function safeJson(text: string | null): unknown {
   try { return JSON.parse(text); } catch { return null; }
 }
 
+/**
+ * Read live from the files at every answer: a script rewritten since its
+ * approval shows as `changed` before its next run is refused. An action the
+ * schema no longer reads counts for nothing here; the run refuses it anyway.
+ */
+function scriptApprovalOf(row: TriggerRow) {
+  const raw = safeJson(row.actions);
+  if (!Array.isArray(raw)) return null;
+  const actions = raw.flatMap((action: unknown) => {
+    const parsed = actionSchema.safeParse(action);
+    return parsed.success ? [parsed.data] : [];
+  });
+  if (!actions.some((action) => action.type === 'script')) return null;
+  return scriptApprovalState(actions, getScriptPins(row.id));
+}
+
 /** Everything but the secret. */
 export function publicTrigger(row: TriggerRow) {
   return {
@@ -124,6 +146,8 @@ export function publicTrigger(row: TriggerRow) {
     has_secret: row.secret !== null,
     has_outbound_secret: (row.outbound_secret ?? null) !== null,
     url: row.source === 'webhook' && row.slug ? `/api/triggers/hooks/${row.slug}` : null,
+    /** `approved` | `unapproved` | `changed` for a trigger that runs a script, else null. */
+    script_approval: scriptApprovalOf(row),
     last_run_at: row.last_run_at,
     next_run_at: row.next_run_at,
     created_at: row.created_at,
@@ -303,7 +327,9 @@ type CreateAs = {
 };
 
 /** Writes a definition already checked; the outbound secret is born here when a `webhook` action needs one. */
-function insertDefinition(def: TriggerDefinition, secret: string | null, as: CreateAs): { row: TriggerRow; outboundSecret: string | null } {
+function insertDefinition(
+  def: TriggerDefinition, secret: string | null, as: CreateAs, pins: readonly ScriptPin[] = [],
+): { row: TriggerRow; outboundSecret: string | null } {
   let row = insertTrigger({
     name: def.name,
     slug: def.source === 'webhook' ? def.slug : null,
@@ -316,6 +342,10 @@ function insertDefinition(def: TriggerDefinition, secret: string | null, as: Cre
     ...as,
     nextRunAt: nextRunFor(def),
   });
+  if (pins.length) {
+    setScriptPins(row.id, pins);
+    row = getTriggerRow(row.id)!;
+  }
   const outboundSecret = sendsWebhooks(def.actions) ? generateSecret('standard') : null;
   if (outboundSecret) {
     setTriggerOutboundSecret(row.id, outboundSecret);
@@ -366,9 +396,12 @@ function approveTrigger(row: LayoutProposalRow, payload: unknown, req: Request) 
   const grants = callerGrants(req);
   const refused = cadenceRefusal(def, null) ?? refusal(req, def, def.actions, grants, () => true);
   if (refused) return problem(refused.status === 403 ? 'forbidden' : 'invalid', refused.error);
+  // The person approving vouches for the files as they are at this moment.
+  const pinned = pinScripts(def.actions);
+  if ('error' in pinned) return problem('invalid', pinned.error);
   const { row: trigger } = insertDefinition(def, null, {
     ownerUserId: row.owner_user_id, createdBy: 'user', creatorAgent: row.agent, actingAgent: null, grants,
-  });
+  }, pinned.pins);
   return {
     detail: trigger.id,
     after: () => emitAutomationEvent({ kind: 'trigger_created', row: trigger, origin: automationOriginOf(req) }),
@@ -454,6 +487,9 @@ export function registerRoutes(app: Router, options: { listensOnLoopback?: () =>
     if (refused) { res.status(refused.status).json({ error: refused.error }); return; }
     if (def.source === 'webhook' && slugTaken(def.slug, null)) { res.status(409).json({ error: `slug already used: ${def.slug}` }); return; }
     if (def.source === 'webhook' && def.config.auth !== 'none' && secret === null) secret = generateSecret(def.config.auth);
+    // Only a person gets here with a script (an agent's becomes a proposal above).
+    const pinned = byAgent ? { pins: [] } : pinScripts(def.actions);
+    if ('error' in pinned) { res.status(400).json({ error: pinned.error }); return; }
     const agent = callerIsAgent(req) && req.auth?.missionId
       ? scopedDb(viewerFromRequest(req)).getMission(req.auth.missionId)?.agent_name ?? null
       : null;
@@ -465,7 +501,7 @@ export function registerRoutes(app: Router, options: { listensOnLoopback?: () =>
         creatorAgent: agent,
         actingAgent: acting.agent,
         grants,
-      });
+      }, pinned.pins);
     } catch (err) {
       res.status(400).json({ error: (err as Error).message });
       return;
@@ -587,6 +623,11 @@ export function registerRoutes(app: Router, options: { listensOnLoopback?: () =>
       : cadenceRefusal(def, row) ?? refusal(req, def, actions, switchOnly ? mine : grants ?? mine, listensOnLoopback, stored);
     if (refused) { res.status(refused.status).json({ error: refused.error }); return; }
     if (def.source === 'webhook' && slugTaken(def.slug, row.id)) { res.status(409).json({ error: `slug already used: ${def.slug}` }); return; }
+    // A person saving the actions (the editor sends them all) approves the
+    // scripts as they are now; flipping the switch or renaming does not. An
+    // agent never gets here with a script (`refusal`).
+    const pinned = !byAgent && patch.data.actions !== undefined ? pinScripts(actions, { actions: stored, pins: getScriptPins(row.id) }) : null;
+    if (pinned && 'error' in pinned) { res.status(400).json({ error: pinned.error }); return; }
     // Moving from `none` to a signed scheme: the secret is born here, and
     // this response is the only one that shows it.
     const newSecret = def.source === 'webhook' && def.config.auth !== 'none' && row.secret === null
@@ -612,6 +653,7 @@ export function registerRoutes(app: Router, options: { listensOnLoopback?: () =>
       approvedAt: def.enabled === false ? null : byAgent ? undefined : Date.now(),
     });
     if (newSecret) setTriggerSecret(row.id, newSecret);
+    if (pinned) setScriptPins(row.id, pinned.pins);
     // A first `webhook` action: its signing secret is born here, shown once.
     const newOutbound = sendsWebhooks(actions) && !row.outbound_secret ? generateSecret('standard') : null;
     if (newOutbound) setTriggerOutboundSecret(row.id, newOutbound);
@@ -672,6 +714,32 @@ export function registerRoutes(app: Router, options: { listensOnLoopback?: () =>
     const outboundSecret = generateSecret('standard');
     setTriggerOutboundSecret(row.id, outboundSecret);
     res.json({ trigger: publicTrigger(getTriggerRow(row.id)!), outbound_secret: outboundSecret });
+  });
+
+  app.post('/api/triggers/:id/approve-script', (req, res) => {
+    if (!manager(req, res)) return;
+    // The approval is what a mission cannot give, not even for its owner's
+    // trigger: refused before the lookup, so it learns nothing about the ids.
+    if (callerIsAgent(req)) { res.status(403).json({ error: 'an agent cannot approve a script: the user does it' }); return; }
+    const row = loadVisible(req, res);
+    if (!row) return;
+    const trigger = parseTrigger(row);
+    if (!trigger) { res.status(409).json({ error: 'stored trigger is unreadable' }); return; }
+    if (!trigger.actions.some((action) => action.type === 'script')) {
+      res.status(400).json({ error: 'this trigger runs no script' });
+      return;
+    }
+    // Approving is vouching that it may run: the caller must be able to run it.
+    const denied = callerMayRun(req, trigger.actions);
+    if (denied) { res.status(denied.status).json({ error: denied.error }); return; }
+    const pinned = pinScripts(trigger.actions);
+    if ('error' in pinned) { res.status(400).json({ error: pinned.error }); return; }
+    setScriptPins(row.id, pinned.pins);
+    auditRequest(req, 'trigger.script.approve', row.id);
+    res.json({
+      trigger: publicTrigger(getTriggerRow(row.id)!),
+      approved: pinned.pins.map((pin) => ({ command: pin.command, cwd: pin.cwd, files: pin.files.map((file) => file.path) })),
+    });
   });
 
   app.post('/api/triggers/:id/test', (req, res) => {

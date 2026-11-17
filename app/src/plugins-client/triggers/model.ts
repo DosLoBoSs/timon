@@ -82,6 +82,13 @@ export type ScheduleConfig = { cron: string; tz?: string };
 export type WebhookConfig = { auth: AuthScheme; rate_limit?: number; coalesce?: Coalesce };
 export type EventConfig = { event: EventKind; rate_limit?: number; coalesce?: Coalesce };
 
+export type ScriptApproval = 'approved' | 'unapproved' | 'changed';
+
+/** The state a person has to act on: a script without approval, or changed since. */
+export function needsScriptApproval(trigger: Pick<TriggerPublic, 'script_approval'>): boolean {
+  return trigger.script_approval === 'unapproved' || trigger.script_approval === 'changed';
+}
+
 /** `publicTrigger` of the daemon: everything but the secret. */
 export type TriggerPublic = {
   id: string;
@@ -98,6 +105,8 @@ export type TriggerPublic = {
   /** Signs what its `webhook` actions send; absent on an older daemon. */
   has_outbound_secret?: boolean;
   url: string | null;
+  /** Where its scripts stand against their approval; null without a script, absent on an older daemon. */
+  script_approval?: ScriptApproval | null;
   last_run_at: number | null;
   next_run_at: number | null;
   created_at: number;
