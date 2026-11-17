@@ -903,8 +903,6 @@
     "notActivated": "当前使用免费版，添加账号需要许可证",
     "activate": "激活",
     "offlineSince": "自 {date} 起无法连接许可证服务器。离线宽限期内仍可使用付费权益，宽限期结束后 Timon 将恢复为免费版。",
-    "buildEndsSoon": "此测试版本将于 {date} 停止运行。请在此之前安装最新版本。",
-    "buildEndsUrgent": "此测试版本将于 {date} 停止运行。请立即安装最新版本。",
     "licenseEndsSoon": "你的许可证将于 {date} 到期。请在此之前输入新密钥。",
     "licenseEndsUrgent": "你的许可证将于 {date} 到期。请立即输入新密钥。"
   },
@@ -1669,6 +1667,7 @@
       },
       "system": {
         "installation": "安装",
+        "updates": "更新",
         "backup": "备份与回收站",
         "diagnostics": "诊断",
         "desktop": "桌面应用",
@@ -1733,6 +1732,7 @@
       },
       "system": {
         "installation": "版本 关于 安装 服务 守护进程 任务 launchagent systemd 路径 数据 文件夹 日志 端口 导出 导入 备份 更新",
+        "updates": "更新 升级 新版本 检查 下载 安装程序 发行说明 自动 update",
         "backup": "备份 归档 每晚 恢复 保留 保留期 天数 回收站 已删除 智能体 找回 撤销 彻底删除",
         "diagnostics": "日志 调试 杂项 基础设施 故障排查",
         "desktop": "卸载 移除 删除 electron 应用",
@@ -4554,18 +4554,10 @@
     "empty": "没有智能体"
   },
   "updates": {
-    "banner": {
-      "available": "Timon {version} 已发布，当前版本为 {installed}。",
-      "buildEnds": "此构建将于 {date} 停止运行。",
-      "downloadLinux": "下载 Linux 版（{format}）",
-      "downloadMac": "下载 macOS 版（{format}）",
-      "downloadWindows": "下载 Windows 版（{format}）",
-      "downloadPage": "下载页面",
-      "notes": "更新内容",
-      "hideNotes": "隐藏更新说明",
-      "noNotes": "此版本未发布更新说明。",
-      "fullNotes": "完整更新日志",
-      "later": "稍后再说"
+    "notice": {
+      "available": "Timon {version} 已发布",
+      "update": "更新",
+      "buildEnds": "此构建将于 {date} 停止运行。"
     },
     "download": {
       "start": "下载并验证",
@@ -4583,6 +4575,7 @@
       "missions": "{count, plural, other {有 # 个任务会话正在运行}}。{count, plural, other {现在安装会停止这些会话}}。",
       "wait": "等待",
       "installAnyway": "仍然安装",
+      "installing": "正在安装…",
       "restarting": "Timon 正在重启并切换到新版本…",
       "closing": "安装程序已打开。Timon 将退出，以便安装新版本。",
       "pkgOpened": "请按照安装程序的提示操作，然后退出并重新打开 Timon。",
@@ -4604,6 +4597,16 @@
         "diskFull": "磁盘空间不足，无法下载安装程序。",
         "filesystem": "无法将安装程序保存到 Timon 的数据文件夹。"
       }
+    },
+    "dialog": {
+      "title": "Timon {version}",
+      "changelog": "查看完整更新日志",
+      "download": "下载",
+      "install": "重启并安装",
+      "verified": "已下载并验证",
+      "installer": "下载安装程序",
+      "allInstallers": "所有安装程序",
+      "progress": "下载进度"
     }
   }
 }

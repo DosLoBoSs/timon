@@ -95,6 +95,9 @@ test('a release writes the fragments into the version, deletes them and keeps th
     assert.equal(run.status, 0, run.stderr);
     const changelog = readFileSync(join(copy, 'CHANGELOG.md'), 'utf8');
     assert.match(changelog, /## \[0\.1\.8\] — \d{4}-\d{2}-\d{2}\n\n### Added\n- New thing\.\n\n### Known issues\n- Still broken\.\n\n## \[0\.1\.7\]/);
+    // The highlights are asked for, never written: an empty heading would be published.
+    assert.match(run.stdout, /### Highlights/);
+    assert.doesNotMatch(changelog, /### Highlights/);
     assert.deepEqual(readdirSync(join(copy, FRAGMENTS_DIR)).sort(), ['README.md', 'still-broken.md']);
     assert.match(readFileSync(join(copy, 'desktop', 'package.json'), 'utf8'), /"version": "0\.1\.8"/);
 

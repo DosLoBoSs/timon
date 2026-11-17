@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { keyIdFor, verifyInstallManifest, verifyReleaseManifest } from '../release-manifest.mjs';
 import {
   ED25519_KEY_ENV, INSTALL_RELEASES_FILE, P256_KEY_ENV, RELEASES_FILE, ROOT, SUMMARY_FILE, artifactKey, decodeKeySecret, keysFromEnv,
-  main, parseArgs, parseChecksums, readGithubConfig, readPinnedKeyIds, redactor, secretValues,
+  channelEntry, highlightsLine, main, notesFor, parseArgs, parseChecksums, readGithubConfig, readPinnedKeyIds, redactor, secretValues,
 } from './publish.mjs';
 
 const SCRIPT = fileURLToPath(new URL('./publish.mjs', import.meta.url));
@@ -425,4 +425,14 @@ test('names, architectures and arguments', () => {
   const pins = readPinnedKeyIds(ROOT);
   assert.match(pins.ed25519, /^release-[a-f0-9]{16}$/);
   assert.match(pins.p256, /^release-[a-f0-9]{16}$/);
+});
+
+test('the highlights pass into the manifest notes unchanged, and the run counts them', () => {
+  const changelog = '# Changelog\n\n## [0.1.9] — 2026-11-20\n\n### Highlights\n- One\n- Two\n- Three\n\n### Added\n- More.\n';
+  const notes = notesFor(changelog, '0.1.9');
+  assert.match(notes, /^### Highlights\n- One\n- Two\n- Three\n\n### Added/);
+  assert.equal(channelEntry({ version: '0.1.9', assets: [], notes, publishedAt: '2026-11-20T00:00:00.000Z' }).notes, notes);
+  assert.equal(highlightsLine(3), '3');
+  assert.match(highlightsLine(0), /none under ### Highlights/);
+  assert.match(highlightsLine(7), /shows the first 5/);
 });

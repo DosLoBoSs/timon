@@ -19,6 +19,7 @@ import { LOCAL_MACHINE_ID } from '@/lib/machines/machine-id';
 import { grantClientPermissions } from './plugin-permissions';
 import { typedBinaryInit } from './plugin-api-body';
 import { reservedRouteSegment } from './reserved-routes';
+import { clearNoticesFrom, pushNotice, removeNotice, type NoticeInput } from '@/lib/notices';
 
 export type PublicPlugin = {
   id: string;
@@ -190,6 +191,9 @@ async function readChromePrefs(response: Response | null): Promise<ChromePrefs> 
 export function clientContext(id: string, declaredSlots: readonly string[], subscribeSse: typeof sseOn = sseOn, permissions: readonly string[] = [], mayOccupyRoot = false) {
   // What the browser checks on its own (`browser:control`), for this load only.
   const effects: Array<() => void> = [grantClientPermissions(id, permissions)];
+  // What `ctx.notices` pushed leaves with the plugin, like its slot entries.
+  const noticeOrigin = `ctx:${id}`;
+  effects.push(() => clearNoticesFrom(noticeOrigin));
   const effect = (setup: () => void | (() => void)): void => {
     const dispose = setup();
     if (dispose) effects.push(dispose);
@@ -266,6 +270,16 @@ export function clientContext(id: string, declaredSlots: readonly string[], subs
         const body = await response.json() as { entries?: UsageEntry[] };
         return body.entries ?? [];
       },
+    },
+    /**
+     * The bottom-left cards (client API 17, docs/NOTICES.md). `push` shows a
+     * card or updates the one with the same id, under this plugin's name;
+     * a card the account closed stays closed. `remove` takes it off the
+     * screen without closing it for good. Both leave with the plugin.
+     */
+    notices: {
+      push: (notice: NoticeInput): void => { pushNotice(id, noticeOrigin, notice); },
+      remove: (noticeId: string): void => { removeNotice(id, noticeId); },
     },
     theme: { current: () => document.documentElement.classList.contains('dark') ? 'dark' : 'light' },
     navigate: (href: string) => { window.location.assign(href); },

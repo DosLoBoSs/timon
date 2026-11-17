@@ -586,6 +586,47 @@ export type {
 /** A body `ctx.api` relays as bytes rather than JSON (client API 15). */
 export type PluginApiBinaryBody = Blob | ArrayBuffer | ArrayBufferView;
 
+/** How a notice card reads (client API 17). */
+export type NoticeTone = 'info' | 'warning' | 'success';
+
+/**
+ * A brand logo a notice card draws in place of its tone's icon (client API
+ * 17). A closed list the app carries itself: no address, no image to load.
+ */
+export type NoticeIcon = 'github' | 'discord' | 'timon' | 'x' | 'youtube';
+
+/**
+ * One button of a notice card (client API 17). `href`: a page of the app
+ * (`/settings`) or an `https:` / `http:` address, opened in a new window.
+ * `dismiss`: the click also closes the card for good, as its × does. An
+ * action needs at least one of `onSelect`, `href`, `dismiss: true`.
+ */
+export type NoticeAction = {
+  label: string;
+  onSelect?: () => void;
+  href?: string;
+  dismiss?: boolean;
+};
+
+/**
+ * A bottom-left notice card (client API 17): not a toast, it stays until an
+ * action or its × takes it away. `id`: 1-96 letters, digits, `.`, `_`, `:` or
+ * `-`, scoped to the plugin; carry a version in it for a card that must come
+ * back for each version. `title` up to 120 characters, `body` up to 400, both
+ * plain text; two actions at most, labels up to 40. `tone` defaults to `info`,
+ * `dismissible` to `true`: closing is remembered for the account, on every
+ * client. `icon`: a brand logo instead of the tone's icon.
+ */
+export type NoticeInput = {
+  id: string;
+  tone?: NoticeTone;
+  icon?: NoticeIcon;
+  title: string;
+  body?: string;
+  actions?: readonly NoticeAction[];
+  dismissible?: boolean;
+};
+
 /** Browser capabilities bound to the installed plugin identity. */
 export type ClientContext = {
   /** Manifest identity of this plugin. */
@@ -655,6 +696,14 @@ export type ClientContext = {
    * unsubscribe earlier. Host publishing requires `realtime:publish`.
    */
   realtime: { subscribe(topic: string, handler: (payload: unknown) => void): () => void };
+  /**
+   * API 17: the bottom-left notice cards. `push` shows a card, or updates the
+   * one this plugin pushed with the same `id`; a card the account closed stays
+   * closed (pushing it again shows nothing). Throws on an invalid notice. At
+   * most three cards show at once, warnings first. `remove` takes a card off
+   * the screen without closing it for good. Both leave with the plugin.
+   */
+  notices: { push(notice: NoticeInput): void; remove(id: string): void };
   theme: { current(): 'light' | 'dark' };
   /** Quotas of the LLM accounts. Needs `usage:read` in the manifest — the
    *  daemon answers 403 otherwise, so a plugin never reads a fabricated zero.

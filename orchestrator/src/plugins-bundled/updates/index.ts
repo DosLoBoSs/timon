@@ -5,9 +5,13 @@
  * `update_available` and leaves one notification per version. It downloads
  * and installs nothing: the banner links to the installer.
  *
+ * It also reads the signed notice feed, `timon-notices.json` (§10), whose
+ * announcements the app shows as notice cards.
+ *
  * Tier `std`: on by default. `TIMON_UPDATES_CHECK` (env > config > settings >
- * default on) stops every request; a build run from the sources (`dev`) and
- * the test runner never check.
+ * default on) stops every request, the notice feed's included;
+ * `TIMON_NOTICES_CHECK` stops the notice feed alone. A build run from the
+ * sources (`dev`) and the test runner never check.
  */
 import type { Context } from '@deepseek-ai/cordis';
 import type { ModuleManifest } from '../../kernel/registry.js';
@@ -18,8 +22,9 @@ import { timonVersion } from '../../data-version.js';
 import { createNotification } from '../../notifications.js';
 import { TIMON_HOME } from '../../paths.js';
 import { settingBool } from '../../settings.js';
-import { UpdateChecker, stateFileIn, type UpdateOffer } from './checker.js';
+import { UpdateChecker, firstCheckDelay, stateFileIn, type UpdateOffer } from './checker.js';
 import { activeReleaseKeyring } from './keyring.js';
+import { NoticesFeed, noticesStateFileIn } from './notices-checker.js';
 import { registerRoutes } from './routes.js';
 
 export const manifest: ModuleManifest = {
@@ -32,15 +37,35 @@ export const name = manifest.name;
 export const inject = manifest.inject;
 
 export const UPDATES_SETTING = 'TIMON_UPDATES_CHECK';
-/** First check once the daemon has settled, spread over a minute so a fleet started together does not hit the site together. */
-const FIRST_CHECK_MIN_MS = 30_000;
-const FIRST_CHECK_JITTER_MS = 60_000;
+/**
+ * A neighbour of the update check rather than the same switch: turning the
+ * update check off keeps its promise of no request at all, while a person who
+ * wants updates but no announcements turns this one off alone.
+ */
+export const NOTICES_SETTING = 'TIMON_NOTICES_CHECK';
+/** Between two successful checks; a failed one is retried sooner (`checkDelayAfter`, checker.ts). */
 export const CHECK_INTERVAL_MS = 6 * 3_600_000;
-/** A short tick that only looks at the clock: switching the setting back on applies without a restart. */
-const TICK_MS = 10 * 60_000;
+/**
+ * A short tick that only looks at the clock: switching the setting back on
+ * applies without a restart, and the 15 min retry after a failure is not
+ * stretched by the tick.
+ */
+const TICK_MS = 60_000;
 
 function checksAllowed(): boolean {
   return buildInfo().channel !== 'dev' && settingBool(UPDATES_SETTING);
+}
+
+const noticesEnabled = (): boolean => settingBool(UPDATES_SETTING) && settingBool(NOTICES_SETTING);
+
+export function createNoticesFeed(): NoticesFeed {
+  return new NoticesFeed({
+    enabled: noticesEnabled,
+    channel: () => buildInfo().channel,
+    installed: timonVersion,
+    keyring: activeReleaseKeyring,
+    stateFile: noticesStateFileIn(TIMON_HOME),
+  });
 }
 
 export function createChecker(): UpdateChecker {
@@ -70,21 +95,32 @@ export function announce(target: UpdateChecker, offer: UpdateOffer, channel: 'be
 
 export function apply(ctx: Context): void {
   const checker = createChecker();
+  const feed = createNoticesFeed();
   registerRoutes(ctx.http.router(), {
     status: () => checker.status(),
     check: () => checker.check(),
     missions: () => ({ live: liveMissionCount(), working: workingMissionCount() }),
+    notices: () => feed.notices(),
   });
 
   // Not under the test runner: a suite that boots the kernel must not reach timon-ai.com.
   if (process.env.NODE_TEST_CONTEXT) return;
-  let lastAttempt = 0;
+  // The checker holds the first check until this spread delay, so the minute
+  // tick cannot run it early; the timeout below runs it on time rather than at
+  // the next tick. The notice feed waits for the same moment.
+  const firstDelay = firstCheckDelay();
+  checker.deferFirstCheck(firstDelay);
+  let noticesDueAt = Date.now() + firstDelay;
   const tick = (): void => {
     // Off or a source build: the clock is not even read, so switching it on checks at the next tick.
-    if (!checksAllowed() || Date.now() - lastAttempt < CHECK_INTERVAL_MS) return;
-    lastAttempt = Date.now();
-    void checker.check();
+    if (!checksAllowed()) return;
+    // The checker keeps the schedule: a failure brings the next check closer, and a check asked by the desktop or by hand pushes it back.
+    if (Date.now() >= checker.nextCheckAt(CHECK_INTERVAL_MS)) void checker.check();
+    if (noticesEnabled() && Date.now() >= noticesDueAt) {
+      noticesDueAt = Date.now() + CHECK_INTERVAL_MS;
+      void feed.refresh();
+    }
   };
-  ctx.timeout(tick, FIRST_CHECK_MIN_MS + Math.floor(Math.random() * FIRST_CHECK_JITTER_MS));
+  ctx.timeout(tick, firstDelay);
   ctx.interval(tick, TICK_MS);
 }

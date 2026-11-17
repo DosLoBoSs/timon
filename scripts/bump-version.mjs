@@ -14,6 +14,11 @@
  * a tag is the anchor a release is read from afterwards, and an agent that
  * lays one down by accident is a mess to unwind.
  *
+ * The highlights of the version (`### Highlights`, 3 to 5 bullets at the top
+ * of its section) are not fragments: they say what matters most in the whole
+ * release, which only the maintainer can choose. The script asks for them and
+ * writes none: an empty heading would be published as it is.
+ *
  *   node scripts/bump-version.mjs patch|minor|major|<x.y.z> [--dry-run]
  */
 import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -116,7 +121,10 @@ for (const fragment of released) {
 }
 console.log(`  ${FRAGMENTS_DIR}/: ${released.length} fragment(s) released and deleted, ${fragments.length - released.length} known issue(s) kept`);
 
-console.log(dryRun ? '\nDry run: nothing written.' : `\nWritten. Commit it on a release branch and open its pull request:
+console.log(dryRun ? '\nDry run: nothing written.' : `\nWritten. Now write the highlights by hand: 3 to 5 bullets under a
+"### Highlights" heading, first in the [${version}] section of ${CHANGELOG}.
+They head the app's update window; without them it shows only the changelog
+link. Then commit it on a release branch and open its pull request:
 
   git add -A CHANGELOG.md changes ${PACKAGES.join(' ')}
   git commit -m "chore(release): ${version}"

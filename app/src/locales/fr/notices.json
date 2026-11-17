@@ -1,0 +1,24 @@
+{
+  "notices": {
+    "region": "Annonces",
+    "close": "Fermer",
+    "githubStar": {
+      "title": "Une étoile sur GitHub ?",
+      "action": "Mettre une étoile sur GitHub"
+    },
+    "feed": {
+      "open": "En savoir plus"
+    },
+    "preview": {
+      "discord": {
+        "title": "Rejoindre la communauté",
+        "body": "Questions, idées et nouveautés, avec l'équipe qui construit Timon.",
+        "action": "Rejoindre"
+      },
+      "feed": {
+        "title": "Démo en direct jeudi",
+        "body": "Agents et plugins, une heure."
+      }
+    }
+  }
+}

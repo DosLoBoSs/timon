@@ -873,8 +873,6 @@
     "notActivated": "Free ist aktiv — weitere Konten brauchen eine Lizenz",
     "activate": "Aktivieren",
     "offlineSince": "Lizenzserver seit {date} nicht erreichbar — bezahlte Rechte bleiben während der Offline-Toleranz verfügbar, danach kehrt Timon zu Free zurück.",
-    "buildEndsSoon": "Dieser Beta-Build läuft am {date} ab. Installiere vorher die neueste Version.",
-    "buildEndsUrgent": "Dieser Beta-Build läuft am {date} ab. Installiere jetzt die neueste Version.",
     "licenseEndsSoon": "Deine Lizenz endet am {date}. Gib vorher einen neuen Schlüssel ein.",
     "licenseEndsUrgent": "Deine Lizenz endet am {date}. Gib jetzt einen neuen Schlüssel ein."
   },
@@ -1639,6 +1637,7 @@
       },
       "system": {
         "installation": "Installation",
+        "updates": "Updates",
         "backup": "Backups & Papierkorb",
         "diagnostics": "Diagnose",
         "desktop": "Desktop-App",
@@ -1703,6 +1702,7 @@
       },
       "system": {
         "installation": "version über installation dienst daemon aufgabe launchagent systemd pfad daten ordner log port export import backup update",
+        "updates": "update aktualisierung neue version prüfen herunterladen installationsprogramm versionshinweise automatisch",
         "backup": "backup sicherung archiv nachts wiederherstellen aufbewahren tage papierkorb gelöschter agent zurückholen rückgängig endgültig",
         "diagnostics": "logs debug sonstiges infra fehlersuche",
         "desktop": "deinstallieren entfernen löschen electron app",
@@ -4485,6 +4485,62 @@
     "search": "Agenten suchen…",
     "clear": "Löschen",
     "empty": "Kein Agent"
+  },
+  "updates": {
+    "notice": {
+      "available": "Timon {version} ist verfügbar",
+      "update": "Aktualisieren",
+      "buildEnds": "Diese Version läuft am {date} ab."
+    },
+    "download": {
+      "start": "Herunterladen und prüfen",
+      "progress": "Wird heruntergeladen… {percent} ({received} von {total})",
+      "cancel": "Abbrechen",
+      "verifying": "Installationsprogramm wird geprüft…",
+      "ready": "{name} ist heruntergeladen und geprüft.",
+      "openInstaller": "Installationsprogramm öffnen",
+      "openFolder": "Im Ordner zeigen",
+      "openFailed": "Das System konnte es nicht öffnen. Nutze „Im Ordner zeigen“.",
+      "retry": "Erneut versuchen",
+      "resume": "Fortsetzen",
+      "install": "Installieren",
+      "installRestart": "Installieren und neu starten",
+      "missions": "{count, plural, one {# Mission läuft} other {# Missionen laufen}}. Jetzt zu installieren stoppt sie.",
+      "wait": "Warten",
+      "installAnyway": "Trotzdem installieren",
+      "installing": "Wird installiert…",
+      "restarting": "Timon startet mit der neuen Version neu…",
+      "closing": "Das Installationsprogramm ist geöffnet. Timon schließt sich, damit es ersetzt werden kann.",
+      "pkgOpened": "Folge dem Installationsprogramm, beende Timon dann und öffne es erneut.",
+      "debGuided": "Deine Softwareverwaltung öffnet das Paket. Wenn sie es nicht installiert, führe diesen Befehl in einem Terminal aus und öffne Timon dann erneut:",
+      "debNotOpened": "Führe diesen Befehl in einem Terminal aus, um das Paket zu installieren, und öffne Timon dann erneut:",
+      "copyCommand": "Kopieren",
+      "copied": "Kopiert",
+      "notWritable": "Der Ordner deines AppImage ist nicht beschreibbar. Das neue AppImage liegt im Datenordner von Timon: Ersetze deines damit.",
+      "installFailed": "Die Installation ist nicht gestartet. Deine aktuelle Version ist unverändert.",
+      "installNone": "Das geprüfte Installationsprogramm ist nicht mehr auf diesem Computer. Lade es erneut herunter, um es zu installieren.",
+      "downloadAgain": "Erneut herunterladen",
+      "error": {
+        "noOffer": "Für diesen Computer ist kein Installationsprogramm veröffentlicht.",
+        "daemon": "Der Dienst von Timon hat nicht geantwortet. Versuche es gleich noch einmal.",
+        "network": "Der Download wurde unterbrochen.",
+        "http": "Der Downloadserver hat die Anfrage abgelehnt.",
+        "insecure": "Der Download wurde an eine unsichere Adresse umgeleitet und gestoppt.",
+        "integrity": "Die Datei entspricht nicht dem veröffentlichten Installationsprogramm und wurde gelöscht.",
+        "diskFull": "Nicht genug Speicherplatz, um das Installationsprogramm herunterzuladen.",
+        "filesystem": "Das Installationsprogramm konnte nicht im Datenordner von Timon gespeichert werden."
+      }
+    },
+    "dialog": {
+      "title": "Timon {version}",
+      "changelog": "Vollständiges Änderungsprotokoll",
+      "download": "Herunterladen",
+      "install": "Neu starten und installieren",
+      "verified": "Heruntergeladen und geprüft",
+      "installer": "Installationsprogramm herunterladen",
+      "allInstallers": "Alle Installationsprogramme",
+      "progress": "Downloadfortschritt"
+    }
   },
   "mcpTab": {
     "yourServers": "Deine MCP-Server"

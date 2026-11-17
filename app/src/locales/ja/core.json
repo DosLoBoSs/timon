@@ -873,8 +873,6 @@
     "notActivated": "Free が有効です — アカウントを追加するにはライセンスが必要です",
     "activate": "有効化",
     "offlineSince": "{date} からライセンスサーバーに接続できません — オフライン猶予期間中は有料の権利を引き続き利用できますが、その後 Timon は Free に戻ります。",
-    "buildEndsSoon": "このベータ版ビルドは {date} に動作を停止します。それまでに最新バージョンをインストールしてください。",
-    "buildEndsUrgent": "このベータ版ビルドは {date} に動作を停止します。今すぐ最新バージョンをインストールしてください。",
     "licenseEndsSoon": "ライセンスは {date} に終了します。それまでに新しいキーを入力してください。",
     "licenseEndsUrgent": "ライセンスは {date} に終了します。今すぐ新しいキーを入力してください。"
   },
@@ -1639,6 +1637,7 @@
       },
       "system": {
         "installation": "インストール",
+        "updates": "アップデート",
         "backup": "バックアップとごみ箱",
         "diagnostics": "診断",
         "desktop": "デスクトップアプリ",
@@ -1703,6 +1702,7 @@
       },
       "system": {
         "installation": "バージョン 情報 インストール サービス デーモン タスク launchagent systemd パス データ フォルダー ログ ポート エクスポート インポート バックアップ 更新 version service daemon export import update",
+        "updates": "アップデート 更新 新しいバージョン 確認 ダウンロード インストーラー リリースノート 自動 update",
         "backup": "バックアップ アーカイブ 夜間 復元 保持 期間 日数 ごみ箱 削除 エージェント 回復 元に戻す 完全削除 backup restore trash",
         "diagnostics": "ログ デバッグ その他 インフラ トラブルシューティング logs debug",
         "desktop": "アンインストール 削除 electron アプリ uninstall remove",
@@ -4485,6 +4485,62 @@
     "search": "エージェントを検索…",
     "clear": "クリア",
     "empty": "エージェントなし"
+  },
+  "updates": {
+    "notice": {
+      "available": "Timon {version} が利用可能です",
+      "update": "アップデート",
+      "buildEnds": "このビルドは {date} に動作を停止します。"
+    },
+    "download": {
+      "start": "ダウンロードして検証",
+      "progress": "ダウンロード中… {percent}（{received} / {total}）",
+      "cancel": "キャンセル",
+      "verifying": "インストーラーを検証中…",
+      "ready": "{name} はダウンロード済みで、検証されました。",
+      "openInstaller": "インストーラーを開く",
+      "openFolder": "フォルダーに表示",
+      "openFailed": "システムで開けませんでした。「フォルダーに表示」を使ってください。",
+      "retry": "再試行",
+      "resume": "再開",
+      "install": "インストール",
+      "installRestart": "インストールして再起動",
+      "missions": "{count, plural, other {# 件のミッションが実行中です}}。今インストールすると{count, plural, other {停止します}}。",
+      "wait": "待つ",
+      "installAnyway": "それでもインストール",
+      "installing": "インストール中…",
+      "restarting": "Timon を新しいバージョンで再起動しています…",
+      "closing": "インストーラーが開いています。置き換えられるよう Timon を終了します。",
+      "pkgOpened": "インストーラーの指示に従い、その後 Timon を終了して再度開いてください。",
+      "debGuided": "ソフトウェアマネージャーがパッケージを開きます。インストールされない場合は、ターミナルでこのコマンドを実行してから Timon を再度開いてください:",
+      "debNotOpened": "パッケージをインストールするには、ターミナルでこのコマンドを実行してから Timon を再度開いてください:",
+      "copyCommand": "コピー",
+      "copied": "コピーしました",
+      "notWritable": "AppImage のフォルダーに書き込めません。新しい AppImage は Timon のデータフォルダーにあります。お使いのものと置き換えてください。",
+      "installFailed": "インストールは開始されませんでした。現在のバージョンは変更されていません。",
+      "installNone": "検証済みのインストーラーはこのコンピューターにもうありません。インストールするには再度ダウンロードしてください。",
+      "downloadAgain": "再ダウンロード",
+      "error": {
+        "noOffer": "このコンピューター向けのインストーラーは公開されていません。",
+        "daemon": "Timon のサービスが応答しませんでした。しばらくしてから再試行してください。",
+        "network": "ダウンロードが中断されました。",
+        "http": "ダウンロードサーバーがリクエストを拒否しました。",
+        "insecure": "ダウンロードが安全でないアドレスにリダイレクトされたため停止しました。",
+        "integrity": "ファイルが公開されたインストーラーと一致しないため削除しました。",
+        "diskFull": "インストーラーをダウンロードするためのディスク容量が足りません。",
+        "filesystem": "インストーラーを Timon のデータフォルダーに保存できませんでした。"
+      }
+    },
+    "dialog": {
+      "title": "Timon {version}",
+      "changelog": "変更履歴をすべて見る",
+      "download": "ダウンロード",
+      "install": "再起動してインストール",
+      "verified": "ダウンロード済み・検証済み",
+      "installer": "インストーラーをダウンロード",
+      "allInstallers": "すべてのインストーラー",
+      "progress": "ダウンロードの進行状況"
+    }
   },
   "mcpTab": {
     "yourServers": "自分の MCP サーバー"

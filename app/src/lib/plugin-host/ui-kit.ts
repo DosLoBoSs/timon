@@ -54,6 +54,8 @@ import { UiDocumentFrame, useUiDocument } from '@/components/chat/ui-document-bl
 import { uiDocumentUrl } from '@/lib/ui-documents';
 import { useSecretRequest } from '@/components/chat/secret-request-card';
 import { useUpdateStatus } from '@/components/updates/update-status-context';
+import { useNotice, useNotices } from '@/components/notices/notice-context';
+import { useUpdateDialog } from '@/components/updates/update-dialog-context';
 import { canRecallPrompt, isTextareaWrapped, usePromptHistory } from '@/lib/prompt-history';
 import { MessageActionButton, useChatMessage, useComposerReply } from '@/components/chat/message-actions';
 import { useModelPicker } from '@/components/model-picker/picker-context';
@@ -119,8 +121,8 @@ export const UI_KIT = {
   // A secret an agent asks its user for (client API 15): what a
   // `chat.secret` occupant renders, and its two gestures.
   useSecretRequest,
-  // A newer Timon the daemon verified (client API 15): what an
-  // `updates.banner` occupant renders, and its "Later".
+  // Deprecated since client API 17: the `updates.banner` slot is no longer
+  // painted, so this answers `null`. Kept so an API 15 plugin still loads.
   useUpdateStatus,
   // The composer's prompt history (client API 12): a `chat.composer`
   // replacement recalls the same prompts as the product's input.
@@ -206,6 +208,12 @@ export const UI_KIT = {
   // One provider's row (client API 16, `providers.row`): the provider it is painted for, how
   // to open its page, the surface's action; and the host, to paint rows of your own.
   useProviderRow, ProviderRow,
+  // The bottom-left cards (client API 17): what a `notices` entry pushes its cards with,
+  // and the card a `notices.card` occupant paints, with its gestures (close, act).
+  useNotices, useNotice,
+  // The update window (client API 17, `updates.dialog`): the version, its highlights and
+  // changelog, the download and the gestures of the step it is at.
+  useUpdateDialog,
 };
 
 /**

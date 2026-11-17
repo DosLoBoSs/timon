@@ -5,3 +5,5 @@ export function parseChangelog(markdown: string): Pick<ReleaseNote, 'version' | 
 export function createReleaseNotes(markdown: string, packageVersion: string): ReleaseNotes;
 export function readReleaseNotes(path: string): ReleaseNotes | null;
 export function selectReleaseNotes(notes: ReleaseNotes | null, fromVersion: string, toVersion?: string): ReleaseNote[];
+export const HIGHLIGHTS_HEADING: string;
+export function highlightsOf(content: string): string[];

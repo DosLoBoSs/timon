@@ -38,7 +38,7 @@ export const DEFAULT_USER_PREFS: UserPrefs = {
  *  `ME_CAN_PERMISSIONS` in `orchestrator/src/plugins-bundled/users/routes.ts`. */
 export type MePermission =
   | 'projects:manage' | 'agents:manage' | 'agents:privileged-config'
-  | 'providers:manage' | 'providers:accounts';
+  | 'providers:manage' | 'providers:accounts' | 'settings:write';
 
 export type AuthMe = {
   user: PublicUser | null;

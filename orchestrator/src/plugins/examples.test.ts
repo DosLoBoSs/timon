@@ -286,6 +286,17 @@ for (const [dir, pkg, id, slot] of [
   });
 }
 
+test('plugin-update-dialog: a browser-only replacement of `updates.dialog` loads at API 17', async () => {
+  await withExample('plugin-update-dialog', '@timon-ai/plugin-update-dialog', async (url) => {
+    const gallery = await (await fetch(url('/api/plugins/example-update-dialog'))).json() as {
+      state: string; kind: string[]; client: { slots: string[] } | null;
+    };
+    assert.equal(gallery.state, 'active');
+    assert.deepEqual(gallery.kind, ['behavior']);
+    assert.deepEqual(gallery.client?.slots, ['updates.dialog']);
+  });
+});
+
 test('plugin-page-toc: a browser-only replacement of `page.toc` loads at API 15', async () => {
   await withExample('plugin-page-toc', '@timon-ai/plugin-page-toc', async (url) => {
     const gallery = await (await fetch(url('/api/plugins/example-page-toc'))).json() as {

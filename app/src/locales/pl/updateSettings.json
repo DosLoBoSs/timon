@@ -1,0 +1,39 @@
+{
+  "updates": {
+    "settings": {
+      "section": "Wersja",
+      "title": "Timon {version}",
+      "titleAvailable": "Timon {version} dostępny",
+      "titleUnknown": "Timon",
+      "status": {
+        "upToDate": "Aktualny",
+        "upToDateAt": "Aktualny · sprawdzono {ago}",
+        "installed": "Zainstalowana: {installed}",
+        "installedAt": "Zainstalowana: {installed} · sprawdzono {ago}",
+        "unchecked": "Jeszcze nie sprawdzono",
+        "checking": "Sprawdzanie…",
+        "failed": "Nie udało się sprawdzić",
+        "off": "Automatyczne sprawdzanie wyłączone",
+        "dev": "Build ze źródeł, nie sprawdzany",
+        "unknown": "Stan niedostępny"
+      },
+      "check": "Sprawdź",
+      "retry": "Ponów",
+      "checking": "Sprawdzanie…",
+      "update": "Zaktualizuj",
+      "more": "Więcej akcji aktualizacji",
+      "notes": "Informacje o wydaniu",
+      "download": "Pobierz instalator",
+      "allInstallers": "Wszystkie instalatory",
+      "automaticOff": "Wyłącz automatyczne sprawdzanie",
+      "automaticOn": "Włącz automatyczne sprawdzanie",
+      "notices": "Ogłoszenia",
+      "saveFailed": "Nie udało się zapisać ustawienia.",
+      "lockedEnv": "Decyduje o tym zmienna środowiskowa {key}.",
+      "lockedConfig": "Decyduje o tym timon.config.json.",
+      "showClosedNotices": "Pokaż ponownie zamknięte karty",
+      "closedNoticesShown": "Zamknięte karty pojawią się ponownie.",
+      "closedNoticesFailed": "Nie udało się ponownie pokazać zamkniętych kart."
+    }
+  }
+}

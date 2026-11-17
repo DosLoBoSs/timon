@@ -195,6 +195,18 @@ test('UI_KIT hands a provider row its provider, and the host that paints one', (
   assert.ok(declarations.includes('export const ProviderRow: PlatformComponent;'));
 });
 
+test('the notice cards and the update window open wave 17, after 0.1.8 shipped API 16', () => {
+  // A plugin that imports them must declare 17, or a 0.1.8 host would load it
+  // and its browser half would die on the missing export.
+  assert.equal(snapshot.apiVersion, 17);
+  for (const name of ['useNotices', 'useNotice', 'useUpdateDialog']) {
+    assert.equal(snapshot.modules['ui.js']?.[name]?.since, 17, name);
+  }
+  for (const path of ['notices', 'notices.push', 'notices.remove']) {
+    assert.equal(snapshot.clientContext[path]?.since, 17, path);
+  }
+});
+
 /** Platform names a client bundle imports, per module file (`ui.js`, …). */
 function platformImports(source: string): Map<string, string[]> {
   const byModule = new Map<string, string[]>();

@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as reference from '../../../../scripts/release-manifest.mjs';
 import type { BuildChannel } from '../../build-info.js';
-import { UpdateChecker, USER_AGENT, entryFor, type FetchLike, type UpdateOffer } from './checker.js';
+import { RETRY_JITTER, UpdateChecker, USER_AGENT, checkDelayAfter, entryFor, firstCheckDelay, type FetchLike, type UpdateOffer } from './checker.js';
 import { RELEASES_SIGNATURE_DOMAIN, RELEASES_URL, type ReleasePublicKey } from './manifest.js';
 
 type Entry = Parameters<typeof reference.composeReleasesPayload>[0]['entry'];
@@ -56,6 +56,7 @@ function checker(opts: {
   enabled?: boolean;
   now?: Date;
   stateFile?: string;
+  random?: () => number;
 }) {
   const offers: Array<{ offer: UpdateOffer; channel: string }> = [];
   const logs: string[] = [];
@@ -72,6 +73,8 @@ function checker(opts: {
     now: () => now,
     platform: 'linux',
     arch: 'x64',
+    // The middle of [0, 1): a retry waits its nominal delay, exactly.
+    random: opts.random ?? (() => 0.5),
     onOffer: (offer, channel) => { offers.push({ offer, channel }); },
     log: (message) => { logs.push(message); },
   });
@@ -305,4 +308,94 @@ test('concurrent checks share one request', async () => {
   const [x, y] = await Promise.all([c.instance.check(), c.instance.check()]);
   assert.deepEqual(x, y);
   assert.equal(c.calls.length, 1);
+});
+
+const MIN = 60_000;
+const INTERVAL = 6 * 60 * MIN;
+
+test('a failed check is retried after 15 min, then 1 h, never beyond the normal interval', async () => {
+  const { text } = manifest(['0.1.8'], at);
+  let fail = true;
+  const c = checker({ now: at, response: () => (fail ? new Response('not yet', { status: 503 }) : new Response(text)) });
+  assert.equal(c.instance.nextCheckAt(INTERVAL), 0, 'never checked: due at once');
+
+  assert.equal((await c.instance.check()).state, 'failed');
+  assert.equal(c.instance.nextCheckAt(INTERVAL), at.getTime() + 15 * MIN);
+
+  const second = new Date(at.getTime() + 15 * MIN);
+  c.setNow(second);
+  await c.instance.check();
+  assert.equal(c.instance.nextCheckAt(INTERVAL), second.getTime() + 60 * MIN);
+
+  // Further failures keep growing, capped at the normal interval.
+  assert.deepEqual([3, 4, 5, 20].map((n) => checkDelayAfter(n, INTERVAL)), [4 * 60 * MIN, INTERVAL, INTERVAL, INTERVAL]);
+  assert.equal(checkDelayAfter(1, 10 * MIN), 10 * MIN, 'a backoff never waits longer than the interval');
+
+  const third = new Date(second.getTime() + 60 * MIN);
+  c.setNow(third);
+  fail = false;
+  assert.equal((await c.instance.check()).state, 'available');
+  assert.equal(c.instance.nextCheckAt(INTERVAL), third.getTime() + INTERVAL, 'a success goes back to the normal interval');
+  assert.equal(c.calls.length, 3);
+});
+
+test('a check asked by hand counts in the schedule; one switched off does not', async () => {
+  const { text } = manifest(['0.1.8'], at);
+  const c = checker({ now: at, body: () => text, enabled: false });
+  await c.instance.check();
+  assert.equal(c.instance.nextCheckAt(INTERVAL), 0, 'no request left: the schedule is untouched');
+  c.settings.enabled = true;
+  await c.instance.check();
+  assert.equal(c.instance.nextCheckAt(INTERVAL), at.getTime() + INTERVAL);
+});
+
+test('the first check is spread over a minute after the daemon settles, and the minute tick cannot run it early', async () => {
+  assert.equal(firstCheckDelay(() => 0), 30_000);
+  assert.equal(firstCheckDelay(() => 0.999_999), 89_999);
+  const spread = new Set(Array.from({ length: 200 }, () => firstCheckDelay()));
+  assert.ok([...spread].every((ms) => ms >= 30_000 && ms < 90_000));
+  assert.ok(spread.size > 20, 'daemons started together do not all check at the same second');
+
+  const { text } = manifest(['0.1.8'], at);
+  const c = checker({ now: at, body: () => text });
+  c.instance.deferFirstCheck(85_000);
+  // The tick that runs every minute sees the check as not yet due.
+  assert.ok(at.getTime() + MIN < c.instance.nextCheckAt(INTERVAL));
+  assert.equal(c.instance.nextCheckAt(INTERVAL), at.getTime() + 85_000);
+  assert.equal(c.calls.length, 0);
+
+  // A check asked by hand meanwhile is not held, and then sets the schedule.
+  const early = new Date(at.getTime() + 10_000);
+  c.setNow(early);
+  await c.instance.check();
+  assert.equal(c.calls.length, 1);
+  assert.equal(c.instance.nextCheckAt(INTERVAL), early.getTime() + INTERVAL);
+});
+
+test('a retry after a failure is spread by 10 % around its nominal wait, drawn once per failure', async () => {
+  let draw = 0;
+  const c = checker({ now: at, response: () => new Response('down', { status: 503 }), random: () => draw });
+  await c.instance.check();
+  assert.equal(c.instance.nextCheckAt(INTERVAL), at.getTime() + 15 * MIN * (1 - RETRY_JITTER), 'earliest');
+  draw = 0.999;
+  assert.equal(c.instance.nextCheckAt(INTERVAL), at.getTime() + 15 * MIN * (1 - RETRY_JITTER), 'stable between ticks');
+
+  await c.instance.check();
+  const latest = at.getTime() + Math.round(60 * MIN * (1 + RETRY_JITTER * 0.998));
+  assert.equal(c.instance.nextCheckAt(INTERVAL), latest, 'a new failure draws again, around the next step of the calendar');
+
+  for (const r of [0, 0.25, 0.5, 0.75, 0.999]) {
+    draw = r;
+    await c.instance.check();
+    const wait = c.instance.nextCheckAt(INTERVAL) - at.getTime();
+    const nominal = checkDelayAfter(3 + [0, 0.25, 0.5, 0.75, 0.999].indexOf(r), INTERVAL);
+    assert.ok(Math.abs(wait - nominal) <= nominal * RETRY_JITTER, `${wait} within 10 % of ${nominal}`);
+  }
+});
+
+test('the interval after a success is not jittered', async () => {
+  const { text } = manifest(['0.1.8'], at);
+  const c = checker({ now: at, body: () => text, random: () => 0 });
+  await c.instance.check();
+  assert.equal(c.instance.nextCheckAt(INTERVAL), at.getTime() + INTERVAL);
 });

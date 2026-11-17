@@ -1,0 +1,24 @@
+{
+  "notices": {
+    "region": "Komunikaty",
+    "close": "Zamknij",
+    "githubStar": {
+      "title": "Gwiazdka na GitHubie?",
+      "action": "Daj gwiazdkę na GitHubie"
+    },
+    "feed": {
+      "open": "Dowiedz się więcej"
+    },
+    "preview": {
+      "discord": {
+        "title": "Dołącz do społeczności",
+        "body": "Pytania, pomysły i nowości, razem z twórcami Timona.",
+        "action": "Dołącz"
+      },
+      "feed": {
+        "title": "Pokaz na żywo w czwartek",
+        "body": "Agenci i wtyczki, jedna godzina."
+      }
+    }
+  }
+}

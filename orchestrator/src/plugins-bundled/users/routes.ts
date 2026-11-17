@@ -50,6 +50,7 @@ import { installationTheme } from '../../users/public-theme.js';
 import { MODEL_FAVORITES_MAX, ModelFavoritesBodySchema } from '../../users/model-favorites.js';
 import { onboardingStep } from '../../onboarding-events.js';
 import { PLAN_PRESET_NAME_MAX, PLAN_PRESETS_MAX, PlanPresetsBodySchema } from '../../users/plan-presets.js';
+import { DismissNoticeBodySchema } from '../../users/dismissed-notices.js';
 import {
   SESSION_COOKIE,
   clearSessionCookie,
@@ -156,9 +157,12 @@ function notifySuperadmins(title: string, body: string): void {
  * (skill-attachment-routes.ts, TODO #620, #693).
  * `providers:manage` / `providers:accounts` give the level of the Providers
  * screen (`users/provider-access.ts`): which of it the app paints at all.
+ * `settings:write` hides "Check now" and the automatic-check switch of
+ * Settings › System › Updates from a member who would only get a 403.
  */
 export const ME_CAN_PERMISSIONS = [
   'projects:manage', 'agents:manage', 'agents:privileged-config', 'providers:manage', 'providers:accounts',
+  'settings:write',
 ] as const;
 export type MeCan = Record<(typeof ME_CAN_PERMISSIONS)[number], boolean>;
 
@@ -389,6 +393,56 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
       return;
     }
     res.json({ presets: dbApi.userPlanPresetsSet(userId, parsed.data.presets) });
+  });
+
+  /**
+   * The notices the caller closed for good (the bottom-left cards,
+   * `docs/NOTICES.md`): kept per account so a card closed on the desktop does
+   * not come back in a browser. Same authentication as the favourites:
+   * `requireAuth`, identity from `req.auth.user` only, a daemon-token with no
+   * account reads `[]` and cannot write.
+   */
+  app.get('/api/prefs/dismissed-notices', (req, res) => {
+    const auth = requireAuth(req, res);
+    if (!auth) return;
+    res.json({ dismissed: dbApi.userDismissedNoticesGet(auth.user?.id) });
+  });
+
+  /**
+   * Closes one notice for good: `{ id: '<pluginId>:<noticeId>' }`, zod-strict.
+   * One key per call rather than the whole list: two clients closing two cards
+   * at once must not overwrite each other.
+   */
+  app.post('/api/prefs/dismissed-notices', (req, res) => {
+    const auth = requireAuth(req, res);
+    if (!auth) return;
+    const userId = auth.user?.id;
+    if (!userId) {
+      forbidden(req, res, { kind: 'account_required' });
+      return;
+    }
+    const parsed = DismissNoticeBodySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: 'id must be a notice key: <pluginId>:<noticeId>, up to 200 characters' });
+      return;
+    }
+    res.json({ dismissed: dbApi.userDismissedNoticeAdd(userId, parsed.data.id) });
+  });
+
+  /**
+   * Shows the closed cards again: forgets the caller's list, never another
+   * account's (the identity comes from the session alone, the request has no
+   * body). Same authentication as the write above.
+   */
+  app.delete('/api/prefs/dismissed-notices', (req, res) => {
+    const auth = requireAuth(req, res);
+    if (!auth) return;
+    const userId = auth.user?.id;
+    if (!userId) {
+      forbidden(req, res, { kind: 'account_required' });
+      return;
+    }
+    res.json({ dismissed: dbApi.userDismissedNoticesClear(userId) });
   });
 
   /**

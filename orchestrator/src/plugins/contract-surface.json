@@ -1,5 +1,5 @@
 {
-  "apiVersion": 16,
+  "apiVersion": 17,
   "members": {
     "accountProvider": {
       "type": "object",
