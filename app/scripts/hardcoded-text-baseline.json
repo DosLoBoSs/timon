@@ -8,10 +8,6 @@
   "app/src/app/(main)/messages/messages-client.tsx": {
     "jsxText": 1
   },
-  "app/src/app/(main)/pipelines/pipelines-client.tsx": {
-    "jsxText": 15,
-    "jsxAttr": 1
-  },
   "app/src/app/(main)/skills/skills-client.tsx": {
     "jsxAttr": 1
   },

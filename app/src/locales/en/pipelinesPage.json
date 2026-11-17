@@ -1,0 +1,21 @@
+{
+  "pipelinesPage": {
+    "title": "Pipelines",
+    "subtitle": "Multi-agent workflow templates",
+    "empty": "No pipelines yet.",
+    "stepCount": "{count, plural, one {# step} other {# steps}}",
+    "pick": "Pick a pipeline.",
+    "run": "Run",
+    "steps": "Steps",
+    "deps": "↑ depends on: {deps}",
+    "latestRun": "Latest run · {id} · {date}",
+    "mission": "mission",
+    "task": "task",
+    "runTitle": "Run the pipeline",
+    "runHint": "Give its input as JSON. Step prompts read it through",
+    "launch": "Launch",
+    "invalidJson": "Invalid JSON: {error}",
+    "runCreated": "Run {id} created ({count, plural, one {# task} other {# tasks}})",
+    "importFailed": "Could not import the pipeline"
+  }
+}

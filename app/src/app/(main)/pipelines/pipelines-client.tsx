@@ -109,7 +109,7 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
     if (!runDialog) return;
     let input: unknown = {};
     try { input = JSON.parse(inputJson || '{}'); }
-    catch (err) { toast.error('Invalid JSON: ' + (err as Error).message); return; }
+    catch (err) { toast.error(t('pipelinesPage.invalidJson', { error: (err as Error).message })); return; }
     try {
       const r = await fetch(`/api/ui/pipelines/${runDialog.id}/run`, {
         method: 'POST',
@@ -118,7 +118,7 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(apiErrorMessage(j, { status: r.status }));
-      toast.success(`Run ${j.run_id.slice(0, 8)} created (${j.steps.length} tasks)`);
+      toast.success(t('pipelinesPage.runCreated', { id: j.run_id.slice(0, 8), count: j.steps.length }));
       setRunDialog(null);
       setCurrentRunId(j.run_id);
     } catch (err) {
@@ -129,7 +129,7 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
   const openInCanvas = useCallback(async (id: string) => {
     const response = await fetch(`/api/ui/workflows/import/pipeline/${id}`, { method: 'POST' });
     const value = await response.json();
-    if (!response.ok) { toast.error(apiErrorMessage(value, 'Could not import pipeline')); return; }
+    if (!response.ok) { toast.error(apiErrorMessage(value, t('pipelinesPage.importFailed'))); return; }
     location.assign(`/workflows/${value.workflow.slug}`);
   }, []);
 
@@ -138,12 +138,12 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
       {/* sidebar */}
       <aside className="w-full shrink-0 bg-muted/20 md:w-72">
         <div className="px-4 py-3">
-          <h2 className="text-sm font-medium">Pipelines</h2>
-          <p className="text-[11px] text-muted-foreground">Templates de workflow multi-agents</p>
+          <h2 className="text-sm font-medium">{t('pipelinesPage.title')}</h2>
+          <p className="text-[11px] text-muted-foreground">{t('pipelinesPage.subtitle')}</p>
         </div>
         <ul className="space-y-0.5 px-1.5 pb-2">
           {pipelines.length === 0 && (
-            <li className="px-4 py-3 text-xs text-muted-foreground">No pipelines yet.</li>
+            <li className="px-4 py-3 text-xs text-muted-foreground">{t('pipelinesPage.empty')}</li>
           )}
           {pipelines.map((p) => (
             <li key={p.id}>
@@ -156,7 +156,7 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
               >
                 <span className="text-sm font-medium">{p.name}</span>
                 <span className="text-[11px] text-muted-foreground">
-                  {p.definition.steps.length} steps
+                  {t('pipelinesPage.stepCount', { count: p.definition.steps.length })}
                 </span>
               </button>
             </li>
@@ -168,7 +168,7 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         {!selected ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Pick a pipeline.
+            {t('pipelinesPage.pick')}
           </div>
         ) : (
           <div className="flex flex-col gap-5 p-5">
@@ -179,7 +179,7 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
               </Badge>
               <span className="ml-auto flex items-center gap-2">
                 <Button size="sm" onClick={() => setRunDialog({ open: true, id: selected.id })}>
-                  Run
+                  {t('pipelinesPage.run')}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => openInCanvas(selected.id)}>{t('workflows.openInCanvas')}</Button>
               </span>
@@ -190,7 +190,7 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
 
             <section>
               <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Steps
+                {t('pipelinesPage.steps')}
               </h3>
               <ol className="space-y-2">
                 {selected.definition.steps.map((step) => (
@@ -208,7 +208,7 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
                       <span className="text-muted-foreground">→ {step.agent}</span>
                       {step.deps_on && step.deps_on.length > 0 && (
                         <span className="text-[10px] text-muted-foreground/70">
-                          ↑ deps: {step.deps_on.join(', ')}
+                          {t('pipelinesPage.deps', { deps: step.deps_on.join(', ') })}
                         </span>
                       )}
                     </div>
@@ -223,7 +223,7 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
             {run && run.run.pipeline_id === selected.id && (
               <section>
                 <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Latest run · {run.run.run_id.slice(0, 8)} · {new Date(run.run.started_at).toISOString().slice(0, 16).replace('T', ' ')}
+                  {t('pipelinesPage.latestRun', { id: run.run.run_id.slice(0, 8), date: new Date(run.run.started_at).toISOString().slice(0, 16).replace('T', ' ') })}
                 </h3>
                 <ul className="space-y-1.5">
                   {run.steps.map((s) => (
@@ -242,14 +242,14 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
                           href={`/missions?selected=${s.mission_id}`}
                           className="text-[10px] text-primary hover:underline"
                         >
-                          mission
+                          {t('pipelinesPage.mission')}
                         </Link>
                       ) : (
                         <Link
                           href={`/kanban?task=${s.task_id}`}
                           className="text-[10px] text-[hsl(var(--info))] hover:underline"
                         >
-                          task
+                          {t('pipelinesPage.task')}
                         </Link>
                       )}
                     </li>
@@ -267,9 +267,9 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Run pipeline</DialogTitle>
+            <DialogTitle>{t('pipelinesPage.runTitle')}</DialogTitle>
             <DialogDescription>
-              Provide input JSON. Available in step prompts via{' '}
+              {t('pipelinesPage.runHint')}{' '}
               <code className="rounded bg-muted px-1 py-0.5 text-[10.5px]">{'{{input.foo}}'}</code>.
             </DialogDescription>
           </DialogHeader>
@@ -278,11 +278,12 @@ export function PipelinesClient({ initialRun }: { initialRun?: string }) {
             onChange={(e) => setInputJson(e.target.value)}
             rows={6}
             /* code-font: JSON input */ className="font-mono text-xs"
+            // i18n-exempt: sample JSON input
             placeholder='{"feature":"X"}'
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRunDialog(null)}>Cancel</Button>
-            <Button onClick={launchRun}>Launch</Button>
+            <Button variant="outline" onClick={() => setRunDialog(null)}>{t('common.cancel')}</Button>
+            <Button onClick={launchRun}>{t('pipelinesPage.launch')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

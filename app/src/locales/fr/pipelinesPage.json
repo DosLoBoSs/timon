@@ -1,0 +1,21 @@
+{
+  "pipelinesPage": {
+    "title": "Pipelines",
+    "subtitle": "Modèles de workflow multi-agents",
+    "empty": "Aucun pipeline pour l'instant.",
+    "stepCount": "{count, plural, one {# étape} other {# étapes}}",
+    "pick": "Choisissez un pipeline.",
+    "run": "Lancer",
+    "steps": "Étapes",
+    "deps": "↑ dépend de : {deps}",
+    "latestRun": "Dernière exécution · {id} · {date}",
+    "mission": "mission",
+    "task": "tâche",
+    "runTitle": "Lancer le pipeline",
+    "runHint": "Donnez son entrée en JSON. Les prompts des étapes la lisent via",
+    "launch": "Lancer",
+    "invalidJson": "JSON invalide : {error}",
+    "runCreated": "Exécution {id} créée ({count, plural, one {# tâche} other {# tâches}})",
+    "importFailed": "Impossible d'importer le pipeline"
+  }
+}
