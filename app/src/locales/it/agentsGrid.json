@@ -48,7 +48,6 @@
     "gitPush": "git push — {count} commit",
     "push": "Push {count}",
     "gitFetch": "git fetch",
-    "addAgent": "Aggiungi agente",
     "filterProject": "Filtra un progetto…",
     "hideHiddenProjects": "Nascondi di nuovo i progetti messi da parte",
     "showHiddenProjects": "Mostra i progetti nascosti",
@@ -61,10 +60,6 @@
     "newProject": "Nuovo progetto",
     "newAgent": "Nuovo agente",
     "askAgent": "Chiedi a {name}",
-    "notifications": "Notifiche",
-    "timonAgentsAccess": "Accesso agli agenti di {brand}",
-    "openOrchestrator": "Apri l’orchestratore {name}",
-    "openHealthAgent": "Apri l’agente di diagnostica",
     "mainAgentFallback": "l’agente principale"
   }
 }

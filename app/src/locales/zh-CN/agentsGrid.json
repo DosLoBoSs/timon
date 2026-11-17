@@ -48,7 +48,6 @@
     "gitPush": "git push — {count} 个提交",
     "push": "推送 {count} 个提交",
     "gitFetch": "git fetch",
-    "addAgent": "添加智能体",
     "filterProject": "筛选项目…",
     "hideHiddenProjects": "再次隐藏已隐藏的项目",
     "showHiddenProjects": "显示隐藏的项目",
@@ -61,10 +60,6 @@
     "newProject": "新建项目",
     "newAgent": "新建智能体",
     "askAgent": "询问 {name}",
-    "notifications": "通知",
-    "timonAgentsAccess": "访问 {brand} 智能体",
-    "openOrchestrator": "打开协调器 {name}",
-    "openHealthAgent": "打开健康检查智能体",
     "mainAgentFallback": "主智能体"
   }
 }

@@ -48,7 +48,6 @@
     "gitPush": "git push — 커밋 {count}개",
     "push": "{count}개 푸시",
     "gitFetch": "git fetch",
-    "addAgent": "에이전트 추가",
     "filterProject": "프로젝트 필터…",
     "hideHiddenProjects": "제외한 프로젝트 다시 숨기기",
     "showHiddenProjects": "숨긴 프로젝트 표시",
@@ -61,10 +60,6 @@
     "newProject": "새 프로젝트",
     "newAgent": "새 에이전트",
     "askAgent": "{name}에게 묻기",
-    "notifications": "알림",
-    "timonAgentsAccess": "{brand} 에이전트 액세스",
-    "openOrchestrator": "{name} 오케스트레이터 열기",
-    "openHealthAgent": "상태 점검 에이전트 열기",
     "mainAgentFallback": "메인 에이전트"
   }
 }
