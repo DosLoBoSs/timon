@@ -78,12 +78,12 @@ test('migration : un daemon qui refuse le PUT ne fait pas perdre la clé', async
 });
 
 test('daemon renseigné : le layout du navigateur ne l\'écrase pas', async () => {
-  const serveur = [{ id: 'serveur' }];
-  const daemon = fakeDaemon({ layout: serveur });
+  const server = [{ id: 'serveur' }];
+  const daemon = fakeDaemon({ layout: server });
   const storage = fakeStorage({ [LEGACY_LAYOUT_KEY]: JSON.stringify([{ id: 'navigateur' }]) });
 
   const out = await loadLayout({ fetchImpl: daemon.fetchImpl, storage });
-  assert.deepEqual(out.raw, serveur);
+  assert.deepEqual(out.raw, server);
   assert.equal(daemon.puts().length, 0);
   assert.equal(storage.getItem(LEGACY_LAYOUT_KEY), JSON.stringify([{ id: 'navigateur' }]));
 });
@@ -107,23 +107,23 @@ test('saveLayout envoie un PUT et rapporte l\'échec sans lever', async () => {
 
 /** A daemon whose responses are held open, so a test decides in which order the
  *  in-flight requests come back. */
-function daemonAuRalenti() {
+function slowDaemon() {
   const bodies: unknown[] = [];
-  const enAttente: Array<() => void> = [];
+  const pending: Array<() => void> = [];
   const fetchImpl = async (_url: string, init?: RequestInit): Promise<Response> => {
     bodies.push(JSON.parse(String(init?.body)).layout);
-    await new Promise<void>((resolve) => { enAttente.push(resolve); });
+    await new Promise<void>((resolve) => { pending.push(resolve); });
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   };
   return {
     bodies,
     fetchImpl,
-    enVol: () => enAttente.length,
+    inFlight: () => pending.length,
     /** Rend la main à la n-ième requête encore ouverte (0 = la plus ancienne). */
-    repondre: (n = 0) => {
-      const rendreLaMain = enAttente.splice(n, 1)[0];
-      assert.ok(rendreLaMain, 'aucune requête ouverte à ce rang');
-      rendreLaMain();
+    answer: (n = 0) => {
+      const release = pending.splice(n, 1)[0];
+      assert.ok(release, 'aucune requête ouverte à ce rang');
+      release();
     },
   };
 }
@@ -132,77 +132,77 @@ function daemonAuRalenti() {
 const tick = () => new Promise<void>((r) => { setTimeout(r, 0); });
 
 test('deux sauvegardes ne se doublent pas : une seule requête à la fois', async () => {
-  const daemon = daemonAuRalenti();
+  const daemon = slowDaemon();
   const io = { scope: 'serie', fetchImpl: daemon.fetchImpl };
 
-  const premier = saveLayout([{ id: 'a' }], io);
+  const first = saveLayout([{ id: 'a' }], io);
   const second = saveLayout([{ id: 'b' }], io);
   await tick();
 
-  assert.equal(daemon.enVol(), 1, 'la seconde attend son tour, elle ne part pas en parallèle');
+  assert.equal(daemon.inFlight(), 1, 'la seconde attend son tour, elle ne part pas en parallèle');
   assert.deepEqual(daemon.bodies, [[{ id: 'a' }]]);
 
-  daemon.repondre();
+  daemon.answer();
   await tick();
   assert.deepEqual(daemon.bodies, [[{ id: 'a' }], [{ id: 'b' }]], 'le second layout part ensuite');
 
-  daemon.repondre();
-  assert.deepEqual(await Promise.all([premier, second]), [true, true]);
+  daemon.answer();
+  assert.deepEqual(await Promise.all([first, second]), [true, true]);
 });
 
 test('réponses en ordre inverse : le dernier layout demandé reste le dernier écrit', async () => {
   // Le daemon répond à la première requête APRÈS la seconde. Sans sérialisation
   // les deux PUT partiraient ensemble, « a » arriverait en dernier, et c'est ce
   // placement périmé que le rechargement suivant afficherait.
-  const recus: unknown[] = [];
-  const latences = [30, 0];
-  let rang = 0;
+  const received: unknown[] = [];
+  const delays = [30, 0];
+  let index = 0;
   const fetchImpl = async (_url: string, init?: RequestInit): Promise<Response> => {
-    const attente = latences[rang++] ?? 0;
-    await new Promise<void>((r) => { setTimeout(r, attente); });
-    recus.push(JSON.parse(String(init?.body)).layout);
+    const delay = delays[index++] ?? 0;
+    await new Promise<void>((r) => { setTimeout(r, delay); });
+    received.push(JSON.parse(String(init?.body)).layout);
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   };
 
-  const premier = saveLayout([{ id: 'a' }], { scope: 'inverse', fetchImpl });
+  const first = saveLayout([{ id: 'a' }], { scope: 'inverse', fetchImpl });
   const second = saveLayout([{ id: 'b' }], { scope: 'inverse', fetchImpl });
-  await Promise.all([premier, second]);
+  await Promise.all([first, second]);
 
-  assert.deepEqual(recus, [[{ id: 'a' }], [{ id: 'b' }]]);
-  assert.deepEqual(recus.at(-1), [{ id: 'b' }], 'le dernier écrit est le dernier demandé');
+  assert.deepEqual(received, [[{ id: 'a' }], [{ id: 'b' }]]);
+  assert.deepEqual(received.at(-1), [{ id: 'b' }], 'le dernier écrit est le dernier demandé');
 });
 
 test('un PUT en échec ne bloque pas les sauvegardes suivantes', async () => {
   // Le drapeau « en vol » se relâche aussi sur erreur : sinon une coupure
   // réseau passagère gèlerait définitivement la persistance du placement.
-  const recus: unknown[] = [];
-  let premierAppel = true;
+  const received: unknown[] = [];
+  let firstCall = true;
   const fetchImpl = async (_url: string, init?: RequestInit): Promise<Response> => {
-    if (premierAppel) {
-      premierAppel = false;
+    if (firstCall) {
+      firstCall = false;
       throw new Error('offline');
     }
-    recus.push(JSON.parse(String(init?.body)).layout);
+    received.push(JSON.parse(String(init?.body)).layout);
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   };
 
   assert.equal(await saveLayout([{ id: 'a' }], { scope: 'panne', fetchImpl }), false);
   assert.equal(await saveLayout([{ id: 'b' }], { scope: 'panne', fetchImpl }), true);
-  assert.deepEqual(recus, [[{ id: 'b' }]]);
+  assert.deepEqual(received, [[{ id: 'b' }]]);
 });
 
 test('les sauvegardes en attente sont fusionnées : seule la plus récente part', async () => {
-  const daemon = daemonAuRalenti();
+  const daemon = slowDaemon();
   const io = { scope: 'fusion', fetchImpl: daemon.fetchImpl };
 
-  const attendus = [saveLayout([{ id: 'a' }], io)];
-  for (const id of ['b', 'c', 'd']) attendus.push(saveLayout([{ id }], io));
+  const expected = [saveLayout([{ id: 'a' }], io)];
+  for (const id of ['b', 'c', 'd']) expected.push(saveLayout([{ id }], io));
   await tick();
 
-  daemon.repondre();
+  daemon.answer();
   await tick();
-  daemon.repondre();
-  assert.deepEqual(await Promise.all(attendus), [true, true, true, true]);
+  daemon.answer();
+  assert.deepEqual(await Promise.all(expected), [true, true, true, true]);
 
   assert.deepEqual(
     daemon.bodies,
@@ -212,14 +212,14 @@ test('les sauvegardes en attente sont fusionnées : seule la plus récente part'
 });
 
 test('sauvegardes sérialisées par portée : deux portées n\'attendent pas l\'une l\'autre', async () => {
-  const daemon = daemonAuRalenti();
+  const daemon = slowDaemon();
   const a = saveLayout([{ id: 'a' }], { scope: 'gauche', fetchImpl: daemon.fetchImpl });
   const b = saveLayout([{ id: 'b' }], { scope: 'droite', fetchImpl: daemon.fetchImpl });
   await tick();
 
-  assert.equal(daemon.enVol(), 2, 'chaque portée a sa propre file');
-  daemon.repondre();
-  daemon.repondre();
+  assert.equal(daemon.inFlight(), 2, 'chaque portée a sa propre file');
+  daemon.answer();
+  daemon.answer();
   assert.deepEqual(await Promise.all([a, b]), [true, true]);
 });
 
