@@ -96,9 +96,12 @@ import { BROWSER_ATTACH_CHANNEL, BROWSER_DETACH_CHANNEL, trustedBrowserSender } 
 
 import { DaemonStartTimeoutError, updateOffer, finishUpdate, updateCopy, updateFailureDialog, unmanagedDaemon, type UpdateStage } from './data-update.js';
 import { UpdateWindow } from './update-window.js';
+import { consentApproves, grantUpdateConsent, revokeUpdateConsent, takeUpdateConsent } from './update-consent.js';
 import { UpdateDownloader } from './update-download.js';
 import { UPDATE_CHANNELS, UpdateController, localDaemonGet, registerUpdateIpc } from './update-ipc.js';
+import { checkLocalUpdatesIfStale } from './update-freshness.js';
 import { missionsAtStake, readMissionCount, removeAppImageBackup } from './update-install.js';
+import { nodeInstallerSystem, silentInstall } from './update-installer.js';
 import { aboutCopy, readThirdPartyNotices, registerAboutIpc, thirdPartyNoticesPath } from './about.js';
 import { showAboutWindow } from './about-window.js';
 import { appMenuTemplate, newWindowCopy, newWindowShortcut } from './app-menu.js';
@@ -872,12 +875,18 @@ function openDetachedWindow(caller: AppWindow, url: string, machineId: string | 
  * up on the web app (TODO #485). Waking it runs alongside the startup view's
  * wait rather than before it, so the window never opens later for it.
  */
-/** Once the daemon answers, it hears that the app opened (anonymous usage statistics). */
+/**
+ * Once the daemon answers, it hears that the app opened (anonymous usage
+ * statistics), and checks for updates again if its last success is stale.
+ */
 function noteDesktopOpened(cfg: DesktopConfig): void {
   if (!daemonUp) return;
   void reportDesktopOpened(originOf(cfg.daemon.listen), cfg.home, app.getVersion())
     .then((line) => console.log(`[desktop] opening reported → ${line}`))
     .catch(() => { /* never thrown, see telemetry-ping.ts */ });
+  void checkLocalUpdatesIfStale(originOf(cfg.daemon.listen), cfg.home)
+    .then((line) => console.log(`[desktop] update check on connection → ${line}`))
+    .catch(() => { /* never thrown, see update-freshness.ts */ });
 }
 
 function rearmAppIfDown(cfg: DesktopConfig, uiUrl: string): void {
@@ -1470,16 +1479,23 @@ async function main(): Promise<void> {
       offer = null;
     } else console.log('[desktop] update offer: shown');
   } else console.log('[desktop] update offer: none');
+  // Taken at every packaged launch, offer or not: a consent is good for one launch only.
+  const consent = app.isPackaged ? takeUpdateConsent(cfg.home) : null;
   if (offer) {
+    // "Restart and install" approved this exact transition, after counting the missions:
+    // the same approval goes to the daemon below, the window only shows its progress.
+    const preApproved = consentApproves(consent, offer);
+    if (consent) console.log(`[desktop] update consent ${consent.from} -> ${consent.to}: ${preApproved ? 'approves this update' : 'does not match, asking'}`);
     // Asked to the daemon that runs now, the installed version's: approving moves its service.
     const installedDaemon = localDaemonGet(originOf(cfg.daemon.listen), cfg.home);
     updateWindow = new UpdateWindow(offer,
       join(process.resourcesPath, 'orchestrator', 'scripts', 'release-notes.json'), uiLocale(),
       windowScheme(desktopHome),
-      () => readMissionCount(installedDaemon).then(missionsAtStake));
+      preApproved ? undefined : () => readMissionCount(installedDaemon).then(missionsAtStake),
+      preApproved);
     if (!await updateWindow.choice) { console.log('[desktop] update declined: quitting'); app.quit(); return; }
     updateApproved = true;
-  }
+  } else if (consent) console.log(`[desktop] update consent ${consent.from} -> ${consent.to}: no update to approve, dropped`);
   // Past the approval, the new AppImage has started: the one it replaced is no longer needed.
   if (process.platform === 'linux') {
     void removeAppImageBackup(process.env.APPIMAGE).catch((error: unknown) => console.warn('[desktop] previous AppImage not removed', error));
@@ -1899,6 +1915,13 @@ if (!app.requestSingleInstanceLock({ build: ownBuild } satisfies LaunchData)) {
       appImage: process.platform === 'linux' ? process.env.APPIMAGE ?? null : null,
       relaunchAppImage: (appImage) => queueAppImageRelaunch(appImage, relaunchOptions(process.platform, process.env, process.argv).args, desktopHome),
       quit: () => app.quit(),
+      silentInstall: (input) => silentInstall(input, nodeInstallerSystem(process.execPath)),
+      adminPrompt: (version) => shellText(uiLocale())('update.adminPrompt', { version }),
+      relaunch: () => { app.relaunch({ args: relaunchOptions(process.platform, process.env, process.argv).args }); },
+      consent: {
+        grant: (transition) => { grantUpdateConsent(loadDesktopConfig(desktopHome, { packaged: app.isPackaged }).home, transition); },
+        revoke: () => { revokeUpdateConsent(loadDesktopConfig(desktopHome, { packaged: app.isPackaged }).home); },
+      },
       showItemInFolder: (path) => shell.showItemInFolder(path),
       openPath: (path) => shell.openPath(path),
       log: (line) => console.log(line),

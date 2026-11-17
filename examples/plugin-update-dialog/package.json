@@ -1,5 +1,5 @@
 {
-  "name": "@timon-ai/plugin-update-banner",
+  "name": "@timon-ai/plugin-update-dialog",
   "version": "0.1.0",
   "license": "MIT",
   "private": true,
@@ -7,14 +7,14 @@
   "exports": { "./client": "./lib/client.js" },
   "files": ["lib", "README.md", "SIGNATURE"],
   "timon": {
-    "id": "example-update-banner",
-    "apiVersion": 15,
+    "id": "example-update-dialog",
+    "apiVersion": 17,
     "kind": "behavior",
-    "label": "Compact update banner",
-    "description": "Replaces Timon's \"new version\" banner with a single compact line: the version, one download link and Later.",
+    "label": "Compact update window",
+    "description": "Replaces Timon's update window with a compact one: the version, its highlights and one row of gestures.",
     "permissions": [],
     "client": {
-      "slots": ["updates.banner"],
+      "slots": ["updates.dialog"],
       "external": ["react", "@timon/ui"],
       "mode": "esm"
     },

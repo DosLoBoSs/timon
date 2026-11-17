@@ -48,6 +48,46 @@ Manifest identity of this plugin.
 
 ***
 
+### notices
+
+> **notices**: `object`
+
+API 17: the bottom-left notice cards. `push` shows a card, or updates the
+one this plugin pushed with the same `id`; a card the account closed stays
+closed (pushing it again shows nothing). Throws on an invalid notice. At
+most three cards show at once, warnings first. `remove` takes a card off
+the screen without closing it for good. Both leave with the plugin.
+
+#### push()
+
+> **push**(`notice`): `void`
+
+##### Parameters
+
+###### notice
+
+[`NoticeInput`](NoticeInput.md)
+
+##### Returns
+
+`void`
+
+#### remove()
+
+> **remove**(`id`): `void`
+
+##### Parameters
+
+###### id
+
+`string`
+
+##### Returns
+
+`void`
+
+***
+
 ### realtime
 
 > **realtime**: `object`

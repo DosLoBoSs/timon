@@ -851,8 +851,6 @@
     "notActivated": "Free is actief — extra accounts hebben een licentie nodig",
     "activate": "Activeren",
     "offlineSince": "Licentieserver onbereikbaar sinds {date} — betaalde rechten blijven beschikbaar tijdens de offlinetolerantie, daarna keert Timon terug naar Free.",
-    "buildEndsSoon": "Deze bètabuild stopt op {date}. Installeer vóór die tijd de nieuwste versie.",
-    "buildEndsUrgent": "Deze bètabuild stopt op {date}. Installeer nu de nieuwste versie.",
     "licenseEndsSoon": "Je licentie eindigt op {date}. Voer vóór die tijd een nieuwe sleutel in.",
     "licenseEndsUrgent": "Je licentie eindigt op {date}. Voer nu een nieuwe sleutel in."
   },
@@ -1601,6 +1599,7 @@
       },
       "system": {
         "installation": "Installatie",
+        "updates": "Updates",
         "backup": "Back-ups & prullenbak",
         "diagnostics": "Diagnose",
         "desktop": "Desktopapp",
@@ -1664,6 +1663,7 @@
       },
       "system": {
         "installation": "versie over installatie dienst daemon taak launchagent systemd pad gegevens map log poort export import back-up update",
+        "updates": "update bijwerken nieuwe versie controleren downloaden installatieprogramma release-opmerkingen automatisch",
         "backup": "back-up back-ups archief nachtelijk herstellen bewaren bewaartermijn dagen prullenbak verwijderde agent terughalen ongedaan definitief",
         "diagnostics": "logs debug overig infra probleemoplossing",
         "desktop": "verwijderen deïnstalleren electron app",
@@ -4387,6 +4387,62 @@
     "search": "Agent zoeken…",
     "clear": "Wissen",
     "empty": "Geen agent"
+  },
+  "updates": {
+    "notice": {
+      "available": "Timon {version} is beschikbaar",
+      "update": "Bijwerken",
+      "buildEnds": "Deze versie werkt niet meer vanaf {date}."
+    },
+    "download": {
+      "start": "Downloaden en controleren",
+      "progress": "Downloaden… {percent} ({received} van {total})",
+      "cancel": "Annuleren",
+      "verifying": "Installatieprogramma controleren…",
+      "ready": "{name} is gedownload en gecontroleerd.",
+      "openInstaller": "Installatieprogramma openen",
+      "openFolder": "In map tonen",
+      "openFailed": "Het systeem kon het niet openen. Gebruik In map tonen.",
+      "retry": "Opnieuw proberen",
+      "resume": "Hervatten",
+      "install": "Installeren",
+      "installRestart": "Installeren en herstarten",
+      "missions": "{count, plural, one {# missie loopt} other {# missies lopen}}. Nu installeren stopt {count, plural, one {die} other {ze}}.",
+      "wait": "Wachten",
+      "installAnyway": "Toch installeren",
+      "installing": "Installeren…",
+      "restarting": "Timon herstart met de nieuwe versie…",
+      "closing": "Het installatieprogramma is geopend. Timon sluit af zodat het vervangen kan worden.",
+      "pkgOpened": "Volg het installatieprogramma, sluit Timon daarna af en open het opnieuw.",
+      "debGuided": "Je softwarebeheer opent het pakket. Als het niet wordt geïnstalleerd, voer dan deze opdracht uit in een terminal en open Timon opnieuw:",
+      "debNotOpened": "Voer deze opdracht uit in een terminal om het pakket te installeren en open Timon daarna opnieuw:",
+      "copyCommand": "Kopiëren",
+      "copied": "Gekopieerd",
+      "notWritable": "Er kan niet worden geschreven in de map van je AppImage. De nieuwe AppImage staat in de gegevensmap van Timon: vervang de jouwe ermee.",
+      "installFailed": "De installatie is niet gestart. Je huidige versie is ongewijzigd.",
+      "installNone": "Het gecontroleerde installatieprogramma staat niet meer op deze computer. Download het opnieuw om het te installeren.",
+      "downloadAgain": "Opnieuw downloaden",
+      "error": {
+        "noOffer": "Er is geen installatieprogramma gepubliceerd voor deze computer.",
+        "daemon": "De dienst van Timon antwoordde niet. Probeer het zo opnieuw.",
+        "network": "De download is onderbroken.",
+        "http": "De downloadserver weigerde het verzoek.",
+        "insecure": "De download werd omgeleid naar een onveilig adres en is gestopt.",
+        "integrity": "Het bestand komt niet overeen met het gepubliceerde installatieprogramma en is verwijderd.",
+        "diskFull": "Niet genoeg schijfruimte om het installatieprogramma te downloaden.",
+        "filesystem": "Het installatieprogramma kon niet worden opgeslagen in de gegevensmap van Timon."
+      }
+    },
+    "dialog": {
+      "title": "Timon {version}",
+      "changelog": "Volledige changelog bekijken",
+      "download": "Downloaden",
+      "install": "Herstarten en installeren",
+      "verified": "Gedownload en gecontroleerd",
+      "installer": "Installatieprogramma downloaden",
+      "allInstallers": "Alle installatieprogramma’s",
+      "progress": "Voortgang van de download"
+    }
   },
   "mcpTab": {
     "yourServers": "Je MCP-servers"

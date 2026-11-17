@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BRAND } from '../brand.js';
 import {
-  readManifest, PLUGIN_API_VERSION, ALLOWED_INJECT, PLUGIN_PERMISSIONS, SENSITIVE_PLUGIN_PERMISSIONS, ORDINARY_PLUGIN_PERMISSIONS,
+  readManifest, PLUGIN_API_VERSION, SLOT_API_VERSIONS, ALLOWED_INJECT, PLUGIN_PERMISSIONS, SENSITIVE_PLUGIN_PERMISSIONS, ORDINARY_PLUGIN_PERMISSIONS,
   dictationEgressLines, PluginManifestSchema, PLUGIN_KINDS,
 } from './manifest.js';
 
@@ -739,6 +739,18 @@ test('mascot: a bad slug, a duplicate or an empty block is refused', () => {
 
 test('mascot: needs the API that knows it', () => {
   assert.match(refusal(mascotPack({ apiVersion: 14 })), /`mascot` needs `apiVersion: 15`/);
+});
+
+test('a slot opened by API 17 needs a manifest that declares it', () => {
+  // A host 16 would load such a plugin, then its browser half dies on an
+  // import (`useNotice`, `useUpdateDialog`) that client does not export.
+  for (const slot of ['notices', 'notices.card', 'updates.dialog']) {
+    assert.match(refusal(pkg({ apiVersion: 16, client: { slots: [slot] } })),
+      new RegExp(`names \`${slot.replace('.', '\\.')}\`, which needs \`apiVersion: 17\``), slot);
+    const res = readManifest(pkg({ apiVersion: 17, client: { slots: [slot] } }));
+    assert.ok(res.ok, res.ok ? '' : res.message);
+  }
+  assert.equal(SLOT_API_VERSIONS['updates.dialog'], PLUGIN_API_VERSION);
 });
 
 test('`root` outside a layout is refused, whatever the other kind', () => {

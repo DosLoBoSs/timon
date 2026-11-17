@@ -16,7 +16,7 @@
 import { FormEvent, useState, type ReactElement } from 'react';
 import { Button } from '@/components/ui/button';
 import { BackToLocalButton } from '@/components/machines/back-to-local';
-import { LockScreenUpdateOffer } from '@/components/updates/update-banner';
+import { LockScreenUpdateOffer } from '@/components/updates/update-notice';
 import { activationErrorMessage, isActivationKey, type BetaLock, type LicenseRejection } from '@/lib/license';
 import { t } from '@/lib/i18n';
 import { formatDate as formatCalendarDate } from '@/lib/intl';

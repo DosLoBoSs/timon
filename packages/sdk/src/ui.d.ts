@@ -446,18 +446,16 @@ declare module '@timon/ui' {
     size: number;
   };
   /**
-   * A newer Timon the daemon verified against the signed release list, as the
-   * `updates.banner` slot receives it (client API 15). `null` outside that
-   * slot; the host only paints the slot while such a version exists and the
-   * person has not put it off. `offer.notes` is plain text: render it as text,
-   * never as HTML. `installers` are the ones for this browser's system, the
-   * first to download first; empty on a phone or an unknown system — link
-   * `offer.notesUrl` then. `later()` hides this version only. While
-   * `buildExpiresAt` is set the build-expiry notice is hidden in favour of the
-   * banner: say when the build stops. `download` is set in the desktop app
-   * only: the shell downloads and verifies the installer for this machine
-   * itself (its URL, size and sha256 come from the daemon, never from the
-   * page) — show its `state` and offer its gestures instead of the link.
+   * @deprecated Since client API 17 the `updates.banner` slot is no longer
+   * painted: a newer Timon is a notice card of `@timon/updates`. Nothing
+   * provides this value to a plugin any more, so it answers `null`. Push your
+   * own card with `ctx.notices`, or restyle every card through `notices.card`.
+   *
+   * Before API 17: the newer Timon the daemon verified against the signed
+   * release list, as the `updates.banner` slot received it. `offer.notes` is
+   * plain text. `installers` are the ones for this browser's system, the
+   * first to download first. `later()` hid this version only. `download` was
+   * set in the desktop app only.
    */
   export function useUpdateStatus(): {
     installed: string;
@@ -503,13 +501,102 @@ declare module '@timon/ui' {
    * with the command that installs it; `not_writable`: the AppImage's folder
    * cannot be written, the file stays in Timon's data folder; `none`: no
    * verified installer is left on disk, nothing was tried — offer `start()`
-   * again.
+   * again. Since the silent installation (client API 17): `restarting` also
+   * follows a `.pkg`, `.deb` or Windows installer that installs without
+   * leaving the app; `cancelled`: the person dismissed the system's password
+   * prompt, nothing changed — show "Install" again, no error.
    */
   export type UpdateInstallOutcome =
     | { status: 'missions'; count: number }
-    | { status: 'restarting' | 'not_writable' | 'opened' | 'closing' | 'none' | 'unsupported' }
+    | { status: 'restarting' | 'not_writable' | 'opened' | 'closing' | 'none' | 'unsupported' | 'cancelled' }
     | { status: 'guided'; command: string; opened: boolean }
     | { status: 'failed'; message: string | null };
+
+  /** A notice card as it is painted (client API 17): `NoticeInput` with its defaults and its owner. */
+  export type Notice = {
+    id: string;
+    pluginId: string;
+    tone: 'info' | 'warning' | 'success';
+    /** A brand logo to draw instead of the tone's icon; `null`: the tone's. */
+    icon: 'github' | 'discord' | 'timon' | 'x' | 'youtube' | null;
+    title: string;
+    body: string | null;
+    actions: readonly { label: string; onSelect?: () => void; href?: string; dismiss?: boolean }[];
+    dismissible: boolean;
+  };
+  /**
+   * What an entry of the `notices` slot pushes its cards with (client API 17).
+   * The entry is mounted once and paints nothing; it pushes from an effect,
+   * which is where a rule that needs React state lives (a plugin with nothing
+   * to watch uses `ctx.notices.push` from `apply`). `notices`: this plugin's
+   * cards still up. `push` and `remove` behave as `ctx.notices`, and the
+   * cards leave with the entry. `null` outside a `notices` entry.
+   */
+  export function useNotices(): {
+    notices: Notice[];
+    push(notice: {
+      id: string;
+      tone?: 'info' | 'warning' | 'success';
+      icon?: 'github' | 'discord' | 'timon' | 'x' | 'youtube';
+      title: string;
+      body?: string;
+      actions?: readonly { label: string; onSelect?: () => void; href?: string; dismiss?: boolean }[];
+      dismissible?: boolean;
+    }): void;
+    remove(id: string): void;
+  } | null;
+  /**
+   * The card a `notices.card` occupant paints (client API 17): the host paints
+   * the slot once per visible card and keeps the frame (bottom-left, stacked,
+   * at most three). Render `title` and `body` as text, never as HTML; offer
+   * `dismiss()` only when `notice.dismissible`; call `act(index)` for a click
+   * on `notice.actions[index]` — it runs `onSelect`, opens `href`, and closes
+   * the card for good when the action says `dismiss`. `null` outside a card.
+   */
+  export function useNotice(): {
+    notice: Notice;
+    dismiss(): void;
+    act(index: number): void;
+  } | null;
+
+  /** A gesture of the update window (client API 17): a button, or a link to open in a new tab when `href` is set. */
+  export type UpdateDialogAction = {
+    label: string;
+    /** What the gesture is: `download`, `cancel`, `retry`, `install`, `install-anyway`, `wait`, `installer`… */
+    marker: string;
+    run(): void;
+    href: string | null;
+  };
+  /**
+   * The update window an `updates.dialog` occupant paints (client API 17).
+   * Opened by the update card and Settings › System › Updates; the host keeps
+   * the dialog (named "Timon <version>": do not add a `DialogTitle`), the focus,
+   * Escape, and the update flow. `highlights` are plain text, written by hand at
+   * the release, at most five, possibly none: then show `notesUrl` alone.
+   * `download` is the desktop app's download (`null` in a browser or a window
+   * on another machine, where `actions` links the installer). `step` says where
+   * the flow stands (`offer`, `idle`, `downloading`, `verifying`,
+   * `download-failed`, `ready`, `missions`, `installing`, `restarting`, …);
+   * `line` and `command` are what to say under it, `alert` whether it is a
+   * refusal. Paint `actions` as they come, the main one first, and call `run()`
+   * — or open `href` — on a click. At `missions` they are "Install anyway" and
+   * "Wait": the running missions stop only on the first. `null` outside the
+   * window.
+   */
+  export function useUpdateDialog(): {
+    version: string;
+    publishedAt: string;
+    installed: string;
+    highlights: string[];
+    notesUrl: string;
+    download: UpdateDownloadState | null;
+    step: string;
+    line: string | null;
+    command: string | null;
+    alert: boolean;
+    actions: UpdateDialogAction[];
+    close(): void;
+  } | null;
 
   /** `older` = ↑, `newer` = ↓ (client API 12). */
   export type PromptHistoryDirection = 'older' | 'newer';

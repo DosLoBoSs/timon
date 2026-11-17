@@ -2,13 +2,13 @@
 
 /**
  * The desktop shell's download and installation of a newer Timon
- * (docs/AUTO-UPDATE.md §6, P2 and P3), as the banner sees it.
+ * (docs/AUTO-UPDATE.md §6, P2 and P3), as the update flow sees it.
  *
  * Only the shell downloads: it reads the verified offer from its own daemon
  * and names the installer itself, so the page sends gestures and nothing else
  * — no URL, no path, no version. In a browser, in an older desktop, or in a
  * window showing another machine, the bridge is absent or refuses, and the
- * hook gives `null`: the banner keeps its plain download link.
+ * hook gives `null`: the flow keeps its plain download link.
  */
 import { useEffect, useMemo, useState } from 'react';
 
@@ -31,14 +31,16 @@ export type UpdateOpenOutcome = { status: 'opened' | 'none' | 'unsupported' } | 
  * What `install` did (P3). `missions`: nothing, `count` missions run and
  * installing would stop them — ask, then `install(true)`. `unsupported`: an
  * older desktop that cannot install; open the installer instead.
+ * `cancelled`: the person dismissed the system's password prompt; nothing
+ * changed and the verified file is still ready.
  */
 export type UpdateInstallOutcome =
   | { status: 'missions'; count: number }
-  | { status: 'restarting' | 'not_writable' | 'opened' | 'closing' | 'none' | 'unsupported' }
+  | { status: 'restarting' | 'not_writable' | 'opened' | 'closing' | 'none' | 'unsupported' | 'cancelled' }
   | { status: 'guided'; command: string; opened: boolean }
   | { status: 'failed'; message: string | null };
 
-/** What an `updates.banner` occupant drives; `null` outside the desktop app. */
+/** What the update flow drives; `null` outside the desktop app. */
 export type UpdateDownloadControl = {
   state: UpdateDownloadState;
   /** Downloads the installer the daemon verified for this machine. Takes nothing. */
@@ -77,7 +79,7 @@ function parseOutcome(value: unknown): UpdateOpenOutcome {
   return { status: 'failed', message: typeof message === 'string' ? message : null };
 }
 
-const INSTALL_STATUSES = new Set(['restarting', 'not_writable', 'opened', 'closing', 'none', 'unsupported']);
+const INSTALL_STATUSES = new Set(['restarting', 'not_writable', 'opened', 'closing', 'none', 'unsupported', 'cancelled']);
 
 export function parseInstallOutcome(value: unknown): UpdateInstallOutcome {
   const read = value && typeof value === 'object' ? value as Record<string, unknown> : {};

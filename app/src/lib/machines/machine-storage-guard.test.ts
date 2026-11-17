@@ -29,6 +29,7 @@ const DEVICE_STATE: Record<string, string> = {
   'lib/dev-logo.ts': 'the development copy\'s product-logo switch, kept per browser for screenshots',
   'lib/first-run-gate.ts': 'the light/dark picked on the onboarding\'s switch, before any account exists to hold it',
   'app/layout.tsx': 'the pre-paint script reads that onboarding pick before any module can run',
+  'components/notices/github-star-notice.tsx': 'the days this browser opened the app, counted for the GitHub star card',
 };
 
 /** Raw storage access left once the machine-scoped wrappings are taken out. */

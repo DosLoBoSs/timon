@@ -1,0 +1,24 @@
+{
+  "notices": {
+    "region": "お知らせ",
+    "close": "閉じる",
+    "githubStar": {
+      "title": "GitHub でスターを付けませんか？",
+      "action": "GitHub でスターを付ける"
+    },
+    "feed": {
+      "open": "詳細を見る"
+    },
+    "preview": {
+      "discord": {
+        "title": "コミュニティに参加",
+        "body": "質問、アイデア、最新情報を Timon の開発者たちと。",
+        "action": "参加する"
+      },
+      "feed": {
+        "title": "木曜日にライブデモ",
+        "body": "エージェントとプラグイン、1 時間。"
+      }
+    }
+  }
+}

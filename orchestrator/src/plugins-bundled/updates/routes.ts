@@ -10,7 +10,11 @@
  *  - `GET /api/updates/missions` — a caller holding `settings` (read): how many
  *    missions an update would stop (docs/AUTO-UPDATE.md §6, P3). The desktop
  *    shell asks before it launches an installer and on its approval screen.
- *    Counts only, never an id, an agent or a title. Takes no query.
+ *    Counts only, never an id, an agent or a title. Takes no query;
+ *  - `GET /api/updates/notices` — any signed-in caller: the announcements of
+ *    the signed notice feed this build shows now, for the notice cards. Public
+ *    and signed like the offer, so no right beyond being signed in. Never
+ *    anonymous. Takes no query.
  *
  * The daemon token (CLI) passes both as the operator it is. A browser never
  * holds it: the web app's proxy forwards the session cookie alone.
@@ -20,6 +24,7 @@ import { z } from 'zod';
 import { apiError } from '../../api-error.js';
 import { rejectIfDenied, requireAuth } from '../../users/identity.js';
 import type { UpdateStatus } from './checker.js';
+import type { RemoteNotice } from './notices-checker.js';
 
 const CheckBody = z.object({}).strict();
 const NoQuery = z.object({}).strict();
@@ -31,6 +36,7 @@ export type UpdatesApi = {
   status(): UpdateStatus;
   check(): Promise<UpdateStatus>;
   missions(): MissionCount;
+  notices(): RemoteNotice[];
 };
 
 export function registerRoutes(app: Router, api: UpdatesApi): void {
@@ -53,5 +59,11 @@ export function registerRoutes(app: Router, api: UpdatesApi): void {
     if (rejectIfDenied(req, res, 'settings')) return;
     if (!NoQuery.safeParse(req.query).success) { res.status(400).json(apiError('invalid_request', 'this route takes no query')); return; }
     res.json(api.missions());
+  });
+
+  app.get('/api/updates/notices', (req, res) => {
+    if (!requireAuth(req, res)) return;
+    if (!NoQuery.safeParse(req.query).success) { res.status(400).json(apiError('invalid_request', 'this route takes no query')); return; }
+    res.json({ notices: api.notices() });
   });
 }

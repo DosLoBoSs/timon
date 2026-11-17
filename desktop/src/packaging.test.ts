@@ -184,7 +184,12 @@ test('the NSIS installer pauses the service with one elevation as it opens, over
   assert.doesNotMatch(nsh, /!macro customCheckAppRunning/);
   const pause = nsh.match(/!macro timonPauseService\s+([\s\S]*?)!macroend/)?.[1] ?? '';
   assert.doesNotMatch(pause, /tasklist/, 'no detection from an unelevated process');
-  assert.match(pause, /\$\{IfNot\} \$\{Silent\}/, 'never prompt under /S');
+  // Never a prompt under /S, nor in an update's uninstaller, except for the
+  // update Timon starts from its window (update-installer.ts, NSIS_SILENT_ARGS).
+  assert.match(pause, /\$\{If\} \$\{Silent\}\s+\$\{OrIf\} \$\{isUpdated\}\s+StrCpy \$2 "skip"\s+\$\{StdUtils\.TestParameter\} \$1 "timon-app-update"\s+\$\{If\} \$1 == "true"\s+StrCpy \$2 "pause"/);
+  assert.match(pause, /\$\{If\} \$2 == "pause"\s+\$\{If\} \$\{FileExists\}/);
+  // A per-machine install elevates itself and runs again: one prompt, from the elevated instance.
+  assert.match(pause, /!ifndef BUILD_UNINSTALLER[\s\S]*\$\{If\} \$\{Silent\}\s+\$\{AndIf\} \$hasPerMachineInstallation == "1"\s+\$\{AndIfNot\} \$\{UAC_IsAdmin\}\s+StrCpy \$2 "skip"/);
   assert.ok(pause.includes('${FileExists} "$INSTDIR\\${APP_EXECUTABLE_FILENAME}"'), 'an existing install');
   assert.match(pause, /timon-service\.cmd[\s\S]*timon-service\.vbs/, 'a service launcher, revision 2 or 1');
   assert.match(pause, /"runas"/);
@@ -581,4 +586,16 @@ test('the macOS permission prompts are in English, and in French on a Mac set to
   const strings = readFileSync(join(root, 'assets', 'mac', 'fr.lproj', 'InfoPlist.strings'), 'utf8');
   for (const key of keys) assert.match(strings, new RegExp(`^"${key}" = "[^"]*[éè][^"]*";$`, 'm'), `fr.lproj: ${key}`);
   assert.match(strings, /"NSMicrophoneUsageDescription" = "[^"]*dictée[^"]*site[^"]*";/, 'the French prompt names dictation too');
+});
+
+// Volet F (docs/AUTO-UPDATE.md §10): the flag the shell passes is the one the installer reads.
+test('the silent update flag of the shell is the one installer.nsh reads', async () => {
+  const { NSIS_SILENT_ARGS } = await import('./update-installer.js');
+  const nsh = readFileSync(join(root, 'build', 'installer.nsh'), 'utf8');
+  const ours = NSIS_SILENT_ARGS.filter((arg) => arg.startsWith('--timon-'));
+  assert.deepEqual(ours, ['--timon-app-update']);
+  assert.ok(nsh.includes(`\${StdUtils.TestParameter} $1 "${ours[0]!.slice(2)}"`));
+  // `/S`, `--updated`, `--force-run`: electron-builder's own, the uninstaller keeps the service task under `--updated`.
+  assert.deepEqual(NSIS_SILENT_ARGS.slice(0, 3), ['/S', '--updated', '--force-run']);
+  assert.match(nsh, /\$\{If\} \$\{isUpdated\}\s+Goto timon_task_done/);
 });

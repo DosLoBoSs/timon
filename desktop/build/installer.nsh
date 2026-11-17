@@ -52,9 +52,34 @@
   Push $1
   Push $2
   ; An update's uninstaller runs after the installer already paused it; under
-  ; /S nothing may prompt.
-  ${IfNot} ${Silent}
-  ${AndIfNot} ${isUpdated}
+  ; /S nothing may prompt. One exception: the update Timon starts from its own
+  ; window (/S --updated --force-run --timon-app-update, update-installer.ts).
+  ; The person asked for it, and the service must not hold the files the
+  ; installer replaces, so the same pause runs, with its elevation prompt.
+  StrCpy $2 "pause"
+  ${If} ${Silent}
+  ${OrIf} ${isUpdated}
+    StrCpy $2 "skip"
+    ${StdUtils.TestParameter} $1 "timon-app-update"
+    ${If} $1 == "true"
+      StrCpy $2 "pause"
+    ${EndIf}
+  ${EndIf}
+  !ifndef BUILD_UNINSTALLER
+  !ifndef INSTALL_MODE_PER_ALL_USERS
+  !ifndef ONE_CLICK
+    ; A silent update of a per-machine install elevates itself in its install
+    ; section and runs again elevated (UAC_RunElevated): that instance pauses
+    ; the service, without a second prompt from this one.
+    ${If} ${Silent}
+    ${AndIf} $hasPerMachineInstallation == "1"
+    ${AndIfNot} ${UAC_IsAdmin}
+      StrCpy $2 "skip"
+    ${EndIf}
+  !endif
+  !endif
+  !endif
+  ${If} $2 == "pause"
     ${If} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
     ${OrIf} ${FileExists} "$PROFILE\.timon\run\timon-service.cmd"
     ${OrIf} ${FileExists} "$PROFILE\.timon\run\timon-service.vbs"

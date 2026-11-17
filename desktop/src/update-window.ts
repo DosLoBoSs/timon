@@ -1,5 +1,5 @@
 import { BrowserWindow, shell } from 'electron';
-import { themeFor, updateCopy, updatePage, type Progress, type UpdateOffer } from './data-update.js';
+import { themeFor, updateCopy, updatePage, updateProgressPage, type Progress, type UpdateOffer } from './data-update.js';
 
 /** How often the approval screen counts the missions again while it waits for a choice. */
 const MISSIONS_POLL_MS = 5_000;
@@ -17,14 +17,20 @@ export class UpdateWindow {
    * Counted while the screen waits; when some run, it says how many, "Quit"
    * becomes "Wait" (the service keeps running them on the installed
    * version) and "Update" becomes "Update anyway".
+   * `preApproved`: "Restart and install" already approved this transition
+   * (`update-consent.ts`), after the missions were counted: the window only
+   * shows the progress, and its choice is made.
    */
   constructor(private offer: UpdateOffer, notesPath: string, private locale: string, scheme: 'light' | 'dark' = 'dark',
-    private countMissions?: () => Promise<number>) {
-    const page = updatePage(offer, notesPath, locale, scheme);
-    this.window = new BrowserWindow({ width: 780, height: 720, minWidth: 480, minHeight: 480,
+    private countMissions?: () => Promise<number>, preApproved = false) {
+    const page = preApproved ? updateProgressPage(offer, locale, scheme) : updatePage(offer, notesPath, locale, scheme);
+    if (preApproved) this.countMissions = undefined;
+    const size = preApproved ? { width: 560, height: 300, minWidth: 420, minHeight: 240 } : { width: 780, height: 720, minWidth: 480, minHeight: 480 };
+    this.window = new BrowserWindow({ ...size,
       title: 'Timon', backgroundColor: themeFor(scheme).background, autoHideMenuBar: true,
       webPreferences: { sandbox: true, nodeIntegration: false, contextIsolation: true } });
     this.choice = new Promise(resolve => { this.choose = resolve; });
+    if (preApproved) { this.approved = true; this.choose?.(true); }
     this.window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     this.window.webContents.on('will-navigate', (event, url) => {
       event.preventDefault();
@@ -38,7 +44,7 @@ export class UpdateWindow {
       } else if (page.links.includes(url)) void shell.openExternal(url);
     });
     this.window.on('closed', () => { this.stopCounting(); });
-    if (countMissions) {
+    if (this.countMissions) {
       this.window.webContents.on('did-finish-load', () => { void this.showMissions(); });
       this.poll = setInterval(() => { void this.showMissions(); }, MISSIONS_POLL_MS);
     }
@@ -69,11 +75,11 @@ export class UpdateWindow {
     if (this.window.isDestroyed()) return;
     const bytes = progress && progress.totalBytes > 0
       ? ` (${updateCopy(this.locale).bytes(Math.min(progress.copiedBytes, progress.totalBytes), progress.totalBytes)})` : '';
+    // The progress-only page has no intro, missions or buttons.
     void this.window.webContents.executeJavaScript(`
-      document.getElementById('intro').hidden = true;
-      document.getElementById('missions').hidden = true;
+      for (const id of ['intro', 'missions']) { const e = document.getElementById(id); if (e) e.hidden = true; }
       document.getElementById('status').textContent = ${JSON.stringify(message + bytes)};
-      for (const id of ['approve', 'quit']) { const b = document.getElementById(id); b.setAttribute('aria-disabled', 'true'); b.tabIndex = -1; }
+      for (const id of ['approve', 'quit']) { const b = document.getElementById(id); if (b) { b.setAttribute('aria-disabled', 'true'); b.tabIndex = -1; } }
       const p = document.getElementById('progress'); p.hidden = false;
       ${progress && progress.totalBytes > 0 ? `p.max = ${progress.totalBytes}; p.value = ${Math.min(progress.copiedBytes, progress.totalBytes)};` : "p.removeAttribute('value');"}
     `).catch(() => { /* A window being destroyed no longer needs progress. */ });

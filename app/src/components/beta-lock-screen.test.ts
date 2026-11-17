@@ -118,7 +118,7 @@ test('a refused key stays on the screen with its reason; a non-admin is told to 
   });
 });
 
-test('the end-date banner shows the date at 14 and 3 days, never for a dev build', async () => {
+test('the end-date banner shows the licence\'s end at 14 and 3 days; the build\'s end is a notice card now', async () => {
   await withDom(async ({ React, root, install }) => {
     const day = 86_400_000;
     let license: Record<string, unknown> = {};
@@ -127,27 +127,28 @@ test('the end-date banner shows the date at 14 and 3 days, never for a dev build
     const base = { status: 'valid', reason: null, edition: 'expert', plan: 'Beta', lifetime: false, expiresAt: null, subscriptionExpiresAt: null, paymentStatus: 'active', offlineSince: null };
     const render = async () => { await React.act(async () => { root.render(React.createElement(LicenseBanner, { key: Math.random() })); }); };
 
-    license = { ...base, build: { channel: 'beta', expiresAt: new Date(Date.now() + 10 * day).toISOString() } };
+    license = { ...base, build: { channel: 'beta', expiresAt: new Date(Date.now() + 2 * day).toISOString() } };
+    await render();
+    assert.equal(document.body.textContent, '', 'the build\'s end is said by the update notice card');
+
+    const beta = { channel: 'beta', expiresAt: null };
+    license = { ...base, build: beta, subscriptionExpiresAt: new Date(Date.now() + 10 * day).toISOString() };
     await render();
     const soon = document.querySelector('[role="status"]');
-    assert.match(soon?.textContent ?? '', /beta build stops running on/);
+    assert.match(soon?.textContent ?? '', /Your licence ends on/);
     assert.doesNotMatch(soon?.className ?? '', /red/);
 
-    license = { ...base, build: { channel: 'beta', expiresAt: new Date(Date.now() + 2 * day).toISOString() } };
+    license = { ...base, build: beta, subscriptionExpiresAt: new Date(Date.now() + 2 * day).toISOString() };
     await render();
     assert.match(document.querySelector('[role="status"]')?.className ?? '', /red/);
 
-    license = { ...base, build: { channel: 'beta', expiresAt: new Date(Date.now() + 40 * day).toISOString() } };
+    license = { ...base, build: beta, subscriptionExpiresAt: new Date(Date.now() + 40 * day).toISOString() };
     await render();
     assert.equal(document.body.textContent, '');
 
-    license = { ...base, build: { channel: 'dev', expiresAt: new Date(Date.now() + 2 * day).toISOString() } };
+    license = { ...base, build: { channel: 'dev', expiresAt: null }, subscriptionExpiresAt: new Date(Date.now() + 2 * day).toISOString() };
     await render();
     assert.equal(document.body.textContent, '');
-
-    license = { ...base, build: { channel: 'beta', expiresAt: null }, subscriptionExpiresAt: new Date(Date.now() + 5 * day).toISOString() };
-    await render();
-    assert.match(document.body.textContent ?? '', /Your licence ends on/);
   });
 });
 
@@ -197,7 +198,7 @@ const LOCKED_OFFER = {
   buildExpiresAt: '2026-09-30T12:00:00.000Z',
 };
 
-test('an expired build with a newer version published links its installer, and Later cannot hide it', async () => {
+test('an expired build with a newer version published opens its installer, and Later cannot hide it', async () => {
   await withDom(async ({ React, root, install }) => {
     install('navigator', { userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130 Timon/0.1.6' });
     // "Later" pressed on this version in a page before the lock: the way out stays.
@@ -208,6 +209,8 @@ test('an expired build with a newer version published links its installer, and L
       assert.ok(REACHABLE.has(input), `the locked screen called ${input}, which the wall refuses`);
       return Response.json(LOCKED_OFFER);
     });
+    const opened: string[] = [];
+    window.open = ((url: string) => { opened.push(url); return null; }) as typeof window.open;
     const { BetaLockScreen } = await import('./beta-lock-screen');
     await React.act(async () => {
       root.render(React.createElement(BetaLockScreen, { lock: { kind: 'build_expired', buildExpiresAt: '2026-09-30T12:00:00.000Z' } }));
@@ -216,13 +219,11 @@ test('an expired build with a newer version published links its installer, and L
     assert.deepEqual(calls, [OFFER_READ], 'one read of the offer, no event stream');
     const offer = document.querySelector('[data-lock-update-offer]');
     assert.ok(offer, 'the offer is on the lock screen');
-    assert.match(offer.textContent ?? '', /Timon 0\.1\.8 is available — you run 0\.1\.6/);
-    const link = offer.querySelector<HTMLAnchorElement>('[data-update-download]');
-    assert.equal(link?.getAttribute('data-update-download'), 'linux-x64-appimage', 'the installer of this system comes first');
-    assert.equal(link?.href, 'https://github.com/acme/r/releases/download/v0.1.8/Timon.AppImage');
-    assert.ok(!offer.querySelector('[data-update-later]'), 'the only way out cannot be put off');
-    await React.act(async () => { buttons(/What's new/)[0]!.click(); });
-    assert.match(offer.querySelector('[data-update-notes]')?.textContent ?? '', /Faster boot\./);
+    assert.match(offer.textContent ?? '', /Timon 0\.1\.8 is available/);
+    const actions = Array.from(offer.querySelectorAll('[data-update-action]'), (el) => el.getAttribute('data-update-action'));
+    assert.deepEqual(actions, ['update'], 'one way out, and it cannot be put off');
+    await React.act(async () => { buttons(/^Update$/)[0]!.click(); });
+    assert.deepEqual(opened, ['https://github.com/acme/r/releases/download/v0.1.8/Timon.AppImage'], 'the installer of this system');
   });
 });
 
@@ -248,7 +249,7 @@ test('in the desktop app the locked build downloads the newer version through th
     await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
     const offer = document.querySelector('[data-lock-update-offer]');
     assert.ok(offer, 'the offer is on the lock screen');
-    const start = offer.querySelector<HTMLButtonElement>('[data-update-start]');
+    const start = offer.querySelector<HTMLButtonElement>('[data-update-action="update"]');
     assert.ok(start, 'the shell downloads it');
     await React.act(async () => { start.click(); await new Promise((resolve) => setTimeout(resolve, 10)); });
     assert.deepEqual(shellCalls.filter(([name]) => name === 'start'), [['start']]);
@@ -270,7 +271,6 @@ test('a locked build with no newer version shows nothing more', async () => {
     await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
     assert.deepEqual(calls, [OFFER_READ]);
     assert.ok(!document.querySelector('[data-lock-update-offer]'));
-    assert.ok(!document.querySelector('[data-update-banner]'));
     assert.doesNotMatch(document.body.textContent ?? '', /is available/);
   });
 });
@@ -289,7 +289,7 @@ test('a lock screen opened before the daemon\'s first check shows the offer once
       assert.equal(input, OFFER_READ);
       return Response.json(answers[Math.min(calls.length, answers.length) - 1]);
     });
-    const { LockScreenUpdateOffer } = await import('./updates/update-banner');
+    const { LockScreenUpdateOffer } = await import('./updates/update-notice');
     await React.act(async () => { root.render(React.createElement(LockScreenUpdateOffer, { retryMs: 20 })); });
     await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 5)); });
     assert.ok(!document.querySelector('[data-lock-update-offer]'), 'nothing checked yet: no offer');
@@ -309,7 +309,7 @@ test('the lock screen stops reading once the check settles with nothing newer, a
     let calls = 0;
     let state = 'unchecked';
     install('fetch', async () => { calls += 1; return Response.json({ ...LOCKED_OFFER, state, available: null }); });
-    const { LockScreenUpdateOffer } = await import('./updates/update-banner');
+    const { LockScreenUpdateOffer } = await import('./updates/update-notice');
     await React.act(async () => { root.render(React.createElement(LockScreenUpdateOffer, { retryMs: 20 })); });
     await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 70)); });
     assert.ok(calls >= 2, 'a pending status is read again');

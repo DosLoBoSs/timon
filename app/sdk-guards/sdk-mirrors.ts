@@ -28,6 +28,7 @@ import type {
   IslandContentOptions, IslandParamSpec, SlotChildren, SlotKind, WidgetOptions,
 } from '../src/lib/plugin-host/slots';
 import type { AccountUsage, UsageEntry, UsageWindow } from '../src/lib/plugin-host/usage-types';
+import type { NoticeAction, NoticeIcon, NoticeInput, NoticeTone } from '../src/lib/notices';
 
 type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
 type Assert<T extends true> = T;
@@ -82,6 +83,12 @@ type _UsageWindow = Assert<Equals<UsageWindow, Sdk.UsageWindow>>;
 type _AccountUsage = Assert<Equals<AccountUsage, Sdk.AccountUsage>>;
 type _UsageEntry = Assert<Equals<UsageEntry, Sdk.UsageEntry>>;
 
+// Notice cards (`lib/notices.ts`, client API 17).
+type _NoticeTone = Assert<Equals<NoticeTone, Sdk.NoticeTone>>;
+type _NoticeAction = Assert<Equals<NoticeAction, Sdk.NoticeAction>>;
+type _NoticeInput = Assert<Equals<NoticeInput, Sdk.NoticeInput>>;
+type _NoticeIcon = Assert<Equals<NoticeIcon, Sdk.NoticeIcon>>;
+
 // The context (`plugin-host/loader.ts`): the app types it by inference from
 // `clientContext`, the SDK by hand. Same members, at the top and one level
 // down; the object the host builds satisfies the SDK's type; and the register
@@ -100,6 +107,7 @@ type _ContextEventsKeys = Assert<Equals<keyof AppContext['events'], keyof SdkCon
 type _ContextRealtimeKeys = Assert<Equals<keyof AppContext['realtime'], keyof SdkContext['realtime']>>;
 type _ContextThemeKeys = Assert<Equals<keyof AppContext['theme'], keyof SdkContext['theme']>>;
 type _ContextUsageKeys = Assert<Equals<keyof AppContext['usage'], keyof SdkContext['usage']>>;
+type _ContextNoticesKeys = Assert<Equals<keyof AppContext['notices'], keyof SdkContext['notices']>>;
 type _ContextSatisfiesSdk = Assert<Accepts<Omit<SdkContext, 'slots'>, Omit<AppContext, 'slots'>>>;
 type _RegisterOptions = Assert<Equals<
   Omit<AppRegisterOptions, HostOnlyRegisterKeys | 'widget' | 'island'>,

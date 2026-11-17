@@ -98,7 +98,13 @@ export const SETTINGS: SettingDef[] = [
     label: 'Check for Timon updates',
     description: "Reads the signed list of Timon releases on timon-ai.com at startup and every 6 hours, to show "
       + "a banner when a newer version is published for this build's channel. The request carries no licence, "
-      + "account or machine identifier. Off: nothing is requested. A build run from the sources never checks." },
+      + "account or machine identifier. Off: nothing is requested, announcements included. A build run from the "
+      + "sources never checks." },
+  { key: 'TIMON_NOTICES_CHECK', type: 'bool', default: true, group: 'Misc', owner: '@timon/updates',
+    label: 'Show Timon announcements',
+    description: "Reads the signed list of announcements on timon-ai.com with the update check, to show them as "
+      + "cards at the bottom left. Same request as the update check: no licence, account or machine identifier. "
+      + "Off, or with the update check off: nothing is requested." },
 
   // ── Missions & concurrency ────────────────────────────────────────────
   { key: 'TIMON_MAX_LIVE_MISSIONS', type: 'int', default: 12, group: 'Missions',

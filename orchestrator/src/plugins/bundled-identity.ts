@@ -134,8 +134,9 @@ const widget = (slots: readonly string[] = ['cockpit.widget']): BundledIdentity 
  */
 export const BUNDLED_IDENTITY: Readonly<Record<string, BundledIdentity>> = Object.freeze({
   '@timon/db': identity('behavior'),
-  // Also the default occupant of two boot slots: the folder browser and the confirmation dialog.
-  '@timon/settings': page('/settings', ['nav.item', 'settings.resources', 'directory.picker', 'confirm.dialog']),
+  // Also the default occupant of the folder browser, the confirmation dialog and the notice card,
+  // and the source of the product's own notices (`notices`).
+  '@timon/settings': page('/settings', ['nav.item', 'settings.resources', 'directory.picker', 'confirm.dialog', 'notices', 'notices.card']),
   '@timon/http': page('/dashboard'),
   '@timon/users': identity('behavior'),
   '@timon/plugins': page('/plugins'),
@@ -218,8 +219,9 @@ export const BUNDLED_IDENTITY: Readonly<Record<string, BundledIdentity>> = Objec
   '@timon/tts': identity('behavior'),
   '@timon/gpt-live': identity('behavior'),
   '@timon/video-factory': widget(['chat.right.widget']),
-  // Its client half paints the "new version" banner, the default occupant of `updates.banner`.
-  '@timon/updates': identity('behavior', { slots: ['updates.banner'] }),
+  // Its client half is a source of `notices`: a newer version and the end of this build, as one card;
+  // and the default occupant of `updates.dialog`, the update window that card opens.
+  '@timon/updates': identity('behavior', { slots: ['notices', 'updates.dialog'] }),
   // Its client half paints the Privacy pane of the settings.
   '@timon/telemetry': identity('behavior', { slots: ['settings.section'] }),
   // Host half only for now: the settings page and the switcher come with its client half (P3d).

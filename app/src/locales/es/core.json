@@ -851,8 +851,6 @@
     "notActivated": "Free está activo: las cuentas adicionales necesitan una licencia",
     "activate": "Activar",
     "offlineSince": "Servidor de licencias inaccesible desde el {date}: los derechos de pago siguen disponibles durante la tolerancia sin conexión; después Timon vuelve a Free.",
-    "buildEndsSoon": "Esta versión beta dejará de funcionar el {date}. Instala la última versión antes de esa fecha.",
-    "buildEndsUrgent": "Esta versión beta dejará de funcionar el {date}. Instala ya la última versión.",
     "licenseEndsSoon": "Tu licencia termina el {date}. Introduce una clave nueva antes de esa fecha.",
     "licenseEndsUrgent": "Tu licencia termina el {date}. Introduce ya una clave nueva."
   },
@@ -1601,6 +1599,7 @@
       },
       "system": {
         "installation": "Instalación",
+        "updates": "Actualizaciones",
         "backup": "Copias y papelera",
         "diagnostics": "Diagnóstico",
         "desktop": "App de escritorio",
@@ -1664,6 +1663,7 @@
       },
       "system": {
         "installation": "versión acerca de instalación servicio daemon tarea launchagent systemd ruta carpeta de datos registro puerto exportar importar copia actualización",
+        "updates": "actualización actualizar nueva versión comprobar descargar instalador notas automática",
         "backup": "copia copias archivo nocturna restaurar conservar retención días papelera eliminado agente recuperar deshacer purgar",
         "diagnostics": "registros logs depuración debug infra solución de problemas",
         "desktop": "desinstalar quitar eliminar electron aplicación",
@@ -4387,6 +4387,62 @@
     "search": "Buscar un agente…",
     "clear": "Borrar",
     "empty": "Ningún agente"
+  },
+  "updates": {
+    "notice": {
+      "available": "Timon {version} está disponible",
+      "update": "Actualizar",
+      "buildEnds": "Esta versión deja de funcionar el {date}."
+    },
+    "download": {
+      "start": "Descargar y verificar",
+      "progress": "Descargando… {percent} ({received} de {total})",
+      "cancel": "Cancelar",
+      "verifying": "Verificando el instalador…",
+      "ready": "{name} está descargado y verificado.",
+      "openInstaller": "Abrir el instalador",
+      "openFolder": "Mostrar en la carpeta",
+      "openFailed": "El sistema no pudo abrirlo. Usa Mostrar en la carpeta.",
+      "retry": "Reintentar",
+      "resume": "Reanudar",
+      "install": "Instalar",
+      "installRestart": "Instalar y reiniciar",
+      "missions": "{count, plural, one {# misión está en curso} other {# misiones están en curso}}. Instalar ahora {count, plural, one {la detiene} other {las detiene}}.",
+      "wait": "Esperar",
+      "installAnyway": "Instalar de todos modos",
+      "installing": "Instalando…",
+      "restarting": "Timon se reinicia con la nueva versión…",
+      "closing": "El instalador está abierto. Timon se cierra para poder ser reemplazado.",
+      "pkgOpened": "Sigue el instalador y luego cierra y vuelve a abrir Timon.",
+      "debGuided": "Tu gestor de software abre el paquete. Si no lo instala, ejecuta este comando en una terminal y luego vuelve a abrir Timon:",
+      "debNotOpened": "Ejecuta este comando en una terminal para instalar el paquete y luego vuelve a abrir Timon:",
+      "copyCommand": "Copiar",
+      "copied": "Copiado",
+      "notWritable": "No se puede escribir en la carpeta de tu AppImage. El nuevo AppImage está en la carpeta de datos de Timon: reemplaza el tuyo con él.",
+      "installFailed": "La instalación no se inició. Tu versión actual no ha cambiado.",
+      "installNone": "El instalador verificado ya no está en este equipo. Descárgalo de nuevo para instalarlo.",
+      "downloadAgain": "Descargar de nuevo",
+      "error": {
+        "noOffer": "No hay ningún instalador publicado para este equipo.",
+        "daemon": "El servicio de Timon no respondió. Inténtalo de nuevo en un momento.",
+        "network": "La descarga se interrumpió.",
+        "http": "El servidor de descarga rechazó la solicitud.",
+        "insecure": "La descarga se redirigió a una dirección no segura y se detuvo.",
+        "integrity": "El archivo no coincide con el instalador publicado y se eliminó.",
+        "diskFull": "No hay suficiente espacio en disco para descargar el instalador.",
+        "filesystem": "No se pudo guardar el instalador en la carpeta de datos de Timon."
+      }
+    },
+    "dialog": {
+      "title": "Timon {version}",
+      "changelog": "Ver el registro de cambios completo",
+      "download": "Descargar",
+      "install": "Reiniciar e instalar",
+      "verified": "Descargado y verificado",
+      "installer": "Descargar el instalador",
+      "allInstallers": "Todos los instaladores",
+      "progress": "Progreso de la descarga"
+    }
   },
   "mcpTab": {
     "yourServers": "Tus servidores MCP"

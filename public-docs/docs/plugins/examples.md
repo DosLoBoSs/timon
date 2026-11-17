@@ -3,7 +3,7 @@ title: Example cookbook
 sidebar_position: 18
 ---
 
-40 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
+41 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
 
 Obtain the example tree with your developer distribution. There is no public repository link. Use a licensed test instance and follow [Testing](testing.md) before installing third-party code.
 
@@ -921,35 +921,52 @@ export function apply(ctx) {
 }
 ```
 
-## Replace the new-version banner {#update-banner}
+## Notice cards at the bottom left {#notice}
 
-Source: `examples/plugin-update-banner`. Manifest ID: `example-update-banner`. Minimum API: **15**.
+Source: `examples/plugin-notice`. Manifest ID: `example-notice`. Minimum API: **17**.
 
-API 15. One registration in the single updates.banner slot replaces the banner that announces a newer Timon with one compact line. Timon paints the slot only while a newer version is published for the build's channel and the person has not put it off. The component reads everything from useUpdateStatus(): the installed version, the offer with its plain-text notes, the installers for this browser's system (the first one to download first) and later(), which hides that version only. While it is shown, Timon's own build-expiry notice steps aside, so the banner says when the build stops. Remove the plugin and Timon's own banner comes back.
+API 17. The bottom-left cards of Timon (a new version, a GitHub star) are open to plugins in two ways, both shown here. From apply, ctx.notices.push({ id, tone, title, body, actions, dismissible }) shows a card under the plugin's name; pushing the same id updates it, ctx.notices.remove(id) takes it away, and a card the person closes stays closed for their account on every client. One registration in the single notices.card slot then replaces how every card is painted, here as one compact line. The component reads useNotice(): the notice, dismiss() and act(index), which runs the action's onSelect, opens its href and closes the card when the action says dismiss. Timon keeps the stack: at most three cards, warnings first. Remove the plugin and its card goes, and Timon's own card comes back.
 
 Permissions: none. Read the [related guide](slots.md).
 
-`timon plugin add ./examples/plugin-update-banner` installs this package on the target instance.
+`timon plugin add ./examples/plugin-notice` installs this package on the target instance.
 
-From `examples/plugin-update-banner/lib/client.js`, line 29 (excerpt):
+From `examples/plugin-notice/lib/client.js`, line 26 (excerpt):
 
 ```js
-function CompactUpdateBanner() {
-  const update = useUpdateStatus()
-  if (!update) return null
-  const target = update.installers[0]
-  const ends = update.buildExpiresAt ? ` (${new Date(update.buildExpiresAt).toLocaleDateString()})` : ''
-  return React.createElement('div', { role: 'status', className: 'flex shrink-0 items-center justify-center gap-3 bg-muted px-3 py-1 text-xs', 'data-compact-update': update.offer.version },
-    React.createElement('span', { className: 'font-semibold' }, t('line', { version: update.offer.version }) + ends),
-    React.createElement('a', {
-      className: 'underline', href: target ? target.url : update.offer.notesUrl, target: '_blank', rel: 'noopener noreferrer',
-      'data-compact-download': target ? target.key : '',
-    }, target ? t('download') : t('page')),
-    React.createElement('button', { type: 'button', className: 'underline', onClick: update.later, 'data-compact-later': '' }, t('later')))
+function CompactNotice() {
+  const value = useNotice()
+  if (!value) return null
+  const { notice, dismiss, act } = value
+  // `icon` names a brand logo (github, discord, timon, x, youtube) or is null:
+  // a replacement may draw its own logo for it, or ignore it.
+  return React.createElement('div', {
+    className: 'flex items-center gap-2 px-3 py-2 text-xs',
+    'data-compact-notice': notice.id,
+    'data-compact-icon': notice.icon ?? notice.tone,
+  },
+    React.createElement('span', { className: 'min-w-0 flex-1 truncate font-medium' }, notice.title),
+    notice.actions.map((action, index) => React.createElement('button', {
+      key: index, type: 'button', className: 'underline', onClick: () => act(index), 'data-compact-action': index,
+    }, action.label)),
+    notice.dismissible
+      ? React.createElement('button', { type: 'button', 'aria-label': t('close'), onClick: dismiss, 'data-compact-dismiss': '' }, '×')
+      : null)
 }
 
 export function apply(ctx) {
-  return ctx.slots.register({ slot: 'updates.banner' }, CompactUpdateBanner)
+  // A card pushed once, from `apply`: nothing to watch, so no `notices` entry is
+  // needed. Closed, it stays closed for this account; it leaves with the plugin.
+  // `icon` is optional: one of the logos the app draws itself, never an image
+  // address. The product's card shows it in its pastille; without it, the tone's icon.
+  ctx.notices.push({
+    id: 'welcome',
+    tone: 'success',
+    icon: 'timon',
+    title: t('welcome'),
+    actions: [{ label: t('docs'), href: 'https://docs.timon-ai.com/plugins/slots' }],
+  })
+  return ctx.slots.register({ slot: 'notices.card' }, CompactNotice)
 }
 ```
 
@@ -1039,6 +1056,42 @@ function CompactAppCard() {
 
 export function apply(ctx) {
   return ctx.slots.register({ slot: 'apps.card' }, CompactAppCard)
+}
+```
+
+## Replace the update window {#update-dialog}
+
+Source: `examples/plugin-update-dialog`. Manifest ID: `example-update-dialog`. Minimum API: **17**.
+
+API 17. One registration in the single updates.dialog slot replaces the window that Update opens, from the update card and from Settings › System › Updates, here with a compact one. The component reads useUpdateDialog(): the version and its date, the highlights written by hand at the release (plain text, possibly none), the changelog link, the desktop app's download, the step the update flow is at with its line, and the actions of that step, each with run() or an href. Timon keeps the dialog around it, named with the version, and runs the flow: the download, its verification, the running missions asked about first, then the installation. Remove the plugin and Timon's own window comes back.
+
+Permissions: none. Read the [related guide](slots.md).
+
+`timon plugin add ./examples/plugin-update-dialog` installs this package on the target instance.
+
+From `examples/plugin-update-dialog/lib/client.js`, line 28 (excerpt):
+
+```js
+function CompactUpdateWindow() {
+  const value = useUpdateDialog()
+  if (!value) return null
+  const { download } = value
+  const progress = download && download.phase === 'downloading' && download.total > 0
+    ? t('progress', { percent: formatPercent(download.received / download.total), total: formatBytes(download.total) })
+    : null
+  return React.createElement('div', { className: 'flex flex-col gap-3 text-sm', 'data-compact-update': value.step },
+    React.createElement('p', { 'aria-hidden': true, className: 'm-0 text-base font-semibold' }, t('title', { version: value.version })),
+    value.highlights.map((item, index) => React.createElement('p', { key: index, className: 'm-0' }, item)),
+    React.createElement('a', { href: value.notesUrl, target: '_blank', rel: 'noopener noreferrer', className: 'text-primary' }, t('changelog')),
+    progress || value.line ? React.createElement('p', { className: 'm-0 tabular-nums text-muted-foreground' }, progress || value.line) : null,
+    React.createElement('div', { className: 'flex flex-wrap gap-2' },
+      value.actions.map((action, index) => action.href
+        ? React.createElement('a', { key: action.marker, href: action.href, target: '_blank', rel: 'noopener noreferrer', className: 'text-primary' }, action.label)
+        : React.createElement(Button, { key: action.marker, size: 'sm', variant: index === 0 ? 'default' : 'ghost', onClick: action.run }, action.label))))
+}
+
+export function apply(ctx) {
+  return ctx.slots.register({ slot: 'updates.dialog' }, CompactUpdateWindow)
 }
 ```
 

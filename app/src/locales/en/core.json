@@ -645,8 +645,6 @@
     "notActivated": "Free is active — additional accounts need a license",
     "activate": "Activate",
     "offlineSince": "License server unreachable since {date} — paid rights remain available during the offline tolerance, then Timon returns to Free.",
-    "buildEndsSoon": "This beta build stops running on {date}. Install the latest version before then.",
-    "buildEndsUrgent": "This beta build stops running on {date}. Install the latest version now.",
     "licenseEndsSoon": "Your licence ends on {date}. Enter a new key before then.",
     "licenseEndsUrgent": "Your licence ends on {date}. Enter a new key now."
   },
@@ -1373,6 +1371,7 @@
       },
       "system": {
         "installation": "Installation",
+        "updates": "Updates",
         "security": "Security",
         "backup": "Backups & trash",
         "diagnostics": "Diagnostics",
@@ -1438,6 +1437,7 @@
       },
       "system": {
         "installation": "version about installation service daemon task launchagent systemd path data folder log port export import backup update",
+        "updates": "update upgrade new version release check download installer changelog notes automatic",
         "security": "security isolation fence sandbox confinement landlock seatbelt mission unix sockets docker ssh agent exception enforce",
         "backup": "backup backups archive nightly restore keep retention days trash deleted agent recover undo purge",
         "diagnostics": "logs debug misc infra troubleshooting",
@@ -4213,18 +4213,10 @@
     "empty": "No agent"
   },
   "updates": {
-    "banner": {
-      "available": "Timon {version} is available — you run {installed}.",
-      "buildEnds": "This build stops running on {date}.",
-      "downloadLinux": "Download for Linux ({format})",
-      "downloadMac": "Download for macOS ({format})",
-      "downloadWindows": "Download for Windows ({format})",
-      "downloadPage": "Download page",
-      "notes": "What's new",
-      "hideNotes": "Hide notes",
-      "noNotes": "No notes were published with this version.",
-      "fullNotes": "Full changelog",
-      "later": "Later"
+    "notice": {
+      "available": "Timon {version} is available",
+      "update": "Update",
+      "buildEnds": "This build stops running on {date}."
     },
     "download": {
       "start": "Download and verify",
@@ -4241,6 +4233,7 @@
       "missions": "{count, plural, one {# mission is running} other {# missions are running}}. Installing now stops {count, plural, one {it} other {them}}.",
       "wait": "Wait",
       "installAnyway": "Install anyway",
+      "installing": "Installing…",
       "restarting": "Timon is restarting on the new version…",
       "closing": "The installer is open. Timon closes so it can be replaced.",
       "pkgOpened": "Follow the installer, then quit and reopen Timon.",
@@ -4262,6 +4255,16 @@
         "diskFull": "Not enough disk space to download the installer.",
         "filesystem": "The installer could not be saved in Timon's data folder."
       }
+    },
+    "dialog": {
+      "title": "Timon {version}",
+      "changelog": "See the full changelog",
+      "download": "Download",
+      "install": "Restart and install",
+      "verified": "Downloaded and verified",
+      "installer": "Download the installer",
+      "allInstallers": "All installers",
+      "progress": "Download progress"
     }
   },
   "missionIsolation": {

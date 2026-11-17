@@ -1,0 +1,39 @@
+{
+  "updates": {
+    "settings": {
+      "section": "バージョン",
+      "title": "Timon {version}",
+      "titleAvailable": "Timon {version} が利用可能",
+      "titleUnknown": "Timon",
+      "status": {
+        "upToDate": "最新です",
+        "upToDateAt": "最新です · {ago}に確認",
+        "installed": "{installed} をインストール済み",
+        "installedAt": "{installed} をインストール済み · {ago}に確認",
+        "unchecked": "まだ確認していません",
+        "checking": "確認中…",
+        "failed": "確認できませんでした",
+        "off": "自動確認はオフ",
+        "dev": "ソースからのビルド（確認なし）",
+        "unknown": "状態を取得できません"
+      },
+      "check": "確認",
+      "retry": "再試行",
+      "checking": "確認中…",
+      "update": "アップデート",
+      "more": "その他のアップデート操作",
+      "notes": "リリースノート",
+      "download": "インストーラーをダウンロード",
+      "allInstallers": "すべてのインストーラー",
+      "automaticOff": "自動確認をオフにする",
+      "automaticOn": "自動確認をオンにする",
+      "notices": "お知らせ",
+      "saveFailed": "設定を保存できませんでした。",
+      "lockedEnv": "環境変数 {key} で決まっています。",
+      "lockedConfig": "timon.config.json で決まっています。",
+      "showClosedNotices": "閉じたカードを再表示",
+      "closedNoticesShown": "閉じたカードが再び表示されます。",
+      "closedNoticesFailed": "閉じたカードを再表示できませんでした。"
+    }
+  }
+}

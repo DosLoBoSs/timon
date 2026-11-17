@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { UpdateDownloader, type FetchLike } from './update-download.js';
 import { UPDATE_CHANNELS, UpdateController, readDaemonUpdateStatus, registerUpdateIpc, type UpdateControllerDeps } from './update-ipc.js';
+import type { SilentInput, SilentOutcome } from './update-installer.js';
 
 const BODY = Buffer.from('a verified installer');
 const SHA = createHash('sha256').update(BODY).digest('hex');
@@ -257,4 +258,176 @@ test('install: the macOS .pkg opens in Installer.app and the shell stays open', 
 test('the preload passes the confirmation of install as a boolean, nothing else', () => {
   const preload = readFileSync(new URL('./preload.cts', import.meta.url), 'utf8');
   assert.ok(preload.includes(`ipcRenderer.invoke('${UPDATE_CHANNELS.install}', { confirmed: confirmed === true })`));
+});
+
+const PKG = { key: 'mac-arm64-pkg', os: 'mac', arch: 'arm64', format: 'pkg', name: 'Timon-0.1.8-arm64.pkg', url: URL_OK, size: BODY.length, sha256: SHA };
+const DEB = { key: 'linux-x64-deb', os: 'linux', arch: 'x64', format: 'deb', name: 'timon_0.1.8_amd64.deb', url: URL_OK, size: BODY.length, sha256: SHA };
+const MAC = { platform: 'darwin' as NodeJS.Platform, arch: 'arm64', appImage: false };
+const LINUX_DEB = { platform: 'linux' as NodeJS.Platform, arch: 'x64', appImage: false };
+
+function silentSetup(machine: { platform: NodeJS.Platform; arch: string; appImage: boolean }, artifact: object | null, outcome: SilentOutcome | (() => Promise<SilentOutcome>),
+  extra: Partial<UpdateControllerDeps> = {}) {
+  const inputs: SilentInput[] = [];
+  const s = installSetup(machine, {
+    ...(artifact ? { readStatus: async () => ({ ...STATUS, available: { ...STATUS.available, artifacts: [artifact] } }) } : {}),
+    readMissions: async () => null,
+    silentInstall: async (input) => { inputs.push(input); s.events.push(`silent ${input.format}`); return typeof outcome === 'function' ? outcome() : outcome; },
+    adminPrompt: (version) => `password for ${version}`,
+    relaunch: () => { s.events.push('relaunch'); },
+    ...extra,
+  });
+  return { ...s, inputs };
+}
+
+test('install, Windows: the silent installer is handed the verified file, then the shell quits; it starts Timon again', async () => {
+  const s = silentSetup(WIN, null, { status: 'handed_over' });
+  await s.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'restarting' });
+  assert.deepEqual(s.events, ['silent nsis', 'quit'], 'no relaunch from here: the installer does it');
+  assert.match(s.inputs[0]!.path, /Timon\.Setup\.0\.1\.8\.exe$/);
+  assert.equal(s.inputs[0]!.sha256, SHA);
+  assert.deepEqual(s.opened, []);
+});
+
+test('install, Windows: no silent path falls back to the visible installer, then quits', async () => {
+  const s = silentSetup(WIN, null, { status: 'unavailable', reason: 'PowerShell is not available.' });
+  await s.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'closing' });
+  assert.deepEqual(s.events, ['silent nsis', 'quit']);
+  assert.match(s.opened[0]!, /Timon\.Setup\.0\.1\.8\.exe$/);
+});
+
+test('install, macOS: installed behind the administrator prompt, then the shell restarts into it', async () => {
+  const s = silentSetup(MAC, PKG, { status: 'installed' });
+  await s.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'restarting' });
+  assert.deepEqual(s.events, ['silent pkg', 'relaunch', 'quit']);
+  assert.equal(s.inputs[0]!.prompt, 'password for 0.1.8');
+  assert.deepEqual(s.opened, []);
+});
+
+test('install, macOS: a dismissed prompt changes nothing and alarms no one; the file stays ready', async () => {
+  const s = silentSetup(MAC, PKG, { status: 'cancelled' });
+  await s.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'cancelled' });
+  assert.deepEqual(s.events, ['silent pkg']);
+  assert.deepEqual(s.opened, []);
+  assert.equal(s.controller.state().phase, 'ready');
+});
+
+test('install, macOS: a failed silent install opens Installer.app, as before', async () => {
+  const s = silentSetup(MAC, PKG, { status: 'failed', reason: 'installer: Error' });
+  await s.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'opened' });
+  assert.deepEqual(s.events, ['silent pkg']);
+  assert.match(s.opened[0]!, /Timon-0\.1\.8-arm64\.pkg$/);
+});
+
+test('install, Linux .deb: pkexec installs then the shell restarts; a refusal falls back to the guided command', async () => {
+  const done = silentSetup(LINUX_DEB, DEB, { status: 'installed' });
+  await done.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await done.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'restarting' });
+  assert.deepEqual(done.events, ['silent deb', 'relaunch', 'quit']);
+  const refused = silentSetup(LINUX_DEB, DEB, { status: 'unavailable', reason: 'No authentication agent found.' });
+  await refused.call(UPDATE_CHANNELS.start);
+  const outcome = await refused.call(UPDATE_CHANNELS.install, { confirmed: true }) as { status: string; command: string };
+  assert.equal(outcome.status, 'guided');
+  assert.match(outcome.command, /^sudo apt install '.*timon_0\.1\.8_amd64\.deb'$/);
+  assert.deepEqual(refused.events, ['silent deb']);
+  const dismissed = silentSetup(LINUX_DEB, DEB, { status: 'cancelled' });
+  await dismissed.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await dismissed.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'cancelled' });
+  assert.deepEqual(dismissed.opened, []);
+});
+
+test('install: a silent install that throws, or bytes changed meanwhile, never end in opening a changed file', async () => {
+  const thrown = silentSetup(MAC, PKG, async () => { throw new Error('boom'); });
+  await thrown.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await thrown.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'opened' });
+  let s: ReturnType<typeof silentSetup> | null = null;
+  s = silentSetup(MAC, PKG, async () => { writeFileSync(s!.downloader.ready()!.path, 'swapped'); return { status: 'failed', reason: 'The installer changed before it was installed.' }; });
+  await s.call(UPDATE_CHANNELS.start);
+  assert.equal((await s.call(UPDATE_CHANNELS.install, { confirmed: true }) as { status: string }).status, 'failed');
+  assert.deepEqual(s.opened, []);
+});
+
+test('install: an installer changed after its verification is never handed to the silent path', async () => {
+  const s = silentSetup(WIN, null, { status: 'handed_over' });
+  await s.call(UPDATE_CHANNELS.start);
+  writeFileSync(s.downloader.ready()!.path, 'tampered');
+  assert.equal((await s.call(UPDATE_CHANNELS.install, { confirmed: true }) as { status: string }).status, 'failed');
+  assert.deepEqual(s.inputs, []);
+  assert.deepEqual(s.events, []);
+});
+
+test('install: a second gesture while the password prompt is open gets the first one\'s answer, not a second prompt', async () => {
+  let answer: (outcome: SilentOutcome) => void = () => undefined;
+  const s = silentSetup(MAC, PKG, () => new Promise<SilentOutcome>((resolve) => { answer = resolve; }));
+  await s.call(UPDATE_CHANNELS.start);
+  const first = s.call(UPDATE_CHANNELS.install, { confirmed: true });
+  const second = s.call(UPDATE_CHANNELS.install, { confirmed: true });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  answer({ status: 'cancelled' });
+  assert.deepEqual(await first, { status: 'cancelled' });
+  assert.deepEqual(await second, { status: 'cancelled' });
+  assert.equal(s.inputs.length, 1);
+});
+
+function consentSetup(machine: { platform: NodeJS.Platform; arch: string; appImage: boolean }, artifact: object | null, outcome: SilentOutcome,
+  extra: Partial<UpdateControllerDeps> = {}) {
+  const consent: string[] = [];
+  const s = silentSetup(machine, artifact, outcome, {
+    consent: {
+      grant: ({ from, to }) => { consent.push(`grant ${from}->${to}`); s.events.push('grant'); },
+      revoke: () => { consent.push('revoke'); },
+    },
+    ...extra,
+  });
+  return { ...s, consent };
+}
+
+test('install: the click grants the migration of this exact transition before any installer starts (§10)', async () => {
+  for (const [machine, artifact, outcome] of [[WIN, null, { status: 'handed_over' }], [MAC, PKG, { status: 'installed' }], [LINUX_DEB, DEB, { status: 'installed' }]] as const) {
+    const s = consentSetup(machine, artifact, outcome);
+    await s.call(UPDATE_CHANNELS.start);
+    assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'restarting' });
+    assert.deepEqual(s.consent, ['grant 0.1.7->0.1.8'], 'granted once, kept for the new version');
+    assert.equal(s.events[0], 'grant', 'before the installer');
+  }
+});
+
+test('install: the system installer opened by the click keeps the consent; a dismissed prompt or a failure revokes it', async () => {
+  const opened = consentSetup(MAC, PKG, { status: 'failed', reason: 'installer: Error' });
+  await opened.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await opened.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'opened' });
+  assert.deepEqual(opened.consent, ['grant 0.1.7->0.1.8']);
+  const cancelled = consentSetup(MAC, PKG, { status: 'cancelled' });
+  await cancelled.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await cancelled.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'cancelled' });
+  assert.deepEqual(cancelled.consent, ['grant 0.1.7->0.1.8', 'revoke']);
+  const failing = consentSetup(MAC, PKG, { status: 'failed', reason: 'installer: Error' }, { openPath: async () => 'no handler' });
+  await failing.call(UPDATE_CHANNELS.start);
+  assert.equal((await failing.call(UPDATE_CHANNELS.install, { confirmed: true }) as { status: string }).status, 'failed');
+  assert.deepEqual(failing.consent, ['grant 0.1.7->0.1.8', 'revoke']);
+});
+
+test('install: running missions, no file or changed bytes grant nothing and remove nothing', async () => {
+  const s = consentSetup(WIN, null, { status: 'handed_over' }, { readMissions: async () => ({ live: 4, working: 2 }) });
+  assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: false }), { status: 'none' });
+  await s.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: false }), { status: 'missions', count: 2 });
+  writeFileSync(s.downloader.ready()!.path, 'tampered');
+  assert.equal((await s.call(UPDATE_CHANNELS.install, { confirmed: true }) as { status: string }).status, 'failed');
+  assert.deepEqual(s.consent, []);
+});
+
+test('install: a consent that cannot be written still installs, and says so in the log', async () => {
+  const lines: string[] = [];
+  const s = silentSetup(WIN, null, { status: 'handed_over' }, {
+    consent: { grant: () => { throw new Error('EACCES'); }, revoke: () => {} },
+    log: (line) => { lines.push(line); },
+  });
+  await s.call(UPDATE_CHANNELS.start);
+  assert.deepEqual(await s.call(UPDATE_CHANNELS.install, { confirmed: true }), { status: 'restarting' });
+  assert.ok(lines.some((line) => /update consent not written: EACCES/.test(line)), lines.join('\n'));
 });
