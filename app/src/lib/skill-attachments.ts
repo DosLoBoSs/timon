@@ -12,7 +12,13 @@
 import { compareText } from './intl';
 
 export type SkillMode = 'include' | 'import';
-export type SkillVia = 'global' | 'project' | 'role' | 'agent' | 'config' | 'code';
+export const SKILL_VIAS = ['global', 'project', 'role', 'agent', 'code'] as const;
+export type SkillVia = (typeof SKILL_VIAS)[number];
+
+/** A daemon older than 0.1.7 can still send `config`: such a value gets no label. */
+export function isSkillVia(via: string): via is SkillVia {
+  return (SKILL_VIAS as readonly string[]).includes(via);
+}
 
 export type SkillAttachment = {
   id: number;

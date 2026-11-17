@@ -2780,7 +2780,6 @@
       "project": "project",
       "role": "role",
       "agent": "this agent",
-      "config": "checked",
       "code": "added by Timon"
     },
     "skillReads": {

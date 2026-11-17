@@ -28,8 +28,8 @@ export type InjectionItem = {
   edit_target: EditTarget | null;
   /** A skill entry: pasted whole (`import`) or one catalogue line (`include`). */
   skill_mode?: 'include' | 'import' | null;
-  /** Where that skill comes from: an attachment scope, the agent's config, or the code. */
-  skill_via?: 'global' | 'project' | 'role' | 'agent' | 'config' | 'code' | null;
+  /** Where that skill comes from: an attachment scope or the code. An older daemon may send another value. */
+  skill_via?: string | null;
   /** Attached to the catalogue, but pasted whole: this backend has no way to read a skill on demand. */
   skill_promoted?: boolean;
   /** A catalogue skill: what reading its body with `skill_get` costs, paid only if the agent reads it. */

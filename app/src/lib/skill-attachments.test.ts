@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  agentSkillModes, attachmentSync, checkedSkills, effectiveSkills, inheritedSkills, parseSkillsPreview, skillsPreviewBody, weightsOnBackend,
+  agentSkillModes, attachmentSync, checkedSkills, effectiveSkills, inheritedSkills, isSkillVia, parseSkillsPreview, skillsPreviewBody, weightsOnBackend,
   type SkillAttachment, type SkillsPreview, type SkillWeights,
   attachBody, attachFailure, attachmentGroups, attachmentKind, attachmentKinds, freeTargets, globalTaken, scopeWritable,
 } from './skill-attachments';
@@ -41,12 +41,17 @@ test('inherited skills are the ones a wider scope brings', () => {
   assert.deepEqual(
     inheritedSkills([
       { id: 'g', mode: 'include', via: 'global' },
-      { id: 'c', mode: 'include', via: 'config' },
+      { id: 'c', mode: 'include', via: 'code' },
       { id: 'r', mode: 'import', via: 'role' },
       { id: 'a', mode: 'import', via: 'agent' },
     ]).map((s) => s.id),
     ['g', 'r'],
   );
+});
+
+test('a via an older daemon still sends (config) is not a known origin', () => {
+  for (const via of ['global', 'project', 'role', 'agent', 'code']) assert.equal(isSkillVia(via), true, via);
+  assert.equal(isSkillVia('config'), false);
 });
 
 test('the preview body is the draft as a save writes it', () => {
