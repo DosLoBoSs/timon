@@ -364,20 +364,15 @@ export function effectiveMergeSha(task: TaskRow, sha: string | null | undefined,
  * in the base, the sha must be in the base and contain them, and no other task
  * may already carry it. What git cannot decide (branch deleted, git missing) is
  * let through, as before, and logged.
+ *
+ * One exception to the last rule (TODO #1053): a `code-group` merge whose
+ * source branches were all in the base already has no merge of its own to
+ * show, and no single branch head contains the others. Once git proves every
+ * branch in the base and inside the sha, a sha another task carries (the
+ * base's head, typically) is accepted: the proof is the ancestry, not the sha.
  */
 export function mergeCloseRefusal(task: TaskRow, sha: string | null): string | null {
   if (task.type !== 'merge') return null;
-  if (sha) {
-    const owner = mergedShaOwner(task, sha);
-    if (owner) {
-      // Another user's task is not named: its id and title are theirs.
-      const which = owner.sameOwner ? `task ${owner.id} ("${owner.title}")` : 'another task';
-      return `Merge guard: commit ${sha} is already the merge of ${which}, ` +
-        `so it does not prove this one. Merge this task's branch, then close with the full sha of the ` +
-        `resulting base. If the branch was already in the base before this task, close with the full sha ` +
-        `of the branch head (\`git rev-parse <branch>\`), once \`git merge-base --is-ancestor <branch> <base>\` succeeds.`;
-    }
-  }
   const sources = mergeSourceBranches(task);
   const verdict = evaluateMergeClose({
     repoPath: taskRepo(task),
@@ -386,6 +381,19 @@ export function mergeCloseRefusal(task: TaskRow, sha: string | null): string | n
     sha,
   });
   if (sources.length === 0) verdict.undecided.push('no source branch found in its dependencies');
+  const owner = sha ? mergedShaOwner(task, sha) : null;
+  const allSourcesProven = sources.length > 1 && verdict.refusal === null && verdict.undecided.length === 0;
+  if (sha && owner && !allSourcesProven) {
+    // Another user's task is not named: its id and title are theirs.
+    const which = owner.sameOwner ? `task ${owner.id} ("${owner.title}")` : 'another task';
+    return `Merge guard: commit ${sha} is already the merge of ${which}, ` +
+      `so it does not prove this one. Merge this task's branch, then close with the full sha of the ` +
+      `resulting base. If the branch was already in the base before this task, close with the full sha ` +
+      `of the branch head (\`git rev-parse <branch>\`), once \`git merge-base --is-ancestor <branch> <base>\` succeeds. ` +
+      `If this task integrates several branches that were all in the base already, close with the full sha ` +
+      `of the base (\`git rev-parse <base>\`) once each of them passes that check.`;
+  }
+  if (owner) console.warn(`[merge-guard] task ${task.id}: sha ${sha} shared with task ${owner.id}, accepted as every source branch is in the base`);
   if (verdict.undecided.length > 0) {
     console.warn(`[merge-guard] task ${task.id}: merge not fully verified (${verdict.undecided.join('; ')})`);
   }

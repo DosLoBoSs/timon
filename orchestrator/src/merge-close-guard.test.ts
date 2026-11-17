@@ -189,6 +189,67 @@ test('what git cannot decide keeps the former behaviour: a deleted source branch
   assert.equal(dbApi.getTask(merge.id)!.status, 'DONE');
 });
 
+// ── code-group: several source branches already in the base (TODO #1053) ──
+
+/**
+ * A `code-group` merge hanging off two code tasks, whose branches `group-a` and
+ * `group-b` both start from `main`. `merged` lists the ones merged into `main`
+ * before the merge task closes; the base's head is then the merge of another task.
+ */
+function groupMerge(merged: readonly ('group-a' | 'group-b')[]): { merge: TaskRow; baseHead: string; other: string } {
+  const { repo } = makeRepo();
+  const codeIds: string[] = [];
+  for (const branch of ['group-a', 'group-b'] as const) {
+    git(repo, 'checkout', '-q', '-b', branch, 'main');
+    commitFile(repo, `${branch}.txt`, `${branch} work`);
+    git(repo, 'checkout', '-q', 'main');
+    const id = randomUUID();
+    dbApi.createTask(id, `${branch} work`, 'witness', { type: 'code', baseBranch: 'main', pipeline: 'code-group' });
+    dbApi.setTaskWorktree(id, repo, branch, 'main');
+    codeIds.push(id);
+  }
+  for (const branch of merged) git(repo, 'merge', '-q', '--no-ff', '-m', `merge: ${branch}`, branch);
+  const baseHead = git(repo, 'rev-parse', 'main');
+  const other = randomUUID();
+  dbApi.createTask(other, 'the merge that moved main', 'witness', { type: 'merge' });
+  dbApi.setTaskMergedSha(other, baseHead);
+  const mergeId = randomUUID();
+  dbApi.createTask(mergeId, 'merge the group', 'witness', { type: 'merge', deps: codeIds, baseBranch: 'main' });
+  dbApi.setTaskWorktree(mergeId, repo, `timon/merge/${mergeId}`, 'main');
+  return { merge: dbApi.getTask(mergeId)!, baseHead, other };
+}
+
+test('a code-group merge whose branches were all in the base closes on the sha of the base', async () => {
+  const { merge, baseHead } = groupMerge(['group-a', 'group-b']);
+  const r = await closeDone(merge.id, { merged_sha: baseHead });
+  assert.equal(r.status, 200, r.json.error);
+  const after = dbApi.getTask(merge.id)!;
+  assert.equal(after.status, 'DONE');
+  assert.equal(after.merged_commit_sha, baseHead);
+});
+
+test('a code-group merge with one branch outside the base still cannot borrow another task\'s sha', async () => {
+  const { merge, baseHead, other } = groupMerge(['group-a']);
+  const r = await closeDone(merge.id, { merged_sha: baseHead });
+  assert.equal(r.status, 409);
+  assert.equal(r.json.code, 'merge_not_proven');
+  assert.match(r.json.error ?? '', new RegExp(`already the merge of task ${other}`));
+  assert.notEqual(dbApi.getTask(merge.id)!.status, 'DONE');
+});
+
+test('a code-group merge cannot borrow a sha that misses one of its branches', async () => {
+  const { merge } = groupMerge(['group-a', 'group-b']);
+  // The head of `group-a` is in the base, carried by another task, and lacks `group-b`.
+  const groupAHead = git(dbApi.getTask(merge.id)!.worktree_path!, 'rev-parse', 'group-a');
+  const holder = randomUUID();
+  dbApi.createTask(holder, 'an earlier merge', 'witness', { type: 'merge' });
+  dbApi.setTaskMergedSha(holder, groupAHead);
+  const r = await closeDone(merge.id, { merged_sha: groupAHead });
+  assert.equal(r.status, 409);
+  assert.equal(r.json.code, 'merge_not_proven');
+  assert.notEqual(dbApi.getTask(merge.id)!.status, 'DONE');
+});
+
 // ── Full pipeline: the coder merged the branch already ─────────────────────
 
 const PROJECT = 'guard';
