@@ -308,6 +308,10 @@ async function handleCodeDone(task: TaskRow): Promise<void> {
     // The base is part of the job too: the review carries it for the brief and
     // the merge that follows inherits it from the root.
     baseBranch: task.base_branch ?? root.base_branch,
+    // How the chain lands is frozen on its first task and travels with it: a
+    // project setting changed mid-way must not split one chain in two modes.
+    integrationMode: task.integration_mode ?? root.integration_mode ?? null,
+    baseRef: task.base_ref ?? root.base_ref ?? null,
     // Same for the job: a review belonging to no series would escape the
     // fallback plan and its returns would have no pilot.
     seriesId: root.series_id,
@@ -394,6 +398,8 @@ async function spawnMergeTask(review: TaskRow): Promise<void> {
     // Without it the merger advanced the repo's ACTIVE branch (18/10/2026: four
     // merges about to land on a feature branch instead of `main`).
     baseBranch: knownBase,
+    integrationMode: root.integration_mode ?? review.integration_mode ?? null,
+    baseRef: root.base_ref ?? review.base_ref ?? null,
     seriesId: root.series_id,
     planGroup: root.plan_group,
     groupId: root.group_id,
@@ -533,6 +539,8 @@ async function handleReviewDone(task: TaskRow): Promise<void> {
     planGroup: root.plan_group,
     pipeline: root.pipeline,
     baseBranch: root.base_branch,
+    integrationMode: root.integration_mode ?? null,
+    baseRef: root.base_ref ?? null,
   });
   dbApi.setTaskVerificationMeta(codeId, nextIter, rootId);
   // Pre-fills the worktree → the dispatcher sees the columns are already set

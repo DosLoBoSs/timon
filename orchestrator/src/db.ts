@@ -1953,6 +1953,43 @@ if (!taskCols.includes('parent_task_id')) db.exec(`ALTER TABLE tasks ADD COLUMN 
 // (`daemon-message.ts`), for the webview to translate. The English columns stay
 // what every other reader shows; NULL = no code, which describes every earlier row.
 if (!taskCols.includes('blocked_reason_code')) db.exec(`ALTER TABLE tasks ADD COLUMN blocked_reason_code TEXT`);
+// How the chain lands (`docs/KANBAN-PR-PIPELINE.md` §2): NULL or 'local' keeps
+// the historical behaviour (the base is a local branch, taken as it is);
+// 'branch' and 'pr' make `base_branch` an integration branch cut from the
+// remote-tracking ref `base_ref` (`origin/main`), created by the daemon and
+// refused rather than replaced when the remote cannot give it. Frozen on the
+// task at its first dispatch and copied by every task the chain creates, so a
+// project setting changed mid-way never splits one chain across two modes.
+if (!taskCols.includes('integration_mode')) db.exec(`ALTER TABLE tasks ADD COLUMN integration_mode TEXT`);
+if (!taskCols.includes('base_ref')) db.exec(`ALTER TABLE tasks ADD COLUMN base_ref TEXT`);
+// One row per integration branch of a repository. The branch is created here
+// (state 'branch'); the later steps of the pull request pipeline fill the PR
+// columns and move the state to 'open', 'merged' or 'closed'. Keyed by the
+// repository's path and the branch: two projects sharing a checkout share its
+// branches too.
+db.exec(`
+CREATE TABLE IF NOT EXISTS integrations (
+  id TEXT PRIMARY KEY,
+  repo TEXT NOT NULL,
+  branch TEXT NOT NULL,
+  remote TEXT NOT NULL,
+  target TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  project TEXT,
+  series_id TEXT,
+  state TEXT NOT NULL DEFAULT 'branch',
+  base_sha TEXT,
+  head_sha TEXT,
+  merge_sha TEXT,
+  pr_number INTEGER,
+  pr_url TEXT,
+  checks TEXT,
+  last_polled_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (repo, branch)
+);
+`);
 if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
 // A writer that changes the reason without naming its code (an agent's own
 // reason, a scope stop, a statement written before the column) must not leave
@@ -2265,6 +2302,32 @@ export type TaskRow = {
   started_at: number | null;
   /** Task this one follows, when the orchestrator created it (see migration). */
   parent_task_id: string | null;
+  /** How the chain lands (see migration): null | 'local' | 'branch' | 'pr'. */
+  integration_mode?: string | null;
+  /** Remote-tracking ref the integration branch was cut from (`origin/main`). */
+  base_ref?: string | null;
+};
+
+/** One integration branch (see the `integrations` migration). */
+export type IntegrationRow = {
+  id: string;
+  repo: string;
+  branch: string;
+  remote: string;
+  target: string;
+  mode: string;
+  project: string | null;
+  series_id: string | null;
+  state: 'branch' | 'open' | 'merged' | 'closed';
+  base_sha: string | null;
+  head_sha: string | null;
+  merge_sha: string | null;
+  pr_number: number | null;
+  pr_url: string | null;
+  checks: string | null;
+  last_polled_at: number | null;
+  created_at: number;
+  updated_at: number;
 };
 
 /**
@@ -2892,6 +2955,21 @@ const setTaskStatusOnlyStmt = db.prepare(
 const setTaskBaseBranchStmt = db.prepare(
   `UPDATE tasks SET base_branch = ?, updated_at = ? WHERE id = ?`,
 );
+const setTaskIntegrationStmt = db.prepare(
+  `UPDATE tasks SET integration_mode = ?, base_ref = ?, updated_at = ? WHERE id = ?`,
+);
+// A row already there keeps its id, state and PR columns: recording the branch
+// again on a later dispatch must not reset what the PR steps wrote.
+const upsertIntegrationStmt = db.prepare(`
+  INSERT INTO integrations (id, repo, branch, remote, target, mode, project, series_id, base_sha, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT (repo, branch) DO UPDATE SET
+    project = COALESCE(integrations.project, excluded.project),
+    series_id = COALESCE(integrations.series_id, excluded.series_id),
+    base_sha = COALESCE(integrations.base_sha, excluded.base_sha),
+    updated_at = excluded.updated_at
+`);
+const getIntegrationStmt = db.prepare(`SELECT * FROM integrations WHERE repo = ? AND branch = ?`);
 const setTaskTodoIdStmt = db.prepare(
   `UPDATE tasks SET todo_id = ?, updated_at = ? WHERE id = ?`,
 );
@@ -4821,6 +4899,11 @@ export const dbApi = {
        *  The chain's own children pass their root's, so the whole volet runs
        *  on the group's LLM. */
       planGroup?: string | null;
+      /** How the chain lands and the remote ref its integration branch comes
+       *  from (see the `integration_mode` migration). The chain's own children
+       *  pass their root's. */
+      integrationMode?: string | null;
+      baseRef?: string | null;
     } = {},
   ): void {
     const now = Date.now();
@@ -4857,6 +4940,9 @@ export const dbApi = {
     );
     if (opts.silentReturn) markTaskSilentReturnStmt.run(id);
     if (opts.baseBranch) setTaskBaseBranchStmt.run(opts.baseBranch, now, id);
+    if (opts.integrationMode || opts.baseRef) {
+      setTaskIntegrationStmt.run(opts.integrationMode ?? null, opts.baseRef ?? null, now, id);
+    }
     if (opts.parentTaskId) setTaskParentStmt.run(opts.parentTaskId, id);
     bus.publish({ kind: 'task_created', taskId: id });
   },
@@ -5366,6 +5452,25 @@ export const dbApi = {
    *  and a `code-self` merge land there (evening of 2026-09-05). */
   setTaskBaseBranch(id: string, base: string): void {
     setTaskBaseBranchStmt.run(base, Date.now(), id);
+  },
+  /** Freezes how the task's chain lands (see the `integration_mode` migration). */
+  setTaskIntegration(id: string, mode: string | null, baseRef: string | null): void {
+    setTaskIntegrationStmt.run(mode, baseRef, Date.now(), id);
+  },
+  /** Records an integration branch; idempotent on (repo, branch). */
+  recordIntegration(row: {
+    repo: string; branch: string; remote: string; target: string; mode: string;
+    project?: string | null; seriesId?: string | null; baseSha?: string | null;
+  }): IntegrationRow {
+    const now = Date.now();
+    upsertIntegrationStmt.run(
+      randomUUID(), row.repo, row.branch, row.remote, row.target, row.mode,
+      row.project ?? null, row.seriesId ?? null, row.baseSha ?? null, now, now,
+    );
+    return getIntegrationStmt.get(row.repo, row.branch) as IntegrationRow;
+  },
+  getIntegration(repo: string, branch: string): IntegrationRow | undefined {
+    return getIntegrationStmt.get(repo, branch) as IntegrationRow | undefined;
   },
   /** Repoint ONE requeued task at another backend and release it now. Unlike
    *  `updateTask`, a null model is written as null: COALESCE would keep the slug
