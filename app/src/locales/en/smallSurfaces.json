@@ -1,0 +1,16 @@
+{
+  "eventsPage": {
+    "title": "Event stream",
+    "clear": "clear"
+  },
+  "kanbanPage": {
+    "paramsTip": {
+      "backend": "backend:",
+      "model": "model:",
+      "permission": "permissions:",
+      "skills": "skills:",
+      "mcp": "MCP:",
+      "tools": "tools:"
+    }
+  }
+}

@@ -59,6 +59,8 @@
       "headers": "Headers",
       "headersHint": "(Key: value per line, '=' also works)",
       "saving": "Saving…"
-    }
+    },
+    "heading": "MCP servers",
+    "headline": "Model Context Protocol servers: local stdio processes and remote HTTP endpoints you can attach to agents."
   }
 }

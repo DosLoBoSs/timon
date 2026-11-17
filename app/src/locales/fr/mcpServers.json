@@ -59,6 +59,8 @@
       "headers": "En-têtes",
       "headersHint": "(Clé: valeur par ligne, '=' fonctionne aussi)",
       "saving": "Enregistrement…"
-    }
+    },
+    "heading": "Serveurs MCP",
+    "headline": "Serveurs Model Context Protocol : processus stdio locaux et adresses HTTP distantes à rattacher aux agents."
   }
 }

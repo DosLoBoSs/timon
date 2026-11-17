@@ -1,0 +1,16 @@
+{
+  "eventsPage": {
+    "title": "Flux d'événements",
+    "clear": "effacer"
+  },
+  "kanbanPage": {
+    "paramsTip": {
+      "backend": "backend :",
+      "model": "modèle :",
+      "permission": "permissions :",
+      "skills": "skills :",
+      "mcp": "MCP :",
+      "tools": "outils :"
+    }
+  }
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { sseOn } from '@/lib/sse-stream';
+import { t } from '@/lib/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { TopBar } from '@/components/topbar';
 import { ModulePageGate } from '@/lib/plugin-host/module-page-gate';
@@ -113,9 +114,9 @@ function EventsPageBody() {
           <div className="flex flex-wrap items-center gap-2 px-4 py-2 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
             <span className="flex items-center gap-2 font-semibold text-foreground">
               <span className="size-1.5 animate-pulse rounded-full bg-[hsl(var(--success))] shadow-[0_0_8px_hsl(var(--success))]" />
-              EVENT STREAM
+              {t('eventsPage.title')}
             </span>
-            <span /* code-font: shell command name */ className="font-mono text-muted-foreground">tail –f</span>
+            <span /* code-font: shell command name */ className="font-mono text-muted-foreground">{/* i18n-exempt: shell command name */}tail –f</span>
             <div className="ml-auto flex flex-wrap gap-1">
               {FILTERS.map((f) => (
                 <button
@@ -138,7 +139,7 @@ function EventsPageBody() {
                 onClick={() => { if (bodyRef.current) bodyRef.current.innerHTML = ''; }}
                 className="rounded border border-border px-2 py-0.5 text-[10.5px] normal-case text-muted-foreground hover:text-foreground"
               >
-                clear
+                {t('eventsPage.clear')}
               </button>
             </div>
           </div>
