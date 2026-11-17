@@ -265,6 +265,24 @@ const CLEAR: Readonly<Record<string, number>> = { loupe: 0, hourglass: 2, coffee
 const MOVES: Readonly<Record<string, number>> = { globe: 1, whip: 4, wand: 5, bulb: 6, rocket: 7, plant: 9 };
 const has = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
 
+/**
+ * The fur's shells drawn with alpha to coverage, without ever lowering the alpha already there. Alpha to
+ * coverage writes each strand's own alpha into the samples it covers: over the skin (alpha 1) a half-covered
+ * strand left the body half see-through, and heads overlapping in a tile, or in the welcome's avalanche where
+ * every head is a copied bitmap, showed through each other. A strand's colour still replaces what is below;
+ * its alpha may only raise what is there (MAX), never lower it.
+ */
+export function furOpaqueOverSkin(mat: THREE.Material): void {
+  mat.alphaToCoverage = true;
+  mat.blending = THREE.CustomBlending;
+  mat.blendEquation = THREE.AddEquation;
+  mat.blendSrc = THREE.OneFactor;
+  mat.blendDst = THREE.ZeroFactor;
+  mat.blendEquationAlpha = THREE.MaxEquation;
+  mat.blendSrcAlpha = THREE.OneFactor;
+  mat.blendDstAlpha = THREE.OneFactor;
+}
+
 /** The page's engine. Created once per page by `tile.ts`, which loads this module and the model data on demand. */
 export function createEngine(data: ModelData): Mascot3DEngine {
   const canvas = document.createElement('canvas');
@@ -329,17 +347,7 @@ export function createEngine(data: ModelData): Mascot3DEngine {
     uShells: { value: SH_MAX },
   };
   const furMat = new THREE.ShaderMaterial({ uniforms: furU, vertexShader: FUR_VERTEX, fragmentShader: FUR_FRAGMENT });
-  furMat.alphaToCoverage = true;
-  // Alpha to coverage writes each strand's own alpha into the samples it covers: over the skin (alpha 1) a
-  // half-covered strand left the body half see-through, and heads overlapping in a tile showed through each other.
-  // A strand's colour still replaces what is below; its alpha may only raise what is there (MAX), never lower it.
-  furMat.blending = THREE.CustomBlending;
-  furMat.blendEquation = THREE.AddEquation;
-  furMat.blendSrc = THREE.OneFactor;
-  furMat.blendDst = THREE.ZeroFactor;
-  furMat.blendEquationAlpha = THREE.MaxEquation;
-  furMat.blendSrcAlpha = THREE.OneFactor;
-  furMat.blendDstAlpha = THREE.OneFactor;
+  furOpaqueOverSkin(furMat);
   const fur = new THREE.InstancedMesh(model('squircle').hi, furMat, SH_MAX);
   const identity = new THREE.Matrix4();
   for (let i = 0; i < SH_MAX; i += 1) fur.setMatrixAt(i, identity);
