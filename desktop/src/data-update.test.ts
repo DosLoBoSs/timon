@@ -586,6 +586,21 @@ test('a previous version that cannot be replaced ends in a message that says wha
   assert.match(refused!.message, /Quit Timon, restart the computer, then open Timon again\./);
   assert.deepEqual({ posts, replaced, stage }, { posts: 0, replaced: 1, stage: 'service' });
 
+  // The restart ended nothing and so did not run the task again (the host
+  // adapter's refusal): its words reach the person, and the update does not
+  // wait for a version nobody started.
+  let asked = 0;
+  const outlived = await finishUpdate(base, {
+    request: async (_, __, version) => { if (version) posts++; else asked++; return stale; },
+    health: ours, sleep: async () => {},
+    replaceStaleDaemon: async () => {
+      throw new Error('The service restart failed: a Timon program of this installation is still running and could not be ended, so the service was not started again: end the Timon programs that still run (node.exe, Timon.exe) from Task Manager or restart the computer, then open Timon again');
+    },
+  }).then(() => null, (e: unknown) => e as Error);
+  assert.match(outlived!.message, /could not replace it: The service restart failed: a Timon program of this installation is still running and could not be ended, so the service was not started again/);
+  assert.match(outlived!.message, /from Task Manager or restart the computer/);
+  assert.deepEqual({ posts, asked }, { posts: 0, asked: 1 });
+
   // Restarted, but the installed version never answers: once, then a bounded wait.
   let clock = 5_000, reads = 0;
   replaced = 0;
