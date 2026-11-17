@@ -3,9 +3,9 @@
 /**
  * The main agent's welcome conversation, as a hook: where it resumes, how it
  * starts, how it ends (docs/ONBOARDING-AGENT-CHAT.md). It runs on the TIMs
- * page (`plugins-client/bots/bots-welcome.tsx`), right after the onboarding.
- * Same daemon routes, same resume key and same trouble rules as
- * `/setup/agent`, which stays the repair screen.
+ * page (`plugins-client/bots/bots-welcome.tsx`), right after the onboarding,
+ * and on `/setup/agent`, the repair screen, which draws its own forms (the AIs,
+ * the name) in front of it.
  *
  * The conversation needs a named agent: an install that reaches the page
  * without one (the gate, an onboarding left half-way) goes back to the agent
@@ -55,6 +55,9 @@ function releaseApp(): void {
   void fetchCapabilities(true).catch(() => null);
 }
 
+/** Why the hook hands the reader back to the app: the step was already over, the agent ended it, the reader skipped it. */
+export type SetupLeave = 'done' | 'finished' | 'skipped';
+
 export type SetupChat = {
   stage: ChatStepStage;
   /** The daemon's last word on the step: the team recruited, the tour chosen. */
@@ -74,9 +77,19 @@ export type SetupChat = {
   skip: () => Promise<void>;
 };
 
-export function useSetupChat(opts: { fetcher?: Fetcher; leave?: () => void } = {}): SetupChat {
+export function useSetupChat(opts: {
+  fetcher?: Fetcher;
+  leave?: (why: SetupLeave) => void;
+  /**
+   * Where a daemon that does not answer the status leaves the reader: the
+   * start's own error (the welcome), or the name form (`/setup/agent`, where
+   * the form has a way forward of its own).
+   */
+  statusFailure?: 'unavailable' | 'unnamed';
+} = {}): SetupChat {
   const fetcher = opts.fetcher ?? fetch;
-  const leaveRef = useRef(opts.leave ?? releaseApp);
+  const leaveRef = useRef<(why: SetupLeave) => void>(opts.leave ?? releaseApp);
+  const statusFailure = useRef(opts.statusFailure ?? 'unavailable');
   const [stage, setStage] = useState<ChatStepStage>({ kind: 'loading' });
   const [status, setStatus] = useState<MainAgentStatus | null>(null);
   const [spoke, setSpoke] = useState(false);
@@ -132,7 +145,7 @@ export function useSetupChat(opts: { fetcher?: Fetcher; leave?: () => void } = {
     const tour = next.tour !== false;
     if (tour) armAutoTour();
     setLeaving({ tour });
-    setTimeout(() => leaveRef.current(), LEAVE_DELAY_MS);
+    setTimeout(() => leaveRef.current('finished'), LEAVE_DELAY_MS);
   }, []);
 
   // Where are we: a conversation already open (a reload), a named agent whose chat never started, or no agent yet.
@@ -147,12 +160,12 @@ export function useSetupChat(opts: { fetcher?: Fetcher; leave?: () => void } = {
         const current = await res.json() as MainAgentStatus;
         setStatus(current);
         const entry = chatStepEntry(current, readResume());
-        if (entry.kind === 'done') { leavingRef.current = true; leaveRef.current(); return; }
+        if (entry.kind === 'done') { leavingRef.current = true; leaveRef.current('done'); return; }
         if (entry.kind === 'startChat') { void start(entry.agent); return; }
         setStage(entry);
       } catch {
-        // The daemon did not answer: the start says it the way a refused start does.
-        setStage({ kind: 'unavailable', agent: '' });
+        // The daemon did not answer: the start says it the way a refused start does, unless the caller has a form for it.
+        setStage(statusFailure.current === 'unnamed' ? { kind: 'unnamed' } : { kind: 'unavailable', agent: '' });
       }
     })();
   }, [start]);
@@ -205,7 +218,7 @@ export function useSetupChat(opts: { fetcher?: Fetcher; leave?: () => void } = {
     if (await requestSkip()) {
       leavingRef.current = true;
       setSkipped(true);
-      leaveRef.current();
+      leaveRef.current('skipped');
       return;
     }
     setSkipError(true);
