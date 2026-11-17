@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 9,
   "vendored": "Test copy of the licence token contract, reduced to the version and the example tokens. Written by sync-license-contract.mjs from the licence server checkout; do not edit by hand.",
   "examples": [
     {
@@ -21,7 +21,8 @@
           "@timon/kanban-code",
           "@timon/dreams",
           "@timon/backlog",
-          "@timon/browser-embedded"
+          "@timon/browser-embedded",
+          "@timon/machines"
         ],
         "plugins": "*",
         "features": [
@@ -59,7 +60,8 @@
           "@timon/kanban-code",
           "@timon/dreams",
           "@timon/backlog",
-          "@timon/browser-embedded"
+          "@timon/browser-embedded",
+          "@timon/machines"
         ],
         "plugins": "*",
         "features": [
@@ -93,17 +95,13 @@
         "plan": "internal",
         "plan_name": "Developer",
         "edition": "expert",
-        "modules": [
-          "@timon/kanban-code",
-          "@timon/dreams",
-          "@timon/backlog",
-          "@timon/browser-embedded"
-        ],
+        "modules": "*",
         "plugins": "*",
         "features": [
           "code-pipeline",
           "browser",
-          "multichat"
+          "multichat",
+          "whitelabel"
         ],
         "seats": 5,
         "users": null,

@@ -198,3 +198,11 @@ test('the text render shows the fence, the warning and the INERT line only where
     resetConfig();
   }
 });
+
+test('an empty main seat names the command that fills it', () => {
+  const r = diagnose();
+  const empty = formatDoctor({ ...r, mainSeat: { holder: null, empty: true, candidates: ['Atlas', 'Zeus'] } });
+  assert.match(empty, /main orchestrator NONE .*eligible: Atlas, Zeus; run "timon agent set-main <name>"/);
+  const none = formatDoctor({ ...r, mainSeat: { holder: null, empty: true, candidates: [] } });
+  assert.doesNotMatch(none, /set-main/, 'no command to suggest when nobody is eligible');
+});

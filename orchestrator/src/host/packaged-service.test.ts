@@ -289,7 +289,11 @@ test('Electron stages ASAR archives as files and cleans up a failed copy', {
   }
 });
 
-test('macOS stages Contents outside Timon.app and points launchd at that copy', async () => {
+// The launchd PATH is joined with `:`, which a Windows temporary folder (`C:\…`)
+// also carries: the macOS staging is checked on a POSIX host only.
+test('macOS stages Contents outside Timon.app and points launchd at that copy', {
+  skip: process.platform === 'win32' && 'the launchd PATH is colon-separated, as a drive letter is',
+}, async () => {
   const root = await mkdtemp(join(tmpdir(), 'timon-mac-package-'));
   const contents = join(root, 'Timon.app', 'Contents');
   const executable = join(contents, 'MacOS', 'Timon');

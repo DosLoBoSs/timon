@@ -6,10 +6,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Users, X, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
+import { compareText } from '@/lib/intl';
 import { mainAgentOf } from '@/lib/main-agent';
 import { onAgentStateEvent } from '@/lib/active-agents';
 import { STATE_VISUALS, type ActiveState } from '@/lib/agent-state';
 import { AgentAvatar, agentIdentity } from '@/components/agent-avatar';
+import { useProjectMeta } from '@/hooks/use-project-meta';
 
 /**
  * Mobile-only quick navigator for the agents canvas.
@@ -71,6 +73,8 @@ export function MobileAgentList() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [agents, setAgents] = useState<MainAgent[]>([]);
+  // The project's logo and colour fill in for an agent without its own, as in every other view.
+  const projects = useProjectMeta();
 
   const refresh = useCallback(async () => {
     try {
@@ -106,7 +110,7 @@ export function MobileAgentList() {
         .sort((x, y) => {
           if (x.name === principal) return -1;
           if (y.name === principal) return 1;
-          return x.name.localeCompare(y.name);
+          return compareText(x.name, y.name);
         });
       setAgents(mains);
     } catch { /* ignore */ }
@@ -184,7 +188,7 @@ export function MobileAgentList() {
 
             <div className="flex items-center justify-between px-4 py-2">
               <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-foreground">
-                {t('mobileAgentList.title')} <span className="text-muted-foreground">.main</span>
+                {t('mobileAgentList.title')} <span className="text-muted-foreground">{/* i18n-exempt: decorative suffix */}.main</span>
               </span>
               <button
                 type="button"
@@ -252,7 +256,7 @@ export function MobileAgentList() {
                         )}
                       </span>
                       {/* The agent's head, by the same rule as every other view (docs/AGENT-AVATAR.md). */}
-                      <AgentAvatar identity={agentIdentity(a, null)} size="sm" roleBadge={false} />
+                      <AgentAvatar identity={agentIdentity(a, a.project ? projects.get(a.project) ?? null : null)} size="sm" roleBadge={false} />
                       <span className="min-w-0 flex-1">
                         <span
                           className="block truncate text-[13px] text-foreground"
@@ -267,7 +271,7 @@ export function MobileAgentList() {
                         )}
                       </span>
                       <span className={cn('shrink-0 tabular-nums text-[10.5px]', vis.textClass)}>
-                        {vis.label}
+                        {t(vis.labelKey)}
                       </span>
                       {a.pending > 0 && (
                         <span

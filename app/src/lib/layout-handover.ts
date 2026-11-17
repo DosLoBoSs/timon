@@ -70,3 +70,39 @@ export async function readHandover(
   }
   return { ok: true, raw: null, from: null };
 }
+
+/** What `mergeHandedList` needs to know of a list: its bounds, and when two
+ *  entries read as one to the user. */
+export type HandedListRules<T> = {
+  max: number;
+  fits: (list: readonly T[]) => boolean;
+  sameName: (a: string, b: string) => boolean;
+};
+
+/**
+ * A list row, plus what the row it was stored under before its scope changed
+ * still holds alone (a remote machine's list hashed with the local session's
+ * id, TIM-0137). Unlike a single value, a list cannot be handed over by
+ * copying: entries may have been saved under the new row since, and both
+ * halves are the user's.
+ *
+ * An entry whose id OR name is already in `current` is skipped, so folding
+ * twice adds nothing and never creates two entries a menu shows under one
+ * name. Truncates rather than refusing, like `mergePresets`: the fold is a
+ * gesture nobody asked for, and the tail it drops is what the daemon would
+ * have refused anyway. `null`: nothing to add, nothing to write.
+ */
+export function mergeHandedList<T extends { id: string; name: string }>(
+  current: readonly T[],
+  previous: readonly T[],
+  { max, fits, sameName }: HandedListRules<T>,
+): T[] | null {
+  const out = [...current];
+  for (const entry of previous) {
+    if (out.length >= max) break;
+    if (out.some((e) => e.id === entry.id || sameName(e.name, entry.name))) continue;
+    out.push(entry);
+  }
+  while (out.length > current.length && !fits(out)) out.pop();
+  return out.length > current.length ? out : null;
+}

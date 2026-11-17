@@ -382,7 +382,7 @@
       "osCredentialAccount": "Liest den Eintrag „{service}“ ({account}) deines System-Anmeldespeichers (macOS-Schlüsselbund). Nur lesend."
     },
     "install": {
-      "allow": "Timon erlauben, die oben aufgeführten Programme auszuführen.",
+      "allow": "Timon erlauben, {count, plural, one {das oben aufgeführte Programm} other {die oben aufgeführten Programme}} auszuführen.",
       "allowHint": "Ohne dies ist der Anbieter installiert, bleibt aber inaktiv, bis du ihn unter {settingsPath} autorisierst."
     },
     "plugins": {

@@ -135,6 +135,9 @@ export class TelemetryCollector {
         return;
       case 'plugins_changed': return this.onPlugins(ev.plugins);
       case 'license_changed': return this.onLicense(ev.status, ev.reason);
+      // Mapped like every backend sent: an account instance is its provider, a custom provider is `other`.
+      case 'backend_fallback':
+        return this.emit('fallback_used', { from_backend: backendValue(ev.fromBackend), to_backend: backendValue(ev.toBackend) });
       case 'browser_recording': return this.emit('browser_action', { kind: 'recording', action: ev.event });
       case 'browser_annotation': return this.emit('browser_action', { kind: 'annotation', action: ev.event });
       case 'onboarding_step': {

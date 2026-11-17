@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os';
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { pathKeyOf } from '../host/launch-path.js';
 import { Context } from '@deepseek-ai/cordis';
 import type { BuildSpawnOpts, Dialect, SessionDriver } from '../backends/types.js';
 
@@ -120,7 +121,8 @@ const dialect: Dialect = {
       let strangerSync: unknown = null;
       try { stranger_ctx.provider.media.adoptSync(opts.missionId, dir.resolve('out'), since); } catch (error) { strangerSync = error; }
       let outside: unknown = null;
-      try { await ctx.provider.media.adopt(opts.missionId, '/etc', since); } catch (error) { outside = error; }
+      // A folder that exists on every system and lies outside the mission (`/etc` is missing on Windows).
+      try { await ctx.provider.media.adopt(opts.missionId, dirname(process.execPath), since); } catch (error) { outside = error; }
       let stranger: unknown = null;
       try { await stranger_ctx.provider.media.adopt(opts.missionId, dir.resolve('out'), since); } catch (error) { stranger = error; }
       ctx.provider.media.allowShow(opts.missionId, dir.resolve('out'));
@@ -134,7 +136,8 @@ const dialect: Dialect = {
       let writeError: unknown = null;
       let linkError: unknown = null;
       try { dir.writeFile('../../outside.txt', 'x'); } catch (error) { writeError = error; }
-      try { dir.link('/etc/hostname', 'hostname'); } catch (error) { linkError = error; }
+      // A file that exists on every system and no provider declared (`/etc/hostname` is Linux only).
+      try { dir.link(process.execPath, 'hostname'); } catch (error) { linkError = error; }
       seen.scratch = { path: dir.path, file, writeError, linkError };
       return { cmd: profile.cmd, args: ['--mcp-config', file], env: { ...profile.env }, cwd: opts.cfg.cwd, initialStdin: null };
     }
@@ -262,10 +265,14 @@ test('REFUSAL: nothing the plugin saw holds the mission token, a vault value or 
     const stdio = plan.servers.find((s) => s.name === 'witness-user-stdio')!;
     assert.match(stdio.env!.UPSTREAM_KEY!, /^timon-seal-/);
     assert.match(stdio.env!.MODE!, /^timon-seal-/, 'every value of a user server is protected, not just the ones that look secret');
-    assert.match(plan.servers.find((s) => s.name === 'witness-user-http')!.headers!.Authorization!, /^timon-seal-/);
+    // An http server with a key is the daemon's relay (TODO #835): the plugin sees a reference to its relay token.
+    const http = plan.servers.find((s) => s.name === 'witness-user-http')!;
+    assert.deepEqual(Object.keys(http.headers ?? {}), ['x-timon-mcp-relay']);
+    assert.match(http.headers!['x-timon-mcp-relay']!, /^timon-seal-/);
 
     // The positive half: the stdin payload the daemon wrote carries the real values...
-    assert.ok(written.includes(USER_ENV_SECRET) && written.includes(USER_HEADER_SECRET), 'the stdin payload holds the real values');
+    assert.ok(written.includes(USER_ENV_SECRET), 'the stdin payload holds the real values');
+    assert.equal(written.includes(USER_HEADER_SECRET), false, 'the key of an http server stays in the daemon, the CLI talks to the relay');
     // ...and the environment, which every child of the CLI inherits, holds none of them.
     assert.equal(JSON.stringify(env).includes(real), false, 'the token is not in the process environment');
     assert.equal(JSON.stringify(env).includes(USER_ENV_SECRET), false);
@@ -382,7 +389,8 @@ test('S2: the base environment of a third-party provider has no vault value, no 
     assert.equal(Object.keys(plan.env).some((key) => key.toUpperCase() === 'TIMON_API_TOKEN'), false);
     assert.equal(plan.env.TIMON_MISSION_ID, 'm-env');
     assert.equal(plan.env.TIMON_AGENT, 'acme.agent');
-    assert.ok(plan.env.PATH, 'the system whitelist stays');
+    // Windows keeps the spelling it read (`Path`): look the key up as the product does.
+    assert.ok(plan.env[pathKeyOf(plan.env, process.platform)], 'the system whitelist stays');
   } finally {
     setConfig(previous);
     delete process.env.DAEMON_ONLY_ACME_WITNESS;
@@ -442,7 +450,11 @@ test('S3: the MCP configuration written to a scratch file holds the real values,
     assert.ok(real && !real.startsWith('timon-seal-'), 'swapped on write');
     assert.notEqual(real, DAEMON_TOKEN);
     assert.equal(config.mcpServers['witness-user-stdio']!.env.UPSTREAM_KEY, USER_ENV_SECRET);
-    assert.equal(config.mcpServers['witness-user-http']!.headers!.Authorization, USER_HEADER_SECRET);
+    const http = config.mcpServers['witness-user-http'] as { url?: string; headers?: Record<string, string> };
+    assert.match(http.url ?? '', /^http:\/\/127\.0\.0\.1:\d+\/mcp-relay\/[A-Za-z0-9_-]{22}\/acme\.agent$/);
+    assert.deepEqual(Object.keys(http.headers ?? {}), ['x-timon-mcp-relay']);
+    assert.ok(!http.headers!['x-timon-mcp-relay']!.startsWith('timon-seal-'), 'the relay token is swapped on write');
+    assert.equal(onDisk.includes('user-mcp-header-secret-9c2e'), false, 'the key of an http server is not written for the CLI');
     if (process.platform !== 'win32') assert.equal(statSync(info.file).mode & 0o777, 0o600);
     // What the plugin's own code could have kept.
     const plugin = [seen.plans.at(-1), seen.envs.at(-1), JSON.stringify(args)].join('\n');

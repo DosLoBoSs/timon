@@ -24,6 +24,7 @@ import { EyeOff, FolderPlus, ListTodo, MessageSquare, RefreshCw, Search, UserPlu
 import { cn } from '@/lib/utils';
 import { useAgentsContentClass } from '@/app/agents/agents-widget-rails';
 import { t } from '@/lib/i18n';
+import { compareText } from '@/lib/intl';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MobileAgentList } from '@/components/mobile-agent-list';
@@ -345,7 +346,7 @@ export function AgentsGridClient() {
       const main = list.find(isMainAgent) ?? list.find(isFlaggedOrchestrator) ?? null;
       const secondaries = list
         .filter((a) => a !== main)
-        .sort((a, b) => roleRank(a) - roleRank(b) || a.name.localeCompare(b.name));
+        .sort((a, b) => roleRank(a) - roleRank(b) || compareText(a.name, b.name));
       const rank = list.reduce((best, a) => {
         const s = stateByAgent.get(a.name);
         return s ? Math.max(best, STATE_RANK[s]) : best;
@@ -363,7 +364,7 @@ export function AgentsGridClient() {
       (a, b) =>
         b.rank - a.rank ||
         b.at - a.at ||
-        (a.project.name || a.project.slug).localeCompare(b.project.name || b.project.slug),
+        compareText(a.project.name || a.project.slug, b.project.name || b.project.slug),
     );
 
     const ws = [...new Set(projects.map((p) => p.workspace).filter(Boolean))] as string[];

@@ -25,6 +25,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
+import { pathKeyOf } from '../host/launch-path.js';
 import express from 'express';
 import { Context } from '@deepseek-ai/cordis';
 import Loader from '@deepseek-ai/cordis-plugin-loader';
@@ -93,7 +94,8 @@ test('coffre éteint : pas de route, pas de secret dans l’environnement d’un
     // Le chemin de lancement, sans base de secrets lue et sans exception.
     const env = missionEnv({ missionId: 'm-vault-off', agentName: 'witness', project: 'p' });
     assert.equal(env[NAME], undefined, 'un secret accordé ne doit pas entrer dans une mission sans coffre');
-    assert.ok(env.PATH !== undefined, 'la liste blanche système reste, elle');
+    // Windows keeps the spelling it read (`Path`): look the key up as the product does.
+    assert.ok(env[pathKeyOf(env, process.platform)] !== undefined, 'la liste blanche système reste, elle');
 
     const slice = injectedSecretsFor({ agent: 'witness', project: 'p' });
     assert.deepEqual(slice, { env: {}, injected: [] });

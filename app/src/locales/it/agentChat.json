@@ -1,6 +1,5 @@
 {
   "agentChat": {
-    "title": "Chat con l’agente",
     "newCard": "Nuova chat con un agente",
     "newCardHint": "Scegli l’agente mostrato da questa scheda. Dopo averla creata, aggiungi un’altra scheda dalla palette dei widget.",
     "newConversation": "Nuova conversazione",
@@ -37,7 +36,7 @@
       "makeMainDone": "{name} è ora l’orchestratore principale: riepiloghi di risveglio e notifiche arrivano a lui",
       "makeMainFailed": "Impossibile impostare {name} come orchestratore principale: {error}",
       "stopConfirm": "Fermare davvero {name}? Le sue missioni in corso vengono terminate, la sua posta in arrivo svuotata, le attività in sospeso bloccate, i suoi trigger e i workflow che lo risveglierebbero disattivati.",
-      "stopped": "{name} fermato: {missions} missione/i, {messages} messaggio/i, {tasks} attività, {triggers} trigger, {runs} esecuzione/i di workflow, {workflows} workflow neutralizzati",
+      "stopped": "{name} fermato: {missions, plural, one {# missione} other {# missioni}}, {messages, plural, one {# messaggio} other {# messaggi}}, {tasks} attività, {triggers} trigger, {runs, plural, one {# esecuzione di workflow} other {# esecuzioni di workflow}}, {workflows} workflow neutralizzati",
       "stopFailed": "Impossibile fermare {name}: {error}",
       "duplicate": "Duplica l’agente"
     },

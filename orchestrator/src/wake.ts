@@ -72,6 +72,7 @@ import { existsSync } from 'node:fs';
 import { bus, type BusEvent } from './bus.js';
 import { CRASH_LOOP_HARD_CEILING, MAX_SYSTEM_REQUEUES, dbApi, type TaskRow, type AgentMessageRow, type MissionRow } from './db.js';
 import { diedOfSystemCause } from './crash-loop.js';
+import { isRequeueableInterruption, requeueBackoffMs, toInterruptionReason } from './interruption.js';
 import { presentInboxDigest, isUrgentReturn, returnPayloadOf, type ReturnPayload } from './wake-digest.js';
 import { planTodoClosure } from './todo-closure.js';
 import { originOfDigest, type UserEventOrigin } from './user-origin.js';
@@ -96,6 +97,7 @@ import { cooldownReason, redirectIfStillDry } from './backend-fallback.js';
 import { agentDir } from './paths.js';
 import { canonicalAgentName } from './agent-config.js';
 import { BackendAccountError } from './backends/account-launch.js';
+import { daemonMessage } from './daemon-message.js';
 import { notifyUser } from './notify.js';
 import { sandboxCascadeNotice } from './sandbox-cascade.js';
 import { mainAgentName, mainAgentNameOrSeed } from './main-agent.js';
@@ -853,17 +855,27 @@ async function flushWakeInner(agent: string, st: WakeState): Promise<void> {
     console.log(`[wake] wake ${agent} deferred (${st.backpressureRetries}×): ${adm.reason}`);
     if (st.backpressureRetries >= MAX_BACKPRESSURE_RETRIES && !st.backpressureEscalated) {
       st.backpressureEscalated = true;
+      const minutes = Math.round((st.backpressureRetries * BACKPRESSURE_RETRY_MS) / 60_000);
       notifyUser(
         `Wake loop blocked by back-pressure: ${agent}`,
         [
           `Wake for agent \`${agent}\` has been deferred for ${st.backpressureRetries}`,
-          `attempt(s) (~${Math.round((st.backpressureRetries * BACKPRESSURE_RETRY_MS) / 60_000)} min).`,
+          `attempt(s) (~${minutes} min).`,
           `Reason: ${adm.reason}.`,
           ``,
           `${deliverable.length} message(s) are waiting in its inbox and cannot be processed.`,
           `Likely cause: global mission cap reached (paused/zombie mission?) or`,
           `high machine load. Check the state of live missions.`,
         ].join('\n'),
+        {
+          message: daemonMessage('wake_backpressure_stalled', {
+            agent,
+            attempts: st.backpressureRetries,
+            minutes,
+            reason: adm.reason ?? '',
+            waiting: deliverable.length,
+          }),
+        },
       );
     }
     if (!st.timer) {
@@ -1016,6 +1028,7 @@ function recordSpawnFailure(agent: string, st: WakeState, batch: AgentMessageRow
       ``,
       `Last error: ${reason}`,
     ].join('\n'),
+    { message: daemonMessage('wake_abandoned', { agent, ceiling, expired: n, error: reason }) },
   );
 }
 
@@ -1098,7 +1111,17 @@ export function handleTaskBlocked(taskId: string, reason: string | null, opts: {
         ``,
         `Unblock it manually after review (UI Kanban → task ${taskId}).`,
       ].join('\n'),
-      { taskId, fromMission: task.mission_id },
+      {
+        taskId,
+        fromMission: task.mission_id,
+        message: daemonMessage('blocking_loop_detected', {
+          title: task.title,
+          taskId,
+          group: task.group_id ?? 'none',
+          wakes,
+          reason: reason ?? task.blocked_reason ?? 'none',
+        }),
+      },
     );
     // The user holds it now: a restart must not hand it back to the pilot.
     dbApi.markTaskReturnNotified(taskId);
@@ -1146,6 +1169,79 @@ export function representBlockedTasks(): number {
     presented++;
   }
   return presented;
+}
+
+/** How recent a system death must be for the boot sweep to replay its task. */
+export const BOOT_REQUEUE_MAX_AGE_MS = 24 * 60 * 60_000;
+
+/** When the task was blocked by its death: the end of the mission that died,
+ *  which the block leaves attached. `updated_at` moves with any later edit
+ *  (title, priority, worktree), so it is only the fallback. */
+function systemDeathAt(task: TaskRow): number {
+  const m = task.mission_id ? dbApi.getMission(task.mission_id) : null;
+  return m?.ended_at ?? task.updated_at;
+}
+
+/** Expires the "Task blocked" recaps still unread for tasks that are no
+ *  longer blocked: the pilot would otherwise be woken on a stale state and
+ *  might recreate or reassign a task that is already queued again. */
+function expireBlockedRecaps(taskIds: ReadonlySet<string>): number {
+  if (taskIds.size === 0) return 0;
+  const stale = dbApi.listAllInbox({ status: 'pending', limit: 500 }).filter((m) => {
+    if (m.from_agent !== WAKE_SENDER) return false;
+    try {
+      const p = JSON.parse(m.payload) as { kind?: unknown; task_id?: unknown; title?: unknown };
+      return p.kind === 'wake_recap' && typeof p.task_id === 'string' && taskIds.has(p.task_id)
+        && typeof p.title === 'string' && p.title.startsWith('Task blocked:');
+    } catch {
+      return false;
+    }
+  });
+  return dbApi.expirePendingMessages(stale.map((m) => m.id));
+}
+
+/**
+ * Boot pass that sends back to PENDING the tasks a recent system death left
+ * BLOCKED once their automatic retries ran out (TIM-0149). A restart often
+ * removes the very cause (a reboot that killed the missions, an overloaded
+ * backend), and those tasks otherwise waited for a human to notice them.
+ *
+ * Bounded so a restart never turns into a spending spree:
+ *   - only a replayable cause that counts toward the crash loop: a quota, an
+ *     auth failure or a stop is not cured by a restart, and a death that is
+ *     not counted would let a task be replayed at every boot;
+ *   - only a task blocked less than `BOOT_REQUEUE_MAX_AGE_MS` ago: an update
+ *     must not replay weeks-old work (stale reviews cost credits);
+ *   - only under `CRASH_LOOP_HARD_CEILING` deaths. The count is never reset
+ *     here and each new death still adds one, so a task gets at most a couple
+ *     of boot replays before only a human can restart it (TIM-0065).
+ *
+ * Runs before `representBlockedTasks`, so a replayed task is not also handed
+ * to its pilot as blocked. Returns how many tasks it requeued.
+ */
+export function requeueRecentSystemDeaths(now: number = Date.now()): number {
+  const requeued = new Set<string>();
+  for (const t of dbApi.listTasks('BLOCKED')) {
+    if (isMirrorTask(t) || !diedOfSystemCause(t)) continue;
+    const reason = toInterruptionReason(t.interrupted_reason);
+    if (!reason || !isRequeueableInterruption(reason)) continue;
+    if (now - systemDeathAt(t) >= BOOT_REQUEUE_MAX_AGE_MS) continue;
+    const deaths = t.requeue_count ?? 0;
+    if (deaths >= CRASH_LOOP_HARD_CEILING) continue;
+    dbApi.updateTaskStatus(t.id, 'PENDING');
+    // The death is consumed by this replay. Kept, it would outlive a block a
+    // person sets before the dispatch, and the next boot would replay the
+    // task against their decision. Nothing reads it afterwards: the age check
+    // ran above, and the next death writes its own cause and mission.
+    dbApi.clearTaskInterruption(t.id);
+    // Same backoff as an agent's requeue: an overloaded backend may still be.
+    dbApi.deferTask(t.id, now + requeueBackoffMs(Math.max(1, deaths)));
+    console.log(`[wake] boot: task ${t.id} requeued after a system death (${reason}, ${deaths}/${CRASH_LOOP_HARD_CEILING} deaths)`);
+    requeued.add(t.id);
+  }
+  const expired = expireBlockedRecaps(requeued);
+  if (expired) console.log(`[wake] boot: ${expired} stale "Task blocked" recap(s) expired`);
+  return requeued.size;
 }
 
 /**
@@ -1539,6 +1635,12 @@ export function startWake(): () => void {
   // otherwise it stays BLOCKED forever (the bug the user hit). The
   // task_blocked recap comes from `orchestrator-wake` → excluded from the inbox sweep above,
   // hence this dedicated pass. handleTaskBlocked honours the anti-loop.
+  try {
+    const requeued = requeueRecentSystemDeaths();
+    if (requeued) console.log(`[wake] boot: ${requeued} task(s) BLOCKED by a system death requeued`);
+  } catch (err) {
+    console.error(`[wake] boot requeue-sweep error: ${(err as Error).message}`);
+  }
   try {
     const presented = representBlockedTasks();
     if (presented) console.log(`[wake] boot: ${presented} task(s) BLOCKED re-presented`);

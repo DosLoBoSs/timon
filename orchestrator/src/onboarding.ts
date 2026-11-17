@@ -38,6 +38,7 @@ import { BINARY_NAMES, mainAgentAuthEnv, systemdPresent, whichBin } from './doct
 import { getHost } from './host/index.js';
 import {
   installBackendPlanFor,
+  installerEnv,
   installPlanFor,
   linuxRelease,
   readOsRelease,
@@ -318,17 +319,24 @@ export async function setupBackendsNow(): Promise<SetupBackend[]> {
  * Runs the vendor's installer for one AI CLI, then checks the daemon can now
  * find it. An installer that exits 0 into a directory the daemon never looks
  * in would leave "Try again" failing behind a reported success.
+ *
+ * `exec` gets the installer's complete environment: the daemon's, plus the
+ * copy of the CLI it resolved before the run (`RESOLVED_BIN_ENV`), so that an
+ * "Update" line updates the copy the card shows. Not a copy inside a desktop
+ * app: its card offers Install, for a standalone copy next to the app's.
  */
 export async function runInstallBackend(
   name: InstallableBackend,
   platform: NodeJS.Platform,
-  exec: (command: string, args: string[]) => Promise<ExecResult>,
+  exec: (command: string, args: string[], env: NodeJS.ProcessEnv) => Promise<ExecResult>,
   locate: (name: string) => string | null,
 ): Promise<OnboardingResult> {
   const plan = installBackendPlanFor(name, platform);
   if (!plan) return { ok: false, lines: [], command: null, reason: `${name} has no official installer on this operating system` };
   const [command, ...args] = plan.argv as [string, ...string[]];
-  const res = await exec(command, args);
+  const found = locate(name);
+  const resolved = found && !desktopBundled(name, found, platform) ? found : null;
+  const res = await exec(command, args, installerEnv(process.env, resolved));
   if (res.code !== 0) {
     return { ok: false, lines: [`${plan.display} → ${res.code}`], command: plan.display, reason: failureReason(res) };
   }

@@ -1,6 +1,5 @@
 {
   "agentChat": {
-    "title": "Chat d'agent",
     "newCard": "Nouveau chat d'agent",
     "newCardHint": "Choisissez l'agent affiché par cette carte. Une fois créée, la palette de widgets en propose une autre.",
     "newConversation": "Nouvelle conversation",
@@ -38,7 +37,7 @@
       "makeMainDone": "{name} est désormais l'orchestrateur principal : les réveils et notifications lui sont adressés",
       "makeMainFailed": "Impossible de définir {name} comme orchestrateur principal : {error}",
       "stopConfirm": "Arrêter vraiment {name} ? Ses missions en cours sont terminées, sa boîte de réception vidée, ses tasks en attente bloquées, ses déclencheurs et les workflows qui le réveilleraient coupés.",
-      "stopped": "{name} arrêté : {missions} mission(s), {messages} message(s), {tasks} task(s), {triggers} déclencheur(s), {runs} run(s) de workflow, {workflows} workflow(s) neutralisés",
+      "stopped": "{name} arrêté : {missions, plural, one {# mission} other {# missions}}, {messages, plural, one {# message} other {# messages}}, {tasks, plural, one {# task} other {# tasks}}, {triggers, plural, one {# déclencheur} other {# déclencheurs}}, {runs, plural, one {# run de workflow} other {# runs de workflow}}, {workflows, plural, one {# workflow} other {# workflows}} neutralisés",
       "stopFailed": "Impossible d'arrêter {name} : {error}",
       "duplicate": "Dupliquer l'agent"
     },

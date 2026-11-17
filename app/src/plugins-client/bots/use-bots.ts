@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * Bots and teams of the `/bots` view, in one place.
+ * Bots and teams of the `/bots` view, in one store shared by every reader
+ * (the rail widget and the chat page).
  *
  * Both lists are re-read on demand (`refresh`) because every mutation of the
  * teams menu changes one or the other: renaming a team, or moving a bot,
@@ -10,7 +11,7 @@
  * shared agent editor, which knows nothing of this view, and the new TIM
  * only showed after a reload.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { isGlobalAgent } from '@/app/agents-grid/agents-grid-client';
 import { AGENTS_CHANGED_EVENT } from '@/lib/agents-changed';
 import { mainBotOf, type Bot, type Team } from './types';
@@ -33,38 +34,101 @@ export type BotsData = {
   refresh: () => Promise<void>;
 };
 
-export function useBots(): BotsData {
-  const [bots, setBots] = useState<Bot[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(true);
+type BotsSnapshot = Omit<BotsData, 'refresh'>;
 
-  const refresh = useCallback(async () => {
-    const [agentsRes, teamsRes] = await Promise.all([
-      fetch('/api/ui/agents', { cache: 'no-store' }).catch(() => null),
-      fetch('/api/ui/teams', { cache: 'no-store' }).catch(() => null),
-    ]);
+/**
+ * One store for the whole page, not one per caller: the rail widget and the
+ * chat page both read it, and two private copies meant two reads of each list
+ * and a chat banner that only saw a team move made in the rail at the next
+ * read. Every caller now shares one snapshot, refreshed by `refresh()`.
+ */
+const INITIAL: BotsSnapshot = { bots: [], teams: [], loading: true };
+
+let snapshot: BotsSnapshot = INITIAL;
+const subscribers = new Set<() => void>();
+/** Bumped when the last reader leaves: an answer still in flight then belongs
+ *  to a past session of the store and must not repaint the next one. */
+let epoch = 0;
+let running: Promise<void> | null = null;
+let queued: Promise<void> | null = null;
+
+function publish(next: BotsSnapshot): void {
+  snapshot = next;
+  for (const fn of subscribers) fn();
+}
+
+async function read(): Promise<void> {
+  const at = epoch;
+  const [agentsRes, teamsRes] = await Promise.all([
+    fetch('/api/ui/agents', { cache: 'no-store' }).catch(() => null),
+    fetch('/api/ui/teams', { cache: 'no-store' }).catch(() => null),
+  ]);
+  let { bots, teams } = snapshot;
+  try {
     if (agentsRes?.ok) {
       const json = (await agentsRes.json()) as { agents?: Bot[] };
       const all = json.agents ?? [];
       const mainName = mainBotOf(all);
-      setBots(all.filter((b) => isOrphanBot(b, mainName)));
+      bots = all.filter((b) => isOrphanBot(b, mainName));
     }
     // Teams are optional: a daemon older than the teams routes answers 404,
     // and the rail then shows every bot under "no team" instead of nothing.
     if (teamsRes?.ok) {
       const json = (await teamsRes.json()) as { teams?: Team[] };
-      setTeams(json.teams ?? []);
+      teams = json.teams ?? [];
     }
-    setLoading(false);
-  }, []);
+  } catch {
+    /* an unreadable answer keeps the last known lists */
+  }
+  if (at !== epoch) return;
+  publish({ bots, teams, loading: false });
+}
 
-  useEffect(() => { void refresh(); }, [refresh]);
+/**
+ * Re-reads both lists. A call made while a read is in flight is not folded
+ * into it: that read may have left before the mutation the caller just made,
+ * so one more read follows it, shared by every call made in the meantime.
+ */
+function refresh(): Promise<void> {
+  if (!running) {
+    running = read().finally(() => { running = null; });
+    return running;
+  }
+  queued ??= running.then(() => {
+    queued = null;
+    return refresh();
+  });
+  return queued;
+}
 
-  useEffect(() => {
-    const onChanged = (): void => { void refresh(); };
-    window.addEventListener(AGENTS_CHANGED_EVENT, onChanged);
-    return () => window.removeEventListener(AGENTS_CHANGED_EVENT, onChanged);
-  }, [refresh]);
+function onAgentsChanged(): void {
+  void refresh();
+}
 
+function subscribe(fn: () => void): () => void {
+  subscribers.add(fn);
+  if (subscribers.size === 1) {
+    // An agent saved elsewhere ("New TIM" opens the shared agent editor,
+    // which knows nothing of this view) re-reads the lists at once.
+    window.addEventListener(AGENTS_CHANGED_EVENT, onAgentsChanged);
+    void refresh();
+  }
+  return () => {
+    subscribers.delete(fn);
+    if (subscribers.size > 0) return;
+    window.removeEventListener(AGENTS_CHANGED_EVENT, onAgentsChanged);
+    // Nobody reads the lists any more: the next reader starts from a blank,
+    // loading store, as a fresh mount always did, rather than from lists
+    // that may belong to another session.
+    epoch += 1;
+    snapshot = INITIAL;
+  };
+}
+
+const getSnapshot = (): BotsSnapshot => snapshot;
+const getServerSnapshot = (): BotsSnapshot => INITIAL;
+
+export function useBots(): BotsData {
+  const { bots, teams, loading } = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   return { bots, teams, loading, refresh };
 }

@@ -382,7 +382,7 @@
       "osCredentialAccount": "Legge la voce \"{service}\" ({account}) dell’archivio credenziali del tuo sistema (portachiavi di macOS). Sola lettura."
     },
     "install": {
-      "allow": "Consenti a Timon di eseguire i programmi elencati sopra.",
+      "allow": "Consenti a Timon di eseguire {count, plural, one {il programma elencato} other {i programmi elencati}} sopra.",
       "allowHint": "Senza questo, il provider è installato ma resta inattivo finché non lo autorizzi in {settingsPath}."
     },
     "plugins": {

@@ -16,6 +16,7 @@ import { Cloud, Copy, FolderGit2, Tag, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
+import { apiErrorMessageOrNull } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { formatDateTime } from '@/lib/intl';
 import { GIT_LOG_LIMIT, useGit, type GitCommit, type GitWorktree } from '@/lib/git-store';
@@ -201,7 +202,7 @@ export function GitGraphView({ repoId }: { repoId: string }) {
   const known = useMemo(() => new Set(layout.rows.map((r) => r.commit.hash)), [layout]);
   const now = Date.now();
 
-  const error = log.error ?? (log.data && !log.data.ok ? log.data.error ?? null : null);
+  const error = log.error ?? (log.data && !log.data.ok ? apiErrorMessageOrNull(log.data) : null);
   if (error) {
     return (
       <div className="m-2 rounded-md bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">{error}</div>

@@ -49,6 +49,8 @@
       "giveUp": "{url} が {seconds} 秒以内に応答しませんでした。",
       "uiMissing": "インターフェースが表示されませんでした。",
       "uiMissingDetail": "{giveUp}\n\nデーモンが Web アプリなしで実行されている可能性があります: Timon を終了して再度開いてください。解決しない場合は、診断をコピーしてサポートに送ってください。",
+      "daemonDown": "バックグラウンドサービスが実行されていません。",
+      "daemonDownDetail": "{origin} で何も応答しません{retried, select, yes {（Timon が再起動した後も同様）} other {}}。ログは {logs} にあります。解決しない場合は、診断をコピーしてサポートに送ってください。",
       "crashing": "デーモンがクラッシュを繰り返しています。",
       "crashingDetail": "{why}\n\n同梱のデーモンを起動できませんでした。データは {home} に残っています。",
       "slow": "デーモンが時間内に応答しませんでした。",

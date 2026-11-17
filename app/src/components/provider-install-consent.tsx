@@ -40,7 +40,7 @@ export function ProviderInstallConsent({ provider, authorizable, allow, busy, on
       {authorizable.length > 0 && (
         <label className="flex items-start gap-2 text-[12px] leading-relaxed">
           <input type="checkbox" className="mt-0.5" checked={allow} disabled={busy} onChange={(e) => onAllow(e.target.checked)} />
-          <span>{t('providersSettings.install.allow')}</span>
+          <span>{t('providersSettings.install.allow', { count: authorizable.length })}</span>
         </label>
       )}
       {authorizable.length > 0 && !allow && (

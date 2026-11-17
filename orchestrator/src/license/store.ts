@@ -27,9 +27,10 @@
  *     is `expired` exactly when someone hand-installs a fresher token — the
  *     moment we most need to answer "same licence, or another one?".
  *
- * Written atomically (`tmp` + `rename`) like the token; `0600`; zone `secrets`.
+ * Written atomically and durably (`writeFileDurably`) like the token; `0600`;
+ * zone `secrets`.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import { LICENSE_STATE_FILE } from '../paths.js';
@@ -49,6 +50,55 @@ const Schema = z.object({
 });
 export type LicenseStore = z.infer<typeof Schema>;
 
+/**
+ * `tmp` + `rename` alone is atomic for the processes reading the file, not for
+ * a power cut: the rename can reach the disk before the data it points to, and
+ * a hard reset then leaves an EMPTY file where the old one was (TIM-0147). The
+ * data is flushed before the rename, the directory entry after it.
+ */
+export function writeFileDurably(file: string, content: string, mode = 0o600): void {
+  mkdirSync(dirname(file), { recursive: true });
+  const tmp = `${file}.tmp-${process.pid}`;
+  const fd = openSync(tmp, 'w', mode);
+  try {
+    writeFileSync(fd, content);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  renameSync(tmp, file);
+  syncDirectory(dirname(file));
+}
+
+/** Best effort: Windows cannot open a directory, and NTFS journals the rename itself. */
+function syncDirectory(dir: string): void {
+  let fd: number | undefined;
+  try {
+    fd = openSync(dir, 'r');
+    fsyncSync(fd);
+  } catch { /* not supported on this system: the file data is already on disk */ }
+  finally {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* already closed */ }
+    }
+  }
+}
+
+/**
+ * True when the file exists but cannot be read back: empty, cut short, not the
+ * expected shape. `readLicenseStore` hides that case on purpose (the boot must
+ * go on); the boot asks here to know its anchors were lost rather than never set.
+ */
+export function licenseStoreDamaged(file = LICENSE_STATE_FILE): boolean {
+  if (!existsSync(file)) return false;
+  try {
+    Schema.parse(JSON.parse(readFileSync(file, 'utf8')) as unknown);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 export function readLicenseStore(file = LICENSE_STATE_FILE): LicenseStore {
   if (!existsSync(file)) return {};
   try { return Schema.parse(JSON.parse(readFileSync(file, 'utf8')) as unknown); }
@@ -59,10 +109,7 @@ export function readLicenseStore(file = LICENSE_STATE_FILE): LicenseStore {
 
 export function writeLicenseStore(patch: LicenseStore, file = LICENSE_STATE_FILE): LicenseStore {
   const next = { ...readLicenseStore(file), ...patch };
-  mkdirSync(dirname(file), { recursive: true });
-  const tmp = `${file}.tmp-${process.pid}`;
-  writeFileSync(tmp, JSON.stringify(next) + '\n', { mode: 0o600 });
-  renameSync(tmp, file);
+  writeFileDurably(file, JSON.stringify(next) + '\n');
   return next;
 }
 

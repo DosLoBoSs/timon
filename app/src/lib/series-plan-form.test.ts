@@ -406,9 +406,9 @@ test('a role points to a subscription account by its instance id; an account to 
     await r.choose(codeMain!, 'Opus', 'Anthropic · KRZDIGITAL');
     assert.equal(codeMain!.querySelector('span[title]')!.getAttribute('title'), 'Anthropic · KRZDIGITAL / Opus');
     await r.openMenu(codeFallback!);
-    const perso = r.rail().find((b) => b.getAttribute('aria-label') === 'Anthropic · Perso')!;
-    assert.ok(perso, 'the account to sign in again stays on the rail');
-    await r.click(perso);
+    const personal = r.rail().find((b) => b.getAttribute('aria-label') === 'Anthropic · Perso')!;
+    assert.ok(personal, 'the account to sign in again stays on the rail');
+    await r.click(personal);
     const rows = r.options().slice(1);
     assert.deepEqual(rows.map((o) => [r.optionLabel(o), o.disabled]), [['Opus', true]]);
     await r.closeMenu();

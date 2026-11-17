@@ -21,7 +21,7 @@ import { readManifest } from './manifest.js';
 import { createHttpPlugin } from '../kernel/http-service.js';
 import { createBodyParser } from '../kernel/body-parser.js';
 import { dbApi } from '../db.js';
-import { readDoc, upsertAgent, writeDoc, patchAgentConfig } from '../agent.js';
+import { getAgent, readDoc, renameAgent, upsertAgent, writeDoc, patchAgentConfig } from '../agent.js';
 import { loadConfig } from '../agent-config.js';
 import { upsertMcp } from '../mcp.js';
 import { setAgentSkills } from '../skill-attachments.js';
@@ -160,7 +160,7 @@ test('an export carries the agent and the NAMES of its secrets, never a value', 
   assert.equal(agent.directives, 'Be brief.');
   assert.deepEqual((agent.docs as Array<{ name: string }>).map((d) => d.name), ['SOUL.md', 'USER.md']);
   assert.deepEqual(agent.hints, { backend: 'claude', model: 'opus', role: 'coder' });
-  assert.match(String(agent.sourceRef), new RegExp(`^timon:[a-f0-9]{16}:${name}$`));
+  assert.match(String(agent.sourceRef), /^timon:[a-f0-9]{16}:id:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   const servers = agent.mcpServers as Array<{ name: string; transport: string; url?: string; command?: string; secretNames?: string[] }>;
   assert.deepEqual(servers.find((s) => s.transport === 'http'), { name: 'Web search', transport: 'http', url: 'https://mcp.example.com/sse', secretNames: ['Authorization'] });
   assert.deepEqual(servers.find((s) => s.transport === 'stdio'), { name: 'Local tool', transport: 'stdio', secretNames: ['TOOL_KEY'] });
@@ -227,4 +227,77 @@ test('the import refuses a malformed archive and a path that climbs out', async 
   assert.equal(prompt.status, 422);
   const companion = await preview(forgeZip([{ name: 'timon-agent-import.json', data: manifest({ skills: [{ id: 's', content: 'x', companionFiles: ['../../.ssh/id_rsa'] }] }) }]));
   assert.equal(companion.status, 422);
+});
+
+/** Stages, previews and applies an archive: the action the preview announced, and the agent written. */
+async function importArchive(base: string, user: string, bytes: Uint8Array): Promise<{ action: string; agent: string | null }> {
+  const staged = await call(base, 'POST', 'stage', user, bytes, 'application/zip');
+  assert.equal(staged.status, 201, JSON.stringify(staged.body));
+  const token = staged.body.token as string;
+  const preview = await call(base, 'POST', 'preview', user, { token });
+  assert.equal(preview.status, 200, JSON.stringify(preview.body));
+  const action = (preview.body.preview as { agents: Array<{ action: string }> }).agents[0]!.action;
+  const applied = await call(base, 'POST', 'apply', user, { token });
+  assert.equal(applied.status, 200, JSON.stringify(applied.body));
+  return { action, agent: (applied.body.agents as Array<{ agent: string | null }>)[0]!.agent };
+}
+
+/** An archive as a Timon made it before the stable id: the agent keyed by its name. */
+function legacyArchive(instance: string, name: string, prompt: string): Uint8Array {
+  return forgeZip([{ name: 'timon-agent-import.json', data: JSON.stringify({
+    format: 'timon-agent-import', version: 1, source: { app: 'timon', exportedAt: null },
+    agents: [{ key: name, displayName: name, instructions: prompt, sourceRef: `timon:${instance}:${name.toLowerCase()}` }],
+  }) }]);
+}
+
+const IMPORTER = ['agents:manage', 'agents:read', 'skills:manage', 'mcp:manage', 'triggers:manage', 'kanban:write'];
+const instanceOf = (sourceRef: unknown): string => /^timon:([a-f0-9]{16}):id:/.exec(String(sourceRef))![1]!;
+
+test('an agent renamed at the source updates its copy instead of coming back as a second agent', async () => {
+  const { base } = await loaded();
+  const owner = account('renamer', IMPORTER);
+  const name = `ren-${++seq}`;
+  upsertAgent({ name, system_prompt: 'First.', config: { role: 'coder' } });
+  const first = (await call(base, 'POST', 'export', owner, { agents: [name] })).bytes;
+  const created = await importArchive(base, owner, new Uint8Array(first));
+  assert.deepEqual(created, { action: 'create', agent: `timon.${name}` });
+
+  const renamed = `${name}-new`;
+  assert.equal(renameAgent(name, renamed).ok, true);
+  upsertAgent({ name: renamed, system_prompt: 'Second.', config: { role: 'coder' } });
+  const second = (await call(base, 'POST', 'export', owner, { agents: [renamed] })).bytes;
+  assert.equal(manifestOf(second).agents[0]!.sourceRef, manifestOf(first).agents[0]!.sourceRef, 'the same ref, whatever the name');
+
+  const updated = await importArchive(base, owner, new Uint8Array(second));
+  assert.deepEqual(updated, { action: 'update', agent: `timon.${name}` });
+  assert.equal(readDoc(`timon.${name}`, 'system-prompt.md'), 'Second.');
+  assert.equal(getAgent(`timon.${renamed}`), null, 'no twin');
+
+  // A new agent given the old name is another agent: it is not caught by the copy of the renamed one.
+  upsertAgent({ name, system_prompt: 'Newcomer.', config: { role: 'coder' } });
+  const newcomer = await importArchive(base, owner, new Uint8Array((await call(base, 'POST', 'export', owner, { agents: [name] })).bytes));
+  assert.equal(newcomer.action, 'create');
+  assert.notEqual(newcomer.agent, `timon.${name}`);
+  assert.equal(readDoc(`timon.${name}`, 'system-prompt.md'), 'Second.');
+});
+
+test('an archive made before the stable id keeps updating the agent it made, before and after a newer archive', async () => {
+  const { base } = await loaded();
+  const owner = account('legacy', IMPORTER);
+  const name = `old-${++seq}`;
+  upsertAgent({ name, system_prompt: 'Now.', config: { role: 'coder' } });
+  const fresh = (await call(base, 'POST', 'export', owner, { agents: [name] })).bytes;
+  const instance = instanceOf(manifestOf(fresh).agents[0]!.sourceRef);
+
+  // As before: an old archive, then the same old archive again.
+  assert.deepEqual(await importArchive(base, owner, legacyArchive(instance, name, 'Old.')), { action: 'create', agent: `timon.${name}` });
+  assert.deepEqual(await importArchive(base, owner, legacyArchive(instance, name, 'Old again.')), { action: 'update', agent: `timon.${name}` });
+  assert.equal(readDoc(`timon.${name}`, 'system-prompt.md'), 'Old again.');
+
+  // A newer archive of the same agent takes the copy over, and the old one still reaches it after.
+  assert.deepEqual(await importArchive(base, owner, new Uint8Array(fresh)), { action: 'update', agent: `timon.${name}` });
+  assert.equal(readDoc(`timon.${name}`, 'system-prompt.md'), 'Now.');
+  assert.deepEqual(await importArchive(base, owner, legacyArchive(instance, name, 'Old once more.')), { action: 'update', agent: `timon.${name}` });
+  assert.deepEqual(await importArchive(base, owner, new Uint8Array(fresh)), { action: 'update', agent: `timon.${name}` });
+  assert.equal(readDoc(`timon.${name}`, 'system-prompt.md'), 'Now.');
 });

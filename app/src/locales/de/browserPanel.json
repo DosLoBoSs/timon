@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "Allgemein",
     "aria": {
-      "embeddedBrowser": "Eingebetteter Browser",
-      "resizePanel": "Größe des Browserbereichs ändern",
-      "projectBrowser": "Browser für {project}"
-    },
-    "actions": {
-      "collapse": "Browser einklappen",
-      "reload": "Ansicht neu laden",
-      "openInTab": "In einem Browser-Tab öffnen",
-      "startProjectBrowser": "Browser dieses Projekts starten",
-      "stopProjectBrowser": "Browser-Container dieses Projekts stoppen",
-      "start": "Starten",
-      "stop": "Stoppen",
-      "retry": "Wiederholen",
-      "takeControl": "Steuerung übernehmen",
-      "watchOnly": "Nur zusehen"
-    },
-    "display": {
-      "desktop": "Desktop-Anzeige",
-      "adapted": "Mobile / angepasste Anzeige",
-      "desktopTitle": "Volle Desktop-Ansicht ({width}×{height}), zentriert auf Schwarz — zu Mobil wechseln",
-      "adaptedTitle": "An den Bereich angepasste Anzeige (mobile Version der Seiten) — zu Desktop wechseln"
-    },
-    "viewer": {
-      "takeControl": "Steuerung übernehmen",
-      "watchOnly": "Zum Zuschauer wechseln",
-      "watchOnlyTitle": "Zuschauer (nur lesen) — Steuerung übernehmen trennt das Gerät, das die Sitzung gerade steuert",
-      "controlTitle": "Steuerung — zum Zuschauer wechseln, um zuzusehen, ohne ein anderes Gerät zu verdrängen"
-    },
-    "pin": {
-      "attach": "Bereich anheften",
-      "detach": "Bereich lösen",
-      "attachTitle": "Anheften — der Inhalt weicht zur Seite aus, statt darunter zu liegen",
-      "detachTitle": "Lösen — der Bereich liegt über dem Inhalt"
-    },
-    "empty": {
-      "noBrowser": "Kein Browser für dieses Projekt — der Browser-Knopf in der oberen Leiste startet einen."
-    },
-    "stream": {
-      "stalled": "Der Stream wird nicht angezeigt. Möglicherweise hat ein anderer Tab oder ein anderes Gerät die Steuerung übernommen — der Server akzeptiert nur einen steuernden Client."
-    },
-    "status": {
-      "stopped": "Browser gestoppt",
-      "starting": "Browser von {project} wird gestartet…"
-    },
-    "errors": {
-      "streamUnavailable": "Der Container läuft, aber sein Stream ist nicht verfügbar",
-      "startRejected": "Start abgelehnt (HTTP {status})",
-      "startTimeout": "Der Container ist nicht rechtzeitig gestartet",
-      "unknown": "Unbekannter Fehler"
+      "embeddedBrowser": "Eingebetteter Browser"
     },
     "native": {
       "title": "Browser",
@@ -142,7 +93,7 @@
       "chromeSigninOpenNow": "Chrome ist auf dem Computer geöffnet, auf dem Timon läuft. Melde dich dort an, komm dann zurück und drücke Fertig.",
       "chromeSigninDone": "Fertig, Anmeldung kopieren",
       "chromeSigninCancel": "Ohne Kopieren schließen",
-      "chromeSigninCopied": "Angemeldet: {count} Cookie(s) in diesen Browser kopiert.",
+      "chromeSigninCopied": "Angemeldet: {count, plural, one {# Cookie} other {# Cookies}} in diesen Browser kopiert.",
       "chromeSigninNothing": "Chrome wurde ohne zu kopierende Anmeldung geschlossen.",
       "chromeSigninKept": "Du kannst das jederzeit wiederholen: Chrome merkt sich seine eigene Anmeldung.",
       "chromeSigninRejected": "Google verweigert die Anmeldung in diesem Browser. Melde dich stattdessen mit Chrome an: Danach kopiert Timon die Anmeldung hierher und bringt dich zur Seite zurück.",
@@ -156,8 +107,7 @@
       "needsControl": "Nutze den Browser in diesem Fenster zum Aufnehmen: Ein anderes Gerät steuert ihn",
       "recording": "Aufnahme läuft",
       "ended": "Aufnahme beendet",
-      "stepsOne": "{count} Schritt",
-      "stepsMany": "{count} Schritte",
+      "steps": "{count, plural, one {# Schritt} other {# Schritte}}",
       "stop": "Stoppen",
       "stopTitle": "Aufnahme stoppen und Schritte prüfen",
       "review": "Prüfen",
@@ -176,11 +126,11 @@
       },
       "titleLabel": "Titel der Aufnahme",
       "truncated": "Die Aufnahme hat ihr Schrittlimit erreicht: Die letzten Schritte wurden nicht behalten.",
-      "flaggedNotice": "{count} Schritt(e) könnten ein Geheimnis enthalten (Schlüssel, Token, Kartennummer). Maskiere, behalte oder lösche jeden vor dem Lernen: Vorher wird nichts an ein Modell gesendet.",
+      "flaggedNotice": "{count, plural, one {# Schritt könnte} other {# Schritte könnten}} ein Geheimnis enthalten (Schlüssel, Token, Kartennummer). Maskiere, behalte oder lösche jeden vor dem Lernen: Vorher wird nichts an ein Modell gesendet.",
       "stepsGone": "Die Schritte dieser Aufnahme wurden nach dem Lernen gelöscht; der Skill ist geblieben.",
       "learn": "Lernen",
       "learnHint": "Eine Mission macht aus diesen Schritten einen Skill, den ein Agent wiederholen kann.",
-      "learnBlockedFlagged": "Kläre zuerst die {count} markierten Schritt(e).",
+      "learnBlockedFlagged": "Kläre zuerst {count, plural, one {den markierten Schritt} other {die # markierten Schritte}}.",
       "learnBlockedEmpty": "Diese Aufnahme hat keinen Schritt zum Lernen.",
       "autoSubmit": "Den Skill den letzten Schritt ohne Rückfrage absenden lassen",
       "autoSubmitHint": "Aus: Der Skill fragt vor dem Senden, Bestellen oder Veröffentlichen nach.",
@@ -205,10 +155,13 @@
         "newTab": "Neuer Tab",
         "switchTab": "Tab wechseln",
         "closeTab": "Tab schließen",
-        "credential": "Gespeicherte Anmeldung"
+        "credential": "Gespeicherte Anmeldung",
+        "frame": "Manueller Schritt: eingebetteter Rahmen ({origin})"
       },
       "paramBadge": "Parameter: {name}",
       "flagged": "Mögliches Geheimnis",
+      "frameUnknownOrigin": "Manueller Schritt: eingebetteter Rahmen",
+      "frameNotice": "Timon sieht nicht, was Sie in einem eingebetteten Rahmen tun (Zahlungsformular, Captcha, Anmeldefeld). Der gelernte Skill hält hier an und bittet Sie, diesen Teil selbst zu erledigen; er braucht also jemanden vor dem Bildschirm.",
       "paramName": "Parametername",
       "stepName": "Schrittname",
       "save": "Speichern",
@@ -263,12 +216,11 @@
       "handedOff": "Zu deiner nächsten Nachricht an {agent} hinzugefügt.",
       "sentNotDeposited": "An {agent} gesendet, aber das Nachrichtenfeld ist voll: Der Agent kann sie mit browser_annotations_get lesen.",
       "boxFull": "Das Nachrichtenfeld dieser Unterhaltung ist voll: Sende oder entferne zuerst, was dort wartet.",
-      "refused": "{count} Auswahl(en) nicht behalten: Das Annotationslimit ist erreicht.",
+      "refused": "{count, plural, one {# Auswahl} other {# Auswahlen}} nicht behalten: Das Annotationslimit ist erreicht.",
       "notFound": "Dieses Element ist nicht mehr auf der Seite.",
       "card": {
         "label": "Browser-Annotationen ({count})",
-        "count": "{count} Annotationen",
-        "countOne": "1 Annotation",
+        "count": "{count, plural, one {# Annotation} other {# Annotationen}}",
         "details": "Details",
         "enlarge": "Aufnahme von Annotation {n} vergrößern",
         "source": "Quelle: {source}",
@@ -279,8 +231,7 @@
           "dismissed": "Verworfen"
         }
       },
-      "queue": "{count} Annotationen",
-      "queueOne": "1 Annotation",
+      "queue": "{count, plural, one {# Annotation} other {# Annotationen}}",
       "history": "Annotationsverlauf",
       "sendQueue": "Senden",
       "sendQueueTitle": "An {agent} senden, in dieser Unterhaltung",

@@ -65,12 +65,17 @@ function run(args: string[], opts: SpawnSyncOptions = {}) {
   });
 }
 
+// The installer targets a Linux VPS: it runs `/usr/bin/bash` and systemd stand-ins
+// written in sh, which macOS (bash elsewhere) and Windows cannot start. Parsing it
+// still holds everywhere bash exists.
+const LINUX_ONLY = process.platform !== 'linux' && 'the installer and its stand-ins run on Linux only';
+
 test('bash -n : le script parse', () => {
   const r = spawnSync('bash', ['-n', script], { encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
 });
 
-test('--dry-run : clone, builds, unit avec installDir, linger, enable --now, doctor — zéro systemctl réel', () => {
+test('--dry-run : clone, builds, unit avec installDir, linger, enable --now, doctor — zéro systemctl réel', { skip: LINUX_ONLY }, () => {
   const h = home();
   try {
     const r = run(['--dry-run'], { env: envFor(h) });
@@ -102,7 +107,7 @@ test('--dry-run : clone, builds, unit avec installDir, linger, enable --now, doc
   }
 });
 
-test('--dry-run est idempotent : un clone déjà là devient un pull --ff-only', () => {
+test('--dry-run est idempotent : un clone déjà là devient un pull --ff-only', { skip: LINUX_ONLY }, () => {
   const h = home();
   const dest = join(h, 'timon');
   try {
@@ -118,7 +123,7 @@ test('--dry-run est idempotent : un clone déjà là devient un pull --ff-only',
   }
 });
 
-test('Node < 20 est refusé avant tout clone', () => {
+test('Node < 20 est refusé avant tout clone', { skip: LINUX_ONLY }, () => {
   const h = home();
   const bin = join(h, 'bin');
   try {
@@ -134,7 +139,7 @@ test('Node < 20 est refusé avant tout clone', () => {
   }
 });
 
-test('git absent est refusé', () => {
+test('git absent est refusé', { skip: LINUX_ONLY }, () => {
   const h = home();
   const bin = join(h, 'bin');
   try {
@@ -149,7 +154,7 @@ test('git absent est refusé', () => {
   }
 });
 
-test('sans --dry-run, une mission TIMON est refusée (rien n\'est lancé)', () => {
+test('sans --dry-run, une mission TIMON est refusée (rien n\'est lancé)', { skip: LINUX_ONLY }, () => {
   const h = home();
   try {
     const r = run([], { env: envFor(h, { TIMON_MISSION_ID: 'mission-temoin' }) });
@@ -161,7 +166,7 @@ test('sans --dry-run, une mission TIMON est refusée (rien n\'est lancé)', () =
   }
 });
 
-test('une unit live qui pointe ailleurs est refusée, même en dry-run', () => {
+test('une unit live qui pointe ailleurs est refusée, même en dry-run', { skip: LINUX_ONLY }, () => {
   const h = home();
   try {
     const unitDir = join(h, '.config', 'systemd', 'user');
@@ -179,7 +184,7 @@ test('une unit live qui pointe ailleurs est refusée, même en dry-run', () => {
   }
 });
 
-test('un dossier cible existant hors git est refusé', () => {
+test('un dossier cible existant hors git est refusé', { skip: LINUX_ONLY }, () => {
   const h = home();
   try {
     mkdirSync(join(h, 'timon'), { recursive: true });

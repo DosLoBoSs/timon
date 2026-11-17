@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "General",
     "aria": {
-      "embeddedBrowser": "Embedded browser",
-      "resizePanel": "Resize browser panel",
-      "projectBrowser": "Browser for {project}"
-    },
-    "actions": {
-      "collapse": "Collapse browser",
-      "reload": "Reload view",
-      "openInTab": "Open in a browser tab",
-      "startProjectBrowser": "Start this project's browser",
-      "stopProjectBrowser": "Stop this project's browser container",
-      "start": "Start",
-      "stop": "Stop",
-      "retry": "Retry",
-      "takeControl": "Take control",
-      "watchOnly": "Watch only"
-    },
-    "display": {
-      "desktop": "Desktop display",
-      "adapted": "Mobile / adapted display",
-      "desktopTitle": "Full desktop view ({width}×{height}), centered on black — switch to mobile",
-      "adaptedTitle": "Display adapted to the panel (mobile version of sites) — switch to desktop"
-    },
-    "viewer": {
-      "takeControl": "Take control",
-      "watchOnly": "Switch to spectator",
-      "watchOnlyTitle": "Spectator (read-only) — taking control will disconnect the device that currently controls the session",
-      "controlTitle": "Control — switch to spectator to watch without evicting another device"
-    },
-    "pin": {
-      "attach": "Pin panel",
-      "detach": "Unpin panel",
-      "attachTitle": "Pin — content moves aside instead of going underneath",
-      "detachTitle": "Unpin — panel moves above the content"
-    },
-    "empty": {
-      "noBrowser": "No browser for this project — the Browser button in the top bar starts one."
-    },
-    "stream": {
-      "stalled": "The stream is not displaying. Another tab or device may have taken control — the server accepts only one controlling client."
-    },
-    "status": {
-      "stopped": "Browser stopped",
-      "starting": "Starting the {project} browser…"
-    },
-    "errors": {
-      "streamUnavailable": "The container is running but its stream is unavailable",
-      "startRejected": "Start rejected (HTTP {status})",
-      "startTimeout": "The container did not start in time",
-      "unknown": "Unknown error"
+      "embeddedBrowser": "Embedded browser"
     },
     "native": {
       "title": "Browser",
@@ -142,7 +93,7 @@
       "chromeSigninOpenNow": "Chrome is open on the computer running Timon. Sign in there, then come back and press Done.",
       "chromeSigninDone": "Done, copy the sign-in",
       "chromeSigninCancel": "Close without copying",
-      "chromeSigninCopied": "Signed in: {count} cookie(s) copied into this browser.",
+      "chromeSigninCopied": "Signed in: {count, plural, one {# cookie} other {# cookies}} copied into this browser.",
       "chromeSigninNothing": "Chrome closed without a sign-in to copy.",
       "chromeSigninKept": "You can run this again at any time: Chrome remembers its own sign-in.",
       "chromeSigninRejected": "Google refused to sign you in from this browser. Sign in with Chrome instead: when you are done, Timon copies the sign-in here and takes you back to the page.",
@@ -156,8 +107,7 @@
       "needsControl": "Use the browser from this window to record: another device holds it",
       "recording": "Recording",
       "ended": "Recording ended",
-      "stepsOne": "{count} step",
-      "stepsMany": "{count} steps",
+      "steps": "{count, plural, one {# step} other {# steps}}",
       "stop": "Stop",
       "stopTitle": "Stop recording and review the steps",
       "review": "Review",
@@ -176,11 +126,11 @@
       },
       "titleLabel": "Recording title",
       "truncated": "The recording reached its step limit: the last steps were not kept.",
-      "flaggedNotice": "{count} step(s) may hold a secret (a key, a token, a card number). Mask, keep or delete each one before Learn: nothing is sent to a model before.",
+      "flaggedNotice": "{count, plural, one {# step may} other {# steps may}} hold a secret (a key, a token, a card number). Mask, keep or delete each one before Learn: nothing is sent to a model before.",
       "stepsGone": "The steps of this recording were deleted after learning; the skill is what remains.",
       "learn": "Learn",
       "learnHint": "A mission turns these steps into a skill an agent can replay.",
-      "learnBlockedFlagged": "Settle the {count} flagged step(s) first.",
+      "learnBlockedFlagged": "Settle the {count, plural, one {flagged step} other {# flagged steps}} first.",
       "learnBlockedEmpty": "This recording has no step to learn.",
       "autoSubmit": "Let the skill submit the final step without asking",
       "autoSubmitHint": "Off: the skill asks for confirmation before sending, ordering or publishing anything.",
@@ -205,10 +155,13 @@
         "newTab": "New tab",
         "switchTab": "Switch tab",
         "closeTab": "Close tab",
-        "credential": "Saved login"
+        "credential": "Saved login",
+        "frame": "Manual step: embedded frame ({origin})"
       },
       "paramBadge": "Parameter: {name}",
       "flagged": "Possible secret",
+      "frameUnknownOrigin": "Manual step: embedded frame",
+      "frameNotice": "Timon cannot see what you do inside an embedded frame (a payment form, a captcha, a sign-in box). The learned skill will pause here and ask you to do this part yourself, so it needs someone in front of the screen.",
       "paramName": "Parameter name",
       "stepName": "Step name",
       "save": "Save",
@@ -263,12 +216,11 @@
       "handedOff": "Added to your next message to {agent}.",
       "sentNotDeposited": "Sent to {agent}, but the message box is full: the agent can read them with browser_annotations_get.",
       "boxFull": "The message box of this conversation is full: send or remove what waits there first.",
-      "refused": "{count} pick(s) not kept: the annotation limit is reached.",
+      "refused": "{count, plural, one {# pick} other {# picks}} not kept: the annotation limit is reached.",
       "notFound": "This element is no longer on the page.",
       "card": {
         "label": "Browser annotations ({count})",
-        "count": "{count} annotations",
-        "countOne": "1 annotation",
+        "count": "{count, plural, one {# annotation} other {# annotations}}",
         "details": "Details",
         "enlarge": "Enlarge the capture of annotation {n}",
         "source": "Source: {source}",
@@ -279,8 +231,7 @@
           "dismissed": "Dismissed"
         }
       },
-      "queue": "{count} annotations",
-      "queueOne": "1 annotation",
+      "queue": "{count, plural, one {# annotation} other {# annotations}}",
       "history": "Annotation history",
       "sendQueue": "Send",
       "sendQueueTitle": "Send them to {agent}, in this conversation",

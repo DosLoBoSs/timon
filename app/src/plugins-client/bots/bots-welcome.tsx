@@ -10,18 +10,26 @@
  * conversation stays on screen afterwards: the TIM is still there to talk to.
  *
  * The page decides when this replaces the plain chat (`bots-page.tsx`); this
- * module starts or resumes the conversation (`useSetupChat`), lifts the loader
- * on the agent's first words, and keeps a way out — "Skip the welcome",
+ * module starts or resumes the conversation (`useSetupChat`) once it is on
+ * screen — the page may be mounted in a hidden island tab or a background
+ * window, and a mission is not spent on a welcome nobody sees — lifts the
+ * loader on the agent's first words, and keeps a way out: "Skip the welcome",
  * quiet while it goes well, a warning when the conversation is stuck.
+ *
+ * A later visit, the welcome over, reopens that conversation as it ended
+ * (`useEndedWelcome`) while it is still the TIM's latest: the plain chat leaves
+ * setup conversations out, and the TIM would seem to have forgotten it.
  */
-import { useEffect, useRef, type ComponentType, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ComponentType, type ReactElement, type RefObject } from 'react';
 import dynamic from 'next/dynamic';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProviderCliCards } from '@/components/provider-cli/provider-cli-cards';
 import { stepHref } from '@/components/onboarding/onboarding-flow';
+import type { Fetcher } from '@/components/onboarding/agent-create';
 import { useSetupChat, type SetupChat } from '@/components/onboarding/setup-chat';
-import type { SetupChatSignal } from '@/app/setup/agent/setup-trouble';
+import { welcomeSkipped } from '@/components/onboarding/setup-entry';
+import type { SetupChatSignal } from '@/components/onboarding/setup-trouble';
 import { t } from '@/lib/i18n';
 import { settingsPath } from '@/lib/settings-path';
 
@@ -54,25 +62,112 @@ const ProductConversation = dynamic(
   { ssr: false },
 );
 
+/** The main TIM's welcome conversation, over: what a later visit reopens. */
+export type EndedWelcome = { agent: string; missionId: string };
+
 /**
  * Which chat the page shows for the selected TIM, pure: the welcome for the
  * main TIM while the daemon holds it (`mainAgentOnboarding`), and for the rest
  * of the visit once it was on screen — the plain chat leaves the setup
- * conversation out, and the TIM would seem to forget what it just said.
- * `hold`: capabilities not read yet, the main TIM's chat waits rather than
- * flash before its welcome.
+ * conversation out, and the TIM would seem to forget what it just said. A
+ * later visit shows that conversation as it ended (`ended`) while it is the
+ * TIM's latest. `hold`: capabilities not read yet, or the ended welcome still
+ * looked up (`ended` undefined), the main TIM's chat waits rather than flash
+ * the wrong conversation first.
  */
 export function botsChatMode(input: {
   selected: string | null;
   main: string | null;
   caps: { firstRun?: boolean; mainAgentOnboarding?: boolean } | null;
   welcomeAgent: string | null;
-}): 'welcome' | 'chat' | 'hold' {
+  ended?: EndedWelcome | null;
+}): 'welcome' | 'ended' | 'chat' | 'hold' {
   const { selected, main, caps } = input;
   if (!selected) return 'chat';
   if (input.welcomeAgent === selected) return 'welcome';
   if (caps === null) return selected === main ? 'hold' : 'chat';
-  return caps.firstRun === false && caps.mainAgentOnboarding === true && selected === main ? 'welcome' : 'chat';
+  if (selected !== main || caps.firstRun !== false) return 'chat';
+  if (caps.mainAgentOnboarding === true) return 'welcome';
+  if (input.ended === undefined) return 'hold';
+  return input.ended?.agent === selected ? 'ended' : 'chat';
+}
+
+/** Enough of the TIM's conversations to tell whether the welcome is still the one it last had. */
+const ENDED_LOOKUP_LIMIT = 20;
+
+type MissionRow = { id: string; agent_name: string; source_channel: string | null; started_at: number; last_event_at: number | null };
+
+function isMissionRow(row: unknown): row is MissionRow {
+  const r = row as Partial<MissionRow> | null;
+  return typeof r?.id === 'string' && typeof r.agent_name === 'string' && typeof r.started_at === 'number';
+}
+
+/**
+ * The welcome a later visit reopens: the TIM's most recently active
+ * conversation, when it is the setup one and the reader did not skip it. A
+ * conversation had since takes over (the plain chat opens it). `null` on any
+ * doubt — the daemon down, a list it cannot read.
+ */
+export async function fetchEndedWelcome(agent: string, fetcher: Fetcher = fetch): Promise<EndedWelcome | null> {
+  try {
+    const query = new URLSearchParams({ agent, limit: String(ENDED_LOOKUP_LIMIT) });
+    const res = await fetcher(`/api/ui/missions?${query}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const body = await res.json() as { missions?: unknown };
+    const rows = Array.isArray(body.missions) ? body.missions.filter(isMissionRow) : [];
+    const activity = (row: MissionRow): number => row.last_event_at ?? row.started_at;
+    const latest = rows.sort((a, b) => activity(b) - activity(a))[0];
+    if (!latest || latest.agent_name !== agent || latest.source_channel !== 'setup' || welcomeSkipped(latest.id)) return null;
+    return { agent, missionId: latest.id };
+  } catch {
+    return null;
+  }
+}
+
+/** `fetchEndedWelcome` for `agent`, looked up afresh at each visit of it: `undefined` until it answers. */
+export function useEndedWelcome(agent: string | null, fetcher?: Fetcher): EndedWelcome | null | undefined {
+  const [found, setFound] = useState<{ agent: string; welcome: EndedWelcome | null } | null>(null);
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
+  useEffect(() => {
+    // Forgotten between two visits: the person may have talked to the TIM elsewhere since.
+    if (!agent) { setFound(null); return; }
+    let live = true;
+    void fetchEndedWelcome(agent, fetcherRef.current).then((welcome) => { if (live) setFound({ agent, welcome }); });
+    return () => { live = false; };
+  }, [agent]);
+  if (!agent) return null;
+  return found?.agent === agent ? found.welcome : undefined;
+}
+
+const noop = (): void => {};
+
+/** The welcome as it ended, reopened: the same conversation, with nothing above it left to skip. */
+export function EndedWelcomeView({ Conversation, welcome }: {
+  Conversation: ComponentType<WelcomeConversationProps>;
+  welcome: EndedWelcome;
+}): ReactElement {
+  return (
+    <section
+      data-bots-welcome="ended"
+      aria-label={t('bots.welcomeConversation', { name: welcome.agent })}
+      className="flex min-h-0 flex-1 flex-col"
+    >
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <Conversation
+          key={welcome.missionId}
+          agent={welcome.agent}
+          missionId={welcome.missionId}
+          onAgentSpoke={noop}
+          onSetupTrouble={noop}
+        />
+      </div>
+    </section>
+  );
+}
+
+export function BotsEndedWelcome({ welcome }: { welcome: EndedWelcome }): ReactElement {
+  return <EndedWelcomeView Conversation={ProductConversation} welcome={welcome} />;
 }
 
 function Loader({ label }: { label: string }): ReactElement {
@@ -195,18 +290,49 @@ export function BotsWelcomeView({ Conversation, chat, onMission, onClosed, onUnn
   );
 }
 
+/**
+ * The element is on screen, latched: laid out in the viewport (a hidden island
+ * tab is `display: none`, which never intersects) while the window is visible.
+ * Without `IntersectionObserver` there is nothing to wait for: shown.
+ */
+export function useShownOnce(ref: RefObject<HTMLElement | null>): boolean {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (shown) return;
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver !== 'function') { setShown(true); return; }
+    let inView = false;
+    const check = (): void => { if (inView && document.visibilityState !== 'hidden') setShown(true); };
+    const observer = new IntersectionObserver((entries) => {
+      inView = entries.some((entry) => entry.isIntersecting);
+      check();
+    });
+    observer.observe(el);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [ref, shown]);
+  return shown;
+}
+
 export function BotsWelcome({ onMission, onClosed }: {
   onMission: (agent: string, missionId: string) => void;
   onClosed: () => void;
 }): ReactElement {
-  const chat = useSetupChat();
+  const box = useRef<HTMLDivElement>(null);
+  const shown = useShownOnce(box);
+  const chat = useSetupChat({ shown });
   return (
-    <BotsWelcomeView
-      Conversation={ProductConversation}
-      chat={chat}
-      onMission={onMission}
-      onClosed={onClosed}
-      onUnnamed={() => window.location.assign(stepHref('agent'))}
-    />
+    <div ref={box} className="flex min-h-0 flex-1 flex-col">
+      <BotsWelcomeView
+        Conversation={ProductConversation}
+        chat={chat}
+        onMission={onMission}
+        onClosed={onClosed}
+        onUnnamed={() => window.location.assign(stepHref('agent'))}
+      />
+    </div>
   );
 }

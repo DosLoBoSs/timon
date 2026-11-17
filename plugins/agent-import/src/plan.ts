@@ -23,6 +23,7 @@ import { FINGERPRINTED_DOCS, fingerprint, ownedBy, type ImportRecord, type Recor
 import { redactArgs, sanitizeUrl } from './redact.js';
 import { mapSchedule, type SourceSchedule } from './schedule-map.js';
 import { stripAllowedTools } from './skill-text.js';
+import { sourceRefAliases } from './source-ref.js';
 
 /** The facades the engine uses, nothing more. */
 export type EngineContext = Pick<
@@ -88,6 +89,8 @@ export type AgentPlan = {
   record: ImportRecord | null;
   /** Where `record` was read from in the store. */
   recordKey: string | null;
+  /** Other refs this source agent may be known by here (`source-ref.ts`). */
+  aliases: string[];
   /** The account the import runs for (`null`: a job). */
   ownerUserId: string | null;
   /** The source's backend and model when they exist here; `null` = Timon's default. */
@@ -332,7 +335,8 @@ export async function planImport(
   for (const source of manifest.agents) {
     const choice: AgentChoice | undefined = choices.get(source.sourceRef);
     const notes: string[] = [];
-    const found = await records.find(sourceApp, source.sourceRef, caller);
+    const aliases = sourceRefAliases(sourceApp, source);
+    const found = await records.find(sourceApp, source.sourceRef, caller, aliases);
     const record = found?.record ?? null;
     const current = record ? byName.get(lower(record.agent)) : undefined;
     const previous = record && current && current.mine ? record : null;
@@ -571,6 +575,7 @@ export async function planImport(
       cwd: cwdMissing ? null : cwd,
       record: previous,
       recordKey: previous ? found?.key ?? null : null,
+      aliases,
       ownerUserId: caller.userId,
       backend,
       model,

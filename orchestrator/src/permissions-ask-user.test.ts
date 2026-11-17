@@ -14,13 +14,14 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { removeHomeOnExit } from '../tests/helpers/test-home.js';
 
 const TMP_HOME = mkdtempSync(join(tmpdir(), 'timon-perm-test-'));
 process.env.TIMON_HOME = TMP_HOME;
-process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
+removeHomeOnExit(TMP_HOME);
 
 const { validateAskUserPayload, malformedAskUserMessage, askUserChannelClosedMessage, DENY_REASONS,
         parseDecisionOrigin, requestPermission, listPending, buildContinuation, formatAskAnswer } = await import('./permissions.js');

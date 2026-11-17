@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { buildWidgetSnapshot, type SnapshotZone } from '@/lib/widget-proposals';
-import type { EntreeCatalogue } from './widget-catalog';
+import type { CatalogEntry } from './widget-catalog';
 
 export const WIDGET_SNAPSHOT_ENDPOINT = '/api/ui/widgets/snapshot';
 
@@ -18,7 +18,7 @@ const published = new Map<string, string>();
  */
 export function usePublishWidgetSnapshot(input: {
   owner: string | null;
-  entries: readonly EntreeCatalogue[];
+  entries: readonly CatalogEntry[];
   visible: (id: string) => boolean;
   view: string | null;
   zones: readonly SnapshotZone[];

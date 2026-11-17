@@ -12,6 +12,8 @@
  *   - the rest share one "no project" group.
  */
 
+import { compareText } from './intl';
+
 export type RailAgent = {
   name: string;
   project: string | null;
@@ -45,7 +47,7 @@ export type RailSection<A extends RailAgent = RailAgent> = {
 export const NO_PROJECT_KEY = 'none';
 
 const byLabel = (a: { label: string }, b: { label: string }) =>
-  a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
+  compareText(a.label, b.label);
 
 export function buildRail<A extends RailAgent>(
   agents: readonly A[],
@@ -98,7 +100,7 @@ export function buildRail<A extends RailAgent>(
   const sections: RailSection<A>[] = poles
     .filter((pole) => inPole.has(pole.slug))
     .map((pole) => ({ key: `pole:${pole.slug}`, pole: { slug: pole.slug, name: pole.name }, groups: inPole.get(pole.slug)!.sort(byLabel) }))
-    .sort((a, b) => a.pole!.name.localeCompare(b.pole!.name, undefined, { sensitivity: 'base' }));
+    .sort((a, b) => compareText(a.pole!.name, b.pole!.name));
   const rank = { project: 0, team: 1, none: 2 } as const;
   outside.sort((a, b) => rank[a.kind] - rank[b.kind] || byLabel(a, b));
   if (outside.length) sections.push({ key: 'pole:', pole: null, groups: outside });

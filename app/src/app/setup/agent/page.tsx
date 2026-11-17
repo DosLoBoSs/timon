@@ -24,7 +24,7 @@
  * the conversation goes well, put forward when it fails — a refused tool left a
  * tester with no card, no `setup_finish`, and a gate that sent every page back here.
  */
-import { Component, Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Component, Suspense, useCallback, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { ArrowRight, ImagePlus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,36 +33,24 @@ import { MAX_IMAGE_UPLOAD_BYTES } from '@/lib/image-upload';
 import { OnboardingBackdrop } from '@/components/onboarding-backdrop';
 import { TopBar } from '@/components/topbar';
 import { useSettingsNavigation } from '@/lib/settings-navigation';
-import { armAutoTour } from '@/lib/guided-tour';
-import { getLocale, t } from '@/lib/i18n';
+import { t } from '@/lib/i18n';
 import { settingsPath } from '@/lib/settings-path';
 import { ProviderCliCards } from '@/components/provider-cli/provider-cli-cards';
 import { readyForSetupChat } from '@/lib/provider-clis';
 import { machineScopedStorage } from '@/lib/machines/machine-storage';
 import { openedFromOnboarding } from '@/components/onboarding/onboarding-flow';
-import { readResume, RESUME_KEY, setupEntry, type MainAgentStatus as Status } from './setup-entry';
+import { useSetupChat, type SetupLeave } from '@/components/onboarding/setup-chat';
 import { setupLanding } from './setup-landing';
 import { fetchCapabilities } from '@/lib/capabilities';
-import { SetupEscape, requestSkip } from './setup-escape';
+import { SetupEscape } from './setup-escape';
 import { SlotRegion } from '@/lib/plugin-host/render';
-import { SILENT_AFTER_MS, setupTrouble, type SetupChatSignal, type SetupMissionState } from './setup-trouble';
 
 // Loaded on demand: the provider step comes first, and the chat is only
 // fetched at the chat stage, under the loader that hides it until the agent speaks.
 const ChatClient = dynamic(() => import('@/app/chat/chat-client').then((m) => m.ChatClient), { ssr: false });
 
-type Stage =
-  | { kind: 'loading' }
-  | { kind: 'providers' }
-  | { kind: 'name' }
-  | { kind: 'starting' }
-  | { kind: 'chat'; agent: string; missionId: string }
-  | { kind: 'unavailable'; agent: string };
-
 /** "Your AIs" was passed in this tab: a reload on the name form does not show it again. */
 const PROVIDERS_KEY = 'timon.setup.providers';
-/** Time the agent's last message stays on screen before the app takes over. */
-const LEAVE_DELAY_MS = 2500;
 
 /** Out of the setup, into the app: a full load, the client host reads the finished install afresh. */
 async function leaveSetup(): Promise<void> {
@@ -84,31 +72,26 @@ class GhostBoundary extends Component<{ children: ReactNode }, { failed: boolean
 }
 
 export default function MainAgentSetupPage() {
-  const [stage, setStage] = useState<Stage>({ kind: 'loading' });
+  // The agent's last words stay on screen a moment, then the loader covers the way out.
+  const [exiting, setExiting] = useState(false);
+  const onLeave = useCallback((why: SetupLeave) => {
+    if (why === 'finished') setExiting(true);
+    void leaveSetup();
+  }, []);
+  // The session itself (where it resumes, its start, its trouble, its end) is the welcome's (`setup-chat.ts`);
+  // a daemon that does not answer leaves the reader on the forms, which have a way forward of their own.
+  const chat = useSetupChat({ leave: onLeave, statusFailure: 'unnamed' });
+  const { stage } = chat;
+  const [providersDone, setProvidersDone] = useState(false);
   const [name, setName] = useState('');
   // The picture is chosen with the name: the conversation no longer asks for it.
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarSource, setAvatarSource] = useState<LogoCropSource | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const started = useRef(false);
-  // The opaque loader stays up until the agent's first words are on screen.
-  const [spoke, setSpoke] = useState(false);
-  const [leaving, setLeaving] = useState(false);
-  const onAgentSpoke = useCallback(() => setSpoke(true), []);
-  // What says the conversation will not finish on its own (`setup-trouble.ts`).
-  const [chatSignal, setChatSignal] = useState<SetupChatSignal | null>(null);
-  const onSetupTrouble = useCallback((signal: SetupChatSignal) => {
-    // A dead mission outranks a refused tool: only it offers to start over.
-    setChatSignal((prev) => (prev === 'ended' || prev === 'spawn_failed' ? prev : signal));
-  }, []);
-  const [mission, setMission] = useState<SetupMissionState | null>(null);
-  const [pollFailures, setPollFailures] = useState(0);
-  const [waitedLong, setWaitedLong] = useState(false);
-  const [skipError, setSkipError] = useState<string | null>(null);
-  // Set once the page navigates away: a start still in flight must not repaint it.
-  const leavingRef = useRef(false);
+  const [naming, setNaming] = useState(false);
+  const busy = naming || chat.busy;
+  const skipError = chat.skipError ? t('setupChat.escape.skipFailed') : null;
   const settings = useSettingsNavigation();
   // `null` until the daemon answered: "Continue" waits for one CLI the chat can start on. A list
   // refused or unreachable does not hold the wizard: the chat then says itself what is missing.
@@ -116,103 +99,14 @@ export default function MainAgentSetupPage() {
   const onBackends = useCallback((backends: Parameters<typeof readyForSetupChat>[0] | null) => {
     setAiReady(backends ? readyForSetupChat(backends) : true);
   }, []);
-
-  const startChat = useCallback(async (agentHint: string | null): Promise<void> => {
-    setStage({ kind: 'starting' });
-    // A restart is a new conversation: nothing of the previous one's trouble carries over.
-    setSpoke(false);
-    setChatSignal(null);
-    setMission(null);
-    setPollFailures(0);
-    setWaitedLong(false);
-    try {
-      const res = await fetch('/api/ui/setup/main-agent/chat', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ locale: getLocale() }),
-      });
-      const body = await res.json().catch(() => ({})) as { mission_id?: string; agent?: string; error?: string };
-      if (leavingRef.current) return;
-      if (!res.ok || !body.mission_id || !body.agent) {
-        setStage({ kind: 'unavailable', agent: agentHint ?? '' });
-        return;
-      }
-      try { machineScopedStorage(sessionStorage).setItem(RESUME_KEY, JSON.stringify({ agent: body.agent, missionId: body.mission_id })); } catch { /* private mode */ }
-      setStage({ kind: 'chat', agent: body.agent, missionId: body.mission_id });
-    } catch {
-      if (leavingRef.current) return;
-      setStage({ kind: 'unavailable', agent: agentHint ?? '' });
-    }
-  }, []);
-
-  // Where are we: a conversation already open (a reload), a named agent whose
-  // chat never started, or the very first question.
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    void (async () => {
-      try {
-        const res = await fetch('/api/ui/setup/main-agent', { cache: 'no-store' });
-        if (!res.ok) throw new Error();
-        const entry = setupEntry(await res.json() as Status, readResume(), providersSeen());
-        if (entry.kind === 'done') { void leaveSetup(); return; }
-        if (entry.kind === 'startChat') { void startChat(entry.agent); return; }
-        setStage(entry);
-      } catch {
-        setStage({ kind: providersSeen() ? 'name' : 'providers' });
-      }
-    })();
-  }, [startChat]);
-
-  // The agent ends the step by itself: follow the daemon's answer.
-  const missionId = stage.kind === 'chat' ? stage.missionId : null;
-  useEffect(() => {
-    if (!missionId) return;
-    // Its mission too: one that ended (a reload included, where no stream event
-    // replays) will never call `setup_finish`.
-    const readMission = () => {
-      void fetch(`/api/ui/missions/${encodeURIComponent(missionId)}?view=status`, { cache: 'no-store' })
-        .then(async (r) => {
-          if (r.status === 404) { setMission({ status: 'missing' }); setPollFailures(0); return; }
-          if (!r.ok) throw new Error(String(r.status));
-          const m = await r.json() as { status?: unknown; liveness?: unknown };
-          setMission({
-            status: typeof m.status === 'string' ? m.status : null,
-            liveness: typeof m.liveness === 'string' ? m.liveness : null,
-          });
-          setPollFailures(0);
-        })
-        .catch(() => setPollFailures((n) => n + 1));
-    };
-    readMission();
-    const missionTimer = setInterval(readMission, 2500);
-    const silentTimer = setTimeout(() => setWaitedLong(true), SILENT_AFTER_MS);
-    return () => { clearInterval(missionTimer); clearTimeout(silentTimer); };
-  }, [missionId]);
-
-  useEffect(() => {
-    if (stage.kind !== 'chat') return;
-    const timer = setInterval(() => {
-      void fetch('/api/ui/setup/main-agent', { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((s: Status | null) => {
-          if (s?.status !== 'complete') return;
-          clearInterval(timer);
-          leavingRef.current = true;
-          // The guided tour follows, in the app, unless declined in the conversation:
-          // leave the agent's last words a moment on screen.
-          if (s.tour !== false) armAutoTour();
-          setTimeout(() => { setLeaving(true); void leaveSetup(); }, LEAVE_DELAY_MS);
-        })
-        .catch(() => { /* next tick */ });
-    }, 2500);
-    return () => clearInterval(timer);
-  }, [stage.kind]);
+  // No agent named yet: "Your AIs" first, unless this tab already passed it. Read only once the
+  // daemon answered, never while the page renders on the server.
+  const form = stage.kind === 'unnamed' ? (providersDone || providersSeen() ? 'name' : 'providers') : null;
 
   async function submitName(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (busy || !name.trim()) return;
-    setBusy(true);
+    setNaming(true);
     setError(null);
     try {
       const res = await fetch('/api/ui/setup/main-agent/name', {
@@ -225,47 +119,36 @@ export default function MainAgentSetupPage() {
         setError(t(`mainAgentSetup.${NAME_ERRORS.has(body.error ?? '') ? body.error : 'failed'}`));
         return;
       }
-      await startChat(body.name);
+      await chat.start(body.name);
     } catch {
       setError(t('mainAgentSetup.failed'));
     } finally {
-      setBusy(false);
+      setNaming(false);
     }
   }
 
   function leaveProviders(): void {
     try { machineScopedStorage(sessionStorage).setItem(PROVIDERS_KEY, 'done'); } catch { /* private mode */ }
-    setStage({ kind: 'name' });
+    setProvidersDone(true);
   }
 
-  async function skip(): Promise<void> {
-    if (busy || leavingRef.current) return;
-    setBusy(true);
-    setSkipError(null);
-    if (await requestSkip()) {
-      leavingRef.current = true;
-      await leaveSetup();
-      return;
-    }
-    setSkipError(t('setupChat.escape.skipFailed'));
-    setBusy(false);
+  function skip(): void {
+    if (busy) return;
+    void chat.skip();
   }
 
-  const trouble = setupTrouble({
-    signal: chatSignal, mission, pollFailures, spoke, elapsedMs: waitedLong ? SILENT_AFTER_MS : 0,
-  });
   const escape = (
     <SetupEscape
-      trouble={stage.kind === 'chat' ? trouble : { level: 'quiet' }}
+      trouble={chat.trouble}
       busy={busy}
       error={skipError}
-      onSkip={() => void skip()}
-      onRestart={() => { if (stage.kind === 'chat') void startChat(stage.agent); }}
+      onSkip={skip}
+      onRestart={() => { if (stage.kind === 'chat') void chat.start(stage.agent); }}
     />
   );
   const skipLink = (
     <div className="space-y-1">
-      <button type="button" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground" disabled={busy} onClick={() => void skip()}>
+      <button type="button" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground" disabled={busy} onClick={skip}>
         {t('setupChat.escape.skip')}
       </button>
       {skipError && <p role="alert" className="text-sm text-destructive">{skipError}</p>}
@@ -287,26 +170,26 @@ export default function MainAgentSetupPage() {
           <div className="timon-island relative min-w-0 flex-1 overflow-hidden">
             <Suspense fallback={null}>
               {/* Keyed on the mission: a restarted conversation starts from an empty thread. */}
-              <ChatClient key={stage.missionId} forcedAgent={stage.agent} forcedMission={stage.missionId} compact chromeComplet setup onAgentSpoke={onAgentSpoke} onSetupTrouble={onSetupTrouble} />
+              <ChatClient key={stage.missionId} forcedAgent={stage.agent} forcedMission={stage.missionId} compact chromeComplet setup onAgentSpoke={chat.onAgentSpoke} onSetupTrouble={chat.onSetupTrouble} />
             </Suspense>
           </div>
         </main>
-        {(!spoke || leaving) && <SetupLoader label={leaving ? t('setupChat.toTour') : undefined} />}
-        {!leaving && escape}
+        {(!chat.spoke || exiting) && <SetupLoader label={exiting ? t('setupChat.toTour') : undefined} />}
+        {!exiting && escape}
       </div>
     );
   }
 
   return (
     <OnboardingBackdrop
-      className={stage.kind === 'providers' ? 'max-w-3xl' : stage.kind === 'unavailable' ? 'max-w-xl' : 'max-w-md'}
+      className={form === 'providers' ? 'max-w-3xl' : stage.kind === 'unavailable' ? 'max-w-xl' : 'max-w-md'}
       center
-      step={stage.kind === 'providers' ? 'ai' : 'agent'}
+      step={form === 'providers' ? 'ai' : 'agent'}
     >
 
       {stage.kind === 'loading' ? (
         <p role="status" className="text-sm text-muted-foreground">{t('mainAgentSetup.loading')}</p>
-      ) : stage.kind === 'providers' ? (
+      ) : form === 'providers' ? (
         <div className="space-y-6">
           <div className="space-y-2">
             <h1 className="text-2xl font-semibold tracking-tight">{t('providerClis.onboarding.title')}</h1>
@@ -338,7 +221,7 @@ export default function MainAgentSetupPage() {
             <p className="text-sm text-muted-foreground">{t('setupChat.troubleshoot.other', { settingsPath: settingsPath('models') })}</p>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <Button type="button" disabled={busy} onClick={() => void startChat(stage.agent)}>{t('setupChat.unavailable.retry')}</Button>
+            <Button type="button" disabled={busy} onClick={() => void chat.start(stage.agent)}>{t('setupChat.unavailable.retry')}</Button>
             <Button type="button" variant="outline" disabled={busy} onClick={() => settings.open({ category: 'models', tab: null })}>{t('setupChat.troubleshoot.openSettings')}</Button>
             {skipLink}
           </div>

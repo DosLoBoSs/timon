@@ -222,6 +222,36 @@ test('the NSIS installer pauses the service with one elevation as it opens, over
   assert.match(ps1, /1\.\.2/, 'a second pass for a child whose parent went first');
 });
 
+// VM, 06/11/2026: an installer killed from SSH left the task Disabled and the
+// daemon stopped. SilentlyContinue hid any failure of the resume, and the
+// resume itself, a child of the pause, died with the SSH session's job object.
+test('the service resume reports its failures, tries again and outlives the session that started it', () => {
+  const ps1 = readFileSync(join(root, 'build', 'timon-service-pause.ps1'), 'utf8');
+  const resume = ps1.match(/\nif \(\$Resume\) \{\n([\s\S]*?)\n\}\n/)?.[1] ?? '';
+  assert.ok(resume.includes('Enable-ScheduledTask'), 'the resume block is found');
+  assert.doesNotMatch(resume, /SilentlyContinue/);
+  assert.ok(ps1.indexOf("$ErrorActionPreference = 'SilentlyContinue'") > ps1.indexOf('if ($Resume) {'), 'only the stop phase stays silent');
+  for (const call of ['Enable-ScheduledTask', 'Start-ScheduledTask']) {
+    const line = resume.split('\n').find((text) => text.includes(call)) ?? '';
+    assert.match(line, /-ErrorAction Stop/, `${call} reports its error`);
+  }
+  assert.match(resume, /foreach \(\$attempt in 1\.\.3\)[\s\S]*Start-Sleep -Seconds \d+/, 'a bounded retry');
+  assert.match(resume, /\$failure\) \{ & \$note /, 'the last failure is written to the log');
+  assert.match(ps1, /Add-Content -LiteralPath \$Log/);
+  assert.match(ps1, /\.timon\\tmp\\timon-service-pause\.log/);
+  // A task found Disabled is enabled whatever left it so; an uninstall's
+  // deleted task is not an error.
+  assert.match(resume, /-eq 'Disabled'\) \{ Enable-ScheduledTask/);
+  assert.match(resume, /ObjectNotFound/);
+  assert.match(resume, /while \(Get-Process -Id \$InstallerPid/, 'no resume while the installer still runs');
+  // Created by WMI, outside the caller's job, hidden from the start (TIM-0030);
+  // the log path travels with it, since its environment is WMI's.
+  assert.match(ps1, /Invoke-CimMethod -ClassName Win32_Process -MethodName Create/);
+  assert.match(ps1, /ShowWindow = \[uint16\]0/);
+  assert.match(ps1, /-WindowStyle Hidden -File `"\$copy`" -Resume/);
+  assert.match(ps1, /if \(\$Log\) \{ \$arguments \+= " -Log `"\$Log`""/);
+});
+
 // Onboarding on a blank Windows: winget from the session-0 service cannot ask
 // for permission, and the Node.js MSI needs it. The installer asks once.
 test('the NSIS installer installs missing Node.js and Git with one elevation', () => {

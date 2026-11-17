@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "一般",
     "aria": {
-      "embeddedBrowser": "埋め込みブラウザー",
-      "resizePanel": "ブラウザーパネルのサイズを変更",
-      "projectBrowser": "{project} のブラウザー"
-    },
-    "actions": {
-      "collapse": "ブラウザーを折りたたむ",
-      "reload": "表示を再読み込み",
-      "openInTab": "ブラウザーのタブで開く",
-      "startProjectBrowser": "このプロジェクトのブラウザーを起動",
-      "stopProjectBrowser": "このプロジェクトのブラウザーコンテナを停止",
-      "start": "開始",
-      "stop": "停止",
-      "retry": "再試行",
-      "takeControl": "操作する",
-      "watchOnly": "表示のみ"
-    },
-    "display": {
-      "desktop": "デスクトップ表示",
-      "adapted": "モバイル / 最適化表示",
-      "desktopTitle": "デスクトップの全画面表示 ({width}×{height})、黒背景の中央 — モバイルに切り替え",
-      "adaptedTitle": "パネルに合わせた表示 (サイトのモバイル版) — デスクトップに切り替え"
-    },
-    "viewer": {
-      "takeControl": "操作する",
-      "watchOnly": "観覧に切り替え",
-      "watchOnlyTitle": "観覧 (読み取り専用) — 操作を始めると、現在セッションを操作しているデバイスが切断されます",
-      "controlTitle": "操作中 — 他のデバイスを追い出さずに見るには観覧に切り替えてください"
-    },
-    "pin": {
-      "attach": "パネルを固定",
-      "detach": "パネルの固定を解除",
-      "attachTitle": "固定 — コンテンツは下に隠れず横に移動します",
-      "detachTitle": "固定解除 — パネルはコンテンツの上に表示されます"
-    },
-    "empty": {
-      "noBrowser": "このプロジェクトにはブラウザーがありません。上部バーのブラウザーボタンで起動できます。"
-    },
-    "stream": {
-      "stalled": "ストリームが表示されません。別のタブまたはデバイスが操作を引き継いだ可能性があります。サーバーが受け付ける操作クライアントは 1 つだけです。"
-    },
-    "status": {
-      "stopped": "ブラウザー停止中",
-      "starting": "{project} のブラウザーを起動中…"
-    },
-    "errors": {
-      "streamUnavailable": "コンテナは実行中ですが、ストリームを利用できません",
-      "startRejected": "起動が拒否されました (HTTP {status})",
-      "startTimeout": "コンテナが時間内に起動しませんでした",
-      "unknown": "不明なエラー"
+      "embeddedBrowser": "埋め込みブラウザー"
     },
     "native": {
       "title": "ブラウザー",
@@ -156,8 +107,7 @@
       "needsControl": "記録するにはこのウィンドウからブラウザーを操作してください。別のデバイスが操作中です",
       "recording": "記録中",
       "ended": "記録終了",
-      "stepsOne": "{count} ステップ",
-      "stepsMany": "{count} ステップ",
+      "steps": "{count} ステップ",
       "stop": "停止",
       "stopTitle": "記録を停止してステップを確認",
       "review": "確認",
@@ -205,10 +155,13 @@
         "newTab": "新しいタブ",
         "switchTab": "タブを切り替え",
         "closeTab": "タブを閉じる",
-        "credential": "保存されたログイン情報"
+        "credential": "保存されたログイン情報",
+        "frame": "手動ステップ: 埋め込みフレーム ({origin})"
       },
       "paramBadge": "パラメーター: {name}",
       "flagged": "シークレットの可能性",
+      "frameUnknownOrigin": "手動ステップ: 埋め込みフレーム",
+      "frameNotice": "埋め込みフレーム (支払いフォーム、CAPTCHA、ログイン欄) の中での操作は Timon には見えません。学習したスキルはここで一時停止し、この部分をご自身で行うよう求めるため、画面の前に人がいる必要があります。",
       "paramName": "パラメーター名",
       "stepName": "ステップ名",
       "save": "保存",
@@ -268,7 +221,6 @@
       "card": {
         "label": "ブラウザーの注釈 ({count})",
         "count": "注釈 {count} 件",
-        "countOne": "注釈 1 件",
         "details": "詳細",
         "enlarge": "注釈 {n} のキャプチャを拡大",
         "source": "ソース: {source}",
@@ -280,7 +232,6 @@
         }
       },
       "queue": "注釈 {count} 件",
-      "queueOne": "注釈 1 件",
       "history": "注釈の履歴",
       "sendQueue": "送信",
       "sendQueueTitle": "この会話で {agent} に送信",

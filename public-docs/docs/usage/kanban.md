@@ -324,6 +324,8 @@ timon task done TASK_ID --comment-file result.md --merged-sha FULL_MERGE_SHA
 
 Only close work after it is actually complete. A `code-self` task requires the full 40-character merge SHA. Use `timon task block TASK_ID --reason "…"` when a real blocker remains.
 
+Timon checks a `merge` task before closing it as done: the branch it integrates must be in its base branch, and the merge SHA must be in the base, contain that branch and not be recorded already on another task. Otherwise the closing is refused with what to do. When the branch was already in the base before the merge task started, close it with the full SHA of the branch head.
+
 Add `--summary "…"` (or the `summary` field of `kanban_mark_as_done`): one or two plain sentences saying what changed, for the person reading the chat. The comment stays the full report for the orchestrator.
 
 ## Task returns in the chat
@@ -339,10 +341,12 @@ Each return is a card:
 
 Everything written for the orchestrator (task id, full comment, review JSON) sits behind **Details**. The orchestrator still receives all the returns of a batch together, in one message, once the reviews and merges that follow its coding tasks are done too.
 
+Returns go to the orchestrator of the task's series. A task an orchestrator creates with `kanban_add`, or with `timon task create` from its own terminal, belongs to its series. A task created otherwise (from the board, or by a raw call to the API) belongs to none: no orchestrator gets its returns, and its reviews use the project's roles instead of the series' ones. To attach such a task to a series, with the reviews, merge and documentation tasks of its chain, run `timon task attach TASK_ID --series SERIES_ID` (the series id, or the id of the orchestrator mission piloting it; `--series current` from inside that mission), or ask the orchestrator to use `kanban_attach_series`.
+
 
 ## When a task keeps failing
 
-A task whose mission stops before the agent closed it (crash, timeout, process killed) is retried on its own up to three times, a few minutes apart. After that it stays **Blocked**, and its reason shows the last error the CLI reported, for example a missing sign-in or a CLI that cannot be found, and ends by saying that automatic retries are over and how to restart the task. Restarting Timon does not retry it again.
+A task whose mission stops before the agent closed it (crash, timeout, process killed) is retried on its own up to three times, a few minutes apart. After that it stays **Blocked**, and its reason shows the last error the CLI reported, for example a missing sign-in or a CLI that cannot be found, and ends by saying that automatic retries are over and how to restart the task. A restart of Timon within a day of the block retries the task once more, since a restart often removes the cause; this stops after six failures in all.
 
 An agent can no longer restart such a task as it is: it has to change its agent, backend or model in the same update (clearing a backend or model the task was pinned to counts, the project's default then applies), and its restart waits a few minutes. After six failures, only you can restart it, by setting it back to Pending from the Kanban or with `timon task update <id> --status PENDING` in a terminal. Your restart starts at once and gives the task a fresh set of retries. Fix the cause shown in the reason first: restarting a task without changing anything gives the same failure.
 

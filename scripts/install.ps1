@@ -4,10 +4,9 @@
 #   & ([scriptblock]::Create((irm https://timon-ai.com/install.ps1))) -DryRun
 #
 # What it does, in order:
-#   1. reads the signed release manifest of timon-ai.com and checks its keyId,
-#      its P-256 signature (Windows PowerShell has no Ed25519; without the
-#      P-256 one, the signature is checked by Timon once installed) and its
-#      expiry;
+#   1. reads the signed installers' manifest of timon-ai.com and checks its
+#      keyId, its P-256 signature (mandatory: Windows PowerShell has no
+#      Ed25519, and a manifest it cannot check stops here) and its expiry;
 #   2. downloads the Windows installer of the stable channel (else beta) and
 #      compares its size and SHA-256 with the manifest BEFORE running it;
 #   3. runs the regular installer and waits for it. Not silently by default:
@@ -44,14 +43,14 @@ function Install-Timon {
   $ProgressPreference = 'SilentlyContinue'
 
   # The installers' manifest: the release manifest plus a P-256 signature
-  # (scripts/release-manifest.mjs). Until the site serves it, the release
-  # manifest the daemons read, without that signature.
+  # (scripts/release-manifest.mjs). Trust anchor: no fallback to the release
+  # manifest the daemons read, which has no P-256 signature, so a network
+  # attacker cannot downgrade the check by serving that file instead.
   $installManifestUrl = 'https://timon-ai.com/.well-known/timon-releases-install.json'
-  $manifestUrl = 'https://timon-ai.com/.well-known/timon-releases.json'
   # The keyId of orchestrator/src/plugins-bundled/updates/keyring.ts.
   $releaseKeyId = 'release-4253f18d5854243a'
   # The installers' P-256 key, its SPKI in base64 (docs/internal/scripts/
-  # release-p256-keygen.mjs --pin writes both lines). Empty: not checked.
+  # release-p256-keygen.mjs --pin writes both lines). Required.
   $releaseP256KeyId = 'release-701bbfb6d1c1eed1'
   $releaseP256PublicKey = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyUUvXZE0kGYqgsXTRslQyKnF1Y5MK2wjSflgy5lGkUbEUzJK9zRP1Iv88aOPoObrkPVSyJWVW4fGJE2Q7N5C6w=='
   $signatureDomain = 'timon-releases-v1'
@@ -81,11 +80,7 @@ Documentation: https://docs.timon-ai.com/installation/windows
   # Read only when TIMON_INSTALL_TESTING=1.
   $testing = $env:TIMON_INSTALL_TESTING -eq '1'
   if ($testing) {
-    if ($env:TIMON_INSTALL_MANIFEST_URL) {
-      $installManifestUrl = $env:TIMON_INSTALL_MANIFEST_URL
-      $manifestUrl = $env:TIMON_INSTALL_MANIFEST_URL
-    }
-    if ($env:TIMON_INSTALL_FALLBACK_MANIFEST_URL) { $manifestUrl = $env:TIMON_INSTALL_FALLBACK_MANIFEST_URL }
+    if ($env:TIMON_INSTALL_MANIFEST_URL) { $installManifestUrl = $env:TIMON_INSTALL_MANIFEST_URL }
     if ($env:TIMON_INSTALL_KEY_ID) { $releaseKeyId = $env:TIMON_INSTALL_KEY_ID }
     if ($env:TIMON_INSTALL_P256_KEY) {
       $releaseP256PublicKey = $env:TIMON_INSTALL_P256_KEY
@@ -178,36 +173,36 @@ Documentation: https://docs.timon-ai.com/installation/windows
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
   }
 
-  $manifestText = $null
-  try { $manifestText = Get-Remote $installManifestUrl $null } catch { $manifestText = $null }
   try {
-    if ($null -eq $manifestText) { $manifestText = Get-Remote $manifestUrl $null }
-    $envelope = $manifestText | ConvertFrom-Json
+    $envelope = Get-Remote $installManifestUrl $null | ConvertFrom-Json
   } catch {
-    Stop-Install "could not read the release manifest ($manifestUrl): $($_.Exception.Message)"
+    Stop-Install "could not read the release manifest ($installManifestUrl): $($_.Exception.Message)"
   }
   if ($envelope.keyId -ne $releaseKeyId) { Stop-Install "the release manifest is signed with an unknown key ($($envelope.keyId))" }
+  if (-not $releaseP256PublicKey) { Stop-Install 'this installer pins no P-256 key: nothing was installed' }
+  if (-not $envelope.p256 -or -not $envelope.p256.sig) {
+    Stop-Install 'the release manifest has no P-256 signature: nothing was installed. Report it at https://timon-ai.com'
+  }
   try {
     $payloadBytes = [Convert]::FromBase64String([string]$envelope.payload)
-    $p256Signature = $null
-    if ($envelope.p256) { $p256Signature = [Convert]::FromBase64String([string]$envelope.p256.sig) }
+    $p256Signature = [Convert]::FromBase64String([string]$envelope.p256.sig)
   } catch {
     Stop-Install 'the release manifest is malformed'
   }
 
-  $signatureLine = 'checked by Timon once installed (Windows PowerShell cannot verify Ed25519)'
-  if ($releaseP256PublicKey -and $null -ne $p256Signature) {
-    if ($envelope.p256.keyId -ne $releaseP256KeyId) { Stop-Install "the release manifest is signed with an unknown P-256 key ($($envelope.p256.keyId))" }
-    $domainBytes = [Text.Encoding]::ASCII.GetBytes($signatureDomain)
-    $signed = New-Object byte[] ($domainBytes.Length + 1 + $payloadBytes.Length)
-    [Array]::Copy($domainBytes, 0, $signed, 0, $domainBytes.Length)
-    [Array]::Copy($payloadBytes, 0, $signed, $domainBytes.Length + 1, $payloadBytes.Length)
-    $valid = Test-P256Signature ([Convert]::FromBase64String($releaseP256PublicKey)) $p256Signature $signed
-    if ($valid -eq $false) {
-      Stop-Install 'the release manifest signature is INVALID: nothing was installed. Report it at https://timon-ai.com'
-    }
-    if ($valid) { $signatureLine = 'verified' }
+  if ($envelope.p256.keyId -ne $releaseP256KeyId) { Stop-Install "the release manifest is signed with an unknown P-256 key ($($envelope.p256.keyId))" }
+  $domainBytes = [Text.Encoding]::ASCII.GetBytes($signatureDomain)
+  $signed = New-Object byte[] ($domainBytes.Length + 1 + $payloadBytes.Length)
+  [Array]::Copy($domainBytes, 0, $signed, 0, $domainBytes.Length)
+  [Array]::Copy($payloadBytes, 0, $signed, $domainBytes.Length + 1, $payloadBytes.Length)
+  $valid = Test-P256Signature ([Convert]::FromBase64String($releaseP256PublicKey)) $p256Signature $signed
+  if ($null -eq $valid) {
+    Stop-Install "this Windows cannot check the release manifest signature (it needs .NET Framework 4.7 or later, or PowerShell 7): nothing was installed. See $docsUrl"
   }
+  if ($valid -ne $true) {
+    Stop-Install 'the release manifest signature is INVALID: nothing was installed. Report it at https://timon-ai.com'
+  }
+  $signatureLine = 'verified'
 
   try {
     $payload = [Text.Encoding]::UTF8.GetString($payloadBytes) | ConvertFrom-Json

@@ -17,16 +17,17 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { removeHomeOnExit } from '../../tests/helpers/test-home.js';
 
 /* TIMON_HOME jetable, posé avant l'import du registry (paths.js lit l'env au
    chargement) → import dynamique obligatoire. */
 const TMP_HOME = mkdtempSync(join(tmpdir(), 'timon-streaming-'));
 process.env.TIMON_HOME = TMP_HOME;
 process.env.CODEX_AUTH_DIR = join(TMP_HOME, 'codex-auth');
-process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
+removeHomeOnExit(TMP_HOME);
 
 const { getBackend, ASSISTANT_DELTA } = await import('./index.js');
 const { mountOfficialProviders, buildUnderSeal } = await import('../../tests/helpers/official-providers.js');

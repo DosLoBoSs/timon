@@ -11,7 +11,7 @@ import type { ImportPreview, PreviewAgent } from '../../../plugins/agent-import/
 type State = typeof import('../../../plugins/agent-import/src/assistant-state.js');
 const loaded = await import('../../../plugins/agent-import/src/assistant-state.js') as State & { default?: State };
 const {
-  IMPORT_ROLES, UPLOAD_MAX_BYTES, applySummary, failureOf, fileFailure, importOptions, mergeChoices, requestBody, shownChoice,
+  IMPORT_ROLES, UPLOAD_MAX_BYTES, applySummary, failureOf, fileFailure, importOptions, mergeChoices, projectOptions, requestBody, shownChoice,
 }: State = loaded.default ?? loaded;
 
 const TOKEN = 'A'.repeat(43);
@@ -152,4 +152,24 @@ test('every message key the assistant can produce exists in both locales', async
   for (const element of ['soul', 'memory', 'skills', 'mcp', 'routines', 'team']) assert.ok(messages.en[`element.${element}`], element);
   for (const status of ['created', 'updated', 'skipped', 'failed']) assert.ok(messages.en[`result.${status}`], status);
   for (const action of ['create', 'update', 'skip']) assert.ok(messages.en[`action.${action}`], action);
+});
+
+test('the project list: none from the daemon means a typed slug, a name shared by two projects shows their slugs', () => {
+  assert.equal(projectOptions(undefined, null), null);
+  assert.equal(projectOptions([], 'web'), null, 'an empty list keeps the typed slug');
+  const projects = [
+    { slug: 'alpha', name: 'Alpha' },
+    { slug: 'site-a', name: 'Site' },
+    { slug: 'site-b', name: 'Site' },
+    { slug: 'bare', name: null },
+  ];
+  assert.deepEqual(projectOptions(projects, 'alpha'), [
+    { slug: 'alpha', label: 'Alpha', known: true },
+    { slug: 'site-a', label: 'Site (site-a)', known: true },
+    { slug: 'site-b', label: 'Site (site-b)', known: true },
+    { slug: 'bare', label: 'bare', known: true },
+  ]);
+  assert.equal(projectOptions(projects, null)!.length, 4, '"no project" is the card\'s own entry');
+  // The source's project is not here: it stays visible, marked, instead of becoming "no project".
+  assert.deepEqual(projectOptions(projects, 'gone')!.at(-1), { slug: 'gone', label: 'gone', known: false });
 });

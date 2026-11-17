@@ -5,6 +5,8 @@
  * task already done only gets the sha).
  */
 
+import { apiErrorMessageOrNull } from '@/lib/api-error';
+
 const COMMIT_SHA_RE = /^[0-9a-f]{7,40}$/i;
 
 export function isCommitSha(value: string): boolean {
@@ -44,6 +46,6 @@ export async function markTaskMerged(
   return {
     ok: false,
     code: typeof body?.code === 'string' ? body.code : null,
-    message: typeof body?.error === 'string' ? body.error : null,
+    message: apiErrorMessageOrNull(body),
   };
 }

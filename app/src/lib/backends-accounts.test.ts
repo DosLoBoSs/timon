@@ -24,7 +24,7 @@ import {
 const models = [{ slug: 'opus', label: 'Opus' }];
 
 const claude: CatalogBackend = { id: 'claude', label: 'Claude', vendor: 'Anthropic', defaultModel: 'opus', models };
-const perso: CatalogBackend = {
+const personal: CatalogBackend = {
   ...claude,
   id: 'claude@a1',
   label: 'Claude · Perso',
@@ -46,7 +46,7 @@ const team: CatalogBackend = {
   account: { id: 'c3', name: 'Team', state: 'cooldown' },
 };
 
-const catalog: BackendCatalog = { defaultBackend: 'claude', backends: [claude, perso, pro, team] };
+const catalog: BackendCatalog = { defaultBackend: 'claude', backends: [claude, personal, pro, team] };
 
 test('an instance id is recognised by its @, a plain backend is not', () => {
   assert.equal(isAccountInstance('claude@a1'), true);
@@ -57,12 +57,12 @@ test('an instance id is recognised by its @, a plain backend is not', () => {
 
 test('the vendor column names the account, so two Anthropic entries differ', () => {
   assert.equal(vendorLabel(claude), 'Anthropic');
-  assert.equal(vendorLabel(perso), 'Anthropic · Perso');
+  assert.equal(vendorLabel(personal), 'Anthropic · Perso');
 });
 
 test('an account to sign in again or out of quota is not pickable', () => {
-  assert.equal(accountUnavailable(perso), null);
-  assert.equal(isPickable(perso), true);
+  assert.equal(accountUnavailable(personal), null);
+  assert.equal(isPickable(personal), true);
   assert.equal(accountUnavailable(pro), 'reauth');
   assert.equal(isPickable(pro), false);
   assert.equal(accountUnavailable(team), 'cooldown');

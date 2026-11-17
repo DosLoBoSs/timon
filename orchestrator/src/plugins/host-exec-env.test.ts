@@ -8,6 +8,7 @@ import '../test-home.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Context } from '@deepseek-ai/cordis';
+import { pathKeyOf } from '../host/launch-path.js';
 
 const { config, setConfig } = await import('../config/load.js');
 const { daemonHost } = await import('./context.js');
@@ -38,5 +39,6 @@ test('ctx.host.exec sees neither the vault, the token nor the daemon environment
   for (const key of Object.keys(WITNESSES)) assert.equal(seen[key], undefined, `${key} must not reach ctx.host.exec`);
   assert.equal(result.stdout.includes('witness'), false, 'no value of the daemon environment either');
   assert.equal(seen.LC_FX_POINTER, 'kept', 'the system whitelist still passes (locale family)');
-  assert.ok(seen.PATH, 'PATH passes: the binary and what it starts must still be found');
+  // Windows keeps the spelling it read (`Path`): look the key up as the product does.
+  assert.ok(seen[pathKeyOf(seen, process.platform)], 'PATH passes: the binary and what it starts must still be found');
 });

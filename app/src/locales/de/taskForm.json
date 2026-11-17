@@ -38,7 +38,6 @@
       "dependencies": "Abhängigkeiten",
       "capabilities": "Fähigkeiten"
     },
-    "type": "Typ",
     "priority": {
       "label": "Priorität",
       "urgent": "Dringend",
@@ -87,7 +86,6 @@
     "modelInherit": "Projektrolle",
     "modelInheritHint": "Die Rolle des Projekts für diesen Aufgabentyp entscheidet, sonst der Agent",
     "modelInherited": "{model} (geerbt)",
-    "modelHelp": "« Projektrolle » führt die Aufgabe mit dem aus, was die Rolle des Projekts für diesen Typ, sonst der Agent, festlegt.",
     "worktreeBlocked": "Dieses Backend arbeitet außerhalb des Ordners von Timon: Eine ihm zugewiesene Code- oder Merge-Aufgabe wird blockiert.",
     "fallback": {
       "short": "Fallback",
@@ -112,7 +110,7 @@
     },
     "deps": {
       "filter": "Aufgaben filtern…",
-      "count": "{selected} ausgewählt · {count} Kandidaten",
+      "count": "{selected} ausgewählt · {count, plural, one {# Kandidat} other {# Kandidaten}}",
       "none": "Keine infrage kommende Aufgabe.",
       "noMatch": "Keine passende Aufgabe."
     },
@@ -138,13 +136,11 @@
     },
     "summary": {
       "label": "Übersicht",
-      "model": "Modell",
       "type": "Typ",
       "priority": "Priorität",
       "deps": "Abhängigkeiten",
       "depsNone": "Keine",
       "depsCount": "{count} zuerst abzuschließen",
-      "start": "Start",
       "startAsap": "So bald wie möglich",
       "status": "Status",
       "attachments": "Dateien",
@@ -216,8 +212,7 @@
         "general": "Allgemeine Einstellungen — gelten für jede Gruppe, die nichts festlegt",
         "other": "Weitere Arbeitsstränge",
         "inherits": "erbt die allgemeinen Einstellungen",
-        "countOne": "{count} Arbeitsstrang",
-        "countMany": "{count} Arbeitsstränge",
+        "count": "{count, plural, one {# Arbeitsstrang} other {# Arbeitsstränge}}",
         "inheritGeneral": "{value} (allgemeine Einstellung)",
         "fallbackSummary": "Fallback {value}",
         "noRolesInMode": "Dieser Modus erstellt keine Aufgabe: kein Modell pro Gruppe zu wählen.",

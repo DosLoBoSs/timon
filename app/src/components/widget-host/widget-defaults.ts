@@ -1,6 +1,6 @@
 import { MAIN_AGENT_WIDGET_ID } from '@/lib/main-agent-card';
 import { ADD_WIDGET_IDS } from './add-widget';
-import { fusionnerLayout, placementHerite, type ContraintesWidget, type WidgetLayout } from './widget-layout';
+import { mergeLayout, inheritedPlacement, type WidgetConstraints, type WidgetLayout } from './widget-layout';
 
 /**
  * What a view looks like before anyone has touched it.
@@ -61,7 +61,7 @@ const STARTERS: Record<string, Record<string, Starter>> = {
 export function workspaceWidgets(
   raw: unknown,
   known: boolean,
-  constraints: readonly ContraintesWidget[],
+  constraints: readonly WidgetConstraints[],
   view: string,
   chatZonesMounted = false,
 ): WidgetLayout[] {
@@ -111,7 +111,7 @@ function reseedFromChat(item: unknown, chatStarters: Record<string, Starter>): u
  */
 export function mergeWorkspaceWidgets(
   raw: unknown,
-  constraints: readonly ContraintesWidget[],
+  constraints: readonly WidgetConstraints[],
   view: string,
   chatZonesMounted = false,
 ): WidgetLayout[] {
@@ -121,13 +121,13 @@ export function mergeWorkspaceWidgets(
   const known = new Set(existing ? (raw as unknown[]).map(item => (item as { id?: unknown } | null)?.id) : []);
   const starters = STARTERS[view] ?? {};
   const byId = new Map(constraints.map(c => [c.id, c]));
-  const additions = fusionnerLayout(null, constraints).filter(widget => !known.has(widget.id)).map(widget => {
+  const additions = mergeLayout(null, constraints).filter(widget => !known.has(widget.id)).map(widget => {
     const constraint = byId.get(widget.id);
-    const inherited = placementHerite(raw, constraint?.formerIds ?? [], widget.id);
+    const inherited = inheritedPlacement(raw, constraint?.formerIds ?? [], widget.id);
     if (inherited) return inherited;
     const initial = (!existing ? starters[widget.id] : undefined) ?? chatStarters[widget.id];
     if (!initial) return constraint?.placedByDefault ? widget : { ...widget, removed: true };
-    return { ...widget, ...initial, hauteur: Math.max(initial.hauteur, constraints.find(c => c.id === widget.id)?.hauteurMin ?? 0) };
+    return { ...widget, ...initial, hauteur: Math.max(initial.hauteur, constraints.find(c => c.id === widget.id)?.minHeight ?? 0) };
   });
-  return fusionnerLayout(existing ? [...(raw as unknown[]), ...additions] : additions, constraints);
+  return mergeLayout(existing ? [...(raw as unknown[]), ...additions] : additions, constraints);
 }

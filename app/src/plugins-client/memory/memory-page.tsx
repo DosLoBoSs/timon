@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { mdToSafeHtml } from '@/lib/markdown';
 import { t } from '@/lib/i18n';
 import { formatDateTime, formatRelativeTime } from '@/lib/intl';
-import { apiErrorMessage } from '@/lib/api-error';
+import { apiErrorMessage, responseErrorMessage } from '@/lib/api-error';
 
 /* ───────── types ───────── */
 type Kind = 'decision' | 'pitfall' | 'preference';
@@ -32,10 +32,10 @@ type GroupedFact = { hash: string; kind: Kind; text: string; count: number; last
 type Project = { slug: string; name?: string | null; color?: string | null };
 type Agent = { name: string; project?: string | null; role?: string | null };
 
-const KIND: Record<Kind, { icon: string; label: string; variant: 'default' | 'destructive' | 'secondary' }> = {
-  decision: { icon: '🧭', label: 'decision', variant: 'default' },
-  pitfall: { icon: '⚠️', label: 'pitfall', variant: 'destructive' },
-  preference: { icon: '💡', label: 'preference', variant: 'secondary' },
+const KIND: Record<Kind, { icon: string; variant: 'default' | 'destructive' | 'secondary' }> = {
+  decision: { icon: '🧭', variant: 'default' },
+  pitfall: { icon: '⚠️', variant: 'destructive' },
+  preference: { icon: '💡', variant: 'secondary' },
 };
 const CURATED = ['instructions.md', 'decisions.md'] as const;
 
@@ -123,7 +123,7 @@ function CurationRunDialog({ runId, onClose }: { runId: string; onClose: () => v
                       {meta.label}
                     </span>
                     <span className="text-[10px] text-muted-foreground/70">
-                      scope {r.scope}
+                      {t('memoryPage.scopeOf', { scope: r.scope })}
                       {r.agent ? ` · ${r.agent}` : ''}
                       {r.rule_id ? ` · #${r.rule_id}` : ''}
                       {r.target_rule_id ? ` → #${r.target_rule_id}` : ''}
@@ -376,7 +376,7 @@ function ProposalRow({ p, onAccept, onReject }: { p: Proposal; onAccept: () => v
   return (
     <li className="rounded-lg border border-border bg-card/30 px-3.5 py-2.5">
       <div className="flex flex-wrap items-center gap-2 text-[11px]">
-        <Badge variant={k.variant} className="h-5 px-1.5 text-[10px]">{k.icon} {k.label}</Badge>
+        <Badge variant={k.variant} className="h-5 px-1.5 text-[10px]">{k.icon} {t(`memoryPage.kind.${p.kind}`)}</Badge>
         <span className="tabular-nums text-muted-foreground">×{p.count}</span>
         {p.slug && <span className="text-muted-foreground/70">{p.slug}</span>}
         {p.agent && <span className="text-muted-foreground/50">{p.agent}</span>}
@@ -537,7 +537,7 @@ function AgentView({ agent }: { agent: string }) {
       {(['pitfall', 'decision', 'preference'] as const).map((k) => byKind[k].length > 0 && (
         <section key={k}>
           <div className="mb-2 flex items-center gap-2">
-            <span className="text-[12px] font-semibold">{KIND[k].icon} {KIND[k].label}s</span>
+            <span className="text-[12px] font-semibold">{KIND[k].icon} {t(`memoryPage.kinds.${k}`)}</span>
             <span className="tabular-nums text-[11px] text-muted-foreground">{byKind[k].length}</span>
           </div>
           <div className="grid gap-2">
@@ -594,12 +594,12 @@ function MarkdownEditor({ title, getUrl, putUrl, placeholder }: {
     timer.current = setTimeout(async () => {
       try {
         const r = await fetch(putUrl, { method: 'PUT', headers: { 'content-type': 'text/plain; charset=utf-8' }, body: content });
-        if (!r.ok) throw new Error('save failed: ' + r.status);
+        if (!r.ok) throw new Error(t('memoryPage.saveError', { title, error: await responseErrorMessage(r) }));
         setOriginal(content); setSaved('saved');
       } catch (e) { setSaved('error'); toast.error(String((e as Error).message || e)); }
     }, 1200);
     return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [content, original, putUrl]);
+  }, [content, original, putUrl, title]);
 
   return (
     <section>

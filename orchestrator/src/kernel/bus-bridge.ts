@@ -63,6 +63,7 @@ declare module '@deepseek-ai/cordis' {
     'timon/browser_recording'(ev: Extract<BusEvent, { kind: 'browser_recording' }>): void;
     'timon/browser_annotation'(ev: Extract<BusEvent, { kind: 'browser_annotation' }>): void;
     'timon/backends_changed'(ev: Extract<BusEvent, { kind: 'backends_changed' }>): void;
+    'timon/backend_fallback'(ev: Extract<BusEvent, { kind: 'backend_fallback' }>): void;
     'timon/license_changed'(ev: Extract<BusEvent, { kind: 'license_changed' }>): void;
     'timon/update_available'(ev: Extract<BusEvent, { kind: 'update_available' }>): void;
   }

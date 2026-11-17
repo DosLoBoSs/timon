@@ -42,9 +42,10 @@ test('agent editor accepts a new name in its dialog and saves agents without inv
   });
   const root = createRoot(document.getElementById('root')!);
   const nameInput = () => document.querySelector<HTMLInputElement>('[role="tabpanel"] input')!;
-  const clickSave = () => React.act(async () => {
-    const button = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save');
-    assert.ok(button, 'Save is available');
+  // The button reads in the current language: French in the second half.
+  const clickSave = (label = 'Save') => React.act(async () => {
+    const button = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.trim() === label);
+    assert.ok(button, `${label} is available`);
     button.click();
   });
   try {
@@ -77,7 +78,7 @@ test('agent editor accepts a new name in its dialog and saves agents without inv
     assert.equal(nameInput().value, 'Zeus');
     assert.equal(nameInput().getAttribute('aria-label'), 'Nom');
     assert.match(document.querySelector('[role="tabpanel"]')!.textContent!, /affiché dans le graphe et la console/);
-    await clickSave();
+    await clickSave('Enregistrer');
     assert.equal(posts[1]?.name, 'Zeus');
     assert.equal(Object.hasOwn(posts[1]!.config, 'cwd'), false, 'existing agent keeps cwd absent');
   } finally {

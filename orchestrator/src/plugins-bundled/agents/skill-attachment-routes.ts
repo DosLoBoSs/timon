@@ -26,6 +26,7 @@ import type express from 'express';
 import type { Request, Response } from 'express';
 import { existsSync } from 'node:fs';
 import { z } from 'zod';
+import { apiError } from '../../api-error.js';
 import { canonicalAgentName, killRunningForAgent, loadConfig, resolveSpawnSkills } from '../../agent.js';
 import { getRole } from '../../agent-roles.js';
 import { tryDefaultBackendName } from '../../backends/index.js';
@@ -117,7 +118,7 @@ export function registerSkillAttachmentRoutes(app: express.IRouter): void {
     if (anonymous(req, res)) return;
     if (rejectUnlessAny(req, res, AGENT_READ)) return;
     const q = listSchema.safeParse(req.query);
-    if (!q.success) { res.status(400).json({ error: 'invalid query', fields: q.error.flatten().fieldErrors }); return; }
+    if (!q.success) { res.status(400).json({ ...apiError('invalid_fields', 'invalid query', { fields: Object.keys(q.error.flatten().fieldErrors).join(', ') }), fields: q.error.flatten().fieldErrors }); return; }
     res.json({ attachments: listSkillAttachments(q.data) });
   });
 
@@ -126,18 +127,18 @@ export function registerSkillAttachmentRoutes(app: express.IRouter): void {
     if (rejectIfDenied(req, res, 'agents:manage')) return;
     const parsed = attachSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid skill attachment', fields: parsed.error.flatten().fieldErrors });
+      res.status(400).json({ ...apiError('invalid_fields', 'Invalid skill attachment', { fields: Object.keys(parsed.error.flatten().fieldErrors).join(', ') }), fields: parsed.error.flatten().fieldErrors });
       return;
     }
     const body = parsed.data;
     let target = body.scope === 'global' ? '' : body.target!;
     if (body.scope === 'agent') {
       target = canonicalAgentName(target);
-      if (!existsSync(agentDir(target))) { res.status(404).json({ error: `agent not found: ${target}` }); return; }
+      if (!existsSync(agentDir(target))) { res.status(404).json(apiError('agent_not_found', `agent not found: ${target}`)); return; }
     }
     // An exclusion may name a skill that is gone: it still has to stop an inheritance.
     if (!body.exclude && !existsSync(skillFile(body.skill))) {
-      res.status(404).json({ error: `skill not found: ${body.skill} (see skill_list)` });
+      res.status(404).json(apiError('skill_not_found', `skill not found: ${body.skill} (see skill_list)`));
       return;
     }
     const refusal = (body.exclude ? null : skillReachRefusal(req, body.skill, body.scope, target))
@@ -147,11 +148,11 @@ export function registerSkillAttachmentRoutes(app: express.IRouter): void {
     // which projects exist; a mistyped slug or role id would otherwise store an
     // attachment no agent ever resolves.
     if (body.scope === 'project' && !listProjects().includes(target)) {
-      res.status(404).json({ error: `project not found: ${target}` });
+      res.status(404).json(apiError('project_not_found', `project not found: ${target}`));
       return;
     }
     if (body.scope === 'role' && !getRole(target)) {
-      res.status(404).json({ error: `role not found: ${target} (see agent roles)` });
+      res.status(404).json(apiError('role_invalid', `role not found: ${target} (see agent roles)`, { role: target }));
       return;
     }
     const row = putSkillAttachment({ skill: body.skill, scope: body.scope, target, mode: body.mode, exclude: body.exclude });
@@ -167,7 +168,7 @@ export function registerSkillAttachmentRoutes(app: express.IRouter): void {
     if (rejectIfDenied(req, res, 'agents:manage')) return;
     const id = Number(req.params.id);
     const row = Number.isInteger(id) && id > 0 ? getSkillAttachment(id) : null;
-    if (!row) { res.status(404).json({ error: 'skill attachment not found' }); return; }
+    if (!row) { res.status(404).json(apiError('skill_attachment_not_found', 'skill attachment not found')); return; }
     // Removing an exclusion hands the agents it covered the skill it held back.
     const refusal = (row.exclude ? skillReachRefusal(req, row.skill, row.scope, row.target) : null)
       ?? writeRefusal(req, row.scope, row.target);
@@ -194,12 +195,12 @@ export function registerSkillAttachmentRoutes(app: express.IRouter): void {
     if (rejectUnlessAny(req, res, AGENT_READ)) return;
     const parsed = previewSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid skills preview', fields: parsed.error.flatten().fieldErrors });
+      res.status(400).json({ ...apiError('invalid_fields', 'Invalid skills preview', { fields: Object.keys(parsed.error.flatten().fieldErrors).join(', ') }), fields: parsed.error.flatten().fieldErrors });
       return;
     }
     const { agent: wanted, ...draft } = parsed.data;
     const agent = wanted === undefined ? null : canonicalAgentName(wanted);
-    if (agent !== null && !existsSync(agentDir(agent))) { res.status(404).json({ error: `agent not found: ${agent}` }); return; }
+    if (agent !== null && !existsSync(agentDir(agent))) { res.status(404).json(apiError('agent_not_found', `agent not found: ${agent}`)); return; }
     // The prompt looks into the working folder (`.grepai`), so a path this caller
     // could not give the agent must not be tested: a save would refuse it anyway.
     if (draft.cwd && !isPrivilegedCaller(req)
@@ -209,7 +210,7 @@ export function registerSkillAttachmentRoutes(app: express.IRouter): void {
     try {
       res.json(buildSkillsPreview(agent, draft));
     } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json(apiError('skills_preview_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -219,7 +220,7 @@ export function registerSkillAttachmentRoutes(app: express.IRouter): void {
     if (anonymous(req, res)) return;
     if (rejectUnlessAny(req, res, AGENT_READ)) return;
     const name = canonicalAgentName(req.params.name);
-    if (!existsSync(agentDir(name))) { res.status(404).json({ error: `agent not found: ${name}` }); return; }
+    if (!existsSync(agentDir(name))) { res.status(404).json(apiError('agent_not_found', `agent not found: ${name}`)); return; }
     res.json({ agent: name, skills: resolveSpawnSkills(name, loadConfig(name)) });
   });
 
@@ -229,7 +230,7 @@ export function registerSkillAttachmentRoutes(app: express.IRouter): void {
     if (anonymous(req, res)) return;
     if (rejectUnlessAny(req, res, AGENT_READ)) return;
     const name = canonicalAgentName(req.params.name);
-    if (!existsSync(agentDir(name))) { res.status(404).json({ error: `agent not found: ${name}` }); return; }
+    if (!existsSync(agentDir(name))) { res.status(404).json(apiError('agent_not_found', `agent not found: ${name}`)); return; }
     res.json({ agent: name, ...skillReadStats(name, viewerFromRequest(req), loadConfig(name).backend ?? tryDefaultBackendName()) });
   });
 }

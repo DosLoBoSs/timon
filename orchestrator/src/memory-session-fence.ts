@@ -102,6 +102,8 @@ export function reviseMemoryRule(id: number, patch: RulePatch, at: number = Date
   if (!before) return undefined;
   const rule = dbApi.updateRule(id, patch);
   if (!rule) return undefined;
+  // The old wording is gone from the rule: it goes from the audit trail too.
+  if (before.text !== rule.text) dbApi.redactMemoryAuditText(id, before.text);
   return { rule, freshConversation: ruleEditRevokes(before, rule) ? fenceSessionsForRule(before, at) : [] };
 }
 
@@ -120,11 +122,14 @@ export function supersedeMemoryRule(oldId: number, byNewId: number | null = null
 /**
  * Deletes a rule and fences the agents it may have reached, whatever its
  * status: a superseded or archived rule may still sit in a session that
- * predates the fences. `undefined` when the rule does not exist.
+ * predates the fences. Its text leaves the curation journal with it.
+ * `undefined` when the rule does not exist.
  */
 export function deleteMemoryRuleAndFence(id: number, at: number = Date.now()): RuleChange | undefined {
   const rule = dbApi.getRule(id);
   if (!rule) return undefined;
   dbApi.deleteRule(id);
+  // A deletion that left the text in the audit trail would delete nothing.
+  dbApi.redactMemoryAuditText(id);
   return { rule, freshConversation: fenceSessionsForRule(rule, at) };
 }

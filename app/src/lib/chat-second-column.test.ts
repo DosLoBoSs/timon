@@ -39,10 +39,10 @@ test('second column: beside its column when there is room, a tab of it otherwise
     return new Response(null, { status: 404 });
   });
 
-  let largeur = 1400;
+  let width = 1400;
   Object.defineProperty(dom.window.HTMLElement.prototype, 'getBoundingClientRect', {
     configurable: true,
-    value() { return { width: largeur, height: 800, top: 0, left: 0, right: largeur, bottom: 800, x: 0, y: 0 }; },
+    value() { return { width, height: 800, top: 0, left: 0, right: width, bottom: 800, x: 0, y: 0 }; },
   });
 
   const { declareSlot, register, resetSlotsForTests } = await import('./plugin-host/slots');
@@ -59,7 +59,7 @@ test('second column: beside its column when there is room, a tab of it otherwise
   const { WidgetHost, useWidgetHost } = await import('../components/widget-host/widget-host');
   const { ChatWidgetRail, useChatColumns, useChatRailsLayout } = await import('../components/chat/chat-rails');
 
-  const seen: { zones: Array<{ id: string; hidden: boolean }>; palette: string[]; gouttiere: number } = { zones: [], palette: [], gouttiere: 0 };
+  const seen: { zones: Array<{ id: string; hidden: boolean }>; palette: string[]; gutter: number } = { zones: [], palette: [], gutter: 0 };
   function Probe() {
     const host = useWidgetHost();
     seen.zones = host.zones.map((z) => ({ id: z.id, hidden: z.hidden === true }));
@@ -67,29 +67,29 @@ test('second column: beside its column when there is room, a tab of it otherwise
     return null;
   }
   function Page() {
-    const { colonnes } = useChatColumns();
-    const rails = useChatRailsLayout(colonnes);
-    seen.gouttiere = rails.droite.gouttiere;
-    return React.createElement('div', { ref: rails.mesurer },
-      ...[rails.gauche, rails.droite].flatMap((cote) => (cote.visible ? cote.rails : []).map((rail) =>
-        React.createElement('div', { key: rail.zone, 'data-rail': rail.zone, 'data-width': rail.largeur },
+    const { columns: chatColumns } = useChatColumns();
+    const rails = useChatRailsLayout(chatColumns);
+    seen.gutter = rails.right.gutter;
+    return React.createElement('div', { ref: rails.measure },
+      ...[rails.left, rails.right].flatMap((side) => (side.visible ? side.rails : []).map((rail) =>
+        React.createElement('div', { key: rail.zone, 'data-rail': rail.zone, 'data-width': rail.width },
           React.createElement(ChatWidgetRail, {
             zone: rail.zone,
             slot: rail.slot,
-            onglets: rail.onglets,
-            actif: rail.actif,
-            cote: cote.cote,
-            label: rail.seconde ? 'Right second' : 'Right',
+            tabs: rail.tabs,
+            active: rail.active,
+            side: side.side,
+            label: rail.second ? 'Right second' : 'Right',
           })))));
   }
 
   const root = createRoot(document.getElementById('root')!);
   const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);
-  const rendre = (cle: number) => React.createElement(PathnameContext.Provider, { value: '/chat' },
+  const view = (generation: number) => React.createElement(PathnameContext.Provider, { value: '/chat' },
     React.createElement(SearchParamsContext.Provider, { value: new URLSearchParams() },
       React.createElement(WorkspaceLayoutProvider, null,
         React.createElement(WidgetHost, null,
-          React.createElement(Page, { key: cle }),
+          React.createElement(Page, { key: generation }),
           React.createElement(Probe)))));
   const shown = () => Array.from(document.querySelectorAll('[data-rail]')).map((n) => [
     n.getAttribute('data-rail'),
@@ -98,25 +98,25 @@ test('second column: beside its column when there is room, a tab of it otherwise
   const zone = (id: string) => seen.zones.filter((z) => z.id === id);
 
   try {
-    await React.act(async () => { root.render(rendre(1)); });
+    await React.act(async () => { root.render(view(1)); });
     await until(() => document.querySelectorAll('[data-rail] [data-widget-id]').length === 2, 'both columns to show their card');
 
     assert.deepEqual(shown(), [[COL, ['plugin:fixture:a']], [TAB2, ['plugin:fixture:b']]], 'two columns side by side');
     assert.deepEqual(zone(TAB2), [{ id: TAB2, hidden: false }]);
     assert.equal(document.querySelectorAll('[role="tab"]').length, 0, 'no tab bar: each column shows one zone');
-    assert.equal(seen.gouttiere, 16 + 300 + 12 + 300 + 12, 'the thread makes room for both');
+    assert.equal(seen.gutter, 16 + 300 + 12 + 300 + 12, 'the thread makes room for both');
     assert.deepEqual(seen.palette, []);
 
     // Still above the narrow threshold, where columns turn into panels.
-    largeur = 1100;
-    await React.act(async () => { root.render(rendre(2)); });
+    width = 1100;
+    await React.act(async () => { root.render(view(2)); });
     await until(() => document.querySelectorAll('[role="tab"]').length === 2, 'the columns to fold into tabs');
 
     assert.deepEqual(shown(), [[COL, ['plugin:fixture:a']]], 'too narrow: one column');
     assert.equal(document.querySelectorAll('[role="tab"]').length, 2, 'one tab entry per column');
     assert.deepEqual(zone(TAB2), [{ id: TAB2, hidden: true }], 'the folded column is a hidden tab');
     assert.deepEqual(seen.palette, [], 'its cards stay placed');
-    assert.equal(seen.gouttiere, 328);
+    assert.equal(seen.gutter, 328);
   } finally {
     await React.act(async () => { root.unmount(); });
     resetSlotsForTests();

@@ -134,7 +134,7 @@ test('a queued task lays its pieces in the shared zones of a board card', async 
     assert.match(m.text('badges'), /Bug/, 'its urgency');
 
     assert.match(m.text('meta'), /Scheduled/);
-    assert.ok(m.zone('meta')?.querySelector('[aria-label="2 attachment(s)"]'), 'the attachment count');
+    assert.ok(m.zone('meta')?.querySelector('[aria-label="2 attachments"]'), 'the attachment count');
     assert.equal(m.zone('context'), null, 'nothing asks for attention');
     assert.equal(m.zone('actions'), null, 'no gesture on a queued task without a series');
   } finally {

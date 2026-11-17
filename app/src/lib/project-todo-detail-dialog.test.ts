@@ -5,7 +5,7 @@ import test from 'node:test';
  * The detail dialog of an idea lists the tasks that carry it (`todo_id`):
  * they are what will close it once merged.
  */
-async function monterDialog(tasks: unknown[], appels: string[], corps: unknown[] = [], extra: Record<string, unknown> = {}) {
+async function mountDialog(tasks: unknown[], calls: string[], bodies: unknown[] = [], extra: Record<string, unknown> = {}) {
   const { JSDOM } = await import('jsdom');
   // Radix Dialog (portal, focus scope) needs the wider set of DOM globals.
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
@@ -22,8 +22,8 @@ async function monterDialog(tasks: unknown[], appels: string[], corps: unknown[]
   install('React', React);
   const { createRoot } = await import('react-dom/client');
   install('fetch', async (input: string, init?: RequestInit) => {
-    appels.push(String(input));
-    if (init?.body) corps.push(JSON.parse(String(init.body)));
+    calls.push(String(input));
+    if (init?.body) bodies.push(JSON.parse(String(init.body)));
     return Response.json({ tasks });
   });
   const { TodoFormModal } = await import('../plugins-client/kanban/todo-form-modal');
@@ -41,12 +41,12 @@ async function monterDialog(tasks: unknown[], appels: string[], corps: unknown[]
 }
 
 test('the dialog lists the tasks linked to the idea', async () => {
-  const appels: string[] = [];
-  const { React, root } = await monterDialog([
+  const calls: string[] = [];
+  const { React, root } = await mountDialog([
     { id: 't-1', title: 'Implémenter l\'idée', type: 'code', status: 'IN_PROGRESS' },
-  ], appels);
+  ], calls);
   // The popup also reads the idea's attachments: only the tasks call counts here.
-  assert.deepEqual(appels.filter((u) => u.startsWith('/api/ui/tasks')), ['/api/ui/tasks?todo_id=42']);
+  assert.deepEqual(calls.filter((u) => u.startsWith('/api/ui/tasks')), ['/api/ui/tasks?todo_id=42']);
   assert.match(document.body.textContent!, /linked tasks/);
   assert.match(document.body.textContent!, /Implémenter l'idée/);
   assert.match(document.body.textContent!, /code · IN_PROGRESS/);
@@ -54,7 +54,7 @@ test('the dialog lists the tasks linked to the idea', async () => {
 });
 
 test('no linked task, no field', async () => {
-  const { React, root } = await monterDialog([], []);
+  const { React, root } = await mountDialog([], []);
   assert.doesNotMatch(document.body.textContent!, /linked tasks/);
   await React.act(async () => { root.unmount(); });
 });
@@ -70,14 +70,14 @@ test('a plugin block in kanban.todo.detail reads the idea it is shown with', asy
   }
   undo.push(register({ slot: 'kanban.todo.detail', pluginId: 'test/block' }, Block));
   try {
-    const { React, root } = await monterDialog([], []);
+    const { React, root } = await mountDialog([], []);
     assert.match(document.body.textContent!, /plugin block for #42/);
     await React.act(async () => { root.unmount(); });
   } finally { for (const fn of undo.reverse()) fn(); }
 });
 
 test('the dialog shows the idea\'s external links, and never an href that is not http(s)', async () => {
-  const { React, root } = await monterDialog([], [], [], {
+  const { React, root } = await mountDialog([], [], [], {
     links: [
       { provider: 'github', ref: 'acme/app#12', url: 'https://github.com/acme/app/issues/12', label: 'Issue #12', plugin_id: null, created_at: 1 },
       { provider: 'discord', ref: 'thread-9', url: null, label: null, plugin_id: null, created_at: 2 },
@@ -97,13 +97,13 @@ test('the dialog shows the idea\'s external links, and never an href that is not
 });
 
 test('no external link, no field', async () => {
-  const { React, root } = await monterDialog([], []);
+  const { React, root } = await mountDialog([], []);
   assert.doesNotMatch(document.body.textContent!, /elsewhere/);
   await React.act(async () => { root.unmount(); });
 });
 
 test('urgency and progress are one chip each, and the vocabulary opens from it', async () => {
-  const { React, root } = await monterDialog([], [], [], { progress: 'analyzed', urgency: 'bug' });
+  const { React, root } = await mountDialog([], [], [], { progress: 'analyzed', urgency: 'bug' });
   const chip = (label: string) => document.querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement | null;
   const progress = chip('progress');
   assert.ok(progress);
@@ -120,7 +120,7 @@ test('urgency and progress are one chip each, and the vocabulary opens from it',
 });
 
 test('the author is not named twice when a connector already carries it', async () => {
-  const { React, root } = await monterDialog([], [], [], {
+  const { React, root } = await mountDialog([], [], [], {
     author: 'discord',
     links: [{ provider: 'discord', ref: 'TIM-0070', url: null, label: 'TIM-0070', plugin_id: null, created_at: 1 }],
   });
@@ -130,7 +130,7 @@ test('the author is not named twice when a connector already carries it', async 
 });
 
 test('the save button stays in the footer, whatever the length of the description', async () => {
-  const { React, root } = await monterDialog([], [], [], { notes: 'x\n'.repeat(400) });
+  const { React, root } = await mountDialog([], [], [], { notes: 'x\n'.repeat(400) });
   const footer = document.querySelector('footer');
   assert.ok(footer);
   assert.ok(Array.from(footer.querySelectorAll('button')).some((b) => /Save/.test(b.textContent ?? '')));

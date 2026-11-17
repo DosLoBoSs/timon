@@ -154,7 +154,8 @@ test('with a token: one prompt migrates the LaunchAgent to a LaunchDaemon', () =
   assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1]!)), order.join(','));
   assert.equal(existsSync(plistPath(o.homeDir)), false, 'the agent file goes once the daemon is loaded');
   const launcher = macosLauncherPath(o.timonHome);
-  assert.equal(statSync(launcher).mode & 0o777, 0o700);
+  // Windows reports no POSIX mode bits (always 0o666): the owner-only mode is a macOS guarantee.
+  if (process.platform !== 'win32') assert.equal(statSync(launcher).mode & 0o777, 0o700);
   assert.ok(readFileSync(launcher, 'utf8').includes(shQuote(join(o.installDir, 'dist', 'boot.js'))));
   assert.match(res.lines.join('\n'), /LaunchDaemon/);
 });
@@ -356,7 +357,11 @@ test('a failed upgrade from a LaunchDaemon with a leftover agent plist relaunche
   assert.equal(readFileSync(plistPath(o.homeDir), 'utf8'), '<plist>agent</plist>');
 });
 
-test('the root script really removes the partial LaunchDaemon when bootstrap fails', () => {
+// The root script runs under sh against a sh stand-in for launchctl: on Windows
+// the script carries `C:\…` paths sh cannot read, so it runs on POSIX hosts only.
+test('the root script really removes the partial LaunchDaemon when bootstrap fails', {
+  skip: process.platform === 'win32' && 'the root script and its launchctl stand-in run under sh',
+}, () => {
   const { o, calls } = mac({ token: true, steps: { ...INSTALLED, bootstrap: 5, rollback: 0 } });
   installService(o);
   const dir = mkdtempSync(join(tmpdir(), 'timon-launchctl-'));

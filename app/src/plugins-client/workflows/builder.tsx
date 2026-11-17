@@ -38,6 +38,7 @@ import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { ArchitectChat } from './architect-chat';
@@ -188,7 +189,7 @@ function VariablesDialog({ open, definition, onChange, onClose }: { open: boolea
           {variables.map((variable, index) => (
             <div key={index} className="grid grid-cols-[1fr_92px_1fr_28px] items-center gap-2">
               {/* code-font: a variable name and its typed default */}
-              <Input value={variable.name} placeholder="name" className="h-8 font-mono text-xs" onChange={(event) => set(variables.map((item, i) => (i === index ? { ...item, name: event.target.value } : item)))} />
+              <Input value={variable.name} placeholder={t('workflows.builder.variableName')} className="h-8 font-mono text-xs" onChange={(event) => set(variables.map((item, i) => (i === index ? { ...item, name: event.target.value } : item)))} />
               <select className="h-8 rounded-md border border-input bg-background px-2 text-xs" value={variable.type} onChange={(event) => set(variables.map((item, i) => (i === index ? { ...item, type: event.target.value as WorkflowVariable['type'] } : item)))}>
                 {VARIABLE_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
               </select>
@@ -233,7 +234,7 @@ function SettingsDialog({ open, workflow, definition, onChange, onWorkflow, onCl
       const response = await fetch(`/api/ui/workflows/${workflow.id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: trimmed || workflow.name, description, ...(agentChanged ? { agent_name: agent } : {}) }) });
       const value = await readJson(response);
       if (response.ok && value.workflow) onWorkflow({ ...workflow, ...(value.workflow as Workflow) });
-      else { toast.error(typeof value.error === 'string' ? value.error : t(agentChanged ? 'workflows.agentSaveError' : 'workflows.save.error')); return; }
+      else { toast.error(apiErrorMessage(value, t(agentChanged ? 'workflows.agentSaveError' : 'workflows.save.error'))); return; }
     }
     onClose();
   };
@@ -256,12 +257,12 @@ function SettingsDialog({ open, workflow, definition, onChange, onWorkflow, onCl
             <div className="space-y-1"><Label className="text-xs">{t('workflows.settingsKeys.maxParallel')}</Label><Input type="number" min={1} value={settings.maxParallel ?? 3} onChange={(event) => setSetting('maxParallel', Math.max(1, Number(event.target.value) || 1))} className="h-8 text-xs" /></div>
             <div className="space-y-1"><Label className="text-xs">{t('workflows.settingsKeys.onError')}</Label>
               <select className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs" value={settings.onError ?? 'fail'} onChange={(event) => setSetting('onError', event.target.value)}>
-                <option value="fail">fail</option><option value="continue">continue</option>
+                <option value="fail">{t('workflows.builder.onError.fail')}</option><option value="continue">{t('workflows.builder.onError.continue')}</option>
               </select>
             </div>
             <div className="space-y-1"><Label className="text-xs">{t('workflows.settingsKeys.overlap')}</Label>
               <select className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs" value={settings.overlap ?? 'skip'} onChange={(event) => setSetting('overlap', event.target.value)}>
-                <option value="skip">skip</option><option value="queue">queue</option><option value="parallel">parallel</option>
+                <option value="skip">{t('workflows.builder.overlap.skip')}</option><option value="queue">{t('workflows.builder.overlap.queue')}</option><option value="parallel">{t('workflows.builder.overlap.parallel')}</option>
               </select>
             </div>
             <div className="space-y-1"><Label className="text-xs">{t('workflows.settingsKeys.timeoutMs')}</Label><Input type="number" min={0} value={settings.timeoutMs ?? ''} onChange={(event) => setSetting('timeoutMs', event.target.value === '' ? undefined : Number(event.target.value))} className="h-8 text-xs" /></div>
@@ -320,7 +321,7 @@ function RunsSheet({ open, workflow, slug, onClose, onRun }: { open: boolean; wo
                     </div>
                     <div className="mt-1 flex gap-3 text-[10px] tabular-nums text-muted-foreground">
                       <span>{formatDuration(runDuration(run))}</span>
-                      <span>{formatTokens((run.tokens_in ?? 0) + (run.tokens_out ?? 0))} tok</span>
+                      <span>{t('workflows.builder.tokens', { n: formatTokens((run.tokens_in ?? 0) + (run.tokens_out ?? 0)) })}</span>
                       {run.cost_usd ? <span>${run.cost_usd.toFixed(3)}</span> : null}
                       {run.error && <span className="truncate text-destructive">{run.error}</span>}
                     </div>
@@ -385,7 +386,7 @@ export function WorkflowBuilder({ slug }: { slug: string }) {
     try {
       const response = await fetch(`/api/ui/workflows/${workflow.id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ draft: current }) });
       const value = await readJson(response);
-      if (!response.ok) throw new Error(typeof value.error === 'string' ? value.error : t('workflows.save.error'));
+      if (!response.ok) throw new Error(apiErrorMessage(value, t('workflows.save.error')));
       dirty.current = false;
       setSaveState('saved');
       setSaveError(null);
@@ -455,7 +456,7 @@ export function WorkflowBuilder({ slug }: { slug: string }) {
       if (!(await saveNow())) return;
       const response = await fetch(`/api/ui/workflows/${workflow.id}/publish`, { method: 'POST' });
       const value = await readJson(response);
-      if (!response.ok) { setIssues(Array.isArray(value.issues) ? (value.issues as WorkflowIssue[]) : null); toast.error(typeof value.error === 'string' ? value.error : t('workflows.publishError')); return; }
+      if (!response.ok) { setIssues(Array.isArray(value.issues) ? (value.issues as WorkflowIssue[]) : null); toast.error(apiErrorMessage(value, t('workflows.publishError'))); return; }
       setIssues(null);
       const version = typeof value.version === 'number' ? value.version : (workflow.published_version ?? 0) + 1;
       setWorkflow({ ...workflow, published_version: version });
@@ -471,7 +472,7 @@ export function WorkflowBuilder({ slug }: { slug: string }) {
       const response = await fetch(`/api/ui/workflows/${workflow.id}/run`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ draft }) });
       const value = await readJson(response);
       const created = value.run as { id?: string } | undefined;
-      if (!response.ok || !created?.id) { setIssues(Array.isArray(value.issues) ? (value.issues as WorkflowIssue[]) : null); toast.error(typeof value.error === 'string' ? value.error : t('workflows.runError')); return; }
+      if (!response.ok || !created?.id) { setIssues(Array.isArray(value.issues) ? (value.issues as WorkflowIssue[]) : null); toast.error(apiErrorMessage(value, t('workflows.runError'))); return; }
       setIssues(null);
       router.push(`/workflows/${encodeURIComponent(slug)}/runs/${created.id}`);
     } finally { setBusy(null); }
@@ -530,8 +531,8 @@ export function WorkflowBuilder({ slug }: { slug: string }) {
             <Switch checked={workflow.enabled === 1} onCheckedChange={(next) => void setEnabled(next)} className="scale-90" />
             {t('workflows.enabled')}
           </label>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={undo} title="Undo (⌘Z)"><Undo2 className="size-4" /></Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={redo} title="Redo (⇧⌘Z)"><Redo2 className="size-4" /></Button>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={undo} title={t('workflows.builder.undo')}><Undo2 className="size-4" /></Button>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={redo} title={t('workflows.builder.redo')}><Redo2 className="size-4" /></Button>
           <Button variant="ghost" size="sm" className="h-8" onClick={tidy}><WandSparkles className="mr-1 size-3.5" />{t('workflows.tidy')}</Button>
           <Button variant="ghost" size="sm" className="h-8" onClick={() => setDialog('variables')}><Braces className="mr-1 size-3.5" />{t('workflows.variables')}{definition.variables.length > 0 && <span className="ml-1 rounded bg-muted px-1 text-[10px] tabular-nums">{definition.variables.length}</span>}</Button>
           <Button variant="ghost" size="sm" className="h-8" onClick={() => setDialog('settings')}><Settings2 className="mr-1 size-3.5" />{t('workflows.settings')}</Button>

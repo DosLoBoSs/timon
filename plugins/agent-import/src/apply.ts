@@ -17,6 +17,8 @@ import type { AgentPlan, EngineContext, ImportPlan } from './plan.js';
 import { FINGERPRINTED_DOCS, fingerprint, type ImportRecord, type OwnedRecord, type Records } from './records.js';
 
 const ERROR_MAX = 300;
+/** Refs of before a record remembers: a handful, an agent is not renamed between every export. */
+const ALIASES_MAX = 16;
 
 type Undo = { what: string; run: () => Promise<unknown> };
 
@@ -250,9 +252,21 @@ async function applyAgent(
 
   const docs: Record<string, string | null> = {};
   for (const file of FINGERPRINTED_DOCS) docs[file] = fingerprint(await ctx.agents.docs.get(name, file));
+  // An older archive reaching an agent a newer one already keyed by its
+  // stable id: the record keeps that id, the archive's ref stays an alias.
+  const incoming = plan.source.sourceRef;
+  const sourceRef = previous && previous.sourceRef !== incoming && (previous.aliases ?? []).includes(incoming)
+    ? previous.sourceRef
+    : incoming;
+  const aliases = [...new Set([
+    ...(previous?.aliases ?? []),
+    ...(previous ? [previous.sourceRef] : []),
+    ...plan.aliases,
+  ])].filter((ref) => ref !== sourceRef).slice(-ALIASES_MAX);
   const record: ImportRecord = {
     sourceApp,
-    sourceRef: plan.source.sourceRef,
+    sourceRef,
+    ...(aliases.length ? { aliases } : {}),
     // A superadmin's update leaves the record to the account that owns it.
     ownerUserId: previous && previous.ownerUserId !== undefined ? previous.ownerUserId : plan.ownerUserId,
     agent: name,

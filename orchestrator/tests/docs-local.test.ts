@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {
@@ -63,11 +63,12 @@ test('the page list is grouped by section', () => {
 });
 
 test('sources: override, then the packaged export, then the source checkout', () => {
-  const bin = join('/', 'opt', 'timon', 'orchestrator', 'bin');
+  // `resolve`, as the module does: on Windows a rooted path gains the drive.
+  const bin = resolve('/', 'opt', 'timon', 'orchestrator', 'bin');
   const sources = docsSources({ TIMON_DOCS_DIR: 'docs-export' }, bin);
   assert.equal(sources[0].kind, 'export');
-  assert.equal(sources[1].dir, join('/', 'opt', 'timon', 'orchestrator', 'public-docs'));
-  assert.equal(sources[2].script, join('/', 'opt', 'timon', 'public-docs', 'scripts', 'export-markdown.mjs'));
+  assert.equal(sources[1].dir, resolve('/', 'opt', 'timon', 'orchestrator', 'public-docs'));
+  assert.equal(sources[2].script, resolve('/', 'opt', 'timon', 'public-docs', 'scripts', 'export-markdown.mjs'));
   assert.equal(docsSources({}, bin).length, 2);
 });
 

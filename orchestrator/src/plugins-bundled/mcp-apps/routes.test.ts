@@ -18,7 +18,7 @@ import { dbApi } from '../../db.js';
 import { issueMissionApiToken } from '../../users/api-tokens.js';
 import { hashSessionToken, SESSION_COOKIE } from '../../users/session.js';
 import { createDaemonAuthMiddleware } from '../http/auth.js';
-import { MCP_DIR, deleteMcp, getMcp, resolveLaunchServers, upsertMcp } from '../../mcp.js';
+import { MCP_DIR, deleteMcp, getMcp, mcpRelayUpstream, resolveLaunchServers, upsertMcp } from '../../mcp.js';
 import { getSecret } from '../../secrets/store.js';
 import { resolveMasterKey } from '../../secrets/key.js';
 import { registerMcpAppsRoutes } from './routes.js';
@@ -88,14 +88,16 @@ test('the body cannot carry a url', async () => {
   assert.equal(getMcp('app-sentry'), null);
 });
 
-test('key: required, kept in the vault, sent as the header at launch', async () => {
+test('key: required, kept in the vault, added by the relay', async () => {
   assert.equal((await call('admin', 'POST', '/api/mcp-apps/github/connect', {})).json.error, 'key_required');
   assert.equal((await call('admin', 'POST', '/api/mcp-apps/github/connect', { key: 'two words here' })).status, 400);
   const key = 'github_pat_' + 'A'.repeat(30);
   assert.equal((await call('admin', 'POST', '/api/mcp-apps/github/connect', { key })).status, 200);
   assert.ok(!readFileSync(join(MCP_DIR, 'app-github.json'), 'utf8').includes(key), 'the key is not in the server file');
-  const [launched] = await resolveLaunchServers(['app-github']);
-  assert.equal(launched?.type === 'http' ? launched.headers.Authorization : null, `Bearer ${key}`);
+  // The CLI is handed the daemon's relay; the relay adds the key from the vault.
+  const launched = await resolveLaunchServers(['app-github'], () => ({ url: 'http://127.0.0.1:3001/mcp-relay/r/a', headers: { 'x-timon-mcp-relay': 't' } }));
+  assert.ok(launched.length === 1 && !JSON.stringify(launched).includes(key), 'the key is in no launch entry');
+  assert.equal((await mcpRelayUpstream('app-github'))?.headers.Authorization, `Bearer ${key}`);
 
   // A new key replaces the old one, which leaves the vault.
   const first = getMcp('app-github');

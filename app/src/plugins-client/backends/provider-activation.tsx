@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useProviderPage } from '@/components/provider-page/provider-page-context';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { settingsPath } from '@/lib/settings-path';
 import type { CustomBackend } from './form';
@@ -27,7 +28,7 @@ async function errorText(res: Response): Promise<string> {
   if (res.status === 403) return t('backendsSettings.errors.forbidden');
   const raw = (await res.text().catch(() => '')).trim();
   try {
-    return (JSON.parse(raw) as { error?: string }).error || `HTTP ${res.status}`;
+    return apiErrorMessage(JSON.parse(raw), { status: res.status });
   } catch {
     return raw || `HTTP ${res.status}`;
   }

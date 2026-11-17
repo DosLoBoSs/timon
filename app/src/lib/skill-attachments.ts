@@ -9,8 +9,16 @@
  * checked skills preserves it, just like exclusions set on the skill's page.
  */
 
+import { compareText } from './intl';
+
 export type SkillMode = 'include' | 'import';
-export type SkillVia = 'global' | 'project' | 'role' | 'agent' | 'config' | 'code';
+export const SKILL_VIAS = ['global', 'project', 'role', 'agent', 'code'] as const;
+export type SkillVia = (typeof SKILL_VIAS)[number];
+
+/** A daemon older than 0.1.7 can still send `config`: such a value gets no label. */
+export function isSkillVia(via: string): via is SkillVia {
+  return (SKILL_VIAS as readonly string[]).includes(via);
+}
 
 export type SkillAttachment = {
   id: number;
@@ -197,7 +205,7 @@ export function attachmentGroups(attachments: SkillAttachment[], skill: string):
   return ATTACHMENT_SCOPES
     .map((scope) => ({
       scope,
-      rows: mine.filter((a) => a.scope === scope).sort((a, b) => a.target.localeCompare(b.target)),
+      rows: mine.filter((a) => a.scope === scope).sort((a, b) => compareText(a.target, b.target)),
     }))
     .filter((g) => g.rows.length > 0);
 }
@@ -222,7 +230,7 @@ export function scopeWritable(scope: AttachmentScope, grants: AttachmentGrants):
 export function freeTargets(scope: AttachmentScope, known: string[], attachments: SkillAttachment[], skill: string): string[] {
   if (scope === 'global') return [];
   const taken = new Set(attachments.filter((a) => a.skill === skill && a.scope === scope).map((a) => a.target));
-  return [...new Set(known)].filter((t) => t !== '' && !taken.has(t)).sort((a, b) => a.localeCompare(b));
+  return [...new Set(known)].filter((t) => t !== '' && !taken.has(t)).sort((a, b) => compareText(a, b));
 }
 
 /** Whether global already holds this skill: the global scope has a single target. */

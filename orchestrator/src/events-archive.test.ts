@@ -48,7 +48,7 @@ test('les events plus vieux que la fenêtre chaude partent en archive, sans pert
   assert.equal(hot.n, 5, 'la table chaude ne garde que la fenêtre récente');
   const cold = db.prepare('SELECT COUNT(*) AS n FROM archive.events').get() as { n: number };
   assert.equal(cold.n, 5, 'les 5 anciens sont dans la base attachée');
-  assert.ok(EVENTS_ARCHIVE_PATH.endsWith('archive/events.db'));
+  assert.ok(EVENTS_ARCHIVE_PATH.endsWith(join('archive', 'events.db')));
 
   const all = dbApi.listEvents(MISSION);
   assert.equal(all.length, 10, 'listEvents doit recoudre chaud + archive');

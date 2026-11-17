@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "Generale",
     "aria": {
-      "embeddedBrowser": "Browser integrato",
-      "resizePanel": "Ridimensiona il pannello del browser",
-      "projectBrowser": "Browser di {project}"
-    },
-    "actions": {
-      "collapse": "Comprimi il browser",
-      "reload": "Ricarica la vista",
-      "openInTab": "Apri in una scheda del browser",
-      "startProjectBrowser": "Avvia il browser di questo progetto",
-      "stopProjectBrowser": "Ferma il container del browser di questo progetto",
-      "start": "Avvia",
-      "stop": "Ferma",
-      "retry": "Riprova",
-      "takeControl": "Prendi il controllo",
-      "watchOnly": "Solo visione"
-    },
-    "display": {
-      "desktop": "Visualizzazione desktop",
-      "adapted": "Visualizzazione mobile / adattata",
-      "desktopTitle": "Vista desktop completa ({width}×{height}), centrata su nero — passa a mobile",
-      "adaptedTitle": "Visualizzazione adattata al pannello (versione mobile dei siti) — passa a desktop"
-    },
-    "viewer": {
-      "takeControl": "Prendi il controllo",
-      "watchOnly": "Passa a spettatore",
-      "watchOnlyTitle": "Spettatore (sola lettura) — prendere il controllo disconnetterà il dispositivo che controlla ora la sessione",
-      "controlTitle": "Controllo — passa a spettatore per guardare senza disconnettere un altro dispositivo"
-    },
-    "pin": {
-      "attach": "Fissa il pannello",
-      "detach": "Sblocca il pannello",
-      "attachTitle": "Fissa — il contenuto si sposta di lato invece di finire sotto",
-      "detachTitle": "Sblocca — il pannello si sposta sopra il contenuto"
-    },
-    "empty": {
-      "noBrowser": "Nessun browser per questo progetto — il pulsante Browser nella barra in alto ne avvia uno."
-    },
-    "stream": {
-      "stalled": "Lo stream non viene mostrato. Un’altra scheda o un altro dispositivo potrebbe aver preso il controllo — il server accetta un solo client di controllo."
-    },
-    "status": {
-      "stopped": "Browser fermo",
-      "starting": "Avvio del browser di {project}…"
-    },
-    "errors": {
-      "streamUnavailable": "Il container è in esecuzione ma il suo stream non è disponibile",
-      "startRejected": "Avvio rifiutato (HTTP {status})",
-      "startTimeout": "Il container non si è avviato in tempo",
-      "unknown": "Errore sconosciuto"
+      "embeddedBrowser": "Browser integrato"
     },
     "native": {
       "title": "Browser",
@@ -142,7 +93,7 @@
       "chromeSigninOpenNow": "Chrome è aperto sul computer su cui gira Timon. Accedi lì, poi torna qui e premi Fatto.",
       "chromeSigninDone": "Fatto, copia l’accesso",
       "chromeSigninCancel": "Chiudi senza copiare",
-      "chromeSigninCopied": "Accesso eseguito: {count} cookie copiati in questo browser.",
+      "chromeSigninCopied": "Accesso eseguito: {count, plural, one {# cookie copiato} other {# cookie copiati}} in questo browser.",
       "chromeSigninNothing": "Chrome è stato chiuso senza un accesso da copiare.",
       "chromeSigninKept": "Puoi rifarlo in qualsiasi momento: Chrome ricorda il proprio accesso.",
       "chromeSigninRejected": "Google rifiuta l’accesso da questo browser. Accedi invece con Chrome: alla fine Timon copia l’accesso qui e ti riporta alla pagina.",
@@ -156,8 +107,7 @@
       "needsControl": "Usa il browser da questa finestra per registrare: un altro dispositivo lo sta usando",
       "recording": "Registrazione",
       "ended": "Registrazione terminata",
-      "stepsOne": "{count} passaggio",
-      "stepsMany": "{count} passaggi",
+      "steps": "{count, plural, one {# passaggio} other {# passaggi}}",
       "stop": "Ferma",
       "stopTitle": "Ferma la registrazione e rivedi i passaggi",
       "review": "Rivedi",
@@ -176,11 +126,11 @@
       },
       "titleLabel": "Titolo della registrazione",
       "truncated": "La registrazione ha raggiunto il limite di passaggi: gli ultimi passaggi non sono stati conservati.",
-      "flaggedNotice": "{count} passaggio/i potrebbero contenere un segreto (una chiave, un token, un numero di carta). Maschera, conserva o elimina ciascuno prima di Apprendi: prima non viene inviato nulla a un modello.",
+      "flaggedNotice": "{count, plural, one {# passaggio potrebbe} other {# passaggi potrebbero}} contenere un segreto (una chiave, un token, un numero di carta). Maschera, conserva o elimina ciascuno prima di Apprendi: prima non viene inviato nulla a un modello.",
       "stepsGone": "I passaggi di questa registrazione sono stati eliminati dopo l’apprendimento; resta la skill.",
       "learn": "Apprendi",
       "learnHint": "Una missione trasforma questi passaggi in una skill che un agente può riprodurre.",
-      "learnBlockedFlagged": "Risolvi prima i {count} passaggi segnalati.",
+      "learnBlockedFlagged": "Risolvi prima {count, plural, one {il passaggio segnalato} other {i # passaggi segnalati}}.",
       "learnBlockedEmpty": "Questa registrazione non ha passaggi da apprendere.",
       "autoSubmit": "Lascia che la skill esegua l’ultimo passaggio senza chiedere",
       "autoSubmitHint": "Disattivato: la skill chiede conferma prima di inviare, ordinare o pubblicare qualsiasi cosa.",
@@ -205,10 +155,13 @@
         "newTab": "Nuova scheda",
         "switchTab": "Cambia scheda",
         "closeTab": "Chiudi la scheda",
-        "credential": "Accesso salvato"
+        "credential": "Accesso salvato",
+        "frame": "Passaggio manuale: riquadro incorporato ({origin})"
       },
       "paramBadge": "Parametro: {name}",
       "flagged": "Possibile segreto",
+      "frameUnknownOrigin": "Passaggio manuale: riquadro incorporato",
+      "frameNotice": "Timon non vede cosa fai all'interno di un riquadro incorporato (un modulo di pagamento, un captcha, una finestra di accesso). La skill appresa si fermerà qui e ti chiederà di fare questa parte da solo, quindi serve qualcuno davanti allo schermo.",
       "paramName": "Nome del parametro",
       "stepName": "Nome del passaggio",
       "save": "Salva",
@@ -263,12 +216,11 @@
       "handedOff": "Aggiunte al tuo prossimo messaggio a {agent}.",
       "sentNotDeposited": "Inviate a {agent}, ma la casella dei messaggi è piena: l’agente può leggerle con browser_annotations_get.",
       "boxFull": "La casella dei messaggi di questa conversazione è piena: invia o rimuovi prima ciò che vi è in attesa.",
-      "refused": "{count} selezione/i non conservate: è stato raggiunto il limite di annotazioni.",
+      "refused": "{count, plural, one {# selezione non conservata} other {# selezioni non conservate}}: è stato raggiunto il limite di annotazioni.",
       "notFound": "Questo elemento non è più nella pagina.",
       "card": {
         "label": "Annotazioni del browser ({count})",
-        "count": "{count} annotazioni",
-        "countOne": "1 annotazione",
+        "count": "{count, plural, one {# annotazione} other {# annotazioni}}",
         "details": "Dettagli",
         "enlarge": "Ingrandisci la cattura dell’annotazione {n}",
         "source": "Sorgente: {source}",
@@ -279,8 +231,7 @@
           "dismissed": "Ignorata"
         }
       },
-      "queue": "{count} annotazioni",
-      "queueOne": "1 annotazione",
+      "queue": "{count, plural, one {# annotazione} other {# annotazioni}}",
       "history": "Cronologia delle annotazioni",
       "sendQueue": "Invia",
       "sendQueueTitle": "Inviale a {agent}, in questa conversazione",

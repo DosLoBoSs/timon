@@ -53,7 +53,7 @@ The download needs room for the installer plus a small margin; when the disk is 
 
 **Restart and install** (or **Install** on the card) first counts the missions running on this computer. When some are, the window and the card say how many: **Wait** leaves everything as it is (install later, once they are done), **Install anyway** goes on and they stop when the service moves to the new version. Then, depending on the package:
 
-- **AppImage**: the AppImage you launched is replaced by the verified one, in the same folder and under the same name, and Timon restarts on it. The previous file stays next to it, hidden, as `.<name>.previous`, until the new version has started; if the replacement or the restart fails, your current AppImage is left as it was. When the AppImage's folder is not writable, nothing is replaced: the new AppImage stays in the `updates` folder for you to move;
+- **AppImage**: the AppImage you launched is replaced by the verified one, in the same folder and under the same name, and Timon restarts on it. The previous file stays next to it, hidden, as `.<name>.previous`, until you approve the update (to go back to it after **Quit**, see [An AppImage you refused to update](downgrading.md#an-appimage-you-refused-to-update)); if the replacement or the restart fails, your current AppImage is left as it was. When the AppImage's folder is not writable, nothing is replaced: the new AppImage stays in the `updates` folder for you to move;
 - **`.deb`**: Timon asks your system for administrator rights (the password dialog of your desktop), installs the package and restarts on it. Without that dialog (no `pkexec`, a server session) or when the installation fails, the package opens in your software manager and the card shows the command that installs it (`sudo apt install '…/timon_<version>_amd64.deb'`) with a **Copy** button;
 - **macOS**: macOS asks for your administrator password, then Timon installs the `.pkg` and restarts on it. When the installation fails, the `.pkg` opens in Installer instead: once it is done, quit Timon and open it again;
 - **Windows**: Timon closes, the setup program installs the new version without its wizard, in the folder and for the users (you only, or everyone) of the current installation, and opens Timon again. Windows may ask for permission, to pause the background service and for an installation for everyone; the missions the service ran stop. If the installation does not happen (permission refused, an error), Timon opens again on the current version; if the setup program cannot be started that way, it opens with its wizard instead.
@@ -64,7 +64,7 @@ Clicking **Restart and install** or **Install** is your approval of the update: 
 
 ### From the settings
 
-**Settings › System › Updates** shows the version you run and its state, for example **Up to date · checked 2 hr. ago**, with one button:
+**Settings › System › Updates** shows the version you run and its state, for example **Up to date · checked 2 hr ago**, with one button:
 
 - **Check**: asks now. When the check cannot reach the list, the row says **Check failed** and the button becomes **Retry**;
 - **Update**, when a newer version is out: opens the update window, as the card does.

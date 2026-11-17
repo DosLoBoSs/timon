@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { filtrerAgents } from '@/plugins-client/agent-chat/agent-picker';
+import { filterAgents } from '@/plugins-client/agent-chat/agent-picker';
 
 const AGENTS = [
   { name: 'timon.coder', role: 'coder', project: 'timon' },
@@ -13,26 +13,26 @@ const AGENTS = [
   { name: 'acme.reviewer', role: 'reviewer', project: 'acme' },
   { name: 'one-shot', ephemeral: true },
 ];
-const PROJETS = [{ slug: 'perso', name: 'Vie personnelle' }, { slug: 'acme', name: 'Ácme' }];
+const PROJECTS = [{ slug: 'perso', name: 'Vie personnelle' }, { slug: 'acme', name: 'Ácme' }];
 
 test('the search ignores accents and case, over name, role and project (slug and name)', () => {
-  const noms = (q: string) => filtrerAgents(AGENTS, PROJETS, q).map((a) => a.name);
-  assert.deepEqual(noms('EQUIPE'), ['Équipe.santé']);
-  assert.deepEqual(noms('sante'), ['Équipe.santé']);
-  assert.deepEqual(noms('coder timon'), ['timon.coder']);
-  assert.deepEqual(noms('personnelle'), ['Équipe.santé'], 'project name');
-  assert.deepEqual(noms('ácme'), ['acme.reviewer']);
-  assert.deepEqual(noms('nobody'), []);
+  const names = (q: string) => filterAgents(AGENTS, PROJECTS, q).map((a) => a.name);
+  assert.deepEqual(names('EQUIPE'), ['Équipe.santé']);
+  assert.deepEqual(names('sante'), ['Équipe.santé']);
+  assert.deepEqual(names('coder timon'), ['timon.coder']);
+  assert.deepEqual(names('personnelle'), ['Équipe.santé'], 'project name');
+  assert.deepEqual(names('ácme'), ['acme.reviewer']);
+  assert.deepEqual(names('nobody'), []);
 });
 
 test('no query lists every agent by name, never an ephemeral one', () => {
   // Accents do not push `Équipe` past `timon`.
-  assert.deepEqual(filtrerAgents(AGENTS, PROJETS, '  ').map((a) => a.name), [
+  assert.deepEqual(filterAgents(AGENTS, PROJECTS, '  ').map((a) => a.name), [
     'acme.reviewer', 'Équipe.santé', 'timon.coder',
   ]);
 });
 
-async function mount(exclus: string[]) {
+async function mount(excluded: string[]) {
   const { JSDOM } = await import('jsdom');
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
   const install = (key: string, value: unknown) => {
@@ -58,8 +58,8 @@ async function mount(exclus: string[]) {
       { onSubmit: (e: Event) => { e.preventDefault(); submits += 1; } },
       React.createElement(AgentPicker, {
         agents: AGENTS,
-        projets: PROJETS,
-        exclus: new Set(exclus),
+        projects: PROJECTS,
+        excluded: new Set(excluded),
         onPick: (a: string) => { picked.push(a); },
       }),
     ));

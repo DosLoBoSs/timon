@@ -1,6 +1,5 @@
 {
   "webuiSettings": {
-    "category": "WebUI",
     "description": "Dove risponde Timon, come aprirlo dal telefono e se è sicuro.",
     "loadError": "Impossibile leggere i dati di rete dal daemon.",
     "forbidden": "Leggere la configurazione di rete di questa macchina richiede un account amministratore.",
@@ -9,7 +8,6 @@
     "servedExternally": "Servita fuori dal daemon, tramite un reverse proxy",
     "statusRemote": "Accesso remoto",
     "remoteReady": "Pronto",
-    "remoteReadyHint": "Aprilo da qualsiasi dispositivo collegato alla tua tailnet.",
     "remoteNotPublished": "Non ancora pubblicato",
     "remoteStopped": "Tailscale è fermo",
     "remoteAbsent": "Tailscale non installato",

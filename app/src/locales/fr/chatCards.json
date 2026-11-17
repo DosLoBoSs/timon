@@ -1,0 +1,35 @@
+{
+  "chatCards": {
+    "mcpEmpty": "Aucun serveur MCP. Ajoutez-en depuis",
+    "mcpExternalToggle": "désactivez-le pour le refuser via --disallowedTools",
+    "skillsEmpty": "Aucune skill installée. Créez-en une depuis",
+    "toolError": "erreur",
+    "thinking": "réflexion"
+  },
+  "composerUsage": {
+    "commandBadge": "cmd",
+    "now": "maintenant",
+    "days": "{d} j",
+    "daysHours": "{d} j {h} h",
+    "hours": "{h} h",
+    "hoursMinutes": "{h} h {m} min",
+    "minutes": "{m} min",
+    "status": {
+      "ok": "ok",
+      "nearLimit": "limite proche",
+      "blocked": "bloqué"
+    },
+    "cap": {
+      "fiveHour": "plafond 5 h",
+      "fiveHourTitle": "limite glissante de l'abonnement sur 5 heures",
+      "sevenDay": "plafond 7 j",
+      "sevenDayTitle": "limite glissante de l'abonnement sur 7 jours",
+      "monthly": "plafond mensuel",
+      "monthlyTitle": "quota mensuel de requêtes premium"
+    },
+    "capLabel": "{cap} :",
+    "reset": "remise à zéro : {when}",
+    "overage": "dépassement :",
+    "overageTitle": "Crédits de dépassement utilisés ce mois-ci : {used} sur {limit} {currency}"
+  }
+}

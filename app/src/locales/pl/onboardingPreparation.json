@@ -1,7 +1,31 @@
 {
   "onboarding": {
     "preparation": {
-      "title": "Przygotowywanie Timona"
+      "title": "Przygotowywanie Timona",
+      "ready": "Timon jest gotowy",
+      "needsYou": "Timon cię potrzebuje",
+      "items": {
+        "service": "Usługa w tle",
+        "servicePortable": "Tryb przenośny: Timon działa, dopóki aplikacja jest otwarta",
+        "serviceAccount": "Usługa w tle, po utworzeniu konta",
+        "database": "Lokalna baza danych",
+        "browser": "Wbudowana przeglądarka",
+        "browserAbsent": "Wbudowana przeglądarka: brak w tej instalacji",
+        "providers": "Szukanie twoich AI"
+      },
+      "doctorFailed": "Timon nie mógł odczytać informacji o tym komputerze. Spróbuj ponownie za chwilę.",
+      "retry": "Spróbuj ponownie",
+      "retrying": "Ponawianie…",
+      "repair": "Otwórz ekran naprawy",
+      "gate": {
+        "waitTitle": "Timon kończy instalację",
+        "waitBody": "Twój agent działa w usłudze w tle, więc pracuje dalej, gdy to okno jest zamknięte. Ten krok otworzy się, gdy tylko usługa odpowie.",
+        "waitAccount": "Usługa w tle uruchomi się, gdy zalogujesz się na swoje konto.",
+        "blockedTitle": "Nie udało się zainstalować usługi w tle",
+        "blockedBody": "Twój agent jej potrzebuje, aby pracować dalej, gdy to okno jest zamknięte. Rozwiąż problem poniżej, a potem spróbuj ponownie.",
+        "configuring": "Zapisywanie konfiguracji…",
+        "configureFailed": "Nie udało się zapisać konfiguracji"
+      }
     }
   }
 }

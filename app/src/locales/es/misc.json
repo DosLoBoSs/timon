@@ -1,26 +1,4 @@
 {
-  "mission": {
-    "title": "Nueva misión",
-    "description": "Inicia una conversación con el agente {agent} usando el LLM que elijas.",
-    "resumeDescription": "También puedes retomar la misión anterior: el nuevo LLM leerá un resumen y continuará desde ahí.",
-    "llm": "LLM",
-    "reasoningEffort": "Esfuerzo de razonamiento",
-    "default": "Predeterminado",
-    "continue": "Continuar desde la misión anterior",
-    "resumeWithSummary": "El nuevo LLM leerá un resumen del historial para retomarla.",
-    "resumeSameLlm": "Retoma el contexto de la misión anterior con el mismo LLM.",
-    "followup": "Mensaje de seguimiento",
-    "firstMessage": "Primer mensaje",
-    "followupPlaceholder": "Ej.: continúa con lo que estábamos haciendo, céntrate en X…",
-    "firstMessagePlaceholder": "Ej.: ayúdame con…",
-    "cancel": "Cancelar",
-    "continuing": "Continuando…",
-    "creating": "Creando…",
-    "start": "Iniciar",
-    "continuedToast": "Misión continuada en {backend} · {model}",
-    "createdToast": "Nueva misión en {backend} · {model}",
-    "failed": "Error: {message}"
-  },
   "llm": {
     "handoverTail": "El resumen falló: solo pasó el FINAL de la conversación",
     "confirmWhole": "Pasar completa",
@@ -107,7 +85,6 @@
     "dismiss": "Descartar",
     "center": "Centro de notificaciones",
     "sure": "¿Seguro?",
-    "close": "Cerrar",
     "empty": "Ninguna notificación",
     "clearAll": "Borrar todo",
     "clearAlerts": "Borrar alertas",
@@ -210,7 +187,7 @@
       "label": "Buscar agentes por nombre, proyecto, polo o equipo",
       "clear": "Borrar la búsqueda",
       "ratio": "{count}/{total}",
-      "count": "{count} agentes coinciden",
+      "count": "{count, plural, one {# agente coincide} other {# agentes coinciden}}",
       "none": "Ningún agente coincide con “{query}”."
     },
     "grid": {
@@ -222,20 +199,13 @@
       "opened": "Cuadrícula abierta en el espacio de trabajo"
     }
   },
-  "calendar": {
-    "today": "Hoy",
-    "tomorrow": "Mañana",
-    "upcoming": "Próximamente",
-    "overdue": "Vencida · {date}",
-    "noDueDate": "Sin fecha límite"
-  },
   "delegations": {
     "title": "Pendientes de respuesta",
     "working": "Trabajando",
     "idle": "Esperando su próximo turno",
     "open": "Abrir esta misión",
     "none": "Nada pendiente",
-    "inline": "{count} misión(es) delegada(s) en curso"
+    "inline": "{count, plural, one {# misión delegada} other {# misiones delegadas}} en curso"
   },
   "missionEgress": {
     "loading": "Leyendo el registro de red…",
@@ -247,7 +217,7 @@
     "newHost": "nuevo",
     "newHostHint": "Primer acceso de esta misión en su proyecto: la alerta lo nombró.",
     "connectionsCount": "{count} con.",
-    "failures": "{count} fallidas",
+    "failures": "{count} {count, plural, one {fallida} other {fallidas}}",
     "sent": "Enviado",
     "received": "Recibido",
     "status": "Estado HTTP devuelto al programa",
@@ -293,8 +263,8 @@
       "crash": "parada inesperada",
       "unknown": "causa desconocida"
     },
-    "pendingMessages": "{count} mensaje(s) esperando en la bandeja de entrada",
-    "openDeliveries": "{count} solicitud(es) aún sin responder"
+    "pendingMessages": "{count, plural, one {# mensaje} other {# mensajes}} esperando en la bandeja de entrada",
+    "openDeliveries": "{count, plural, one {# solicitud} other {# solicitudes}} aún sin responder"
   },
   "permissionRefusal": {
     "accountLacks": "Tu cuenta no tiene {permission}. Pide a un administrador que lo añada a tu rol.",

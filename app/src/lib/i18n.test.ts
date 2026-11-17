@@ -12,10 +12,10 @@ useSourceLocaleLoader();
 
 test('collecte les fragments de la locale anglaise', () => {
   setLocale('en');
-  assert.equal(t('agentsGrid.gitPush', { count: 2 }), 'git push — 2 commit(s)');
+  assert.equal(t('agentsGrid.gitPush', { count: 2 }), 'git push — 2 commits');
   assert.equal(t('taskForm.create'), 'Create task');
-  assert.equal(t('browserPanel.actions.reload'), 'Reload view');
-  assert.equal(t('mission.title'), 'New mission');
+  assert.equal(t('browserPanel.native.profile'), 'Browser profile');
+  assert.equal(t('llm.confirmTitle'), 'Switch LLM?');
   assert.equal(t('loginPage.title'), 'Sign in');
   assert.equal(t('session.logout'), 'Sign out');
   assert.equal(t('cockpit.accountUsage.disconnected'), 'Not signed in');
@@ -32,10 +32,10 @@ test('le français ne s\'active qu\'une fois chargé', async () => {
 
 test('collecte les fragments de la locale française', async () => {
   await loadLocale('fr');
-  assert.equal(t('projectsPage.projectCount', { count: 2 }), '2 projet(s)');
+  assert.equal(t('projectsPage.projectCount', { count: 2 }), '2 projets');
   assert.equal(t('taskForm.create'), 'Créer la tâche');
-  assert.equal(t('browserPanel.actions.reload'), 'Recharger la vue');
-  assert.equal(t('mission.title'), 'Nouvelle mission');
+  assert.equal(t('browserPanel.native.profile'), 'Profil de navigateur');
+  assert.equal(t('llm.confirmTitle'), 'Basculer de LLM ?');
   assert.equal(t('loginPage.title'), 'Connexion');
   assert.equal(t('session.logout'), 'Se déconnecter');
   assert.equal(t('cockpit.accountUsage.disconnected'), 'Non connecté');

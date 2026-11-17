@@ -97,7 +97,8 @@ test('refreshes an expired OIDC token and preserves the Grok auth store', { conc
     assert.equal(stored[scope]?.refresh_token, 'refresh-new');
     assert.equal(stored[scope]?.preference, 'keep-me');
     assert.equal(stored.untouched?.key, 'another-account');
-    assert.equal(statSync(path).mode & 0o777, 0o600);
+    // Windows reports 0o666 for any writable file: owner-only there is an ACL, not mode bits.
+    if (process.platform !== 'win32') assert.equal(statSync(path).mode & 0o777, 0o600);
   } finally {
     if (previous === undefined) delete process.env.GROK_AUTH_JSON;
     else process.env.GROK_AUTH_JSON = previous;

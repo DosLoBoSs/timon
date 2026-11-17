@@ -1,0 +1,66 @@
+{
+  "eventsPage": {
+    "title": "Event stream",
+    "clear": "clear"
+  },
+  "kanbanPage": {
+    "paramsTip": {
+      "backend": "backend:",
+      "model": "model:",
+      "permission": "permissions:",
+      "skills": "skills:",
+      "mcp": "MCP:",
+      "tools": "tools:"
+    }
+  },
+  "pluginHost": {
+    "renderFailed": "The plugin {id} failed to render."
+  },
+  "roles": {
+    "custom": "Custom",
+    "idPlaceholder": "e.g. designer",
+    "labelPlaceholder": "Designer"
+  },
+  "projectsForm": {
+    "workspacePlaceholder": "personal / clients / side projects…",
+    "speechPlaceholder": "Short project description, context, goal…"
+  },
+  "licensePage": {
+    "keyPlaceholder": "{key} or {token}"
+  },
+  "browserPanel": {
+    "native": {
+      "backspace": "Backspace"
+    }
+  },
+  "pluginsPage": {
+    "galleryRole": "carousel"
+  },
+  "dreamsPage": {
+    "heading": "Dreams"
+  },
+  "vault": {
+    "heading": "Vault"
+  },
+  "memoryPage": {
+    "scopeOf": "scope {scope}",
+    "kind": {
+      "decision": "decision",
+      "pitfall": "pitfall",
+      "preference": "preference"
+    },
+    "kinds": {
+      "decision": "decisions",
+      "pitfall": "pitfalls",
+      "preference": "preferences"
+    }
+  },
+  "agentsGrid": {
+    "age": {
+      "seconds": "{n} s",
+      "minutes": "{n} min",
+      "hours": "{n} h",
+      "days": "{n} d"
+    }
+  }
+}

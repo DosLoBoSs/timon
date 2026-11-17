@@ -153,7 +153,7 @@ const testSchema = z.union([
 /** Never echoes the input: a rejected body may be the one that held the key. */
 function invalid(res: Response, error: z.ZodError): void {
   const fields = [...new Set(error.issues.map((issue) => issue.path.join('.') || 'body'))];
-  res.status(400).json({ error: 'invalid request', fields });
+  res.status(400).json({ ...apiError('invalid_fields', 'invalid request', { fields: fields.join(', ') }), fields });
 }
 
 function slugify(name: string): string {
@@ -449,7 +449,7 @@ export function registerCustomBackendRoutes(router: Router): void {
     try {
       res.json(saveBackendIcon((req.body && typeof req.body === 'object') ? req.body as Record<string, unknown> : {}));
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('icon_invalid', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -461,7 +461,8 @@ export function registerCustomBackendRoutes(router: Router): void {
       res.send(bytes);
     } catch (err) {
       const msg = (err as Error).message;
-      res.status(msg === 'not found' ? 404 : 400).json({ error: msg });
+      if (msg === 'not found') { res.status(404).json(apiError('not_found', msg)); return; }
+      res.status(400).json(apiError('icon_invalid', msg, { detail: msg }));
     }
   });
 
@@ -479,7 +480,7 @@ export function registerCustomBackendRoutes(router: Router): void {
         ? savedTarget(parsed.data.id)
         : { protocol: parsed.data.protocol, baseUrl: parsed.data.baseUrl, key: parsed.data.key ?? '' };
       if (!target) {
-        res.status(404).json({ error: 'unknown backend, or one this form cannot test' });
+        res.status(404).json(apiError('backend_untestable', 'unknown backend, or one this form cannot test'));
         return;
       }
       const outcome = await testBackendConnection(target);
@@ -496,11 +497,11 @@ export function registerCustomBackendRoutes(router: Router): void {
     const input = parsed.data;
     const id = input.id ?? slugify(input.name);
     if (!LOCAL_BACKEND_ID_RE.test(id)) {
-      res.status(400).json({ error: 'invalid request', fields: ['name'] });
+      res.status(400).json({ ...apiError('invalid_fields', 'invalid request', { fields: 'name' }), fields: ['name'] });
       return;
     }
     if (existsSync(localBackendFile(id))) {
-      res.status(409).json({ error: `a backend named ${id} already exists`, code: 'duplicate' });
+      res.status(409).json(apiError('backend_duplicate', `a backend named ${id} already exists`, { name: id }));
       return;
     }
 
@@ -518,7 +519,7 @@ export function registerCustomBackendRoutes(router: Router): void {
       brand: input.brand ?? null,
     });
     if (!candidate.ok) {
-      res.status(400).json({ error: candidate.reason });
+      res.status(400).json(apiError('backend_invalid', candidate.reason, { detail: candidate.reason }));
       return;
     }
 
@@ -536,7 +537,7 @@ export function registerCustomBackendRoutes(router: Router): void {
         const status = code === 'unavailable' ? 503 : code === 'duplicate' ? 409 : 400;
         // The store's message is built from the name, never from the value —
         // but only the code leaves, so that stays true whatever it becomes.
-        res.status(status).json({ error: `the key could not be stored in the vault (${code})`, code: `vault-${code}` });
+        res.status(status).json(apiError('backend_key_not_stored', `the key could not be stored in the vault (${code})`, { reason: code }));
         return;
       }
     }
@@ -553,7 +554,8 @@ export function registerCustomBackendRoutes(router: Router): void {
       removeLocalBackend(id);
       if (secretId) deleteSecret(secretId);
       reloadLocalBackends();
-      res.status(409).json({ error: entry?.issue ?? 'the backend could not be loaded', code: 'not-loaded' });
+      const issue = entry?.issue ?? 'the backend could not be loaded';
+      res.status(409).json(apiError('backend_not_loaded', issue, { detail: issue }));
       return;
     }
     auditRequest(req, 'backend.custom.create', id);
@@ -571,7 +573,7 @@ export function registerCustomBackendRoutes(router: Router): void {
   const updateCustom: RequestHandler = (req, res) => {
     const id = String(req.params['id'] ?? '');
     if (!LOCAL_BACKEND_ID_RE.test(id)) {
-      res.status(400).json({ error: 'invalid backend id' });
+      res.status(400).json(apiError('invalid_id', 'invalid backend id'));
       return;
     }
     const parsed = updateSchema.safeParse(req.body ?? {});
@@ -587,12 +589,13 @@ export function registerCustomBackendRoutes(router: Router): void {
     if (!entry.profile) {
       // Merging into a file we could not read would silently drop whatever it
       // holds. Its owner fixes it, or deletes it.
-      res.status(409).json({ error: entry.issue ?? 'the backend could not be loaded', code: 'not-loaded' });
+      const issue = entry.issue ?? 'the backend could not be loaded';
+      res.status(409).json(apiError('backend_not_loaded', issue, { detail: issue }));
       return;
     }
     const active = activeProfiles();
     if (input.disabled && active.some((row) => row.profile.id === id) && active.length === 1) {
-      res.status(409).json({ error: 'The last active backend cannot be disabled' });
+      res.status(409).json(apiError('backend_last_active', 'The last active backend cannot be disabled'));
       return;
     }
     const before = publicView(entry, new Map());
@@ -602,7 +605,7 @@ export function registerCustomBackendRoutes(router: Router): void {
       || (input.protocol !== undefined && input.protocol !== before.protocol)
       || (input.baseUrl !== undefined && input.baseUrl !== before.baseUrl);
     if (connectionChanged && (!protocol || !baseUrl)) {
-      res.status(409).json({ error: 'connection settings cannot be edited for this file format', code: 'foreign-shape' });
+      res.status(409).json(apiError('backend_foreign_shape', 'connection settings cannot be edited for this file format'));
       return;
     }
     const models = input.models ? mergeModels(input.models, entry.profile.models) : entry.profile.models;
@@ -612,11 +615,11 @@ export function registerCustomBackendRoutes(router: Router): void {
       ? before.defaultModel
       : models.find((model) => !model.hidden)?.slug ?? null;
     if (input.defaultModel && !models.some((model) => model.slug === input.defaultModel && !model.hidden)) {
-      res.status(400).json({ error: 'The default model must be visible' });
+      res.status(400).json(apiError('default_model_hidden', 'The default model must be visible'));
       return;
     }
     if (new Set(models.map((model) => model.slug)).size !== models.length) {
-      res.status(400).json({ error: 'Duplicate model slug' });
+      res.status(400).json(apiError('model_slug_duplicate', 'Duplicate model slug'));
       return;
     }
     const { custom: _custom, ...fileShape } = entry.profile;
@@ -644,7 +647,7 @@ export function registerCustomBackendRoutes(router: Router): void {
       brand: input.brand === undefined ? entry.profile.brand : input.brand ?? undefined,
     });
     if (!candidate.ok) {
-      res.status(400).json({ error: candidate.reason });
+      res.status(400).json(apiError('backend_invalid', candidate.reason, { detail: candidate.reason }));
       return;
     }
 
@@ -666,7 +669,7 @@ export function registerCustomBackendRoutes(router: Router): void {
       } catch (err) {
         const code = err instanceof SecretStoreError ? err.code : 'unknown';
         const status = code === 'unavailable' ? 503 : code === 'duplicate' ? 409 : 400;
-        res.status(status).json({ error: `the key could not be stored in the vault (${code})`, code: `vault-${code}` });
+        res.status(status).json(apiError('backend_key_not_stored', `the key could not be stored in the vault (${code})`, { reason: code }));
         return;
       }
     }
@@ -694,7 +697,7 @@ export function registerCustomBackendRoutes(router: Router): void {
       if (previous !== null) writeFileSync(localBackendFile(id), previous, 'utf8');
       else removeLocalBackend(id);
       reloadLocalBackends();
-      res.status(409).json({ error: issue, code: 'not-loaded' });
+      res.status(409).json(apiError('backend_not_loaded', issue, { detail: issue }));
       return;
     }
     pruneIcons(iconFilesOf(entry));
@@ -708,7 +711,7 @@ export function registerCustomBackendRoutes(router: Router): void {
   router.delete('/api/backends/custom/:id', (req, res) => {
     const id = String(req.params['id'] ?? '');
     if (!LOCAL_BACKEND_ID_RE.test(id)) {
-      res.status(400).json({ error: 'invalid backend id' });
+      res.status(400).json(apiError('invalid_id', 'invalid backend id'));
       return;
     }
     const pictures = listLocalBackends().filter((row) => row.id === id).flatMap(iconFilesOf);

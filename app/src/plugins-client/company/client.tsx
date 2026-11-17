@@ -13,15 +13,15 @@ const t = createTranslator({
     title: 'Job title', manager: 'Reports to', root: 'Default · project lead or main agent', save: 'Save position', saving: 'Saving…', saved: 'Position saved', cancel: 'Cancel',
     edit: 'Edit {name}', chat: 'Open chat', saveError: 'Could not save. Your changes are still in the form.', invalid: 'Choose a manager outside this agent’s own team.',
     hint: 'Select an agent to edit its role and reporting line.', noMatch: 'No matching agent or role.', repaired: 'Some reporting lines were invalid. These agents are shown at the top level; select them to choose a manager.',
-    report: '1 direct report', reports: '{count} direct reports', reportingTo: 'Reports to {manager}', diagram: 'Agent organization chart', stale: 'The agent list could not be refreshed.', close: 'Close position editor',
+    report: '1 direct report', reports: '{count} direct reports', reportingTo: 'Reports to {manager}', diagram: 'Agent organization chart', stale: 'The agent list could not be refreshed.', close: 'Close position editor', heading: 'Company',
   },
   fr: {
-    count: '{count} agents', search: 'Chercher un agent ou un rôle…', fit: 'Ajuster la vue', zoomIn: 'Zoom avant', zoomOut: 'Zoom arrière', refresh: 'Actualiser les agents',
-    loading: 'Chargement de votre organisation…', loadError: 'Impossible de charger l’organisation.', retry: 'Réessayer', empty: 'Aucun agent pour le moment. Créez un agent pour commencer votre organisation.', create: 'Créer un agent',
-    title: 'Poste', manager: 'Responsable', root: 'Par défaut · lead du projet ou agent principal', save: 'Enregistrer le poste', saving: 'Enregistrement…', saved: 'Poste enregistré', cancel: 'Annuler',
-    edit: 'Modifier {name}', chat: 'Ouvrir le chat', saveError: 'Enregistrement impossible. Vos modifications restent dans le formulaire.', invalid: 'Choisissez un responsable en dehors de l’équipe de cet agent.',
-    hint: 'Sélectionnez un agent pour modifier son poste et son responsable.', noMatch: 'Aucun agent ou rôle correspondant.', repaired: 'Certains liens hiérarchiques étaient invalides. Ces agents apparaissent au premier niveau ; sélectionnez-les pour choisir leur responsable.',
-    report: '1 collaborateur direct', reports: '{count} collaborateurs directs', reportingTo: 'Responsable : {manager}', diagram: 'Organigramme des agents', stale: 'La liste des agents n’a pas pu être actualisée.', close: 'Fermer l’éditeur de poste',
+    count: '{count} agents', search: 'Chercher un agent ou un rôle…', fit: 'Ajuster la vue', zoomIn: 'Zoom avant', zoomOut: 'Zoom arrière', refresh: 'Actualiser les agents', // i18n-exempt: the plugin's own French table
+    loading: 'Chargement de votre organisation…', loadError: 'Impossible de charger l’organisation.', retry: 'Réessayer', empty: 'Aucun agent pour le moment. Créez un agent pour commencer votre organisation.', create: 'Créer un agent', // i18n-exempt: the plugin's own French table
+    title: 'Poste', manager: 'Responsable', root: 'Par défaut · lead du projet ou agent principal', save: 'Enregistrer le poste', saving: 'Enregistrement…', saved: 'Poste enregistré', cancel: 'Annuler', // i18n-exempt: the plugin's own French table
+    edit: 'Modifier {name}', chat: 'Ouvrir le chat', saveError: 'Enregistrement impossible. Vos modifications restent dans le formulaire.', invalid: 'Choisissez un responsable en dehors de l’équipe de cet agent.', // i18n-exempt: the plugin's own French table
+    hint: 'Sélectionnez un agent pour modifier son poste et son responsable.', noMatch: 'Aucun agent ou rôle correspondant.', repaired: 'Certains liens hiérarchiques étaient invalides. Ces agents apparaissent au premier niveau ; sélectionnez-les pour choisir leur responsable.', // i18n-exempt: the plugin's own French table
+    report: '1 collaborateur direct', reports: '{count} collaborateurs directs', reportingTo: 'Responsable : {manager}', diagram: 'Organigramme des agents', stale: 'La liste des agents n’a pas pu être actualisée.', close: 'Fermer l’éditeur de poste', heading: 'Entreprise', // i18n-exempt: the plugin's own French table
   },
 });
 
@@ -198,10 +198,10 @@ export function CompanyView() {
     finally { pendingSave.current = null; if (mounted.current) setSaving(false); }
   }
 
-  return <section className="timon-company" aria-label="Company">
+  return <section className="timon-company" aria-label={t('heading')}>
     <style>{CSS}</style>
     <header className="co-toolbar">
-      <h1>Company</h1><span className="co-muted">{organization && t('count', { count: members.length })}</span>
+      <h1>{t('heading')}</h1><span className="co-muted">{organization && t('count', { count: members.length })}</span>
       <label className="co-search"><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('search')} aria-label={t('search')} /></label>
       <div className="co-tools">
         <button type="button" aria-label={t('zoomOut')} title={t('zoomOut')} disabled={zoom <= 0.25} onClick={() => { fitted.current = false; setZoom(value => Math.max(0.25, value - 0.15)); }}>−</button>

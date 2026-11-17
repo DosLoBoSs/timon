@@ -25,9 +25,11 @@ test('no file holds more hard-coded text than the baseline allows', () => {
 });
 
 test('the scan sees the desktop shell and the app', () => {
-  const files = Object.keys(scanHardcodedText());
-  assert.ok(files.some((file) => file.startsWith('app/src/')));
-  // The shell holds no hard-coded text any more (its words are in desktop.json): its root is checked instead.
+  // Neither holds hard-coded text any more (the app's words are in its locales, the
+  // shell's in desktop.json): their roots are checked instead.
+  const app = DEFAULT_ROOTS.find((root) => root.dir.split(sep).slice(-2).join('/') === 'app/src');
+  assert.ok(app && existsSync(join(app.dir, 'lib', 'i18n.ts')), 'the app is no longer read — did it move?');
+  assert.deepEqual([...app.kinds].sort(), ['french', 'jsxAttr', 'jsxText']);
   const shell = DEFAULT_ROOTS.find((root) => root.dir.split(sep).slice(-2).join('/') === 'desktop/src');
   assert.ok(shell && existsSync(join(shell.dir, 'main.ts')), 'the desktop shell is no longer read — did it move?');
   assert.ok(shell.kinds.includes('french'));

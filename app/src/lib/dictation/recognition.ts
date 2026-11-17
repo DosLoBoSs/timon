@@ -5,7 +5,7 @@ import { getLocale, t, type Locale } from '@/lib/i18n';
 import { regionalTag } from '@/lib/intl';
 import { pluginsSynced } from '@/lib/plugin-host/loader';
 import { settingsPath } from '@/lib/settings-path';
-import { webSpeechSansMoteur } from '@/lib/stt-dictee';
+import { webSpeechWithoutEngine } from '@/lib/stt-dictation';
 
 import { startMicrophoneCapture } from './audio-capture';
 import { AUTO_CHOICE, dictationChoice, resetDictationChoice, subscribeDictationChoice, type DictationChoice } from './choice';
@@ -48,7 +48,7 @@ export type RouteEnv = {
 
 /** Web Speech with a service behind it: not the desktop's (TIM-0061). */
 function webSpeechUsable(env: RouteEnv): boolean {
-  return env.webSpeech && !webSpeechSansMoteur(env);
+  return env.webSpeech && !webSpeechWithoutEngine(env);
 }
 
 export function dictationRoute(env: RouteEnv): DictationRoute {
@@ -63,7 +63,7 @@ export function dictationRoute(env: RouteEnv): DictationRoute {
   // state still in flight; the engine answers the start itself.
   const usable = env.engines.find((engine) => engine.availability !== 'unavailable');
   const engineRoute: EngineRoute | null = usable ? `engine:${usable.id}` : null;
-  if (webSpeechSansMoteur(env)) return engineRoute ?? 'unavailable-desktop';
+  if (webSpeechWithoutEngine(env)) return engineRoute ?? 'unavailable-desktop';
   if (env.webSpeech) return 'web-speech';
   return engineRoute ?? 'unavailable-browser';
 }

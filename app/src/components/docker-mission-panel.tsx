@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ExternalLink, Hammer, Play, RotateCw, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { apiErrorMessageOrNull } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 
 type DockerState = 'no-cwd' | 'no-docker' | 'none' | 'running' | 'partial' | 'stopped';
@@ -87,7 +88,7 @@ export function DockerMissionPanel({ slug }: { slug: string | null }) {
         // the next poll (4 s) brings `building: true`.
         const j = (await r.json()) as { docker?: Docker; error?: string };
         if (r.ok && j.docker) setD(j.docker);
-        else if (j.error) setErr(j.error);
+        else setErr(apiErrorMessageOrNull(j));
       } catch {
         /* the failure shows at the next poll: the state will not move */
       } finally {

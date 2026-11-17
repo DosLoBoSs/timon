@@ -92,13 +92,13 @@ function Bar({ job, tick }: { job: VfJob; tick: number }) {
   );
 }
 
-function LigneJob({ job, tick }: { job: VfJob; tick: number }) {
-  const titre = job.theme?.trim() || job.job_id.slice(0, 8);
-  const etape = job.phase ? `${job.stage} · ${job.phase}` : job.stage;
+function JobRow({ job, tick }: { job: VfJob; tick: number }) {
+  const title = job.theme?.trim() || job.job_id.slice(0, 8);
+  const stepLabel = job.phase ? `${job.stage} · ${job.phase}` : job.stage;
   return (
     <li className="space-y-0.5">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="truncate text-[11.5px]" title={titre}>{titre}</span>
+        <span className="truncate text-[11.5px]" title={title}>{title}</span>
         {job.ratio !== null && (
           <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
             {Math.round(job.ratio * 100)}%
@@ -112,7 +112,7 @@ function LigneJob({ job, tick }: { job: VfJob; tick: number }) {
         </span>
       </div>
       <div className="flex flex-wrap items-baseline gap-x-2 text-[10.5px] text-muted-foreground/70">
-        <span>{etape}</span>
+        <span>{stepLabel}</span>
         {job.eta_ms !== null && !job.stale && <span>{t('videoFactoryPanel.remaining', { duration: formatDuration(job.eta_ms) })}</span>}
         {job.stale && (
           <span className="text-amber-400/90">
@@ -138,10 +138,10 @@ export function VideoFactoryPanel({ slug }: { slug: string | null }) {
   // machine's epoch), the local clock is aligned on it.
   const skew = useRef(0);
 
-  const actif = slug === 'video-factory';
+  const active = slug === 'video-factory';
 
   const load = useCallback(async () => {
-    if (!actif) return;
+    if (!active) return;
     try {
       const r = await fetch('/api/ui/video-factory/progress', { cache: 'no-store' });
       if (!r.ok) return;
@@ -151,26 +151,26 @@ export function VideoFactoryPanel({ slug }: { slug: string | null }) {
     } catch {
       /* Silent: one missed poll a second must not break the rail. */
     }
-  }, [actif]);
+  }, [active]);
 
   useEffect(() => {
-    if (!actif) return;
+    if (!active) return;
     load();
     const t = setInterval(load, POLL_MS);
     return () => clearInterval(t);
-  }, [actif, load]);
+  }, [active, load]);
 
   useEffect(() => {
-    if (!actif) return;
+    if (!active) return;
     const t = setInterval(() => setTick(Date.now() + skew.current), 120);
     return () => clearInterval(t);
-  }, [actif]);
+  }, [active]);
 
   // Another project, no database (repo not initialised), or no production
   // running: nothing to show. A permanently empty block would waste the rail.
-  if (!actif || !snap?.available || snap.jobs.length === 0) return null;
+  if (!active || !snap?.available || snap.jobs.length === 0) return null;
 
-  const enCours = snap.jobs.filter((j) => !j.stale).length;
+  const runningCount = snap.jobs.filter((j) => !j.stale).length;
 
   return (
     <div className="p-3">
@@ -178,7 +178,7 @@ export function VideoFactoryPanel({ slug }: { slug: string | null }) {
         <span
           className={cn(
             'size-1.5 rounded-full',
-            enCours > 0 ? 'bg-primary' : 'bg-muted-foreground/40',
+            runningCount > 0 ? 'bg-primary' : 'bg-muted-foreground/40',
           )}
           aria-hidden
         />
@@ -186,7 +186,7 @@ export function VideoFactoryPanel({ slug }: { slug: string | null }) {
 
       <ul className="space-y-2.5">
         {snap.jobs.map((j) => (
-          <LigneJob key={j.job_id} job={j} tick={tick} />
+          <JobRow key={j.job_id} job={j} tick={tick} />
         ))}
       </ul>
     </div>

@@ -10,14 +10,16 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { once } from 'node:events';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import express from 'express';
+import { removeHomeOnExit } from '../../../tests/helpers/test-home.js';
 
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-setup-free-'));
+removeHomeOnExit(process.env.TIMON_HOME);
 process.env.TIMON_RESOURCE_GUARD_ENABLED = '0';
 const { registerRoutes: userRoutes } = await import('./routes.js');
 const { registerRoutes: licenseRoutes } = await import('../../kernel/routes/license.js');
@@ -79,7 +81,6 @@ test.after(() => {
   globalThis.fetch = actualFetch;
   overrideKeyringForTests(null);
   overrideBuildInfo(undefined);
-  rmSync(process.env.TIMON_HOME!, { recursive: true, force: true });
 });
 
 const credentials = { email: 'owner@example.test', name: 'Owner', password: 'test-password' };

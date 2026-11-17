@@ -177,6 +177,67 @@ test('a change applies to the list the daemon holds now, never to a stale copy',
   } finally { d.restore(); followArrangementsOwner(null); }
 });
 
+test('on a remote machine, the list stored under the previous owner is folded in once, then erased', async () => {
+  const scope = await sharedArrangementsScope('acting-1');
+  const source = await sharedArrangementsScope('local-1');
+  const d = daemon({
+    [scope]: writeArrangements([{ id: 'kept', name: 'Kept', createdAt: 0, tree: split(), menu: false }]),
+    [source]: writeArrangements([
+      { id: 'old', name: 'From before', createdAt: 0, tree: split(), menu: true },
+      // Same name as an entry of the new list: the new one wins, no duplicate.
+      { id: 'twin', name: 'kept', createdAt: 0, tree: split(), menu: false },
+      { id: 'kept', name: 'Kept', createdAt: 0, tree: split(), menu: false },
+    ]),
+  });
+  try {
+    followArrangementsOwner('acting-1', 'local-1');
+    assert.equal(await refreshArrangements(), true);
+    assert.deepEqual(readArrangements(d.rows.get(scope)!.layout).map((a) => a.id), ['kept', 'old']);
+    assert.deepEqual(arrangementsState().arrangements.map((a) => a.id), ['kept', 'old']);
+    assert.equal(arrangementsState().arrangements[1]!.menu, true, 'the menu entry follows the arrangement');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(d.rows.has(source), false, 'the previous row is erased once the merged list is written');
+    // A row written there again (an old window) is not read a second time in this document.
+    d.rows.set(source, { layout: writeArrangements([{ id: 'late', name: 'Late', createdAt: 0, tree: split(), menu: false }]), updatedAt: 3 });
+    await refreshArrangements();
+    assert.deepEqual(arrangementsState().arrangements.map((a) => a.id), ['kept', 'old']);
+  } finally { d.restore(); followArrangementsOwner(null); }
+});
+
+test('the previous owner learnt after the list was read still folds it, and a failed write keeps the old row', async () => {
+  const scope = await sharedArrangementsScope('acting-2');
+  const source = await sharedArrangementsScope('local-2');
+  const d = daemon({ [source]: writeArrangements([{ id: 'old', name: 'From before', createdAt: 0, tree: split(), menu: false }]) });
+  const fetchOk = globalThis.fetch;
+  try {
+    // The menu entries follow the account alone: no previous owner yet.
+    followArrangementsOwner('acting-2');
+    await refreshArrangements();
+    assert.deepEqual(arrangementsState().arrangements, []);
+    followArrangementsOwner('acting-2', undefined);
+    await refreshArrangements();
+    assert.deepEqual(arrangementsState().arrangements, [], 'undefined teaches nothing');
+    // Then a reader that knows the workspace mounts; the account's row refuses writes.
+    globalThis.fetch = (async (input: string, init?: RequestInit) => (init?.method ?? 'GET') === 'PUT'
+      ? Response.json({ error: 'boom' }, { status: 500 })
+      : fetchOk(input, init)) as typeof globalThis.fetch;
+    followArrangementsOwner('acting-2', 'local-2');
+    await refreshArrangements();
+    assert.equal(d.rows.has(scope), false);
+    assert.equal(d.rows.has(source), true, 'nothing is erased before the merged list is written');
+  } finally { d.restore(); followArrangementsOwner(null); }
+});
+
+test('the same owner before and after hands nothing over', async () => {
+  const scope = await sharedArrangementsScope('same-1');
+  const d = daemon({ [scope]: writeArrangements([{ id: 'a', name: 'A', createdAt: 0, tree: split(), menu: false }]) });
+  try {
+    followArrangementsOwner('same-1', 'same-1');
+    await refreshArrangements();
+    assert.deepEqual(d.writes, []);
+  } finally { d.restore(); followArrangementsOwner(null); }
+});
+
 test('without an account nothing is written', async () => {
   followArrangementsOwner(null);
   assert.deepEqual(await mutateArrangements((list) => addArrangement(list, 'x', split())), { ok: false, error: 'write-failed' });

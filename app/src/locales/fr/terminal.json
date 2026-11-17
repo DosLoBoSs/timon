@@ -43,7 +43,6 @@
       "unauthorized": "Connectez-vous pour ouvrir un terminal.",
       "pty_unavailable": "Cette machine ne peut pas démarrer de terminal : le composant pseudo-terminal n'a pas pu être chargé. Consultez le journal du daemon."
     },
-    "titleScoped": "Terminal — {scope}",
     "scopes": {
       "none": "Sans projet",
       "label": "Projets"
@@ -72,7 +71,7 @@
       },
       "windowRefused": "Décision enregistrée, mais le terminal de {scope} n'est pas à l'écran. Ouvre une conversation de {scope} pour l'y coller ; la commande est dans ton presse-papiers.",
       "windowRefusedNoClipboard": "Décision enregistrée, mais le terminal de {scope} n'est pas à l'écran. Ouvre une conversation de {scope}, puis copie la commande depuis la carte.",
-      "pendingBadge": "{count} commande(s) en attente de ta décision"
+      "pendingBadge": "{count, plural, one {# commande} other {# commandes}} en attente de ta décision"
     }
   }
 }

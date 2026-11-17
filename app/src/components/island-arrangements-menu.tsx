@@ -43,9 +43,9 @@ const ICON_BUTTON = 'rounded p-1 text-muted-foreground/70 outline-none transitio
 const KEY = 'appearance.menu.arrangements';
 
 export function IslandArrangementsSection() {
-  const { key, owner } = useWorkspaceLayout();
+  const { key, owner, previousOwner } = useWorkspaceLayout();
   const router = useRouter();
-  const { arrangements, ready } = useArrangements(owner);
+  const { arrangements, ready } = useArrangements(owner, previousOwner);
   const registered = useIslandContentTypes();
   const types = useMemo(() => new Map([...registered].map(([id, type]) => [id, type.options])), [registered]);
 

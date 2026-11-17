@@ -60,7 +60,7 @@
     "autoHint": "Back to the slot this folder gets automatically",
     "auto": "Auto",
     "unlinked": "{count} unlinked",
-    "unresolved": "{count} link(s) point at notes that do not exist",
+    "unresolved": "{count} links point at notes that do not exist",
     "ghosts": " (shown as ghosts)",
     "hidden": " (hidden)",
     "templatesExcluded": "Templates excluded. ",
@@ -87,6 +87,7 @@
     "color12": "Slate",
     "links_one": "{count} link",
     "notes_one": "{count} note",
-    "added_one": "{count} note added"
+    "added_one": "{count} note added",
+    "unresolved_one": "{count} link points at a note that does not exist"
   }
 }

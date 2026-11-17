@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import {
   PLUGIN_AGENT_PREFIX,
@@ -39,10 +40,11 @@ import {
 
 async function errorText(res: Response): Promise<string> {
   const raw = (await res.text().catch(() => '')).trim();
-  if (!raw) return `HTTP ${res.status}`;
+  if (!raw) return apiErrorMessage(null, { status: res.status });
   try {
-    const parsed = JSON.parse(raw) as { error?: string; message?: string; reason?: string };
-    return parsed.reason || parsed.error || parsed.message || raw;
+    const parsed = JSON.parse(raw) as { error?: unknown; message?: string; reason?: string };
+    // A known code reads translated; otherwise the daemon's `reason` is the more precise sentence.
+    return apiErrorMessage({ ...parsed, error: parsed.reason || parsed.error }, parsed.message || raw);
   } catch {
     return raw;
   }

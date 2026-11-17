@@ -49,8 +49,9 @@ test("l'installation lie Node et npm dans ~/.local/bin sans gestionnaire systèm
     });
     assert.equal(fetchCall, 2);
     assert.match(lines[0] ?? '', /v22\.23\.2/);
-    assert.match(await readlink(join(home, '.local', 'bin', 'node')), /node-v22\.23\.2.*\/bin\/node$/);
-    assert.match(await readlink(join(home, '.local', 'bin', 'npm')), /node-v22\.23\.2.*\/bin\/npm$/);
+    // The link target uses the host separator; only macOS runs this for real.
+    assert.match(await readlink(join(home, '.local', 'bin', 'node')), /node-v22\.23\.2.*[\\/]bin[\\/]node$/);
+    assert.match(await readlink(join(home, '.local', 'bin', 'npm')), /node-v22\.23\.2.*[\\/]bin[\\/]npm$/);
   } finally {
     if (previousPath === undefined) delete process.env.PATH;
     else process.env.PATH = previousPath;

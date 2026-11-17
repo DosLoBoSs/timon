@@ -8,12 +8,12 @@
  * Product-internal: the widget window never lists them, a placeholder of a
  * widget is not a widget anyone would pick.
  */
-import { idPlacementPlugin } from './widget-catalog';
+import { pluginPlacementId } from './widget-catalog';
 
 export const ADD_WIDGET_MODULE = '@timon/ui-layout';
 export const ADD_WIDGET_KEYS = ['add-widget', 'add-widget-2'] as const;
 
-export const ADD_WIDGET_IDS: readonly string[] = ADD_WIDGET_KEYS.map((key) => idPlacementPlugin(ADD_WIDGET_MODULE, key));
+export const ADD_WIDGET_IDS: readonly string[] = ADD_WIDGET_KEYS.map((key) => pluginPlacementId(ADD_WIDGET_MODULE, key));
 
 export function isAddWidgetPlaceholder(id: string): boolean {
   return ADD_WIDGET_IDS.includes(id);

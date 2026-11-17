@@ -153,7 +153,7 @@ export function NoticesHost(): ReactElement {
             <div
               key={`${notice.pluginId}:${notice.id}`}
               role="status"
-              className="timon-island pointer-events-auto bg-popover text-popover-foreground shadow-elev-3"
+              className="timon-island pointer-events-auto [--timon-island-fill:hsl(var(--popover))] text-popover-foreground shadow-elev-3"
               data-notice={`${notice.pluginId}:${notice.id}`}
             >
               <NoticeProvider value={noticeValue(notice)}>

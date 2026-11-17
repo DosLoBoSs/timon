@@ -9,7 +9,7 @@ import { resolveRole } from '@/lib/roles';
 import { t } from '@/lib/i18n';
 import { formatDate, formatTime } from '@/lib/intl';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
-import { apiErrorMessage } from '@/lib/api-error';
+import { apiErrorMessage, responseErrorMessage } from '@/lib/api-error';
 
 type Routine = {
   id: string;
@@ -90,8 +90,7 @@ function RoutineDialog({
         },
       );
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || t('routinesPage.failed', { status: res.status }));
+        throw new Error(await responseErrorMessage(res, t('routinesPage.failed', { status: res.status })));
       }
       toast.success(t(isEdit ? 'routinesPage.updated' : 'routinesPage.created'));
       onSaved();
@@ -191,6 +190,7 @@ function RoutineDialog({
                 value={project}
                 onChange={(e) => setProject(e.target.value)}
                 className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                // i18n-exempt: sample project slug
                 placeholder="timon"
               />
             </div>
@@ -273,7 +273,7 @@ export function RoutinesClient() {
 
       <div className="mt-4 flex items-center gap-2">
         <Button size="sm" onClick={() => setShowNew(true)} className="h-7 px-3 text-[12px]">{t('routinesPage.newButton')}</Button>
-        <span className="text-[11.5px] text-muted-foreground">{t(routines.length > 1 ? 'routinesPage.countOther' : 'routinesPage.countOne', { count: routines.length })}</span>
+        <span className="text-[11.5px] text-muted-foreground">{t('routinesPage.count', { count: routines.length })}</span>
       </div>
 
       <div className="mt-3 space-y-2">

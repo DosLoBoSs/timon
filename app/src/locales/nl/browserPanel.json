@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "Algemeen",
     "aria": {
-      "embeddedBrowser": "Ingebouwde browser",
-      "resizePanel": "Grootte van browserpaneel wijzigen",
-      "projectBrowser": "Browser voor {project}"
-    },
-    "actions": {
-      "collapse": "Browser inklappen",
-      "reload": "Weergave herladen",
-      "openInTab": "In een browsertabblad openen",
-      "startProjectBrowser": "Browser van dit project starten",
-      "stopProjectBrowser": "Browsercontainer van dit project stoppen",
-      "start": "Starten",
-      "stop": "Stoppen",
-      "retry": "Opnieuw proberen",
-      "takeControl": "Besturing overnemen",
-      "watchOnly": "Alleen kijken"
-    },
-    "display": {
-      "desktop": "Desktopweergave",
-      "adapted": "Mobiele / aangepaste weergave",
-      "desktopTitle": "Volledige desktopweergave ({width}×{height}), gecentreerd op zwart — naar mobiel wisselen",
-      "adaptedTitle": "Weergave aangepast aan het paneel (mobiele versie van sites) — naar desktop wisselen"
-    },
-    "viewer": {
-      "takeControl": "Besturing overnemen",
-      "watchOnly": "Naar toeschouwer wisselen",
-      "watchOnlyTitle": "Toeschouwer (alleen lezen) — besturing overnemen verbreekt het apparaat dat de sessie nu bestuurt",
-      "controlTitle": "Besturing — wissel naar toeschouwer om te kijken zonder een ander apparaat te verdringen"
-    },
-    "pin": {
-      "attach": "Paneel vastzetten",
-      "detach": "Paneel losmaken",
-      "attachTitle": "Vastzetten — de inhoud schuift opzij in plaats van eronder te liggen",
-      "detachTitle": "Losmaken — het paneel ligt boven de inhoud"
-    },
-    "empty": {
-      "noBrowser": "Geen browser voor dit project — de knop Browser in de bovenbalk start er een."
-    },
-    "stream": {
-      "stalled": "De stream wordt niet getoond. Misschien heeft een ander tabblad of apparaat de besturing overgenomen — de server accepteert maar één besturende client."
-    },
-    "status": {
-      "stopped": "Browser gestopt",
-      "starting": "Browser van {project} wordt gestart…"
-    },
-    "errors": {
-      "streamUnavailable": "De container draait, maar de stream is niet beschikbaar",
-      "startRejected": "Starten geweigerd (HTTP {status})",
-      "startTimeout": "De container is niet op tijd gestart",
-      "unknown": "Onbekende fout"
+      "embeddedBrowser": "Ingebouwde browser"
     },
     "native": {
       "title": "Browser",
@@ -142,7 +93,7 @@
       "chromeSigninOpenNow": "Chrome is geopend op de computer waarop Timon draait. Meld je daar aan, kom dan terug en druk op Klaar.",
       "chromeSigninDone": "Klaar, aanmelding kopiëren",
       "chromeSigninCancel": "Sluiten zonder kopiëren",
-      "chromeSigninCopied": "Aangemeld: {count} cookie(s) naar deze browser gekopieerd.",
+      "chromeSigninCopied": "Aangemeld: {count, plural, one {# cookie} other {# cookies}} naar deze browser gekopieerd.",
       "chromeSigninNothing": "Chrome is gesloten zonder aanmelding om te kopiëren.",
       "chromeSigninKept": "Je kunt dit altijd opnieuw doen: Chrome onthoudt zijn eigen aanmelding.",
       "chromeSigninRejected": "Google weigert je aan te melden vanuit deze browser. Meld je in plaats daarvan aan met Chrome: daarna kopieert Timon de aanmelding hierheen en brengt je terug naar de pagina.",
@@ -156,8 +107,7 @@
       "needsControl": "Gebruik de browser vanuit dit venster om op te nemen: een ander apparaat bestuurt hem",
       "recording": "Opname loopt",
       "ended": "Opname beëindigd",
-      "stepsOne": "{count} stap",
-      "stepsMany": "{count} stappen",
+      "steps": "{count, plural, one {# stap} other {# stappen}}",
       "stop": "Stoppen",
       "stopTitle": "Opname stoppen en de stappen nakijken",
       "review": "Nakijken",
@@ -176,11 +126,11 @@
       },
       "titleLabel": "Titel van de opname",
       "truncated": "De opname heeft haar stappenlimiet bereikt: de laatste stappen zijn niet bewaard.",
-      "flaggedNotice": "{count} stap(pen) kunnen een geheim bevatten (een sleutel, een token, een kaartnummer). Maskeer, bewaar of verwijder elke stap vóór Aanleren: daarvoor wordt niets naar een model gestuurd.",
+      "flaggedNotice": "{count, plural, one {# stap kan} other {# stappen kunnen}} een geheim bevatten (een sleutel, een token, een kaartnummer). Maskeer, bewaar of verwijder elke stap vóór Aanleren: daarvoor wordt niets naar een model gestuurd.",
       "stepsGone": "De stappen van deze opname zijn na het aanleren verwijderd; de skill is wat overblijft.",
       "learn": "Aanleren",
       "learnHint": "Een missie maakt van deze stappen een skill die een agent kan herhalen.",
-      "learnBlockedFlagged": "Handel eerst de {count} gemarkeerde stap(pen) af.",
+      "learnBlockedFlagged": "Handel eerst {count, plural, one {de gemarkeerde stap} other {de # gemarkeerde stappen}} af.",
       "learnBlockedEmpty": "Deze opname heeft geen stap om aan te leren.",
       "autoSubmit": "De skill de laatste stap zonder vragen laten verzenden",
       "autoSubmitHint": "Uit: de skill vraagt om bevestiging voordat hij iets verzendt, bestelt of publiceert.",
@@ -205,10 +155,13 @@
         "newTab": "Nieuw tabblad",
         "switchTab": "Tabblad wisselen",
         "closeTab": "Tabblad sluiten",
-        "credential": "Opgeslagen login"
+        "credential": "Opgeslagen login",
+        "frame": "Handmatige stap: ingesloten frame ({origin})"
       },
       "paramBadge": "Parameter: {name}",
       "flagged": "Mogelijk geheim",
+      "frameUnknownOrigin": "Handmatige stap: ingesloten frame",
+      "frameNotice": "Timon ziet niet wat je in een ingesloten frame doet (een betaalformulier, een captcha, een inlogvak). De geleerde skill pauzeert hier en vraagt je dit deel zelf te doen, dus er moet iemand achter het scherm zitten.",
       "paramName": "Parameternaam",
       "stepName": "Stapnaam",
       "save": "Opslaan",
@@ -263,12 +216,11 @@
       "handedOff": "Toegevoegd aan je volgende bericht aan {agent}.",
       "sentNotDeposited": "Verzonden naar {agent}, maar het berichtvak is vol: de agent kan ze lezen met browser_annotations_get.",
       "boxFull": "Het berichtvak van dit gesprek is vol: verstuur of verwijder eerst wat daar wacht.",
-      "refused": "{count} selectie(s) niet bewaard: de annotatielimiet is bereikt.",
+      "refused": "{count, plural, one {# selectie} other {# selecties}} niet bewaard: de annotatielimiet is bereikt.",
       "notFound": "Dit element staat niet meer op de pagina.",
       "card": {
         "label": "Browserannotaties ({count})",
-        "count": "{count} annotaties",
-        "countOne": "1 annotatie",
+        "count": "{count, plural, one {# annotatie} other {# annotaties}}",
         "details": "Details",
         "enlarge": "Opname van annotatie {n} vergroten",
         "source": "Bron: {source}",
@@ -279,8 +231,7 @@
           "dismissed": "Afgewezen"
         }
       },
-      "queue": "{count} annotaties",
-      "queueOne": "1 annotatie",
+      "queue": "{count, plural, one {# annotatie} other {# annotaties}}",
       "history": "Annotatiegeschiedenis",
       "sendQueue": "Versturen",
       "sendQueueTitle": "Naar {agent} versturen, in dit gesprek",

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { BackendCatalog } from '@/lib/backends';
 import {
-  agentConfigPath, createMainAgent, loadMainAgent, MAIN_AGENT_NAME_PATH, sheetMcp, sheetSkills,
+  agentConfigPath, createMainAgent, loadMainAgent, loadSheetSkills, MAIN_AGENT_NAME_PATH, repickedSkills, sheetMcp, sheetSkills, sheetSkillsPath,
 } from './agent-create';
 import { resetOnboardingProfile } from './onboarding-profile';
 
@@ -79,6 +79,27 @@ test('the sheet offers the person\'s skills and opt-in MCP servers, not the prod
   assert.deepEqual(sheetSkills([{ id: 'timon-task' }, { id: 'tests', title: 'Tests' }, { id: 'x', shadowed: true }, { nope: 1 }]), [{ id: 'tests', label: 'Tests' }]);
   assert.deepEqual(sheetMcp([{ id: 'github', name: 'GitHub' }, { id: 'gmail', source: 'claude_ai' }, { id: 'local', source: 'claude_cli' }]), [{ id: 'github', label: 'GitHub' }]);
   assert.deepEqual(sheetSkills('nope'), []);
+});
+
+test('a folder\'s skills are read with its path; a failed read keeps the list shown', async () => {
+  assert.equal(sheetSkillsPath(''), '/api/ui/skills');
+  assert.equal(sheetSkillsPath('/home/me/my app'), '/api/ui/skills?cwd=%2Fhome%2Fme%2Fmy%20app');
+  const seen: string[] = [];
+  const ok = await loadSheetSkills('/p', async (url) => { seen.push(url); return Response.json({ skills: [{ id: 'timon-task' }, { id: 'deploy', title: 'Deploy' }] }); });
+  assert.deepEqual(ok, [{ id: 'deploy', label: 'Deploy' }]);
+  assert.deepEqual(seen, ['/api/ui/skills?cwd=%2Fp']);
+  assert.equal(await loadSheetSkills('/p', async () => Response.json({ error: 'nope' }, { status: 502 })), null);
+  assert.equal(await loadSheetSkills('/p', async () => { throw new Error('offline'); }), null);
+  const abort = new AbortController();
+  abort.abort();
+  assert.equal(await loadSheetSkills('/p', async () => Response.json({ skills: [{ id: 'late' }] }), abort.signal), null, 'a cancelled read changes nothing');
+});
+
+test('a new list drops the picks it no longer offers and checks what the agent already had', () => {
+  const before = [{ id: 'tests', label: 'Tests' }, { id: 'lint', label: 'lint' }];
+  const after = [{ id: 'tests', label: 'Tests' }, { id: 'deploy', label: 'deploy' }, { id: 'seo', label: 'seo' }];
+  assert.deepEqual(repickedSkills(['tests', 'lint'], before, after, ['seo', 'timon-task']), ['tests', 'seo']);
+  assert.deepEqual(repickedSkills([], before, before, ['tests']), [], 'an unchecked skill stays unchecked when the list is the same');
 });
 
 /* ---------- The step, rendered ---------- */
@@ -245,6 +266,45 @@ test('sheet: an engine that honours only some modes offers only those, and says 
   invalidateBackendCatalog();
 });
 
+test('sheet: the engine tab offers the model\'s reasoning efforts, resets one a new model lacks, and writes it', async () => {
+  const withLevels: BackendCatalog = {
+    ...CATALOG,
+    backends: [{
+      ...CATALOG.backends[0]!,
+      models: [{ slug: 'opus', label: 'Opus', supportedReasoningLevels: ['low', 'high'] }, { slug: 'sonnet', label: 'Sonnet' }],
+    }],
+  };
+  const answer: Answer = (c) => (c.url.startsWith('/api/ui/backends/catalog') ? Response.json(withLevels) : undefined);
+  const { invalidateBackendCatalog } = await import('@/lib/backends');
+  invalidateBackendCatalog();
+  const row = (r: Rendered, label: string): HTMLButtonElement => {
+    const found = Array.from(r.host.querySelectorAll<HTMLButtonElement>('[data-picker-row]')).find((b) => b.textContent?.includes(label));
+    assert.ok(found, `${label} is offered`);
+    return found;
+  };
+  await renderStep('developer', async (r) => {
+    await click(r, '[data-tab="engine"]');
+    // The agent runs on opus: its levels, after the model's default.
+    assert.deepEqual(Array.from(r.host.querySelectorAll('[data-effort]')).map((el) => el.getAttribute('data-effort')), ['', 'low', 'high']);
+    assert.equal(q(r.host, '[data-effort=""]').getAttribute('aria-pressed'), 'true', 'the model\'s default first');
+    await click(r, '[data-effort="high"]');
+    assert.equal(q(r.host, '[data-effort="high"]').getAttribute('aria-pressed'), 'true');
+    await r.react.act(async () => { row(r, 'Sonnet').click(); });
+    await settle(r.react);
+    assert.ok(!r.host.querySelector('[data-effort-section]'), 'a model without levels shows no segment');
+    await r.react.act(async () => { row(r, 'Opus').click(); });
+    await settle(r.react);
+    assert.equal(q(r.host, '[data-effort=""]').getAttribute('aria-pressed'), 'true', 'the level sonnet lacked went back to the default');
+    await click(r, '[data-effort="low"]');
+    await click(r, '[data-create]');
+    await settle(r.react, 40);
+    const patch = patchOf(r.calls);
+    assert.equal(patch?.model, 'opus');
+    assert.equal(patch?.reasoningEffort, 'low');
+  }, answer);
+  invalidateBackendCatalog();
+});
+
 test('sheet: line of work, exact permission mode with its warning, the daemon\'s lists, all written', async () => {
   await renderStep('developer', async (r) => {
     assert.equal(q(r.host, '[data-role="orchestrator"]').getAttribute('aria-pressed'), 'true', 'the sheet opens on the pilot');
@@ -284,6 +344,74 @@ test('sheet: line of work, exact permission mode with its warning, the daemon\'s
     assert.equal((patch?.look as { acc?: string } | undefined)?.acc, 'pen', 'a reviewer holds the red pen');
     assert.equal(r.nexts(), 1);
   });
+});
+
+test('sheet: a picked folder brings its project\'s skills, debounced, and only the last folder lands', async () => {
+  const lists: Record<string, { id: string; title?: string }[]> = {
+    '/projects/first': [{ id: 'first-only' }],
+    '/projects/acme': [{ id: 'tests', title: 'Tests' }, { id: 'deploy', title: 'Deploy' }, { id: 'seo' }],
+    '/projects/slow': [{ id: 'slow-only' }],
+  };
+  const answer: Answer = (c) => {
+    if (c.url === '/api/ui/agents/_main') return Response.json({ name: '_main', backend: 'claude', model: 'opus', skills: ['timon-task', 'seo'], mcp_servers: [], look: null });
+    if (!c.url.startsWith('/api/ui/skills?')) return undefined;
+    const cwd = new URL(c.url, 'http://x').searchParams.get('cwd') ?? '';
+    return Response.json({ skills: lists[cwd] ?? [] });
+  };
+  await renderStep('developer', async (r) => {
+    const picks: string[] = [];
+    let slowAnswered = false;
+    // The desktop's folder dialog: the step picks through it on this computer.
+    (r.dom.window as unknown as { timonDesktop?: unknown }).timonDesktop = {
+      restartAfterSetup: async () => false,
+      selectDirectory: async () => picks.shift() ?? null,
+    };
+    // The slow folder's answer arrives after the next folder was picked.
+    const savedFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const res = await savedFetch(input, init);
+      if (String(input).includes('slow')) { await new Promise((ok) => setTimeout(ok, 300)); slowAnswered = true; }
+      return res;
+    }) as typeof fetch;
+    const shown = (): (string | null)[] => Array.from(r.host.querySelectorAll('[data-skill]')).map((el) => el.getAttribute('data-skill'));
+    const cwdReads = (): string[] => r.calls.filter((c) => c.url.startsWith('/api/ui/skills?')).map((c) => c.url);
+    try {
+      await click(r, '[data-tab="tools"]');
+      assert.deepEqual(shown(), ['tests'], 'no folder: the person\'s own skills');
+      await click(r, '[data-tab="base"]');
+      picks.push('/projects/first', '/projects/acme');
+      await click(r, '[data-pick-folder]');
+      await click(r, '[data-pick-folder]');
+      await settle(r.react, 320);
+      assert.equal(q(r.host, '[data-folder]').textContent, '/projects/acme');
+      assert.deepEqual(cwdReads(), ['/api/ui/skills?cwd=%2Fprojects%2Facme'], 'two quick picks, one read: the last folder\'s');
+      await click(r, '[data-tab="tools"]');
+      assert.deepEqual(shown(), ['tests', 'deploy', 'seo'], 'the project\'s skills join the list');
+      assert.equal(q(r.host, '[data-skill="seo"]').getAttribute('aria-pressed'), 'true', 'a skill the agent already had starts checked');
+      await click(r, '[data-skill="deploy"]');
+
+      await click(r, '[data-tab="base"]');
+      picks.push('/projects/slow');
+      await click(r, '[data-pick-folder]');
+      await settle(r.react, 280);
+      assert.ok(cwdReads().includes('/api/ui/skills?cwd=%2Fprojects%2Fslow'), 'the slow read is on its way');
+      picks.push('/projects/first');
+      await click(r, '[data-pick-folder]');
+      await settle(r.react, 400);
+      assert.ok(slowAnswered, 'the slow answer came back');
+      await click(r, '[data-tab="tools"]');
+      assert.deepEqual(shown(), ['first-only'], 'the cancelled read does not overwrite the last folder\'s list');
+      await click(r, '[data-skill="first-only"]');
+      await click(r, '[data-create]');
+      await settle(r.react, 40);
+      const patch = patchOf(r.calls);
+      assert.equal(patch?.cwd, '/projects/first');
+      assert.deepEqual(patch?.skills, ['timon-task', 'seo', 'first-only'], 'a pick of a folder left behind is not written; the agent\'s own are kept');
+    } finally {
+      globalThis.fetch = savedFetch;
+      delete (r.dom.window as unknown as { timonDesktop?: unknown }).timonDesktop;
+    }
+  }, answer);
 });
 
 test('« Customise » opens the panel; a pick is kept and sent; Escape closes it', async () => {

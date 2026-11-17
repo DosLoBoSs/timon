@@ -162,14 +162,16 @@ export function AppFrame(): React.ReactElement {
         />
         {/* Chrome, like the nav rail: a compact zone, where the bell and the
             quota rings show as icons. Content zones (cockpit, chat columns)
-            keep the cards. */}
+            keep the cards. Its colour is the island's fill, not a `bg-*`
+            utility: with the glass on, it follows the glass scope (a plate
+            over the chrome's frost, or clear) like the other islands. */}
         <WidgetZone
           zone="sidebar.right.widget"
           slot="sidebar.right.widget"
           compact
           hideWhenEmpty
           label={t('layout.rightWidgets')}
-          className="timon-island flex w-72 shrink-0 flex-col gap-3 overflow-y-auto bg-surface-1 p-3"
+          className="timon-island flex w-72 shrink-0 flex-col gap-3 overflow-y-auto p-3 [--timon-island-fill:hsl(var(--surface-1))]"
           emptyClassName="w-56 border-dashed bg-transparent"
         />
       </main>

@@ -168,7 +168,7 @@ test('the main agent welcome starts from the onboarding: greeting first, nothing
   rmSync(skillDir('timon-main-agent-setup'), { recursive: true, force: true });
   seedBundledSkills();
   const content = getSkill('timon-main-agent-setup')!.content;
-  assert.match(content, /<!-- timon-bundled-version: 12 -->/);
+  assert.match(content, /<!-- timon-bundled-version: 13 -->/);
   assert.ok(!content.includes('Which language do you speak?'), 'the language was chosen on the first screen');
   assert.ok(!content.includes('setup_request_avatar'), 'the look exists already');
   assert.ok(!content.includes('onboarding_profile_set'), 'the profile was chosen on the onboarding screens');
@@ -205,9 +205,13 @@ test('the welcome offers two paths, a third only from the card, and every path e
     return content.slice(from, next > 0 ? next : content.indexOf('## After setup_finish'));
   };
   const tim = branch('Create another TIM');
+  // The TIM creates it after their yes (TODO #901); the button stays the way past the limit.
+  assert.ok(tim.indexOf('**Create it**') < tim.indexOf('`setup_create_tim`'), 'the yes comes before the creation');
+  assert.match(tim, /`role` = the closest one/);
   assert.match(tim, /"New TIM" button/);
-  assert.match(tim, /Never create the TIM yourself/);
+  assert.ok(tim.indexOf('`setup_create_tim`') < tim.indexOf('`setup_finish`'), 'created before the step closes');
   assert.match(tim, /`setup_finish` with `tour: false`/);
+  assert.match(content, /`setup_create_tim` is refused from then\s+on/);
   const project = branch('Create a project with a team of TIMs');
   assert.match(project, /Kanban tasks/);
   assert.match(project, /The Agents page draws the team\s+as a canvas/);
@@ -228,10 +232,10 @@ test('an install seeded with the previous welcome gets the new one at the next b
   rmSync(skillDir(id), { recursive: true, force: true });
   seedBundledSkills();
   const current = getSkill(id)!.content;
-  upsertSkill(id, current.replace('timon-bundled-version: 12', 'timon-bundled-version: 11').replace('1. **What now, before anything else.**', '1. **Your character, before a word.**'));
+  upsertSkill(id, current.replace('timon-bundled-version: 13', 'timon-bundled-version: 12').replace('1. **What now, before anything else.**', '1. **Your character, before a word.**'));
   seedBundledSkills();
   const reseeded = getSkill(id)!.content;
-  assert.match(reseeded, /<!-- timon-bundled-version: 12 -->/);
+  assert.match(reseeded, /<!-- timon-bundled-version: 13 -->/);
   assert.ok(reseeded.includes('1. **What now, before anything else.**'));
 });
 
@@ -284,8 +288,8 @@ test('learn-browser-recording is the product skill the learn route hands its con
   rmSync(skillDir(id), { recursive: true, force: true });
   seedBundledSkills();
   const content = getSkill(id)!.content;
-  // Version 5 (#471): no file tool and only the recording's exact URLs; the seed rewrites 1 to 4.
-  assert.match(content, /<!-- timon-bundled-version: 5 -->\s*$/);
+  // Version 6 (#944): a manual step in an embedded frame is a pause; the seed rewrites 1 to 5.
+  assert.match(content, /<!-- timon-bundled-version: 6 -->\s*$/);
   const { fm, body } = parseFrontmatter(content);
   assert.equal(fm.name, id);
   assert.ok(fm.description && fm.description.length > 20);
@@ -298,7 +302,7 @@ test('learn-browser-recording keeps the recording untrusted and never lets a sec
   seedBundledSkills();
   const content = getSkill('learn-browser-recording')!.content;
   // Every step type the recorder stores is explained.
-  for (const type of ['navigate', 'click', 'input', 'enter', 'switchTab', 'newTab', 'closeTab', 'credential', 'secret']) {
+  for (const type of ['navigate', 'click', 'input', 'enter', 'switchTab', 'newTab', 'closeTab', 'credential', 'secret', 'frame']) {
     assert.ok(content.includes(type), `step type ${type}`);
   }
   assert.match(content, /UNTRUSTED PAGE DATA/);
@@ -307,6 +311,9 @@ test('learn-browser-recording keeps the recording untrusted and never lets a sec
   assert.match(content, /Never hard-code a saved login id/);
   assert.match(content, /otp[\s\S]*card[\s\S]*PAUSE[\s\S]*"Done"[\s\S]*never asks for the value/);
   assert.match(content, /`attended: true`/);
+  // A manual step in an embedded frame is handled like a one-time code: a pause on "Done", never automated (#944).
+  assert.match(content, /`frame` step:[\s\S]*exactly like a one-time code[\s\S]*PAUSE[\s\S]*`question`[\s\S]*"Done"[\s\S]*never asks for what they typed[\s\S]*`attended: true`/);
+  assert.match(content, /Every `frame` step of the recording is a PAUSE/);
   assert.match(content, /`browser-<short-task-name>`/);
   assert.match(content, /`skill_get`[\s\S]*not yours\s+to replace/);
   // The daemon bounds the conversion mission to one new browser-* skill: the skill says so.

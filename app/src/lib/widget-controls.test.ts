@@ -105,7 +105,7 @@ test('a lone card carries its grip and gear in a hidden pill, keeps a live body,
     { id: 'plugin:fixture:card', rail: 'droite', rang: 0, hauteur: 200 },
   ]);
   try {
-    const { surPoigneeTitre } = await import('../components/widget-host/widget-card');
+    const { isOnTitleHandle } = await import('../components/widget-host/widget-card');
     const card = document.querySelector<HTMLElement>('[data-widget-id="plugin:fixture:card"]')!;
     const strip = card.querySelector<HTMLElement>('.widget-chrome')!;
     assert.ok(strip, 'the pill is mounted, for the keyboard');
@@ -116,11 +116,11 @@ test('a lone card carries its grip and gear in a hidden pill, keeps a live body,
     assert.equal(card.querySelectorAll('button[aria-label^="Remove"]').length, 0, 'no cross');
     assert.ok(!card.querySelector('.widget-content')!.className.includes('pointer-events-none'), 'the body stays live');
     const header = card.querySelector<HTMLElement>('.widget-content > section > header')!;
-    const forme = { bare: false, tabbed: false };
-    assert.equal(surPoigneeTitre(card, header, 0, forme), true, 'the title bar lifts the card');
-    assert.equal(surPoigneeTitre(card, card.querySelector('[data-body] p')!, 0, forme), false, 'the body does not');
-    assert.equal(surPoigneeTitre(card, card.querySelector('[data-field]')!, 0, forme), false, 'nor a field');
-    assert.equal(surPoigneeTitre(card, grip!, 0, forme), false, 'a control keeps its click');
+    const shape = { bare: false, tabbed: false };
+    assert.equal(isOnTitleHandle(card, header, 0, shape), true, 'the title bar lifts the card');
+    assert.equal(isOnTitleHandle(card, card.querySelector('[data-body] p')!, 0, shape), false, 'the body does not');
+    assert.equal(isOnTitleHandle(card, card.querySelector('[data-field]')!, 0, shape), false, 'nor a field');
+    assert.equal(isOnTitleHandle(card, grip!, 0, shape), false, 'a control keeps its click');
   } finally {
     await cleanup();
   }
@@ -241,13 +241,13 @@ test('in a stack, resting on a tab shows the hint and a right click on a tab ope
     { id: 'plugin:fixture:bell', rail: 'droite', rang: 1, hauteur: 200, group: 'stack:t:1' },
   ]);
   try {
-    const { surPoigneeTitre } = await import('../components/widget-host/widget-card');
+    const { isOnTitleHandle } = await import('../components/widget-host/widget-card');
     const card = document.querySelector<HTMLElement>('[data-widget-id="plugin:fixture:card"][data-tabbed]')!;
     assert.ok(card, 'the stack is painted');
     const tab = card.querySelector<HTMLElement>('[role="tab"]')!;
-    const forme = { bare: false, tabbed: true };
-    assert.equal(surPoigneeTitre(card, tab, 0, forme), false, 'a press on a tab is the tab\'s own drag');
-    assert.equal(surPoigneeTitre(card, tab, 0, forme, true), true, 'but the tab is a title for the hint');
+    const shape = { bare: false, tabbed: true };
+    assert.equal(isOnTitleHandle(card, tab, 0, shape), false, 'a press on a tab is the tab\'s own drag');
+    assert.equal(isOnTitleHandle(card, tab, 0, shape, true), true, 'but the tab is a title for the hint');
     const event = new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 5 });
     Object.defineProperty(event, 'pointerType', { value: 'mouse' });
     await React.act(async () => { tab.dispatchEvent(event); });

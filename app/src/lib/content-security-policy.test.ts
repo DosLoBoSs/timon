@@ -7,10 +7,14 @@ import {
   MAX_EGRESS_HOSTS,
   contentSecurityPolicy,
   createEgressSource,
+  createScriptNonce,
   enforceContentSecurityPolicy,
+  inlineScriptsAllowed,
   pageEgressHosts,
+  scriptNonceOf,
   wantsFreshPolicy,
 } from './content-security-policy';
+import { getScriptNonceFromHeader } from 'next/dist/server/app-render/get-script-nonce-from-header';
 import { createWindowPolicy } from './ui/window-csp';
 
 function directive(policy: string, name: string): string[] {
@@ -44,6 +48,51 @@ test('without a declared host, the window reaches its own origin and nothing els
   assert.deepEqual(directive(policy, 'base-uri'), ["'self'"]);
   assert.ok(!directive(policy, 'script-src').some((s) => /^https?:|^\*$/.test(s)), 'no remote script source');
   assert.ok(!policy.includes('*'), 'no wildcard anywhere');
+});
+
+test('inline scripts run with the response nonce only, never with unsafe-inline', () => {
+  const nonce = createScriptNonce();
+  const script = directive(contentSecurityPolicy({ egressHosts: [], dev: false, nonce }), 'script-src');
+  assert.ok(script.includes(`'nonce-${nonce}'`));
+  assert.ok(!script.includes("'unsafe-inline'"));
+  // No nonce: no inline script at all, rather than a fallback to the keyword.
+  for (const dev of [false, true]) {
+    assert.ok(!directive(contentSecurityPolicy({ egressHosts: [], dev }), 'script-src').includes("'unsafe-inline'"));
+  }
+  // A nonce that would escape its source expression is dropped.
+  for (const hostile of ["abc' 'unsafe-inline", 'short', 'a b c d e f g h i j k l', '']) {
+    const policy = contentSecurityPolicy({ egressHosts: [], dev: false, nonce: hostile });
+    assert.ok(!directive(policy, 'script-src').some((s) => s.startsWith("'nonce-") || s === "'unsafe-inline'"), hostile);
+  }
+});
+
+test('a nonce is 128 random bits, never the same twice, and reads back as Next reads it', () => {
+  const seen = new Set(Array.from({ length: 64 }, () => createScriptNonce()));
+  assert.equal(seen.size, 64);
+  for (const nonce of seen) {
+    assert.equal(Buffer.from(nonce, 'base64').length, 16);
+    const policy = contentSecurityPolicy({ egressHosts: ['api.acme.com'], dev: true, selfHost: '127.0.0.1:3101', nonce });
+    assert.equal(scriptNonceOf(policy), nonce);
+    // The App Router puts this value on its own inline scripts.
+    assert.equal(getScriptNonceFromHeader(policy), nonce);
+  }
+  assert.equal(scriptNonceOf(null), undefined);
+  assert.equal(scriptNonceOf("default-src 'self'; script-src 'self'"), undefined);
+});
+
+test('only a conversation document keeps inline scripts, and without a nonce', () => {
+  const id = '0b5f6c1e-2d4a-4f7e-9a3b-8c1d2e3f4a5b';
+  assert.equal(inlineScriptsAllowed(`/api/ui/ui-documents/${id}/document`), true);
+  assert.equal(inlineScriptsAllowed(`/api/ui/ui-documents/${id}/document?v=2`), true);
+  for (const other of [
+    '/', '/chat', `/api/ui/ui-documents/${id}`, `/api/ui/ui-documents/${id}/document/x`,
+    `/api/ui/ui-documents/../document`, `/api/ui/ui-documents/a%2fb/document`,
+    `/x/api/ui/ui-documents/${id}/document`, `/api/ui/ui-documents/${id}/documents`, undefined,
+  ]) assert.equal(inlineScriptsAllowed(other), false, String(other));
+  const script = directive(contentSecurityPolicy({ egressHosts: [], dev: false, inlineScripts: true, nonce: createScriptNonce() }), 'script-src');
+  assert.ok(script.includes("'unsafe-inline'"));
+  // With a nonce next to it, the browser would ignore the keyword.
+  assert.ok(!script.some((s) => s.startsWith("'nonce-")));
 });
 
 test('a declared host is reachable over TLS only; eval is a dev-only allowance', () => {
@@ -214,4 +263,40 @@ test('the server wiring refreshes on a document only and fails closed with no da
     await app.close();
   }
   assert.equal(CSP_HEADER.toLowerCase(), 'content-security-policy');
+});
+
+test('the server wiring hands Next a fresh nonce per request, in the policy it sends', async () => {
+  const seen: Array<{ request: string; reportOnly: unknown }> = [];
+  const handler = createWindowPolicy({ dev: false, source: { hosts: () => [], refresh: async () => {} } });
+  const app = await serve((req, res) => {
+    void handler(req, res).then(() => {
+      seen.push({ request: String(req.headers['content-security-policy']), reportOnly: req.headers['content-security-policy-report-only'] });
+      res.end('ok');
+    });
+  });
+  try {
+    const sent: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const res = await fetch(app.url + '/chat', {
+        // A client's own policy never reaches the render: its nonce would be trusted.
+        headers: { 'sec-fetch-dest': 'document', 'content-security-policy': "script-src 'nonce-AAAAAAAAAAAAAAAAAAAAAA=='", 'content-security-policy-report-only': "script-src 'unsafe-inline'" },
+      });
+      await res.text();
+      sent.push(res.headers.get('content-security-policy') ?? '');
+    }
+    const nonces = sent.map((policy) => scriptNonceOf(policy));
+    assert.ok(nonces.every((n) => typeof n === 'string' && n !== 'AAAAAAAAAAAAAAAAAAAAAA=='));
+    assert.equal(new Set(nonces).size, 3, 'one nonce per request');
+    for (const [i, policy] of sent.entries()) {
+      assert.equal(seen[i]!.request, policy, 'Next reads the very policy the response carries');
+      assert.equal(seen[i]!.reportOnly, undefined);
+      assert.ok(!directive(policy, 'script-src').includes("'unsafe-inline'"));
+    }
+    const doc = await fetch(app.url + '/api/ui/ui-documents/0b5f6c1e-2d4a-4f7e-9a3b-8c1d2e3f4a5b/document', { headers: { 'sec-fetch-dest': 'iframe' } });
+    await doc.text();
+    const docScript = directive(doc.headers.get('content-security-policy') ?? '', 'script-src');
+    assert.ok(docScript.includes("'unsafe-inline'"), 'the sandboxed document keeps its inline scripts');
+  } finally {
+    await app.close();
+  }
 });

@@ -330,7 +330,7 @@ export function ProjectEditDialog({ slug: editingSlug, onSaved, onClose }: Proje
                   <Input
                     value={draft.color}
                     onChange={(e) => setDraft((d) => ({ ...d, color: e.target.value }))}
-                    placeholder="auto"
+                    placeholder={t('editPage.colorAuto')}
                     /* code-font: hex colour value */ className="font-mono"
                     disabled={saving}
                   />
@@ -350,7 +350,7 @@ export function ProjectEditDialog({ slug: editingSlug, onSaved, onClose }: Proje
                 <Input
                   value={draft.workspace}
                   onChange={(e) => setDraft((d) => ({ ...d, workspace: e.target.value }))}
-                  placeholder="perso / clients / vibe…"
+                  placeholder={t('projectsForm.workspacePlaceholder')}
                   disabled={saving}
                 />
               </Field>
@@ -381,7 +381,7 @@ export function ProjectEditDialog({ slug: editingSlug, onSaved, onClose }: Proje
               <Textarea
                 value={draft.speech}
                 onChange={(e) => setDraft((d) => ({ ...d, speech: e.target.value }))}
-                placeholder="Short project description, context, goal…"
+                placeholder={t('projectsForm.speechPlaceholder')}
                 rows={3}
                 disabled={saving}
               />
@@ -428,7 +428,7 @@ export function ProjectEditDialog({ slug: editingSlug, onSaved, onClose }: Proje
         <Dialog open onOpenChange={(v) => { if (!v) setFate(null); }}>
           <DialogContent className="sm:max-w-[460px]">
             <DialogHeader>
-              <DialogTitle>{t('projectsPage.fateTitle', { slug: editingSlug, count: String(fate.agents.length) })}</DialogTitle>
+              <DialogTitle>{t('projectsPage.fateTitle', { slug: editingSlug, count: fate.agents.length })}</DialogTitle>
             </DialogHeader>
             <div className="flex flex-col gap-3 text-[13px]">
               <div className="text-[11px] text-muted-foreground">

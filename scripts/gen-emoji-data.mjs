@@ -71,6 +71,7 @@ writeFileSync(
  *
  * Source: ${source}
  * Regenerate with \`node scripts/gen-emoji-data.mjs\`.
+ * french-ok-file: the Unicode names keep their native accents (country flags).
  *
  * Each entry is \`[character, name, extra search keywords]\`; the tuple form
  * keeps the file three times smaller than named fields for ${total} entries,
@@ -82,7 +83,7 @@ export type EmojiEntry = readonly [char: string, name: string, keywords: string]
 export type EmojiGroup = { readonly name: string; readonly emojis: readonly EmojiEntry[] };
 
 export const EMOJI_GROUPS: readonly EmojiGroup[] = ${JSON.stringify(serialized, null, 0)
-    .replace(/\{"name":/g, '\n{ name: ')
+    .replace(/\{"name":/g, '\n// i18n-exempt: Unicode names, matched by the emoji search\n{ name: ')
     .replace(/,"emojis":/g, ', emojis: ')} as const;
 `,
   'utf8',

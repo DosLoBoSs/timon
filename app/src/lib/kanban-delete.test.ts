@@ -61,7 +61,7 @@ test('a refusal names the blocking tasks and the chain member that holds it back
   const dependents = await deleteKanbanTask('task-id');
   assert.equal(dependents.chainSize, undefined);
   assert.match(dependents.message, /#dependen Waits on it/);
-  assert.match(dependents.message, /1 more belong to another account/);
+  assert.match(dependents.message, /1 more belongs to another account/);
 
   ctx.mock.method(globalThis, 'fetch', async () => Response.json({ code: 'task_worktree', task_id: 'child-12345678' }, { status: 409 }));
   assert.match((await deleteKanbanTask('task-id', { chain: true })).message, /^Chain task child-12: .*worktree/);

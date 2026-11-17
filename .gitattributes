@@ -1,2 +1,5 @@
+# Keep LF in every checkout: tests read sources with "\n" regexes, and a
+# Windows runner with core.autocrlf=true would otherwise check out CRLF.
+* text=auto eol=lf
 *.bat text eol=crlf
 *.cmd text eol=crlf

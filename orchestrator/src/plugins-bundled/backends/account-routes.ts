@@ -140,7 +140,8 @@ function loginInitiator(req: Request, res: Response): { viewer: DbViewer; initia
 }
 
 function invalid(res: Response, error: z.ZodError): void {
-  res.status(400).json({ error: 'invalid body', fields: error.issues.map((issue) => issue.path.join('.') || 'body') });
+  const fields = error.issues.map((issue) => issue.path.join('.') || 'body');
+  res.status(400).json({ ...apiError('invalid_fields', 'invalid body', { fields: fields.join(', ') }), fields });
 }
 
 export function registerAccountRoutes(router: Router): void {
@@ -172,17 +173,17 @@ export function registerAccountRoutes(router: Router): void {
     }
     if (owner !== null) {
       const user = dbApi.getUserById(owner);
-      if (!user || user.status === 'disabled') return void res.status(400).json({ error: 'unknown or disabled owner' });
+      if (!user || user.status === 'disabled') return void res.status(400).json(apiError('owner_unknown', 'unknown or disabled owner'));
     }
     if (!backendTakesAccounts(parsed.data.backend)) {
-      return void res.status(400).json({ error: `backend ${parsed.data.backend} does not take subscription accounts` });
+      return void res.status(400).json(apiError('backend_takes_no_accounts', `backend ${parsed.data.backend} does not take subscription accounts`, { backend: parsed.data.backend }));
     }
     try {
       const row = createBackendAccount({ backend: parsed.data.backend, name: parsed.data.name, ownerUserId: owner, createdBy: viewer.id });
       auditRequest(req, 'backend_account.create', accountInstance(row));
       res.status(201).json({ account: publicAccount(row, viewer) });
     } catch (error) {
-      if (error instanceof BackendAccountConflictError) return void res.status(409).json({ error: error.message });
+      if (error instanceof BackendAccountConflictError) return void res.status(409).json(apiError('backend_account_conflict', error.message, { detail: error.message }));
       throw error;
     }
   });
@@ -197,7 +198,7 @@ export function registerAccountRoutes(router: Router): void {
     try {
       if (parsed.data.name !== undefined) renameBackendAccount(row.id, parsed.data.name);
     } catch (error) {
-      if (error instanceof BackendAccountConflictError) return void res.status(409).json({ error: error.message });
+      if (error instanceof BackendAccountConflictError) return void res.status(409).json(apiError('backend_account_conflict', error.message, { detail: error.message }));
       throw error;
     }
     if (parsed.data.status === 'active') {
@@ -230,7 +231,7 @@ export function registerAccountRoutes(router: Router): void {
     try {
       res.status(202).json({ login: startAccountLogin(row, who.initiator) });
     } catch (error) {
-      if (error instanceof LoginFlowError) return void res.status(400).json({ error: error.message });
+      if (error instanceof LoginFlowError) return void res.status(400).json(apiError('signin_refused', error.message, { detail: error.message }));
       throw error;
     }
   });
@@ -253,7 +254,7 @@ export function registerAccountRoutes(router: Router): void {
       if (!login) return void res.status(404).json(apiError('signin_not_in_progress', 'no sign-in in progress'));
       res.json({ login });
     } catch (error) {
-      if (error instanceof LoginFlowError) return void res.status(error.code === 'bad_code' ? 400 : 409).json({ error: error.message });
+      if (error instanceof LoginFlowError) return void res.status(error.code === 'bad_code' ? 400 : 409).json(apiError('signin_refused', error.message, { detail: error.message }));
       throw error;
     }
   });
@@ -276,7 +277,7 @@ export function registerAccountRoutes(router: Router): void {
     if (!parsed.success) return invalid(res, parsed.error);
     const wanted = new Set(parsed.data.userIds);
     for (const userId of wanted) {
-      if (!dbApi.getUserById(userId)) return void res.status(400).json({ error: `unknown user ${userId}` });
+      if (!dbApi.getUserById(userId)) return void res.status(400).json(apiError('user_not_found', `unknown user ${userId}`));
     }
     const current = new Set(listBackendAccountGrants(row.id));
     for (const userId of current) if (!wanted.has(userId)) revokeBackendAccountGrant(row.id, userId);

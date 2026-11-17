@@ -1,0 +1,23 @@
+{
+  "remoteSessions": {
+    "title": "Sessions distantes",
+    "introBefore": "Les jetons de l'API distante émis, actifs ou non. Révoquez-en un avec",
+    "introAfter": "et les identifiants maîtres.",
+    "column": {
+      "client": "Client",
+      "id": "ID",
+      "issued": "Émis",
+      "expires": "Expire",
+      "state": "État",
+      "calls": "Appels",
+      "lastCall": "Dernier appel",
+      "recent": "Récents"
+    },
+    "state": {
+      "active": "actif",
+      "expired": "expiré",
+      "revoked": "révoqué"
+    },
+    "empty": "Aucun jeton émis."
+  }
+}

@@ -9,8 +9,13 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const { ConsoleLog, cliInstallDone, cliInstallJob, resetCliInstallsForTests, startCliInstall, streamingExec } = await import('./provider-cli-install.js');
+const { config, resetConfig, setConfig } = await import('./config/load.js');
+const { RESOLVED_BIN_ENV } = await import('./host/machine.js');
 
 function fakeChild(): ChildProcess & { stdout: PassThrough; stderr: PassThrough } {
   const child = new EventEmitter() as ChildProcess & { stdout: PassThrough; stderr: PassThrough };
@@ -112,4 +117,60 @@ test('after a success the daemon looks for its CLIs again, before the job says i
   await cliInstallDone('codex');
   assert.deepEqual(order, ['recheck:running']);
   assert.equal(cliInstallJob('codex')?.state, 'succeeded');
+});
+
+test('the installer is told the copy the daemon resolved: a host.binaries pin wins (TODO #799)', async () => {
+  resetCliInstallsForTests();
+  // A copy only the pin names, in a folder the daemon never searches by itself.
+  const dir = mkdtempSync(join(tmpdir(), 'timon-pinned-copilot-'));
+  const pinned = join(dir, process.platform === 'win32' ? 'copilot.cmd' : 'copilot');
+  writeFileSync(pinned, process.platform === 'win32' ? '@echo off\r\n' : '#!/bin/sh\n');
+  chmodSync(pinned, 0o755);
+  const base = config();
+  setConfig({ ...base, host: { ...base.host, binaries: { ...base.host.binaries, copilot: pinned } } });
+  try {
+    const seen: NodeJS.ProcessEnv[] = [];
+    // No `locate`: the job resolves the CLI the way the card does.
+    startCliInstall('copilot', {
+      exec: async (_command, _args, _log, env) => { seen.push(env); return { code: 0, stdout: '', stderr: '' }; },
+    });
+    const result = await cliInstallDone('copilot');
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0]![RESOLVED_BIN_ENV], pinned);
+    // The rest of the daemon's environment still reaches the installer.
+    assert.equal(seen[0]!.PATH ?? seen[0]!.Path, process.env.PATH ?? process.env.Path);
+    assert.equal(result?.ok, true);
+  } finally {
+    resetConfig();
+  }
+});
+
+test('no copy found: the variable is absent, even one the daemon itself inherited', async () => {
+  resetCliInstallsForTests();
+  const inherited = process.env[RESOLVED_BIN_ENV];
+  process.env[RESOLVED_BIN_ENV] = '/stale/copilot';
+  try {
+    const seen: NodeJS.ProcessEnv[] = [];
+    startCliInstall('claude', {
+      platform: 'linux',
+      exec: async (_command, _args, _log, env) => { seen.push(env); return { code: 0, stdout: '', stderr: '' }; },
+      locate: () => null,
+    });
+    await cliInstallDone('claude');
+    assert.equal(seen.length, 1);
+    assert.equal(RESOLVED_BIN_ENV in seen[0]!, false);
+  } finally {
+    if (inherited === undefined) delete process.env[RESOLVED_BIN_ENV];
+    else process.env[RESOLVED_BIN_ENV] = inherited;
+  }
+});
+
+test('the environment given to the streaming exec is the one the installer runs with', { skip: process.platform === 'win32' ? 'a POSIX shell reads the variable' : false }, async () => {
+  const log = new ConsoleLog();
+  // portability: /bin/sh, the shell the posix installer lines run in (skipped on Windows)
+  const res = await streamingExec('/bin/sh', ['-c', `printf '%s' "$${RESOLVED_BIN_ENV}"`], log, {
+    env: { ...process.env, [RESOLVED_BIN_ENV]: '/opt/copilot' },
+  });
+  assert.equal(res.code, 0, res.stderr);
+  assert.deepEqual(log.lines, ['/opt/copilot']);
 });

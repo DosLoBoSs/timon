@@ -10,6 +10,7 @@
  */
 
 import { agentRoleKey } from '@/lib/roles';
+import { compareText } from '@/lib/intl';
 import { chatHref } from '@/lib/chat-island-params';
 
 export type NewMissionCandidate = {
@@ -60,7 +61,7 @@ export function newMissionAgents(
   const main = projectMain(list);
   const rest = list
     .filter((a) => a !== main)
-    .sort((a, b) => roleRank(a) - roleRank(b) || a.name.localeCompare(b.name));
+    .sort((a, b) => roleRank(a) - roleRank(b) || compareText(a.name, b.name));
   return (main ? [main, ...rest] : rest).map((a) => ({ name: a.name, role: agentRoleKey(a.role) }));
 }
 

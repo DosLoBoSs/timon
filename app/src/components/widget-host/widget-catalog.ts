@@ -1,5 +1,5 @@
 /**
- * The widget catalogue: what the host can place, wherever it comes from.
+ * The widget catalog: what the host can place, wherever it comes from.
  *
  * The host used to read `widget-registry.tsx`, a table of React components
  * compiled into the app. A plugin widget was rendered apart by `<Slot />`,
@@ -9,7 +9,7 @@
  * The slot registry is now the only source of placement: the cockpit tiles are
  * the registrations of the client halves of `dreams` and `vault`, and
  * the native table no longer exists.
- * The `natifs` parameter stays the entry point for entries that would not come
+ * The `natives` parameter stays the entry point for entries that would not come
  * from the registry; it is empty in the product.
  *
  * Pure module: no React, no slot registry. The slot entries are passed to it,
@@ -18,10 +18,10 @@
  */
 
 import type { WidgetOptions } from '@/lib/plugin-host/slots';
-import type { ContraintesWidget, ZoneId } from './widget-layout';
+import type { WidgetConstraints, ZoneId } from './widget-layout';
 
 /** A widget registration in a slot, as the registry reports it. */
-export type EntreeSlotWidget = {
+export type WidgetSlotEntry = {
   /**
    * Registration id (`<pluginId>:<n>`). It changes at every reload, hence
    * the stable placement id computed below.
@@ -36,12 +36,12 @@ export type EntreeSlotWidget = {
   options?: WidgetOptions;
 };
 
-export type EntreeCatalogue = ContraintesWidget & {
-  titre: string;
+export type CatalogEntry = WidgetConstraints & {
+  title: string;
   /**
    * Plugin that registers this widget. Absent for a native entry. It is not
    * enough to tell two same-named widgets apart (one module often paints both
-   * the cockpit card and the chat card), hence `origineWidget` below.
+   * the cockpit card and the chat card), hence `widgetOrigin` below.
    */
   pluginId?: string;
   /**
@@ -56,22 +56,22 @@ export type EntreeCatalogue = ContraintesWidget & {
   bar?: boolean;
   /** One sentence on what the widget does, read in the widget window. */
   description?: string;
-  /** Name in the widget window when `titre` is the user's. */
-  titreCatalogue?: string;
+  /** Name in the widget window when `title` is the user's. */
+  catalogTitle?: string;
   /** Glyph of the card in the widget window (`WidgetOptions.icon`). */
-  icone?: string;
+  icon?: string;
 };
 
 /**
  * Heights of a plugin widget. A plugin does not declare them yet (the manifest
  * does not carry them), and leaving them undefined would make
- * `fusionnerLayout` clamp on `undefined`, hence persist `NaN`s.
+ * `mergeLayout` clamp on `undefined`, hence persist `NaN`s.
  */
-export const HAUTEUR_DEFAUT_PLUGIN = 260;
-export const HAUTEUR_MIN_PLUGIN = 120;
+export const PLUGIN_DEFAULT_HEIGHT = 260;
+export const PLUGIN_MIN_HEIGHT = 120;
 
 /** Prefix of the placement ids of plugin widgets. */
-export const PREFIXE_PLUGIN = 'plugin:';
+export const PLUGIN_ID_PREFIX = 'plugin:';
 
 /**
  * Id under which a plugin widget's placement is written.
@@ -80,93 +80,93 @@ export const PREFIXE_PLUGIN = 'plugin:';
  * using it would put every card back at its default place at every F5. The
  * (plugin, key) pair is what the plugin controls and repeats.
  */
-export function idPlacementPlugin(pluginId: string, key?: string): string {
-  return `${PREFIXE_PLUGIN}${pluginId}${key ? `:${key}` : ''}`;
+export function pluginPlacementId(pluginId: string, key?: string): string {
+  return `${PLUGIN_ID_PREFIX}${pluginId}${key ? `:${key}` : ''}`;
 }
 
 /** Same-module former keys, then the cross-module ids a bundled widget may carry. */
 function formerIdsOf(pluginId: string, options: WidgetOptions | undefined): string[] {
-  const ids = (options?.formerKeys ?? []).map((k) => idPlacementPlugin(pluginId, k || undefined));
+  const ids = (options?.formerKeys ?? []).map((k) => pluginPlacementId(pluginId, k || undefined));
   if (pluginId.startsWith('@timon/')) ids.push(...(options?.formerIds ?? []));
   return ids;
 }
 
 /**
- * Merges the native widgets and the slot registrations into a catalogue.
+ * Merges the native widgets and the slot registrations into a catalog.
  *
  * Natives come first and keep their default ranks; plugin widgets are added
  * after them, in the order the registry reports them.
  *
- * `zoneDefautDuSlot` translates a slot into a first-placement zone. It is
- * injected, as `estAffichable` is into `widgetsAdmisParConfig`: the only known
+ * `defaultZoneForSlot` translates a slot into a first-placement zone. It is
+ * injected, as `isVisible` is into `widgetsAllowedByConfig`: the only known
  * exception is the cockpit, whose two rails share the `cockpit.widget` slot
  * (see `widget-dnd.ts`), and that knowledge belongs to the cockpit, not to the
  * model. By default the zone carries the slot's name, which is true of
  * `sidebar.left.widget`, `sidebar.right.widget` and any zone a third-party
  * layout would declare.
  */
-export function catalogueWidgets(
-  natifs: readonly EntreeCatalogue[],
-  entrees: readonly EntreeSlotWidget[],
-  zoneDefautDuSlot: (slot: string) => ZoneId = (slot) => slot,
-): EntreeCatalogue[] {
-  const catalogue = [...natifs];
-  const vus = new Set(catalogue.map((e) => e.id));
+export function buildWidgetCatalog(
+  natives: readonly CatalogEntry[],
+  entries: readonly WidgetSlotEntry[],
+  defaultZoneForSlot: (slot: string) => ZoneId = (slot) => slot,
+): CatalogEntry[] {
+  const catalog = [...natives];
+  const seen = new Set(catalog.map((e) => e.id));
 
-  for (const entree of entrees) {
-    const stable = idPlacementPlugin(entree.pluginId, entree.key);
+  for (const entry of entries) {
+    const stable = pluginPlacementId(entry.pluginId, entry.key);
     // Two registrations of the same plugin without distinct keys: the second
     // cannot claim the same placement. It falls back on its registration id: it
     // shows and moves, but goes back to its default place on reload. A key in
     // the plugin manifest fixes that.
-    const id = vus.has(stable) ? entree.registrationId : stable;
-    if (vus.has(id)) continue;
-    vus.add(id);
-    const options = entree.options;
-    catalogue.push({
+    const id = seen.has(stable) ? entry.registrationId : stable;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const options = entry.options;
+    catalog.push({
       id,
-      titre: options?.title ?? entree.key ?? entree.pluginId,
-      pluginId: entree.pluginId,
-      slots: [entree.slot],
-      registrationId: entree.registrationId,
-      hauteurDefaut: options?.height ?? HAUTEUR_DEFAUT_PLUGIN,
-      hauteurMin: options?.minHeight ?? HAUTEUR_MIN_PLUGIN,
+      title: options?.title ?? entry.key ?? entry.pluginId,
+      pluginId: entry.pluginId,
+      slots: [entry.slot],
+      registrationId: entry.registrationId,
+      defaultHeight: options?.height ?? PLUGIN_DEFAULT_HEIGHT,
+      minHeight: options?.minHeight ?? PLUGIN_MIN_HEIGHT,
       ...(options?.heightMode ? { heightMode: options.heightMode } : {}),
       ...(options?.bar ? { bar: true } : {}),
       ...(options?.description ? { description: options.description } : {}),
-      ...(options?.catalogTitle ? { titreCatalogue: options.catalogTitle } : {}),
-      ...(options?.icon ? { icone: options.icon } : {}),
+      ...(options?.catalogTitle ? { catalogTitle: options.catalogTitle } : {}),
+      ...(options?.icon ? { icon: options.icon } : {}),
       ...(options?.placedByDefault ? { placedByDefault: true } : {}),
-      ...(formerIdsOf(entree.pluginId, options).length ? { formerIds: formerIdsOf(entree.pluginId, options) } : {}),
+      ...(formerIdsOf(entry.pluginId, options).length ? { formerIds: formerIdsOf(entry.pluginId, options) } : {}),
       // The declared zone is only a first-placement preference: the slot alone
       // cannot give it when two zones share it (the cockpit rails). Nothing checks
       // it here: the model does not know which zones are mounted, and a missing
       // zone simply leaves the card waiting for it.
-      railDefaut: options?.zone ?? zoneDefautDuSlot(entree.slot),
-      rangDefaut: catalogue.length,
+      defaultZone: options?.zone ?? defaultZoneForSlot(entry.slot),
+      defaultRank: catalog.length,
     });
   }
 
-  return catalogue;
+  return catalog;
 }
 
 /**
  * Current id of a widget named by an id it carried before (`formerIds`).
  *
- * `placementHerite` only migrates the host's layout; an id written elsewhere
+ * `inheritedPlacement` only migrates the host's layout; an id written elsewhere
  * (an island tab) must find its card too. A current id always wins; when two
- * widgets claim the same former id, the first in the catalogue keeps it.
+ * widgets claim the same former id, the first in the catalog keeps it.
  */
-export function idCourant(entrees: readonly EntreeCatalogue[], id: string): string | null {
-  if (entrees.some((e) => e.id === id)) return id;
-  return entrees.find((e) => e.formerIds?.includes(id))?.id ?? null;
+export function currentWidgetId(entries: readonly CatalogEntry[], id: string): string | null {
+  if (entries.some((e) => e.id === id)) return id;
+  return entries.find((e) => e.formerIds?.includes(id))?.id ?? null;
 }
 
 /**
  * Slots whose surface we can name for a human, as i18n keys.
  *
  * The palette shows this surface under the title: two widgets can share
- * `titre` AND plugin (the two "Missions" both come from `@timon/missions`),
+ * `title` AND plugin (the two "Missions" both come from `@timon/missions`),
  * and it is the slot that tells which one paints the cockpit and which one
  * paints the chat rail. An unknown slot (a third-party layout's) is shown as
  * is: a readable id is better than nothing.
@@ -175,7 +175,7 @@ export function idCourant(entrees: readonly EntreeCatalogue[], id: string): stri
  *  `topbar.widget`, where the Working agents widget starts (TODO #479). */
 export const TOPBAR_CENTER_ZONE = 'topbar.center.widget';
 
-const CLES_SURFACE: Record<string, string> = {
+const SURFACE_KEYS: Record<string, string> = {
   'cockpit.widget': 'widgets.surface.cockpit',
   'chat.left.widget': 'widgets.surface.chatLeft',
   'chat.right.widget': 'widgets.surface.chatRight',
@@ -185,10 +185,10 @@ const CLES_SURFACE: Record<string, string> = {
   [TOPBAR_CENTER_ZONE]: 'widgets.surface.topbar',
 };
 
-export type OrigineWidget = {
+export type WidgetOrigin = {
   /** i18n key of the surface, `null` when the slot has none. */
-  cleSurface: string | null;
-  /** Fallback name, shown when `cleSurface` is `null`. */
+  surfaceKey: string | null;
+  /** Fallback name, shown when `surfaceKey` is `null`. */
   surface: string;
   /** Short plugin name (`@timon/missions` → `missions`), `null` if native. */
   plugin: string | null;
@@ -197,27 +197,27 @@ export type OrigineWidget = {
 /**
  * Where a widget comes from: the surface it lives in by default, and its plugin.
  *
- * The declared slot wins over `railDefaut`: the latter can carry a zone
+ * The declared slot wins over `defaultZone`: the latter can carry a zone
  * internal to the cockpit (`gauche`), which only makes sense for the cockpit,
- * whereas the slot names the surface for everyone. Except when `railDefaut`
+ * whereas the slot names the surface for everyone. Except when `defaultZone`
  * is itself a known surface (`topbar.widget`, a sidebar).
  */
-export function origineWidget(entree: EntreeCatalogue): OrigineWidget {
+export function widgetOrigin(entry: CatalogEntry): WidgetOrigin {
   // A product zone named as first placement (the top bar, a sidebar) says
   // more than the registration slot every bundled widget shares.
-  const slot = CLES_SURFACE[entree.railDefaut] ? entree.railDefaut : entree.slots[0] ?? entree.railDefaut;
-  const plugin = entree.pluginId?.replace(/^@[^/]+\//, '') ?? null;
-  return { cleSurface: CLES_SURFACE[slot] ?? null, surface: slot, plugin };
+  const slot = SURFACE_KEYS[entry.defaultZone] ? entry.defaultZone : entry.slots[0] ?? entry.defaultZone;
+  const plugin = entry.pluginId?.replace(/^@[^/]+\//, '') ?? null;
+  return { surfaceKey: SURFACE_KEYS[slot] ?? null, surface: slot, plugin };
 }
 
 /** The page a widget belongs to in the widget window: where it is at home, which
  *  is what the user looks for it by. Admission is wider (a `*.widget` slot opens
  *  every host zone), so this reads the first placement, not the admission. */
-export type PageWidget = 'cockpit' | 'chat' | 'agents' | 'sidebars' | 'topbar';
-export const PAGES_WIDGET: readonly PageWidget[] = ['cockpit', 'chat', 'agents', 'sidebars', 'topbar'];
+export type WidgetPage = 'cockpit' | 'chat' | 'agents' | 'sidebars' | 'topbar';
+export const WIDGET_PAGES: readonly WidgetPage[] = ['cockpit', 'chat', 'agents', 'sidebars', 'topbar'];
 
-export function pageDuWidget(entree: EntreeCatalogue): PageWidget {
-  for (const zone of [entree.railDefaut, entree.slots[0] ?? '']) {
+export function widgetPage(entry: CatalogEntry): WidgetPage {
+  for (const zone of [entry.defaultZone, entry.slots[0] ?? '']) {
     if (zone.startsWith('chat.')) return 'chat';
     if (zone.startsWith('agents.')) return 'agents';
     if (zone.startsWith('topbar.')) return 'topbar';

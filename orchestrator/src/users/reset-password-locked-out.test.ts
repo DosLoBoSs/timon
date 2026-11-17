@@ -3,7 +3,7 @@
  * daemon token that `timon user reset-password` uses is enough, no session
  * needed. The temporary password signs in, the old one no longer does.
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
@@ -11,13 +11,14 @@ import type { AddressInfo } from 'node:net';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
+import { removeHomeOnExit } from '../../tests/helpers/test-home.js';
 
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-reset-locked-'));
 await import('../../tests/helpers/paid-license.js');
 process.env.TIMON_RESOURCE_GUARD_ENABLED = '0';
 const TOKEN = 'witness-daemon-token';
 writeFileSync(join(process.env.TIMON_HOME, 'daemon-token'), TOKEN, { encoding: 'utf8', mode: 0o600 });
-process.on('exit', () => rmSync(process.env.TIMON_HOME!, { recursive: true, force: true }));
+removeHomeOnExit(process.env.TIMON_HOME!);
 
 const { createDaemonAuthMiddleware } = await import('../plugins-bundled/http/auth.js');
 const { registerRoutes: registerUserRoutes } = await import('../plugins-bundled/users/routes.js');

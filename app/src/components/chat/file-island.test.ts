@@ -40,13 +40,21 @@ async function mount(ctx: TestContext) {
     if (!saved.has(key)) saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
     Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
   };
-  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'HTMLInputElement', 'Element', 'Node', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'FocusEvent', 'DOMParser', 'getComputedStyle', 'MutationObserver', 'requestAnimationFrame', 'cancelAnimationFrame']) {
+  // Window: CodeMirror's measure, run from a jsdom animation frame, tests
+  // `instanceof Window` when the editor has no scrollable parent.
+  for (const key of ['window', 'Window', 'document', 'navigator', 'HTMLElement', 'HTMLInputElement', 'Element', 'Node', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'FocusEvent', 'DOMParser', 'getComputedStyle', 'MutationObserver', 'requestAnimationFrame', 'cancelAnimationFrame']) {
     install(key, key === 'window' ? dom.window : Reflect.get(dom.window, key));
   }
   Object.defineProperty(dom.window, 'innerWidth', { value: 1400, configurable: true });
   dom.window.matchMedia = (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} })) as never;
   Object.defineProperty(dom.window.HTMLElement.prototype, 'clientWidth', { get: () => 1400, configurable: true });
   Object.defineProperty(dom.window.HTMLElement.prototype, 'clientHeight', { get: () => 800, configurable: true });
+  // jsdom lays no text out and its Range has no geometry: CodeMirror reads it
+  // from the same frames. No rectangle is what it gets for text not shown.
+  Object.assign(dom.window.Range.prototype, {
+    getClientRects: () => [],
+    getBoundingClientRect: () => new dom.window.DOMRect(0, 0, 0, 0),
+  });
   install('IS_REACT_ACT_ENVIRONMENT', true);
   const bodies: Record<string, string> = { 'docs/a.md': 'alpha body', 'docs/b.txt': 'beta body' };
   const saves: { path: string; body: string }[] = [];

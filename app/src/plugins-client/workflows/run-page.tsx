@@ -182,7 +182,7 @@ export function WorkflowRunPage({ slug, runId }: { slug: string; runId: string }
         <div className="ml-auto flex items-center gap-3 text-[11px] tabular-nums text-muted-foreground">
           <span title={formatDateTime(run.started_at)}>{formatRelative(run.started_at)}</span>
           <span>{formatDuration(runDuration(run))}</span>
-          <span>{formatTokens(tokens)} tok</span>
+          <span>{t('workflows.builder.tokens', { n: formatTokens(tokens) })}</span>
           {run.cost_usd ? <span>${run.cost_usd.toFixed(3)}</span> : null}
           {run.error && <span className="max-w-[24ch] truncate text-destructive" title={run.error}>{run.error}</span>}
         </div>

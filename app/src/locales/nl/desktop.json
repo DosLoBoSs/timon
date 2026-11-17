@@ -49,6 +49,8 @@
       "giveUp": "{url} antwoordde niet binnen {seconds} s.",
       "uiMissing": "De interface is niet verschenen.",
       "uiMissingDetail": "{giveUp}\n\nDe daemon draait misschien zonder zijn webapp: sluit Timon af en open het opnieuw. Blijft het probleem, kopieer dan de diagnose en stuur haar naar support.",
+      "daemonDown": "De achtergrondservice draait niet.",
+      "daemonDownDetail": "Niets antwoordt op {origin}{retried, select, yes {, ook niet nadat Timon hem opnieuw startte} other {}}. Zijn logs staan in {logs}. Blijft het probleem, kopieer dan de diagnose en stuur haar naar support.",
       "crashing": "De daemon blijft crashen.",
       "crashingDetail": "{why}\n\nDe meegeleverde daemon kon niet starten. Je gegevens blijven in {home}.",
       "slow": "De daemon antwoordde niet op tijd.",

@@ -12,6 +12,7 @@ import { useRef, useState, type ReactElement } from 'react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { ReasoningControl } from '@/lib/backends';
@@ -44,7 +45,7 @@ export async function errorText(res: Response): Promise<string> {
   if (res.status === 403) return t('backendsSettings.errors.forbidden');
   const raw = (await res.text().catch(() => '')).trim();
   try {
-    return (JSON.parse(raw) as { error?: string }).error || `HTTP ${res.status}`;
+    return apiErrorMessage(JSON.parse(raw), { status: res.status });
   } catch {
     return raw || `HTTP ${res.status}`;
   }

@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path';
 import { TIMON_HOME } from './paths.js';
 import { db, dbApi, attachEventsArchive } from './db.js';
 import { settingInt } from './settings.js';
+import { runDataRetention } from './data-retention.js';
 
 export const EVENTS_ARCHIVE_PATH = join(TIMON_HOME, 'archive', 'events.db');
 
@@ -122,6 +123,11 @@ export function startEventsArchive(): () => void {
       lastSpansDay = day;
       void drainOldTraceSpans({ stopped: () => stopped }).catch((e: unknown) => {
         console.error(`[events-archive] trace span cleanup failed: ${(e as Error).message}`);
+      });
+      // Same catch-up: a retention someone turned on must not wait for a
+      // computer left on at 04:30.
+      void runDataRetention({ stopped: () => stopped }).catch((e: unknown) => {
+        console.error(`[retention] cleanup failed: ${(e as Error).message}`);
       });
     }
     if (d.getHours() !== 4 || d.getMinutes() < 30) return;

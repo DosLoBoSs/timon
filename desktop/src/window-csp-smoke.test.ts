@@ -18,14 +18,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 type CspModule = {
-  contentSecurityPolicy(opts: { egressHosts: readonly string[]; dev: boolean; selfHost?: string | null }): string;
+  contentSecurityPolicy(opts: { egressHosts: readonly string[]; dev: boolean; selfHost?: string | null; nonce?: string | null }): string;
+  createScriptNonce(): string;
   enforceContentSecurityPolicy(res: http.ServerResponse, policy: string): void;
 };
 
 const LOOSE = 'default-src * data: blob: \'unsafe-inline\'';
 
-function page(outside: string): string {
-  return `<!doctype html><meta charset="utf-8"><iframe id="f" name="f" src="/loose-frame"></iframe><script>
+// The page's own logic carries the response's nonce, as Next's scripts do;
+// the second script, without it, must never run (TODO #1002).
+function page(outside: string, nonce: string): string {
+  return `<!doctype html><meta charset="utf-8"><iframe id="f" name="f" src="/loose-frame"></iframe><script nonce="${nonce}">
 const out=${JSON.stringify(outside)};const r={};window.__r=r;window.violations=[];
 const frameResult=new Promise(res=>addEventListener('message',e=>{if(e.data&&e.data.name==='frame')res(e.data.result)}));
 document.addEventListener('securitypolicyviolation',e=>violations.push(e.effectiveDirective));
@@ -46,12 +49,13 @@ const settle=(p,ms=1500)=>Promise.race([p.then(()=>'sent',()=>'blocked'),new Pro
   r.looseWorker=await new Promise(res=>{loose.onmessage=e=>res(e.data);loose.onerror=()=>res('refused')});
   r.looseFrame=await Promise.race([frameResult,new Promise(res=>setTimeout(()=>res('silent'),1500))]);
   await new Promise(res=>setTimeout(res,500));
+  r.inlineRan=window.__inlineRan===true;
   window.__done=r;
 })();
-</script>`;
+</script><script>window.__inlineRan=true</script>`;
 }
 
-const FRAME = (outside: string) => `<!doctype html><script>
+const FRAME = (outside: string, nonce: string) => `<!doctype html><script nonce="${nonce}">
 fetch(${JSON.stringify(outside)}+'/frame',{mode:'no-cors'}).then(()=>'sent',()=>'blocked').then(result=>parent.postMessage({name:'frame',result},'*'));
 </script>`;
 
@@ -74,12 +78,13 @@ test('the window policy leaves no way out to an undeclared origin, in Chromium',
 
   const app = http.createServer((req, res) => {
     // A declared host, to prove declarations do not open anything else.
-    csp.enforceContentSecurityPolicy(res, csp.contentSecurityPolicy({ egressHosts: ['api.declared.example'], dev: false, selfHost: req.headers.host ?? null }));
+    const nonce = csp.createScriptNonce();
+    csp.enforceContentSecurityPolicy(res, csp.contentSecurityPolicy({ egressHosts: ['api.declared.example'], dev: false, selfHost: req.headers.host ?? null, nonce }));
     if (req.url === '/ok') { res.end('ok'); return; }
-    if (req.url === '/loose-frame') { res.setHeader('Content-Security-Policy', LOOSE); res.setHeader('content-type', 'text/html'); res.end(FRAME(outsideUrl)); return; }
+    if (req.url === '/loose-frame') { res.setHeader('Content-Security-Policy', LOOSE); res.setHeader('content-type', 'text/html'); res.end(FRAME(outsideUrl, nonce)); return; }
     if (req.url === '/loose-worker.js') { res.writeHead(200, { 'Content-Security-Policy': LOOSE, 'content-type': 'text/javascript' }); res.end(WORKER(outsideUrl)); return; }
     res.setHeader('content-type', 'text/html');
-    res.end(page(outsideUrl));
+    res.end(page(outsideUrl, nonce));
   });
   await new Promise<void>((resolve) => app.listen(0, '127.0.0.1', resolve));
   const appUrl = `http://127.0.0.1:${(app.address() as AddressInfo).port}/`;
@@ -112,6 +117,11 @@ fail(new Error('page never finished: '+await w.webContents.executeJavaScript('JS
     // outside server's silence below is what proves it never left.
     assert.deepEqual(reached, [], `the undeclared origin was reached: ${reached.join(', ')}`);
     assert.ok(v.includes('connect-src'), `violations: ${v.join(', ')}`);
+    // The frame's script ran on its nonce and its fetch was held, rather than
+    // the frame staying silent because its script never ran.
+    assert.equal(r.looseFrame, 'blocked', 'the framed route ran its nonced script');
+    assert.equal(r.inlineRan, false, 'an inline script without the nonce ran');
+    assert.ok(v.includes('script-src-elem'), `violations: ${v.join(', ')}`);
     console.log(line);
   } finally {
     await new Promise((resolve) => app.close(resolve));

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 
 await import('../tests/helpers/paid-license.js');
 const { desktopBundled, PROVIDER_CLI_NAMES, runInstallBackend, setupBackends } = await import('./onboarding.js');
-const { installBackendPlanFor } = await import('./host/machine.js');
+const { installBackendPlanFor, RESOLVED_BIN_ENV } = await import('./host/machine.js');
 
 const NO_VERSION = () => ({ version: null, latest: null, updateAvailable: false, unsupportedVersion: false });
 
@@ -29,15 +29,18 @@ test('more vendors, each with its own documented line, and none made up', () => 
   assert.equal(installBackendPlanFor('grok', 'linux')?.display, 'curl -fsSL https://x.ai/cli/install.sh | bash');
   assert.equal(installBackendPlanFor('grok', 'win32')?.argv.at(-1), 'irm https://x.ai/cli/install.ps1 | iex');
   // A CLI already there updates itself, none yet gets the vendor's script (TODO #789): `tests/copilot-update-line.test.ts`.
-  assert.match(installBackendPlanFor('copilot', 'darwin')?.display ?? '', /then copilot update;else curl -fsSL https:\/\/gh\.io\/copilot-install\|bash;fi$/);
+  // The copy the daemon resolved comes first, when it hands one over (TODO #799).
+  assert.match(installBackendPlanFor('copilot', 'darwin')?.display ?? '', /^c=\$\{TIMON_RESOLVED_BIN:-copilot\};.*then "\$c" update;else curl -fsSL https:\/\/gh\.io\/copilot-install\|bash;fi$/);
   // A fresh Windows: winget with the flags without which it stops on the source's terms (TIM-0022).
   // A CLI already there: its own `copilot update`, since winget's record drifts from it (TIM-0138).
   const copilotWin = installBackendPlanFor('copilot', 'win32')?.argv.at(-1) ?? '';
   // After the update, an explicit exit with the CLI's own code: a failed update is a failed job.
   assert.match(copilotWin, /if \(Get-Command copilot -ErrorAction SilentlyContinue\) \{ copilot update; exit \(Get-Variable LASTEXITCODE -ValueOnly\) \} else \{ winget install .*--accept-source-agreements .*--id GitHub\.Copilot \}$/);
+  // The copy the daemon resolved first (TODO #799), read without a `$` so the line still pastes into CMD.
+  assert.match(copilotWin, /; if \(\[Environment\]::GetEnvironmentVariable\('TIMON_RESOLVED_BIN'\)\) \{ & \(\[Environment\]::GetEnvironmentVariable\('TIMON_RESOLVED_BIN'\)\) update; exit \(Get-Variable LASTEXITCODE -ValueOnly\) \} elseif \(Get-Command copilot /);
   assert.match(copilotWin, /GetEnvironmentVariable\('Path', 'User'\)/);
   assert.match(copilotWin, /GetEnvironmentVariable\('Path', 'Machine'\)/);
-  assert.ok(copilotWin.length <= 500, `${copilotWin.length} characters`);
+  assert.ok(copilotWin.length <= 1000, `${copilotWin.length} characters`);
   // Shown inside `-Command "…"` for pasting into PowerShell or CMD. A `"` ends the quoting; a `$`
   // is expanded by a PowerShell paste, and the backtick escaping it there reaches the inner shell
   // intact from a CMD paste: no escape works for both, hence `Get-Variable` over `$LASTEXITCODE`.
@@ -129,6 +132,18 @@ test('a failed Copilot update on Windows is a failed job, though the CLI is stil
   assert.equal(failed.ok, false);
   assert.match(failed.reason ?? '', /network unreachable \(exit 1\)/);
   assert.match(failed.lines[0] ?? '', / → 1$/);
+});
+
+test('the installer is told the copy the daemon resolved, unless it is a desktop app\'s own', async () => {
+  const envs: NodeJS.ProcessEnv[] = [];
+  const ok = async (_command: string, _args: string[], env: NodeJS.ProcessEnv) => { envs.push(env); return { code: 0, stdout: '', stderr: '' }; };
+  await runInstallBackend('copilot', 'linux', ok, () => '/home/ann/.nvm/versions/node/v21.0.0-rc.1/bin/copilot');
+  assert.equal(envs[0]![RESOLVED_BIN_ENV], '/home/ann/.nvm/versions/node/v21.0.0-rc.1/bin/copilot');
+  // Install on such a card is for a standalone copy: the line must not update the app's.
+  await runInstallBackend('codex', 'darwin', ok, () => '/Applications/Codex.app/Contents/Resources/codex');
+  assert.equal(RESOLVED_BIN_ENV in envs[1]!, false);
+  await runInstallBackend('claude', 'linux', ok, () => null);
+  assert.equal(RESOLVED_BIN_ENV in envs[2]!, false);
 });
 
 test('a CLI shipped inside a desktop app is flagged, so Install stays offered', () => {

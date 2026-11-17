@@ -31,7 +31,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { AppWindow, ChevronDown, ChevronLeft, ChevronRight, Droplets, ExternalLink, GripVertical, Minus, PanelRight, Pin, PinOff, Plus, X } from 'lucide-react';
+import { AppWindow, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, GripVertical, Minus, PanelRight, Pin, PinOff, Plus, X } from 'lucide-react';
 import { Picto } from '@/components/picto';
 import { ChatTabIcon } from '@/plugins-client/missions/chat-tab-icon';
 import { createPortal } from 'react-dom';
@@ -123,15 +123,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { GlassClear, IslandGlassScopeProvider, useGlassScope } from '@/components/glass-scope';
-import { GLASS_TUNING_ENABLED, readGlassScope, type GlassScope } from '@/lib/glass-scope';
+import { type GlassScope } from '@/lib/glass-scope';
+import { IslandGlassSubmenu } from './island-glass-menu';
+import { publishPageGlass } from './page-glass';
 import {
   ISLAND_MIN_HEIGHT,
   ISLAND_MIN_WIDTH,
@@ -288,6 +285,19 @@ const HIDDEN_TAB_ATTRS = { inert: true, 'aria-hidden': true } as const;
 
 const rectStyle = (rect: Rect): CSSProperties => ({ left: rect.x, top: rect.y, width: rect.width, height: rect.height });
 
+/**
+ * The tab an open just showed `content` in: every open focuses its island and
+ * activates the tab, a new one or the open one moved. Looked up by identity
+ * when the focus says otherwise.
+ */
+function openedTab(tree: IslandTree, content: IslandContent, existing: ((other: IslandContent) => boolean) | undefined): TabId | null {
+  const focused = tree.focus ? findLeaf(tree, tree.focus) : null;
+  const active = focused?.tabs.find((tab) => tab.id === focused.active);
+  if (active && active.content.type === content.type) return active.id;
+  const same = existing ?? sameContentAs(content.params, undefined);
+  return allLeaves(tree).flatMap((leaf) => leaf.tabs).find((tab) => tab.content.type === content.type && same(tab.content))?.id ?? null;
+}
+
 /** A drop as an op on the tree it is handed: planned again when replayed on a rewritten one. */
 function droppedOn(
   tree: IslandTree,
@@ -382,6 +392,17 @@ export function IslandWorkspaceView({
   applyRef.current = apply;
   const typesRef = useRef(types);
   typesRef.current = types;
+  /** New params for a tab, cleaned by its type: why they did not land, `null` once they did. */
+  const setParamsOf = (tabId: TabId, next: IslandParams): string | null => {
+    const tab = allLeaves(treeRef.current).flatMap((leaf) => leaf.tabs).find((x) => x.id === tabId);
+    const type = tab ? typesRef.current.get(tab.content.type) : undefined;
+    const parsed = type ? type.options.parseParams(next) : null;
+    const refused = parsed ? applyRef.current((tr) => setTabParams(tr, tabId, parsed)).refused : null;
+    if (parsed && !refused) return null;
+    return !tab ? 'unknown tab' : !type ? 'unknown type' : !parsed ? 'params refused by parseParams' : refused;
+  };
+  const setParamsRef = useRef(setParamsOf);
+  setParamsRef.current = setParamsOf;
   const actions = useRef(new Map<TabId, TabActions>());
   const actionsOf = (tabId: TabId): TabActions => {
     let found = actions.current.get(tabId);
@@ -390,13 +411,10 @@ export function IslandWorkspaceView({
         // A change that cannot land says so: a silent no-op left a popup's
         // View button dead for weeks (TIM-0127).
         setParams: (next) => {
-          const tab = allLeaves(treeRef.current).flatMap((leaf) => leaf.tabs).find((x) => x.id === tabId);
-          const type = tab ? typesRef.current.get(tab.content.type) : undefined;
-          const parsed = type ? type.options.parseParams(next) : null;
-          const refused = parsed ? applyRef.current((tr) => setTabParams(tr, tabId, parsed)).refused : null;
-          if (parsed && !refused) return;
-          const why = !tab ? 'unknown tab' : !type ? 'unknown type' : !parsed ? 'params refused by parseParams' : refused;
-          console.warn('[islands] setParams not applied', { tabId, type: tab?.content.type, why, next });
+          const why = setParamsOf(tabId, next);
+          if (!why) return;
+          const type = allLeaves(treeRef.current).flatMap((leaf) => leaf.tabs).find((x) => x.id === tabId)?.content.type;
+          console.warn('[islands] setParams not applied', { tabId, type, why, next });
           toast.error(t('islands.paramsRefused'), { id: 'islands-params-refused' });
         },
         setTitle: (title) => setTitles((old) => {
@@ -503,10 +521,10 @@ export function IslandWorkspaceView({
   }, [types]);
 
   // --------------------------------------------------- announced to the app
-  const open = useCallback((content: IslandContent, edge: DropRegion | 'float', pinned = false): boolean => {
+  const open = useCallback((content: IslandContent, edge: DropRegion | 'float', pinned = false): TabId | null => {
     const resolved = resolve(content);
     const type = types.get(content.type);
-    if (!resolved || !type) return false;
+    if (!resolved || !type) return null;
     const { content: clean, options } = resolved;
     const current = treeRef.current;
     const inTree = (id: string | null) => !!id && !floatOf(current, id);
@@ -536,14 +554,14 @@ export function IslandWorkspaceView({
     }
     else if (edge === 'center' || edge === 'float' || narrow) result = apply((tr) => addTab(tr, target, clean, undefined, options));
     else result = apply((tr) => insertAt(tr, target, edge, clean, options));
-    if (result.refused) return false;
+    if (result.refused) return null;
     const targetLeaf = allLeaves(current).find((leaf) => leaf.id === (group?.id ?? target));
     const where = targetLeaf ? titleOf(targetLeaf.tabs.find((x) => x.id === targetLeaf.active) ?? targetLeaf.tabs[0]!) : '';
     setAnnouncement(t(group || edge === 'center' || narrow ? 'islands.announce.tab' : `islands.announce.${edge}`, {
       title: type.options.title,
       target: where,
     }));
-    return true;
+    return openedTab(result.tree, clean, options.existing);
   }, [resolve, types, narrow, apply, titleOf]);
 
   const openRef = useRef(open);
@@ -551,7 +569,9 @@ export function IslandWorkspaceView({
   const viewKeyRef = useRef(viewKey);
   viewKeyRef.current = viewKey;
   const handle = useMemo<IslandWorkspaceHandle>(() => ({
-    open: (content, edge, pinned) => openRef.current(content, edge, pinned),
+    open: (content, edge, pinned) => openRef.current(content, edge, pinned) !== null,
+    openTab: (content, edge, pinned) => openRef.current(content, edge, pinned),
+    setParams: (tabId, params) => setParamsRef.current(tabId, params) === null,
     activate: (tabId) => { apply((tr) => activateTab(tr, tabId)); },
     close: (tabId) => { closeRef.current(tabId); },
     openGrid: (grid, cells) => {
@@ -634,6 +654,21 @@ export function IslandWorkspaceView({
   const frameIsIsland = (className ?? '').split(/\s+/).includes('timon-island');
   const singleGlass = tree.root.kind === 'leaf' ? tree.root.glassScope ?? null : null;
   const routeBare = painted && !stacked && tree.root.kind === 'leaf' && tree.root.id === routeLeafId && tree.root.tabs.length === 1;
+  // No header is painted for the page (alone, or alone under popups): its Glass
+  // choice moves to the top bar's Appearance menu. Not before the arrangement
+  // is read: a write would be refused.
+  const pageGlassOffered = announce && tree.root.kind === 'leaf' && (!painted || routeBare);
+  useEffect(() => {
+    if (!pageGlassOffered) return undefined;
+    return publishPageGlass({
+      scope: singleGlass,
+      // The route's island of the tree it is handed, so a replay on a row
+      // another window rewrote still finds it (or is left alone).
+      set: (scope) => {
+        applyRef.current((tr) => setLeafGlassScope(tr, allLeaves(tr).find((leaf) => leaf.tabs.some((tab) => tab.content.type === HOST_ROUTE))?.id ?? '', scope));
+      },
+    });
+  }, [pageGlassOffered, singleGlass]);
   // Docked islands whose only tab asks to be the whole island (`bare`): no header painted.
   const bareLeaves = new Set(
     painted && !stacked
@@ -1050,6 +1085,8 @@ export function IslandWorkspaceView({
           onReorder={reorderStacked}
           islandOf={(tabId) => leaves.find((leaf) => leaf.tabs.some((x) => x.id === tabId))?.id}
           canDrag={!narrow}
+          glassOf={(leafId) => leaves.find((leaf) => leaf.id === leafId)?.glassScope ?? null}
+          onGlassScope={(leafId, scope) => { apply((tr) => setLeafGlassScope(tr, leafId, scope)); }}
         />
       </div>,
     );
@@ -1585,25 +1622,7 @@ function IslandHeader({
                 {t('islands.popup.minimize')}
               </DropdownMenuItem>
             )}
-            {glassOn && (
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger data-island-menu="glass">
-                  <Droplets className="size-4" aria-hidden />
-                  {t('islands.glass.menu')}
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuRadioGroup
-                    value={leaf.glassScope ?? 'follow'}
-                    onValueChange={(value) => { onGlassScope?.(readGlassScope(value)); }}
-                  >
-                    <DropdownMenuRadioItem value="follow" data-island-glass="follow">{t('islands.glass.follow')}</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="island" data-island-glass="island">{t('islands.glass.island')}</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="widgets" data-island-glass="widgets">{t('islands.glass.widgets')}</DropdownMenuRadioItem>
-                    {GLASS_TUNING_ENABLED && <DropdownMenuRadioItem value="both" data-island-glass="both">{t('islands.glass.both')}</DropdownMenuRadioItem>}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            )}
+            {glassOn && <IslandGlassSubmenu value={leaf.glassScope ?? null} onChange={(scope) => { onGlassScope?.(scope); }} />}
             {menuTab.content.type !== HOST_ROUTE && (
               <DropdownMenuItem data-island-menu="close" onSelect={() => onClose(menuTab.id)}>
                 <X className="size-4" aria-hidden />
@@ -1819,6 +1838,8 @@ function StackPicker({
   onReorder,
   islandOf,
   canDrag,
+  glassOf,
+  onGlassScope,
 }: {
   tabs: readonly IslandTab[];
   shown: TabId;
@@ -1834,6 +1855,10 @@ function StackPicker({
   islandOf: (tabId: TabId) => string | undefined;
   /** Too small but wide: a pointer that drags. Narrow: a touch screen, nothing is draggable (§10). */
   canDrag: boolean;
+  /** The glass an island chose; `null` follows the Appearance setting. */
+  glassOf: (leafId: string) => GlassScope | null;
+  /** Stacked, no island header offers its Glass menu: the tab's menu does, for the tab's island. */
+  onGlassScope: (leafId: string, scope: GlassScope | null) => void;
 }): ReactElement {
   const [menuTabId, setMenuTabId] = useState<TabId | null>(null);
   const [dragged, setDragged] = useState<TabId | null>(null);
@@ -1847,6 +1872,8 @@ function StackPicker({
   const menuDetach = menuTab ? detachOf(menuTab) : undefined;
   const earlier = menuTab ? step(menuTab, -1) : undefined;
   const later = menuTab ? step(menuTab, 1) : undefined;
+  const glassOn = useGlassScope() !== null;
+  const menuIsland = menuTab ? islandOf(menuTab.id) : undefined;
   return (
     <div
       role="tablist"
@@ -1954,6 +1981,7 @@ function StackPicker({
                 {t('islands.detach')}
               </DropdownMenuItem>
             )}
+            {glassOn && menuIsland && <IslandGlassSubmenu value={glassOf(menuIsland)} onChange={(scope) => { onGlassScope(menuIsland, scope); }} />}
             {menuTab.content.type !== HOST_ROUTE && (
               <DropdownMenuItem data-stack-menu-item="close" onSelect={() => onClose(menuTab.id)}>
                 <X className="size-4" aria-hidden />

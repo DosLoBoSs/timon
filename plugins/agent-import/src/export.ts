@@ -18,9 +18,9 @@ import {
   type AgentImportManifest, type ManifestAgent, type ManifestGroup, type ManifestMcpServer, type ManifestRoutine,
   type ManifestSkill,
 } from './manifest.js';
+import { EXPORT_SOURCE_APP, exportSourceRef } from './source-ref.js';
 
-/** The application an export says it comes from: the key of a re-import on the other side. */
-export const EXPORT_SOURCE_APP = 'timon';
+export { EXPORT_SOURCE_APP };
 /** What one manifest holds (`agents` of the schema). */
 export const EXPORT_MAX_AGENTS = 100;
 
@@ -59,7 +59,8 @@ const RULE_KINDS = new Set(['preference', 'decision', 'pitfall']);
 /**
  * A random id of this Timon, kept in the plugin's store: the `sourceRef` of
  * an exported agent names its instance, so two machines exporting a `coder`
- * each never update one another's copy on the importing side.
+ * each never update one another's copy on the importing side. The agent part
+ * of it is the stable id its daemon keeps across a rename (`source-ref.ts`).
  */
 async function instanceId(ctx: ExportContext): Promise<string> {
   const stored = await ctx.storage.kv.get(INSTANCE_KEY);
@@ -259,7 +260,7 @@ export async function buildExport(ctx: ExportContext, request: ExportRequest, no
         ...(def.cwd ? { cwd: def.cwd.slice(0, 4096) } : {}),
         ...(def.main ? { main: true } : {}),
       },
-      sourceRef: `timon:${instance}:${def.name.toLowerCase()}`.slice(0, 300),
+      sourceRef: exportSourceRef(instance, def),
     });
   }
 

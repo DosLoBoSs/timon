@@ -1,6 +1,5 @@
 {
   "agentChat": {
-    "title": "Agenten-Chat",
     "newCard": "Neuer Agenten-Chat",
     "newCardHint": "Wähle den Agenten, den diese Karte zeigt. Weitere Karten fügst du nach dem Erstellen über die Widget-Palette hinzu.",
     "newConversation": "Neue Unterhaltung",
@@ -37,7 +36,7 @@
       "makeMainDone": "{name} ist jetzt der Hauptorchestrator: Weck-Zusammenfassungen und Benachrichtigungen gehen an ihn",
       "makeMainFailed": "{name} konnte nicht als Hauptorchestrator festgelegt werden: {error}",
       "stopConfirm": "{name} wirklich stoppen? Laufende Missionen werden beendet, der Posteingang geleert, offene Aufgaben blockiert, Trigger und die Workflows, die ihn wecken würden, abgeschaltet.",
-      "stopped": "{name} gestoppt: {missions} Mission(en), {messages} Nachricht(en), {tasks} Aufgabe(n), {triggers} Trigger, {runs} Workflow-Läufe, {workflows} Workflow(s) neutralisiert",
+      "stopped": "{name} gestoppt: {missions, plural, one {# Mission} other {# Missionen}}, {messages, plural, one {# Nachricht} other {# Nachrichten}}, {tasks, plural, one {# Aufgabe} other {# Aufgaben}}, {triggers} Trigger, {runs, plural, one {# Workflow-Lauf} other {# Workflow-Läufe}}, {workflows, plural, one {# Workflow} other {# Workflows}} neutralisiert",
       "stopFailed": "{name} konnte nicht gestoppt werden: {error}",
       "duplicate": "Agenten duplizieren"
     },

@@ -22,6 +22,8 @@ export type Task = {
   started_at?: number | null;
   scheduled_at?: number | null;
   blocked_reason?: string | null;
+  /** JSON code of a reason the daemon wrote, translated on display (`daemonMessageText`). */
+  blocked_reason_code?: string | null;
   done_comment?: string | null;
   /** SYSTEM death cause of the mission (rate_limit | killed | timeout |
    *  crash), set by the orchestrator. Null = the task was not interrupted:

@@ -60,6 +60,13 @@ export type AcpDriverOptions = {
   /** Thinking level to select once the model is, or null/absent for the
    *  model's own default. */
   reasoningEffort?: string | null;
+  /**
+   * The agent's own session mode to select once the session opens, as the
+   * provider's table maps the mission's `permission_mode`
+   * (`AcpAgentSpec.sessionModes`). Selected only when the session announces it;
+   * null/absent = the session keeps the mode the agent opened it in.
+   */
+  sessionMode?: string | null;
   /** Session to reopen, or null for a fresh one. */
   resumeSession: string | null;
   /** MCP servers of the session, resolved lazily: building them reads the
@@ -173,6 +180,47 @@ export function modelConfigId(result: AcpRecord): string | null {
     if (r && (r.id === 'model' || r.category === 'model')) return str(r.id);
   }
   return null;
+}
+
+/** The session modes an agent announced, in either shape: `modes` (applied
+ *  through `session/set_mode`) or a `mode` config option. `null` = none. */
+export type AnnouncedModes = {
+  readonly current: string | null;
+  readonly ids: readonly string[];
+  /** `modes` listed them: `session/set_mode` is the way. */
+  readonly setMode: boolean;
+  /** Id of the `mode` config option, when the agent has one. */
+  readonly configId: string | null;
+};
+
+export function announcedModes(result: AcpRecord): AnnouncedModes | null {
+  const ids: string[] = [];
+  let current: string | null = null;
+  let setMode = false;
+  const modes = asRecord(result.modes);
+  if (modes && Array.isArray(modes.availableModes)) {
+    for (const m of modes.availableModes) {
+      const id = str(asRecord(m)?.id);
+      if (id) ids.push(id);
+    }
+    setMode = ids.length > 0;
+    current = str(modes.currentModeId);
+  }
+  let configId: string | null = null;
+  if (Array.isArray(result.configOptions)) {
+    for (const o of result.configOptions) {
+      const r = asRecord(o);
+      if (!r || !(r.category === 'mode' || r.id === 'mode')) continue;
+      const values = optionValues(r.options);
+      if (values.length === 0) continue;
+      configId = str(r.id);
+      ids.push(...values);
+      current ??= str(r.currentValue);
+      break;
+    }
+  }
+  if (ids.length === 0) return null;
+  return { current, ids: [...new Set(ids)], setMode, configId };
 }
 
 /** Normalized event a driver emits when the session does not run the model or
@@ -326,6 +374,9 @@ export class AcpSessionDriver implements SessionDriver {
       }
       this.sessionId = sessionId;
       this.options = result;
+      // Read before the model: a `set_config_option` reply replaces the options,
+      // and with them the `modes` the session opened with.
+      const mode = await this.applySessionMode(sessionId, announcedModes(result));
       const model = await this.applyModel(sessionId);
       const effort = await this.applyEffort(sessionId);
 
@@ -341,6 +392,7 @@ export class AcpSessionDriver implements SessionDriver {
           ...(model.active ? { model: model.active } : {}),
           ...(model.requested ? { requested_model: model.requested } : {}),
           ...(capabilities.permissionsByAgent ? { permissions_by_agent: true } : {}),
+          ...(mode !== null ? { session_mode: mode } : {}),
         },
       }]);
       if (model.refused !== null || effort.refused !== null) {
@@ -428,6 +480,44 @@ export class AcpSessionDriver implements SessionDriver {
     // than dying on a model id it does not know, and says so in the chat.
     console.warn(`[acp] ${this.opts.profileId}: model ${want} not applied (${refused})`);
     return { requested: want, active: before, refused };
+  }
+
+  /**
+   * Selects the session mode the provider mapped the mission's permission mode
+   * to, when the session announced it. Fail-closed: a mode the agent did not
+   * announce is never replaced by another one, and a refusal leaves the agent's
+   * own mode (it still asks through the card). Returns the mode the session
+   * runs, as far as it is known; null when the agent announced none.
+   */
+  private async applySessionMode(sessionId: string, announced: AnnouncedModes | null): Promise<string | null> {
+    if (!announced) return null;
+    const want = this.opts.sessionMode?.trim() || null;
+    if (!want || want === announced.current) return announced.current;
+    if (!announced.ids.includes(want)) {
+      console.warn(`[acp] ${this.opts.profileId}: session mode ${want} not announced by the agent, kept ${announced.current ?? 'its own'}`);
+      return announced.current;
+    }
+    let reason: string | null = null;
+    if (announced.setMode) {
+      try {
+        await this.transport.setMode(sessionId, want);
+        return want;
+      } catch (err) {
+        if (!(err instanceof AcpRpcError)) throw err;
+        reason = clip(err.message);
+      }
+    }
+    if (announced.configId !== null) {
+      try {
+        this.keepOptions(await this.transport.setConfigOption(sessionId, announced.configId, want));
+        return want;
+      } catch (err) {
+        if (!(err instanceof AcpRpcError)) throw err;
+        reason = clip(err.message);
+      }
+    }
+    console.warn(`[acp] ${this.opts.profileId}: session mode ${want} not applied (${reason ?? 'refused'})`);
+    return announced.current;
   }
 
   /** After the model: a level belongs to the model that declares it, and the

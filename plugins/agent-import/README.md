@@ -37,7 +37,7 @@ The import routes need a signed-in account allowed to create agents
 | Route | Body | Answer |
 |---|---|---|
 | `POST stage` | the zip itself, `Content-Type: application/zip` (or `application/x-zip-compressed`, `application/octet-stream`), 50 MiB at most | `201 { token, sha256, size, expiresAt }` |
-| `POST preview` | `{ "token": "…", "options"?: ImportOptions }` | `{ archive, preview, ready: true }`; `422 invalid_manifest` without a valid manifest |
+| `POST preview` | `{ "token": "…", "options"?: ImportOptions }` | `{ archive, preview, ready: true }`, `preview.projects` listing the projects an agent may be put on (`[{ slug, name }]`, empty when they cannot be read); `422 invalid_manifest` without a valid manifest |
 | `POST apply` | `{ "token": "…", "options"?: ImportOptions }` | spends the token, re-checks the SHA-256, then `{ agents, warnings }`, agent by agent |
 | `POST discard` | `{ "token": "…" }` | `{ discarded: true }` |
 | `GET hermes` | — | `{ found, label?, profiles: [{ name, displayName }] }`: the Hermes installation of the daemon's machine, never a path |

@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "일반",
     "aria": {
-      "embeddedBrowser": "내장 브라우저",
-      "resizePanel": "브라우저 패널 크기 조정",
-      "projectBrowser": "{project} 브라우저"
-    },
-    "actions": {
-      "collapse": "브라우저 접기",
-      "reload": "보기 새로 고침",
-      "openInTab": "브라우저 탭에서 열기",
-      "startProjectBrowser": "이 프로젝트의 브라우저 시작",
-      "stopProjectBrowser": "이 프로젝트의 브라우저 컨테이너 중지",
-      "start": "시작",
-      "stop": "중지",
-      "retry": "다시 시도",
-      "takeControl": "제어하기",
-      "watchOnly": "보기만"
-    },
-    "display": {
-      "desktop": "데스크톱 화면",
-      "adapted": "모바일 / 맞춤 화면",
-      "desktopTitle": "데스크톱 전체 보기 ({width}×{height}), 검은 배경 가운데 — 모바일로 전환",
-      "adaptedTitle": "패널에 맞춘 화면 (사이트의 모바일 버전) — 데스크톱으로 전환"
-    },
-    "viewer": {
-      "takeControl": "제어하기",
-      "watchOnly": "관전으로 전환",
-      "watchOnlyTitle": "관전 (읽기 전용) — 제어를 가져오면 현재 세션을 제어 중인 기기의 연결이 끊어집니다",
-      "controlTitle": "제어 중 — 다른 기기를 내보내지 않고 보려면 관전으로 전환하세요"
-    },
-    "pin": {
-      "attach": "패널 고정",
-      "detach": "패널 고정 해제",
-      "attachTitle": "고정 — 콘텐츠가 아래로 가려지지 않고 옆으로 이동합니다",
-      "detachTitle": "고정 해제 — 패널이 콘텐츠 위에 표시됩니다"
-    },
-    "empty": {
-      "noBrowser": "이 프로젝트에는 브라우저가 없습니다. 상단 바의 브라우저 버튼으로 시작할 수 있습니다."
-    },
-    "stream": {
-      "stalled": "스트림이 표시되지 않습니다. 다른 탭이나 기기가 제어를 가져갔을 수 있습니다. 서버는 제어 클라이언트를 하나만 받습니다."
-    },
-    "status": {
-      "stopped": "브라우저 중지됨",
-      "starting": "{project} 브라우저 시작 중…"
-    },
-    "errors": {
-      "streamUnavailable": "컨테이너는 실행 중이지만 스트림을 사용할 수 없습니다",
-      "startRejected": "시작이 거부됨 (HTTP {status})",
-      "startTimeout": "컨테이너가 제시간에 시작되지 않았습니다",
-      "unknown": "알 수 없는 오류"
+      "embeddedBrowser": "내장 브라우저"
     },
     "native": {
       "title": "브라우저",
@@ -156,8 +107,7 @@
       "needsControl": "녹화하려면 이 창에서 브라우저를 사용하세요. 다른 기기가 제어 중입니다",
       "recording": "녹화 중",
       "ended": "녹화 종료됨",
-      "stepsOne": "{count}단계",
-      "stepsMany": "{count}단계",
+      "steps": "{count}단계",
       "stop": "중지",
       "stopTitle": "녹화를 중지하고 단계 검토",
       "review": "검토",
@@ -205,10 +155,13 @@
         "newTab": "새 탭",
         "switchTab": "탭 전환",
         "closeTab": "탭 닫기",
-        "credential": "저장된 로그인"
+        "credential": "저장된 로그인",
+        "frame": "수동 단계: 삽입된 프레임 ({origin})"
       },
       "paramBadge": "매개변수: {name}",
       "flagged": "시크릿일 수 있음",
+      "frameUnknownOrigin": "수동 단계: 삽입된 프레임",
+      "frameNotice": "삽입된 프레임(결제 양식, 캡차, 로그인 창) 안에서 하는 작업은 Timon이 볼 수 없습니다. 학습된 스킬은 여기서 멈추고 이 부분을 직접 하도록 요청하므로, 화면 앞에 사람이 있어야 합니다.",
       "paramName": "매개변수 이름",
       "stepName": "단계 이름",
       "save": "저장",
@@ -268,7 +221,6 @@
       "card": {
         "label": "브라우저 주석 ({count})",
         "count": "주석 {count}개",
-        "countOne": "주석 1개",
         "details": "세부 정보",
         "enlarge": "주석 {n}의 캡처 확대",
         "source": "소스: {source}",
@@ -280,7 +232,6 @@
         }
       },
       "queue": "주석 {count}개",
-      "queueOne": "주석 1개",
       "history": "주석 기록",
       "sendQueue": "보내기",
       "sendQueueTitle": "이 대화에서 {agent}에게 보내기",

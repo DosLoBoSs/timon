@@ -43,7 +43,6 @@
       "unauthorized": "Zaloguj się, aby otworzyć terminal.",
       "pty_unavailable": "Ta maszyna nie może uruchomić terminala: nie udało się wczytać komponentu pseudoterminala. Sprawdź dziennik demona."
     },
-    "titleScoped": "Terminal — {scope}",
     "scopes": {
       "none": "Bez projektu",
       "label": "Projekty"

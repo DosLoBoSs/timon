@@ -1,0 +1,66 @@
+{
+  "eventsPage": {
+    "title": "Flux d'événements",
+    "clear": "effacer"
+  },
+  "kanbanPage": {
+    "paramsTip": {
+      "backend": "backend :",
+      "model": "modèle :",
+      "permission": "permissions :",
+      "skills": "skills :",
+      "mcp": "MCP :",
+      "tools": "outils :"
+    }
+  },
+  "pluginHost": {
+    "renderFailed": "Le plugin {id} n'a pas pu s'afficher."
+  },
+  "roles": {
+    "custom": "Personnalisés",
+    "idPlaceholder": "ex. designer",
+    "labelPlaceholder": "Designer"
+  },
+  "projectsForm": {
+    "workspacePlaceholder": "perso / clients / projets annexes…",
+    "speechPlaceholder": "Courte description du projet, contexte, objectif…"
+  },
+  "licensePage": {
+    "keyPlaceholder": "{key} ou {token}"
+  },
+  "browserPanel": {
+    "native": {
+      "backspace": "Retour arrière"
+    }
+  },
+  "pluginsPage": {
+    "galleryRole": "carrousel"
+  },
+  "dreamsPage": {
+    "heading": "Rêves"
+  },
+  "vault": {
+    "heading": "Vault"
+  },
+  "memoryPage": {
+    "scopeOf": "portée {scope}",
+    "kind": {
+      "decision": "décision",
+      "pitfall": "piège",
+      "preference": "préférence"
+    },
+    "kinds": {
+      "decision": "décisions",
+      "pitfall": "pièges",
+      "preference": "préférences"
+    }
+  },
+  "agentsGrid": {
+    "age": {
+      "seconds": "{n} s",
+      "minutes": "{n} min",
+      "hours": "{n} h",
+      "days": "{n} j"
+    }
+  }
+}

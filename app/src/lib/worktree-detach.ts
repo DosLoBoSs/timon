@@ -4,6 +4,8 @@
  * branch with its commits; the next dispatch reattaches to it.
  */
 
+import { apiErrorMessageOrNull } from '@/lib/api-error';
+
 /** A task that has a worktree and is not running in it. */
 export function canDetachWorktree(task: { status?: string | null; worktree_path?: string | null }): boolean {
   return !!task.worktree_path && (task.status === 'PENDING' || task.status === 'BLOCKED');
@@ -20,5 +22,5 @@ export async function detachTaskWorktree(id: string, fetchImpl: typeof fetch = f
   }
   if (res.ok) return { ok: true };
   const body = await res.json().catch(() => null) as { error?: unknown } | null;
-  return { ok: false, message: typeof body?.error === 'string' ? body.error : null };
+  return { ok: false, message: apiErrorMessageOrNull(body) };
 }

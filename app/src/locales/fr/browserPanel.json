@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "Général",
     "aria": {
-      "embeddedBrowser": "Navigateur intégré",
-      "resizePanel": "Redimensionner le panneau navigateur",
-      "projectBrowser": "Navigateur de {project}"
-    },
-    "actions": {
-      "collapse": "Replier le navigateur",
-      "reload": "Recharger la vue",
-      "openInTab": "Ouvrir dans un onglet du navigateur",
-      "startProjectBrowser": "Démarrer le navigateur de ce projet",
-      "stopProjectBrowser": "Arrêter le conteneur navigateur de ce projet",
-      "start": "Démarrer",
-      "stop": "Arrêter",
-      "retry": "Réessayer",
-      "takeControl": "Reprendre la main",
-      "watchOnly": "Passer spectateur"
-    },
-    "display": {
-      "desktop": "Affichage bureau",
-      "adapted": "Affichage mobile / adapté",
-      "desktopTitle": "Version bureau entière ({width}×{height}), centrée sur fond noir — passer en mobile",
-      "adaptedTitle": "Affichage mobile / adapté au panneau (version mobile des sites) — passer en bureau"
-    },
-    "viewer": {
-      "takeControl": "Reprendre le contrôle",
-      "watchOnly": "Passer en spectateur",
-      "watchOnlyTitle": "Spectateur (lecture seule) — reprendre le contrôle déconnectera l’appareil qui contrôle actuellement la session",
-      "controlTitle": "Contrôle — passer en spectateur pour regarder sans évincer un autre appareil"
-    },
-    "pin": {
-      "attach": "Épingler le panneau",
-      "detach": "Détacher le panneau",
-      "attachTitle": "Épingler — le contenu se décale au lieu de passer dessous",
-      "detachTitle": "Détacher — le panneau repasse au-dessus du contenu"
-    },
-    "empty": {
-      "noBrowser": "Aucun navigateur pour ce projet — le bouton Navigateur de la barre du haut en démarre un."
-    },
-    "stream": {
-      "stalled": "Le flux ne s’affiche pas. Un autre onglet ou appareil a peut-être pris la main — le serveur n’accepte qu’un seul client en contrôle."
-    },
-    "status": {
-      "stopped": "Navigateur arrêté",
-      "starting": "Démarrage du navigateur de {project}…"
-    },
-    "errors": {
-      "streamUnavailable": "Le conteneur tourne mais son flux ne répond pas",
-      "startRejected": "Démarrage refusé (HTTP {status})",
-      "startTimeout": "Le conteneur n’a pas démarré dans les temps",
-      "unknown": "Erreur inconnue"
+      "embeddedBrowser": "Navigateur intégré"
     },
     "native": {
       "title": "Navigateur",
@@ -142,7 +93,7 @@
       "chromeSigninOpenNow": "Chrome est ouvert sur l’ordinateur qui fait tourner Timon. Connectez-vous dedans, puis revenez ici et appuyez sur Terminé.",
       "chromeSigninDone": "Terminé, copier la connexion",
       "chromeSigninCancel": "Fermer sans copier",
-      "chromeSigninCopied": "Connecté : {count} cookie(s) copié(s) dans ce navigateur.",
+      "chromeSigninCopied": "Connecté : {count, plural, one {# cookie copié} other {# cookies copiés}} dans ce navigateur.",
       "chromeSigninNothing": "Chrome s’est fermé sans connexion à copier.",
       "chromeSigninKept": "Vous pouvez recommencer à tout moment : Chrome garde sa propre connexion.",
       "chromeSigninRejected": "Google refuse de vous connecter depuis ce navigateur. Connectez-vous plutôt avec Chrome : à la fin, Timon recopie la connexion ici et vous ramène sur la page.",
@@ -156,8 +107,7 @@
       "needsControl": "Utilisez le navigateur depuis cette fenêtre pour enregistrer : un autre appareil le tient",
       "recording": "Enregistrement",
       "ended": "Enregistrement terminé",
-      "stepsOne": "{count} étape",
-      "stepsMany": "{count} étapes",
+      "steps": "{count, plural, one {# étape} other {# étapes}}",
       "stop": "Arrêter",
       "stopTitle": "Arrêter l'enregistrement et relire les étapes",
       "review": "Relire",
@@ -176,11 +126,11 @@
       },
       "titleLabel": "Titre de l'enregistrement",
       "truncated": "L'enregistrement a atteint sa limite d'étapes : les dernières n'ont pas été gardées.",
-      "flaggedNotice": "{count} étape(s) peuvent contenir un secret (clé, jeton, numéro de carte). Masquez, gardez ou supprimez chacune avant Apprendre : rien n'est envoyé à un modèle avant.",
+      "flaggedNotice": "{count, plural, one {# étape peut} other {# étapes peuvent}} contenir un secret (clé, jeton, numéro de carte). Masquez, gardez ou supprimez chacune avant Apprendre : rien n'est envoyé à un modèle avant.",
       "stepsGone": "Les étapes de cet enregistrement ont été supprimées après l'apprentissage ; il en reste le skill.",
       "learn": "Apprendre",
       "learnHint": "Une mission transforme ces étapes en un skill qu'un agent peut rejouer.",
-      "learnBlockedFlagged": "Traitez d'abord les {count} étape(s) signalée(s).",
+      "learnBlockedFlagged": "Traitez d'abord {count, plural, one {l'étape signalée} other {les # étapes signalées}}.",
       "learnBlockedEmpty": "Cet enregistrement n'a aucune étape à apprendre.",
       "autoSubmit": "Laisser le skill valider la dernière étape sans demander",
       "autoSubmitHint": "Désactivé : le skill demande confirmation avant d'envoyer, de commander ou de publier quoi que ce soit.",
@@ -205,10 +155,13 @@
         "newTab": "Nouvel onglet",
         "switchTab": "Changer d'onglet",
         "closeTab": "Fermer l'onglet",
-        "credential": "Identifiant enregistré"
+        "credential": "Identifiant enregistré",
+        "frame": "Étape manuelle : cadre intégré ({origin})"
       },
       "paramBadge": "Paramètre : {name}",
       "flagged": "Secret possible",
+      "frameUnknownOrigin": "Étape manuelle : cadre intégré",
+      "frameNotice": "Timon ne voit pas ce que vous faites dans un cadre intégré (formulaire de paiement, captcha, fenêtre de connexion). Le skill appris s'arrêtera ici et vous demandera de faire cette partie vous-même : il a besoin de quelqu'un devant l'écran.",
       "paramName": "Nom du paramètre",
       "stepName": "Nom de l'étape",
       "save": "Enregistrer",
@@ -263,12 +216,11 @@
       "handedOff": "Ajoutées à votre prochain message à {agent}.",
       "sentNotDeposited": "Envoyées à {agent}, mais la zone de message est pleine : l'agent peut les lire avec browser_annotations_get.",
       "boxFull": "La zone de message de cette conversation est pleine : envoyez ou retirez d'abord ce qui y attend.",
-      "refused": "{count} pointé(s) non gardé(s) : la limite d'annotations est atteinte.",
+      "refused": "{count, plural, one {# pointé non gardé} other {# pointés non gardés}} : la limite d'annotations est atteinte.",
       "notFound": "Cet élément n'est plus sur la page.",
       "card": {
         "label": "Annotations du navigateur ({count})",
-        "count": "{count} annotations",
-        "countOne": "1 annotation",
+        "count": "{count, plural, one {# annotation} other {# annotations}}",
         "details": "Détails",
         "enlarge": "Agrandir la capture de l'annotation {n}",
         "source": "Source : {source}",
@@ -279,8 +231,7 @@
           "dismissed": "Écartée"
         }
       },
-      "queue": "{count} annotations",
-      "queueOne": "1 annotation",
+      "queue": "{count, plural, one {# annotation} other {# annotations}}",
       "history": "Historique des annotations",
       "sendQueue": "Envoyer",
       "sendQueueTitle": "Les envoyer à {agent}, dans cette conversation",

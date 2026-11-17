@@ -43,6 +43,17 @@ If activation is refused, check that you selected the intended installation and
 used the correct key. Follow the displayed message or contact support without
 sharing the key. See [Command-line interface](cli.md) for targeting an instance.
 
+## Renewal
+
+Once activated, Timon renews the licence in the background, a few minutes
+apart. A short loss of connection, or a restart, does not turn it off. When
+the network is not ready yet as Timon starts, it tries again three times, 30
+seconds, 1 minute and 2 minutes apart, before going back to its usual pace. If
+Timon starts with its licence not valid and cannot renew it, an alert in the
+Notification center gives the cause (network, or why the renewal was refused).
+When a renewal goes through, the modules the licence covers turn back on by
+themselves, without a restart.
+
 ## Activation endpoint for custom clients
 
 Use this endpoint on **your own daemon**, with an authenticated account allowed

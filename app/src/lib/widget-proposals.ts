@@ -15,19 +15,19 @@
 
 import { mergeWorkspaceWidgets } from '@/components/widget-host/widget-defaults';
 import {
-  deplacerWidget,
-  orphelins,
-  reordonnerRail,
-  retirerWidget,
-  verserZone,
-  widgetsDuRail,
-  type ContraintesWidget,
+  moveWidget,
+  orphanPlacements,
+  reorderZone,
+  removeWidget,
+  pourZone,
+  widgetsOfZone,
+  type WidgetConstraints,
   type WidgetLayout,
 } from '@/components/widget-host/widget-layout';
-import type { EntreeCatalogue } from '@/components/widget-host/widget-catalog';
-import { lireColonnes, type ChatColumns } from '@/components/chat/chat-columns';
+import type { CatalogEntry } from '@/components/widget-host/widget-catalog';
+import { readColumns, type ChatColumns } from '@/components/chat/chat-columns';
 
-/** The chat's two columns (`COLONNES` in `chat-rails.tsx`). */
+/** The chat's two columns (`COLUMNS` in `chat-rails.tsx`). */
 export const CHAT_COLUMN_ZONES = ['chat.left.widget', 'chat.right.widget'] as const;
 /** The product views whose starters the browser publishes. */
 export const PRODUCT_VIEWS = ['/', '/agents', '/chat'] as const;
@@ -125,7 +125,7 @@ export function applyWidgetsProposal(input: {
   proposal: WidgetsProposal;
   widgetsRaw: unknown;
   columnsRaw: unknown;
-  constraints: readonly ContraintesWidget[];
+  constraints: readonly WidgetConstraints[];
   /** Suffix of the n-th new tab: `Date.now().toString(36)` + n, never reused. */
   suffix: (n: number) => string;
 }): AppliedWidgets {
@@ -139,7 +139,7 @@ export function applyWidgetsProposal(input: {
   const closed: Array<{ tab: string; column: string }> = [];
   if (proposal.columns && proposal.view === '/chat') {
     const p = proposal.columns;
-    const current = lireColonnes(input.columnsRaw, CHAT_COLUMN_ZONES);
+    const current = readColumns(input.columnsRaw, CHAT_COLUMN_ZONES);
     const onglets: Record<string, string[]> = { ...current.onglets };
     for (const [column, list] of Object.entries(p.tabs ?? {})) {
       const wanted = list.map(zoneOf);
@@ -158,8 +158,8 @@ export function applyWidgetsProposal(input: {
     };
     const actifs = merge(current.actifs, Object.fromEntries(Object.entries(p.active ?? {}).map(([c, ref]) => [c, zoneOf(ref) === c ? null : zoneOf(ref)])));
     const secondes = merge(current.secondes, Object.fromEntries(Object.entries(p.second ?? {}).map(([c, ref]) => [c, ref === null ? null : zoneOf(ref)])));
-    // `lireColonnes` normalises: unknown zones, foreign tabs and stale actives drop out.
-    columns = lireColonnes({
+    // `readColumns` normalises: unknown zones, foreign tabs and stale actives drop out.
+    columns = readColumns({
       ...current,
       ordre: p.order ?? current.ordre,
       masquees: p.hidden ?? current.masquees,
@@ -173,29 +173,29 @@ export function applyWidgetsProposal(input: {
 
   let layout: WidgetLayout[] = mergeWorkspaceWidgets(input.widgetsRaw, constraints, proposal.view);
   const known = new Set(layout.map((w) => w.id));
-  for (const { tab, column } of closed) layout = verserZone(layout, tab, column);
+  for (const { tab, column } of closed) layout = pourZone(layout, tab, column);
 
   const zones = Object.entries(proposal.zones ?? {}).map(([ref, ids]) => ({ zone: zoneOf(ref), ids }));
   const listed = new Set(zones.flatMap((z) => z.ids));
   const missing = [...new Set([...listed, ...(proposal.remove ?? [])])].filter((id) => !known.has(id));
 
-  for (const id of proposal.remove ?? []) layout = retirerWidget(layout, id);
+  for (const id of proposal.remove ?? []) layout = removeWidget(layout, id);
   for (const { zone } of zones) {
-    for (const w of widgetsDuRail(layout, zone)) if (!listed.has(w.id)) layout = retirerWidget(layout, w.id);
+    for (const w of widgetsOfZone(layout, zone)) if (!listed.has(w.id)) layout = removeWidget(layout, w.id);
   }
   for (const { zone, ids } of zones) {
     for (const id of ids) {
       const entry = layout.find((w) => w.id === id);
-      if (entry && (entry.removed || entry.rail !== zone)) layout = deplacerWidget(layout, id, zone, null);
+      if (entry && (entry.removed || entry.rail !== zone)) layout = moveWidget(layout, id, zone, null);
     }
   }
   for (const { zone, ids } of zones) {
-    const present = widgetsDuRail(layout, zone).map((w) => w.id);
+    const present = widgetsOfZone(layout, zone).map((w) => w.id);
     const order = [...ids.filter((id) => present.includes(id)), ...present.filter((id) => !ids.includes(id))];
-    layout = reordonnerRail(layout, zone, order);
+    layout = reorderZone(layout, zone, order);
   }
 
-  return { widgets: [...layout, ...orphelins(input.widgetsRaw, constraints)], columns, missing };
+  return { widgets: [...layout, ...orphanPlacements(input.widgetsRaw, constraints)], columns, missing };
 }
 
 // ── catalog snapshot ────────────────────────────────────────────────────────
@@ -220,7 +220,7 @@ const clip = (s: string, max: number) => s.replace(/[\u0000-\u001f\u007f-\u009f\
  * at every load and could never be proposed.
  */
 export function buildWidgetSnapshot(input: {
-  entries: readonly EntreeCatalogue[];
+  entries: readonly CatalogEntry[];
   visible: (id: string) => boolean;
   view: string | null;
   zones: readonly SnapshotZone[];
@@ -249,12 +249,12 @@ export function buildWidgetSnapshot(input: {
   return {
     catalog: entries.map((e) => ({
       id: e.id.slice(0, 200),
-      title: clip(e.titre, 120),
+      title: clip(e.title, 120),
       ...(e.pluginId ? { pluginId: e.pluginId } : {}),
       slots: e.slots.slice(0, 8).map((s) => s.slice(0, 96)),
       ...(e.bar ? { bar: true } : {}),
       ...(e.description ? { description: clip(e.description, 300) } : {}),
-      ...(e.placedByDefault && zoneId.test(e.railDefaut) ? { placedByDefault: true as const, zone: e.railDefaut } : {}),
+      ...(e.placedByDefault && zoneId.test(e.defaultZone) ? { placedByDefault: true as const, zone: e.defaultZone } : {}),
     })),
     defaults,
     ...(view ? { view } : {}),

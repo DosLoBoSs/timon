@@ -38,7 +38,6 @@
       "dependencies": "Afhankelijkheden",
       "capabilities": "Mogelijkheden"
     },
-    "type": "Type",
     "priority": {
       "label": "Prioriteit",
       "urgent": "Dringend",
@@ -87,7 +86,6 @@
     "modelInherit": "Projectrol",
     "modelInheritHint": "De rol van het project voor dit taaktype beslist, anders de agent",
     "modelInherited": "{model} (overgenomen)",
-    "modelHelp": "« Projectrol » voert de taak uit met wat de rol van het project voor dit type, anders de agent, bepaalt.",
     "worktreeBlocked": "Deze backend werkt buiten de map van Timon: een code- of mergetaak die eraan is toegewezen, wordt geblokkeerd.",
     "fallback": {
       "short": "Reserve",
@@ -112,7 +110,7 @@
     },
     "deps": {
       "filter": "Taken filteren…",
-      "count": "{selected} geselecteerd · {count} kandidaten",
+      "count": "{selected} geselecteerd · {count, plural, one {# kandidaat} other {# kandidaten}}",
       "none": "Geen geschikte taak.",
       "noMatch": "Geen taak gevonden."
     },
@@ -138,13 +136,11 @@
     },
     "summary": {
       "label": "Overzicht",
-      "model": "Model",
       "type": "Type",
       "priority": "Prioriteit",
       "deps": "Afhankelijkheden",
       "depsNone": "Geen",
       "depsCount": "{count} eerst af te ronden",
-      "start": "Start",
       "startAsap": "Zo snel mogelijk",
       "status": "Status",
       "attachments": "Bestanden",
@@ -216,8 +212,7 @@
         "general": "Algemene instellingen — gelden voor elke groep die niets instelt",
         "other": "Andere werkstromen",
         "inherits": "neemt de algemene instellingen over",
-        "countOne": "{count} werkstroom",
-        "countMany": "{count} werkstromen",
+        "count": "{count, plural, one {# werkstroom} other {# werkstromen}}",
         "inheritGeneral": "{value} (algemene instelling)",
         "fallbackSummary": "reserve {value}",
         "noRolesInMode": "Deze modus maakt geen taak aan: geen model per groep te kiezen.",

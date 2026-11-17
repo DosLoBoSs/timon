@@ -129,6 +129,7 @@ export function TestDialog({ trigger, onClose }: { trigger: TriggerPublic; onClo
                 id="trigger-test-payload" rows={8} value={payload} onChange={(e) => setPayload(e.target.value)}
                 // code-font: a JSON payload
                 className={cn(INPUT, 'font-mono text-xs')} spellCheck={false}
+                // i18n-exempt: sample JSON payload
                 placeholder={'{\n  "action": "opened",\n  "issue": { "title": "Crash on start" }\n}'}
               />
             </div>
@@ -138,6 +139,7 @@ export function TestDialog({ trigger, onClose }: { trigger: TriggerPublic; onClo
                 <textarea
                   id="trigger-test-headers" rows={2} value={headers} onChange={(e) => setHeaders(e.target.value)}
                   // code-font: JSON headers
+                  // i18n-exempt: sample JSON headers
                   className={cn(INPUT, 'font-mono text-xs')} spellCheck={false} placeholder={'{ "X-GitHub-Event": "issues" }'}
                 />
               </div>

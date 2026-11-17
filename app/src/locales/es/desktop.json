@@ -49,6 +49,8 @@
       "giveUp": "{url} no respondió en {seconds} s.",
       "uiMissing": "La interfaz no se inició.",
       "uiMissingDetail": "{giveUp}\n\nPuede que el daemon esté funcionando sin su aplicación web: cierra Timon y vuelve a abrirlo. Si persiste, copia el diagnóstico y envíalo a soporte.",
+      "daemonDown": "El servicio en segundo plano no se está ejecutando.",
+      "daemonDownDetail": "Nada responde en {origin}{retried, select, yes {, ni siquiera después de que Timon lo reiniciara} other {}}. Sus registros están en {logs}. Si persiste, copia el diagnóstico y envíalo a soporte.",
       "crashing": "El daemon se bloquea una y otra vez.",
       "crashingDetail": "{why}\n\nEl daemon incluido no pudo iniciarse. Tus datos siguen en {home}.",
       "slow": "El daemon no respondió a tiempo.",

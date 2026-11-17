@@ -88,7 +88,7 @@ export function SettingsSearchResultsView({
   const count = results.tabs.length + results.rows.length;
   return (
     <div>
-      <p role="status" className="sr-only">{t(count === 1 ? 'settingsSearch.countOne' : 'settingsSearch.countOther', { count })}</p>
+      <p role="status" className="sr-only">{t('settingsSearch.count', { count })}</p>
       {count === 0 && (
         <p className="py-6 text-[13px] text-muted-foreground">{t('settingsSearch.empty', { query: query.trim() })}</p>
       )}

@@ -284,7 +284,7 @@ test('the tile shows its 📎 and its number of files, in the card\'s meta and a
   try {
     await renderTile(m, 'card', { ...IDEA, attachment_count: 3 });
     assert.equal($('[data-board-card-meta] [data-todo-attachments]')?.textContent, '3');
-    assert.equal($('[data-todo-attachments]')?.getAttribute('aria-label'), '3 attachment(s)');
+    assert.equal($('[data-todo-attachments]')?.getAttribute('aria-label'), '3 attachments');
     await renderTile(m, 'row', { ...IDEA, attachment_count: 2 });
     assert.equal($('[data-density="row"] [data-todo-attachments]')?.textContent, '2');
     await renderTile(m, 'card', { ...IDEA, attachment_count: 0 });

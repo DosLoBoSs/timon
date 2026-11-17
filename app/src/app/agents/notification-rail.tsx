@@ -37,6 +37,7 @@ type Notification = {
   /** Agent that raised it; null = Timon itself. */
   agent?: string | null;
   presentation?: SystemNotificationPresentation;
+  message_code?: string | null;
 };
 
 type Counts = Record<NotificationType, number>;

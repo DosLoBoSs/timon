@@ -5,7 +5,8 @@
  * The daemon draws the code and keeps only a salted SHA-256 of it. That is
  * hygiene, not a barrier: a million candidates fall to any hash in a blink, so
  * whoever reads this process's memory reads the code. What actually protects a
- * code is that it lives 10 minutes, dies after 5 wrong guesses, and works once.
+ * code is that it lives 10 minutes, dies after 5 wrong guesses, and works once;
+ * a challenge, resends included, takes 10 wrong guesses at most.
  *
  * In memory on purpose, like the login throttle: the daemon is one process,
  * the window is minutes, and a restart only costs the user a new code. A table
@@ -18,6 +19,11 @@ export type EmailCodePurpose = 'verify' | 'reset';
 
 export const EMAIL_CODE_TTL_MS = 10 * 60 * 1000;
 export const EMAIL_CODE_MAX_ATTEMPTS = 5;
+/** Wrong guesses one challenge takes over all its codes. A resend gives the
+ *  new code a fresh `EMAIL_CODE_MAX_ATTEMPTS`, for a reader who mistyped; this
+ *  stops five resends from adding up to 25 guesses. Past it the reader starts
+ *  over, which goes through the origin quota and the failure throttle. */
+export const EMAIL_CODE_MAX_TOTAL_ATTEMPTS = 10;
 export const EMAIL_CODE_RESEND_MS = 60 * 1000;
 /** Mails one challenge may cause, first one included: the relay allows about
  *  five per address in 15 minutes, past that the user starts over anyway. */
@@ -56,7 +62,10 @@ type Challenge = {
   expiresAt: number;
   lastSentAt: number;
   sends: number;
+  /** Wrong guesses on the current code. */
   attempts: number;
+  /** Wrong guesses on every code of the challenge: a resend does not reset it. */
+  totalAttempts: number;
   consumed: boolean;
 };
 
@@ -187,6 +196,7 @@ export class EmailCodeStore {
       lastSentAt: now,
       sends: 1,
       attempts: 0,
+      totalAttempts: 0,
       consumed: false,
     };
     this.challenges.set(id, challenge);
@@ -204,7 +214,11 @@ export class EmailCodeStore {
     if (!challenge) return { ok: false, reason: 'expired' };
     const wait = challenge.lastSentAt + EMAIL_CODE_RESEND_MS - now;
     if (wait > 0) return { ok: false, reason: 'too_soon', retryAfterMs: wait };
-    if (challenge.sends >= EMAIL_CODE_MAX_SENDS) return { ok: false, reason: 'send_limit' };
+    // Out of guesses for good: a new code would be refused anyway, so no mail
+    // goes out and the reader is sent back to a new request.
+    if (challenge.sends >= EMAIL_CODE_MAX_SENDS || challenge.totalAttempts >= EMAIL_CODE_MAX_TOTAL_ATTEMPTS) {
+      return { ok: false, reason: 'send_limit' };
+    }
     const limited = this.originLimited(origin, now);
     if (limited) return limited;
     this.noteRequest(origin, now);
@@ -223,7 +237,8 @@ export class EmailCodeStore {
       userId: challenge.userId,
       commit: () => {
         // A fresh code is a fresh secret: the old one stops working and the
-        // guesses spent on it do not count against the new one.
+        // guesses spent on it do not count against the new one, only against
+        // the challenge (`totalAttempts`).
         challenge.salt = salt;
         challenge.hash = digest(salt, code);
         challenge.expiresAt = expiresAt;
@@ -235,8 +250,8 @@ export class EmailCodeStore {
   }
 
   /**
-   * Tests a code. A wrong one costs an attempt; the fifth wrong one burns the
-   * challenge. A right one does NOT consume it: the caller does, once the
+   * Tests a code. A wrong one costs an attempt; the fifth wrong one on a code,
+   * or the tenth on the challenge, burns it. A right one does NOT consume it: the caller does, once the
    * account change it guards has happened, so a later failure (licence refused,
    * storage error) does not cost the user a code.
    */
@@ -244,14 +259,20 @@ export class EmailCodeStore {
     const now = this.now();
     const challenge = this.live(id, purpose, now);
     if (!challenge) return { ok: false, reason: 'expired' };
-    if (challenge.attempts >= EMAIL_CODE_MAX_ATTEMPTS) return { ok: false, reason: 'exhausted' };
+    if (challenge.attempts >= EMAIL_CODE_MAX_ATTEMPTS || challenge.totalAttempts >= EMAIL_CODE_MAX_TOTAL_ATTEMPTS) {
+      return { ok: false, reason: 'exhausted' };
+    }
     const submitted = typeof code === 'string' ? code.trim() : '';
     const matches = /^\d{6}$/.test(submitted)
       && timingSafeEqual(digest(challenge.salt, submitted), challenge.hash)
       && (email === undefined || email === challenge.email);
     if (!matches) {
       challenge.attempts += 1;
-      const attemptsLeft = EMAIL_CODE_MAX_ATTEMPTS - challenge.attempts;
+      challenge.totalAttempts += 1;
+      const attemptsLeft = Math.min(
+        EMAIL_CODE_MAX_ATTEMPTS - challenge.attempts,
+        EMAIL_CODE_MAX_TOTAL_ATTEMPTS - challenge.totalAttempts,
+      );
       return attemptsLeft > 0 ? { ok: false, reason: 'invalid', attemptsLeft } : { ok: false, reason: 'exhausted' };
     }
     return { ok: true, id: challenge.id, email: challenge.email, userId: challenge.userId };

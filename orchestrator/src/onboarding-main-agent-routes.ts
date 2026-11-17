@@ -5,7 +5,7 @@
  *  - the wizard's browser (a superadmin SESSION): name, start the chat (or
  *    find the one already open, from the TIMs page), answer the picture card;
  *  - the main agent's mission (its own api-token): soul, picture request,
- *    teammates, finish. These refuse unless the mission IS the setup conversation and the
+ *    teammates, another TIM, finish. These refuse unless the mission IS the setup conversation and the
  *    step is still pending.
  */
 import type { Request, Response, Router } from 'express';
@@ -24,6 +24,7 @@ import {
 import { answerAvatarRequest, requestAvatar, setupChatMission, startSetupChat } from './onboarding-main-agent-chat.js';
 import { onboardingStep } from './onboarding-events.js';
 import { recruitSetupTeam } from './onboarding-setup-team.js';
+import { createSetupTim } from './onboarding-setup-tim.js';
 import { apiError } from './api-error.js';
 
 // The picture is chosen with the name, on the same form.
@@ -39,6 +40,11 @@ const SoulBody = z.object({
 }).strict();
 
 const TeamBody = z.object({ coder: z.string().min(1).max(48), reviewer: z.string().min(1).max(48) }).strict();
+const TimBody = z.object({
+  name: z.string().min(1).max(48),
+  role: z.string().min(1).max(32),
+  job: z.string().max(300).optional(),
+}).strict();
 const FinishBody = z.object({ tour: z.boolean().optional() }).strict();
 
 const status = (error: unknown): number => (error instanceof MainAgentSetupError ? 409 : 500);
@@ -158,6 +164,21 @@ export function registerSetupChatRoutes(app: Router): void {
       const team = recruitSetupTeam(body.data);
       auditRequest(req, 'setup.main-agent.team', mission.missionId);
       res.status(201).json({ ok: true, team });
+    } catch (error) {
+      res.status(status(error)).json({ error: code(error) });
+    }
+  });
+
+  // Auth: the setup conversation's own api-token only (`setupMission`); a browser, another mission, anonymous: refused.
+  app.post('/api/setup/agent/tim', (req, res) => {
+    const mission = setupMission(req, res);
+    if (!mission) return;
+    const body = TimBody.safeParse(req.body);
+    if (!body.success) { res.status(400).json(apiError('invalid_request', 'invalid_request')); return; }
+    try {
+      const tim = createSetupTim(body.data);
+      if (tim.created) auditRequest(req, 'setup.main-agent.tim', mission.missionId);
+      res.status(tim.created ? 201 : 200).json({ ok: true, tim });
     } catch (error) {
       res.status(status(error)).json({ error: code(error) });
     }

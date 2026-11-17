@@ -8,13 +8,14 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { removeHomeOnExit } from '../tests/helpers/test-home.js';
 
 const TMP_HOME = mkdtempSync(join(tmpdir(), 'timon-mcp-serialize-'));
 process.env.TIMON_HOME = TMP_HOME;
-process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
+removeHomeOnExit(TMP_HOME);
 
 const { upsertMcp, buildMcpConfig, buildCodexMcpToml, buildGrokMcpToml } = await import('./mcp.js');
 
@@ -24,14 +25,11 @@ upsertMcp({
   transport: { type: 'stdio', command: 'node', args: ['srv.mjs', '--flag'], env: { TOKEN: 'a"b', 'odd.key': 'v' } },
 });
 upsertMcp({ id: 'bare', name: 'has space', transport: { type: 'stdio', command: 'bare-cmd' } });
+upsertMcp({ id: 'web', name: 'web', transport: { type: 'http', url: 'https://mcp.example.test/v1' } });
 upsertMcp({
-  id: 'web',
-  name: 'web',
-  transport: {
-    type: 'http',
-    url: 'https://mcp.example.test/v1',
-    headers: { 'X-Key': 'k' },
-  },
+  id: 'keyed',
+  name: 'keyed',
+  transport: { type: 'http', url: 'https://keyed.example.test/v1', headers: { 'X-Key': 'keyed-header-value' } },
 });
 upsertMcp({
   id: 'connected',
@@ -49,14 +47,15 @@ upsertMcp({
   },
 });
 
-const IDS = ['plain', 'bare', 'web', 'does-not-exist'];
+// `keyed` carries a key: with no mission to bind the relay to, it is left out of all three.
+const IDS = ['plain', 'bare', 'web', 'keyed', 'does-not-exist'];
 
 test('claude and copilot: --mcp-config JSON', async () => {
   assert.equal(await buildMcpConfig(IDS), JSON.stringify({
     mcpServers: {
       plain: { command: 'node', args: ['srv.mjs', '--flag'], env: { TOKEN: 'a"b', 'odd.key': 'v' } },
       bare: { command: 'bare-cmd', args: [], env: {} },
-      web: { type: 'http', url: 'https://mcp.example.test/v1', headers: { 'X-Key': 'k' } },
+      web: { type: 'http', url: 'https://mcp.example.test/v1' },
     },
   }));
   assert.equal(await buildMcpConfig([]), null);
@@ -87,7 +86,6 @@ test('codex: config.toml blocks, approval mode before any sub-table', async () =
     '[mcp_servers.web]',
     'url = "https://mcp.example.test/v1"',
     'default_tools_approval_mode = "approve"',
-    'http_headers = { "X-Key" = "k" }',
     '',
   ].join('\n'));
 });
@@ -112,31 +110,60 @@ test('grok: enabled flag, headers in a sub-table, no approval key', async () => 
     'url = "https://mcp.example.test/v1"',
     'enabled = true',
     '',
-    '[mcp_servers.web.headers]',
-    'X-Key = "k"',
-    '',
   ].join('\n'));
   assert.equal(await buildGrokMcpToml([]), null);
 });
 
-test('an OAuth server reaches a CLI only as the relay: neither its bearer nor its stored headers', async () => {
+test('the headers of an http entry, pinned in the three formats (what the relay token travels in)', async () => {
+  const { serializeCodexMcpToml, serializeGrokMcpToml, serializeMcpJson } = await import('./backends/mcp-serialize.js');
+  const list = [{ type: 'http', name: 'web', url: 'https://mcp.example.test/v1', headers: { 'X-Key': 'k' } }] as const;
+  assert.equal(serializeMcpJson(list), JSON.stringify({
+    mcpServers: { web: { type: 'http', url: 'https://mcp.example.test/v1', headers: { 'X-Key': 'k' } } },
+  }));
+  assert.equal(serializeCodexMcpToml(list), [
+    '[mcp_servers.web]',
+    'url = "https://mcp.example.test/v1"',
+    'default_tools_approval_mode = "approve"',
+    'http_headers = { "X-Key" = "k" }',
+    '',
+  ].join('\n'));
+  assert.equal(serializeGrokMcpToml(list), [
+    '[mcp_servers.web]',
+    'url = "https://mcp.example.test/v1"',
+    'enabled = true',
+    '',
+    '[mcp_servers.web.headers]',
+    'X-Key = "k"',
+    '',
+  ].join('\n'));
+});
+
+test('an OAuth or keyed server reaches a CLI only as the relay: neither its bearer nor its stored headers', async () => {
   const { resolveLaunchServers } = await import('./mcp.js');
-  // No mission to bind a relay token to: the server is left out, not handed over with its bearer.
-  assert.equal(await buildMcpConfig(['connected']), null);
-  assert.equal(await buildCodexMcpToml(['connected']), null);
+  // No mission to bind a relay token to: the server is left out, not handed over with its bearer or key.
+  for (const id of ['connected', 'keyed']) {
+    assert.equal(await buildMcpConfig([id]), null, id);
+    assert.equal(await buildCodexMcpToml([id]), null, id);
+    assert.equal(await buildGrokMcpToml([id]), null, id);
+  }
   const seen: Array<{ id: string; url: string }> = [];
-  const launched = await resolveLaunchServers(['connected', 'web'], (server) => {
+  const launched = await resolveLaunchServers(['connected', 'keyed', 'web'], (server) => {
     seen.push(server);
-    return { url: 'http://127.0.0.1:3001/mcp-relay/r/agent', headers: { 'x-timon-mcp-relay': 'relay-token' } };
+    return { url: `http://127.0.0.1:3001/mcp-relay/${server.id}/agent`, headers: { 'x-timon-mcp-relay': 'relay-token' } };
   });
-  assert.deepEqual(seen, [{ id: 'connected', url: 'https://oauth.example.test/mcp' }]);
-  assert.deepEqual(launched[0], {
-    type: 'http', name: 'connected', url: 'http://127.0.0.1:3001/mcp-relay/r/agent', headers: { 'x-timon-mcp-relay': 'relay-token' },
-  });
+  assert.deepEqual(seen, [
+    { id: 'connected', url: 'https://oauth.example.test/mcp' },
+    { id: 'keyed', url: 'https://keyed.example.test/v1' },
+  ], 'a server with no credential is not relayed');
+  assert.deepEqual(launched, [
+    { type: 'http', name: 'connected', url: 'http://127.0.0.1:3001/mcp-relay/connected/agent', headers: { 'x-timon-mcp-relay': 'relay-token' } },
+    { type: 'http', name: 'keyed', url: 'http://127.0.0.1:3001/mcp-relay/keyed/agent', headers: { 'x-timon-mcp-relay': 'relay-token' } },
+    { type: 'http', name: 'web', url: 'https://mcp.example.test/v1', headers: {} },
+  ]);
   const { serializeCodexMcpToml, serializeGrokMcpToml, serializeMcpJson } = await import('./backends/mcp-serialize.js');
   for (const text of [serializeMcpJson(launched), serializeCodexMcpToml(launched), serializeGrokMcpToml(launched)]) {
-    assert.ok(text && !text.includes('oauth-access-token-value') && !text.includes('stored-header-value'));
-    assert.ok(!text.includes('oauth.example.test'));
+    assert.ok(text && !text.includes('oauth-access-token-value') && !text.includes('stored-header-value') && !text.includes('keyed-header-value'));
+    assert.ok(!text.includes('oauth.example.test') && !text.includes('keyed.example.test'));
   }
 });
 

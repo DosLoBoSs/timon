@@ -273,6 +273,14 @@ export type BusEvent =
   | { kind: 'browser_annotation'; event: BrowserAnnotationEventName; profileId: string; annotationId: string;
       ownerUserId: string | null; annotation: BrowserAnnotationMetadata; reason?: string; origin: ProjectEventOrigin }
   | { kind: 'backends_changed' }
+  /**
+   * An actor actually moved to its fallback backend (`backend-fallback.ts`): a
+   * spawn redirected off a sidelined backend, or a series' pilot or task type
+   * switched over. Raw backend ids, account instances included (`claude@<id>`),
+   * so a listener that sends them anywhere maps them first. No `missionId`:
+   * the browser stream never relays it.
+   */
+  | { kind: 'backend_fallback'; fromBackend: string | null; toBackend: string }
   | { kind: 'license_changed'; status: 'valid' | 'unlicensed'; reason: string | null; offlineSince: string | null }
   /**
    * `@timon/updates` verified a signed manifest that offers a newer version

@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "Ogólny",
     "aria": {
-      "embeddedBrowser": "Wbudowana przeglądarka",
-      "resizePanel": "Zmień rozmiar panelu przeglądarki",
-      "projectBrowser": "Przeglądarka dla {project}"
-    },
-    "actions": {
-      "collapse": "Zwiń przeglądarkę",
-      "reload": "Odśwież widok",
-      "openInTab": "Otwórz w karcie przeglądarki",
-      "startProjectBrowser": "Uruchom przeglądarkę tego projektu",
-      "stopProjectBrowser": "Zatrzymaj kontener przeglądarki tego projektu",
-      "start": "Uruchom",
-      "stop": "Zatrzymaj",
-      "retry": "Ponów",
-      "takeControl": "Przejmij kontrolę",
-      "watchOnly": "Tylko podgląd"
-    },
-    "display": {
-      "desktop": "Widok desktopowy",
-      "adapted": "Widok mobilny / dopasowany",
-      "desktopTitle": "Pełny widok desktopowy ({width}×{height}), wyśrodkowany na czarnym tle — przełącz na mobilny",
-      "adaptedTitle": "Widok dopasowany do panelu (mobilne wersje stron) — przełącz na desktopowy"
-    },
-    "viewer": {
-      "takeControl": "Przejmij kontrolę",
-      "watchOnly": "Przełącz na tryb widza",
-      "watchOnlyTitle": "Widz (tylko odczyt) — przejęcie kontroli rozłączy urządzenie, które obecnie steruje sesją",
-      "controlTitle": "Sterowanie — przełącz na tryb widza, by oglądać bez wypychania innego urządzenia"
-    },
-    "pin": {
-      "attach": "Przypnij panel",
-      "detach": "Odepnij panel",
-      "attachTitle": "Przypnij — treść przesuwa się na bok zamiast znikać pod panelem",
-      "detachTitle": "Odepnij — panel nakłada się na treść"
-    },
-    "empty": {
-      "noBrowser": "Brak przeglądarki dla tego projektu — uruchomisz ją przyciskiem Przeglądarka na górnym pasku."
-    },
-    "stream": {
-      "stalled": "Strumień się nie wyświetla. Być może inna karta lub urządzenie przejęło kontrolę — serwer akceptuje tylko jednego sterującego klienta."
-    },
-    "status": {
-      "stopped": "Przeglądarka zatrzymana",
-      "starting": "Uruchamianie przeglądarki {project}…"
-    },
-    "errors": {
-      "streamUnavailable": "Kontener działa, ale jego strumień jest niedostępny",
-      "startRejected": "Uruchomienie odrzucone (HTTP {status})",
-      "startTimeout": "Kontener nie uruchomił się na czas",
-      "unknown": "Nieznany błąd"
+      "embeddedBrowser": "Wbudowana przeglądarka"
     },
     "native": {
       "title": "Przeglądarka",
@@ -156,8 +107,7 @@
       "needsControl": "Aby nagrywać, używaj przeglądarki z tego okna: steruje nią inne urządzenie",
       "recording": "Nagrywanie",
       "ended": "Nagrywanie zakończone",
-      "stepsOne": "{count} krok",
-      "stepsMany": "{count} {count, plural, one {krok} few {kroki} many {kroków} other {kroku}}",
+      "steps": "{count} {count, plural, one {krok} few {kroki} many {kroków} other {kroku}}",
       "stop": "Zatrzymaj",
       "stopTitle": "Zatrzymaj nagrywanie i przejrzyj kroki",
       "review": "Przejrzyj",
@@ -205,10 +155,13 @@
         "newTab": "Nowa karta",
         "switchTab": "Zmiana karty",
         "closeTab": "Zamknięcie karty",
-        "credential": "Zapisane logowanie"
+        "credential": "Zapisane logowanie",
+        "frame": "Krok ręczny: osadzona ramka ({origin})"
       },
       "paramBadge": "Parametr: {name}",
       "flagged": "Możliwy sekret",
+      "frameUnknownOrigin": "Krok ręczny: osadzona ramka",
+      "frameNotice": "Timon nie widzi, co robisz wewnątrz osadzonej ramki (formularz płatności, captcha, okno logowania). Nauczona umiejętność zatrzyma się tutaj i poprosi Cię o wykonanie tej części samodzielnie, więc ktoś musi być przy ekranie.",
       "paramName": "Nazwa parametru",
       "stepName": "Nazwa kroku",
       "save": "Zapisz",
@@ -268,7 +221,6 @@
       "card": {
         "label": "Adnotacje przeglądarki ({count})",
         "count": "{count} {count, plural, one {adnotacja} few {adnotacje} many {adnotacji} other {adnotacji}}",
-        "countOne": "1 adnotacja",
         "details": "Szczegóły",
         "enlarge": "Powiększ zrzut adnotacji {n}",
         "source": "Źródło: {source}",
@@ -280,7 +232,6 @@
         }
       },
       "queue": "{count} {count, plural, one {adnotacja} few {adnotacje} many {adnotacji} other {adnotacji}}",
-      "queueOne": "1 adnotacja",
       "history": "Historia adnotacji",
       "sendQueue": "Wyślij",
       "sendQueueTitle": "Wyślij je do {agent} w tej rozmowie",

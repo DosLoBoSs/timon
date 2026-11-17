@@ -54,10 +54,12 @@ import { taskProjectSlug } from './task-project.js';
 import { readRoles } from './projects.js';
 import { inheritedLlm, resolveRoleAgent } from './agent-seed.js';
 import { notifyUser } from './notify.js';
+import { daemonMessage } from './daemon-message.js';
 import { warnSandboxCascadeAhead } from './sandbox-cascade.js';
 import { parseReviewVerdict } from './review-verdict.js';
 import { execFileHost } from './host/index.js';
 import { integrateMergeMessage } from './worktree.js';
+import { branchWork } from './code-gate.js';
 
 const exec = execFileHost;
 const MAX_ITERATIONS = 3;
@@ -77,6 +79,39 @@ async function diffSummary(task: TaskRow): Promise<{ stat: string; hasChanges: b
     );
     const stat = r.stdout.trim();
     return { stat, hasChanges: stat.length > 0 };
+  } catch {
+    return null;
+  }
+}
+
+/** Longest commit listing put into a review brief. */
+const INTEGRATED_STAT_MAX_LINES = 200;
+
+/** The coder's own commits on a branch its base already contains. */
+type IntegratedWork = { start: string; head: string; count: number; stat: string };
+
+/**
+ * What a review reads when the coder merged the branch into its base and
+ * `base...HEAD` is empty (TODO #1012): the first-parent commits since the
+ * branch was created, never an empty diff. Null when the branch has none, or
+ * when git cannot tell.
+ */
+async function integratedWork(task: TaskRow): Promise<IntegratedWork | null> {
+  if (!task.worktree_path) return null;
+  const work = branchWork(task.worktree_path, task.branch_name);
+  if (!work?.start || work.commits.length === 0) return null;
+  try {
+    const r = await exec(
+      'git',
+      ['-C', task.worktree_path, 'log', '--first-parent', '--no-merges', '--stat', '--format=%h %s',
+        `${work.start}..${work.head}`],
+      { timeout: 5_000, maxBuffer: 4 * 1024 * 1024 },
+    );
+    const lines = r.stdout.trim().split('\n');
+    const stat = lines.length > INTEGRATED_STAT_MAX_LINES
+      ? [...lines.slice(0, INTEGRATED_STAT_MAX_LINES), `… (${lines.length - INTEGRATED_STAT_MAX_LINES} more lines)`].join('\n')
+      : lines.join('\n');
+    return { start: work.start, head: work.head, count: work.commits.length, stat };
   } catch {
     return null;
   }
@@ -196,7 +231,10 @@ async function handleCodeDone(task: TaskRow): Promise<void> {
   }
 
   const diff = await diffSummary(task);
-  if (!diff || !diff.hasChanges) {
+  // An empty `base...HEAD` may only mean the coder merged the branch already:
+  // its commits are then reviewed from where the branch started.
+  const integrated = diff && !diff.hasChanges ? await integratedWork(task) : null;
+  if (!diff || (!diff.hasChanges && !integrated)) {
     console.log(`[verification] code ${task.id} DONE with no diff — skip review`);
     return;
   }
@@ -219,10 +257,26 @@ async function handleCodeDone(task: TaskRow): Promise<void> {
     `Branch: \`${task.branch_name ?? '?'}\` (base \`${task.base_branch ?? '?'}\`)`,
     `Worktree: \`${task.worktree_path ?? '?'}\``,
     ``,
-    `## Diff (stat)`,
-    '```',
-    diff.stat,
-    '```',
+    ...(integrated
+      ? [
+          `## Branch already merged into \`${task.base_branch ?? '?'}\``,
+          `The coder merged this branch into its base already, so \`git diff ${task.base_branch ?? '<base>'}...HEAD\` is empty.`,
+          `Review the coder's ${integrated.count} own commit(s) instead, from where the branch started:`,
+          '```bash',
+          `git log -p --first-parent --no-merges ${integrated.start}..${integrated.head}`,
+          '```',
+          ``,
+          `## Coder's commits (stat)`,
+          '```',
+          integrated.stat,
+          '```',
+        ]
+      : [
+          `## Diff (stat)`,
+          '```',
+          diff.stat,
+          '```',
+        ]),
     ``,
     `## Original mission (root ${rootId})`,
     root.description ?? root.title,
@@ -270,6 +324,14 @@ async function handleCodeDone(task: TaskRow): Promise<void> {
   console.log(
     `[verification] code ${task.id} DONE → review ${reviewId} (iter ${iteration}, reviewer=${reviewer})`,
   );
+  // A chain created outside a mission (a `curl`, the board) has no pilot: its
+  // returns go nowhere and the series roles do not apply (TODO #1013).
+  if (!root.series_id) {
+    console.warn(
+      `[verification] review ${reviewId} chained from ${rootId}, which belongs to no series: ` +
+      `no pilot gets its returns (attach it: timon task attach ${rootId} --series <pilot mission>)`,
+    );
+  }
   const created = dbApi.getTask(reviewId);
   if (created) warnSandboxCascadeAhead(created);
 }
@@ -315,6 +377,10 @@ async function spawnMergeTask(review: TaskRow): Promise<void> {
     `4. Non-trivial conflict or broken build → do NOT force it: leave the task BLOCKED with the reason (the orchestrator will escalate).`,
     `5. Never delete a file your branch does not ask to delete: an automatic`,
     `   check detects it and will hand the task back to you for repair.`,
+    `6. The daemon checks the merge before accepting DONE: \`${branch}\` must be in \`${base}\``,
+    `   and the sha must contain it. If the branch was already in \`${base}\` before you`,
+    `   started (\`git merge-base --is-ancestor ${branch} ${base}\` succeeds), there is nothing`,
+    `   to merge: close with the full sha of \`git rev-parse ${branch}\`.`,
     ``,
     `Merge commits carry an explicit English message (\`-m\`) with no task or mission id, and no mention of Claude/Anthropic/Co-Authored-By: git's default message names the task branch, which a public repository's commit-msg hook refuses.`,
   ].filter(Boolean).join('\n');
@@ -356,15 +422,25 @@ async function handleReviewDone(task: TaskRow): Promise<void> {
     // (a reviewer writing prose instead of JSON). We now move the review to
     // BLOCKED → emits task_blocked → the wake loop wakes the orchestrator
     // (which can re-drive or escalate to the user). Never silent again.
+    const excerpt = (task.done_comment ?? '(empty)').slice(0, 300);
     const reason =
       `Review verdict not parsable in done_comment (expected: JSON {"verdict":"pass"|"changes_requested",...}). ` +
-      `done_comment received: ${(task.done_comment ?? '(empty)').slice(0, 300)}`;
+      `done_comment received: ${excerpt}`;
+    // `none`, not the English placeholder: the webview words an empty comment itself.
+    const shown = task.done_comment ? excerpt : 'none';
     console.warn(`[verification] review ${task.id} verdict not parsable → BLOCKED (escalated through wake)`);
-    dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason: reason });
+    dbApi.updateTaskStatus(task.id, 'BLOCKED', {
+      blockedReason: reason,
+      blockedReasonCode: daemonMessage('review_verdict_unparsable', { excerpt: shown }),
+    });
     notifyUser(
       `Review with no usable verdict: ${task.title}`,
       `Review ${task.id} closed without a parsable JSON verdict, so the code→review→merge chain cannot continue.\n\n${reason}\n\nRe-trigger the review or decide manually (merge / new code iteration).`,
-      { taskId: task.id, fromMission: task.mission_id },
+      {
+        taskId: task.id,
+        fromMission: task.mission_id,
+        message: daemonMessage('review_verdict_unusable', { title: task.title, taskId: task.id, excerpt: shown }),
+      },
     );
     return;
   }
@@ -390,7 +466,12 @@ async function handleReviewDone(task: TaskRow): Promise<void> {
       ``,
       `Human intervention required — unblock manually after review.`,
     ].join('\n');
-    dbApi.updateTaskStatus(rootId, 'BLOCKED', { blockedReason: reason });
+    dbApi.updateTaskStatus(rootId, 'BLOCKED', {
+      blockedReason: reason,
+      blockedReasonCode: daemonMessage('verification_cap_reached', {
+        max: MAX_ITERATIONS, reviewId: task.id, feedback: parsed.feedback || 'none',
+      }),
+    });
     console.warn(
       `[verification] root ${rootId} → BLOCKED (cap ${MAX_ITERATIONS} reached, review ${task.id})`,
     );

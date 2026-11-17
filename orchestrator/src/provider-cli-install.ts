@@ -97,9 +97,10 @@ export function streamingExec(
   command: string,
   args: string[],
   log: ConsoleLog,
-  opts: { timeoutMs?: number; spawn?: Spawn; kill?: (child: ChildProcess) => void } = {},
+  opts: { timeoutMs?: number; spawn?: Spawn; kill?: (child: ChildProcess) => void; env?: NodeJS.ProcessEnv } = {},
 ): Promise<ExecResult> {
-  const spawn = opts.spawn ?? ((cmd, argv) => getHost().spawn(cmd, argv, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }));
+  // `env`, when given, is the complete environment (`installerEnv`): the host adapter passes it verbatim.
+  const spawn = opts.spawn ?? ((cmd, argv) => getHost().spawn(cmd, argv, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, ...(opts.env ? { env: opts.env } : {}) }));
   const kill = opts.kill ?? ((child) => killProcessTree(child));
   return new Promise((resolve) => {
     let stdout = '';
@@ -140,7 +141,7 @@ const jobs = new Map<string, Entry>();
 
 export type InstallDeps = {
   platform?: NodeJS.Platform;
-  exec?: (command: string, args: string[], log: ConsoleLog) => Promise<ExecResult>;
+  exec?: (command: string, args: string[], log: ConsoleLog, env: NodeJS.ProcessEnv) => Promise<ExecResult>;
   locate?: (name: string) => string | null;
   /** Run once an install has succeeded: the daemon looks for its CLIs again. */
   afterSuccess?: (name: string) => Promise<void> | void;
@@ -165,9 +166,9 @@ export function startCliInstall(name: InstallableBackend, deps: InstallDeps = {}
   const job: InstallJob = {
     name, command: plan.display, state: 'running', startedAt: Date.now(), finishedAt: null, lines: [], dropped: 0, result: null,
   };
-  const exec = deps.exec ?? ((command, args, into) => streamingExec(command, args, into));
+  const exec = deps.exec ?? ((command, args, into, env) => streamingExec(command, args, into, { env }));
   const locate = deps.locate ?? ((binary: string) => whichBin(binary, config().host.binaries).path);
-  const done = runInstallBackend(name, platform, (command, args) => exec(command, args, log), locate)
+  const done = runInstallBackend(name, platform, (command, args, env) => exec(command, args, log, env), locate)
     .catch((error: unknown): OnboardingResult => ({ ok: false, lines: [], command: plan.display, reason: (error as Error).message }))
     .then(async (result) => {
       if (result.ok && deps.afterSuccess) {

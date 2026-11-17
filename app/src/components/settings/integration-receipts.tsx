@@ -12,9 +12,9 @@ import {
   type IntegrationReceipt, type IntegrationReceiptConnection,
 } from '@/lib/integration-receipts';
 
-function Count({ value, label, tone }: { value: number; label: string; tone?: string }): ReactElement | null {
+function Count({ value, labelKey, tone }: { value: number; labelKey: string; tone?: string }): ReactElement | null {
   if (value === 0) return null;
-  return <span className={cn('rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground tabular-nums', tone)}>{t(label, { count: value })}</span>;
+  return <span className={cn('rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground tabular-nums', tone)}>{t(labelKey, { count: value })}</span>;
 }
 
 function ReceiptRow({ receipt, busy, act }: {
@@ -70,9 +70,9 @@ function ConnectionBlock({ connection, onChanged }: { connection: IntegrationRec
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="truncate text-[13px] font-medium">{connection.transport}</h4>
             {!connection.enabled && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{t('integrationReceipts.disabled')}</span>}
-            <Count value={counts.failed} label="integrationReceipts.countFailed" tone="bg-destructive/15 text-destructive" />
-            <Count value={counts.retrying} label="integrationReceipts.countRetrying" tone="bg-amber-500/15 text-amber-700 dark:text-amber-300" />
-            <Count value={counts.queued} label="integrationReceipts.countQueued" />
+            <Count value={counts.failed} labelKey="integrationReceipts.countFailed" tone="bg-destructive/15 text-destructive" />
+            <Count value={counts.retrying} labelKey="integrationReceipts.countRetrying" tone="bg-amber-500/15 text-amber-700 dark:text-amber-300" />
+            <Count value={counts.queued} labelKey="integrationReceipts.countQueued" />
           </div>
           <p className="truncate text-[11px] text-muted-foreground">
             {t('integrationReceipts.handledBy', { agent: connection.agent })}

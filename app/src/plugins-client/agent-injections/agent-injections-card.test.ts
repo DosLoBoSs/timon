@@ -274,7 +274,7 @@ test('a skill pasted because the backend cannot read it says so, and is not call
 
 test('a catalogue skill no mission read stands out, on its row and in the dialog', async () => {
   const skill = (label: string, mode: 'include' | 'import') => ({
-    id: `skill-${label}`, label, content: `- \`${label}\` — d`, tokens: 2, source_path: null, editable: false, editable_text: null, edit_target: null, skill_mode: mode, skill_via: 'config',
+    id: `skill-${label}`, label, content: `- \`${label}\` — d`, tokens: 2, source_path: null, editable: false, editable_text: null, edit_target: null, skill_mode: mode, skill_via: 'agent',
   });
   const skills = {
     id: 'skills', source: 'skills', origin: 'skills', source_path: null, tokens: 6, injected_by: 'timon', order: 2, label: 'Skills', content: '', truncated: false, redacted: false, editable: false, editable_text: null, edit_target: null,
@@ -298,7 +298,7 @@ test('a catalogue skill no mission read stands out, on its row and in the dialog
 
 test('on a backend whose reads cannot be measured, no skill is called never read', async () => {
   const skill = (label: string) => ({
-    id: `skill-${label}`, label, content: `- \`${label}\` — d`, tokens: 2, source_path: null, editable: false, editable_text: null, edit_target: null, skill_mode: 'include', skill_via: 'config',
+    id: `skill-${label}`, label, content: `- \`${label}\` — d`, tokens: 2, source_path: null, editable: false, editable_text: null, edit_target: null, skill_mode: 'include', skill_via: 'agent',
   });
   const skills = {
     id: 'skills', source: 'skills', origin: 'skills', source_path: null, tokens: 2, injected_by: 'timon', order: 2, label: 'Skills', content: '', truncated: false, redacted: false, editable: false, editable_text: null, edit_target: null,
@@ -326,7 +326,7 @@ test('a catalogue skill shows what reading it would cost, apart from the total',
   const skills = {
     id: 'skills', source: 'skills', origin: 'skills', source_path: null, tokens: 120, injected_by: 'timon', order: 4, label: 'Skills', content: 'skills', truncated: false, redacted: false, editable: false, editable_text: null, edit_target: null,
     items: [
-      { id: 'skill-cat', label: 'cat', content: '- `cat` — read me', tokens: 12, source_path: null, editable: false, editable_text: null, edit_target: null, skill_mode: 'include', skill_via: 'config', on_demand_tokens: 2500 },
+      { id: 'skill-cat', label: 'cat', content: '- `cat` — read me', tokens: 12, source_path: null, editable: false, editable_text: null, edit_target: null, skill_mode: 'include', skill_via: 'agent', on_demand_tokens: 2500 },
       { id: 'skill-imp', label: 'imp', content: 'imported body', tokens: 90, source_path: null, editable: false, editable_text: null, edit_target: null, skill_mode: 'import', skill_via: 'agent', on_demand_tokens: null },
     ],
   };

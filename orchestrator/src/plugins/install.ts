@@ -16,7 +16,7 @@ import { LicenseCapabilityError, assertCompositionMutable, fixedComposition, wit
 import { mutationLicenseState } from '../license/runtime.js';
 import type { LicenseState } from '../license/license.js';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, win32 } from 'node:path';
 import { CONFIG_FILE, config, loadConfig, setConfig } from '../config/load.js';
 import { BRAND } from '../brand.js';
 import { whiteLabelAllowed } from '../license/capabilities.js';
@@ -433,7 +433,7 @@ async function addPluginAdmitted(
   const bound = boundPluginPackages();
   // npm runs with the plugins root as cwd: a relative path (`./examples/plugin-hello`) would be read
   // from THERE, not from where the user typed it. Resolve it against the caller's directory first.
-  const npmSpec = LOCAL_SPEC.test(spec) ? resolve(spec.startsWith('file:') ? spec.slice('file:'.length) : spec) : spec;
+  const npmSpec = isLocalSpec(spec) ? resolve(localSpecPath(spec)) : spec;
   await run(['install', '--prefix', root, ...NPM_FLAGS, npmSpec], root);
 
   const added = installedPackages(root).filter((p) => !before.has(p));
@@ -534,7 +534,7 @@ function versionOf(dir: string): string | null {
  * read those without fetching them.
  */
 export function registryPackageName(spec: string): string | null {
-  if (LOCAL_SPEC.test(spec) || /\.(tgz|tar|tar\.gz)$/i.test(spec)) return null;
+  if (isLocalSpec(spec) || /\.(tgz|tar|tar\.gz)$/i.test(spec)) return null;
   const m = /^((?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*)(?:@([^/:]*))?$/i.exec(spec.trim());
   return m?.[1] ?? null;
 }
@@ -630,20 +630,42 @@ function locateDependency(root: string, bundleDir: string, name: string): string
   return null;
 }
 
-const LOCAL_SPEC = /^(file:|\.{1,2}\/|\/)/;
+/**
+ * Whether `spec` names a folder on disk rather than something npm fetches.
+ *
+ * Both path grammars are recognised on every system: a folder picked in the
+ * interface on Windows arrives as `C:\…`, `\\server\share\…` or `..\…`, and
+ * missing it made the spec look like a registry name, so a bundle's children
+ * were resolved against the `node_modules` copy instead of their source.
+ * `win32.isAbsolute` also accepts the POSIX `/…` form and refuses `C:` or
+ * `C:foo`, which are relative to a drive's current folder. None of npm's own
+ * grammars (`name@1.2.3`, `@scope/name`, `github:u/r`, `u/r`, URLs, `npm:`)
+ * starts with a separator, a dot segment or a drive letter followed by one.
+ */
+export function isLocalSpec(spec: string): boolean {
+  return spec.startsWith('file:')
+    || spec === '.' || spec === '..'
+    || /^\.{1,2}[\\/]/.test(spec)
+    || win32.isAbsolute(spec);
+}
+
+/** The path a local spec names, without its `file:` prefix. */
+function localSpecPath(spec: string): string {
+  return spec.startsWith('file:') ? spec.slice('file:'.length) : spec;
+}
 
 /** Directory named by a `file:` / relative / absolute spec, if it is a package. */
 function localDepDir(base: string, spec: string): string | null {
-  if (!LOCAL_SPEC.test(spec)) return null;
-  const dir = resolve(base, spec.startsWith('file:') ? spec.slice('file:'.length) : spec);
+  if (!isLocalSpec(spec)) return null;
+  const dir = resolve(base, localSpecPath(spec));
   return existsSync(join(dir, 'package.json')) ? dir : null;
 }
 
 /** Source folder of a local `spec` (`./examples/plugin-bundle`), otherwise `null`
  *  — a registry name or a tarball has no source folder. */
 function localSpecDir(spec: string): string | null {
-  if (!LOCAL_SPEC.test(spec)) return null;
-  const dir = resolve(spec.startsWith('file:') ? spec.slice('file:'.length) : spec);
+  if (!isLocalSpec(spec)) return null;
+  const dir = resolve(localSpecPath(spec));
   return existsSync(join(dir, 'package.json')) ? dir : null;
 }
 
@@ -658,9 +680,8 @@ function localSpecDir(spec: string): string | null {
  * installing a folder onto itself: npm erases it before copying it again.
  */
 function childSpec(name: string, spec: string, base: string): string {
-  if (LOCAL_SPEC.test(spec)) {
-    return resolve(base, spec.startsWith('file:') ? spec.slice('file:'.length) : spec);
-  }
+  // Checked before the URL test below: a lowercase drive (`c:\…`) reads as a scheme there.
+  if (isLocalSpec(spec)) return resolve(base, localSpecPath(spec));
   // URL, git, tarball, `npm:` alias: npm already knows how to read them alone.
   if (/^([a-z+]+:|github:|[\w-]+\/[\w-]+#?)/.test(spec) && !/^[\^~><=\d*]/.test(spec)) return spec;
   return `${name}@${spec}`;

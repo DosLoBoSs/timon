@@ -38,7 +38,6 @@
       "dependencies": "Zależności",
       "capabilities": "Możliwości"
     },
-    "type": "Typ",
     "priority": {
       "label": "Priorytet",
       "urgent": "Pilny",
@@ -87,7 +86,6 @@
     "modelInherit": "Rola projektu",
     "modelInheritHint": "Decyduje rola projektu dla tego typu zadania, w przeciwnym razie agent",
     "modelInherited": "{model} (dziedziczony)",
-    "modelHelp": "„Rola projektu” uruchamia zadanie na tym, o czym decyduje rola projektu dla tego typu, a w przeciwnym razie agent.",
     "worktreeBlocked": "Ten backend pracuje poza folderem Timon: przypisane mu zadanie code lub merge zostanie zablokowane.",
     "fallback": {
       "short": "Zapasowy",
@@ -138,13 +136,11 @@
     },
     "summary": {
       "label": "Podsumowanie",
-      "model": "Model",
       "type": "Typ",
       "priority": "Priorytet",
       "deps": "Zależności",
       "depsNone": "Brak",
       "depsCount": "do ukończenia wcześniej: {count}",
-      "start": "Start",
       "startAsap": "Jak najszybciej",
       "status": "Stan",
       "attachments": "Pliki",
@@ -216,8 +212,7 @@
         "general": "Ustawienia ogólne — dotyczą każdej grupy, która nic nie ustawia",
         "other": "Inne wątki prac",
         "inherits": "dziedziczy ustawienia ogólne",
-        "countOne": "{count} wątek prac",
-        "countMany": "{count} {count, plural, one {wątek prac} few {wątki prac} many {wątków prac} other {wątku prac}}",
+        "count": "{count} {count, plural, one {wątek prac} few {wątki prac} many {wątków prac} other {wątku prac}}",
         "inheritGeneral": "{value} (ustawienie ogólne)",
         "fallbackSummary": "zapasowy {value}",
         "noRolesInMode": "Ten tryb nie tworzy zadań: nie ma modelu do wyboru dla grupy.",

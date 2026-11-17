@@ -637,6 +637,12 @@ export class AcpTransport {
     await this.request('session/set_model', { sessionId, modelId });
   }
 
+  /** Switches the session to one of the modes it announced (`session/set_mode`).
+   *  Never during a turn. */
+  async setMode(sessionId: string, modeId: string): Promise<void> {
+    await this.request('session/set_mode', { sessionId, modeId });
+  }
+
   /** Sets one of the session's config options (`session/set_config_option`) and
    *  returns the options as they stand afterwards — which, for opencode, differ
    *  per model: the thinking levels follow the model. Never during a turn. */

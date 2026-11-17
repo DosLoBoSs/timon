@@ -32,13 +32,13 @@ export function useWidgetStyleDefaults(): WidgetStyleDefaults {
 /** What is in effect for one widget: its own choice if it counts, else the site's.
  *  Before the site style was ever changed (`at` is 0), every choice counts: the
  *  screen looks as it did. */
-export function effectiveWidgetStyle(entree: Pick<WidgetLayout, 'borderless' | 'transparent' | 'borderlessAt' | 'transparentAt'>, site: WidgetStyleDefaults) {
+export function effectiveWidgetStyle(entry: Pick<WidgetLayout, 'borderless' | 'transparent' | 'borderlessAt' | 'transparentAt'>, site: WidgetStyleDefaults) {
   const counts = (at: number | undefined) => site.at === 0 || (at ?? 0) > site.at;
-  const borderlessOwn = entree.borderless !== undefined && counts(entree.borderlessAt);
-  const transparentOwn = entree.transparent !== undefined && counts(entree.transparentAt);
+  const borderlessOwn = entry.borderless !== undefined && counts(entry.borderlessAt);
+  const transparentOwn = entry.transparent !== undefined && counts(entry.transparentAt);
   return {
-    borderless: borderlessOwn ? entree.borderless === true : site.borderless,
-    transparent: transparentOwn ? entree.transparent === true : site.transparent,
+    borderless: borderlessOwn ? entry.borderless === true : site.borderless,
+    transparent: transparentOwn ? entry.transparent === true : site.transparent,
     /** The widget has a choice of its own that is in effect. */
     own: borderlessOwn || transparentOwn,
   };

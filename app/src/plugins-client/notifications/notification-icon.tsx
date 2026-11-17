@@ -33,17 +33,17 @@ export function notificationSource(n: NotificationKindInput): NotificationSource
   if (a.startsWith('/dreams')) return 'dream';
   if (a.startsWith('/memory')) return 'memory';
   const t = n.title.toLowerCase();
-  if (t.startsWith('dreaming') || t.includes('dream') || t.includes('rêve')) return 'dream';
+  if (t.startsWith('dreaming') || t.includes('dream') || t.includes('rêve')) return 'dream'; // i18n-exempt: older notifications carry French titles
   // "Memory pressure" and "Memory ceiling" are about RAM, not agent memory.
   if ((t.startsWith('memory') && !/pressure|ceiling/.test(t))
-    || t.startsWith('mémoire') || t.startsWith('memoire')) return 'memory';
-  if (t.includes('deploy') || t.includes('déploie') || t.includes('déploy')) return 'deploy';
-  if (t.includes('merge') || t.includes('mergé') || t.includes('unblocked') || t.includes('débloqué')) return 'merge';
-  if (t.includes('blocked') || t.includes('bloquée') || t.includes('bloqué')) return 'blocked';
-  if (t.includes('ci broken') || t.includes('ci cassé') || t.includes('cassée') || t.includes('crash')) return 'crash';
+    || t.startsWith('mémoire') || t.startsWith('memoire')) return 'memory'; // i18n-exempt: older notifications carry French titles
+  if (t.includes('deploy') || t.includes('déploie') || t.includes('déploy')) return 'deploy'; // i18n-exempt: older notifications carry French titles
+  if (t.includes('merge') || t.includes('mergé') || t.includes('unblocked') || t.includes('débloqué')) return 'merge'; // i18n-exempt: older notifications carry French titles
+  if (t.includes('blocked') || t.includes('bloquée') || t.includes('bloqué')) return 'blocked'; // i18n-exempt: older notifications carry French titles
+  if (t.includes('ci broken') || t.includes('ci cassé') || t.includes('cassée') || t.includes('crash')) return 'crash'; // i18n-exempt: older notifications carry French titles
   if (t.includes('audit')) return 'audit';
   if (t.includes('inbox')) return 'inbox';
-  if (t.includes('report') || t.includes('rapport') || t.includes('reusab') || t.includes('réutilisab')) return 'report';
+  if (t.includes('report') || t.includes('rapport') || t.includes('reusab') || t.includes('réutilisab')) return 'report'; // i18n-exempt: older notifications carry French titles
   if (t.includes('kanban')) return 'kanban';
   return n.type === 'action_required' ? 'action' : n.type === 'alert' ? 'alert' : 'info';
 }

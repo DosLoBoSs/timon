@@ -74,7 +74,7 @@ export function guardPluginPublicRequest(
   const now = opts.now ?? Date.now();
   // Computed by the auth layer, which owns the cross-site rule (`isCrossSiteMutation`).
   if (opts.crossSite) {
-    res.status(403).json({ error: 'cross-site request refused' });
+    res.status(403).json(apiError('cross_site_refused', 'cross-site request refused'));
     return false;
   }
   const length = Number(req.header('content-length') ?? 0);

@@ -2,9 +2,7 @@
   "apps": {
     "title": "공식 커넥터",
     "subtitle": "에이전트가 함께 쓰는 서비스의 MCP 서버를 한 번에 연결하세요.",
-    "count": "연결됨 {connected} · 커넥터 {total}개",
     "loadFailed": "커넥터를 불러올 수 없습니다. Timon이 실행 중인지 확인한 뒤 페이지를 새로 고치세요.",
-    "noMatch": "이 검색과 일치하는 커넥터가 없습니다.",
     "footer": "각 커넥터는 게시자가 호스팅하는 원격 MCP 서버이며, 에이전트가 보내는 내용을 받습니다. 연결해도 아직 에이전트에 제공되지는 않습니다. 에이전트의 MCP 서버에서 추가하세요. 로컬 MCP 서버만 불러오는 백엔드의 에이전트는 원격 커넥터를 건너뜁니다.",
     "category": {
       "code": "코드",
@@ -20,8 +18,7 @@
     "action": {
       "connect": "연결",
       "finishSignIn": "로그인 완료",
-      "disconnect": "연결 해제",
-      "close": "닫기"
+      "disconnect": "연결 해제"
     },
     "card": {
       "open": "{name} 열기"
@@ -62,8 +59,6 @@
     "toast": {
       "connected": "{name} 연결됨",
       "consentOpened": "{name}: 열린 페이지에서 로그인을 완료하세요.",
-      "authorized": "커넥터가 승인됨",
-      "oauthFailed": "로그인 실패: {error}",
       "connectFailed": "{name}을(를) 연결하지 못했습니다: {error}",
       "disconnected": "{name} 연결 해제됨",
       "disconnectFailed": "{name}의 연결을 해제하지 못했습니다: {error}"
@@ -261,14 +256,10 @@
     "search": "검색",
     "clearSearch": "검색 지우기",
     "noTeam": "팀 없음",
-    "noTeamHint": "이 TIM은 어느 팀에도 속하지 않습니다.",
-    "memberOf": "팀: {team}",
-    "teams": "팀",
     "newTeam": "새 팀",
     "renameTeam": "팀 이름 바꾸기",
     "deleteTeam": "팀 삭제",
     "teamName": "이름",
-    "teamColor": "색상",
     "create": "만들기",
     "save": "저장",
     "teamCreated": "팀이 만들어졌습니다",
@@ -285,7 +276,6 @@
     "talksWithTeam": "{bot}은(는) {team} 팀에 있어 그 팀의 TIM과만 대화합니다.",
     "talksWithAll": "{bot}은(는) 팀이 없어 모든 TIM과 대화할 수 있습니다.",
     "crossTeamRefused": "거부됨: {from}와(과) {to}은(는) 같은 팀이 아닙니다.",
-    "openRail": "TIMs",
     "emptyTitle": "왼쪽에서 대화할 TIM을 선택하세요.",
     "showRail": "TIM 목록 표시"
   },
@@ -392,7 +382,6 @@
     "createError": "워크플로를 만들 수 없습니다.",
     "notFound": "이 워크플로는 존재하지 않습니다.",
     "backToList": "워크플로 목록으로 돌아가기",
-    "version": "v{n}",
     "emptyTitle": "아직 워크플로가 없습니다",
     "emptyHint": "워크플로는 트리거, 에이전트, 조건으로 이루어진 그래프입니다. 그리고 게시하면 실행할 때마다 각 에이전트가 한 일이 표시됩니다.",
     "neverRun": "실행된 적 없음",
@@ -402,10 +391,8 @@
     "disabled": "사용 안 함",
     "add": "추가",
     "nodeCount": "노드 {n}개",
-    "nodeSettings": "노드 설정",
     "label": "레이블",
     "deleteNode": "노드 삭제",
-    "identity": "정체성",
     "identityRef": "기존 에이전트",
     "identityInline": "인라인 정체성",
     "agentRef": "에이전트",
@@ -425,11 +412,6 @@
     "allowedToolsHint": "쉼표로 구분한 도구 이름 또는 패턴으로, 에이전트 자체 목록과 합쳐집니다.",
     "noCatalogue": "아직 카탈로그에 아무것도 없습니다.",
     "filter": "필터…",
-    "memory": "메모리",
-    "timeoutMs": "제한 시간 (ms)",
-    "retries": "재시도",
-    "completion": "완료 방식",
-    "routes": "출력 경로",
     "execution": "실행",
     "inputHint": "에이전트에 보내는 지시입니다. 템플릿: '{{input.x}}', '{{vars.x}}', '{{nodes.<id>.output}}'.",
     "routesHint": "에이전트가 ```json timon:output 블록('{ \"route\": \"…\" }')으로 고를 수 있는 추가 출력 포트입니다.",
@@ -490,8 +472,6 @@
     "openChat": "채팅 열기",
     "openTrace": "추적 열기",
     "openRun": "실행 열기",
-    "running": "실행 중",
-    "completed": "완료됨",
     "wholeRun": "실행 전체",
     "loadOlder": "이전 스팬 불러오기 ({count}개 더)",
     "spansTruncated": "스팬 {total}개 중 최신 {shown}개를 표시합니다. 미션을 선택하면 모든 스팬을 볼 수 있습니다.",
@@ -600,7 +580,6 @@
     "resizeChat": "워크플로 채팅 크기 조정",
     "chatAgentError": "워크플로 에이전트를 불러올 수 없습니다.",
     "retryChatAgent": "다시 시도",
-    "buildWithAiHint": "오케스트레이터에게 그래프 설계를 요청하세요. 오케스트레이터가 제안하고, 무엇이든 바뀌기 전에 사용자가 변경 내용을 검토합니다.",
     "architectError": "아키텍트에 연결할 수 없습니다.",
     "proposal": "제안",
     "accept": "수락",
@@ -778,8 +757,7 @@
         "desc": "템플릿 출력으로 실행을 끝냅니다."
       }
     },
-    "noMission": "열린 미션이 없습니다.",
-    "chatAgent": "에이전트"
+    "noMission": "열린 미션이 없습니다."
   },
   "session": {
     "logout": "로그아웃",
@@ -1000,16 +978,9 @@
       }
     }
   },
-  "agents": {
-    "viewToggle": {
-      "groupLabel": "에이전트 페이지 레이아웃",
-      "title": "{label} 보기"
-    }
-  },
   "settings": {
     "title": "설정",
-    "description": "오케스트레이터 설정. 우선순위: 환경 변수, 여기에 저장한 값, 코드 기본값 순입니다.",
-    "pushNotifications": "푸시 알림"
+    "description": "오케스트레이터 설정. 우선순위: 환경 변수, 여기에 저장한 값, 코드 기본값 순입니다."
   },
   "appearance": {
     "title": "모양",
@@ -1234,11 +1205,7 @@
       }
     }
   },
-  "plugins": {
-    "unsignedAllowed": "개발자 모드 — 서명되지 않은 플러그인 허용"
-  },
   "orchestratorSelf": {
-    "title": "오케스트레이터",
     "state": "상태",
     "rebuilding": "다시 빌드…",
     "since": "시작",
@@ -1320,15 +1287,10 @@
     "error": "프리셋을 적용하거나 다시 불러올 수 없습니다. 설정을 확인한 뒤 다시 시도하세요."
   },
   "settingsPage": {
-    "forbiddenTitle": "설정",
-    "forbidden": "이 페이지는 최고 관리자 전용입니다.",
     "loadError": "설정을 불러올 수 없습니다",
     "saveError": "저장할 수 없습니다",
     "resetToDefault": "기본값으로 재설정",
     "saved": "저장됨",
-    "count": "설정 {count}개",
-    "overriddenCount": "재정의 {count}개",
-    "forcedCount": "강제 {count}개 (환경 변수 / 설정 파일)",
     "notificationsDescription": "이 기기. 구독은 전역 설정이 아니라 이 브라우저에 저장됩니다.",
     "categories": "카테고리",
     "selectCategory": "카테고리",
@@ -1656,8 +1618,7 @@
     "sections": "섹션",
     "settings": "설정",
     "empty": "“{query}”와(과) 일치하는 설정이 없습니다.",
-    "countOne": "결과 {count}개",
-    "countOther": "결과 {count}개",
+    "count": "결과 {count}개",
     "tabKeywords": {
       "interface": {
         "appearance": "테마 어두운 밝은 모드 색상 색 팔레트 모양 스킨 theme dark light colors",
@@ -1824,10 +1785,7 @@
       "reasonOtherRole": "{named}은(는) 다른 역할을 맡고 있습니다",
       "reasonUnknown": "디스패처가 해당 역할을 맡은 에이전트를 선택했습니다"
     },
-    "depsBadge": "의존 {count}",
     "depsTitle": "의존 대상:",
-    "dependentsBadge": "필요로 하는 작업 {count}",
-    "chainBadge": "체인 {count}",
     "dependentsTitle": "이 작업에 의존하는 작업 (삭제를 막습니다):",
     "chainLink": "검증 체인",
     "notOnBoard": "보드에 없음",
@@ -1869,10 +1827,8 @@
       "modelInheritedHint": "프로젝트 역할 또는 에이전트에서 상속됨",
       "todoLink": "이 작업이 실현하는 TO DO 아이디어",
       "scheduled": "예약됨",
-      "waitsOne": "작업 {count}개 대기 중",
-      "waitsMany": "작업 {count}개 대기 중",
-      "unblocksOne": "작업 {count}개 차단 해제",
-      "unblocksMany": "작업 {count}개 차단 해제",
+      "waits": "작업 {count}개 대기 중",
+      "unblocks": "작업 {count}개 차단 해제",
       "attachments": "첨부 파일 {count}개",
       "priority": "우선순위 {priority}",
       "openMission": "미션 열기",
@@ -1888,7 +1844,6 @@
     "autoFitView": "보기 자동 맞춤",
     "poleProjects": "프로젝트 {count}개",
     "newPole": "새 폴",
-    "editPole": "폴 편집",
     "editPoleNamed": "폴 {name} 편집",
     "poleName": "이름",
     "poleColor": "색상",
@@ -1932,7 +1887,7 @@
     "orgActions": "{name} 작업",
     "orgRootDrop": "여기에 놓으면 에이전트를 기본 상위 에이전트 아래로 되돌립니다",
     "mainSeatEmpty": "메인 오케스트레이터 없음",
-    "mainSeatEmptyHint": "에이전트가 이 역할을 맡을 때까지 상위가 없는 에이전트는 최상위에 표시됩니다.",
+    "mainSeatEmptyHint": "에이전트가 이 역할을 맡을 때까지 상위가 없는 에이전트는 최상위에 표시됩니다. 터미널에서는 `timon agent set-main <name>`을 실행하세요.",
     "mainSeatNoCandidate": "이 역할을 맡을 수 있는 에이전트가 없습니다. 프로젝트가 없는 에이전트에게 오케스트레이터 역할을 부여하세요.",
     "mainSeatSet": "{name}을(를) 메인 오케스트레이터로 설정"
   },
@@ -2041,7 +1996,6 @@
     "providerRetrying": "{provider} 서버에 연결할 수 없음 — 재시도 중 ({attempt}/{max})…",
     "providerRetryingNoCount": "{provider} 서버에 연결할 수 없음 — 재시도 중…",
     "providerRecovered": "{count}회 재시도 후 다시 연결됨",
-    "providerRecoveredOne": "1회 재시도 후 다시 연결됨",
     "providerExhausted": "{count}회 재시도 후에도 {provider} 서버에 연결할 수 없음",
     "providerExhaustedWithTimon": "공급자 재시도 {count}회와 Timon 재시도 {timon}회 후에도 {provider} 서버에 연결할 수 없음",
     "timonRetryIn": "Timon 재시도 {attempt}/{max}, {seconds}초 후…",
@@ -2106,7 +2060,6 @@
     "backendModelOfConv": "이 대화의 백엔드 + 모델",
     "currentlyRunning": "현재: {model}",
     "perMissionOverride": "미션별 재정의로, 에이전트 설정에는 영향을 주지 않습니다",
-    "currentLlm": "현재 LLM",
     "thinkingLevelIcon": "추론 수준",
     "composerProject": "프로젝트 {name}",
     "copyMarkdown": "Markdown으로 복사",
@@ -2148,8 +2101,6 @@
       }
     },
     "reasoningLevelTitle": "추론 수준: 높을수록 모델이 답에 더 많은 연산을 씁니다",
-    "default": "기본값",
-    "modelDefault": "모델 기본값",
     "contextWindowUsed": "마지막 턴에서 사용한 컨텍스트 창 ({limit} 토큰 중 {used}, {pct}%)",
     "contextWindowUsedUnknown": "마지막 턴에서 사용한 컨텍스트 창 ({used} 토큰 — 모델 창 크기 알 수 없음)",
     "leftRail": "채팅 왼쪽 열",
@@ -2190,7 +2141,6 @@
     "cannotOpen": "{path}을(를) 열 수 없음",
     "dirtyWorkingTreeConfirm": "작업 트리에 변경 사항이 있습니다 (파일 {count}개). 그래도 \"{branch}\"(으)로 전환하시겠습니까?",
     "checkoutFailed": "체크아웃 실패",
-    "noProjectForAgent": "이 에이전트에 연결된 프로젝트가 없습니다",
     "refresh": "새로 고침",
     "clean": "깨끗함",
     "occupiedByWorktree": "워크트리가 사용 중",
@@ -2340,7 +2290,6 @@
     "revokeFailed": "승인을 취소할 수 없습니다."
   },
   "orchestration": {
-    "tab": "오케스트레이션",
     "intro": "이 에이전트가 일을 맡길 수 있는 대상: 생성하는 미션과 할당하는 Kanban 작업. 메시지에는 영향을 주지 않습니다.",
     "saveFirst": "먼저 에이전트를 저장한 뒤 오케스트레이션할 대상을 선택하세요.",
     "unavailable": "계정에서 위임 목록을 사용할 수 없습니다.",
@@ -2368,7 +2317,6 @@
     "nobodyYet": "아직 없습니다. 위에서 에이전트를 검색해 추가하세요.",
     "everyoneNote": "나중에 만들어지는 에이전트를 포함한 모든 에이전트. 하나씩 고르려면 없음을 선택하세요.",
     "remove": "{name} 제거",
-    "filter": "에이전트 필터",
     "count": "에이전트 {total}개 중 {count}개",
     "empty": "다른 에이전트가 없습니다.",
     "noMatch": "일치하는 에이전트가 없습니다.",
@@ -2393,7 +2341,6 @@
     "switch": "그래도 전환",
     "convert": "변환",
     "renew": "갱신",
-    "rebuild": "다시 빌드",
     "detach": "분리",
     "cut": "그래도 끊기",
     "discardChanges": "저장하지 않은 변경 사항을 버리시겠습니까?",
@@ -2401,8 +2348,7 @@
     "deleteDoc": "{name}을(를) 삭제하시겠습니까?",
     "deleteFile": "\"{path}\"을(를) 삭제하시겠습니까?",
     "moveFile": "\"{from}\"을(를) \"{to}\"(으)로 옮기시겠습니까?",
-    "moveFileToRoot": "\"{from}\"을(를) 루트 폴더로 옮기시겠습니까?",
-    "rebuildGrepai": "grepai 인덱스 전체를 삭제하고 처음부터 다시 만드시겠습니까?"
+    "moveFileToRoot": "\"{from}\"을(를) 루트 폴더로 옮기시겠습니까?"
   },
   "directoryBrowser": {
     "title": "폴더 선택",
@@ -2451,11 +2397,8 @@
     "directoryPickerUnavailable": "폴더를 탐색하려면 최신 Timon 데스크톱 앱을 사용하세요. 경로를 직접 입력할 수도 있습니다.",
     "directoryPickerFailed": "폴더 선택 창을 열 수 없습니다. 경로를 직접 입력할 수 있습니다.",
     "imageInvalid": "이미지 파일(png, jpg, webp, gif)이 필요합니다",
-    "imageTooLarge": "이미지가 너무 큽니다 (최대 8MB)",
-    "uploadInvalidResponse": "잘못된 업로드 응답",
     "avatarUploaded": "아바타 업로드됨 — 적용하려면 저장하세요",
     "changeAvatar": "아바타 변경",
-    "removeAvatar": "아바타 제거 (프로젝트 로고 / 역할 아이콘으로 되돌림)",
     "colorHint": "캔버스의 노드 테두리. 비어 있으면 이름에서 자동 지정",
     "colorTitle": "에이전트 색상",
     "colorAutoTitle": "자동 색상 (이름에서 파생)",
@@ -2665,13 +2608,10 @@
     "remove": "인터페이스에서 {title} 제거",
     "palette": {
       "title": "사용 가능한 위젯",
-      "open": "위젯 추가 ({count})",
       "close": "위젯 카탈로그 닫기",
       "hint": "위젯을 영역으로 드래그하세요.",
       "move": "드래그해서 카탈로그 이동",
       "drag": "{title}을(를) 영역으로 드래그",
-      "restore": "{title} 추가",
-      "noZone": "이 페이지에는 {title}을(를) 둘 수 있는 영역이 없습니다",
       "search": "위젯 검색…",
       "noMatch": "일치하는 위젯이 없습니다.",
       "empty": "모든 위젯이 이미 화면에 있습니다.",
@@ -2702,7 +2642,6 @@
       "cancelled": "{title} 이동이 취소되었습니다."
     },
     "style": "위젯 모양",
-    "styleFor": "{title}의 모양",
     "followSiteStyle": "사이트 스타일 따르기",
     "settings": "위젯 설정",
     "settingsFor": "{title}의 설정",
@@ -2724,8 +2663,7 @@
     "saveError": "레이아웃을 저장할 수 없습니다. 다시 시도하세요.",
     "resizeEdge": "{above}와(과) {below} 크기 조정 (드래그, Shift를 누르면 맞춤 지점 무시)",
     "changedElsewhere": "이 레이아웃은 다른 창에서 변경되었습니다. 다시 불러왔으며, 마지막 변경 사항은 저장되지 않았습니다.",
-    "replayedElsewhere": "이 레이아웃은 다른 창에서 변경되었습니다. 내 변경 사항은 그 위에 적용되었습니다.",
-    "clock": "시계"
+    "replayedElsewhere": "이 레이아웃은 다른 창에서 변경되었습니다. 내 변경 사항은 그 위에 적용되었습니다."
   },
   "seriesGraph": {
     "title": "시리즈 그래프",
@@ -2735,7 +2673,6 @@
     "origin": "시작",
     "iteration": "반복 {n}",
     "openGraph": "시리즈 그래프",
-    "openGraphOf": "시리즈 {series}의 그래프",
     "cycleWarning": "의존성 순환: 작업 {count}개의 순서를 정할 수 없어 마지막 열에 모았습니다.",
     "ignoredDeps": "시리즈 밖을 가리키는 의존성 {count}개는 무시되었습니다.",
     "legendHeld": "차단된 작업 때문에 대기 중",
@@ -2863,16 +2800,12 @@
     "eyebrow": "로컬 갤러리",
     "title": "이 컴퓨터에 설치된 플러그인",
     "subtitle": "연결 여부와 관계없이 여기에 설치된 모든 것. 꺼도 설정과 함께 디스크에 남습니다.",
-    "empty": "아직 설치된 플러그인이 없습니다. `timon plugin add <package>`로 추가하세요.",
     "inserts": "연결 위치",
     "insertsNone": "없음 (호스트 쪽만)",
     "modifies": "변경 대상",
     "contains": "설치 항목",
     "enable": "{name} 사용",
     "disable": "{name} 사용 안 함",
-    "bundled": "Timon에 포함됨",
-    "bundledSubtitle": "제품의 모듈입니다. 꺼도 설치된 상태로 남으며 즉시 적용됩니다.",
-    "thirdParty": "여기에 설치됨",
     "notInLicence": "라이선스에 포함되지 않음",
     "coreLocked": "핵심 모듈 — 이것 없이는 데몬이 실행되지 않습니다.",
     "themeLocked": "모든 색상 토큰을 담고 있습니다 — 끄면 앱에 팔레트가 없어집니다. 테마는 모양에서 바꾸세요.",
@@ -2886,7 +2819,6 @@
     "toggleSyncFailed": "이 탭을 새로 고칠 수 없습니다 — 결과를 보려면 페이지를 새로 고치세요."
   },
   "inboxPage": {
-    "title": "받은편지함",
     "inboxOf": "받은편지함:",
     "allAgents": "모든 에이전트",
     "pickAgent": "에이전트 선택",
@@ -2914,7 +2846,6 @@
     "parentMissing": "원본 메시지를 사용할 수 없습니다.",
     "openMission": "보낸 미션 열기",
     "toMission": "미션 {id}에게 보냄",
-    "kind": "종류",
     "kindMsg": "메시지",
     "kindRequest": "요청",
     "kindResponse": "응답",
@@ -2955,7 +2886,6 @@
     "byOrigin": "출처별 토큰",
     "dialogDescription": "이 주입의 텍스트와 출처.",
     "copyPath": "경로 복사",
-    "tab": "주입",
     "notCreated": "먼저 에이전트를 저장하세요: 주입 내용은 만든 뒤에 존재합니다.",
     "timelineLabel": "전송되는 순서대로 나열한 주입 단계",
     "pickStep": "읽을 단계를 선택하세요.",
@@ -2972,7 +2902,6 @@
       "skills": "스킬",
       "project": "프로젝트"
     },
-    "chars": "{n}자",
     "edit": "편집",
     "save": "저장",
     "cancel": "취소",
@@ -2987,7 +2916,6 @@
       "project": "프로젝트",
       "role": "역할",
       "agent": "이 에이전트",
-      "config": "선택됨",
       "code": "Timon이 추가"
     },
     "skillReads": {
@@ -3024,7 +2952,6 @@
     "tasks": "작업",
     "leftRail": "에이전트 왼쪽 사이드바",
     "rightRail": "에이전트 오른쪽 사이드바",
-    "companyUnavailable": "에이전트를 조직도로 정리하려면 Company 플러그인을 켜세요.",
     "managePlugins": "플러그인 관리",
     "runningCount": "{count, plural, other {진행 중 · #}}",
     "queuedCount": "{count, plural, other {대기 중 · #}}",
@@ -3470,7 +3397,6 @@
     "hint": "시스템 언어는 브라우저나 컴퓨터의 언어를 따릅니다. 바꾸면 페이지가 다시 불러와집니다."
   },
   "voiceSettings": {
-    "category": "음성",
     "title": "음성 받아쓰기",
     "graceHint": "머뭇거려도 받아쓰기는 계속됩니다: {seconds}초 동안 조용하거나 중지하면 바로 끝납니다.",
     "pushToTalk": "키를 누르고 말하기",
@@ -3676,8 +3602,7 @@
     "conversionFailed": "변환 실패",
     "workflowCreated": "워크플로가 만들어졌습니다",
     "newButton": "+ 새 루틴",
-    "countOne": "루틴 {count}개",
-    "countOther": "루틴 {count}개",
+    "count": "루틴 {count}개",
     "empty": "설정된 루틴이 없습니다. 만들면 cron이 정기적으로 Kanban에 작업을 넣습니다.",
     "disable": "클릭하면 비활성화",
     "enable": "클릭하면 활성화",
@@ -3717,8 +3642,7 @@
     "loading": "불러오는 중…",
     "forbidden": "계정으로 트리거를 관리할 수 없습니다 (권한 triggers:manage).",
     "loadFailed": "트리거를 불러올 수 없습니다: {error}",
-    "countOne": "트리거 {count}개",
-    "countOther": "트리거 {count}개",
+    "count": "트리거 {count}개",
     "empty": {
       "schedule": "아직 일정 트리거가 없습니다.",
       "webhook": "아직 webhook이 없습니다. 만들면 서비스(GitHub, GitLab, 봇…)가 Timon에 작업을 넣을 수 있습니다.",
@@ -4437,28 +4361,6 @@
     "saveFailed": "이 설정을 저장할 수 없습니다.",
     "forbidden": "이 Timon의 관리자만 이 설정을 변경할 수 있습니다."
   },
-  "grepaiPanel": {
-    "project": "프로젝트",
-    "index": "인덱스",
-    "missing": "없음",
-    "noIndex": "이 프로젝트에는 시맨틱 인덱스가 없습니다 — 에이전트는 일반 텍스트로 검색합니다. 초기화하면 감시자도 시작됩니다: 첫 스캔에는 몇 분이 걸릴 수 있습니다.",
-    "initialize": "초기화",
-    "initializing": "초기화하는 중…",
-    "watcher": "감시자",
-    "running": "실행 중",
-    "stopped": "중지됨",
-    "neverIndexed": "인덱싱된 적 없음",
-    "pid": "pid",
-    "indexed": "인덱싱됨",
-    "age": "경과",
-    "stale": "오래됨",
-    "size": "크기",
-    "frozen": "인덱스가 멈춰 있습니다 — 에이전트가 더 이상 존재하지 않는 코드를 읽고 있을 수 있습니다.",
-    "start": "시작",
-    "stop": "중지",
-    "rebuild": "다시 빌드",
-    "rebuildTitle": "인덱스를 삭제하고 처음부터 다시 빌드"
-  },
   "dockerPanel": {
     "unreachable": "Docker 데몬에 연결할 수 없음 — 컨테이너 상태를 읽을 수 없습니다.",
     "stack": "스택",
@@ -4498,7 +4400,6 @@
       "cancel": "취소",
       "verifying": "설치 프로그램 확인 중…",
       "ready": "{name}을(를) 다운로드하고 확인했습니다.",
-      "openInstaller": "설치 프로그램 열기",
       "openFolder": "폴더에서 보기",
       "openFailed": "시스템에서 열 수 없습니다. 폴더에서 보기를 사용하세요.",
       "retry": "다시 시도",

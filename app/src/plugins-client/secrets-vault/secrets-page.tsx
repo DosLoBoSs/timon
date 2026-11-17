@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { refreshBackendCatalog } from '@/lib/backends';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { formatDateTime } from '@/lib/intl';
 import { RevealDialog } from './reveal-dialog';
@@ -81,10 +82,10 @@ type Plugin = { id: string; label: string | null };
  *  body would turn a precise message into a useless "failed". */
 async function errorText(res: Response): Promise<string> {
   const raw = (await res.text().catch(() => '')).trim();
-  if (!raw) return `HTTP ${res.status}`;
+  if (!raw) return apiErrorMessage(null, { status: res.status });
   try {
-    const parsed = JSON.parse(raw) as { error?: string; message?: string };
-    return parsed.error || parsed.message || raw;
+    const parsed = JSON.parse(raw) as { error?: unknown; message?: string };
+    return apiErrorMessage(parsed, parsed.message || raw);
   } catch {
     return raw;
   }
@@ -390,7 +391,7 @@ function EditorForm({
         <Input
           value={editor.name}
           disabled={editor.id !== null}
-          placeholder="GITHUB_TOKEN"
+          placeholder="GITHUB_TOKEN" // i18n-exempt: sample variable name
           onChange={(e) => onChange({ ...editor, name: e.target.value.toUpperCase() })}
           // code-font: an environment variable name
           className="font-mono"
@@ -611,7 +612,7 @@ function BrokerFields({
         <Textarea
           rows={2}
           value={editor.brokerHosts}
-          placeholder="api.github.com"
+          placeholder="api.github.com" // i18n-exempt: sample host name
           // code-font: host names
           className="font-mono"
           onChange={(e) => onChange({ ...editor, brokerHosts: e.target.value })}
@@ -626,7 +627,7 @@ function BrokerFields({
           <span className="text-[12px] font-medium">{t('secretsPage.field.brokerHeader')}</span>
           <Input
             value={editor.brokerHeaderName}
-            placeholder="Authorization"
+            placeholder="Authorization" // i18n-exempt: HTTP header name
             // code-font: an HTTP header name
             className="font-mono"
             onChange={(e) => onChange({ ...editor, brokerHeaderName: e.target.value })}
@@ -639,7 +640,7 @@ function BrokerFields({
           <span className="text-[12px] font-medium">{t('secretsPage.field.brokerQuery')}</span>
           <Input
             value={editor.brokerQueryName}
-            placeholder="access_token"
+            placeholder="access_token" // i18n-exempt: sample query parameter
             // code-font: a query parameter name
             className="font-mono"
             onChange={(e) => onChange({ ...editor, brokerQueryName: e.target.value })}

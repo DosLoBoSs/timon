@@ -125,7 +125,7 @@ export function useLicense(): PublicLicense | null {
 /** Body of a `PUT /api/license` (or `POST /api/license/activate`) refusal.
  *  `device` is only joined on `invalid:machine`; `message` only on an
  *  activation refusal the license server named. */
-export type LicenseRejection = { error?: string; reason?: string; device?: string; message?: string; current?: { edition: string; plan: string | null }; next?: { edition: string; plan: string | null }; /** The licence server's own refusal, relayed by the daemon to a superadmin (`retry_at` on `transfer_pending`). */ body?: { retry_at?: number } };
+export type LicenseRejection = { error?: string; code?: string; params?: Record<string, string | number>; reason?: string; device?: string; message?: string; current?: { edition: string; plan: string | null }; next?: { edition: string; plan: string | null }; /** The licence server's own refusal, relayed by the daemon to a superadmin (`retry_at` on `transfer_pending`). */ body?: { retry_at?: number } };
 
 /**
  * Tells apart the two things `/activate` accepts: a JWT (three dot-separated

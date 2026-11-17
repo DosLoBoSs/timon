@@ -1,6 +1,5 @@
 {
   "mascot": {
-    "field": {"shape": "Skull", "fur": "Fur", "eyes": "Eyes", "acc": "Accessory"},
     "shape": {"squircle": "Classic", "tri": "Pear", "gem": "Egg", "round": "Round", "bean": "Wide", "cloud": "Tall", "hex": "Square"},
     "fur": {
       "sand": "Sand", "cinnamon": "Cinnamon", "cream": "Cream", "cocoa": "Cocoa", "caramel": "Caramel", "taupe": "Taupe",

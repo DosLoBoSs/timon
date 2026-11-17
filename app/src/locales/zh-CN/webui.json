@@ -1,6 +1,5 @@
 {
   "webuiSettings": {
-    "category": "Web 界面",
     "description": "查看 Timon 的访问地址、如何从手机打开，以及访问是否安全。",
     "loadError": "无法从守护进程读取网络信息。",
     "forbidden": "只有管理员账号才能读取此设备的网络配置。",
@@ -9,7 +8,6 @@
     "servedExternally": "由守护进程之外的反向代理提供服务",
     "statusRemote": "远程访问",
     "remoteReady": "已就绪",
-    "remoteReadyHint": "可从任何已登录到你的 Tailnet 的设备打开。",
     "remoteNotPublished": "尚未发布",
     "remoteStopped": "Tailscale 已停止",
     "remoteAbsent": "未安装 Tailscale",

@@ -8,7 +8,6 @@
     },
     "pendingCount": "{count, plural, one {# pending request} other {# pending requests}}",
     "elapsed": "Elapsed: {duration}",
-    "today": "Today",
     "newConversationEmpty": "New conversation. Type a message to start.",
     "missionEmpty": "No messages in this mission — start the conversation with {agent}.",
     "patternInPath": "{pattern} in {path}",

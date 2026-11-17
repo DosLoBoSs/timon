@@ -20,8 +20,8 @@
 /** Comparison ignoring case, accents and punctuation: an engine adds
  *  punctuation and capitals as it goes, "ok I" then "OK, I am" are indeed the
  *  same sentence start. */
-function normaliser(texte: string): string {
-  return texte
+function normalize(text: string): string {
+  return text
     .toLowerCase()
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
@@ -30,17 +30,17 @@ function normaliser(texte: string): string {
 }
 
 /** Number of words shared by the end of `avant` and the start of `apres`. */
-function chevauchement(avant: string[], apres: string[]): number {
-  const max = Math.min(avant.length, apres.length);
+function overlap(before: string[], after: string[]): number {
+  const max = Math.min(before.length, after.length);
   for (let k = max; k >= 2; k -= 1) {
-    let egal = true;
+    let equal = true;
     for (let i = 0; i < k; i += 1) {
-      if (avant[avant.length - k + i] !== apres[i]) {
-        egal = false;
+      if (before[before.length - k + i] !== after[i]) {
+        equal = false;
         break;
       }
     }
-    if (egal) return k;
+    if (equal) return k;
   }
   return 0;
 }
@@ -49,57 +49,57 @@ function chevauchement(avant: string[], apres: string[]): number {
  * Joins transcription segments into a text where each word appears only once.
  * Empty entries are ignored; the order is kept.
  */
-export function fusionnerSegments(segments: Array<string | null | undefined>): string {
-  let sortie = '';
-  let normale = '';
+export function mergeSegments(segments: Array<string | null | undefined>): string {
+  let out = '';
+  let normalized = '';
 
-  for (const brut of segments) {
-    const seg = (brut ?? '').trim();
+  for (const raw of segments) {
+    const seg = (raw ?? '').trim();
     if (!seg) continue;
-    const n = normaliser(seg);
+    const n = normalize(seg);
     if (!n) continue;
 
-    if (!normale) {
-      sortie = seg;
-      normale = n;
+    if (!normalized) {
+      out = seg;
+      normalized = n;
       continue;
     }
     // Rewrite: the engine delivers again everything it already said, longer.
-    if (n.startsWith(normale)) {
-      sortie = seg;
-      normale = n;
+    if (n.startsWith(normalized)) {
+      out = seg;
+      normalized = n;
       continue;
     }
     // Segment already fully transcribed (identical redelivery).
-    if (normale.endsWith(n)) continue;
+    if (normalized.endsWith(n)) continue;
 
     // Partial overlap: append only the new tail.
-    const motsA = normale.split(' ');
-    const motsB = n.split(' ');
-    const k = chevauchement(motsA, motsB);
+    const wordsA = normalized.split(' ');
+    const wordsB = n.split(' ');
+    const k = overlap(wordsA, wordsB);
     if (k > 0) {
-      const inedit = seg.trim().split(/\s+/).slice(k).join(' ');
-      if (!inedit) continue;
-      sortie = `${sortie} ${inedit}`;
-      normale = `${normale} ${motsB.slice(k).join(' ')}`;
+      const fresh = seg.trim().split(/\s+/).slice(k).join(' ');
+      if (!fresh) continue;
+      out = `${out} ${fresh}`;
+      normalized = `${normalized} ${wordsB.slice(k).join(' ')}`;
       continue;
     }
 
-    sortie = `${sortie} ${seg}`;
-    normale = `${normale} ${n}`;
+    out = `${out} ${seg}`;
+    normalized = `${normalized} ${n}`;
   }
 
-  return sortie;
+  return out;
 }
 
-type ResultatBrut = { 0: { transcript: string }; isFinal: boolean };
+type RawResult = { 0: { transcript: string }; isFinal: boolean };
 
 /**
  * Reads ALL of `results` (never from `resultIndex`: the engines that rewrite
  * the sentence leave it at 0 and the rest would be lost) and returns the final
  * and the interim text of the current session.
  */
-export function lireResultats(results: ArrayLike<ResultatBrut>): {
+export function readResults(results: ArrayLike<RawResult>): {
   final: string;
   interim: string;
 } {
@@ -112,5 +112,5 @@ export function lireResultats(results: ArrayLike<ResultatBrut>): {
     if (!t.trim()) continue;
     (r.isFinal ? finals : interims).push(t);
   }
-  return { final: fusionnerSegments(finals), interim: fusionnerSegments(interims) };
+  return { final: mergeSegments(finals), interim: mergeSegments(interims) };
 }

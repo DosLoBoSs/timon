@@ -43,6 +43,28 @@ const tools = [
   { name: 'performance_stop_trace', description: 'Stop the recording and return a summary: script, layout and style time, JS heap, navigation timing and Core Web Vitals (LCP, CLS, INP, long tasks). No raw trace file.', inputSchema: schema() },
   { name: 'download_file', description: 'Copy a completed download from list_pages to a new absolute file path on the agent filesystem. Existing files are never overwritten; browser host paths are not exposed.', inputSchema: schema({ downloadId: str, filePath: str }, ['downloadId','filePath']) },
 ];
+// Copied from isGoogleSigninRejected in app/src/lib/google-signin.ts: `bin/` cannot import the
+// app's sources, so a test holds the two rules equal.
+const GOOGLE_ACCOUNTS_HOST = 'accounts.google.com';
+const GOOGLE_SIGNIN_REJECTED_PATH = /^\/(?:v\d+\/)?signin(?:\/v\d+)?\/rejected\/?$/;
+// Starting Sign in with Chrome is a human-only command: the agent can only hand it to the user.
+const GOOGLE_SIGNIN_REJECTED_NOTE = 'Google refused this browser; ask the user to run Sign in with Chrome in the browser panel (its options menu). You cannot start it yourself: once the user says the sign-in is copied, take a new snapshot.';
+function isGoogleSigninRejected(value) {
+  if (typeof value !== 'string') return false;
+  let url;
+  try { url = new URL(value); } catch { return false; }
+  return url.protocol === 'https:' && url.hostname === GOOGLE_ACCOUNTS_HOST && GOOGLE_SIGNIN_REJECTED_PATH.test(url.pathname);
+}
+/** The page a navigate_page (browser status) or take_snapshot (evaluated page) result shows. */
+function shownUrl(value) {
+  if (typeof value?.result?.url === 'string') return value.result.url;
+  if (Array.isArray(value?.tabs)) return value.tabs.find(tab => tab?.id === value.activeTabId)?.url;
+  return undefined;
+}
+function agentNote(name, value) {
+  if (name !== 'navigate_page' && name !== 'take_snapshot') return null;
+  return isGoogleSigninRejected(shownUrl(value)) ? GOOGLE_SIGNIN_REJECTED_NOTE : null;
+}
 async function command(action, extra = {}) {
   if (!token) throw new Error('A mission token is required. No fallback browser is permitted.');
   const response = await fetch(`${origin}/api/native-browser/mission/command`, {
@@ -230,6 +252,8 @@ lines.on('line', async line => {
       result={content:value?.screenshot
         ? [{type:'image',data:value.screenshot.data,mimeType:value.screenshot.mimeType}]
         : [{type:'text',text:JSON.stringify(value)}]};
+      const note=agentNote(msg.params?.name,value);
+      if (note) result.content.push({type:'text',text:note});
     } else return send({jsonrpc:'2.0',id:msg.id,error:{code:-32601,message:'Method not found'}});
     send({jsonrpc:'2.0',id:msg.id,result});
   } catch(error) { send({jsonrpc:'2.0',id:msg.id,result:{isError:true,content:[{type:'text',text:error.message}]}}); }

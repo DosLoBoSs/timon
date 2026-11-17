@@ -16,6 +16,7 @@ import { scopedDb } from '../../users/scoped-db.js';
 import { createTaskWorktree, detachTaskWorktree, disposeTaskWorktree, WorktreeServiceError } from '../../worktree-service.js';
 import { rejectIfDenied, requireAuth, viewerFromRequest } from '../../users/identity.js';
 import { isOwnMissionTask } from '../kanban/own-task.js';
+import { mergeCloseRefusal } from '../kanban/routes.js';
 import { parseEmptyBody, parseMergedShaBody, parseWorktreeCreateBody } from '../kanban/task-write-bodies.js';
 import { apiError } from '../../api-error.js';
 
@@ -81,6 +82,10 @@ export function registerRoutes(app: Router): void {
       res.status(400).json({ error: 'sha (7-40 hex chars) required' });
       return;
     }
+    // `timon task done --merged-sha` records here first: a merge that is not
+    // proven is refused before a wrong sha lands on the task (TODO #1012).
+    const refusal = mergeCloseRefusal(task, sha);
+    if (refusal) { res.status(409).json({ error: refusal, code: 'merge_not_proven' }); return; }
     dbApi.setTaskMergedSha(task.id, sha);
     res.json({ task: scope.getTask(task.id) });
   });

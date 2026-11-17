@@ -151,7 +151,7 @@ void main() {
  * the sphere would come out clearly darker and duller on a phone, precisely
  * the platform this mode exists for.
  */
-function encoderSortie(source: string, lite: boolean): string {
+function encodeOutput(source: string, lite: boolean): string {
   return source.replace('/*OUTPUT*/', lite ? '#include <colorspace_fragment>' : '');
 }
 
@@ -220,13 +220,13 @@ export default function VoiceSphere({ state, analyser }: Props) {
     // Target of the palette lerp, reused from frame to frame: three colours
     // allocated on every rAF are 180 objects a second to collect for nothing;
     // on a phone, the GC ends up showing.
-    const cible = new THREE.Color();
+    const scratchColor = new THREE.Color();
 
     // Core: a smooth sphere deformed in the vertex shader, zero CPU loop.
     const coreGeo = new THREE.SphereGeometry(1.15, lite ? 64 : 96, lite ? 64 : 96);
     const coreMat = new THREE.ShaderMaterial({
       vertexShader: CORE_VERT,
-      fragmentShader: encoderSortie(CORE_FRAG, lite),
+      fragmentShader: encodeOutput(CORE_FRAG, lite),
       transparent: true,
       uniforms: {
         uTime: { value: 0 },
@@ -246,7 +246,7 @@ export default function VoiceSphere({ state, analyser }: Props) {
     const haloGeo = new THREE.SphereGeometry(1.6, 48, 48);
     const haloMat = new THREE.ShaderMaterial({
       vertexShader: HALO_VERT,
-      fragmentShader: encoderSortie(HALO_FRAG, lite),
+      fragmentShader: encodeOutput(HALO_FRAG, lite),
       transparent: true,
       blending: THREE.AdditiveBlending,
       side: THREE.BackSide,
@@ -404,9 +404,9 @@ export default function VoiceSphere({ state, analyser }: Props) {
       smoothLevel += (level - smoothLevel) * 0.12;
 
       // Smooth colour transition on every state change.
-      colorA.lerp(cible.set(target.a), 0.05);
-      colorB.lerp(cible.set(target.b), 0.05);
-      glow.lerp(cible.set(target.glow), 0.05);
+      colorA.lerp(scratchColor.set(target.a), 0.05);
+      colorB.lerp(scratchColor.set(target.b), 0.05);
+      glow.lerp(scratchColor.set(target.glow), 0.05);
       headMat.color.copy(glow);
       trailMat.color.copy(glow);
       dustMat.color.copy(glow);

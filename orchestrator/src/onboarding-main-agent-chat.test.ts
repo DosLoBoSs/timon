@@ -18,6 +18,7 @@ await import('../tests/helpers/paid-license.js');
 const { registerSetupChatRoutes } = await import('./onboarding-main-agent-routes.js');
 const { openSetupMission, setupBrief, setupDefaultModel, SETUP_CHANNEL, watchFirstTurn } = await import('./onboarding-main-agent-chat.js');
 const { SETUP_TEAM_KEY, setupTeam } = await import('./onboarding-setup-team.js');
+const { SETUP_TIM_LIMIT, setupTims } = await import('./onboarding-setup-tim.js');
 const { bus } = await import('./bus.js');
 const { MAIN_AGENT_STEP_KEY, MAIN_AGENT_TOUR_KEY, mainAgentStatus } = await import('./onboarding-main-agent.js');
 const { TEAM_STATE_KEY } = await import('./onboarding-team-state.js');
@@ -82,7 +83,7 @@ test('the default model follows the backend, and a backend we do not know keeps 
 
 test('every route refuses an anonymous caller', async () => {
   for (const path of ['/api/setup/main-agent/name', '/api/setup/main-agent/chat', '/api/setup/main-agent/avatar',
-    '/api/setup/agent/avatar-request', '/api/setup/agent/soul', '/api/setup/agent/team', '/api/setup/agent/finish']) {
+    '/api/setup/agent/avatar-request', '/api/setup/agent/soul', '/api/setup/agent/team', '/api/setup/agent/tim', '/api/setup/agent/finish']) {
     assert.ok([401, 403].includes((await call('POST', path, null, {})).status), path);
   }
 });
@@ -173,6 +174,51 @@ test('the team is recruited for the setup conversation only, once, under free na
   assert.ok(dbApi.getAllSettings()[SETUP_TEAM_KEY]);
 });
 
+test('another TIM is created for the setup conversation only, in the main agent\'s folder, never as a copy', async () => {
+  const tim = (who: Fake | null, body: unknown) => call('POST', '/api/setup/agent/tim', who, body);
+  const job = { name: 'Iris', role: 'research', job: 'Sorts my emails every morning and tells me what matters.' };
+  // Anonymous, a browser, a mission that is not the setup conversation.
+  assert.equal((await tim(null, job)).status, 401);
+  assert.equal((await tim(asAdmin, job)).status, 403);
+  assert.equal((await tim(agentOf('sc-plain'), job)).status, 403);
+  assert.equal(existsSync(agentDir('Iris')), false, 'a refusal creates nobody');
+  // A bad body: no role, a job too long, a field the route does not take.
+  assert.equal((await tim(agentOf('sc-chat'), { name: 'Iris' })).status, 400);
+  assert.equal((await tim(agentOf('sc-chat'), { ...job, job: 'x'.repeat(301) })).status, 400);
+  assert.equal((await tim(agentOf('sc-chat'), { ...job, cwd: '/etc' })).status, 400);
+  // A role the Agents page does not know, or the orchestrator's.
+  assert.equal((await tim(agentOf('sc-chat'), { ...job, role: 'wizard' })).json.error, 'invalid_role');
+  assert.equal((await tim(agentOf('sc-chat'), { ...job, role: 'orchestrator' })).json.error, 'invalid_role');
+  // The main agent's name, or any agent this step did not create.
+  assert.equal((await tim(agentOf('sc-chat'), { ...job, name: '_main' })).json.error, 'name_taken');
+  assert.equal((await tim(agentOf('sc-chat'), { ...job, name: 'someone' })).json.error, 'name_taken');
+  assert.equal(existsSync(agentDir('Iris')), false);
+
+  const made = await tim(agentOf('sc-chat'), { ...job, name: 'Iris Mail' });
+  assert.equal(made.status, 201);
+  assert.deepEqual(made.json.tim, { name: 'Iris-Mail', role: 'research', created: true });
+  const config = JSON.parse(readFileSync(join(agentDir('Iris-Mail'), 'config.json'), 'utf8')) as Record<string, unknown>;
+  assert.equal(config.cwd, '/tmp', 'the main agent\'s folder, not a registered project');
+  assert.equal(config.backend, 'claude');
+  assert.equal(config.role, 'research');
+  assert.equal(config.reports_to, '_main');
+  assert.equal(config.permission_mode, 'default');
+  assert.match(readFileSync(join(agentDir('Iris-Mail'), 'system-prompt.md'), 'utf8'), /Sorts my emails every morning/);
+
+  // Repeated after a reload: the same TIM, nothing rewritten.
+  const again = await tim(agentOf('sc-chat'), { name: 'iris mail', role: 'ops', job: 'Something else.' });
+  assert.equal(again.status, 200);
+  assert.deepEqual(again.json.tim, { name: 'Iris-Mail', role: 'research', created: false });
+  assert.match(readFileSync(join(agentDir('Iris-Mail'), 'system-prompt.md'), 'utf8'), /Sorts my emails/);
+
+  // The job is optional; a handful of TIMs at most, beyond is the "New TIM" button.
+  assert.equal((await tim(agentOf('sc-chat'), { name: 'Tim1', role: 'ops' })).status, 201);
+  for (let i = 2; i < SETUP_TIM_LIMIT; i++) assert.equal((await tim(agentOf('sc-chat'), { ...job, name: `Tim${i}` })).status, 201);
+  assert.equal((await tim(agentOf('sc-chat'), { ...job, name: 'OneTooMany' })).json.error, 'tim_limit');
+  assert.equal(existsSync(agentDir('OneTooMany')), false);
+  assert.equal(setupTims().length, SETUP_TIM_LIMIT);
+});
+
 test('finishing answers the step once; afterwards every tool refuses', async () => {
   assert.equal((await call('POST', '/api/setup/agent/finish', agentOf('sc-chat'), { tour: 'no' })).status, 400);
   assert.equal(mainAgentStatus().tour, true, 'the tour follows unless declined');
@@ -182,6 +228,7 @@ test('finishing answers the step once; afterwards every tool refuses', async () 
   assert.equal(dbApi.getAllSettings()[MAIN_AGENT_TOUR_KEY], '0');
   assert.equal(mainAgentStatus().tour, false);
   assert.equal((await call('POST', '/api/setup/agent/team', agentOf('sc-chat'), { coder: 'Grace', reviewer: 'Ken' })).status, 409);
+  assert.equal((await call('POST', '/api/setup/agent/tim', agentOf('sc-chat'), { name: 'Late', role: 'ops' })).status, 409);
   assert.equal((await call('POST', '/api/setup/agent/soul', agentOf('sc-chat'), { soul: 'Late.' })).status, 409);
   assert.equal((await call('POST', '/api/setup/agent/finish', agentOf('sc-chat'), {})).status, 409);
 });

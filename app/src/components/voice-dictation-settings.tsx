@@ -5,7 +5,7 @@ import { Mic } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { t } from '@/lib/i18n';
-import { DICTEE_GRACE_MS } from '@/lib/stt-dictee';
+import { DICTATION_GRACE_MS } from '@/lib/stt-dictation';
 import {
   chargerPushToTalk,
   enregistrerPushToTalk,
@@ -60,7 +60,7 @@ export function VoiceDictationSettings(): ReactElement {
       <div>
         <h3 className="text-[13px] font-semibold tracking-[-0.01em]">{t('voiceSettings.title')}</h3>
         <p className="mt-1 max-w-[65ch] text-[12px] leading-snug text-muted-foreground">
-          {t('voiceSettings.graceHint', { seconds: String(Math.round(DICTEE_GRACE_MS / 1000)) })}
+          {t('voiceSettings.graceHint', { seconds: String(Math.round(DICTATION_GRACE_MS / 1000)) })}
         </p>
       </div>
 

@@ -1,6 +1,5 @@
 {
   "agentChat": {
-    "title": "Chat do agente",
     "newCard": "Novo chat de agente",
     "newCardHint": "Escolha o agente que este cartão mostra. Depois de criá-lo, adicione outro cartão pela paleta de widgets.",
     "newConversation": "Nova conversa",
@@ -37,7 +36,7 @@
       "makeMainDone": "{name} agora é o orquestrador principal: resumos de despertar e notificações vão para ele",
       "makeMainFailed": "Não foi possível definir {name} como orquestrador principal: {error}",
       "stopConfirm": "Parar {name} de verdade? Suas missões em andamento são encerradas, sua caixa de entrada é esvaziada, suas tarefas pendentes são bloqueadas e seus gatilhos e os workflows que o acordariam são desativados.",
-      "stopped": "{name} parado: {missions} missão(ões), {messages} mensagem(ns), {tasks} tarefa(s), {triggers} gatilho(s), {runs} execução(ões) de workflow, {workflows} workflow(s) neutralizado(s)",
+      "stopped": "{name} parado: {missions, plural, one {# missão} other {# missões}}, {messages, plural, one {# mensagem} other {# mensagens}}, {tasks, plural, one {# tarefa} other {# tarefas}}, {triggers, plural, one {# gatilho} other {# gatilhos}}, {runs, plural, one {# execução de workflow} other {# execuções de workflow}}, {workflows, plural, one {# workflow} other {# workflows}} neutralizados",
       "stopFailed": "Não foi possível parar {name}: {error}",
       "duplicate": "Duplicar o agente"
     },

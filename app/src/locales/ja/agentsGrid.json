@@ -48,7 +48,6 @@
     "gitPush": "git push — {count} コミット",
     "push": "{count} 件をプッシュ",
     "gitFetch": "git fetch",
-    "addAgent": "エージェントを追加",
     "filterProject": "プロジェクトを絞り込む…",
     "hideHiddenProjects": "除外したプロジェクトを再び隠す",
     "showHiddenProjects": "非表示のプロジェクトを表示",
@@ -61,10 +60,6 @@
     "newProject": "新しいプロジェクト",
     "newAgent": "新しいエージェント",
     "askAgent": "{name} に質問",
-    "notifications": "通知",
-    "timonAgentsAccess": "{brand} エージェントへのアクセス",
-    "openOrchestrator": "{name} オーケストレーターを開く",
-    "openHealthAgent": "ヘルスエージェントを開く",
     "mainAgentFallback": "メインエージェント"
   }
 }

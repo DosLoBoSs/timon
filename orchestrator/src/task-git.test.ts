@@ -49,6 +49,7 @@ for (const [name, cwd] of [['git.agent', repo], ['sub.agent', repoSub], ['plain.
   writeFileSync(join(agentDir(name), 'config.json'), JSON.stringify({ cwd }));
 }
 const { gitTaskRefusal, insideGitRepository, GIT_MISSING_REASON } = await import('./task-git.js');
+const { decodeDaemonMessage } = await import('./daemon-message.js');
 const { blockIfGitMissing } = await import('./dispatcher.js');
 const { dbApi } = await import('./db.js');
 const { CATALOG } = await import('./kernel/catalog.js');
@@ -152,6 +153,7 @@ test('the dispatcher blocks a code task with the reason instead of spawning it i
   const task = dbApi.getTask(id)!;
   assert.equal(task.status, 'BLOCKED');
   assert.equal(task.blocked_reason, GIT_MISSING_REASON);
+  assert.equal(decodeDaemonMessage(task.blocked_reason_code)?.code, 'git_missing_for_task');
 
   const sub = randomUUID();
   dbApi.createTask(sub, 'review from a sub-folder without git', 'sub.agent', { type: 'review' });

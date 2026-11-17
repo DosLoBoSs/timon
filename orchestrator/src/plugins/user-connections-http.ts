@@ -46,12 +46,12 @@ const patchSchema = z.object({
 function owner(req: Request, res: Response): ConnectionActor | null {
   if (!req.auth) { res.status(401).json({ error: 'unauthorized' }); return null; }
   const user = req.auth.user;
-  if (!user) { res.status(403).json({ error: 'a connection belongs to an account; sign in as a user' }); return null; }
+  if (!user) { res.status(403).json(apiError('connection_account_required', 'a connection belongs to an account; sign in as a user')); return null; }
   return { userId: user.id, isAdmin: req.auth.isSuperadmin };
 }
 /** `owner` for a change: only a signed-in person, never an agent's token. */
 function person(req: Request, res: Response): ConnectionActor | null {
-  if (req.auth && !isPersonAuth(req.auth)) { res.status(403).json({ error: 'connections are changed by a signed-in person' }); return null; }
+  if (req.auth && !isPersonAuth(req.auth)) { res.status(403).json(apiError('person_required', 'connections are changed by a signed-in person')); return null; }
   return owner(req, res);
 }
 function admin(req: Request, res: Response): ConnectionActor | null {
@@ -78,10 +78,10 @@ async function handle(res: Response, work: () => unknown): Promise<void> {
   try {
     res.json(await work());
   } catch (error) {
-    if (error instanceof UserConnectionError) { res.status(error.status).json({ error: error.message }); return; }
+    if (error instanceof UserConnectionError) { res.status(error.status).json(apiError('connection_refused', error.message, { detail: error.message })); return; }
     // The message of an unexpected error may come from plugin code: not echoed.
     console.error('[plugin-connections] request failed:', error instanceof Error ? error.name : 'error');
-    res.status(500).json({ error: 'connection request failed' });
+    res.status(500).json(apiError('connection_request_failed', 'connection request failed'));
   }
 }
 
@@ -89,7 +89,7 @@ export function registerUserConnectionRoutes(router: Router, service: UserConnec
   const json = express.json({ limit: '64kb' });
   const parse = <T>(schema: z.ZodType<T>, req: Request, res: Response): T | null => {
     const parsed = schema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: 'invalid connection payload' }); return null; }
+    if (!parsed.success) { res.status(400).json(apiError('invalid_body', 'invalid connection payload')); return null; }
     return parsed.data;
   };
 

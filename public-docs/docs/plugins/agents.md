@@ -18,7 +18,7 @@ A plugin that connects Timon to another system often has to manage what an agent
 | `agents:manage` | `ctx.agents.delete`, `rename`, `setAvatar`, and `memoryScope` on `update` | |
 | `agents:manage` (API 15) | `skills`, `mcpServers` and `team` on `create` / `update`; `ctx.agents.teams.create` and `teams.delete` (`agents:read` for `teams.list`); `purge` on `ctx.agents.delete` | yes |
 | `agents:docs:read`, `agents:docs:write` | `ctx.agents.docs.*`: an agent's identity documents (`SOUL.md`…), which are its instructions | yes |
-| `agents:export` (API 15) | `ctx.agents.export(name)`: the portable definition of any agent the signed-in account may read (prompt, documents, settings, skills, MCP servers, team, picture, routines), to recreate it elsewhere. A request only; never a secret, log or transcript | yes |
+| `agents:export` (API 15) | `ctx.agents.export(name)`: the portable definition of any agent the signed-in account may read (a stable `id` that a rename keeps, prompt, documents, settings, skills, MCP servers, team, picture, routines), to recreate it elsewhere. A request only; never a secret, log or transcript | yes |
 | `messages:send`, `messages:read` | `ctx.messages`: the inbox of the agents you created | `read`: yes |
 | `skills:read`, `skills:write` | `ctx.skills` | `write`: yes |
 | `mcp-servers:read`, `mcp-servers:write` | `ctx.mcpServers` | `write`: yes |

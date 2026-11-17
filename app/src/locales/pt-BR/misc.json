@@ -1,26 +1,4 @@
 {
-  "mission": {
-    "title": "Nova missão",
-    "description": "Inicie uma conversa com o agente {agent} usando o LLM de sua escolha.",
-    "resumeDescription": "Você também pode retomar a missão anterior: o novo LLM lerá um resumo e continuará a partir dele.",
-    "llm": "LLM",
-    "reasoningEffort": "Esforço de raciocínio",
-    "default": "Padrão",
-    "continue": "Continuar a partir da missão anterior",
-    "resumeWithSummary": "O novo LLM lerá um resumo do histórico para retomar.",
-    "resumeSameLlm": "Retoma o contexto da missão anterior no mesmo LLM.",
-    "followup": "Mensagem de continuação",
-    "firstMessage": "Primeira mensagem",
-    "followupPlaceholder": "Ex.: continue o que estávamos fazendo, foque em X…",
-    "firstMessagePlaceholder": "Ex.: me ajude com…",
-    "cancel": "Cancelar",
-    "continuing": "Continuando…",
-    "creating": "Criando…",
-    "start": "Iniciar",
-    "continuedToast": "Missão continuada em {backend} · {model}",
-    "createdToast": "Nova missão em {backend} · {model}",
-    "failed": "Falha: {message}"
-  },
   "llm": {
     "handoverTail": "Falha no resumo: apenas o FINAL da conversa foi transmitido",
     "confirmWhole": "Transmitir inteira",
@@ -102,12 +80,11 @@
   "notifications": {
     "bell": {
       "open": "Notificações",
-      "unread": "Notificações — {count} não lida(s)"
+      "unread": "Notificações — {count} {count, plural, one {não lida} other {não lidas}}"
     },
     "dismiss": "Dispensar",
     "center": "Central de notificações",
     "sure": "Certeza?",
-    "close": "Fechar",
     "empty": "Nenhuma notificação",
     "clearAll": "Limpar tudo",
     "clearAlerts": "Limpar alertas",
@@ -210,7 +187,7 @@
       "label": "Buscar agentes por nome, projeto, polo ou equipe",
       "clear": "Limpar a busca",
       "ratio": "{count}/{total}",
-      "count": "{count} agentes correspondentes",
+      "count": "{count, plural, one {# agente correspondente} other {# agentes correspondentes}}",
       "none": "Nenhum agente corresponde a “{query}”."
     },
     "grid": {
@@ -222,20 +199,13 @@
       "opened": "Grade aberta no espaço de trabalho"
     }
   },
-  "calendar": {
-    "today": "Hoje",
-    "tomorrow": "Amanhã",
-    "upcoming": "Próximos",
-    "overdue": "Atrasado · {date}",
-    "noDueDate": "Sem prazo"
-  },
   "delegations": {
     "title": "Aguardando retorno",
     "working": "Trabalhando",
     "idle": "Aguardando o próximo turno",
     "open": "Abrir esta missão",
     "none": "Nada aguardado",
-    "inline": "{count} missão(ões) delegada(s) em execução"
+    "inline": "{count, plural, one {# missão delegada} other {# missões delegadas}} em execução"
   },
   "missionEgress": {
     "loading": "Lendo o registro de rede…",
@@ -293,8 +263,8 @@
       "crash": "parada inesperada",
       "unknown": "causa desconhecida"
     },
-    "pendingMessages": "{count} mensagem(ns) aguardando na caixa de entrada",
-    "openDeliveries": "{count} solicitação(ões) ainda sem resposta"
+    "pendingMessages": "{count, plural, one {# mensagem} other {# mensagens}} aguardando na caixa de entrada",
+    "openDeliveries": "{count, plural, one {# solicitação} other {# solicitações}} ainda sem resposta"
   },
   "permissionRefusal": {
     "accountLacks": "Sua conta não possui {permission}. Peça a um administrador que a adicione ao seu papel.",

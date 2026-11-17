@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { mergeWorkspaceWidgets, workspaceWidgets } from '../components/widget-host/widget-defaults';
-import type { ContraintesWidget } from '../components/widget-host/widget-layout';
+import type { WidgetConstraints } from '../components/widget-host/widget-layout';
 import { MAIN_AGENT_WIDGET_ID } from './main-agent-card';
 import { ADD_WIDGET_IDS, isAddWidgetPlaceholder } from '../components/widget-host/add-widget';
 
@@ -16,7 +16,7 @@ const ids = [
   'plugin:@timon/docker-supervision:docker', 'plugin:@timon/skills-widget:skills', 'plugin:@timon/mcp-widget:mcp',
   'plugin:@timon/projects:overview', 'plugin:@timon/agents:team', 'plugin:@timon/video-factory:video',
 ];
-const constraints: ContraintesWidget[] = ids.map(id => ({ id, hauteurDefaut: 260, hauteurMin: 76, railDefaut: 'gauche', rangDefaut: 0 }));
+const constraints: WidgetConstraints[] = ids.map(id => ({ id, defaultHeight: 260, minHeight: 76, defaultZone: 'gauche', defaultRank: 0 }));
 
 test('a fresh install opens on the short arrangement the product ships (05/11/2026)', () => {
   const [add, add2] = ADD_WIDGET_IDS;
@@ -24,16 +24,16 @@ test('a fresh install opens on the short arrangement the product ships (05/11/20
   // The centre of the cockpit is the main agent's chat: that IS the first
   // screen of the product, and a starter that named anything else would give
   // a new install a board with no conversation on it.
-  const centre = cockpit.find(w => w.rail === 'centre');
-  assert.equal(centre?.id, MAIN_AGENT_WIDGET_ID);
-  assert.equal(centre?.heightMode, 'fill');
+  const center = cockpit.find(w => w.rail === 'centre');
+  assert.equal(center?.id, MAIN_AGENT_WIDGET_ID);
+  assert.equal(center?.heightMode, 'fill');
   const column = (cards: typeof cockpit, rail: string) => cards.filter(w => w.rail === rail).sort((a, b) => a.rang - b.rang);
-  const parRail = (rail: string) => column(cockpit, rail).map(w => w.id);
+  const byRail = (rail: string) => column(cockpit, rail).map(w => w.id);
   const shares = (cards: typeof cockpit, rail: string) => column(cards, rail).map(w => w.fillPercent);
-  assert.deepEqual(parRail('gauche'), ['plugin:@timon/agents:notifications', add]);
+  assert.deepEqual(byRail('gauche'), ['plugin:@timon/agents:notifications', add]);
   assert.deepEqual(shares(cockpit, 'gauche'), [66, 34], 'the notifications take two thirds, « Your widget here » the rest');
-  assert.deepEqual(parRail('centre'), [MAIN_AGENT_WIDGET_ID]);
-  assert.deepEqual(parRail('droite'), ['plugin:@timon/kanban:todo', 'plugin:@timon/agents:tasks']);
+  assert.deepEqual(byRail('centre'), [MAIN_AGENT_WIDGET_ID]);
+  assert.deepEqual(byRail('droite'), ['plugin:@timon/kanban:todo', 'plugin:@timon/agents:tasks']);
   assert.deepEqual(shares(cockpit, 'droite'), [50, 50]);
   // Frameless and transparent: the cockpit's cards sit on the background
   // rather than in boxes; the dashed placeholder draws its own outline.
@@ -91,9 +91,9 @@ test('a scope that has not answered yet paints nothing, an answered empty one pa
 
 test('a widget placed by default lands in its zone on every view, stored layout or not', () => {
   const bell = 'plugin:@timon/notifications:bell';
-  const withBell: ContraintesWidget[] = [
+  const withBell: WidgetConstraints[] = [
     ...constraints,
-    { id: bell, hauteurDefaut: 320, hauteurMin: 160, railDefaut: 'topbar.widget', rangDefaut: 99, placedByDefault: true },
+    { id: bell, defaultHeight: 320, minHeight: 160, defaultZone: 'topbar.widget', defaultRank: 99, placedByDefault: true },
   ];
   // A view with a stored layout that predates the widget: it must not vanish
   // from the bar into the palette.
@@ -114,9 +114,9 @@ test('a widget placed by default lands in its zone on every view, stored layout 
 test('a renamed widget takes over the place its former id had on screen', () => {
   const bell = 'plugin:@timon/notifications:bell';
   const inbox = 'plugin:@timon/notifications:inbox';
-  const withBell: ContraintesWidget[] = [
+  const withBell: WidgetConstraints[] = [
     ...constraints,
-    { id: bell, hauteurDefaut: 320, hauteurMin: 160, railDefaut: 'topbar.widget', rangDefaut: 99, placedByDefault: true, formerIds: [inbox] },
+    { id: bell, defaultHeight: 320, minHeight: 160, defaultZone: 'topbar.widget', defaultRank: 99, placedByDefault: true, formerIds: [inbox] },
   ];
   const placedInbox = [{ id: inbox, rail: 'sidebar.left.widget', rang: 0, hauteur: 300, borderless: true }];
   const inherited = mergeWorkspaceWidgets(placedInbox, withBell, '/').find(w => w.id === bell);
@@ -168,9 +168,9 @@ test('the Skills and MCP cards take over their places and their tab stack under 
     { id: 'plugin:@timon/agents:skills', rail: 'chat.right.widget', rang: 1, hauteur: 300, group: stack },
     { id: 'plugin:@timon/agents:mcp', rail: 'chat.right.widget', rang: 2, hauteur: 300, group: stack, activeTab: true },
   ];
-  const renamed: ContraintesWidget[] = [
-    { id: skills, hauteurDefaut: 260, hauteurMin: 140, railDefaut: 'gauche', rangDefaut: 0, formerIds: ['plugin:@timon/agents:skills'] },
-    { id: mcp, hauteurDefaut: 220, hauteurMin: 120, railDefaut: 'gauche', rangDefaut: 0, formerIds: ['plugin:@timon/agents:mcp'] },
+  const renamed: WidgetConstraints[] = [
+    { id: skills, defaultHeight: 260, minHeight: 140, defaultZone: 'gauche', defaultRank: 0, formerIds: ['plugin:@timon/agents:skills'] },
+    { id: mcp, defaultHeight: 220, minHeight: 120, defaultZone: 'gauche', defaultRank: 0, formerIds: ['plugin:@timon/agents:mcp'] },
   ];
   const merged = mergeWorkspaceWidgets(stored, renamed, '/chat', true);
   const s = merged.find(w => w.id === skills)!;
@@ -209,9 +209,9 @@ test('TODO #278: the single Git card takes over the place of the former publicat
 test('Working agents lands in the middle of the top bar on every view that never named it', () => {
   const working = 'plugin:@timon/agents:working';
   const team = 'plugin:@timon/agents:team';
-  const withWorking: ContraintesWidget[] = [
+  const withWorking: WidgetConstraints[] = [
     ...constraints.filter(c => c.id !== team),
-    { id: working, hauteurDefaut: 300, hauteurMin: 120, railDefaut: 'topbar.center.widget', rangDefaut: 99, placedByDefault: true },
+    { id: working, defaultHeight: 300, minHeight: 120, defaultZone: 'topbar.center.widget', defaultRank: 99, placedByDefault: true },
   ];
   const placeOf = (raw: unknown, view = '/') => mergeWorkspaceWidgets(raw, withWorking, view).find(w => w.id === working);
   for (const view of ['/', '/chat', '/agents']) {

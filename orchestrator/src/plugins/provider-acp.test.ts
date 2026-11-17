@@ -12,7 +12,7 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter } from 'node:path';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Context } from '@deepseek-ai/cordis';
 import type { NormalizedEvent } from '../backends/types.js';
@@ -97,7 +97,8 @@ test('registered, it launches the agent in ACP mode and speaks the protocol thro
 test('a declaration the core reads works for an ACP agent too: its sign-in folder is masked from the others', async () => {
   const { resolveIsolation } = await import('../host/isolation.js');
   const deny = resolveIsolation(TimonConfigSchema.parse({}), { home: '/home/t', backend: 'claude' }).deny;
-  assert.ok(deny.includes('/home/t/.acme'));
+  // Spelled with the host's path rules, as the policy spells it.
+  assert.ok(deny.includes(resolve('/home/t', '.acme')));
 });
 
 /* ── The agent's own list of models, asked through the program the manifest declared ─────────── */

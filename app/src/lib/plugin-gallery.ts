@@ -34,6 +34,8 @@ import type { PluginCardData } from '@/components/plugin-card';
 import { t } from '@/lib/i18n';
 import { declarationLines, readDictationDecl } from '@/lib/dictation/destination';
 import { activationErrorMessage } from '@/lib/license';
+import { parseApiError } from '@/lib/api-error';
+import { compareText } from '@/lib/intl';
 import { moduleOffCause } from '@/lib/module-off-reason';
 import { PRODUCT_THEME_PLUGIN } from '@/lib/plugin-host/loader';
 
@@ -237,10 +239,10 @@ function bundledNote(plugin: PluginPublic, active: boolean): string | null {
  * verbatim rather than replaced by a generic one.
  */
 export function toggleFailureMessage(status: number, body: unknown): string {
-  const detail = typeof body === 'object' && body !== null && typeof (body as { error?: unknown }).error === 'string'
-    ? (body as { error: string }).error.trim()
-    : '';
-  if (detail) return activationErrorMessage({ error: detail }, t);
+  const parsed = parseApiError(body);
+  if (parsed?.message) {
+    return activationErrorMessage({ error: parsed.message, ...(parsed.code ? { code: parsed.code, params: parsed.params } : {}) }, t);
+  }
   if (status === 401) return t('pluginsPage.toggleUnauthenticated');
   if (status === 403) return t('pluginsPage.toggleForbidden');
   if (status === 404) return t('pluginsPage.toggleUnknown');
@@ -258,7 +260,7 @@ export function groupBySource(plugins: PluginPublic[]): { bundled: PluginPublic[
 /** Plugged in first, then refused, then unplugged; alphabetical within a group. */
 export function sortForGallery(plugins: PluginPublic[]): PluginPublic[] {
   const rank = (p: PluginPublic): number => (p.state === 'active' ? 0 : p.state === 'disabled' ? 2 : 1);
-  return [...plugins].sort((a, b) => rank(a) - rank(b) || (a.label ?? a.id).localeCompare(b.label ?? b.id));
+  return [...plugins].sort((a, b) => rank(a) - rank(b) || compareText(a.label ?? a.id, b.label ?? b.id));
 }
 
 /**

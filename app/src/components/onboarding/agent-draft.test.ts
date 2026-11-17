@@ -116,7 +116,7 @@ test('the interview sends its autonomy as a permission mode and every answer as 
 
 test('the sheet sends model, exact permission mode, folder, skills, MCP servers, its line of work and rules', () => {
   const sheet = draft({
-    role: 'review', model: { backend: 'codex', model: 'gpt-5.5' }, permission: 'bypassPermissions', folder: ' /home/me/app ',
+    role: 'review', model: { backend: 'codex', model: 'gpt-5.5' }, effort: 'high', permission: 'bypassPermissions', folder: ' /home/me/app ',
     skills: ['tests'], mcp: ['github'], rules: ' Never push. ', customLook: STYLED,
   });
   const patch = creationPatch('sheet', sheet, {
@@ -130,6 +130,7 @@ test('the sheet sends model, exact permission mode, folder, skills, MCP servers,
     permission_mode: 'bypassPermissions',
     backend: 'codex',
     model: 'gpt-5.5',
+    reasoningEffort: 'high',
     cwd: '/home/me/app',
     // Not shown, so not unchecked: the product's own skill and an unlisted server stay.
     skills: ['timon-task', 'tests'],
@@ -137,6 +138,8 @@ test('the sheet sends model, exact permission mode, folder, skills, MCP servers,
   });
   const untouched = creationPatch('sheet', draft(), NO_CONTEXT);
   assert.equal(untouched.model, undefined, 'no model picked: the agent keeps its own');
+  assert.ok(!('reasoningEffort' in untouched), 'no effort picked: the model\'s default, nothing written');
+  assert.ok(!('reasoningEffort' in creationPatch('interview', draft({ effort: 'high' }), NO_CONTEXT)), 'only the sheet sets the effort');
   assert.equal(untouched.cwd, undefined, 'no folder: the workspace stays');
   assert.equal(directivesOf('sheet', draft({ rules: '   ' })), '', 'the pilot needs no line of work');
   assert.equal(directivesOf('sheet', draft({ role: 'code', rules: '' })), roleLine('code'));

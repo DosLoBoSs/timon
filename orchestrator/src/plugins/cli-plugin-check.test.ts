@@ -24,6 +24,12 @@ function runTimon(args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ code: 
   return new Promise((resolve, reject) => {
     // A closed port by default: `check` asks the daemon for its Node, and a test never reaches the live one.
     const full: NodeJS.ProcessEnv = { ...process.env, TIMON_HOME: HOME, TIMON_RESOURCE_GUARD_ENABLED: '0', TIMON_API: 'http://127.0.0.1:9', TIMON_API_TOKEN: '', ...env };
+    // Windows names a variable whatever its case (`Path`): an override must not leave the inherited spelling beside it.
+    if (process.platform === 'win32') {
+      for (const name of Object.keys(env)) {
+        for (const key of Object.keys(full)) if (key !== name && key.toUpperCase() === name.toUpperCase()) delete full[key];
+      }
+    }
     delete full.TIMON_MISSION_ID;
     const child = spawn(process.execPath, [...IMPORTS.flatMap((m) => ['--import', m]), TIMON, ...args], {
       cwd: ORCH, env: full, stdio: ['ignore', 'pipe', 'pipe'],
@@ -97,7 +103,11 @@ test('--deny is repeatable and makes each word an error', async () => {
  * the PATH, which is the same "npm could not be run".
  */
 async function checkWithoutNpm(home: string): Promise<void> {
-  const r = await runTimon(['plugin', 'check', '--json', folder()], { PATH: '', HOME: home, NVM_DIR: '' });
+  // Windows also looks in `%APPDATA%\npm`, `Program Files\nodejs`, Volta and nvm-windows, from the account's profile.
+  const windows: NodeJS.ProcessEnv = process.platform === 'win32'
+    ? { USERPROFILE: home, APPDATA: '', LOCALAPPDATA: '', ProgramFiles: '', NVM_SYMLINK: '' }
+    : {};
+  const r = await runTimon(['plugin', 'check', '--json', folder()], { PATH: '', HOME: home, NVM_DIR: '', ...windows });
   // The report carries the finding that failed: print it with stderr, or a red run says nothing.
   assert.equal(r.code, 0, `stdout:\n${r.stdout}\nstderr:\n${r.stderr}`);
   const report = JSON.parse(r.stdout) as { packed: { source: string }; findings: Array<{ rule: string }> };

@@ -5,10 +5,10 @@
 #   curl -fsSL https://timon-ai.com/install.sh | sh -s -- --dry-run
 #
 # What it does, in order:
-#   1. reads the signed release manifest of timon-ai.com and checks its
-#      signatures: P-256 with any openssl (LibreSSL on macOS included), and
-#      Ed25519 with OpenSSL 3; with neither, says so and relies on HTTPS and
-#      the checksum below;
+#   1. reads the signed installers' manifest of timon-ai.com and checks its
+#      signatures: P-256, always, with any openssl (LibreSSL on macOS
+#      included), and Ed25519 too with OpenSSL 3; a manifest that cannot be
+#      checked stops here;
 #   2. picks the package of this machine: the deb on Debian and Ubuntu, the
 #      AppImage on other Linux distributions, the pkg on macOS;
 #   3. downloads it and compares its size and SHA-256 with the manifest
@@ -26,10 +26,10 @@
 set -eu
 
 # The installers' manifest: the release manifest plus a P-256 signature
-# (scripts/release-manifest.mjs). Until the site serves it, the release
-# manifest the daemons read, without that signature.
+# (scripts/release-manifest.mjs). Trust anchor: no fallback to the release
+# manifest the daemons read, which has no P-256 signature, so a network
+# attacker cannot downgrade the check by serving that file instead.
 INSTALL_MANIFEST_URL='https://timon-ai.com/.well-known/timon-releases-install.json'
-MANIFEST_URL='https://timon-ai.com/.well-known/timon-releases.json'
 SIGNATURE_DOMAIN='timon-releases-v1'
 # The release key of docs/internal/scripts (keyId release-4253f18d5854243a),
 # the one orchestrator/src/plugins-bundled/updates/keyring.ts pins.
@@ -38,7 +38,7 @@ RELEASE_PUBLIC_KEY='-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEA/exKqVlkcdYZ9xhlreEUFmnjlu/7VfHpfPXfdbIyeAk=
 -----END PUBLIC KEY-----'
 # The installers' P-256 key (docs/internal/scripts/release-p256-keygen.mjs
-# --pin writes both lines). Empty: the P-256 signature is not checked.
+# --pin writes both lines). Required: the installer refuses to run without it.
 RELEASE_P256_KEY_ID='release-701bbfb6d1c1eed1'
 RELEASE_P256_PUBLIC_KEY='-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyUUvXZE0kGYqgsXTRslQyKnF1Y5M
@@ -79,7 +79,6 @@ has() { command -v "$1" >/dev/null 2>&1; }
 apply_test_hooks() {
   if [ "${TIMON_INSTALL_TESTING:-}" = 1 ]; then
     INSTALL_MANIFEST_URL="${TIMON_INSTALL_MANIFEST_URL:-$INSTALL_MANIFEST_URL}"
-    MANIFEST_URL="${TIMON_INSTALL_FALLBACK_MANIFEST_URL:-$INSTALL_MANIFEST_URL}"
     if [ -n "${TIMON_INSTALL_PUBLIC_KEY_FILE:-}" ]; then
       RELEASE_PUBLIC_KEY=$(cat "$TIMON_INSTALL_PUBLIC_KEY_FILE")
       RELEASE_KEY_ID="${TIMON_INSTALL_KEY_ID:-$RELEASE_KEY_ID}"
@@ -159,9 +158,9 @@ has_openssl3() {
   has openssl && openssl version 2>/dev/null | grep -Eq '^OpenSSL ([3-9]|[1-9][0-9])\.'
 }
 
-# Ed25519 needs OpenSSL 3: LibreSSL (the macOS one) and OpenSSL 1.1 cannot
-# verify it. P-256 works with any of them. Each signature that can be checked
-# is, and one that fails stops here. Sets SIGNATURE to verified or unchecked.
+# The P-256 signature is mandatory: any openssl verifies it, LibreSSL (the
+# macOS one) and OpenSSL 1.1 included. Ed25519 needs OpenSSL 3 and is checked
+# on top when it is there. A signature that is missing or fails stops here.
 verify_manifest() {
   envelope="$1"
   key_id=$(envelope_field "$envelope" keyId)
@@ -172,33 +171,24 @@ verify_manifest() {
   base64_decode "$WORK/sig.b64" "$WORK/sig.bin" || die 'the release manifest is malformed'
   [ "$key_id" = "$RELEASE_KEY_ID" ] || die "the release manifest is signed with an unknown key ($key_id)"
   { printf '%s\000' "$SIGNATURE_DOMAIN"; cat "$WORK/payload.json"; } >"$WORK/signed.bin"
-  SIGNATURE=unchecked
 
+  [ -n "$RELEASE_P256_PUBLIC_KEY" ] || die 'this installer pins no P-256 key: nothing was installed'
   p256_key_id=$(p256_field "$envelope" keyId)
   p256_field "$envelope" sig >"$WORK/p256.b64"
-  if [ -n "$RELEASE_P256_PUBLIC_KEY" ] && [ -s "$WORK/p256.b64" ] && has openssl; then
-    [ "$p256_key_id" = "$RELEASE_P256_KEY_ID" ] || die "the release manifest is signed with an unknown P-256 key ($p256_key_id)"
-    base64_decode "$WORK/p256.b64" "$WORK/p256.der" || die 'the release manifest is malformed'
-    printf '%s\n' "$RELEASE_P256_PUBLIC_KEY" >"$WORK/p256-key.pem"
-    if openssl dgst -sha256 -verify "$WORK/p256-key.pem" -signature "$WORK/p256.der" "$WORK/signed.bin" >/dev/null 2>&1; then
-      SIGNATURE=verified
-    else
-      die 'the release manifest signature is INVALID: nothing was installed. Report it at https://timon-ai.com'
-    fi
-  fi
+  [ -s "$WORK/p256.b64" ] || die 'the release manifest has no P-256 signature: nothing was installed. Report it at https://timon-ai.com'
+  has openssl || die 'checking the release manifest signature needs openssl: install it (for example sudo apt-get install openssl), then run this command again'
+  [ "$p256_key_id" = "$RELEASE_P256_KEY_ID" ] || die "the release manifest is signed with an unknown P-256 key ($p256_key_id)"
+  base64_decode "$WORK/p256.b64" "$WORK/p256.der" || die 'the release manifest is malformed'
+  printf '%s\n' "$RELEASE_P256_PUBLIC_KEY" >"$WORK/p256-key.pem"
+  openssl dgst -sha256 -verify "$WORK/p256-key.pem" -signature "$WORK/p256.der" "$WORK/signed.bin" >/dev/null 2>&1 ||
+    die 'the release manifest signature is INVALID: nothing was installed. Report it at https://timon-ai.com'
+  SIGNATURE=verified
 
   if has_openssl3; then
     printf '%s\n' "$RELEASE_PUBLIC_KEY" >"$WORK/release-key.pem"
-    if openssl pkeyutl -verify -pubin -inkey "$WORK/release-key.pem" -rawin \
-      -in "$WORK/signed.bin" -sigfile "$WORK/sig.bin" >/dev/null 2>&1; then
-      SIGNATURE=verified
-    else
+    openssl pkeyutl -verify -pubin -inkey "$WORK/release-key.pem" -rawin \
+      -in "$WORK/signed.bin" -sigfile "$WORK/sig.bin" >/dev/null 2>&1 ||
       die 'the release manifest signature is INVALID: nothing was installed. Report it at https://timon-ai.com'
-    fi
-  fi
-
-  if [ "$SIGNATURE" = unchecked ]; then
-    warn 'could not check the manifest signature (it needs OpenSSL 3): relying on HTTPS and the package checksum'
   fi
 }
 
@@ -476,9 +466,7 @@ main() {
   if [ "$DOWNLOAD_ONLY" = 0 ]; then trap 'rm -rf "$WORK"' EXIT; fi
   trap 'exit 130' INT TERM
 
-  if ! fetch "$INSTALL_MANIFEST_URL" "$WORK/releases.json" 2>/dev/null; then
-    fetch "$MANIFEST_URL" "$WORK/releases.json" || die "could not download the release manifest ($MANIFEST_URL)"
-  fi
+  fetch "$INSTALL_MANIFEST_URL" "$WORK/releases.json" || die "could not download the release manifest ($INSTALL_MANIFEST_URL)"
   verify_manifest "$WORK/releases.json"
 
   key="$OS-$ARCH-$FORMAT"

@@ -4,7 +4,7 @@ import { settingsPath } from '@/lib/settings-path';
 /**
  * Terminal failures of the desktop's local dictation engine. `not-allowed`
  * and `audio-capture` (a refused or missing microphone) are Web Speech's own
- * codes and keep their meaning; these are ours. `erreurDicteeFatale` and the
+ * codes and keep their meaning; these are ours. `isFatalDictationError` and the
  * voice mode treat every one as final, so no surface relaunches into a
  * failure that will repeat (TIM-0061: "Listening…" stuck, nothing written).
  */

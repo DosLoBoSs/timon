@@ -41,11 +41,11 @@ export const COLUMNS_SUFFIX = 'columns';
 /** Where the owner's browser stores the catalog snapshot. One row per account. */
 export const SNAPSHOT_SCOPE = 'widgets.snapshot';
 
-/** The chat's two columns, in their default order (`COLONNES` in `chat-rails.tsx`). */
+/** The chat's two columns, in their default order (`COLUMNS` in `chat-rails.tsx`). */
 export const CHAT_COLUMNS = ['chat.left.widget', 'chat.right.widget'] as const;
 /** Separator between a column's zone and its tab suffix (`chat-columns.ts`). */
 export const TAB_SEPARATOR = '#';
-/** Bounds of a column width (`LARGEUR_MIN` / `LARGEUR_MAX` in `chat-columns.ts`). */
+/** Bounds of a column width (`WIDTH_MIN` / `WIDTH_MAX` in `chat-columns.ts`). */
 export const COLUMN_MIN_WIDTH = 240;
 export const COLUMN_MAX_WIDTH = 800;
 
@@ -155,7 +155,7 @@ export function mergeSnapshot(previous: StoredSnapshot | null, body: SnapshotBod
 
 /**
  * The plugin a placement id belongs to, read from the id itself
- * (`idPlacementPlugin`: `plugin:<pluginId>[:<key>]`). `null` for anything
+ * (`pluginPlacementId`: `plugin:<pluginId>[:<key>]`). `null` for anything
  * else — a registration id is not stable, it is never proposed.
  */
 export function pluginOfWidget(id: string): string | null {
@@ -175,7 +175,7 @@ export function visibleCatalog(snapshot: StoredSnapshot | null, allowed: PluginA
   });
 }
 
-/** Columns as `lireColonnes` would keep them, enough to list zones and tabs. */
+/** Columns as `readColumns` would keep them, enough to list zones and tabs. */
 export type ColumnsState = {
   order: string[];
   hidden: string[];

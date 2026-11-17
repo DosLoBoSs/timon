@@ -5,9 +5,11 @@ import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
+import { compareText } from '@/lib/intl';
 import { FramedFace } from '@/plugins-client/agent-chat/agent-avatar';
-import { visageAgent, type ProjetConnu } from '@/plugins-client/agent-chat/use-agents';
+import { agentFace, type KnownProject } from '@/plugins-client/agent-chat/use-agents';
 
 export type OrchestrationSource = 'explicit' | 'main' | 'orchestrator' | 'reports_to';
 
@@ -92,9 +94,9 @@ export function checkedNames(
 async function refusalReason(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { reason?: unknown; error?: unknown };
-    for (const value of [body.reason, body.error]) {
-      if (typeof value === 'string' && value) return value;
-    }
+    // A known code reads translated; otherwise the daemon's `reason` is the more precise sentence.
+    const error = typeof body.reason === 'string' && body.reason ? body.reason : body.error;
+    return apiErrorMessage({ ...body, error }, t('orchestration.reasonUnknown'));
   } catch {}
   return t('orchestration.reasonUnknown');
 }
@@ -107,7 +109,7 @@ export type OrchestrationSectionProps = {
   /** The teams of bots, to name the team an agent belongs to. */
   teams?: readonly OrchestrationTeam[];
   /** The projects, for the avatar an agent without a picture borrows. */
-  projects?: readonly ProjetConnu[];
+  projects?: readonly KnownProject[];
   /** The daemon's answer after a write, to refresh what the editor holds. */
   onSaved?: (agent: OrchestrationAgent) => void;
   /** Whether a selection is picked but not applied yet, so the host can warn
@@ -135,12 +137,12 @@ function TeamTag({ team, mine }: { team: OrchestrationTeam | undefined; mine: bo
 function Row({ agent, roster, projects, tags }: {
   agent: OrchestrationRosterEntry;
   roster: readonly OrchestrationRosterEntry[];
-  projects: readonly ProjetConnu[];
+  projects: readonly KnownProject[];
   tags?: React.ReactNode;
 }) {
   return (
     <>
-      <FramedFace visage={visageAgent(agent.name, roster, projects)} className="size-7" glyphClassName="text-[11px]" />
+      <FramedFace visage={agentFace(agent.name, roster, projects)} className="size-7" glyphClassName="text-[11px]" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[12.5px] font-medium">{agent.name}</span>
         {(agent.project || agent.role) && (
@@ -192,7 +194,7 @@ export function OrchestrationSection({ agent: given, roster, teams = [], project
 
   const self = roster.find((a) => a.name === agent.name);
   const rest = roster.filter((a) => a.name !== agent.name);
-  const names = rest.map((a) => a.name).sort((a, b) => a.localeCompare(b));
+  const names = rest.map((a) => a.name).sort((a, b) => compareText(a, b));
   const checked = checkedNames(selection, agent.effective_orchestrates, names);
   const { direct, below } = canvasReports(agent.name, roster);
   const teamOf = (id: string | null | undefined) => (id ? teams.find((x) => x.id === id) : undefined);
@@ -202,7 +204,7 @@ export function OrchestrationSection({ agent: given, roster, teams = [], project
   // Who is in, the canvas reports first: what the operator drew comes before what was added by hand.
   const chosen = rest
     .filter((a) => checked.has(a.name))
-    .sort((a, b) => Number(below.has(b.name)) - Number(below.has(a.name)) || a.name.localeCompare(b.name));
+    .sort((a, b) => Number(below.has(b.name)) - Number(below.has(a.name)) || compareText(a.name, b.name));
   const needle = filter.trim().toLowerCase();
   const candidates = needle
     ? rest.filter((a) => !checked.has(a.name) && [a.name, a.project, a.role].some((v) => v?.toLowerCase().includes(needle))).slice(0, 8)

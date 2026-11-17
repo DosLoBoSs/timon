@@ -1,6 +1,5 @@
 {
   "agentChat": {
-    "title": "Agent chat",
     "newCard": "New agent chat",
     "newCardHint": "Pick the agent this card shows. Add another card from the widget palette once this one is created.",
     "newConversation": "New conversation",
@@ -38,7 +37,7 @@
       "makeMainDone": "{name} is now the main orchestrator: wake recaps and notifications go to it",
       "makeMainFailed": "Could not set {name} as main orchestrator: {error}",
       "stopConfirm": "Stop {name} for real? Its running missions are terminated, its inbox emptied, its pending tasks blocked, its triggers and the workflows that would wake it switched off.",
-      "stopped": "{name} stopped: {missions} mission(s), {messages} message(s), {tasks} task(s), {triggers} trigger(s), {runs} workflow run(s), {workflows} workflow(s) neutralised",
+      "stopped": "{name} stopped: {missions, plural, one {# mission} other {# missions}}, {messages, plural, one {# message} other {# messages}}, {tasks, plural, one {# task} other {# tasks}}, {triggers, plural, one {# trigger} other {# triggers}}, {runs, plural, one {# workflow run} other {# workflow runs}}, {workflows, plural, one {# workflow} other {# workflows}} neutralised",
       "stopFailed": "Could not stop {name}: {error}",
       "duplicate": "Duplicate agent"
     },

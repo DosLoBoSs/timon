@@ -34,8 +34,7 @@ import { fingerprintReadable } from './fingerprint.js';
 import { assertLicenseCompatible } from './compliance.js';
 import { LicenseCapabilityError } from './capabilities.js';
 import { fixedComposition } from './capabilities.js';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
 import type { Application } from 'express';
 import { bus } from '../bus.js';
 import { LICENSE_FILE, LICENSE_KEY_FILE } from '../paths.js';
@@ -43,12 +42,19 @@ import { deviceId } from './device.js';
 import { LicenseServerError, renew, type ClientOptions } from './client.js';
 import { installLicenseToken, readLicense, unlicensed, verifyLicenseToken, type LicenseReason, type LicenseState, type VerifyOptions } from './license.js';
 import { licenseRevision, licenseState, reevaluateBuildPolicy, setLicenseState } from './runtime.js';
-import { readLicenseStore, writeLicenseStore } from './store.js';
+import { licenseStoreDamaged, readLicenseStore, writeFileDurably, writeLicenseStore, type LicenseStore } from './store.js';
 
 /** §5.1 defaults, used only until the server has announced its own. */
 const DEFAULT_EVERY_SECONDS = 300;
 const DEFAULT_OFFLINE_HOURS = 24;
 const LOCAL_TICK_MS = 60_000;
+/**
+ * Delays of the quick retries after a boot whose first renewal found no
+ * network, before the regular interval takes over. A retry that would land at
+ * or past the first regular tick is dropped (the server may announce a short
+ * interval), so the two never send a renewal at the same time.
+ */
+const BOOT_RETRY_MS: readonly number[] = [30_000, 60_000, 120_000];
 
 // ── Persistence of the activation key ───────────────────────────────────────
 
@@ -60,10 +66,7 @@ export function readLicenseKey(file = LICENSE_KEY_FILE): string | null {
 }
 
 export function writeLicenseKey(key: string, file = LICENSE_KEY_FILE): void {
-  mkdirSync(dirname(file), { recursive: true });
-  const tmp = `${file}.tmp-${process.pid}`;
-  writeFileSync(tmp, key.trim() + '\n', { mode: 0o600 });
-  renameSync(tmp, file);
+  writeFileDurably(file, key.trim() + '\n');
 }
 
 export function forgetLicenseKey(file = LICENSE_KEY_FILE): void {
@@ -87,7 +90,7 @@ export function recordServerContact(refresh: { every: number; offlineHours: numb
  * says so (`offlineSince`) so the banner can.
  */
 export function bootLicenseState(opts: VerifyOptions = {}): LicenseState {
-  const store = readLicenseStore();
+  const store = recoverLicenseStore(opts.now ?? new Date());
   const graceUntil = store.lastContact === undefined
     ? undefined
     : store.lastContact + (store.offlineHours ?? DEFAULT_OFFLINE_HOURS) * 3600;
@@ -96,6 +99,31 @@ export function bootLicenseState(opts: VerifyOptions = {}): LicenseState {
     return { ...state, offlineSince: new Date(store.lastContact * 1000).toISOString() };
   }
   return state;
+}
+
+/**
+ * A hard reset can leave `license.state.json` empty or cut short, and reading
+ * it as absent lost `lastContact`: a token that expired during the outage then
+ * looked never renewed, so the boot read it `expired` and a beta build locked
+ * itself (`beta_ended`) until a renewal got through (TIM-0147). The token file
+ * is rewritten by every activation and renewal, so its date is the last server
+ * contact that survived; the tolerance counts from it, as it would have.
+ *
+ * Only with an activation key: without one, the token was installed by hand
+ * and its date says nothing about the server.
+ */
+function recoverLicenseStore(now: Date): LicenseStore {
+  const store = readLicenseStore();
+  if (!licenseStoreDamaged() || !readLicenseKey()) return store;
+  let tokenWritten: number;
+  try { tokenWritten = statSync(LICENSE_FILE).mtimeMs; } catch { return store; }
+  const lastContact = Math.floor(Math.min(tokenWritten, now.getTime()) / 1000);
+  console.warn(`[license] license.state.json is unreadable; offline tolerance counted from the licence file date (${new Date(lastContact * 1000).toISOString()})`);
+  try { return writeLicenseStore({ lastContact }); }
+  catch (err) {
+    console.warn('[license] could not rewrite license.state.json:', (err as Error).message);
+    return { ...store, lastContact };
+  }
 }
 
 // ── The loop ────────────────────────────────────────────────────────────────
@@ -112,6 +140,8 @@ export type RefreshDeps = {
   manual?: boolean;
   /** Tests: whether the machine id can be read right now. */
   fingerprintReadable?: () => boolean;
+  /** Tests: shorter delays for the quick retries after the boot. */
+  bootRetryMs?: readonly number[];
 };
 
 export type LicenseRefresh = {
@@ -143,6 +173,24 @@ function publish(state: LicenseState): void {
   bus.publish({ kind: 'license_changed', status: state.status, reason: state.reason, offlineSince: state.offlineSince });
 }
 
+/**
+ * The cause of a failed renewal, worded for the log and the alert: which side
+ * failed is what tells a network not ready yet from a server that answered.
+ * Built from the status, the error code and the transport's own error code —
+ * never the request, which carries the activation key.
+ */
+export function describeRenewFailure(err: unknown): string {
+  if (err instanceof LicenseServerError) {
+    if (err.status === 429) return 'rate limited by the license server (429)';
+    if (err.status === 0) return `license server not usable: ${err.code}`;
+    return `license server answered ${err.status} ${err.code}`;
+  }
+  const e = err as { name?: unknown; message?: unknown; cause?: { code?: unknown } } | null;
+  if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return 'network: license server did not answer in time';
+  const code = typeof e?.cause?.code === 'string' ? e.cause.code : null;
+  return `network: ${code ?? (typeof e?.message === 'string' ? e.message : 'unreachable')}`;
+}
+
 function refusalReason(code: string): 'revoked' | 'expired' | 'deactivated' | null {
   if (code === 'revoked') return 'revoked';
   if (code === 'expired') return 'expired';
@@ -155,6 +203,7 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
   const notify = deps.notify ?? defaultNotify;
   let offlineSince: number | null = null;
   let warnedOffline = false;
+  let alertedStillOff = false;
 
   /** Tells the rest of the daemon what `before` became, once per change. */
   const announce = async (before: LicenseState, after: LicenseState): Promise<void> => {
@@ -183,7 +232,30 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
   const apply = async (state: LicenseState): Promise<void> => {
     const before = licenseState();
     setLicenseState(state);
+    if (licenseState().status === 'valid') alertedStillOff = false;
     await announce(before, licenseState());
+  };
+
+  /**
+   * A licence that is off while an activation key is there, and a renewal that
+   * could not settle it. `goOff` only speaks when a VALID licence goes off: a
+   * boot that read the licence as off, then failed to renew it, stayed silent
+   * while the dispatcher and the routines were down for an hour (TIM-0147).
+   * Once per episode; a licence valid again re-arms it.
+   */
+  const alertStillOff = (cause: string): void => {
+    const state = licenseState();
+    if (state.status === 'valid' || state.reason === 'build_expired' || alertedStillOff) return;
+    alertedStillOff = true;
+    const minutes = Math.round((readLicenseStore().every ?? DEFAULT_EVERY_SECONDS) / 60);
+    console.warn(`[license] licence still not valid (${state.reason}) and its renewal failed: ${cause}`);
+    // Only a locked beta build gets here: `tick` never renews a licence that
+    // fell back to local Free, which keeps every module anyway.
+    notify({
+      title: 'Licence not renewed',
+      body: `Timon could not renew its licence (${cause}); the modules your licence covers stay off until it goes through. It tries again every ${minutes} min.`,
+      urgent: true,
+    });
   };
 
   const goOff = async (reason: LicenseReason, detail: string): Promise<void> => {
@@ -214,7 +286,15 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
     }
   };
 
+  /**
+   * Whether the last renewal failed for want of a network (unreachable, 5xx,
+   * unsigned): the only failure the boot retries quickly. A refusal or a 429
+   * is an answer, and asking again sooner would not change it.
+   */
+  let lastOffline = false;
+
   const tick = async (): Promise<void> => {
+    lastOffline = false;
     // Free never contacts the issuer, including installations retaining an old key.
     if (licenseState().localFree || licenseState().planId === 'free') return;
     // A build past its end date needs no answer from the server.
@@ -247,22 +327,25 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
       await apply(state);
     } catch (err) {
       if (revision !== licenseRevision() || key !== readLicenseKey()) return;
+      const cause = describeRenewFailure(err);
       if (err instanceof LicenseServerError && err.isRefusal) {
-        if (err.status === 429) return; // rate limited: not an answer about the licence
+        console.warn(`[license] renew failed: ${cause}`);
+        if (err.status === 429) { alertStillOff(cause); return; } // rate limited: not an answer about the licence
         if (err.status === 409 && err.code === 'device_mismatch') {
           rememberRefusal('invalid:machine');
           await goOff('invalid:machine', 'another machine holds this device id (device_mismatch)');
           return;
         }
         const reason = refusalReason(err.code);
-        if (reason) { rememberRefusal(reason); await goOff(reason, `license server answered ${err.status} ${err.code}`); return; }
-        // A refusal we do not know how to read (400 invalid_request…): log,
-        // change nothing — the local tick keeps the expiry honest.
-        console.warn(`[license] renew refused: ${err.status} ${err.code}`);
+        if (reason) { rememberRefusal(reason); await goOff(reason, cause); return; }
+        // A refusal we do not know how to read (400 invalid_request…): change
+        // nothing — the local tick keeps the expiry honest.
+        alertStillOff(cause);
         return;
       }
       // Unreachable, 5xx, unsigned: offline. The token stays good until the
       // plan's tolerance runs out; the local tick enforces that.
+      lastOffline = true;
       if (offlineSince === null) {
         const store = readLicenseStore();
         offlineSince = store.lastContact !== undefined ? store.lastContact * 1000 : now();
@@ -277,7 +360,8 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
         const left = Math.max(0, Math.round((until - now()) / 3_600_000));
         notify({ title: 'Licence server unreachable', body: `No contact since ${new Date(offlineSince).toISOString()}. The licence stays valid for about ${left} h more.`, urgent: false });
       }
-      console.warn(`[license] renew failed (${(err as Error).message}); offline since ${new Date(offlineSince).toISOString()}`);
+      console.warn(`[license] renew failed: ${cause}; offline since ${new Date(offlineSince).toISOString()}`);
+      alertStillOff(cause);
     }
   };
 
@@ -321,13 +405,33 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
   network.unref();
   local.unref();
   // First refresh right away: a daemon that was down for a while must not wait
-  // five minutes to learn its licence was revoked — or renewed.
-  void tick();
+  // five minutes to learn its licence was revoked — or renewed. At boot the
+  // network is often not up yet (a machine just woken, Wi-Fi still joining):
+  // a licence read as off then kept its modules off for a whole interval
+  // (TIM-0147), so a failure for want of a network is retried a few times
+  // sooner before the interval takes over.
+  const retries = deps.bootRetryMs ?? BOOT_RETRY_MS;
+  let stopped = false;
+  let bootRetry: NodeJS.Timeout | null = null;
+  const bootTick = async (attempt: number, elapsed: number): Promise<void> => {
+    await tick();
+    const delay = retries[attempt];
+    if (stopped || !lastOffline || delay === undefined || elapsed + delay >= every) return;
+    bootRetry = setTimeout(() => { bootRetry = null; void bootTick(attempt + 1, elapsed + delay); }, delay);
+    bootRetry.unref();
+  };
+  void bootTick(0, 0);
 
   return {
     tick,
     localTick,
-    stop() { clearInterval(network); clearInterval(local); },
+    stop() {
+      stopped = true;
+      clearInterval(network);
+      clearInterval(local);
+      if (bootRetry) clearTimeout(bootRetry);
+      bootRetry = null;
+    },
   };
 }
 

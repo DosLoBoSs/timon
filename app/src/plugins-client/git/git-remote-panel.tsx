@@ -109,7 +109,7 @@ export function GitPublish({ g, repo = null, repoName = null }: {
         });
         const j = (await r.json()) as { git?: GitRemote; error?: string };
         if (r.ok && j.git) { setGitRemote(gitRepoId(g.slug, repo), j.git); ok = true; }
-        else if (!r.ok || j.error) setErr(responseErrorText(j, `HTTP ${r.status}`));
+        else if (!r.ok || j.error) setErr(responseErrorText(j, t('apiErrors.http_status', { status: r.status })));
       } catch (e) {
         setErr(String(e));
       } finally {

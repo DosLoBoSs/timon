@@ -302,7 +302,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
     const patch: Partial<UserPrefs> = {};
     if (body.scheme !== undefined) {
       if (!isColorScheme(body.scheme)) {
-        res.status(400).json({ error: 'scheme must be light or dark' });
+        res.status(400).json(apiError('scheme_invalid', 'scheme must be light or dark'));
         return;
       }
       patch.scheme = body.scheme;
@@ -326,7 +326,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
       patch.layout = chosen.id;
     }
     if (patch.theme === undefined && patch.layout === undefined && patch.scheme === undefined) {
-      res.status(400).json({ error: 'theme, layout or scheme required' });
+      res.status(400).json(apiError('prefs_empty', 'theme, layout or scheme required'));
       return;
     }
     const prefs = dbApi.userPrefsSet(userId, patch);
@@ -358,7 +358,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
     }
     const parsed = ModelFavoritesBodySchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: `favorites must be at most ${MODEL_FAVORITES_MAX} { backend, model } pairs` });
+      res.status(400).json(apiError('model_favorites_invalid', `favorites must be at most ${MODEL_FAVORITES_MAX} { backend, model } pairs`, { max: MODEL_FAVORITES_MAX }));
       return;
     }
     res.json({ favorites: dbApi.userModelFavoritesSet(userId, parsed.data.favorites) });
@@ -387,9 +387,11 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
     }
     const parsed = PlanPresetsBodySchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({
-        error: `presets must be at most ${PLAN_PRESETS_MAX} { id, name (1-${PLAN_PRESET_NAME_MAX} characters), roles } entries, each setting at least one role`,
-      });
+      res.status(400).json(apiError(
+        'plan_presets_invalid',
+        `presets must be at most ${PLAN_PRESETS_MAX} { id, name (1-${PLAN_PRESET_NAME_MAX} characters), roles } entries, each setting at least one role`,
+        { max: PLAN_PRESETS_MAX, nameMax: PLAN_PRESET_NAME_MAX },
+      ));
       return;
     }
     res.json({ presets: dbApi.userPlanPresetsSet(userId, parsed.data.presets) });
@@ -451,7 +453,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
    */
   app.post('/api/auth/setup-token', (req, res) => {
     if (req.auth?.kind !== 'daemon-token') {
-      res.status(403).json({ error: 'daemon token required' });
+      res.status(403).json(apiError('daemon_token_required', 'daemon token required'));
       return;
     }
     if (dbApi.countUsers() > 0) {
@@ -492,13 +494,11 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
     const name = parseName(body.name);
     const password = parsePassword(body.password);
     if (!email || !name || !password) {
-      res.status(400).json({
-        error: 'email, name and password (min 8 characters) required',
-      });
+      res.status(400).json(apiError('setup_fields_required', `email, name and password (min ${MIN_PASSWORD} characters) required`, { min: MIN_PASSWORD }));
       return;
     }
     if (body.scheme !== undefined && !isColorScheme(body.scheme)) {
-      res.status(400).json({ error: 'scheme must be light or dark' });
+      res.status(400).json(apiError('scheme_invalid', 'scheme must be light or dark'));
       return;
     }
     // A browser confirms the address before the account exists; the operator
@@ -628,7 +628,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
       return;
     }
     if (!email || password.length === 0) {
-      res.status(400).json({ error: 'email and password required' });
+      res.status(400).json(apiError('credentials_required', 'email and password required'));
       return;
     }
     const user = dbApi.getUserByEmail(email);
@@ -718,7 +718,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
       return;
     }
     if (!next) {
-      res.status(400).json({ error: `password must be at least ${MIN_PASSWORD} characters` });
+      res.status(400).json(apiError('password_too_short', `password must be at least ${MIN_PASSWORD} characters`, { min: MIN_PASSWORD }));
       return;
     }
     const user = dbApi.getUserById(session.id);
@@ -732,7 +732,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
       return;
     }
     if (verdicts.sameAsCurrent) {
-      res.status(400).json({ error: 'the new password must differ from the current one' });
+      res.status(400).json(apiError('password_unchanged', 'the new password must differ from the current one'));
       return;
     }
     clearThrottle(keys);
@@ -761,7 +761,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
     }
     const body = (req.body ?? {}) as { name?: unknown; avatar_url?: unknown };
     if (body.name === undefined && body.avatar_url === undefined) {
-      res.status(400).json({ error: 'name or avatar_url required' });
+      res.status(400).json(apiError('profile_empty', 'name or avatar_url required'));
       return;
     }
     let user = dbApi.getUserById(session.id);
@@ -780,7 +780,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
     if (body.avatar_url !== undefined) {
       const avatar = parseAvatarUrl(body.avatar_url);
       if (avatar === undefined) {
-        res.status(400).json({ error: `avatar_url must be null or start with ${AVATAR_URL_PREFIX}` });
+        res.status(400).json(apiError('avatar_url_invalid', `avatar_url must be null or start with ${AVATAR_URL_PREFIX}`));
         return;
       }
       user = dbApi.setUserAvatar(user.id, avatar);
@@ -819,7 +819,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
       return;
     }
     if (!email) {
-      res.status(400).json({ error: 'a valid email is required' });
+      res.status(400).json(apiError('email_invalid', 'a valid email is required'));
       return;
     }
     const user = dbApi.getUserById(session.id);
@@ -830,7 +830,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
     }
     clearThrottle(keys);
     if (email === user.email) {
-      res.status(400).json({ error: 'the new email must differ from the current one' });
+      res.status(400).json(apiError('email_unchanged', 'the new email must differ from the current one'));
       return;
     }
     if (dbApi.getUserByEmail(email)) {
@@ -867,18 +867,18 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
   app.post('/api/auth/email/confirm', (req, res) => {
     const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
     if (!token) {
-      res.status(400).json({ error: 'token required' });
+      res.status(400).json(apiError('token_required', 'token required'));
       return;
     }
     const tokenHash = hashSessionToken(token);
     const pending = dbApi.getPendingEmailChange(tokenHash);
     if (!pending) {
-      res.status(400).json({ error: 'invalid or expired token' });
+      res.status(400).json(apiError('token_invalid', 'invalid or expired token'));
       return;
     }
     const user = dbApi.getUserById(pending.user_id);
     if (!user || user.status !== 'active') {
-      res.status(400).json({ error: 'invalid or expired token' });
+      res.status(400).json(apiError('token_invalid', 'invalid or expired token'));
       return;
     }
     const taken = dbApi.getUserByEmail(pending.new_email);
@@ -925,7 +925,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
       res.json(saveAvatar(body));
     } catch (err) {
       if (err instanceof LicenseCapabilityError) { res.status(409).json({ error: err.code, message: err.message }); return; }
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('avatar_invalid', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -940,7 +940,8 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
     } catch (err) {
       if (err instanceof LicenseCapabilityError) { res.status(409).json({ error: err.code, message: err.message }); return; }
       const msg = (err as Error).message;
-      res.status(msg === 'not found' ? 404 : 400).json({ error: msg });
+      if (msg === 'not found') { res.status(404).json(apiError('not_found', msg)); return; }
+      res.status(400).json(apiError('avatar_invalid', msg, { detail: msg }));
     }
   });
 

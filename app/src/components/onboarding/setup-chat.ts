@@ -3,9 +3,9 @@
 /**
  * The main agent's welcome conversation, as a hook: where it resumes, how it
  * starts, how it ends (docs/ONBOARDING-AGENT-CHAT.md). It runs on the TIMs
- * page (`plugins-client/bots/bots-welcome.tsx`), right after the onboarding.
- * Same daemon routes, same resume key and same trouble rules as
- * `/setup/agent`, which stays the repair screen.
+ * page (`plugins-client/bots/bots-welcome.tsx`), right after the onboarding,
+ * and on `/setup/agent`, the repair screen, which draws its own forms (the AIs,
+ * the name) in front of it.
  *
  * The conversation needs a named agent: an install that reaches the page
  * without one (the gate, an onboarding left half-way) goes back to the agent
@@ -18,11 +18,11 @@ import { fetchCapabilities } from '@/lib/capabilities';
 import { armAutoTour } from '@/lib/guided-tour';
 import { getLocale } from '@/lib/i18n';
 import { machineScopedStorage } from '@/lib/machines/machine-storage';
-import { readResume, RESUME_KEY, setupEntry, type MainAgentStatus } from '@/app/setup/agent/setup-entry';
-import { requestSkip } from '@/app/setup/agent/setup-escape';
+import { markWelcomeSkipped, readResume, RESUME_KEY, setupEntry, type MainAgentStatus } from './setup-entry';
+import { requestSkip } from './setup-skip';
 import {
   SILENT_AFTER_MS, setupTrouble, type SetupChatSignal, type SetupMissionState, type SetupTrouble,
-} from '@/app/setup/agent/setup-trouble';
+} from './setup-trouble';
 import { MAIN_AGENT_STATUS_PATH, type Fetcher } from './agent-create';
 
 export const SETUP_CHAT_PATH = '/api/ui/setup/main-agent/chat';
@@ -55,6 +55,9 @@ function releaseApp(): void {
   void fetchCapabilities(true).catch(() => null);
 }
 
+/** Why the hook hands the reader back to the app: the step was already over, the agent ended it, the reader skipped it. */
+export type SetupLeave = 'done' | 'finished' | 'skipped';
+
 export type SetupChat = {
   stage: ChatStepStage;
   /** The daemon's last word on the step: the team recruited, the tour chosen. */
@@ -74,9 +77,26 @@ export type SetupChat = {
   skip: () => Promise<void>;
 };
 
-export function useSetupChat(opts: { fetcher?: Fetcher; leave?: () => void } = {}): SetupChat {
+export function useSetupChat(opts: {
+  fetcher?: Fetcher;
+  leave?: (why: SetupLeave) => void;
+  /**
+   * Where a daemon that does not answer the status leaves the reader: the
+   * start's own error (the welcome), or the name form (`/setup/agent`, where
+   * the form has a way forward of its own).
+   */
+  statusFailure?: 'unavailable' | 'unnamed';
+  /**
+   * The conversation is on screen. Until it is, nothing is read and nothing
+   * starts: a page mounted in a hidden tab spends no mission. Defaults to
+   * `true` (`/setup/agent` is the conversation's own screen).
+   */
+  shown?: boolean;
+} = {}): SetupChat {
   const fetcher = opts.fetcher ?? fetch;
-  const leaveRef = useRef(opts.leave ?? releaseApp);
+  const leaveRef = useRef<(why: SetupLeave) => void>(opts.leave ?? releaseApp);
+  const statusFailure = useRef(opts.statusFailure ?? 'unavailable');
+  const shown = opts.shown ?? true;
   const [stage, setStage] = useState<ChatStepStage>({ kind: 'loading' });
   const [status, setStatus] = useState<MainAgentStatus | null>(null);
   const [spoke, setSpoke] = useState(false);
@@ -92,6 +112,8 @@ export function useSetupChat(opts: { fetcher?: Fetcher; leave?: () => void } = {
   const leavingRef = useRef(false);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
+  const stageRef = useRef(stage);
+  stageRef.current = stage;
 
   const onAgentSpoke = useCallback(() => setSpoke(true), []);
   const onSetupTrouble = useCallback((signal: SetupChatSignal) => {
@@ -132,13 +154,14 @@ export function useSetupChat(opts: { fetcher?: Fetcher; leave?: () => void } = {
     const tour = next.tour !== false;
     if (tour) armAutoTour();
     setLeaving({ tour });
-    setTimeout(() => leaveRef.current(), LEAVE_DELAY_MS);
+    setTimeout(() => leaveRef.current('finished'), LEAVE_DELAY_MS);
   }, []);
 
   // Where are we: a conversation already open (a reload), a named agent whose chat never started, or no agent yet.
+  // Once per mount, and only once on screen: the start below is the one a mission costs.
   const entered = useRef(false);
   useEffect(() => {
-    if (entered.current) return;
+    if (!shown || entered.current) return;
     entered.current = true;
     void (async () => {
       try {
@@ -147,15 +170,15 @@ export function useSetupChat(opts: { fetcher?: Fetcher; leave?: () => void } = {
         const current = await res.json() as MainAgentStatus;
         setStatus(current);
         const entry = chatStepEntry(current, readResume());
-        if (entry.kind === 'done') { leavingRef.current = true; leaveRef.current(); return; }
+        if (entry.kind === 'done') { leavingRef.current = true; leaveRef.current('done'); return; }
         if (entry.kind === 'startChat') { void start(entry.agent); return; }
         setStage(entry);
       } catch {
-        // The daemon did not answer: the start says it the way a refused start does.
-        setStage({ kind: 'unavailable', agent: '' });
+        // The daemon did not answer: the start says it the way a refused start does, unless the caller has a form for it.
+        setStage(statusFailure.current === 'unnamed' ? { kind: 'unnamed' } : { kind: 'unavailable', agent: '' });
       }
     })();
-  }, [start]);
+  }, [shown, start]);
 
   // The conversation's mission: one that ended (a reload included) will never call `setup_finish`.
   const missionId = stage.kind === 'chat' ? stage.missionId : null;
@@ -204,8 +227,11 @@ export function useSetupChat(opts: { fetcher?: Fetcher; leave?: () => void } = {
     setSkipError(false);
     if (await requestSkip()) {
       leavingRef.current = true;
+      // Walked out of: a later visit of the TIMs page does not reopen it.
+      const current = stageRef.current;
+      if (current.kind === 'chat') markWelcomeSkipped(current.missionId);
       setSkipped(true);
-      leaveRef.current();
+      leaveRef.current('skipped');
       return;
     }
     setSkipError(true);

@@ -18,6 +18,7 @@ import React, { useEffect, useState } from 'react';
 import { ChevronRight, type LucideIcon } from 'lucide-react';
 import { toolLabel } from '@/lib/tool-label';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ToolCallsMode } from './chat-appearance';
 
@@ -77,7 +78,7 @@ export function ToolCall({ name, title, icon: Icon, headHtml, result, mode = 'dr
         <ChevronRight className="tool-summary-chevron size-3 shrink-0" aria-hidden />
         <Icon className="size-3.5 shrink-0" aria-hidden />
         <span className="tool-summary-name">{toolLabel(name, title)}</span>
-        {result?.isError && <span className="tool-result-badge">error</span>}
+        {result?.isError && <span className="tool-result-badge">{t('chatCards.toolError')}</span>}
       </summary>
       <ToolBody headHtml={headHtml} result={result} />
     </details>
@@ -117,8 +118,8 @@ export function ToolCallStack({ tools, running = [], live = false }: {
   const ticking = running.length > 0;
   useEffect(() => {
     if (!ticking) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, [ticking]);
   if (tools.length === 0) return null;
   const open = tools.find((tool) => tool.id === openId) ?? null;
@@ -197,7 +198,7 @@ export function ToolCallStack({ tools, running = [], live = false }: {
       })}
       {live && running.length === 0 && (
         <div className="tool-stack-live">
-          <span className="tool-stack-live-name">thinking</span>
+          <span className="tool-stack-live-name">{t('chatCards.thinking')}</span>
           <ThinkingDots />
         </div>
       )}
@@ -205,7 +206,7 @@ export function ToolCallStack({ tools, running = [], live = false }: {
         <div className="tool-stack-open">
           <div className="tool-stack-open-name">
             {toolLabel(open.name, open.title)}
-            {open.result?.isError && <span className="tool-result-badge">error</span>}
+            {open.result?.isError && <span className="tool-result-badge">{t('chatCards.toolError')}</span>}
           </div>
           <ToolBody headHtml={open.headHtml} result={open.result} />
         </div>

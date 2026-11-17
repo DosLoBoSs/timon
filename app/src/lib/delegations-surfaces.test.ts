@@ -37,7 +37,7 @@ test('le bandeau annonce le compte et nomme chaque agent une seule fois', () => 
       ],
     }),
   );
-  assert.ok(html.includes('3 delegated mission(s) running'));
+  assert.ok(html.includes('3 delegated missions running'));
   assert.ok(html.includes('timon.coder, timon.reviewer'));
   // Sobriété : le brief appartient à la carte du rail, pas au fil.
   assert.ok(!html.includes('refonte du composer'));

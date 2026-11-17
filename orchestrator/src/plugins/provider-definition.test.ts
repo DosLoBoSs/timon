@@ -10,6 +10,7 @@ import '../test-home.js';
 import '../../tests/helpers/paid-license.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
 import { Context } from '@deepseek-ai/cordis';
 import type { NativeProviderDefinition } from '../backends/engine/definition.js';
 import type { NormalizedEvent } from '../backends/types.js';
@@ -363,7 +364,9 @@ test('C1: the host adapter looks where the provider said, and installs as it sai
       },
     };
     const release = ctx.provider.registerProvider(def);
-    const linux = binaryCandidates('acme-agent', { platform: 'linux', homeDir: '/home/t', env: { ACME_PREFIX: '/opt/acme' }, path: '/usr/bin' });
+    // A Windows host joins the Linux candidates with its own separator: the folders are the same.
+    const linux = binaryCandidates('acme-agent', { platform: 'linux', homeDir: '/home/t', env: { ACME_PREFIX: '/opt/acme' }, path: '/usr/bin' })
+      .map((candidate) => candidate.replaceAll('\\', '/'));
     assert.ok(linux.includes('/home/t/.acme/bin/acme-agent') && linux.includes('/opt/acme/bin/acme-agent'));
     const noPrefix = binaryCandidates('acme-agent', { platform: 'linux', homeDir: '/home/t', env: {}, path: '/usr/bin' });
     assert.equal(noPrefix.some((p) => p.includes('${')), false, 'a folder that needs an unset variable is dropped, not searched literally');
@@ -409,13 +412,15 @@ test('C2: another provider\'s sign-in folder is masked, the mission\'s own is sp
     registry.registerProfile('acme-plugin-l', { id: 'acme-l-profile', dialect: 'acme-l', label: 'Acme', models: [], defaultModel: null });
     const cfg = TimonConfigSchema.parse({});
     const home = '/home/tester';
+    // Spelled with the host's path rules, as the policy spells it.
+    const inHome = (dir: string) => resolve(home, dir);
     const onClaude = resolveIsolation(cfg, { home, backend: 'claude' });
-    assert.ok(onClaude.deny.includes(`${home}/.acme`) && onClaude.deny.includes(`${home}/.config/acme`), 'a claude mission cannot read acme\'s sign-in');
+    assert.ok(onClaude.deny.includes(inHome('.acme')) && onClaude.deny.includes(inHome('.config/acme')), 'a claude mission cannot read acme\'s sign-in');
     const onAcme = resolveIsolation(cfg, { home, backend: 'acme-l-profile' });
-    assert.equal(onAcme.deny.includes(`${home}/.acme`), false, 'acme\'s own mission keeps it');
-    assert.ok(onAcme.deny.includes(`${home}/.claude`), 'and still cannot read claude\'s');
+    assert.equal(onAcme.deny.includes(inHome('.acme')), false, 'acme\'s own mission keeps it');
+    assert.ok(onAcme.deny.includes(inHome('.claude')), 'and still cannot read claude\'s');
     release();
-    assert.equal(resolveIsolation(cfg, { home, backend: 'claude' }).deny.includes(`${home}/.acme`), false);
+    assert.equal(resolveIsolation(cfg, { home, backend: 'claude' }).deny.includes(inHome('.acme')), false);
   } finally {
     restore();
   }

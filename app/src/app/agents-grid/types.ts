@@ -1,5 +1,7 @@
 /** Types + helpers shared by the project grid and its cards. */
 
+import { t } from '@/lib/i18n';
+
 export type Project = {
   slug: string;
   name?: string | null;
@@ -132,10 +134,10 @@ export const GREPAI_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 /** Deliberately approximate compact duration: we want an order of magnitude. */
 export function humanAge(ms: number): string {
   const s = Math.round(ms / 1000);
-  if (s < 60) return `${s} s`;
+  if (s < 60) return t('agentsGrid.age.seconds', { n: s });
   const m = Math.round(s / 60);
-  if (m < 60) return `${m} min`;
+  if (m < 60) return t('agentsGrid.age.minutes', { n: m });
   const h = Math.round(m / 60);
-  if (h < 48) return `${h} h`;
-  return `${Math.round(h / 24)} j`;
+  if (h < 48) return t('agentsGrid.age.hours', { n: h });
+  return t('agentsGrid.age.days', { n: Math.round(h / 24) });
 }

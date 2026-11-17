@@ -13,6 +13,7 @@ import { scopedDb } from '../../users/scoped-db.js';
 import { viewerFromRequest } from '../../users/identity.js';
 import { requireProviderAccess } from '../../users/provider-access.js';
 import { refuseBackendChange } from './change-gate.js';
+import { apiError } from '../../api-error.js';
 
 type FileView = {
   id: string; models: { slug: string; label: string; hidden?: boolean; addedAt?: number }[];
@@ -90,7 +91,7 @@ export function registerManagedBackendRoutes(router: Router, files: () => FileLi
     const origin = registeredBackendOwners().profiles[id];
     if (origin === 'local-file') { updateCustom(req, res, next); return; }
     if (!installedProfiles().some((profile) => profile.id === id)) {
-      res.status(404).json({ error: 'Unknown backend' });
+      res.status(404).json(apiError('backend_unknown', 'Unknown backend'));
       return;
     }
     try {
@@ -98,10 +99,12 @@ export function registerManagedBackendRoutes(router: Router, files: () => FileLi
       res.json({ backend: listing(req).backends.find((entry) => entry.id === id) });
     } catch (error) {
       if (error instanceof ZodError) {
-        res.status(400).json({ error: 'Unsupported or invalid backend fields', fields: error.issues.map((issue) => issue.path.join('.') || 'body') });
+        const fields = error.issues.map((issue) => issue.path.join('.') || 'body');
+        res.status(400).json({ ...apiError('invalid_fields', 'Unsupported or invalid backend fields', { fields: fields.join(', ') }), fields });
         return;
       }
-      res.status(409).json({ error: error instanceof Error ? error.message : 'Backend update failed' });
+      const detail = error instanceof Error ? error.message : 'Backend update failed';
+      res.status(409).json(apiError('backend_update_failed', detail, { detail }));
     }
   });
 }

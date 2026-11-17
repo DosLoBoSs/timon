@@ -1,26 +1,4 @@
 {
-  "mission": {
-    "title": "새 미션",
-    "description": "선택한 LLM으로 에이전트 {agent}와(과) 대화를 시작합니다.",
-    "resumeDescription": "이전 미션을 재개할 수도 있습니다: 새 LLM이 요약을 읽고 거기서 이어 갑니다.",
-    "llm": "LLM",
-    "reasoningEffort": "추론 노력",
-    "default": "기본값",
-    "continue": "이전 미션에서 계속",
-    "resumeWithSummary": "새 LLM이 기록 요약을 읽고 재개합니다.",
-    "resumeSameLlm": "같은 LLM에서 이전 미션의 컨텍스트를 재개합니다.",
-    "followup": "후속 메시지",
-    "firstMessage": "첫 메시지",
-    "followupPlaceholder": "예: 하던 작업을 계속하고 X에 집중…",
-    "firstMessagePlaceholder": "예: …을(를) 도와줘",
-    "cancel": "취소",
-    "continuing": "계속하는 중…",
-    "creating": "만드는 중…",
-    "start": "시작",
-    "continuedToast": "{backend} · {model}에서 미션을 이어 갔습니다",
-    "createdToast": "{backend} · {model}에서 새 미션",
-    "failed": "실패: {message}"
-  },
   "llm": {
     "handoverTail": "요약 실패: 대화의 끝부분만 전달됨",
     "confirmWhole": "통째로 넘기기",
@@ -107,7 +85,6 @@
     "dismiss": "닫기",
     "center": "알림 센터",
     "sure": "확실한가요?",
-    "close": "닫기",
     "empty": "알림 없음",
     "clearAll": "모두 지우기",
     "clearAlerts": "경고 지우기",
@@ -221,13 +198,6 @@
       "openWorkspace": "워크스페이스에서 열기",
       "opened": "그리드가 워크스페이스에서 열렸습니다"
     }
-  },
-  "calendar": {
-    "today": "오늘",
-    "tomorrow": "내일",
-    "upcoming": "예정",
-    "overdue": "기한 지남 · {date}",
-    "noDueDate": "기한 없음"
   },
   "delegations": {
     "title": "결과 대기 중",

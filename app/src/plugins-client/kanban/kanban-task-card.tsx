@@ -6,6 +6,7 @@ import { ChatLink } from '@/components/chat/chat-link';
 import { RoleBadge } from '@/components/role-badge';
 import { StatusLabel } from '@/components/task-form/task-form-parts';
 import { ActiveAgentAvatar, AgentAvatar, type AgentIdentity } from '@/components/agent-avatar';
+import { daemonMessageText } from '@/lib/api-error';
 import { chatHref } from '@/lib/chat-island-params';
 import { t as i18n } from '@/lib/i18n';
 import { INTERRUPTION_LABEL_KEYS } from '@/lib/interruption-labels';
@@ -149,7 +150,7 @@ export function KanbanTaskCard({
         </div>
       )}
       {t.blocked_reason && (
-        <div className="rounded bg-destructive/10 px-2 py-1 text-[11.5px] text-destructive">{t.blocked_reason}</div>
+        <div className="rounded bg-destructive/10 px-2 py-1 text-[11.5px] text-destructive">{daemonMessageText(t.blocked_reason_code, t.blocked_reason)}</div>
       )}
     </>
   ) : null;
@@ -166,7 +167,7 @@ export function KanbanTaskCard({
       {waits > 0 && (
         <TaskLinksBadge
           tone="plain"
-          label={i18n(waits === 1 ? 'kanbanPage.card.waitsOne' : 'kanbanPage.card.waitsMany', { count: waits })}
+          label={i18n('kanbanPage.card.waits', { count: waits })}
           header={i18n('kanbanPage.depsTitle')}
           links={deps.map((id) => ({ id }))}
           byId={byId}
@@ -175,7 +176,7 @@ export function KanbanTaskCard({
       {unblocks > 0 && (
         <TaskLinksBadge
           tone={chain > 0 ? 'chain' : 'plain'}
-          label={i18n(unblocks === 1 ? 'kanbanPage.card.unblocksOne' : 'kanbanPage.card.unblocksMany', { count: unblocks })}
+          label={i18n('kanbanPage.card.unblocks', { count: unblocks })}
           header={i18n('kanbanPage.dependentsTitle')}
           links={dependents}
           byId={byId}

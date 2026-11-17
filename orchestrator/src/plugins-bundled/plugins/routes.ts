@@ -134,13 +134,13 @@ export function registerRoutes(router: Router): void {
       return void res.status(404).json(apiError('plugin_unknown', 'unknown plugin'));
     }
     if (!status.manifest?.permissions.includes('usage:read')) {
-      return void res.status(403).json({ error: `plugin \`${id}\`: permission \`usage:read\` is missing from the manifest` });
+      return void res.status(403).json(apiError('plugin_permission_missing', `plugin \`${id}\`: permission \`usage:read\` is missing from the manifest`, { plugin: id, permission: 'usage:read' }));
     }
     try {
       // The caller's subscription accounts only (TODO #330).
       res.json({ entries: await collectUsage(viewerFromRequest(req), req.query.refresh === '1' ? { force: true } : undefined) });
     } catch (error) {
-      res.status(503).json({ error: (error as Error).message });
+      res.status(503).json(apiError('usage_unavailable', (error as Error).message, { detail: (error as Error).message }));
     }
   });
 
@@ -158,7 +158,7 @@ export function registerRoutes(router: Router): void {
     const id = String(req.params.id ?? '');
     const status = loaderFromApp(req.app)?.list().find((p) => p.id === id);
     if (!status || status.state !== 'active' || !thirdPartyPluginVisible(viewerFromRequest(req), id)) {
-      return void res.status(404).json({ error: 'plugin inconnu' });
+      return void res.status(404).json(apiError('plugin_unknown', 'unknown plugin'));
     }
     const pack = readDictationPack(status.dir, status.manifest);
     res.set('Cache-Control', 'no-store');
@@ -182,9 +182,9 @@ export function registerRoutes(router: Router): void {
   router.post('/api/plugins/:id/enabled', async (req, res) => {
     // Express decodes scoped ids; legacy aliases remain supported.
     const parsedId = toggleIdSchema.safeParse(req.params.id);
-    if (!parsedId.success) return void res.status(400).json({ error: '`id` must be a non-empty string' });
+    if (!parsedId.success) return void res.status(400).json(apiError('invalid_id', '`id` must be a non-empty string'));
     const parsedBody = toggleBodySchema.safeParse(req.body);
-    if (!parsedBody.success) return void res.status(400).json({ error: '`enabled` must be a boolean' });
+    if (!parsedBody.success) return void res.status(400).json(apiError('invalid_body', '`enabled` must be a boolean'));
     const target = resolveToggleTarget(parsedId.data);
     const { id } = target;
     const { enabled } = parsedBody.data;
@@ -202,7 +202,7 @@ export function registerRoutes(router: Router): void {
       try {
         await applyToggle(req.app, target, enabled);
       } catch (err) {
-        if (err instanceof CoreModuleError) return void res.status(403).json({ error: err.message });
+        if (err instanceof CoreModuleError) return void res.status(403).json(apiError('core_module_locked', err.message, { detail: err.message }));
         throw err;
       }
       return void res.json({ ok: true, id, enabled });
@@ -235,12 +235,12 @@ export function registerRoutes(router: Router): void {
     const status = loaderFromApp(req.app)?.list().find((p) => p.id === id);
     const key = typeof req.body?.key === 'string' ? req.body.key : '';
     const setting = status?.manifest?.settings.find((candidate) => candidate.key === key);
-    if (!setting) return void res.status(400).json({ error: 'undeclared setting' });
+    if (!setting) return void res.status(400).json(apiError('plugin_setting_unknown', 'undeclared setting'));
     const value: unknown = req.body?.value;
     const valid = setting.type === 'string' || setting.type === 'secret' ? typeof value === 'string'
       : setting.type === 'number' ? typeof value === 'number' && Number.isFinite(value)
         : typeof value === 'boolean';
-    if (!valid) return void res.status(400).json({ error: `invalid ${setting.type} value` });
+    if (!valid) return void res.status(400).json(apiError('plugin_setting_invalid', `invalid ${setting.type} value`, { type: setting.type }));
     const json = JSON.stringify(value);
     const kvKey = settingKvKey(key);
     // Type `secret` is sealed with the vault envelope. `settingStatus` still
@@ -279,14 +279,14 @@ export function registerRoutes(router: Router): void {
     if (!declared) return void res.status(404).json(apiError('plugin_unknown', 'unknown plugin'));
     const { publisher } = declared;
     const decl = declared.decls.find((w) => w.name === name);
-    if (!decl) return void res.status(404).json({ error: 'webhook not declared' });
+    if (!decl) return void res.status(404).json(apiError('webhook_not_declared', 'webhook not declared'));
     const body = rotateBodySchema.safeParse(req.body ?? {});
-    if (!body.success) return void res.status(400).json({ error: '`keepPrevious` must be a boolean' });
+    if (!body.success) return void res.status(400).json(apiError('invalid_body', '`keepPrevious` must be a boolean'));
     let secret: string;
     try {
       secret = rotatePluginWebhookSecret(id, name, req.auth?.user?.id ?? null, publisher, { keepPrevious: body.data.keepPrevious, auth: decl.auth });
     } catch (err) {
-      if (err instanceof PluginWebhookSecretError) return void res.status(400).json({ error: err.message });
+      if (err instanceof PluginWebhookSecretError) return void res.status(400).json(apiError('webhook_secret_invalid', err.message, { detail: err.message }));
       console.warn(`[plugins] ${id}/${name}: webhook secret not stored — ${(err as Error).message}`);
       return void res.status(503).json(apiError('vault_unavailable', 'secrets vault unavailable'));
     }
@@ -312,17 +312,17 @@ export function registerRoutes(router: Router): void {
     if (!declared) return void res.status(404).json(apiError('plugin_unknown', 'unknown plugin'));
     const { publisher } = declared;
     const decl = declared.decls.find((w) => w.name === name);
-    if (!decl) return void res.status(404).json({ error: 'webhook not declared' });
+    if (!decl) return void res.status(404).json(apiError('webhook_not_declared', 'webhook not declared'));
     const body = provideBodySchema.safeParse(req.body ?? {});
     // zod's issues would quote the input: a fixed message instead.
-    if (!body.success) return void res.status(400).json({ error: 'expected `{ secret: string, keepPrevious?: boolean }`' });
+    if (!body.success) return void res.status(400).json(apiError('invalid_body', 'expected `{ secret: string, keepPrevious?: boolean }`'));
     let verifyToken: string | null;
     try {
       ({ verifyToken } = setPluginWebhookSecret(id, name, req.auth.user?.id ?? null, publisher, body.data.secret, {
         keepPrevious: body.data.keepPrevious, auth: decl.auth,
       }));
     } catch (err) {
-      if (err instanceof PluginWebhookSecretError) return void res.status(400).json({ error: err.message });
+      if (err instanceof PluginWebhookSecretError) return void res.status(400).json(apiError('webhook_secret_invalid', err.message, { detail: err.message }));
       console.warn(`[plugins] ${id}/${name}: webhook secret not stored — ${(err as Error).message}`);
       return void res.status(503).json(apiError('vault_unavailable', 'secrets vault unavailable'));
     }
@@ -336,7 +336,7 @@ export function registerRoutes(router: Router): void {
     const name = paramOf(req, 'name');
     const declared = declaredWebhooks(req, id);
     const decl = declared?.decls.find((w) => w.name === name);
-    if (!declared || !decl) return void res.status(404).json({ error: 'webhook not declared' });
+    if (!declared || !decl) return void res.status(404).json(apiError('webhook_not_declared', 'webhook not declared'));
     const revoked = revokePreviousPluginWebhookSecret(id, name);
     res.json({ ok: true, revoked, webhook: pluginWebhookStatus(id, name, decl.auth, declared.publisher) });
   });

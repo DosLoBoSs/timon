@@ -33,11 +33,11 @@ type Actor = { userId: string; everyAccount: boolean };
 function reader(req: Request, res: Response): Actor | null {
   if (!req.auth) { res.status(401).json({ error: 'unauthorized' }); return null; }
   const user = req.auth.user;
-  if (!user) { res.status(403).json({ error: 'a connection belongs to an account; sign in as a user' }); return null; }
+  if (!user) { res.status(403).json(apiError('connection_account_required', 'a connection belongs to an account; sign in as a user')); return null; }
   return { userId: user.id, everyAccount: req.auth.isSuperadmin && isPersonAuth(req.auth) };
 }
 function person(req: Request, res: Response): Actor | null {
-  if (req.auth && !isPersonAuth(req.auth)) { res.status(403).json({ error: 'receipts are replayed by a signed-in person' }); return null; }
+  if (req.auth && !isPersonAuth(req.auth)) { res.status(403).json(apiError('person_required', 'receipts are replayed by a signed-in person')); return null; }
   return reader(req, res);
 }
 const sees = (actor: Actor, connection: PluginMessagingConnection): boolean =>
@@ -51,9 +51,9 @@ function ownerView(connection: PluginMessagingConnection, actor: Actor) {
 }
 
 function refused(res: Response, error: unknown): void {
-  if (error instanceof IntegrationQueueError) { res.status(error.status).json({ error: error.message }); return; }
+  if (error instanceof IntegrationQueueError) { res.status(error.status).json(apiError('receipt_refused', error.message, { detail: error.message })); return; }
   console.error('[integrations] receipt request failed:', error instanceof Error ? error.name : 'error');
-  res.status(500).json({ error: 'receipt request failed' });
+  res.status(500).json(apiError('receipt_request_failed', 'receipt request failed'));
 }
 
 export function registerIntegrationReceiptRoutes(router: Router, store: IntegrationStore): void {
@@ -96,7 +96,7 @@ export function registerIntegrationReceiptRoutes(router: Router, store: Integrat
     const actor = person(req, res); if (!actor) return;
     const found = owned(req, res, actor); if (!found) return;
     try {
-      if (!store.replay(found.row.id)) { res.status(409).json({ error: 'nothing to replay on this receipt' }); return; }
+      if (!store.replay(found.row.id)) { res.status(409).json(apiError('receipt_nothing_to_replay', 'nothing to replay on this receipt')); return; }
       auditForeign(req, actor, found.connection, 'integration_receipt.admin_replay', found.row.id);
       res.json({ ok: true });
     } catch (error) { refused(res, error); }
@@ -106,7 +106,7 @@ export function registerIntegrationReceiptRoutes(router: Router, store: Integrat
     const actor = person(req, res); if (!actor) return;
     const found = owned(req, res, actor); if (!found) return;
     try {
-      if (!store.discardFailed(found.row.id)) { res.status(409).json({ error: 'only a failed receipt can be discarded' }); return; }
+      if (!store.discardFailed(found.row.id)) { res.status(409).json(apiError('receipt_not_failed', 'only a failed receipt can be discarded')); return; }
       auditForeign(req, actor, found.connection, 'integration_receipt.admin_discard', found.row.id);
       res.json({ ok: true });
     } catch (error) { refused(res, error); }

@@ -72,7 +72,7 @@ export type ExecTreeOpts = Pick<SpawnOpts, 'cwd' | 'env'> & { timeout: number; m
 /**
  * `detached` takes the child out of the daemon's group and session: a Ctrl+C at
  * the terminal no longer reaches it, nor does launchd's group kill. The daemon
- * ends on SIGTERM and SIGINT through `process.exit` (`resources-guard`), so this
+ * ends on its stop signals through `process.exit` (`daemon-shutdown.ts`), so this
  * brings back what those signals did. A SIGKILLed daemon still leaves the child.
  */
 const liveGroups = new Set<ChildProcess>();

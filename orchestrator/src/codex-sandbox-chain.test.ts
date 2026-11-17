@@ -104,7 +104,7 @@ test('the selector shows the level codex really runs in, not the label it was gi
 });
 
 test('only plan reaches codex as read-only; acceptEdits and auto write, bypassPermissions lifts the sandbox', async () => {
-  const cwd = realpathSync(mkdtempSync(join(tmpdir(), 'timon-codex-chain-cwd-')));
+  const cwd = realpathSync.native(mkdtempSync(join(tmpdir(), 'timon-codex-chain-cwd-')));
   try {
     const expected: Record<string, string> = {
       plan: 'read-only',
@@ -135,7 +135,7 @@ function git(cwd: string, ...args: string[]): void {
 }
 
 test('a task worktree opens git roots nested under codex\'s .git carve-outs: kept off Windows, dropped on it', async () => {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), 'timon-codex-chain-wt-')));
+  const base = realpathSync.native(mkdtempSync(join(tmpdir(), 'timon-codex-chain-wt-')));
   try {
     const repo = join(base, 'repo');
     mkdirSync(repo);

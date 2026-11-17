@@ -1,6 +1,6 @@
 /**
- * `/mcp-relay/<route>/<agent>` — the daemon's side of the OAuth MCP relay
- * (`mcp-relay.ts`). Mounted on the daemon's own listener, BEFORE its auth and
+ * `/mcp-relay/<route>/<agent>` — the daemon's side of the MCP relay
+ * (`mcp-relay.ts`), for a server that carries a credential. Mounted on the daemon's own listener, BEFORE its auth and
  * body parser (`kernel-boot.ts`): the path takes its own relay token and
  * nothing else, and the body must reach the upstream byte for byte.
  *
@@ -15,10 +15,10 @@
  *
  * On the way out: the agent's `Authorization`, cookies and relay token are
  * dropped, the stored headers and the CURRENT bearer added; only same-origin
- * redirects are followed (3 at most); a 401 refreshes the token once and
- * replays. A server with no usable connection answers a JSON-RPC error with a
+ * redirects are followed (3 at most); a 401 refreshes an OAuth token once and
+ * replays (a key nothing can renew is not replayed). A server with no usable connection answers a JSON-RPC error with a
  * 200, never a 401 — a 401 would have the CLI start an OAuth flow of its own.
- * The relay token and the bearer are never logged.
+ * The relay token, the bearer and the stored headers are never logged.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Readable } from 'node:stream';
@@ -167,7 +167,7 @@ function notConnected(res: ServerResponse, method: string, body: Buffer | undefi
     id: rpcIdOf(body),
     error: {
       code: -32001,
-      message: `MCP server ${serverId} is not connected: reconnect it from Timon's MCP servers page.`,
+      message: `MCP server ${serverId} is not connected, or refused its credentials: check it on Timon's MCP servers page.`,
     },
   }));
 }
@@ -194,7 +194,7 @@ async function forward(
   }, {
     maxRedirects: MAX_REDIRECTS,
     destination: (url) => {
-      // The bearer is the server's, for its origin: a hop elsewhere is refused, not stripped and followed.
+      // The credential is the server's, for its origin: a hop elsewhere is refused, not stripped and followed.
       if (url.origin !== origin) throw new DestinationRefusedError('redirect to another origin refused');
       if (upstream.publicOnly) assertMcpLiteralAllowed(url.hostname);
       return POLICY;

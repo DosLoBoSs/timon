@@ -39,7 +39,7 @@ test('agent editor: a checked skill set to Import is attached on save, inherited
     }
     if (url.startsWith('/api/ui/skill-attachments?')) return Response.json({ attachments: [] });
     if (url === '/api/ui/agents/Zeus/skills') {
-      return Response.json({ skills: [{ id: 'alpha', mode: 'include', via: 'config' }, { id: 'house', mode: 'import', via: 'project' }] });
+      return Response.json({ skills: [{ id: 'alpha', mode: 'include', via: 'agent' }, { id: 'house', mode: 'import', via: 'project' }] });
     }
     return Response.json({ agents: [], skills: [], servers: [], roles: [], projects: [], files: [], backends: [] });
   });
@@ -134,7 +134,7 @@ test('agent editor: the spawn total is the one the daemon resolves for the draft
       return Response.json({ weights: { alpha: { include: 20, import: 3000, on_demand: 3100 }, beta: { include: 15, import: 800, on_demand: 820 } } });
     }
     if (url.startsWith('/api/ui/skill-attachments?')) return Response.json({ attachments: [] });
-    if (url === '/api/ui/agents/Zeus/skills') return Response.json({ skills: [{ id: 'alpha', mode: 'include', via: 'config' }] });
+    if (url === '/api/ui/agents/Zeus/skills') return Response.json({ skills: [{ id: 'alpha', mode: 'include', via: 'agent' }] });
     return Response.json({ agents: [], skills: [], servers: [], roles: [], projects: [], files: [], backends: [] });
   });
   const root = createRoot(document.getElementById('root')!);

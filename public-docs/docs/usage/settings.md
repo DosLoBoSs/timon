@@ -217,6 +217,8 @@ Two settings bound what Timon keeps about finished missions. They are independen
 
 `TIMON_EVENTS_HOT_DAYS` (0 by default, off) moves older events to `archive/events.db`. They stay readable, but a standard export or backup no longer includes them unless you pass `--with-archive`, which is why it is off until you ask for it.
 
+`TIMON_EVENTS_RETENTION_DAYS` and `TIMON_LEARNINGS_RETENTION_DAYS` (0 by default, off) delete for good, once a day, the mission history and the raw memory facts older than that many days. See [Keeping less](privacy.md#keeping-less).
+
 ## Stopping stuck missions (Cleanup)
 
 **Settings → Missions → Cleanup** decides when Timon frees a mission that no longer needs its process, or stops one that is stuck. Two settings govern a turn that is still running:
@@ -256,7 +258,7 @@ Each generated title is one short call on the quota or credits of the chosen bac
 
 ## Appearance and plugin settings
 
-**Frosted glass** in Appearance blurs what lies behind the widgets, the top bar and the side menu. **Where the glass sits** chooses who carries it: **Whole island** (the default) makes each island one frosted plate, its widgets standing out by a slightly lighter surface; **Widgets** leaves the islands clear, so the wallpaper shows sharp between the cards, and makes each widget and the chat's reading column a frosted card. Any island can choose otherwise from its menu (right click on its tab → **Glass**): **Follow the Appearance setting**, **Whole island** or **Widgets**, remembered for that island on that page. A popup island (a terminal opened over the page, for example) is always frosted like a widget, over what lies under it.
+**Frosted glass** in Appearance blurs what lies behind the widgets, the top bar and the side menu. **Where the glass sits** chooses who carries it: **Whole island** (the default) makes each island one frosted plate, its widgets standing out by a slightly lighter surface; **Widgets** leaves the islands clear, so the wallpaper shows sharp between the cards, and makes each widget and the chat's reading column a frosted card. Any island can choose otherwise from its menu (right click on its tab → **Glass**): **Follow the Appearance setting**, **Whole island** or **Widgets**, remembered for that island on that page. A page shown alone has no tab: its choice is in **Customize interface** in the top bar (the palette icon) → **Glass of this page**. On a narrow screen, where the islands are stacked, the menu of each tab in the row at the top offers **Glass** for its island. A popup island (a terminal opened over the page, for example) is always frosted like a widget, over what lies under it.
 
 **Ambient tint**, under the accent colour, sets the mood of the neutral surfaces from a single colour per mode. The colour you pick is the page background: its hue colours every background level, border and secondary text, and its lightness moves them all together, so the steps between canvas, cards and fields stay the same. A dark blue-grey turns the dark mode bluish, a light beige warms the light mode. The lightness stays within a range where text remains readable, and a very vivid colour is toned down to a tinted grey. **Native greys** goes back to the default. The accent colour, for buttons and links, stays independent.
 

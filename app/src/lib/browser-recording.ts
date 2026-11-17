@@ -6,6 +6,7 @@
  * own masking pass: never from what a Stop returns (metadata only).
  */
 
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 
 /** What the engine reports in the browser status, to every viewer of the profile. */
@@ -40,7 +41,8 @@ export type BrowserRecordingLearnOptions = { autoSubmit: boolean; agent?: string
 
 export type BrowserRecordingLearnAgent = { name: string; main: boolean };
 
-export type RecordedStepType = 'click' | 'input' | 'secret' | 'enter' | 'navigate' | 'newTab' | 'switchTab' | 'closeTab' | 'credential';
+/** `frame`: the user acted inside an embedded frame, which is never recorded; `origin` names its site. */
+export type RecordedStepType = 'click' | 'input' | 'secret' | 'enter' | 'navigate' | 'newTab' | 'switchTab' | 'closeTab' | 'credential' | 'frame';
 
 export type RecordedStep = {
   n: number;
@@ -72,7 +74,7 @@ export type StoppedBrowserRecording = { recording: BrowserRecordingMeta; already
 export type LearnedBrowserRecording = { recording: BrowserRecordingMeta; missionId: string };
 
 export function stepCount(count: number): string {
-  return t(count === 1 ? 'browserPanel.recording.stepsOne' : 'browserPanel.recording.stepsMany', { count });
+  return t('browserPanel.recording.steps', { count });
 }
 
 /** Same rule as the daemon (`BrowserRecordingOp`, op `param`). */
@@ -101,7 +103,7 @@ async function request<T>(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELE
     ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
   });
   const value = await response.json().catch(() => ({})) as { error?: unknown };
-  if (!response.ok) throw new BrowserRecordingRequestError(typeof value.error === 'string' ? value.error : `Browser recording request failed (${response.status})`, response.status);
+  if (!response.ok) throw new BrowserRecordingRequestError(apiErrorMessage(value, { status: response.status }), response.status);
   return value as T;
 }
 

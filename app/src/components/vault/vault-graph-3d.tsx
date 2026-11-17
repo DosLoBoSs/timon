@@ -35,8 +35,8 @@ export interface VaultGraph3DProps {
   onNodeClick?: (node: { id: string; title: string; folder: string }) => void;
   /** Opens the search field overlaid on the graph. Driven by the magnifier in
    *  the widget header, which lives outside this component. */
-  rechercheOuverte?: boolean;
-  onFermerRecherche?: () => void;
+  searchOpen?: boolean;
+  onCloseSearch?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,17 +58,17 @@ const FOLDER_SAT = '72%';
  *  background a mid grey fades out, hence a clearly lighter grey and a
  *  slightly raised opacity. */
 const PALETTES = {
-  clair: {
-    fond: 'radial-gradient(ellipse at center, #ffffff 0%, #f6f4ef 55%, #e9e5dc 100%)',
-    luminositeNoeud: '48%',
-    couleurLien: '#5a5a60',
-    opaciteLien: 0.13,
+  light: {
+    background: 'radial-gradient(ellipse at center, #ffffff 0%, #f6f4ef 55%, #e9e5dc 100%)',
+    nodeLightness: '48%',
+    linkColor: '#5a5a60',
+    linkOpacity: 0.13,
   },
-  sombre: {
-    fond: 'radial-gradient(ellipse at center, #1c1714 0%, #131010 55%, #0a0808 100%)',
-    luminositeNoeud: '62%',
-    couleurLien: '#c9c2b8',
-    opaciteLien: 0.16,
+  dark: {
+    background: 'radial-gradient(ellipse at center, #1c1714 0%, #131010 55%, #0a0808 100%)',
+    nodeLightness: '62%',
+    linkColor: '#c9c2b8',
+    linkOpacity: 0.16,
   },
 } as const;
 
@@ -79,13 +79,13 @@ function readPrimaryHue(): number {
   return Number.isFinite(hue) ? hue : FALLBACK_PRIMARY_HUE;
 }
 
-function folderColor(folder: string, baseHue: number, luminosite: string): string {
+function folderColor(folder: string, baseHue: number, lightness: string): string {
   let hash = 0;
   for (let i = 0; i < folder.length; i++) {
     hash = folder.charCodeAt(i) + ((hash << 5) - hash);
   }
   const offset = FOLDER_HUE_OFFSETS[Math.abs(hash) % FOLDER_HUE_OFFSETS.length]!;
-  return `hsl(${baseHue + offset}, ${FOLDER_SAT}, ${luminosite})`;
+  return `hsl(${baseHue + offset}, ${FOLDER_SAT}, ${lightness})`;
 }
 
 // ---------------------------------------------------------------------------
@@ -151,8 +151,8 @@ function scaleNodeSize(degree: number, maxDegree: number): number {
 // ---------------------------------------------------------------------------
 export default function VaultGraph3D({
   onNodeClick,
-  rechercheOuverte = false,
-  onFermerRecherche,
+  searchOpen = false,
+  onCloseSearch,
 }: VaultGraph3DProps) {
   const { open: openSettings } = useSettingsNavigation();
   // Ref callback rather than useRef: the container is unmounted/remounted on
@@ -166,10 +166,10 @@ export default function VaultGraph3D({
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   // Awake = tab in the foreground AND widget in the viewport. Nothing justifies
   // drawing when nobody is looking.
-  const [eveille, setEveille] = useState(true);
+  const [awake, setAwake] = useState(true);
 
   const sceneRef = useRef<VaultGraphScene | null>(null);
-  const [scenePrete, setScenePrete] = useState(0);
+  const [sceneReady, setSceneReady] = useState(0);
 
   // ---- fetch data ---------------------------------------------------------
   useEffect(() => {
@@ -202,9 +202,9 @@ export default function VaultGraph3D({
     const el = container;
     if (!el) return;
 
-    let visibleDansViewport = true;
-    const recalculer = () => {
-      setEveille(visibleDansViewport && document.visibilityState === 'visible');
+    let inViewport = true;
+    const recompute = () => {
+      setAwake(inViewport && document.visibilityState === 'visible');
     };
 
     // Two windows side by side are both "visible": the intersection observer
@@ -212,18 +212,18 @@ export default function VaultGraph3D({
     // viewport by a rail.
     const io = new IntersectionObserver(
       (entries) => {
-        visibleDansViewport = entries.some((e) => e.isIntersecting);
-        recalculer();
+        inViewport = entries.some((e) => e.isIntersecting);
+        recompute();
       },
       { threshold: 0.01 },
     );
     io.observe(el);
-    document.addEventListener('visibilitychange', recalculer);
-    recalculer();
+    document.addEventListener('visibilitychange', recompute);
+    recompute();
 
     return () => {
       io.disconnect();
-      document.removeEventListener('visibilitychange', recalculer);
+      document.removeEventListener('visibilitychange', recompute);
     };
   }, [container]);
 
@@ -253,7 +253,7 @@ export default function VaultGraph3D({
   // Without that, switching to full screen — which moves the component in the
   // React tree, hence remounts it — would replay two seconds of settling on
   // every round trip.
-  const grapheScene = useMemo(() => {
+  const sceneGraph = useMemo(() => {
     if (!data) return null;
     return {
       nodes: data.nodes.map((n) => ({
@@ -267,7 +267,7 @@ export default function VaultGraph3D({
   // state. It is read again on every theme switch, since the token may change
   // with it.
   const { scheme: resolvedTheme } = useColorScheme();
-  const palette = resolvedTheme === 'dark' ? PALETTES.sombre : PALETTES.clair;
+  const palette = resolvedTheme === 'dark' ? PALETTES.dark : PALETTES.light;
   const [primaryHue, setPrimaryHue] = useState(FALLBACK_PRIMARY_HUE);
   useEffect(() => {
     const sync = () => setPrimaryHue(readPrimaryHue());
@@ -276,18 +276,18 @@ export default function VaultGraph3D({
     return () => window.removeEventListener('timon:theme-painted', sync);
   }, [resolvedTheme]);
 
-  const couleurNoeud = useCallback(
-    (n: { folder: string }) => folderColor(n.folder, primaryHue, palette.luminositeNoeud),
+  const colorOfNode = useCallback(
+    (n: { folder: string }) => folderColor(n.folder, primaryHue, palette.nodeLightness),
     [primaryHue, palette],
   );
 
   // ---- automatic rotation, paused during gestures --------------------------
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const suspendreRotation = useCallback(() => {
-    sceneRef.current?.definirRotation(false);
+  const pauseRotation = useCallback(() => {
+    sceneRef.current?.setRotation(false);
     if (idleTimer.current) clearTimeout(idleTimer.current);
     idleTimer.current = setTimeout(() => {
-      sceneRef.current?.definirRotation(true);
+      sceneRef.current?.setRotation(true);
     }, IDLE_RESUME_MS);
   }, []);
 
@@ -299,17 +299,17 @@ export default function VaultGraph3D({
   // `await import()` in an effect rather than `next/dynamic`: the module pulls
   // in three.js and must never be evaluated during prerendering. An effect
   // only runs on the client, so the barrier is structural, not declarative.
-  const hote = useRef<HTMLDivElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const el = hote.current;
-    if (!el || loading || error || !grapheScene || grapheScene.nodes.length === 0) return;
+    const el = hostRef.current;
+    if (!el || loading || error || !sceneGraph || sceneGraph.nodes.length === 0) return;
 
-    let annule = false;
+    let cancelled = false;
     let scene: VaultGraphScene | null = null;
 
     void (async () => {
       const { VaultGraphScene: Scene } = await import('./vault-graph-scene');
-      if (annule) return;
+      if (cancelled) return;
 
       scene = new Scene({
         container: el,
@@ -317,50 +317,50 @@ export default function VaultGraph3D({
         height: dimensions.height,
         // The simulation MUTATES these objects (x/y/z, fx/fy/fz): they are
         // copies of the React data, memoised to survive remounts.
-        nodes: grapheScene.nodes,
-        links: grapheScene.links,
-        nodeColor: couleurNoeud,
+        nodes: sceneGraph.nodes,
+        links: sceneGraph.links,
+        nodeColor: colorOfNode,
         nodeRadius: (n) => Math.cbrt(scaleNodeSize(n.degree, maxDegree)) * NODE_REL_SIZE,
-        linkColor: palette.couleurLien,
-        linkOpacity: palette.opaciteLien,
-        cadenceBase: RENDER_FPS,
+        linkColor: palette.linkColor,
+        linkOpacity: palette.linkOpacity,
+        baseFrameRate: RENDER_FPS,
         onClick: (n: SceneNode) => {
           setOpenNoteId(n.id);
           onNodeClick?.({ id: n.id, title: n.title, folder: n.folder });
         },
-        onInteract: suspendreRotation,
+        onInteract: pauseRotation,
       });
 
       sceneRef.current = scene;
       // Wakes the render loop, which waits for the scene to exist.
-      setScenePrete((n) => n + 1);
+      setSceneReady((n) => n + 1);
     })();
 
     return () => {
-      annule = true;
-      scene?.detruire();
+      cancelled = true;
+      scene?.destroy();
       if (sceneRef.current === scene) sceneRef.current = null;
     };
     // `dimensions` is deliberately missing: a resize goes through
-    // `redimensionner()`, it must not rebuild the whole scene (which would
+    // `resize()`, it must not rebuild the whole scene (which would
     // restart the simulation and make the framing jump).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grapheScene, loading, error, maxDegree, onNodeClick, suspendreRotation]);
+  }, [sceneGraph, loading, error, maxDegree, onNodeClick, pauseRotation]);
 
   // The theme applies to the scene in place: rebuilding it for a mere
   // light/dark switch would replay the layout for nothing.
   useEffect(() => {
-    sceneRef.current?.definirTheme({
-      nodeColor: couleurNoeud,
-      linkColor: palette.couleurLien,
-      linkOpacity: palette.opaciteLien,
+    sceneRef.current?.setTheme({
+      nodeColor: colorOfNode,
+      linkColor: palette.linkColor,
+      linkOpacity: palette.linkOpacity,
     });
-  }, [couleurNoeud, palette, scenePrete]);
+  }, [colorOfNode, palette, sceneReady]);
 
   // The resize is applied to the existing scene.
   useEffect(() => {
-    sceneRef.current?.redimensionner(dimensions.width, dimensions.height);
-  }, [dimensions, scenePrete]);
+    sceneRef.current?.resize(dimensions.width, dimensions.height);
+  }, [dimensions, sceneReady]);
 
   // ---- render loop --------------------------------------------------------
   // The timer PACES, the rAF DRAWS. The rAF is never rearmed from its own
@@ -371,68 +371,68 @@ export default function VaultGraph3D({
   // Going through a rAF rather than drawing directly in the timer keeps two
   // properties: drawing stays aligned with vsync, and the browser does not call
   // the callback back when nothing is composited — so nothing spins idle with
-  // the window minimised, which `eveille` alone does not guarantee
+  // the window minimised, which `awake` alone does not guarantee
   // (`visibilitychange` is not emitted by every window manager).
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene || !eveille) return;
+    if (!scene || !awake) return;
 
-    let arrete = false;
+    let stopped = false;
     let raf = 0;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
-    const planifier = () => {
-      if (arrete) return;
+    const schedule = () => {
+      if (stopped) return;
       // While settling and during a drag the scene really moves: draw at full
       // speed, it is transient. Otherwise fall back to the cruising rate.
-      const delai = scene.enMouvement ? 0 : 1000 / scene.cadenceSouhaitee;
+      const delay = scene.isMoving ? 0 : 1000 / scene.targetFrameRate;
       timer = setTimeout(() => {
         raf = requestAnimationFrame(() => {
           raf = 0;
-          scene.rendre();
-          planifier();
+          scene.render();
+          schedule();
         });
-      }, delai);
+      }, delay);
     };
 
-    planifier();
+    schedule();
 
     return () => {
-      arrete = true;
+      stopped = true;
       if (timer) clearTimeout(timer);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [eveille, scenePrete]);
+  }, [awake, sceneReady]);
 
   // ---- search -------------------------------------------------------------
   // The filter covers the title, path, folder and tags — everything the graph
   // payload already holds. Note BODIES are not covered: that would need a
   // search endpoint on the orchestrator side, hence a restart of it, which is
   // a separate ops step.
-  const [requete, setRequete] = useState('');
-  const champRef = useRef<HTMLInputElement | null>(null);
+  const [query, setQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (rechercheOuverte) champRef.current?.focus();
+    if (searchOpen) inputRef.current?.focus();
     // Closing the search must lift the filter, otherwise nodes would stay
     // hidden with nothing on screen explaining why.
-    else setRequete('');
-  }, [rechercheOuverte]);
+    else setQuery('');
+  }, [searchOpen]);
 
-  const correspondants = useMemo(() => {
-    const q = requete.trim().toLowerCase();
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
     if (!q || !data) return null;
     const ids = new Set<string>();
     for (const n of data.nodes) {
-      const foin = `${n.title} ${n.id} ${n.folder} ${(n.tags ?? []).join(' ')}`.toLowerCase();
-      if (foin.includes(q)) ids.add(n.id);
+      const haystack = `${n.title} ${n.id} ${n.folder} ${(n.tags ?? []).join(' ')}`.toLowerCase();
+      if (haystack.includes(q)) ids.add(n.id);
     }
     return ids;
-  }, [requete, data]);
+  }, [query, data]);
 
   useEffect(() => {
-    sceneRef.current?.definirFiltre(correspondants);
-  }, [correspondants, scenePrete]);
+    sceneRef.current?.setFilter(matches);
+  }, [matches, sceneReady]);
 
   // Wikilinks carry a basename (`[[cockpit-hud]]`), nodes a full path
   // (`wiki/projects/timon/cockpit-hud`): the id is found through the last
@@ -493,28 +493,28 @@ export default function VaultGraph3D({
       {/* The graph background follows the app theme. It stays a gradient of the
           widget's own rather than a token colour: the central halo sets the
           node cluster apart from the panel edge, in both themes. */}
-      <div aria-hidden className="absolute inset-0 z-0" style={{ background: palette.fond }} />
+      <div aria-hidden className="absolute inset-0 z-0" style={{ background: palette.background }} />
       {/* Host of the WebGL canvas, mounted and emptied by the scene itself. */}
-      <div ref={hote} className="absolute inset-0 z-10" />
+      <div ref={hostRef} className="absolute inset-0 z-10" />
 
       {/* Search as an overlay rather than a bar above: the panel is already
           small, taking 32 px of height from it would make it unreadable. */}
-      {rechercheOuverte && (
+      {searchOpen && (
         <div className="absolute inset-x-2 top-2 z-20 flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/90 px-2 py-1 backdrop-blur-sm">
           <input
-            ref={champRef}
-            value={requete}
-            onChange={(e) => setRequete(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') onFermerRecherche?.(); }}
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') onCloseSearch?.(); }}
             placeholder={t('vault.filter')}
             className="min-w-0 flex-1 bg-transparent text-[11px] text-foreground outline-none placeholder:text-muted-foreground/60"
           />
           <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground/70">
-            {correspondants ? `${correspondants.size}/${data.nodes.length}` : data.nodes.length}
+            {matches ? `${matches.size}/${data.nodes.length}` : data.nodes.length}
           </span>
           <button
             type="button"
-            onClick={() => onFermerRecherche?.()}
+            onClick={() => onCloseSearch?.()}
             aria-label={t('vault.closeSearch')}
             className="shrink-0 rounded px-1 text-[11px] text-muted-foreground hover:text-foreground"
           >

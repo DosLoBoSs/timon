@@ -402,13 +402,13 @@ test('S8: the manifest refuses an entry that is not a printable name', () => {
 
 test('S3 bis: ctx.provider.git.writableRoots answers for a repository, and for nothing else', async () => {
   const { execFileSync } = await import('node:child_process');
-  const repo = realpathSync(mkdtempSync(join(tmpdir(), 'timon-provider-git-')));
+  const repo = realpathSync.native(mkdtempSync(join(tmpdir(), 'timon-provider-git-')));
   execFileSync('git', ['init', '-q'], { cwd: repo, stdio: 'ignore' });
   const ctx = pluginContext('acme-git', []);
   assert.deepEqual(ctx.provider.git.writableRoots(repo), [join(repo, '.git')]);
   assert.deepEqual(ctx.provider.git.writableRoots(join(repo, 'missing')), [], 'a folder that does not exist');
   assert.deepEqual(ctx.provider.git.writableRoots('relative/path'), [], 'a relative path is not a working directory');
-  assert.deepEqual(ctx.provider.git.writableRoots(realpathSync(mkdtempSync(join(tmpdir(), 'timon-provider-nogit-')))), [], 'outside a repository');
+  assert.deepEqual(ctx.provider.git.writableRoots(realpathSync.native(mkdtempSync(join(tmpdir(), 'timon-provider-nogit-')))), [], 'outside a repository');
 });
 
 test('registerProductProfile: a plugin shipped in the release registers a profile that names a vault entry, inactive until its dialect is there; anyone else is refused', async () => {

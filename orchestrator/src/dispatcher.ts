@@ -28,12 +28,14 @@ import {
 } from './worktree.js';
 import { agentDir } from './paths.js';
 import { notifyUser } from './notify.js';
+import { daemonMessage, type DaemonMessage } from './daemon-message.js';
 import { orchestratorForProject } from './main-agent.js';
 import { messageTime } from './message-dates.js';
 import { CONVENTION_ROLES, inheritedLlm, resolveRoleAgentPreview, roleForTaskType, type RoleAgentPreview } from './agent-seed.js';
 import { evaluateDeps, repairWaitStall, type DepGate } from './merge-gate.js';
 import {
   describeInterruption,
+  interruptionMessage,
   QUOTA_REOPEN_MARGIN_MS,
   requeueBackoffMs,
   toInterruptionReason,
@@ -42,7 +44,8 @@ import {
   type InterruptionReason,
 } from './interruption.js';
 import { MissionFenceRefusedError, profileLimits } from './resources.js';
-import { gitTaskRefusal } from './task-git.js';
+import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal } from './code-gate.js';
+import { GIT_MISSING_MESSAGE, GIT_MISSING_REASON, gitTaskRefusal } from './task-git.js';
 import { spawnWideningRefusal } from './users/privileged-overrides.js';
 import { isMirrorTask } from './task-mirror.js';
 import {
@@ -739,30 +742,43 @@ export function capabilityRefusal(task: Pick<TaskRow, 'type'>, backend: BackendN
   // Attached files are announced by their path on this host's disk, which an
   // agent without the `attachments` capability (a remote one) cannot open:
   // running anyway would let the task pass for done without its mockups.
+  return capabilityRefusalMessage(task, backend, attachmentCount)?.text ?? null;
+}
+
+/** `capabilityRefusal` with the code the webview translates (TODO #845). */
+function capabilityRefusalMessage(
+  task: Pick<TaskRow, 'type'>,
+  backend: BackendName,
+  attachmentCount: number,
+): { text: string; code: DaemonMessage } | null {
   if (attachmentCount > 0 && !backendCapabilities(backend).attachments) {
-    return (
-      `Backend \`${backend}\` cannot read files on this host (no \`attachments\` capability), ` +
-      `and this task has ${attachmentCount} attached file(s). Assign the task to an agent on a local backend, ` +
-      `set a local backend on the task (backend override), or remove the attachments.`
-    );
+    return {
+      text:
+        `Backend \`${backend}\` cannot read files on this host (no \`attachments\` capability), ` +
+        `and this task has ${attachmentCount} attached file(s). Assign the task to an agent on a local backend, ` +
+        `set a local backend on the task (backend override), or remove the attachments.`,
+      code: daemonMessage('backend_cannot_read_attachments', { backend, count: attachmentCount }),
+    };
   }
   if (!WORKTREE_TASK_TYPES.has(task.type)) return null;
   if (backendCapabilities(backend).worktree) return null;
-  return (
-    `Backend \`${backend}\` does not work in Timon's folder (no \`worktree\` capability), ` +
-    `so a \`${task.type}\` task cannot run on it. Assign the task to an agent on a local backend, ` +
-    `or set a local backend on the task (backend override) or on the project's role.`
-  );
+  return {
+    text:
+      `Backend \`${backend}\` does not work in Timon's folder (no \`worktree\` capability), ` +
+      `so a \`${task.type}\` task cannot run on it. Assign the task to an agent on a local backend, ` +
+      `or set a local backend on the task (backend override) or on the project's role.`,
+    code: daemonMessage('backend_cannot_use_worktree', { backend, type: task.type }),
+  };
 }
 
 /** Blocks `task` with a readable reason when its backend cannot run it.
  *  Blocked, not dropped: the reason wakes the series and the task waits for a
  *  human or its orchestrator to reassign it. */
 export function blockIfBackendCannot(task: TaskRow, backend: BackendName, attachmentCount = 0): boolean {
-  const reason = capabilityRefusal(task, backend, attachmentCount);
-  if (!reason) return false;
-  console.warn(`[dispatcher] task ${task.id} → BLOCKED: ${reason}`);
-  dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason: reason });
+  const refusal = capabilityRefusalMessage(task, backend, attachmentCount);
+  if (!refusal) return false;
+  console.warn(`[dispatcher] task ${task.id} → BLOCKED: ${refusal.text}`);
+  dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason: refusal.text, blockedReasonCode: refusal.code });
   return true;
 }
 
@@ -772,7 +788,10 @@ export function blockIfGitMissing(task: TaskRow, capabilities?: readonly string[
   const reason = gitTaskRefusal(task.type, { cwd, ...(capabilities ? { capabilities } : {}) });
   if (!reason) return false;
   console.warn(`[dispatcher] task ${task.id} → BLOCKED: ${reason}`);
-  dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason: reason });
+  dbApi.updateTaskStatus(task.id, 'BLOCKED', {
+    blockedReason: reason,
+    blockedReasonCode: reason === GIT_MISSING_REASON ? GIT_MISSING_MESSAGE : null,
+  });
   return true;
 }
 
@@ -838,7 +857,10 @@ export function blockIfExtrasWiden(task: TaskRow, agentName: string): boolean {
     action: 'task.override_denied',
     target: `task:${task.id} agent:${agentName} — ${refusal}`,
   });
-  dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason: reason });
+  dbApi.updateTaskStatus(task.id, 'BLOCKED', {
+    blockedReason: reason,
+    blockedReasonCode: daemonMessage('task_extras_widen', { agent: agentName, refusal }),
+  });
   return true;
 }
 
@@ -968,10 +990,14 @@ async function dispatch(): Promise<void> {
       // orchestrator.
       // Same for a wait that never ends: a review asked for changes and no
       // repair iteration exists past the limit (TODO #322).
-      const blockedReason = gate.blockedReason ?? repairWaitStall(gate, Date.now());
+      const stall = gate.blockedReason ? null : repairWaitStall(gate, Date.now());
+      const blockedReason = gate.blockedReason ?? stall?.reason ?? null;
       if (blockedReason) {
         console.warn(`[dispatcher] task ${task.id} → BLOCKED: ${blockedReason}`);
-        dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason });
+        dbApi.updateTaskStatus(task.id, 'BLOCKED', {
+          blockedReason,
+          blockedReasonCode: gate.blockedReason ? gate.blockedReasonCode ?? null : stall?.code ?? null,
+        });
         lastWaitLogged.delete(task.id);
       } else if (gate.waitingFor && lastWaitLogged.get(task.id) !== gate.waitingFor) {
         lastWaitLogged.set(task.id, gate.waitingFor);
@@ -1185,6 +1211,8 @@ async function dispatch(): Promise<void> {
           taskId,
           'crash',
           `Spawn failed (${MAX_SPAWN_FAILURES}×): ${msg}. The mission never started — this is not a business block.`,
+          null,
+          daemonMessage('task_spawn_failed', { attempts: MAX_SPAWN_FAILURES, error: msg, exhausted: 0, taskId: '' }),
         );
         reportInterruptionOutcome(task, 'crash', outcome, `spawn failed: ${msg}`);
       }
@@ -1199,7 +1227,15 @@ export function blockOnUnusableCwd(task: TaskRow, err: CwdUnusableError): void {
   const reason = `${err.message[0]!.toUpperCase()}${err.message.slice(1)}. The mission was not started: `
     + `restore this folder, or change the working directory of the agent or its project, then retry the task.`;
   console.warn(`[dispatcher] task ${task.id} → BLOCKED: ${reason}`);
-  dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason: reason });
+  dbApi.updateTaskStatus(task.id, 'BLOCKED', {
+    blockedReason: reason,
+    blockedReasonCode: daemonMessage('task_cwd_unusable', {
+      // snake_case: an ICU select key cannot hold a hyphen.
+      cause: err.error.replaceAll('-', '_'),
+      path: err.path,
+      errno: err.code,
+    }),
+  });
 }
 
 /** The block a spawn refused by the quota guard leads to. Leaves the same way as a
@@ -1213,6 +1249,7 @@ function blockOnRefusedSpawn(task: TaskRow, backend: string): void {
     reason,
     `${describeInterruption(reason, Date.now(), detail)} The turn was refused before spawn.`,
     exact?.until ?? null,
+    interruptionMessage(reason, Date.now(), detail, { context: 'spawn_refused' }),
   );
   reportInterruptionOutcome(task, reason, outcome, `spawn refused on ${backend}`);
   if (task.series_id) {
@@ -1292,7 +1329,14 @@ function reportInterruptionOutcome(
       `${MAX_SYSTEM_REQUEUES} automatic requeues. It stays BLOCKED: ` +
       `retrying once more would give the same result.` +
       (after?.blocked_reason ? `\n\n${after.blocked_reason}` : ''),
-    { taskId: task.id },
+    {
+      taskId: task.id,
+      // The stored reason stays in English here: its own code lives on the task.
+      message: daemonMessage('task_system_deaths', {
+        deaths, title: task.title, taskId: task.id, reason, requeues: MAX_SYSTEM_REQUEUES,
+        detail: after?.blocked_reason || 'none',
+      }),
+    },
   );
 }
 
@@ -1343,6 +1387,16 @@ function interruptionText(missionId: string, reason: InterruptionReason, detail?
   const base = describeInterruption(reason, Date.now(), detail);
   const last = lastMissionError(missionId);
   return last ? `${base} Last error: ${last}` : base;
+}
+
+/** The code of `interruptionText`, plus the sentence a caller adds after it. */
+function interruptionCode(
+  missionId: string,
+  reason: InterruptionReason,
+  detail?: InterruptionDetail,
+  context?: 'boot_orphan',
+): DaemonMessage {
+  return interruptionMessage(reason, Date.now(), detail, { context, lastError: lastMissionError(missionId) });
 }
 
 type QualifiedDeath = {
@@ -1470,6 +1524,27 @@ function autoCloseComment(task: { type?: string | null; agent_name: string }, mi
   return `[closed from the agent's last reply: its backend has no Timon tools to close the task]\n\n${body}`;
 }
 
+/**
+ * The DONE of a task whose mission ended without the agent closing it, unless
+ * the checks every close route applies refuse it (TODO #1053): a `merge` must
+ * prove its source branches in the base, a `full` code task already in its base
+ * must still be reviewable. A refused close goes BLOCKED with the reason, so the
+ * chain never starts on a merge that did not happen or a review of nothing.
+ */
+function autoCloseTask(task: TaskRow, missionId: string): 'DONE' | 'BLOCKED' {
+  const refusal = mergeCloseRefusal(task, effectiveMergeSha(task, null, null)) ?? codeCloseRefusal(task);
+  if (refusal) {
+    dbApi.updateTaskStatus(task.id, 'BLOCKED', {
+      blockedReason: `The mission ended without closing its task, and the automatic close was refused. ${refusal}`,
+      // Kept as the agent left it: updateTaskStatus writes the column whole.
+      doneComment: task.done_comment,
+    });
+    return 'BLOCKED';
+  }
+  dbApi.setTaskStatusOnly(task.id, 'DONE', autoCloseComment(task, missionId));
+  return 'DONE';
+}
+
 /** Wire the mission_complete bus event → task status update. Exported so
  *  tests can wire the watcher without starting the dispatch loop. */
 export function watchMissionComplete(): () => void {
@@ -1509,6 +1584,7 @@ export function watchMissionComplete(): () => void {
         reason,
         interruptionText(ev.missionId, reason, detail),
         quotaResetsAt,
+        interruptionCode(ev.missionId, reason, detail),
       );
       reportInterruptionOutcome(task, reason, outcome, `mission ${ev.missionId}`);
       if (reason === 'overloaded' && outcome === 'requeued') moveOverloadedTask(task);
@@ -1538,8 +1614,8 @@ export function watchMissionComplete(): () => void {
     // carries NO comment at all, a sentence qualifying this automatic
     // closure. Without it the pilot received a mute `task_closed`,
     // indistinguishable from an agent who simply had nothing to say.
-    dbApi.setTaskStatusOnly(task.id, newStatus, autoCloseComment(task, ev.missionId));
-    console.log(`[dispatcher] task ${task.id} → ${newStatus} (mission ${ev.missionId})`);
+    const closed = autoCloseTask(task, ev.missionId);
+    console.log(`[dispatcher] task ${task.id} → ${closed} (mission ${ev.missionId})`);
   };
   bus.on('event', onBusEvent);
   return () => void bus.off('event', onBusEvent);
@@ -1613,6 +1689,7 @@ export async function reconcileOrphanedTasks(graceMs = 0): Promise<void> {
         reason,
         `${interruptionText(t.mission_id, reason, detail)} Orphan reconciled at boot: the mission finished without transitioning the task.`,
         quotaResetsAt,
+        interruptionCode(t.mission_id, reason, detail, 'boot_orphan'),
       );
       reportInterruptionOutcome(t, reason, outcome, `reconcile, mission ${t.mission_id.slice(0, 8)} ${m.status}`);
       // Same conclusion as the live path (`watchMissionComplete`): the work did
@@ -1631,8 +1708,8 @@ export async function reconcileOrphanedTasks(graceMs = 0): Promise<void> {
     } else if (m.status === 'completed') {
       // Same qualified sentence as the live path: without it the pilot got a
       // mute `task_closed` for every orphan caught at boot (TODO #522).
-      dbApi.setTaskStatusOnly(t.id, 'DONE', autoCloseComment(t, t.mission_id));
-      console.log(`[dispatcher] reconcile: task ${t.id} IN_PROGRESS→DONE (mission ${t.mission_id.slice(0, 8)} completed)`);
+      const closed = autoCloseTask(t, t.mission_id);
+      console.log(`[dispatcher] reconcile: task ${t.id} IN_PROGRESS→${closed} (mission ${t.mission_id.slice(0, 8)} completed)`);
       fixed++;
     }
   }
@@ -1690,6 +1767,7 @@ export function auditMergedTasksWithoutSha(): void {
     `Some merge-type tasks are marked DONE but have no merged_commit_sha — ` +
       `their branch was probably never integrated onto the base (2026-05-25 incident).\n\n` +
       `${list}\n\nCheck whether the changes actually shipped; otherwise replay the merge.`,
+    { message: daemonMessage('merge_audit_missing_sha', { count: offenders.length, list }) },
   );
 }
 

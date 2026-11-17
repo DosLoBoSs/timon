@@ -1,26 +1,4 @@
 {
-  "mission": {
-    "title": "新しいミッション",
-    "description": "選んだ LLM でエージェント {agent} との会話を開始します。",
-    "resumeDescription": "以前のミッションを再開することもできます: 新しい LLM が要約を読んで、そこから続けます。",
-    "llm": "LLM",
-    "reasoningEffort": "推論の度合い",
-    "default": "既定",
-    "continue": "以前のミッションから続ける",
-    "resumeWithSummary": "新しい LLM は履歴の要約を読んで再開します。",
-    "resumeSameLlm": "同じ LLM で以前のミッションのコンテキストを再開します。",
-    "followup": "続きのメッセージ",
-    "firstMessage": "最初のメッセージ",
-    "followupPlaceholder": "例: 作業の続きをして、X に集中して…",
-    "firstMessagePlaceholder": "例: … を手伝って",
-    "cancel": "キャンセル",
-    "continuing": "続行中…",
-    "creating": "作成中…",
-    "start": "開始",
-    "continuedToast": "{backend} · {model} でミッションを続行しました",
-    "createdToast": "{backend} · {model} で新しいミッション",
-    "failed": "失敗しました: {message}"
-  },
   "llm": {
     "handoverTail": "要約に失敗: 会話の末尾だけが引き継がれました",
     "confirmWhole": "まるごと引き継ぐ",
@@ -107,7 +85,6 @@
     "dismiss": "閉じる",
     "center": "通知センター",
     "sure": "よろしいですか？",
-    "close": "閉じる",
     "empty": "通知はありません",
     "clearAll": "すべてクリア",
     "clearAlerts": "アラートをクリア",
@@ -221,13 +198,6 @@
       "openWorkspace": "ワークスペースで開く",
       "opened": "グリッドをワークスペースで開きました"
     }
-  },
-  "calendar": {
-    "today": "今日",
-    "tomorrow": "明日",
-    "upcoming": "今後",
-    "overdue": "期限切れ · {date}",
-    "noDueDate": "期限なし"
   },
   "delegations": {
     "title": "報告待ち",

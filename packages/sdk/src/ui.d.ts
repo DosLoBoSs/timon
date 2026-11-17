@@ -732,7 +732,8 @@ declare module '@timon/ui' {
   export type BrowserRecordedStep = {
     n: number;
     t: number;
-    type: 'click' | 'input' | 'secret' | 'enter' | 'navigate' | 'newTab' | 'switchTab' | 'closeTab' | 'credential';
+    /** `frame`: the user acted by hand inside an embedded frame, which is never recorded; `origin` names its site. */
+    type: 'click' | 'input' | 'secret' | 'enter' | 'navigate' | 'newTab' | 'switchTab' | 'closeTab' | 'credential' | 'frame';
     tabId: string;
     name?: string;
     text?: string;

@@ -21,12 +21,12 @@ import { Tile } from '@/components/tile';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
 import { t } from '@/lib/i18n';
 import {
-  abonnerInstances,
-  chargerInstances,
-  enregistrerInstance,
-  instancesActuelles,
-  supprimerInstance,
-  titreInstance,
+  subscribeInstances,
+  loadInstances,
+  saveInstance,
+  currentInstances,
+  deleteInstance,
+  instanceTitle,
   type AgentChatInstance,
 } from './agent-chat/instances';
 import type { BundledClientContext, BundledClientPlugin } from './types';
@@ -48,7 +48,7 @@ const HAUTEUR_DEFAUT = 520;
 const HAUTEUR_MIN = 280;
 
 function useInstances(): readonly AgentChatInstance[] {
-  return useSyncExternalStore(abonnerInstances, instancesActuelles, instancesActuelles);
+  return useSyncExternalStore(subscribeInstances, currentInstances, currentInstances);
 }
 
 /**
@@ -65,8 +65,8 @@ function carteDeLInstance(id: string): (props: WidgetProps) => React.ReactNode {
       <AgentChatCard
         {...props}
         instance={instance}
-        onSave={(suivante) => void enregistrerInstance(suivante)}
-        onDelete={() => void supprimerInstance(id)}
+        onSave={(suivante) => void saveInstance(suivante)}
+        onDelete={() => void deleteInstance(id)}
       />
     );
   };
@@ -89,7 +89,7 @@ function NouvelleCarte({ poignee, className, onReplace }: WidgetProps) {
       <InstanceConfig
         instance={null}
         onSave={async (instance) => {
-          if (!await enregistrerInstance(instance)) return false;
+          if (!await saveInstance(instance)) return false;
           onReplace?.(`plugin:${AGENT_CHAT_MODULE}:${instance.id}`);
           return true;
         }}
@@ -130,9 +130,9 @@ export const agentChatClient: BundledClientPlugin = {
 
     const synchroniser = (): void => {
       if (!vivant) return;
-      const liste = instancesActuelles();
+      const liste = currentInstances();
       for (const instance of liste) {
-        const titre = titreInstance(instance);
+        const titre = instanceTitle(instance);
         const carte = cartes.get(instance.id);
         if (carte?.titre === titre) continue;
         carte?.dispose();
@@ -167,8 +167,8 @@ export const agentChatClient: BundledClientPlugin = {
       }
     };
 
-    ctx.onDispose(abonnerInstances(synchroniser));
+    ctx.onDispose(subscribeInstances(synchroniser));
     synchroniser();
-    void chargerInstances();
+    void loadInstances();
   },
 };

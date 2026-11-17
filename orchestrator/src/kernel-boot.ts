@@ -62,6 +62,8 @@ import {
   ensureDaemonToken,
 } from './plugins-bundled/http/auth.js';
 import { createHost } from './host/index.js';
+import { stopSignalsFor } from './host/stop-signals.js';
+import { installDaemonShutdown } from './daemon-shutdown.js';
 import { inspectListenPort } from './host/listen-port.js';
 import { endRecordedMissionProcesses, missionProcessDir, sweepOpsFor } from './host/mission-processes.js';
 import { bus } from './bus.js';
@@ -407,8 +409,15 @@ function startMissionSearchBackfill(): () => void {
 }
 
 // Direct execution (`node dist/boot.js`, or `index.ts` in kernel mode).
+// The stop signals are caught before the boot: one arriving mid-boot still
+// exits through `process.exit`, with whatever tree exists by then.
+let root: Context | null = null;
+installDaemonShutdown({
+  signals: stopSignalsFor(process.platform),
+  release: async () => { await root?.fiber.dispose(); },
+});
 try {
-  await boot();
+  root = await boot();
 } catch (err) {
   if (err instanceof ConfigError) {
     console.error(`[timon] ${err.message}`);

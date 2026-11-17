@@ -11,18 +11,18 @@
  */
 
 import { isLocalDictationError } from './dictation/errors';
-import { fusionnerSegments } from './stt-transcript';
+import { mergeSegments } from './stt-transcript';
 
 /** Silence tolerated before dictation ends on its own. An ordinary hesitation
  *  lasts one to two seconds; four leave time to resume without making someone
  *  who has finished speaking wait forever. Single source: the inactivity timer
  *  AND the `onend` restart test read this value. */
-export const DICTEE_GRACE_MS = 4_000;
+export const DICTATION_GRACE_MS = 4_000;
 
 /** The engine refuses `start()` until the previous instance is released
  *  (`InvalidStateError`): one tick passes before restarting. Same reason, same
  *  order of magnitude as the conversation mode. */
-export const DICTEE_RESTART_DELAY_MS = 250;
+export const DICTATION_RESTART_DELAY_MS = 250;
 
 /**
  * Errors on which restarting is pointless: the microphone is refused or taken
@@ -36,7 +36,7 @@ export const DICTEE_RESTART_DELAY_MS = 250;
  * `no-speech` and `aborted` are NOT: they are the ordinary turn ends of a
  * listening session that just went through a pause.
  */
-export function erreurDicteeFatale(error: string): boolean {
+export function isFatalDictationError(error: string): boolean {
   return (
     error === 'not-allowed' ||
     error === 'audio-capture' ||
@@ -54,25 +54,25 @@ export function erreurDicteeFatale(error: string): boolean {
  * signals are checked: the preload bridge is ours, the user agent token also
  * covers a window where the bridge failed to load.
  */
-export function webSpeechSansMoteur(env: { userAgent: string; desktopBridge: boolean }): boolean {
+export function webSpeechWithoutEngine(env: { userAgent: string; desktopBridge: boolean }): boolean {
   return env.desktopBridge || /\bElectron\//.test(env.userAgent);
 }
 
-export type EtatFinDictee = {
+export type DictationEndState = {
   /** The user asked to stop (microphone button, unmount, silence expired). */
-  arretManuel: boolean;
+  stoppedByUser: boolean;
   /** A fatal error was received during the session. */
-  erreurFatale: boolean;
+  fatalError: boolean;
   /** Milliseconds since the last recognised speech (or since the start when
    *  nothing has been said yet). */
-  depuisDerniereActivite: number;
+  sinceLastActivity: number;
   graceMs?: number;
 };
 
 /** True when `onend` must restart listening instead of closing dictation. */
-export function doitRelancerDictee(etat: EtatFinDictee): boolean {
-  if (etat.arretManuel || etat.erreurFatale) return false;
-  return etat.depuisDerniereActivite < (etat.graceMs ?? DICTEE_GRACE_MS);
+export function shouldRestartDictation(state: DictationEndState): boolean {
+  if (state.stoppedByUser || state.fatalError) return false;
+  return state.sinceLastActivity < (state.graceMs ?? DICTATION_GRACE_MS);
 }
 
 /**
@@ -82,16 +82,16 @@ export function doitRelancerDictee(etat: EtatFinDictee): boolean {
  * the first `onresult` of the new session would rewrite the field with only
  * the sentence just spoken, erasing everything before it.
  */
-export function composerDictee(base: string, texte: string): string {
-  const gauche = base ?? '';
-  const droite = (texte ?? '').trim();
-  if (!droite) return gauche;
-  if (!gauche) return droite;
-  return `${gauche}${gauche.endsWith(' ') ? '' : ' '}${droite}`;
+export function composeDictation(base: string, text: string): string {
+  const left = base ?? '';
+  const right = (text ?? '').trim();
+  if (!right) return left;
+  if (!left) return right;
+  return `${left}${left.endsWith(' ') ? '' : ' '}${right}`;
 }
 
 /** A result of the Web Speech engine, reduced to what the composition needs. */
-export type ResultatDictee = {
+export type DictationResult = {
   isFinal: boolean;
   transcript: string;
 };
@@ -113,13 +113,13 @@ export type ResultatDictee = {
  * But index 0 is not enough: several Android engines re-emit the WHOLE
  * sentence on every event, each copy in its own slot ("hi / hi how / hi how
  * are"). Joining them as they are gives "hi hi how hi how are": the slots
- * therefore go through `fusionnerSegments`, which replaces a segment that
+ * therefore go through `mergeSegments`, which replaces a segment that
  * extends what precedes instead of appending it (see lib/stt-transcript).
  */
-export function texteSession(results: ArrayLike<ResultatDictee>): string {
+export function sessionText(results: ArrayLike<DictationResult>): string {
   const segments: string[] = [];
   for (let i = 0; i < results.length; i += 1) {
     segments.push(results[i]?.transcript ?? '');
   }
-  return fusionnerSegments(segments);
+  return mergeSegments(segments);
 }

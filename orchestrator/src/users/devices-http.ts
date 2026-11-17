@@ -167,7 +167,7 @@ function deviceManager(req: Request, res: Response): { userId: string | null; is
 function visibleDevice(req: Request, res: Response, manager: { userId: string | null; isSuperadmin: boolean }): DeviceRow | null {
   const device = getDevice(String(req.params.id));
   if (!device || (!manager.isSuperadmin && device.user_id !== manager.userId)) {
-    res.status(404).json({ error: 'device not found' });
+    res.status(404).json(apiError('device_not_found', 'device not found'));
     return null;
   }
   return device;

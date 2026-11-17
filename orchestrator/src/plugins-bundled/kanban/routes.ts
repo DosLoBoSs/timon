@@ -10,7 +10,8 @@ import { z } from 'zod';
 import { AgentConfig, killAgent, listAgents } from '../../agent.js';
 import { backendIdForModel, catalogClaimsModel } from '../../backends/catalog.js';
 import { asBackendName } from '../../backends/index.js';
-import { evaluateCodeDone, inspectGitBranch, shaInBase } from '../../code-gate.js';
+import { codeCloseRefusal, effectiveMergeSha, evaluateCodeDone, inspectGitBranch, mergeCloseRefusal, shaInBase, taskRepo } from '../../code-gate.js';
+export { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal } from '../../code-gate.js';
 import { config } from '../../config/load.js';
 import { FALLBACK_SCOPES, TASK_TYPES, db, dbApi, isCodeOnlyPipeline, isFallbackScope, isTaskType, normalizeTaskStatusInput, rowVisible, type TaskDeleteOutcome, type TaskDeleteResult, type TaskRow, type TaskType } from '../../db.js';
 import { forbidden, forbiddenBody, isPersonAuth, rejectIfDenied, requireAuth, viewerFromRequest } from '../../users/identity.js';
@@ -45,7 +46,7 @@ import { gitTaskRefusal, isPlausibleGitRef } from '../../task-git.js';
 import { taskOriginFromRequest, withTaskOrigin } from '../../task-origin.js';
 import { backendRefusal, pipelineRefusal, planGroupRefusal, projectRefusal } from './task-field-guards.js';
 import { isClosingOnly, parseTaskUpdateBody } from './task-update-body.js';
-import { parseMarkMergedBody, parseTaskCloseBody } from './task-write-bodies.js';
+import { parseAttachSeriesBody, parseMarkMergedBody, parseTaskCloseBody } from './task-write-bodies.js';
 import { parsePipelineCreateBody, parsePipelineRunBody, parsePipelineUpdateBody } from './pipeline-body.js';
 import { isOwnMissionTask, ownMissionTaskId } from './own-task.js';
 import { parseTaskCreateBody, type TaskCreateBody } from './task-create-body.js';
@@ -364,12 +365,6 @@ function parseSummary(raw: unknown): string | undefined {
  * process (`stopClosedTaskMission`) — it is the process's exit that publishes
  * `mission_complete`, hence that primes the verification-loop and the doc task.
  */
-/** Where git can tell whether a task's sha landed: its worktree, else its agent's repository. */
-function taskRepo(task: TaskRow): string | null {
-  if (task.worktree_path && existsSync(task.worktree_path)) return task.worktree_path;
-  try { return loadConfig(task.agent_name).cwd ?? null; } catch { return null; }
-}
-
 /**
  * A sha on a full-pipeline `code` task skips its review, releases its
  * dependents and closes its idea (TIM-0109, marked merged by hand). Every
@@ -381,6 +376,15 @@ export function mergedShaRefusal(task: TaskRow, sha: string): string | null {
   if (task.type !== 'code' || isCodeOnlyPipeline(task.pipeline)) return null;
   if (shaInBase(taskRepo(task), task.base_branch, sha) !== 'not_contained') return null;
   return `Commit ${sha} is not in ${task.base_branch} of this repository. Check the sha of the merge.`;
+}
+
+/** Answers 409 when a `merge` or `full` code task may not go DONE yet; true if it did. */
+function rejectUnprovenClose(res: express.Response, task: TaskRow, sha: string | null): boolean {
+  const mergeRefusal = mergeCloseRefusal(task, sha);
+  if (mergeRefusal) { res.status(409).json({ error: mergeRefusal, code: 'merge_not_proven' }); return true; }
+  const codeRefusal = codeCloseRefusal(task);
+  if (codeRefusal) { res.status(409).json({ error: codeRefusal, code: 'branch_unreviewable' }); return true; }
+  return false;
 }
 
 export function closeTask(
@@ -1196,6 +1200,10 @@ export function registerRoutes(app: Router): void {
       }
       const shaRefusal = mergedShaRefusal(task, body.merged_sha);
       if (shaRefusal) { res.status(409).json({ error: shaRefusal, code: 'sha_not_in_base' }); return; }
+    }
+    const declaredSha = typeof body.merged_sha === 'string' ? body.merged_sha : null;
+    if (rejectUnprovenClose(res, task, effectiveMergeSha(task, declaredSha, comment))) return;
+    if (body.merged_sha !== undefined) {
       // Set BEFORE the status: the merge guard refuses DONE on a
       // type='merge' task without a sha, and the reverse order degrades the transition into BLOCKED.
       dbApi.setTaskMergedSha(taskId, body.merged_sha);
@@ -1282,6 +1290,63 @@ export function registerRoutes(app: Router): void {
     res.json({ task: scope.getTask(task.id), verified: found === 'contained' });
   });
 
+  /**
+   * Attach a task's whole chain to a series (TODO #1013): its root, and every
+   * review, merge, doc and repair iteration below it, get the series and its
+   * current pilot. A task created without a mission (a `curl` with the
+   * daemon-token, a board click) has neither, so its returns reach no pilot
+   * and its reviews ignore the series' roles; this is the gesture that repairs
+   * it without touching the database by hand.
+   *
+   * `series`: the series id, the id of the mission piloting it, or `current`
+   * (the caller's own mission). A mission that pilots no task yet starts its
+   * series here. Neither a series nor a mission = 404, and a series the caller
+   * cannot see answers the same, so the refusal confirms nothing.
+   */
+  app.post('/api/tasks/:id/attach-series', (req, res) => {
+    if (!requireAuth(req, res)) return;
+    if (rejectIfDenied(req, res, 'kanban:write')) return;
+    const params = z.object({ id: z.string().min(1).max(255).regex(/^[A-Za-z0-9_-]+$/) }).safeParse(req.params);
+    if (!params.success) { res.status(400).json(apiError('task_invalid', 'Invalid task identifier.')); return; }
+    const parsed = parseAttachSeriesBody(req.body);
+    if (!parsed.ok) { res.status(400).json({ error: parsed.error, code: 'task_body_invalid' }); return; }
+    const named = parsed.value.series;
+    if (!named || !SeriesParamSchema.safeParse({ id: named }).success) {
+      res.status(400).json(apiError('series_invalid', 'series must be a series id, a pilot mission id or "current".'));
+      return;
+    }
+    const viewer = viewerFromRequest(req);
+    const scope = scopedDb(viewer);
+    const task = scope.getTask(params.data.id);
+    if (!task) { res.status(404).json(apiError('task_not_found', 'Task not found.')); return; }
+    // A mission-bound token IS its mission; the header is only a claim (`pilotMissionOf`).
+    const tokenMission = req.auth?.kind === 'api-token' ? req.auth.missionId : undefined;
+    const raw = named === 'current' ? (tokenMission ?? req.header('X-TIMON-Mission') ?? '').trim() : named;
+    if (!raw) {
+      res.status(400).json(apiError('series_invalid', 'series "current" needs a mission: call from inside one, or name the series.'));
+      return;
+    }
+    const notFound = () => res.status(404).json(apiError('series_not_found', `Series ${raw} not found: name a series id or the id of the mission piloting it.`));
+    const known = dbApi.seriesIdForMission(raw);
+    const seriesId = known ?? (scope.getMission(raw) ? raw : null);
+    if (!seriesId || !seriesVisible(req, seriesId)) { notFound(); return; }
+    const pilotId = (known ? dbApi.seriesPilotMission(known) : null) ?? seriesId;
+    // The stored pilot seeds follow-up agents on its backend (TIM-0082): a
+    // restricted caller may only name a pilot it can see.
+    const pilot = scope.getMission(pilotId);
+    if (!pilot) { notFound(); return; }
+    if (pilot.task_id) {
+      res.status(400).json(apiError('series_pilot_is_task', `Mission ${pilot.id} runs a task: a series is piloted by the mission that plans it.`));
+      return;
+    }
+    // Only what the caller sees moves: someone else's follow-up keeps its row.
+    const lineage = (dbApi.listTaskLineage(task.id) ?? []).filter((t) => scope.getTask(t.id));
+    const ids = lineage.map((t) => t.id);
+    dbApi.attachTasksToSeries(ids, seriesId, pilot.id);
+    auditRequest(req, 'task.attach_series', `${task.id} series:${seriesId} pilot:${pilot.id} tasks:${ids.length}`);
+    res.json({ series_id: seriesId, pilot_mission_id: pilot.id, attached: ids, task: scope.getTask(task.id) });
+  });
+
   app.get('/api/tasks/:id', (req, res) => {
     const task = scopedDb(viewerFromRequest(req)).getTask(req.params.id);
     if (!task) { res.status(404).json(apiError('not_found', 'not found')); return; }
@@ -1351,6 +1416,8 @@ export function registerRoutes(app: Router): void {
       const shaRefusal = mergedShaRefusal(task, sha);
       if (shaRefusal) { res.status(409).json({ error: shaRefusal, code: 'sha_not_in_base' }); return; }
     }
+    if (normalizeTaskStatusInput(body.status) === 'DONE' && task.status !== 'DONE'
+      && rejectUnprovenClose(res, task, effectiveMergeSha(task, sha, body.done_comment))) return;
     // See creation: a non-numeric scheduled_at would go into the database as is.
     const sched = validateScheduledAt(body.scheduled_at);
     if (!sched.ok) {

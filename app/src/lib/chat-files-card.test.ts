@@ -25,9 +25,9 @@ const restricted = (widgets: string[], plugins: string[] = []): Capabilities['su
 });
 
 test('the Files card follows @timon/files-widget and its own widget grant', async () => {
-  const { inscriptionsVisibles } = await import('../components/chat/chat-rails');
+  const { visibleRegistrations } = await import('../components/chat/chat-rails');
   const files = (c: Capabilities | null) =>
-    inscriptionsVisibles(c).filter((i) => i.key === 'Files').map((i) => i.pluginId);
+    visibleRegistrations(c).filter((i) => i.key === 'Files').map((i) => i.pluginId);
 
   assert.deepEqual(files(null), ['@timon/files-widget'], 'capabilities not loaded yet: shown');
   assert.deepEqual(files(caps()), ['@timon/files-widget'], 'unrestricted viewer');

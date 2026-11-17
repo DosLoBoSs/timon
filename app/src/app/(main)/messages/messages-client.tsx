@@ -21,6 +21,7 @@ import { AgentAvatar, useAgentIdentities, type AgentIdentity } from '@/component
 import { mdToSafeHtml } from '@/lib/markdown';
 import { useHighlighterVersion } from '@/components/chat/bubble-html';
 import { isEmptyValue, isLongFieldSet, isPlainObject, parseMessageBody } from '@/lib/message-body';
+import { localizedNoticePayload } from '@/lib/daemon-notice-payload';
 import { apiErrorMessage } from '@/lib/api-error';
 
 type MessageKind = 'msg' | 'request' | 'response' | 'notification';
@@ -437,7 +438,7 @@ export function MessagesClient({ initialAgent }: { initialAgent?: string }) {
           </Select>
         </div>
         <div className="relative flex min-w-[200px] flex-1 flex-col gap-1">
-          <label className="text-xs text-muted-foreground">&nbsp;</label>
+          <label className="text-xs text-muted-foreground">{/* i18n-exempt: spacer aligning the search box */}&nbsp;</label>
           <Search className="pointer-events-none absolute bottom-2.5 left-2.5 size-3 text-muted-foreground" />
           <Input
             value={query}
@@ -497,7 +498,7 @@ export function MessagesClient({ initialAgent }: { initialAgent?: string }) {
                         <div className="flex items-center gap-2">
                           <OriginBadge origin={m.origin} />
                           <span className={cn('min-w-0 flex-1 truncate text-[12px]', m.status === 'pending' ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
-                            {subjectOf(m.payload)}
+                            {subjectOf(localizedNoticePayload(m.payload))}
                           </span>
                           {m.in_reply_to && <span className="text-[10px] text-muted-foreground/70">↳</span>}
                         </div>
@@ -535,7 +536,7 @@ export function MessagesClient({ initialAgent }: { initialAgent?: string }) {
                     )}
                   </span>
                 </div>
-                <div className="text-[14px] font-semibold">{subjectOf(selected.payload)}</div>
+                <div className="text-[14px] font-semibold">{subjectOf(localizedNoticePayload(selected.payload))}</div>
                 <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                   <OriginBadge origin={selected.origin} />
                   <KindChip kind={selected.kind} />
@@ -564,7 +565,7 @@ export function MessagesClient({ initialAgent }: { initialAgent?: string }) {
                     )}
                   </div>
                 )}
-                <MessageBody key={selected.id} payload={selected.payload} />
+                <MessageBody key={selected.id} payload={localizedNoticePayload(selected.payload)} />
                 {replies.length > 0 && (
                   <div className="space-y-2">
                     <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground">
@@ -602,7 +603,7 @@ function ThreadItem({ msg, identityOf, onOpen }: {
           </button>
         )}
       </div>
-      <MessageBody key={msg.id} payload={msg.payload} compact />
+      <MessageBody key={msg.id} payload={localizedNoticePayload(msg.payload)} compact />
     </div>
   );
 }

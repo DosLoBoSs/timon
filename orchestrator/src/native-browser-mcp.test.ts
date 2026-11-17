@@ -121,7 +121,8 @@ test('MCP transfers local files through bounded profile commands without sending
   assert.deepEqual(requests.at(-1)?.body, { action: 'fileUploadCommit', chooserId: 'chooser-id', uploadIds: ['upload-1', 'upload-2'] });
   const downloaded = await rpc('tools/call', { name: 'download_file', arguments: { downloadId: 'download-id', filePath: destination } });
   assert.ok(!downloaded.result.isError); assert.deepEqual(await readFile(destination), payload);
-  assert.equal((await stat(destination)).mode & 0o777, 0o600);
+  // Windows reports 0o666 for any writable file: owner-only there is an ACL, not mode bits.
+  if (process.platform !== 'win32') assert.equal((await stat(destination)).mode & 0o777, 0o600);
   assert.ok(!JSON.stringify(requests).includes(directory), 'filesystem paths never leave the MCP process');
   const previousReads = requests.filter(({ body }) => body.action === 'downloadRead').length;
   const collision = await rpc('tools/call', { name: 'download_file', arguments: { downloadId: 'download-id', filePath: destination } });
@@ -176,4 +177,56 @@ test('devtools MCP tools keep chrome-devtools-mcp names and forward only their o
   assert.ok(requests.every(({ body }) => !('profileId' in body)));
   const injected = await rpc('tools/call', { name: 'hover', arguments: { uid: '1"]);alert(1)//' } });
   assert.equal(injected.result.isError, true, 'uids are validated before reaching the page');
+});
+
+test('the Google refusal rule of the browser MCP is the one the browser panel applies', async () => {
+  const shim = await readFile(fileURLToPath(new URL('../bin/browser-mcp.mjs', import.meta.url)), 'utf8');
+  const app = await readFile(fileURLToPath(new URL('../../app/src/lib/google-signin.ts', import.meta.url)), 'utf8');
+  const literal = (source: string, name: string) => new RegExp(`const ${name} = ([^;\\n]+);`).exec(source)?.[1];
+  assert.ok(literal(app, 'REJECTED_PATH'), 'the app still names its rule REJECTED_PATH');
+  assert.equal(literal(shim, 'GOOGLE_SIGNIN_REJECTED_PATH'), literal(app, 'REJECTED_PATH'));
+  assert.equal(literal(shim, 'GOOGLE_ACCOUNTS_HOST'), literal(app, 'GOOGLE_ACCOUNTS_HOST'));
+  // Both read the host and the path the same way: https only, the exact host, the parsed pathname.
+  assert.match(app, /url\.protocol === 'https:' && url\.hostname === GOOGLE_ACCOUNTS_HOST/);
+  assert.match(app, /REJECTED_PATH\.test\(new URL\(value!\)\.pathname\)/);
+  assert.match(shim, /url\.protocol === 'https:' && url\.hostname === GOOGLE_ACCOUNTS_HOST && GOOGLE_SIGNIN_REJECTED_PATH\.test\(url\.pathname\)/);
+});
+
+test('navigate_page and take_snapshot tell the agent to hand a Google refusal to the user', async (t) => {
+  let shown = 'https://accounts.google.com/v3/signin/rejected?continue=https://mail.google.com/';
+  const { requests, client } = await harness(t, (body) => {
+    if (body.action === 'evaluate') return { result: { result: { url: shown, title: 'Couldn’t sign you in', text: '', elements: [] } } };
+    if (body.action === 'screenshot') return { result: { data: 'aW1hZ2U=', mimeType: 'image/jpeg' } };
+    return { result: { running: true, activeTabId: 'b', tabs: [{ id: 'a', url: 'https://example.com/' }, { id: 'b', url: shown }] } };
+  });
+  const rpc = client('mission-google');
+  const note = /Google refused this browser; ask the user to run Sign in with Chrome in the browser panel/;
+  const content = async (name: string, args: Record<string, unknown> = {}) => {
+    const reply = await rpc('tools/call', { name, arguments: args });
+    assert.ok(!reply.result.isError, name);
+    return reply.result.content as { type: string; text?: string }[];
+  };
+
+  for (const [name, args] of [['navigate_page', { url: 'https://accounts.google.com/' }], ['navigate_page', { type: 'reload' }], ['take_snapshot', {}]] as const) {
+    const reply = await content(name, args);
+    assert.equal(reply.length, 2, name);
+    assert.equal(typeof JSON.parse(reply[0]!.text!), 'object', 'the page data stays the first, parsable block');
+    assert.match(reply[1]!.text!, note);
+    assert.match(reply[1]!.text!, /You cannot start it yourself/);
+  }
+  assert.ok(requests.every(({ body }) => !/chromeSignin/i.test(String(body.action))), 'the MCP never starts the human-only sign-in');
+  // Other tools report the page as it is: the note goes with the two that read where the tab landed.
+  assert.equal((await content('list_pages')).length, 1);
+  assert.equal((await content('take_screenshot')).length, 1);
+
+  for (const url of ['https://accounts.google.com/signin/rejected', 'https://accounts.google.com/v2/signin/v1/rejected/']) {
+    shown = url;
+    assert.match((await content('take_snapshot')).at(-1)!.text!, note, url);
+  }
+  for (const url of ['https://accounts.google.com/v3/signin/identifier', 'http://accounts.google.com/signin/rejected',
+    'https://accounts.google.com.evil.test/signin/rejected', 'https://evil.test/?u=https://accounts.google.com/signin/rejected', 'not a url']) {
+    shown = url;
+    assert.equal((await content('take_snapshot')).length, 1, url);
+    assert.equal((await content('navigate_page', { url: 'https://example.com/' })).length, 1, url);
+  }
 });

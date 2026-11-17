@@ -246,6 +246,9 @@
         "worktree": "为每个编程任务创建独立的 Git 工作树",
         "worktreeDetail": "智能体在独立工作树中操作，不会直接修改你的分支。",
         "engine": "引擎",
+        "effort": "推理强度",
+        "effortDefault": "模型默认",
+        "effortHint": "回答前思考的深度。越高越慢，订阅用量也越多。",
         "permissions": "权限",
         "perm": {
           "default": "每次使用敏感工具前都询问",

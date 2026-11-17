@@ -1,26 +1,4 @@
 {
-  "mission": {
-    "title": "新建任务会话",
-    "description": "使用你选择的 LLM 与智能体 {agent} 开始对话。",
-    "resumeDescription": "你也可以继续上一个任务会话：新的 LLM 会先阅读摘要，再接着处理。",
-    "llm": "LLM",
-    "reasoningEffort": "推理强度",
-    "default": "默认",
-    "continue": "继续上一个任务会话",
-    "resumeWithSummary": "新的 LLM 会先阅读历史摘要，再继续会话。",
-    "resumeSameLlm": "在同一个 LLM 上沿用上一个任务会话的上下文。",
-    "followup": "后续消息",
-    "firstMessage": "首条消息",
-    "followupPlaceholder": "例如：继续刚才的工作，重点关注 X……",
-    "firstMessagePlaceholder": "例如：请帮我……",
-    "cancel": "取消",
-    "continuing": "正在继续……",
-    "creating": "正在创建……",
-    "start": "开始",
-    "continuedToast": "已在 {backend} · {model} 上继续任务会话",
-    "createdToast": "已在 {backend} · {model} 上新建任务会话",
-    "failed": "失败：{message}"
-  },
   "llm": {
     "handoverTail": "摘要生成失败：仅移交了对话末尾的内容",
     "confirmWhole": "完整移交",
@@ -104,7 +82,6 @@
     "dismiss": "忽略",
     "center": "通知中心",
     "sure": "确定吗？",
-    "close": "关闭",
     "empty": "暂无通知",
     "clearAll": "清空全部",
     "clearAlerts": "清空警报",
@@ -221,7 +198,6 @@
       "opened": "已在工作区中打开网格"
     }
   },
-  "calendar": { "today": "今天", "tomorrow": "明天", "upcoming": "即将到期", "overdue": "已逾期 · {date}", "noDueDate": "无截止日期" },
   "delegations": { "title": "等待委派结果", "working": "运行中", "idle": "等待下一轮", "open": "打开此任务会话", "none": "暂无等待中的委派", "inline": "有 {count} 个委派的任务会话正在运行" },
   "missionEgress": {
     "loading": "正在读取网络日志……",
@@ -287,6 +263,5 @@
     "generic": "你的账号无权执行此操作。"
   },
   "videoFactoryPanel": { "remaining": "约剩 {duration}", "stalledFor": "已停滞 {duration}" },
-  "slotRoot": { "noLayout": "尚未加载布局，请启用 ui-layout" },
-  "calendarItems": { "untitled": "（无标题）" }
+  "slotRoot": { "noLayout": "尚未加载布局，请启用 ui-layout" }
 }

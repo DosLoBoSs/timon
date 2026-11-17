@@ -2,39 +2,301 @@
   "onboarding": {
     "back": "뒤로",
     "continue": "계속",
-    "language": {
-      "title": "언어를 선택하세요"
+    "progress": "{total}단계 중 {current}단계",
+    "scheme": {
+      "label": "라이트 또는 다크 모드",
+      "light": "라이트",
+      "dark": "다크"
     },
     "splash": {
       "title": "당신의 AI 팀,\n당신의 컴퓨터에서.",
       "subtitle": "이미 결제 중인 AI 구독으로 당신의 컴퓨터에서 일하는 에이전트.",
       "hint": "쉿, 잡을 수 있어요."
     },
+    "language": {
+      "title": "언어를 선택하세요",
+      "previous": "이전 언어",
+      "next": "다음 언어"
+    },
+    "background": {
+      "title": "로그아웃한 뒤에도 Timon이 계속 일할까요?",
+      "subtitle": "Timon은 이 컴퓨터에서 백그라운드 서비스로 실행됩니다. 세션과 함께 멈출지, 계속 실행할지 선택하세요.",
+      "recommended": "추천",
+      "session": {
+        "title": "로그인해 있는 동안만",
+        "description": "로그아웃하면 Timon이 멈추고, 다시 로그인하면 다시 시작됩니다. 화면을 잠가도 계속 실행됩니다.",
+        "lingerNote": "계정에 lingering이 이미 켜져 있습니다. 이 선택은 lingering을 끄므로, 로그아웃할 때 다른 사용자 서비스도 함께 멈춥니다."
+      },
+      "always": {
+        "title": "로그아웃해도 계속",
+        "description": "컴퓨터가 켜져 있는 한, 화면 앞에 아무도 없어도 루틴, 야간 작업, Webhook이 계속 실행됩니다. Mac에서는 관리자 암호를 묻습니다."
+      },
+      "later": "{settingsPath}에서 언제든 바꿀 수 있습니다."
+    },
     "account": {
       "title": "로컬 계정 만들기",
       "subtitle": "이 계정으로 Timon에 로그인합니다. 당신이 관리자입니다.",
+      "name": "이름",
+      "nameHint": "에이전트가 당신을 이름으로 부를 수 있도록.",
+      "email": "이메일",
+      "emailHint": "로그인에 사용합니다. 확인용 코드를 보내 드립니다.",
+      "emailPlaceholder": "you@example.com",
+      "password": "비밀번호",
+      "confirm": "비밀번호 확인",
+      "mismatch": "두 비밀번호가 일치하지 않습니다.",
+      "tooShort": "{min}자 이상.",
+      "create": "내 계정 만들기",
       "privacy": "계정과 비밀번호는 이 컴퓨터에 남습니다. 이메일 주소와 인증 코드는 저희 서버를 거쳐 이메일로 전송됩니다. 익명 사용 통계는 기본으로 공유되며, 설정에서 끌 수 있습니다."
+    },
+    "legacy": {
+      "opening": "다음 화면을 여는 중…"
     },
     "llm": {
       "title": "LLM을\n선택하세요.",
-      "subtitle": "Timon은 이미 가진 AI 구독으로 작동합니다. 토큰당 요금은 없습니다."
+      "subtitle": "Timon은 이미 가진 AI 구독으로 작동합니다. 토큰당 요금은 없습니다.",
+      "plan": {
+        "title": "내 AI 구독 사용",
+        "detailAny": "이미 결제 중인 AI 도구",
+        "hint": "Timon이 이 컴퓨터에 이미 있는 AI 도구를 찾아보았습니다.",
+        "ready": "{names} 준비 완료.",
+        "none": "계속하려면 AI를 하나 이상 연결하세요.",
+        "anyway": "그래도 계속"
+      },
+      "local": {
+        "title": "로컬 모델 사용",
+        "detail": "Ollama, 구독 없음, 어떤 데이터도 컴퓨터 밖으로 나가지 않음",
+        "hint": "에이전트가 이 컴퓨터의 자체 모델로 실행됩니다.",
+        "ollama": "오픈 모델(Llama, Qwen, Mistral…)을 로컬에서 실행합니다.",
+        "connect": "Ollama가 실행되면 {settingsPath}에서 공급자로 추가하세요."
+      },
+      "legal": "계속하면 {terms}에 동의하고 {privacy}을 확인한 것으로 간주됩니다.",
+      "terms": "이용 약관",
+      "privacy": "개인정보 처리방침"
     },
     "profile": {
       "title": "어떤 일로 오셨나요?",
-      "subtitle": "답변에 맞춰 Timon이 기본 설정과 둘러보기를 조정합니다."
+      "subtitle": "답변에 맞춰 Timon이 기본 설정과 둘러보기를 조정합니다.",
+      "developer": {
+        "title": "코드를 작성해요",
+        "description": "내 저장소에서 코딩, 리뷰, 병합을 하는 에이전트."
+      },
+      "automation": {
+        "title": "자동화해요",
+        "description": "이메일, 캘린더, 정보 수집, 루틴: 알아서 돌아가는 일."
+      },
+      "beginner": {
+        "title": "처음 써 봐요",
+        "description": "AI 에이전트를 차근차근 이해하고 싶어요."
+      },
+      "failed": "선택을 저장하지 못했습니다. 다시 시도하세요."
     },
     "agent": {
+      "names": "Nova, Pixel, Ziggy, Misty, Oslo, Kiwi, Lumen, Sasha, Tempo, Pico",
+      "random": "무작위",
+      "customise": "사용자 지정",
+      "nameLabel": "이름",
+      "namePlaceholder": "이름을 지어 주세요",
+      "nameRoll": "무작위 이름",
+      "create": "{name} 깨우기",
+      "createNoName": "에이전트 깨우기",
+      "creating": "{name}을(를) 깨우는 중…",
+      "configFailed": "{name}의 이름은 정해졌지만 설정을 저장하지 못했습니다. 다시 시도하세요.",
+      "will": "할 수 있는 일",
+      "loading": "프로필을 불러오는 중…",
+      "profileError": "프로필을 읽지 못해 가장 간단한 화면을 보여 드립니다.",
+      "retry": "다시 시도",
+      "cap": {
+        "base": "Timon에서 당신과 채팅하기",
+        "mail": "이메일을 읽고 분류하기",
+        "agenda": "캘린더를 확인하고 일정 채우기",
+        "code": "Git 저장소에서 작업하기",
+        "watch": "매일 아침 뉴스 모니터링하기",
+        "write": "문서와 메시지 작성하기",
+        "research": "웹에서 검색하고 비교하기"
+      },
+      "mission": {
+        "mail": "이메일",
+        "agenda": "캘린더",
+        "code": "코드",
+        "watch": "뉴스 모니터링",
+        "write": "글쓰기",
+        "research": "리서치"
+      },
+      "views": {
+        "label": "보기",
+        "recommended": "내 프로필에 추천",
+        "templates": "입문 · 템플릿",
+        "interview": "자동화 · 인터뷰",
+        "sheet": "개발자 · 시트"
+      },
       "templates": {
         "title": "프로필 선택",
-        "subtitle": "바로 쓸 수 있는 출발점입니다. 나중에 모두 바꿀 수 있습니다."
+        "subtitle": "바로 쓸 수 있는 출발점입니다. 나중에 모두 바꿀 수 있습니다.",
+        "none": "아직 프로필 없음",
+        "empty": "오른쪽에서 프로필을 고르면 여기에 카드가 채워집니다.",
+        "hint": "먼저 프로필을 고르세요.",
+        "assist": {
+          "title": "개인 비서",
+          "description": "이메일, 캘린더, 알림."
+        },
+        "dev": {
+          "title": "코딩 파트너",
+          "description": "저장소에서 수정하고, 리뷰하고, 배포합니다."
+        },
+        "watch": {
+          "title": "스카우트",
+          "description": "매일 아침 뉴스 요약."
+        },
+        "write": {
+          "title": "작가",
+          "description": "기사, 게시물, 답장."
+        },
+        "research": {
+          "title": "조사관",
+          "description": "검색하고, 비교하고, 요약합니다."
+        },
+        "blank": {
+          "title": "처음부터 시작",
+          "description": "쓰면서 다듬어 가는 범용 에이전트."
+        }
       },
       "interview": {
         "title": "자동화를 설정해 봅시다",
-        "subtitle": "다섯 가지 질문이면 에이전트가 무엇을, 무엇으로, 언제 할지 알게 됩니다."
+        "subtitle": "다섯 가지 질문이면 에이전트가 무엇을, 무엇으로, 언제 할지 알게 됩니다.",
+        "role": "자동화 담당",
+        "count": "{current}/{total}",
+        "edit": "편집",
+        "finish": "완료",
+        "hint": "질문에 답하세요({current}/{total}).",
+        "q1": "무엇을 자동화해 드릴까요?",
+        "q2": "어떤 도구를 써도 될까요?",
+        "q3": "언제 시작할까요?",
+        "q4": "중요한 작업 전에는 어떻게 할까요?",
+        "q5": "어디로 알려 드릴까요?",
+        "other": "다른 것이 있나요? 설명해 주세요…",
+        "toolsHint": "아직 연결되지 않은 도구는 바로 다음에 안내해 드립니다.",
+        "always": "항상",
+        "dailyAt": "매일",
+        "urlProvided": "URL 제공됨",
+        "tool": {
+          "gmail": "Gmail",
+          "gcal": "Google 캘린더",
+          "gdrive": "Google 드라이브",
+          "slack": "Slack",
+          "notion": "Notion",
+          "telegram": "Telegram",
+          "github": "GitHub",
+          "browser": "내장 브라우저",
+          "files": "로컬 파일",
+          "webhook": "Webhook"
+        },
+        "trigger": {
+          "chat": "나에게 말을 걸 때",
+          "daily": "매일 {at}",
+          "mail": "새 이메일이 올 때마다",
+          "hook": "이벤트 발생 시(Webhook)"
+        },
+        "autonomy": {
+          "ask": {
+            "title": "먼저 물어보기",
+            "description": "처음에는 이것을 추천합니다: 모든 전송과 변경을 직접 승인합니다."
+          },
+          "report": {
+            "title": "실행하고 나중에 알리기",
+            "description": "반복 작업용: 실행한 뒤 결과를 보고합니다."
+          },
+          "silent": {
+            "title": "조용히 실행하기",
+            "description": "안전하고 충분히 검증된 루틴에만 사용하세요."
+          }
+        },
+        "notify": {
+          "timon": "Timon에서",
+          "telegram": "Telegram",
+          "email": "이메일로"
+        },
+        "sum": {
+          "tools": "도구",
+          "starts": "시작",
+          "autonomy": "자율성",
+          "notifies": "알림"
+        }
       },
       "sheet": {
         "title": "에이전트 구성",
-        "subtitle": "모든 설정은 프로필에서 계속 수정할 수 있습니다."
+        "subtitle": "모든 설정은 프로필에서 계속 수정할 수 있습니다.",
+        "tab": {
+          "base": "역할과 프로젝트",
+          "engine": "엔진",
+          "perms": "권한",
+          "tools": "도구"
+        },
+        "roleTitle": "주요 업무",
+        "roleHint": "여전히 당신의 메인 에이전트, 즉 파일럿입니다. 여기서는 무엇에 집중할지만 정합니다.",
+        "role": {
+          "orchestrator": {
+            "title": "오케스트레이터 / 파일럿",
+            "description": "일을 작업으로 나누고 위임합니다."
+          },
+          "code": {
+            "title": "코더",
+            "description": "프로젝트의 코드를 작성하고 수정합니다."
+          },
+          "review": {
+            "title": "리뷰어",
+            "description": "배포 전에 변경 사항을 검토합니다."
+          },
+          "research": {
+            "title": "리서처",
+            "description": "탐색하고, 문서를 읽고, 접근 방식을 비교합니다."
+          },
+          "chore": {
+            "title": "운영",
+            "description": "빌드, 배포, 유지 보수."
+          }
+        },
+        "project": "프로젝트",
+        "noFolder": "선택한 폴더 없음",
+        "choose": "선택…",
+        "worktree": "코드 작업마다 격리된 Git 워크트리 하나",
+        "worktreeDetail": "당신의 브랜치 옆에서 작업하며, 브랜치 안에서는 절대 작업하지 않습니다.",
+        "engine": "엔진",
+        "effort": "추론 강도",
+        "effortDefault": "모델 기본값",
+        "effortHint": "답하기 전에 얼마나 깊이 생각할지. 높을수록 느려지고 구독 사용량이 늘어납니다.",
+        "permissions": "권한",
+        "perm": {
+          "default": "민감한 도구는 매번 묻기",
+          "acceptEdits": "파일 편집은 허용하고 나머지는 묻기",
+          "plan": "읽기 전용: 계획만 세우고 아무것도 바꾸지 않음",
+          "auto": "자동: Timon의 분류기가 판단하고, 확실하지 않을 때만 카드 표시",
+          "bypassPermissions": "모두 허용, 확인 전혀 없음"
+        },
+        "bypassWarning": "승인 카드가 전혀 없습니다. 이 컴퓨터에서 무엇이든 할 수 있습니다.",
+        "skills": "스킬",
+        "noSkills": "아직 설치된 스킬이 없습니다.",
+        "mcp": "MCP 서버",
+        "noMcp": "아직 등록된 MCP 서버가 없습니다.",
+        "rules": "지침",
+        "rulesPlaceholder": "예: 한국어로 답하기, 묻지 않고 push하지 않기.",
+        "sum": {
+          "project": "프로젝트",
+          "toChoose": "선택 필요",
+          "permissions": "권한",
+          "skills": "스킬",
+          "mcp": "MCP"
+        }
+      },
+      "style": {
+        "title": "{name}의 모습",
+        "skull": "머리",
+        "fur": "털",
+        "eyes": "눈",
+        "accessory": "액세서리",
+        "try": "상태 미리 보기",
+        "random": "알아서 골라 줘",
+        "done": "완료",
+        "close": "닫기"
       }
     },
     "signin": {
@@ -43,12 +305,11 @@
     },
     "mascot": {
       "title": "{name}의 마스코트를 만나 보세요",
-      "subtitle": "이번 버전의 새 기능: 모든 에이전트에게 지금 하는 일(생각 중, 작업 중, 당신을 기다리는 중)을 보여 주는 마스코트가 생겼습니다. {name}을(를) 원하는 대로 꾸며 보세요."
-    },
-    "scheme": {
-      "label": "라이트 또는 다크 모드",
-      "light": "라이트",
-      "dark": "다크"
+      "subtitle": "이번 버전의 새 기능: 모든 에이전트에게 지금 하는 일(생각 중, 작업 중, 당신을 기다리는 중)을 보여 주는 마스코트가 생겼습니다. {name}을(를) 원하는 대로 꾸며 보세요.",
+      "keep": "이 모습으로 하기",
+      "skip": "나중에",
+      "later": "에이전트의 아바타 탭에서 언제든 바꿀 수 있습니다.",
+      "failed": "모습을 저장하지 못했습니다. 다시 시도하거나 “나중에”를 선택하세요."
     },
     "discover": {
       "label": "Timon 알아보기",
@@ -103,6 +364,39 @@
         "workflows": "워크플로",
         "plugins": "플러그인"
       }
+    },
+    "usage": {
+      "title": "누구를 위해 Timon을 사용하나요?",
+      "optional": "선택 사항",
+      "solo": {
+        "title": "나를 위해",
+        "description": "내 프로젝트와 일상 업무."
+      },
+      "team": {
+        "title": "우리 팀이나 회사를 위해",
+        "description": "여러 사람이 에이전트와 프로젝트를 공유."
+      },
+      "agency": {
+        "title": "우리 에이전시나 고객을 위해",
+        "description": "고객을 위해 에이전트를 만들고 운영합니다.",
+        "badge": "파트너 프로그램"
+      },
+      "offer": {
+        "title": "에이전시를 위해 만들었습니다",
+        "early": "Timon Pro 얼리 액세스와 팀과의 직접 소통 창구",
+        "partners": "파트너 프로그램 참여 자리",
+        "discount": "선정된 첫 10개 에이전시는 Timon Pro를 평생 50% 할인받습니다.",
+        "consent": "에이전시 혜택 안내를 받을 주소:",
+        "emailLabel": "에이전시 혜택 안내를 받을 이메일 주소",
+        "notice": "Timon이 이 주소로 보내는 것은 이 안내뿐입니다. {settingsPath}에서 언제든 철회할 수 있습니다.",
+        "invalidEmail": "올바른 이메일 주소를 입력하거나 체크를 해제하세요.",
+        "failed": "혜택 요청을 기록하지 못했습니다. 다시 시도하거나 체크를 해제하세요.",
+        "refused": "이 주소는 거부되었습니다. 확인하거나 체크를 해제하세요."
+      },
+      "failed": "답변을 저장하지 못했습니다. 다시 시도하세요.",
+      "continue": "계속",
+      "sending": "보내는 중…",
+      "pickProfile": "계속하려면 사용 목적을 선택하세요."
     }
   }
 }

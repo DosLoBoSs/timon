@@ -588,13 +588,14 @@ export function deleteMcp(id: string): boolean {
 /**
  * The headers `header_secrets` names, read from the vault; `null` when one
  * cannot be (vault switched off, locked, secret deleted): the server is then
- * left out of the launch rather than sent without its key.
+ * left out of the launch, and the relay answers it as not connected, rather
+ * than sending it without its key.
  */
 function vaultHeaders(id: string, transport: McpStoredHttpConfig): Record<string, string> | null {
   const entries = Object.entries(transport.header_secrets ?? {});
   if (!entries.length) return {};
   if (!vaultEnabled()) {
-    console.warn(`[timon] mcp ${id} left out of the launch: its key is in the vault, which is switched off`);
+    console.warn(`[timon] mcp ${id} unavailable: its key is in the vault, which is switched off`);
     return null;
   }
   const out: Record<string, string> = {};
@@ -602,7 +603,7 @@ function vaultHeaders(id: string, transport: McpStoredHttpConfig): Record<string
     try {
       out[header] = (ref.prefix ?? '') + readSecretValue(ref.secret_id);
     } catch (err) {
-      console.warn(`[timon] mcp ${id} left out of the launch: its key for ${header} cannot be read (${(err as Error).message})`);
+      console.warn(`[timon] mcp ${id} unavailable: its key for ${header} cannot be read (${(err as Error).message})`);
       return null;
     }
   }
@@ -698,16 +699,32 @@ function sameHttpOrigin(id: string, origin: string): boolean {
   }
 }
 
-/** What a launch hands a CLI for a server connected by OAuth (`mcp-relay.ts`). */
+function hasEntries(record: Record<string, unknown> | undefined): boolean {
+  return record !== undefined && Object.keys(record).length > 0;
+}
+
+/**
+ * Whether a server reaches its CLI only through the daemon's relay: it carries
+ * a credential — an OAuth connection, headers of its own, or headers whose
+ * value the vault holds — which must not be written into the CLI's
+ * configuration, in the mission's scratch folder.
+ */
+function relayedServer(s: McpStoredServer): s is McpStoredServer & { transport: McpStoredHttpConfig } {
+  if (s.transport.type !== 'http') return false;
+  return Boolean(s.transport.oauth) || hasEntries(s.transport.headers) || hasEntries(s.transport.header_secrets);
+}
+
+/** What a launch hands a CLI for a server that carries a credential (`mcp-relay.ts`). */
 export type McpRelayMinter = (server: { id: string; url: string }) => { url: string; headers: Record<string, string> } | null;
 
 /**
  * The servers `ids` name, ready to be written for a CLI: external connectors
- * skipped (they are loaded by claude itself) and a server connected by OAuth
- * replaced by the daemon's relay (`relay`), so that neither its bearer nor its
- * stored headers reach the CLI's configuration. Without `relay` — no mission to
- * bind the relay token to — or without a relay key (vault off), such a server is left out. The CLI-specific text is
- * `backends/mcp-serialize.ts`, which a provider plugin shares.
+ * skipped (they are loaded by claude itself) and a server that carries a
+ * credential — OAuth, stored headers, vault-held headers — replaced by the
+ * daemon's relay (`relay`), so that neither its bearer nor its headers reach
+ * the CLI's configuration. Without `relay` — no mission to bind the relay token
+ * to — or without a relay key (vault off), such a server is left out. The
+ * CLI-specific text is `backends/mcp-serialize.ts`, which a provider plugin shares.
  */
 export async function resolveLaunchServers(ids: string[], relay?: McpRelayMinter): Promise<McpLaunchServer[]> {
   const out: McpLaunchServer[] = [];
@@ -727,16 +744,19 @@ export async function resolveLaunchServers(ids: string[], relay?: McpRelayMinter
       }
     }
     const name = s.name && /^[A-Za-z0-9_-]+$/.test(s.name) ? s.name : id;
-    if (s.transport.type === 'http' && s.transport.oauth) {
-      // The relay adds the bearer and the stored headers itself, refreshing the
-      // token when it is due: the CLI gets neither.
+    if (relayedServer(s)) {
+      // A key the vault cannot give now would only reach the CLI as a dead server.
+      if (!vaultHeaders(id, s.transport)) continue;
+      // The relay adds the bearer and the headers itself, refreshing an OAuth
+      // token when it is due, and pins a `public_only` server's address at
+      // every request: the CLI gets none of them.
       if (!relay) {
-        console.warn(`[timon] mcp ${id} left out of the launch: an OAuth server goes through the relay, and this launch has no mission to bind it to`);
+        console.warn(`[timon] mcp ${id} left out of the launch: a server with credentials goes through the relay, and this launch has no mission to bind it to`);
         continue;
       }
       const target = relay({ id, url: s.transport.url });
       if (!target) {
-        console.warn(`[timon] mcp ${id} left out of the launch: the OAuth relay is unavailable (secrets vault off)`);
+        console.warn(`[timon] mcp ${id} left out of the launch: the MCP relay is unavailable (secrets vault off)`);
         continue;
       }
       out.push({ type: 'http', name, ...target });
@@ -751,25 +771,22 @@ export async function resolveLaunchServers(ids: string[], relay?: McpRelayMinter
         env: s.transport.env ?? {},
       });
     } else if (s.transport.type === 'http') {
-      const fromVault = vaultHeaders(id, s.transport);
-      if (!fromVault) continue;
-      const headers = { ...(s.transport.headers ?? {}), ...fromVault };
       if (s.public_only) {
         // The check above proves nothing to a CLI that resolves the name again
         // later: it talks to a loopback proxy that connects to the address it
         // judged, at every request (TODO #577).
         const origin = new URL(s.transport.url).origin;
         const pinned = await pinnedLaunchTarget(id, s.transport.url, () => sameHttpOrigin(id, origin));
-        out.push({ type: 'http', name, url: pinned.url, headers: { ...headers, ...pinned.headers } });
+        out.push({ type: 'http', name, url: pinned.url, headers: { ...pinned.headers } });
       } else {
-        out.push({ type: 'http', name, url: s.transport.url, headers });
+        out.push({ type: 'http', name, url: s.transport.url, headers: {} });
       }
     }
   }
   return out;
 }
 
-/** The OAuth server a relay route leads to: `null` once deleted, moved to another url, or no longer OAuth. */
+/** The relayed server a relay route leads to: `null` once deleted, moved to another url, or no longer relayed. */
 export function mcpRelayServerForRoute(route: string): string | null {
   if (!existsSync(MCP_DIR)) return null;
   for (const f of readdirSync(MCP_DIR)) {
@@ -777,7 +794,7 @@ export function mcpRelayServerForRoute(route: string): string | null {
     const id = f.slice(0, -'.json'.length);
     if (!ID_RE.test(id)) continue;
     const s = readRaw(id);
-    if (s?.transport.type !== 'http' || !s.transport.oauth) continue;
+    if (!s || !relayedServer(s)) continue;
     if (mcpRelayRoute(id, s.transport.url) === route) return id;
   }
   return null;
@@ -786,7 +803,7 @@ export function mcpRelayServerForRoute(route: string): string | null {
 /** Where the relay sends a request for a server, with what. Never leaves the daemon. */
 export type McpRelayUpstream = {
   url: string;
-  /** The stored headers and the current bearer. */
+  /** The stored headers, the vault-held ones and, for an OAuth server, the current bearer. */
   headers: Record<string, string>;
   /** Held to public addresses (`McpServer.public_only`): the relay pins every hop. */
   publicOnly: boolean;
@@ -794,27 +811,35 @@ export type McpRelayUpstream = {
 
 /**
  * The upstream of a relayed server, read at every request — a server deleted,
- * moved or disconnected since is `null`. `rejected` is the `Authorization` the
- * server just answered 401 to: the token is then refreshed once, unless another
- * request already did; `null` when it could not be (no refresh token, or the
- * provider refused), so the caller stops instead of replaying a dead token.
+ * moved, disconnected, or whose vault-held key cannot be read is `null`.
+ * `rejected` is the `Authorization` the server just answered 401 to: an OAuth
+ * token is then refreshed once, unless another request already did; `null`
+ * when it could not be (no refresh token, the provider refused, or a server
+ * with no OAuth, whose key nothing can renew), so the caller stops instead of
+ * replaying a dead credential.
  */
 export async function mcpRelayUpstream(id: string, rejected?: string): Promise<McpRelayUpstream | null> {
   validId(id);
   // A refresh in flight is waited for: it may be the one that settles this request.
   await refreshing.get(id)?.catch(() => undefined);
   let s = readRaw(id);
-  if (s?.transport.type !== 'http' || !s.transport.oauth || !oauthTokensOf(s)) return null;
-  const current = (server: McpServer): McpRelayUpstream | null => {
+  if (!s || !relayedServer(s)) return null;
+  const current = (server: McpStoredServer): McpRelayUpstream | null => {
     if (server.transport.type !== 'http') return null;
-    const tok = oauthTokensOf(server);
-    if (!tok) return null;
-    const headers = { ...(server.transport.headers ?? {}) };
-    if (!headers.Authorization && !headers.authorization) {
-      headers.Authorization = `${tok.token_type || 'Bearer'} ${tok.access_token}`;
+    const fromVault = vaultHeaders(server.id, server.transport);
+    if (!fromVault) return null;
+    const headers = { ...(server.transport.headers ?? {}), ...fromVault };
+    if (server.transport.oauth) {
+      const tok = oauthTokensOf(server);
+      if (!tok) return null;
+      if (!headers.Authorization && !headers.authorization) {
+        headers.Authorization = `${tok.token_type || 'Bearer'} ${tok.access_token}`;
+      }
     }
     return { url: server.transport.url, headers, publicOnly: server.public_only === true };
   };
+  if (!s.transport.oauth) return rejected === undefined ? current(s) : null;
+  if (!oauthTokensOf(s)) return null;
   if (rejected === undefined) return current(await refreshOnce(s));
   const before = current(s);
   if (before && authorizationOf(before) !== rejected) return before;

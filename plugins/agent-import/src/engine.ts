@@ -5,7 +5,7 @@
  */
 import type { PluginContext } from '@timon-ai/sdk';
 import { applyPlan } from './apply.js';
-import type { ApplyResponse, ImportOptions, ImportPreview } from './contract.js';
+import type { ApplyResponse, ImportOptions, ImportPreview, PreviewProject } from './contract.js';
 import { MANIFEST_FILE, ManifestError, parseManifestText, type AgentImportManifest } from './manifest.js';
 import { planImport, type EngineContext } from './plan.js';
 import { ReaderError, compileGlob, globMatches, type SourceTree } from './readers/policy.js';
@@ -63,6 +63,23 @@ export async function readManifestFromZip(
   return manifestFromSource(source, await readZip(path, source.wants));
 }
 
+/**
+ * The projects the assistant offers in its list, by label. A refusal or a host
+ * without projects is no reason to fail a preview: the list is empty and the
+ * assistant falls back to a typed slug.
+ */
+async function projectsOf(ctx: PluginContext): Promise<PreviewProject[]> {
+  try {
+    const projects = await ctx.projects.list();
+    return projects
+      .map((p) => ({ slug: p.slug, name: p.name }))
+      .sort((a, b) => (a.name ?? a.slug).localeCompare(b.name ?? b.slug) || a.slug.localeCompare(b.slug));
+  } catch (err) {
+    ctx.log.warn('projects could not be listed for the preview:', err instanceof Error ? err.message : 'unknown error');
+    return [];
+  }
+}
+
 export type Engine = {
   preview(manifest: AgentImportManifest, options?: ImportOptions): Promise<ImportPreview>;
   apply(manifest: AgentImportManifest, options?: ImportOptions): Promise<ApplyResponse>;
@@ -79,7 +96,10 @@ export function createEngine(ctx: PluginContext): Engine {
     return run;
   };
   return {
-    preview: (manifest, options) => serial(async () => (await planImport(engineCtx, records, manifest, options)).preview),
+    preview: (manifest, options) => serial(async () => {
+      const { preview } = await planImport(engineCtx, records, manifest, options);
+      return { ...preview, projects: await projectsOf(ctx) };
+    }),
     apply: (manifest, options) => serial(async () => applyPlan(engineCtx, records, await planImport(engineCtx, records, manifest, options))),
   };
 }

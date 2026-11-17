@@ -53,6 +53,8 @@ export const CATALOG: readonly ModuleDescriptor[] = [
   { id: '@timon/todo-outcomes', name: './plugins-bundled/todo-outcomes/index.js', tier: 'opt', dependsOn: ['@timon/kanban'] },
   { id: '@timon/triggers', name: './plugins-bundled/triggers/index.js', tier: 'std', dependsOn: ['@timon/kanban'] },
   { id: '@timon/routines', name: './plugins-bundled/routines/index.js', tier: 'std', dependsOn: ['@timon/kanban'] },
+  // No `dependsOn`: workflows only inject core services and spawn their own
+  // missions; the trigger action follows `triggers` through an optional sub-fiber.
   { id: '@timon/workflows', name: './plugins-bundled/workflows/index.js', tier: 'std' },
   { id: '@timon/dreams', name: './plugins-bundled/dreams/index.js', tier: 'std', licensed: true, dependsOn: ['@timon/memory'] },
   { id: '@timon/agent-chat', name: './plugins-bundled/agent-chat/client.js', tier: 'std', clientOnly: true },

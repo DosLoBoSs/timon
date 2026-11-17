@@ -7,12 +7,21 @@
  * The declared hosts come from the LOCAL daemon's `/api/plugins`, read with
  * the daemon token: a browser half always loads from this computer's copy,
  * a remote machine's plugin included (`plugin-host/remote-plugins.ts`).
+ *
+ * The script nonce is born here rather than in `middleware.ts`: this is where
+ * the one policy of the response is composed, for every path, and the
+ * middleware skips `/api/` and the static files. The policy also replaces the
+ * request's own `content-security-policy` header, which is where Next reads
+ * the nonce: one a client sent cannot reach the render.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
+  CSP_HEADER,
   contentSecurityPolicy,
   createEgressSource,
+  createScriptNonce,
   enforceContentSecurityPolicy,
+  inlineScriptsAllowed,
   wantsFreshPolicy,
   type EgressSource,
 } from '../content-security-policy';
@@ -43,6 +52,17 @@ export function createWindowPolicy(opts: { dev: boolean; source?: EgressSource }
   return async (req, res) => {
     if (wantsFreshPolicy(req.method, req.headers)) await source.refresh();
     const host = typeof req.headers.host === 'string' ? req.headers.host : null;
-    enforceContentSecurityPolicy(res, contentSecurityPolicy({ egressHosts: source.hosts(), dev: opts.dev, selfHost: host }));
+    const inlineScripts = inlineScriptsAllowed(req.url);
+    const policy = contentSecurityPolicy({
+      egressHosts: source.hosts(),
+      dev: opts.dev,
+      selfHost: host,
+      nonce: inlineScripts ? null : createScriptNonce(),
+      inlineScripts,
+    });
+    req.headers[CSP_HEADER.toLowerCase()] = policy;
+    // Next falls back to it when the other is missing: never the client's.
+    delete req.headers['content-security-policy-report-only'];
+    enforceContentSecurityPolicy(res, policy);
   };
 }

@@ -1,7 +1,8 @@
 /**
  * A remote MCP server whose key lives in the vault (`header_secrets`): the file
- * on disk holds the secret's id only, the launch reads the value, and no
- * caller can aim a stored key at a url of its choosing.
+ * on disk holds the secret's id only, the relay reads the value (the CLI is
+ * handed the relay, never the key), and no caller can aim a stored key at a
+ * url of its choosing.
  */
 // Isolates TIMON_HOME BEFORE any module touching Timon state (see test-home.ts).
 import './test-home.js';
@@ -9,12 +10,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { MCP_DIR, deleteMcp, getMcp, resolveLaunchServers, upsertMcp } from './mcp.js';
+import { MCP_DIR, deleteMcp, getMcp, mcpRelayUpstream, resolveLaunchServers, upsertMcp } from './mcp.js';
 import { createSecret, getSecret } from './secrets/store.js';
 import { resetActiveModules, setActiveModules } from './kernel/module-state.js';
 import type { McpHttpConfig } from './mcp.js';
 
-test('the key reaches the launch as a header, never the file', async () => {
+test('the key reaches the server through the relay, never the file nor the CLI', async () => {
   const secret = createSecret({ name: 'MCP_APP_ACME_KEY', value: 'k-live-123' });
   upsertMcp({
     id: 'app-acme',
@@ -25,9 +26,19 @@ test('the key reaches the launch as a header, never the file', async () => {
   const onDisk = readFileSync(join(MCP_DIR, 'app-acme.json'), 'utf8');
   assert.ok(!onDisk.includes('k-live-123'), 'the value is not written to the server file');
   assert.equal(getMcp('app-acme')?.app_slug, 'acme');
-  const [launched] = await resolveLaunchServers(['app-acme']);
-  assert.equal(launched?.type, 'http');
-  assert.equal(launched?.type === 'http' ? launched.headers.Authorization : null, 'Bearer k-live-123');
+  // The launch hands the CLI the relay, never the key; the relay reads it from the vault at each request.
+  const minted: Array<{ id: string; url: string }> = [];
+  const launched = await resolveLaunchServers(['app-acme'], (server) => {
+    minted.push(server);
+    return { url: 'http://127.0.0.1:3001/mcp-relay/r/agent', headers: { 'x-timon-mcp-relay': 'relay-token' } };
+  });
+  assert.deepEqual(minted, [{ id: 'app-acme', url: 'https://mcp.acme.example/mcp' }]);
+  assert.deepEqual(launched, [{ type: 'http', name: 'app-acme', url: 'http://127.0.0.1:3001/mcp-relay/r/agent', headers: { 'x-timon-mcp-relay': 'relay-token' } }]);
+  assert.ok(!JSON.stringify(launched).includes('k-live-123'), 'the key is in no launch entry');
+  const upstream = await mcpRelayUpstream('app-acme');
+  assert.equal(upstream?.headers.Authorization, 'Bearer k-live-123');
+  assert.equal(upstream?.url, 'https://mcp.acme.example/mcp');
+  assert.equal(await mcpRelayUpstream('app-acme', 'Bearer k-live-123'), null, 'a refused key is not replayed');
   deleteMcp('app-acme');
 });
 

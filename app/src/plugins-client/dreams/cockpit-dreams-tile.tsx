@@ -56,7 +56,7 @@ export function CockpitDreamsTile({ poignee, className }: WidgetProps) {
 
   return (
     <Tile
-      title="Dreams"
+      title={t('dreamsPage.heading')}
       subtitle={loading ? '…' : t('cockpit.dreams.pending', { count: dreams.length })}
       className={cn(HUD_SURFACE, className)}
       actions={poignee}

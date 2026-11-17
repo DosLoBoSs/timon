@@ -16,7 +16,7 @@ import { useWidgetCatalog } from '@/components/widget-host/use-widget-catalog';
 import { t } from '@/lib/i18n';
 import type { IslandParams } from '@/lib/island-tree';
 import { slotEntries, slotNames } from '@/lib/plugin-host/slots';
-import { idPlacementPlugin } from '@/components/widget-host/widget-catalog';
+import { pluginPlacementId } from '@/components/widget-host/widget-catalog';
 
 export const WIDGET_CARD_KEY = 'widget-card';
 
@@ -41,7 +41,7 @@ export function widgetCardBare(params: IslandParams, view: { route: string }): b
   if (typeof id !== 'string') return false;
   for (const name of slotNames()) {
     for (const entry of slotEntries(name)) {
-      if (!entry.widget?.bareIslandOn || idPlacementPlugin(entry.pluginId, entry.key) !== id) continue;
+      if (!entry.widget?.bareIslandOn || pluginPlacementId(entry.pluginId, entry.key) !== id) continue;
       return entry.widget.bareIslandOn.includes(view.route);
     }
   }
@@ -53,9 +53,9 @@ export function WidgetCardIsland(): ReactElement {
   const id = typeof params.widget === 'string' ? params.widget : '';
   // A tab saved before its widget changed id (moved to another module,
   // renamed key) finds the card under its new id.
-  const entry = useWidgetCatalog().trouver(id);
+  const entry = useWidgetCatalog().lookup(id);
 
-  useEffect(() => { if (entry) setTitle(entry.titre); }, [entry, setTitle]);
+  useEffect(() => { if (entry) setTitle(entry.title); }, [entry, setTitle]);
   // Store the current id: `singletonBy: ['widget']` then focuses this tab
   // instead of opening a second one for the same card.
   useEffect(() => { if (entry && entry.id !== id) setParams({ widget: entry.id }); }, [entry, id, setParams]);
@@ -65,7 +65,7 @@ export function WidgetCardIsland(): ReactElement {
   }
   return (
     <div className="flex h-full min-h-0 flex-col overflow-auto">
-      {entry.rendu({ poignee: null, className: 'h-full min-h-0' })}
+      {entry.render({ poignee: null, className: 'h-full min-h-0' })}
     </div>
   );
 }

@@ -74,7 +74,7 @@ function GenericForm({ type, initial, approvalRequired, onSubmit, onCancel }: {
       </label>
       <label className="block space-y-1">
         <span className="text-[12px] font-medium">{t('pluginConnections.url')}</span>
-        <input className={input} type="url" value={url} required placeholder="https://" onChange={(e) => setUrl(e.target.value)} />
+        <input className={input} type="url" value={url} required placeholder="https://" /* i18n-exempt: URL scheme */ onChange={(e) => setUrl(e.target.value)} />
       </label>
       {type.fields.map((field) => (
         <label key={field.key} className="block space-y-1">

@@ -2,39 +2,301 @@
   "onboarding": {
     "back": "戻る",
     "continue": "続ける",
-    "language": {
-      "title": "言語を選んでください"
+    "progress": "ステップ {current}/{total}",
+    "scheme": {
+      "label": "ライトモードまたはダークモード",
+      "light": "ライト",
+      "dark": "ダーク"
     },
     "splash": {
       "title": "あなたのAIチームを、\nあなたの手元に。",
       "subtitle": "すでに契約しているAIサブスクリプションで、あなたのマシン上で働くエージェント。",
       "hint": "ねえ、つかめますよ。"
     },
+    "language": {
+      "title": "言語を選んでください",
+      "previous": "前の言語",
+      "next": "次の言語"
+    },
+    "background": {
+      "title": "ログアウトしたあとも、Timonに作業を続けさせますか？",
+      "subtitle": "Timonはこのコンピューターでバックグラウンドサービスとして動きます。セッションと一緒に停止するか、動き続けるかを選んでください。",
+      "recommended": "おすすめ",
+      "session": {
+        "title": "ログイン中だけ",
+        "description": "ログアウトするとTimonは停止し、再ログインすると再び起動します。画面をロックしても動き続けます。",
+        "lingerNote": "あなたのアカウントではすでにlingeringが有効です。この選択でオフになるため、ログアウト時にほかのユーザーサービスも停止します。"
+      },
+      "always": {
+        "title": "ログアウト中も",
+        "description": "コンピューターの電源が入っている限り、画面の前に誰もいなくても、ルーティン、夜間タスク、Webhookが動き続けます。Macでは管理者パスワードの入力を求められます。"
+      },
+      "later": "{settingsPath} でいつでも変更できます。"
+    },
     "account": {
       "title": "ローカルアカウントを作成",
       "subtitle": "このアカウントでTimonにサインインします。あなたが管理者です。",
+      "name": "名前",
+      "nameHint": "エージェントがあなたを名前で呼べるように。",
+      "email": "メールアドレス",
+      "emailHint": "サインインに使います。確認のためにコードを送信します。",
+      "emailPlaceholder": "you@example.com",
+      "password": "パスワード",
+      "confirm": "パスワードの確認",
+      "mismatch": "2つのパスワードが一致しません。",
+      "tooShort": "{min} 文字以上。",
+      "create": "アカウントを作成",
       "privacy": "アカウントとパスワードはこのコンピューターに保存されます。メールアドレスと確認用のコードは当社のサーバーを経由し、そこからメールで届きます。匿名の利用統計は既定で共有されます。設定でオフにできます。"
+    },
+    "legacy": {
+      "opening": "次の画面を開いています…"
     },
     "llm": {
       "title": "LLMを\n選んでください。",
-      "subtitle": "Timonはすでにお持ちのAIサブスクリプションで動きます。トークン単位の請求は一切ありません。"
+      "subtitle": "Timonはすでにお持ちのAIサブスクリプションで動きます。トークン単位の請求は一切ありません。",
+      "plan": {
+        "title": "AIサブスクリプションを使う",
+        "detailAny": "すでに契約しているAIツール",
+        "hint": "TimonはこのマシンにすでにあるAIツールを探しました。",
+        "ready": "{names} で準備完了。",
+        "none": "続行するには、少なくとも1つのAIを接続してください。",
+        "anyway": "このまま続行"
+      },
+      "local": {
+        "title": "ローカルモデルを使う",
+        "detail": "Ollama。サブスクリプション不要、データはマシンの外に出ません",
+        "hint": "エージェントはこのコンピューター上のモデルで動きます。",
+        "ollama": "オープンモデル（Llama、Qwen、Mistral…）をローカルで実行します。",
+        "connect": "Ollamaが起動したら、{settingsPath} でプロバイダーとして追加してください。"
+      },
+      "legal": "続行すると、{terms}に同意し、{privacy}を確認したものとみなされます。",
+      "terms": "利用規約",
+      "privacy": "プライバシーポリシー"
     },
     "profile": {
       "title": "Timonで何をしたいですか？",
-      "subtitle": "回答に合わせて、Timonが初期設定とガイドツアーを調整します。"
+      "subtitle": "回答に合わせて、Timonが初期設定とガイドツアーを調整します。",
+      "developer": {
+        "title": "コードを書く",
+        "description": "私のリポジトリでコーディング、レビュー、マージをするエージェント。"
+      },
+      "automation": {
+        "title": "自動化する",
+        "description": "メール、カレンダー、情報収集、ルーティン：ひとりでに進む仕事。"
+      },
+      "beginner": {
+        "title": "はじめて使う",
+        "description": "AIエージェントを一歩ずつ理解したい。"
+      },
+      "failed": "選択を保存できませんでした。もう一度お試しください。"
     },
     "agent": {
+      "names": "Nova, Pixel, Ziggy, Misty, Oslo, Kiwi, Lumen, Sasha, Tempo, Pico",
+      "random": "ランダム",
+      "customise": "カスタマイズ",
+      "nameLabel": "名前",
+      "namePlaceholder": "名前をつけてください",
+      "nameRoll": "ランダムな名前",
+      "create": "{name} を起動する",
+      "createNoName": "エージェントを起動する",
+      "creating": "{name} を起動しています…",
+      "configFailed": "{name} に名前はつきましたが、設定を保存できませんでした。もう一度お試しください。",
+      "will": "できること",
+      "loading": "プロフィールを読み込んでいます…",
+      "profileError": "プロフィールを読み込めなかったため、いちばんシンプルな画面を表示しています。",
+      "retry": "再試行",
+      "cap": {
+        "base": "Timonであなたとチャットする",
+        "mail": "メールを読んで仕分ける",
+        "agenda": "カレンダーを確認して予定を入れる",
+        "code": "Gitリポジトリで作業する",
+        "watch": "毎朝ニュースをチェックする",
+        "write": "文書やメッセージを書く",
+        "research": "Webで調べて比較する"
+      },
+      "mission": {
+        "mail": "メール",
+        "agenda": "カレンダー",
+        "code": "コード",
+        "watch": "ニュースチェック",
+        "write": "執筆",
+        "research": "リサーチ"
+      },
+      "views": {
+        "label": "表示",
+        "recommended": "あなたのプロフィールにおすすめ",
+        "templates": "初心者 · テンプレート",
+        "interview": "自動化 · インタビュー",
+        "sheet": "開発者 · シート"
+      },
       "templates": {
         "title": "プロフィールを選ぶ",
-        "subtitle": "すぐに使える出発点です。あとですべて変更できます。"
+        "subtitle": "すぐに使える出発点です。あとですべて変更できます。",
+        "none": "プロフィール未選択",
+        "empty": "右側でプロフィールを選ぶと、ここにカードが表示されます。",
+        "hint": "まずプロフィールを選んでください。",
+        "assist": {
+          "title": "パーソナルアシスタント",
+          "description": "メール、カレンダー、リマインダー。"
+        },
+        "dev": {
+          "title": "コーディングパートナー",
+          "description": "リポジトリで修正、レビュー、リリースまで。"
+        },
+        "watch": {
+          "title": "スカウト",
+          "description": "毎朝のニュースダイジェスト。"
+        },
+        "write": {
+          "title": "ライター",
+          "description": "記事、投稿、返信。"
+        },
+        "research": {
+          "title": "調査員",
+          "description": "調べて、比較して、まとめる。"
+        },
+        "blank": {
+          "title": "ゼロから始める",
+          "description": "使いながら育てていく汎用エージェント。"
+        }
       },
       "interview": {
         "title": "自動化を設定しましょう",
-        "subtitle": "5つの質問に答えれば、エージェントは何を、何で、いつ行うかがわかります。"
+        "subtitle": "5つの質問に答えれば、エージェントは何を、何で、いつ行うかがわかります。",
+        "role": "オートメーター",
+        "count": "{current}/{total}",
+        "edit": "編集",
+        "finish": "完了",
+        "hint": "質問に答えてください（{current}/{total}）。",
+        "q1": "何を自動化しましょうか？",
+        "q2": "どのツールを使ってよいですか？",
+        "q3": "いつ始めますか？",
+        "q4": "重要な操作の前は、どうしますか？",
+        "q5": "どこでお知らせしますか？",
+        "other": "ほかにありますか？内容を書いてください…",
+        "toolsHint": "まだ接続されていないものは、このあとすぐに案内します。",
+        "always": "常に",
+        "dailyAt": "毎日",
+        "urlProvided": "URL指定済み",
+        "tool": {
+          "gmail": "Gmail",
+          "gcal": "Google カレンダー",
+          "gdrive": "Google ドライブ",
+          "slack": "Slack",
+          "notion": "Notion",
+          "telegram": "Telegram",
+          "github": "GitHub",
+          "browser": "内蔵ブラウザー",
+          "files": "ローカルファイル",
+          "webhook": "Webhook"
+        },
+        "trigger": {
+          "chat": "話しかけられたとき",
+          "daily": "毎日 {at}",
+          "mail": "新しいメールが届くたび",
+          "hook": "イベント発生時（Webhook）"
+        },
+        "autonomy": {
+          "ask": {
+            "title": "先に確認する",
+            "description": "最初はこれがおすすめ：送信や変更をすべてあなたが承認します。"
+          },
+          "report": {
+            "title": "実行して、あとで報告",
+            "description": "定型作業向け：実行してから報告します。"
+          },
+          "silent": {
+            "title": "黙って実行",
+            "description": "安全で十分に検証済みのルーティンだけに。"
+          }
+        },
+        "notify": {
+          "timon": "Timonで",
+          "telegram": "Telegram",
+          "email": "メールで"
+        },
+        "sum": {
+          "tools": "ツール",
+          "starts": "開始",
+          "autonomy": "自律度",
+          "notifies": "通知"
+        }
       },
       "sheet": {
         "title": "エージェントを設定",
-        "subtitle": "すべての設定はプロフィールでいつでも変更できます。"
+        "subtitle": "すべての設定はプロフィールでいつでも変更できます。",
+        "tab": {
+          "base": "役割とプロジェクト",
+          "engine": "エンジン",
+          "perms": "権限",
+          "tools": "ツール"
+        },
+        "roleTitle": "主な担当",
+        "roleHint": "メインエージェント（パイロット）であることは変わりません。ここでは何に集中するかだけを決めます。",
+        "role": {
+          "orchestrator": {
+            "title": "オーケストレーター / パイロット",
+            "description": "作業をタスクに分けて委任します。"
+          },
+          "code": {
+            "title": "コーダー",
+            "description": "プロジェクトのコードを書いて変更します。"
+          },
+          "review": {
+            "title": "レビュアー",
+            "description": "変更をリリース前にレビューします。"
+          },
+          "research": {
+            "title": "リサーチャー",
+            "description": "調査し、ドキュメントを読み、アプローチを比較します。"
+          },
+          "chore": {
+            "title": "運用",
+            "description": "ビルド、デプロイ、メンテナンス。"
+          }
+        },
+        "project": "プロジェクト",
+        "noFolder": "フォルダー未選択",
+        "choose": "選択…",
+        "worktree": "コードタスクごとに独立したGitワークツリー",
+        "worktreeDetail": "あなたのブランチの横で作業し、ブランチの中では作業しません。",
+        "engine": "エンジン",
+        "effort": "推論の強さ",
+        "effortDefault": "モデルの既定値",
+        "effortHint": "回答前にどれだけ考えるか。高いほど遅くなり、サブスクリプションの消費も増えます。",
+        "permissions": "権限",
+        "perm": {
+          "default": "重要なツールはすべて確認する",
+          "acceptEdits": "ファイルの編集は許可し、それ以外は確認する",
+          "plan": "読み取り専用：計画だけ立て、何も変更しない",
+          "auto": "自動：Timonの分類器が判断し、迷ったときだけカードを表示",
+          "bypassPermissions": "すべて許可し、一切チェックしない"
+        },
+        "bypassWarning": "承認カードは一切表示されません。このマシン上で何でもできてしまいます。",
+        "skills": "スキル",
+        "noSkills": "スキルはまだインストールされていません。",
+        "mcp": "MCP サーバー",
+        "noMcp": "MCP サーバーはまだ登録されていません。",
+        "rules": "指示",
+        "rulesPlaceholder": "例：日本語で答える、確認なしにpushしない。",
+        "sum": {
+          "project": "プロジェクト",
+          "toChoose": "未選択",
+          "permissions": "権限",
+          "skills": "スキル",
+          "mcp": "MCP"
+        }
+      },
+      "style": {
+        "title": "{name} の見た目",
+        "skull": "頭",
+        "fur": "毛並み",
+        "eyes": "目",
+        "accessory": "アクセサリー",
+        "try": "状態を試す",
+        "random": "おまかせ",
+        "done": "完了",
+        "close": "閉じる"
       }
     },
     "signin": {
@@ -43,12 +305,11 @@
     },
     "mascot": {
       "title": "{name}のマスコットです",
-      "subtitle": "このバージョンの新機能：すべてのエージェントに、今していること（考え中、作業中、あなたを待っている）を表すマスコットがつきました。{name}を好きなように着せ替えてください。"
-    },
-    "scheme": {
-      "label": "ライトモードまたはダークモード",
-      "light": "ライト",
-      "dark": "ダーク"
+      "subtitle": "このバージョンの新機能：すべてのエージェントに、今していること（考え中、作業中、あなたを待っている）を表すマスコットがつきました。{name}を好きなように着せ替えてください。",
+      "keep": "この見た目にする",
+      "skip": "今はしない",
+      "later": "エージェントの「アバター」タブでいつでも変更できます。",
+      "failed": "見た目を保存できませんでした。もう一度試すか、「今はしない」を選んでください。"
     },
     "discover": {
       "label": "Timonを知る",
@@ -103,6 +364,39 @@
         "workflows": "ワークフロー",
         "plugins": "プラグイン"
       }
+    },
+    "usage": {
+      "title": "Timonを誰のために使いますか？",
+      "optional": "任意",
+      "solo": {
+        "title": "自分のため",
+        "description": "自分のプロジェクトと日々の仕事。"
+      },
+      "team": {
+        "title": "チームや会社のため",
+        "description": "複数のメンバーで、エージェントとプロジェクトを共有。"
+      },
+      "agency": {
+        "title": "自分のエージェンシーやクライアントのため",
+        "description": "クライアントのためにエージェントを構築・運用しています。",
+        "badge": "パートナープログラム"
+      },
+      "offer": {
+        "title": "エージェンシー向け",
+        "early": "Timon Proへの早期アクセスと、チームへの直接の窓口",
+        "partners": "パートナープログラムへの参加枠",
+        "discount": "選ばれた最初の10社のエージェンシーは、Timon Proが永久に50%オフになります。",
+        "consent": "エージェンシー向けのご案内を次のアドレスに送る：",
+        "emailLabel": "エージェンシー向けのご案内を受け取るメールアドレス",
+        "notice": "Timonからこのアドレスに送るのはこのご案内だけです。{settingsPath} でいつでも取り消せます。",
+        "invalidEmail": "有効なメールアドレスを入力するか、チェックを外してください。",
+        "failed": "ご案内のリクエストを記録できませんでした。もう一度試すか、チェックを外してください。",
+        "refused": "このアドレスは受け付けられませんでした。確認するか、チェックを外してください。"
+      },
+      "failed": "回答を保存できませんでした。もう一度お試しください。",
+      "continue": "続ける",
+      "sending": "送信しています…",
+      "pickProfile": "続けるには、利用目的を選んでください。"
     }
   }
 }

@@ -1,6 +1,7 @@
 import { toast } from 'sonner';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
 import { announceAgentsChanged } from '@/lib/agents-changed';
+import { responseErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { settingsPath } from '@/lib/settings-path';
 
@@ -20,7 +21,7 @@ export async function deleteAgentAfterConfirm(name: string, opts: { onRestored?:
     const r = await fetch('/api/ui/agents/' + encodeURIComponent(name), {
       method: 'DELETE',
     });
-    if (!r.ok) throw new Error(await r.text());
+    if (!r.ok) throw new Error(await responseErrorMessage(r));
     // The graph does not poll its agents, it reloads them on this event:
     // without it, the deleted node stays on screen until the page reloads.
     announceAgentsChanged();
@@ -32,7 +33,7 @@ export async function deleteAgentAfterConfirm(name: string, opts: { onRestored?:
           onClick: () => {
             void fetch(`/api/ui/agent-trash/${encodeURIComponent(trashId)}/restore`, { method: 'POST' })
               .then(async (res) => {
-                if (!res.ok) throw new Error(await res.text());
+                if (!res.ok) throw new Error(await responseErrorMessage(res));
                 toast.success(t('agentTrash.restored', { name }));
                 announceAgentsChanged();
                 await opts.onRestored?.();
@@ -42,11 +43,11 @@ export async function deleteAgentAfterConfirm(name: string, opts: { onRestored?:
         },
       });
     } else {
-      toast.success('Deleted ' + name);
+      toast.success(t('agentsPage.deleted', { name }));
     }
     return true;
   } catch (e) {
-    toast.error('Delete failed: ' + String((e as Error).message || e).slice(0, 80));
+    toast.error(t('agentsPage.deleteFailed', { error: String((e as Error).message || e).slice(0, 80) }));
     return false;
   }
 }

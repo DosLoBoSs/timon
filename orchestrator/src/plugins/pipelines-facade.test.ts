@@ -157,22 +157,56 @@ test('another plugin\'s or account\'s pipeline is invisible; a hand-made one sho
   const theirs = await other.plugin.pipelines.create(flow('theirs'));
   const adas = createPipeline({ name: 'ada flow', definition: { steps: [{ id: 'a', agent: 'worker', prompt: 'SECRET PROMPT {{input.k}}' }] }, ownerUserId: ada.id });
   const bobs = createPipeline({ name: 'bob flow', definition: { steps: [{ id: 'a', agent: 'worker', prompt: 'x' }] }, ownerUserId: bob.id });
-  const system = createPipeline({ name: 'system flow', definition: { steps: [{ id: 'a', agent: 'worker', prompt: 'x' }] } });
 
   const listed = (await asAda(() => plugin.pipelines.list())).map((p) => p.id);
   assert.ok(listed.includes(adas.id));
-  for (const hidden of [theirs.id, bobs.id, system.id]) assert.ok(!listed.includes(hidden), hidden);
+  for (const hidden of [theirs.id, bobs.id]) assert.ok(!listed.includes(hidden), hidden);
   const summary = await asAda(() => plugin.pipelines.get(adas.id));
   assert.equal(summary?.mine, false);
   assert.ok(summary && !('steps' in summary));
   assert.ok(!JSON.stringify(summary).includes('SECRET PROMPT'));
   assert.deepEqual(summary?.inputs, ['k']);
   assert.equal(await asAda(() => plugin.pipelines.get(theirs.id)), undefined);
-  assert.ok((await asAdmin(() => plugin.pipelines.list())).some((p) => p.id === system.id), 'a superadmin sees system rows');
   await assert.rejects(asAda(() => plugin.pipelines.run(bobs.id)), code('not_found'));
   await assert.rejects(plugin.pipelines.run(adas.id), code('not_found'), 'a job does not see a user\'s pipeline');
   await dispose();
   await other.dispose();
+});
+
+test('a system pipeline is every account\'s to see and run, never the plugin\'s to delete; a job does not see it (TODO #854)', async () => {
+  const { plugin, dispose } = await pluginWith(ALL, 'acme-system');
+  // Owner NULL, as the seeded `feature-flow`: the routes let every account read and run it.
+  const system = createPipeline({
+    name: 'feature-flow sys', definition: { steps: [{ id: 'a', agent: 'worker', prompt: 'SYSTEM PROMPT {{input.feature}}' }] },
+  });
+  try {
+    for (const [who, as] of [['Ada', asAda], ['Bob', asBob], ['a superadmin', asAdmin]] as const) {
+      assert.ok((await as(() => plugin.pipelines.list())).some((p) => p.id === system.id), `${who} lists it`);
+      const seen = await as(() => plugin.pipelines.get(system.id));
+      assert.equal(seen?.mine, false, who);
+      assert.ok(seen && !('steps' in seen) && !JSON.stringify(seen).includes('SYSTEM PROMPT'), `${who} sees a summary only`);
+    }
+
+    const run = await asAda(() => plugin.pipelines.run(system.id, { feature: 'search' }));
+    assert.equal(run.steps.length, 1);
+    assert.equal(dbApi.getTask(run.steps[0]!.taskId)!.owner_user_id, ada.id, 'the run is the caller\'s');
+    assert.ok(await asAda(() => plugin.pipelines.runStatus(run.runId)));
+    assert.equal(await asBob(() => plugin.pipelines.runStatus(run.runId)), undefined, 'Bob sees the pipeline, not Ada\'s run');
+
+    // Seen without having created it: changing it is refused, superadmin's request included.
+    await assert.rejects(asAda(() => plugin.pipelines.delete(system.id)), code('forbidden'));
+    await assert.rejects(asAdmin(() => plugin.pipelines.delete(system.id)), code('forbidden'));
+    assert.ok(dbApi.getPipeline(system.id), 'still there');
+
+    // A job has no account: the system row stays out of its view, as before.
+    assert.ok(!(await plugin.pipelines.list()).some((p) => p.id === system.id));
+    assert.equal(await plugin.pipelines.get(system.id), undefined);
+    assert.equal(await plugin.pipelines.delete(system.id), false);
+    await assert.rejects(plugin.pipelines.run(system.id, { feature: 'x' }), code('not_found'));
+  } finally {
+    dbApi.deletePipeline(system.id);
+    await dispose();
+  }
 });
 
 test('delete reaches only the plugin\'s own pipelines', async () => {

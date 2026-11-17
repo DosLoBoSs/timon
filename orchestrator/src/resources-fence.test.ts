@@ -30,8 +30,10 @@ import {
   resetFenceLaunchFailureForTest, watchFencedLaunch, wrapMissionLaunch, type MissionFenceOutcome,
 } from './resources.js';
 
-// The fence checks every grant on the path it resolves to: the tree exists.
-const TH = join(mkdtempSync(join(tmpdir(), 'fence-launch-')), '.timon');
+// The fence checks every grant on the path it resolves to: the tree exists,
+// and is spelled the way it resolves (`/private/var` on macOS, the long name of
+// a `RUNNER~1` folder on Windows), so the policy can be compared to it.
+const TH = join(realpathSync.native(mkdtempSync(join(tmpdir(), 'fence-launch-'))), '.timon');
 const MISSION = 'cccccccc-0000-4000-8000-000000000003';
 const TARGET = { timonHome: TH, cwd: join(TH, 'worktrees', 'task-1'), missionId: MISSION, platform: 'linux' as const };
 mkdirSync(TARGET.cwd, { recursive: true });
@@ -243,7 +245,7 @@ test('an agent set up in the workspace folder itself keeps it, said once in the 
   }, { mode: 'auto', fence, warn: (l) => warnings.push(l) });
   launch();
   const policy = fence.policies[0];
-  const workspace = realpathSync(WORKSPACE_DIR);
+  const workspace = realpathSync.native(WORKSPACE_DIR);
   assert.ok(policy?.rw.includes(workspace), 'the working directory is granted, read and write');
   assert.equal(policy?.ignored.filter((i) => i.path === WORKSPACE_DIR).length, 0, 'not dropped');
   assert.ok(!warnings.some((l) => l.includes('dropped')), warnings.join('\n'));

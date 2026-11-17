@@ -169,7 +169,7 @@ export function maskUrl(raw: string): string {
 // Daemon side: what a recording becomes before it is sealed.
 
 export const RECORDING_STEP_TYPES = ['click', 'input', 'secret', 'enter', 'navigate',
-  'newTab', 'switchTab', 'closeTab', 'credential'] as const;
+  'newTab', 'switchTab', 'closeTab', 'credential', 'frame'] as const;
 export type RecordedStepType = (typeof RECORDING_STEP_TYPES)[number];
 /** The public contract spells both lists out; compilation fails if they part. */
 type _RecordingStepTypesMatchContract = Assert<Equals<RecordedStepType, ContractStepType>>;
@@ -218,6 +218,15 @@ function sanitizeStep(raw: unknown): Omit<RecordedStep, 'n'> | null {
   if (!parsed.success) return null;
   const s = parsed.data;
   const step: Omit<RecordedStep, 'n'> = { t: s.t, type: s.type, tabId: s.tabId };
+  if (s.type === 'frame') {
+    // A manual step in an embedded frame (#944) says where the user acted, never what: no value,
+    // text, address or secret survives, only the frame's origin.
+    if (s.selector) step.selector = s.selector;
+    if (s.tag) step.tag = s.tag;
+    if (s.name && !isSecretPlaceholder(s.name)) step.name = s.name;
+    if (isRecordableUrl(s.origin)) step.origin = new URL(s.origin).origin;
+    return step;
+  }
   for (const key of ['selector', 'tag', 'inputType', 'role', 'text', 'openerTabId'] as const) {
     if (s[key]) step[key] = s[key];
   }

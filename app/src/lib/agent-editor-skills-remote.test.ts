@@ -65,7 +65,7 @@ test('agent editor: on a backend that cannot read a skill on demand, every skill
     }
     if (url.startsWith('/api/ui/skill-attachments?')) return Response.json({ attachments: [] });
     if (url === '/api/ui/agents/Zeus/skills') {
-      return Response.json({ skills: [{ id: 'alpha', mode: 'include', via: 'config' }, { id: 'house', mode: 'include', via: 'project' }] });
+      return Response.json({ skills: [{ id: 'alpha', mode: 'include', via: 'agent' }, { id: 'house', mode: 'include', via: 'project' }] });
     }
     return Response.json({ agents: [], skills: [], servers: [], roles: [], projects: [], files: [], backends: [] });
   });

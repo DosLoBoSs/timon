@@ -125,11 +125,11 @@ export function TaskParamsBadge({ task: stored, onSaved, target }: {
       )}
     >
       <div className="mb-1">
-        <span className="text-muted-foreground/60">backend:</span>{' '}
+        <span className="text-muted-foreground/60">{i18n('kanbanPage.paramsTip.backend')}</span>{' '}
         <span className="text-foreground">{backend}</span>
       </div>
       <div className="mb-1">
-        <span className="text-muted-foreground/60">model:</span>{' '}
+        <span className="text-muted-foreground/60">{i18n('kanbanPage.paramsTip.model')}</span>{' '}
         <span className="text-foreground">{model ?? i18n('kanbanPage.defaultModel', { backend })}</span>
       </div>
       {mark.inherited && (
@@ -137,25 +137,25 @@ export function TaskParamsBadge({ task: stored, onSaved, target }: {
       )}
       {mode && (
         <div className="mb-1">
-          <span className="text-muted-foreground/60">perm:</span>{' '}
+          <span className="text-muted-foreground/60">{i18n('kanbanPage.paramsTip.permission')}</span>{' '}
           <span className="text-foreground">{mode}</span>
         </div>
       )}
       {skills.length > 0 && (
         <div className="mb-1">
-          <span className="text-muted-foreground/60">skills:</span>{' '}
+          <span className="text-muted-foreground/60">{i18n('kanbanPage.paramsTip.skills')}</span>{' '}
           <span className="text-foreground">{skills.join(', ')}</span>
         </div>
       )}
       {mcps.length > 0 && (
         <div className="mb-1">
-          <span className="text-muted-foreground/60">mcp:</span>{' '}
+          <span className="text-muted-foreground/60">{i18n('kanbanPage.paramsTip.mcp')}</span>{' '}
           <span className="text-foreground">{mcps.join(', ')}</span>
         </div>
       )}
       {tools.length > 0 && (
         <div>
-          <span className="text-muted-foreground/60">tools:</span>{' '}
+          <span className="text-muted-foreground/60">{i18n('kanbanPage.paramsTip.tools')}</span>{' '}
           <span className="text-foreground">{tools.join(', ')}</span>
         </div>
       )}

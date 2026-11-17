@@ -68,6 +68,8 @@ Agents & missions:
   timon agent set-avatar <name> --clear  remove it
   timon agent rename <old> <new>          rename an agent and its references (refused if <new>
                                          exists or a mission of <old> is running)
+  timon agent set-main <name>             make <name> the main orchestrator: it receives the recaps
+                                         and notifications (a project-less orchestrator; never from a mission)
   timon agent doc list <agent>            list the identity docs (*.md at ~/.timon/agents/<agent>/)
   timon agent doc get <agent> <file>      print one (SOUL.md, system-prompt.md…)
   timon agent doc put <agent> <file> [--file PATH]
@@ -81,6 +83,8 @@ Agents & missions:
   timon agent import <FILE> [--yes] [--accept-cwd] [--prefix P] [--json]
                                          shows what would be created, asks, then imports
                                          (--accept-cwd takes the proposed working directories)
+                                         routines on at the source arrive off: --keep-routines
+                                         keeps them on, --keep-routines-for NAME[,NAME…] for some
   timon agent import --hermes [PROFILE…] [--yes] [--accept-cwd] [--prefix P] [--json]
                                          the same, read from Hermes on the machine running
                                          Timon (all its profiles, or those named); no zip
@@ -143,6 +147,8 @@ Tasks (Kanban backlog):
   timon task mark-merged <id> --sha SHA [--comment TEXT]
                                                branch merged outside Timon: records its merge commit
   timon task mark-as-failed [id] --reason TEXT closes it as BLOCKED
+  timon task attach <id> --series ID|current   attaches the task's chain (root, reviews, merge, doc)
+                                               to a series and its pilot; current = this mission
   timon task update <id> [--status ...] [--priority N] [--title ...] [--agent ...] [--type ...]
   timon task delete <id> [--chain]           --chain: also the verification chain it heads
 
@@ -363,7 +369,7 @@ Island workspace of the user's screen (an agent's mission owner):
                                              {open: {...}} or {layout: {...}})
   timon islands propose --arrangement ID [--view PATH] [--project SLUG] [--note TEXT]
                                              a card recalling a named arrangement on the view
-  timon setup avatar|soul|team|finish        the main agent's own setup conversation (refused elsewhere)
+  timon setup avatar|soul|team|tim|finish    the main agent's own setup conversation (refused elsewhere)
   timon navigate routes                      pages of the app an agent can send the user to
   timon navigate go <path> [--param k=v]... [--note TEXT]
                                              ask the user to go there (a card they follow)
@@ -619,10 +625,16 @@ usage: timon agent set-avatar <name> <image-file> | timon agent set-avatar <name
 usage: timon agent rename <old-name> <new-name>
 ```
 
+### timon agent set-main name
+
+```text
+usage: timon agent set-main <name>
+```
+
 ### timon agent …
 
 ```text
-usage: timon agent <create|update|set-scope|set-avatar|rename|doc|trash|export|import|export-skill> <name> …
+usage: timon agent <create|update|set-scope|set-avatar|rename|set-main|doc|trash|export|import|export-skill> <name> …
        (deletion: the app or the agent_delete tool, which move the agent to the trash)
 ```
 
@@ -687,6 +699,12 @@ usage: timon task done <id> [--comment TEXT | --comment-file PATH | --comment-st
 usage: timon task mark-merged <id> --sha SHA [--comment TEXT]
 ```
 
+### timon task attach id --series ID|current
+
+```text
+usage: timon task attach <id> --series ID|current
+```
+
 ### timon task mark-as-done [id] --comment TEXT | --comment-file PATH | --comment-stdin
 
 ```text
@@ -721,7 +739,7 @@ usage: timon task delete <id> [--chain]
 ### timon task …
 
 ```text
-usage: timon task <list|get|create|done|block|mark-as-done|mark-as-failed|mark-merged|update|delete> …
+usage: timon task <list|get|create|done|block|mark-as-done|mark-as-failed|mark-merged|attach|update|delete> …
 ```
 
 ### timon series fallback set --scope orchestrator|code|review|merge|doc|chore|* 
@@ -1090,10 +1108,10 @@ usage: timon ui-doc render <file.html> [--title TEXT] [--reply] | timon ui-doc g
 usage: timon onboarding profile [set <developer|automation|beginner>]
 ```
 
-### timon setup avatar|soul|team --coder NAME --reviewer NAME|finish [--no-tour]
+### timon setup avatar|soul|team --coder NAME --reviewer NAME|tim --name NAME --role …
 
 ```text
-usage: timon setup <avatar|soul|team --coder NAME --reviewer NAME|finish [--no-tour]>
+usage: timon setup <avatar|soul|team --coder NAME --reviewer NAME|tim --name NAME --role ROLE [--job TEXT]|finish [--no-tour]>
 ```
 
 ### timon backup enable|status [--json]

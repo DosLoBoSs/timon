@@ -15,12 +15,13 @@
  * holds: no secret, trigger secret, token, log, transcript, memory file,
  * session, tool permission or browser profile.
  */
-import { existsSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { existsSync, writeFileSync } from 'node:fs';
 import { z } from 'zod';
 import { canonicalAgentName, loadConfig } from '../agent-config.js';
 import { dbApi } from '../db.js';
 import { mainAgentName } from '../main-agent.js';
-import { agentDir } from '../paths.js';
+import { agentConfig, agentDir } from '../paths.js';
 import { ownAgentSkills } from '../skill-attachments.js';
 import { listTriggerRows } from '../triggers/store.js';
 import { AGENT_ICON_URL_PREFIX, readAgentIcon, readProjectIcon, type ServedFile } from '../uploads.js';
@@ -40,6 +41,21 @@ type AvatarMime = NonNullable<PluginAgentExport['avatar']>['mime'];
 
 const ScheduleConfig = z.object({ cron: z.string().min(1), tz: z.string().optional() });
 const TaskAction = z.object({ type: z.literal('task'), agent: z.string(), prompt: z.string() });
+
+const UID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * The agent's stable id (`config.uid`), minted and saved the first time an
+ * export needs it. No event is published: the agent itself does not change,
+ * and a plugin following its own agents must not take this for a hand edit.
+ */
+function ensureAgentUid(name: string): string {
+  const config = loadConfig(name);
+  if (typeof config.uid === 'string' && UID_RE.test(config.uid)) return config.uid;
+  const uid = randomUUID();
+  writeFileSync(agentConfig(name), JSON.stringify({ ...config, uid }, null, 2));
+  return uid;
+}
 
 /** The picture this daemon serves for the agent; an address it does not store is not read. */
 function avatarOf(iconUrl: string | undefined): PluginAgentExport['avatar'] {
@@ -106,6 +122,7 @@ export function agentExportFor(scope: AgentCallerScope): ScopedAgentExport {
       }
       const team = config.team ? dbApi.getTeam(config.team, scope.viewer ?? null) : undefined;
       return {
+        id: ensureAgentUid(target),
         name: target,
         main: mainAgentName() === target,
         role: config.role ?? null,

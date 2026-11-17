@@ -135,7 +135,7 @@ function bool(raw: unknown, fallback: boolean): boolean {
 /**
  * Re-reads the stored value, field by field.
  *
- * Tolerant by construction, like `lireColonnes`: an unknown key is ignored, a
+ * Tolerant by construction, like `readColumns`: an unknown key is ignored, a
  * missing one falls back to its default, and a mode outside the three known
  * ones is not a broken thread — just the default rendering.
  */

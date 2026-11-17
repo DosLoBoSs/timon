@@ -18,7 +18,9 @@ async function mount(ctx: TestContext, { width = 1200, height = 800, exclusive =
     if (!saved.has(key)) saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
     Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
   };
-  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'getComputedStyle', 'MutationObserver']) {
+  // HTMLInputElement: Radix's focus scope tests `instanceof HTMLInputElement`
+  // when the focus leaves an open menu (the popup folded from its own menu).
+  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'HTMLInputElement', 'Element', 'Node', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'getComputedStyle', 'MutationObserver']) {
     install(key, key === 'window' ? dom.window : Reflect.get(dom.window, key));
   }
   Object.defineProperty(dom.window, 'innerWidth', { value: width, configurable: true });
@@ -311,6 +313,73 @@ test('stacked for lack of room, a tab keeps its menu and its drag, within its ow
   assert.deepEqual(order(), [['route'], ['a', 'b'], ['c'], ['d']]);
 });
 
+/** Opens a Radix submenu from its trigger, as the keyboard does (jsdom has no pointer hover). */
+async function openSubmenu(act: (fn: () => void) => Promise<void>, trigger: HTMLElement) {
+  await act(() => {
+    trigger.focus();
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+  });
+}
+
+test('stacked, the menu of a tab sets the glass of its island (TODO #806)', async (t) => {
+  const w = await mount(t, { width: 600 });
+  // The glass is on for the account: the Appearance screen sets it on <html>.
+  document.documentElement.setAttribute('data-glass', '');
+  const base = w.tree.defaultIslandTree();
+  const split = w.tree.insertAt(base, base.root.id, 'right', { type: FAKE, params: { id: 'a' } }).tree;
+  await w.render(split);
+  assert.equal(w.workspace().dataset.islandWorkspace, 'stacked');
+  const boardLeaf = w.tree.allLeaves(split).find((leaf) => leaf.tabs.some((tab) => tab.content.params.id === 'a'))!;
+  const handle = document.querySelector<HTMLElement>(`[data-island-tab-handle="${boardLeaf.tabs[0]!.id}"]`)!;
+  await w.act(() => { handle.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })); });
+  const trigger = document.querySelector<HTMLElement>('[data-island-menu="glass"]');
+  assert.ok(trigger, 'the Glass entry, as in an island header');
+  await openSubmenu(w.act, trigger!);
+  assert.equal(document.querySelector('[data-island-glass="follow"]')?.getAttribute('aria-checked'), 'true', 'no choice yet: it follows Appearance');
+  assert.ok(!document.querySelector('[data-island-glass="both"]'), '"both" stays hidden while glass tuning is');
+  await w.act(() => { document.querySelector<HTMLElement>('[data-island-glass="widgets"]')!.click(); });
+  const after = w.calls.at(-1)!.tree;
+  assert.equal(w.tree.allLeaves(after).find((leaf) => leaf.id === boardLeaf.id)?.glassScope, 'widgets');
+  assert.equal(w.tree.allLeaves(after).find((leaf) => leaf.id !== boardLeaf.id)?.glassScope, undefined, 'the island of the page keeps its own');
+});
+
+test('stacked with the glass off, the menu of a tab offers no Glass entry', async (t) => {
+  const w = await mount(t, { width: 600 });
+  const base = w.tree.defaultIslandTree();
+  const split = w.tree.insertAt(base, base.root.id, 'right', { type: FAKE, params: { id: 'a' } }).tree;
+  await w.render(split);
+  const handle = document.querySelector<HTMLElement>('[data-island-tab-handle]')!;
+  await w.act(() => { handle.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })); });
+  assert.ok(document.querySelector('[data-stack-menu-item]') || document.querySelector('[role="menu"]'), 'the menu is open');
+  assert.ok(!document.querySelector('[data-island-menu="glass"]'));
+});
+
+test('the page alone hands its glass to the top bar, and takes it back once split (TODO #806)', async (t) => {
+  const w = await mount(t);
+  const { readPageGlass } = await import('./page-glass');
+  const base = w.tree.defaultIslandTree();
+  await w.render(base);
+  assert.equal(readPageGlass(), null, 'not before the arrangement is read: a write would be refused');
+  await w.render(base, true);
+  assert.equal(readPageGlass()?.scope, null, 'no choice yet: it follows Appearance');
+  await w.act(() => { readPageGlass()!.set('widgets'); });
+  const chosen = w.calls.at(-1)!.tree;
+  assert.equal(chosen.root.kind === 'leaf' && chosen.root.glassScope, 'widgets');
+  assert.equal(w.workspace().dataset.islandWorkspace, 'single', 'still nothing painted around the page');
+  assert.equal(w.workspace().getAttribute('data-glass-scope'), 'widgets');
+  assert.equal(readPageGlass()?.scope, 'widgets');
+  // Split, the page's island header carries the menu again.
+  await w.set(w.tree.insertAt(chosen, chosen.root.id, 'right', { type: FAKE, params: { id: 'a' } }).tree);
+  assert.equal(readPageGlass(), null);
+  // Alone under a popup, the page has no header: the top bar offers it again.
+  await w.set(w.tree.openFloat(chosen, { type: FAKE, params: { id: 'p' } }, { x: 0.25, y: 0.25, width: 0.5, height: 0.5 }).tree);
+  assert.equal(readPageGlass()?.scope, 'widgets');
+  await w.act(() => { readPageGlass()!.set(null); });
+  const back = w.calls.at(-1)!.tree;
+  assert.equal(back.root.kind === 'leaf' ? back.root.glassScope : 'split', undefined, 'back to the Appearance setting');
+  assert.equal(back.floats?.length, 1, 'the popup is untouched');
+});
+
 test('an announced workspace opens a content next to the focused island, once', async (t) => {
   const w = await mount(t);
   assert.equal(w.bus.openInIsland({ type: FAKE, params: { id: 'a' } }), false, 'no workspace: refused');
@@ -326,6 +395,37 @@ test('an announced workspace opens a content next to the focused island, once', 
   await w.act(() => { opened = w.bus.openInIsland({ type: FAKE, params: { id: 3 } }); });
   assert.equal(opened, false);
   assert.ok(w.mounts.includes('a'));
+});
+
+test('the bus names the tab it opened, and re-targets it in place (TODO #819)', async (t) => {
+  const w = await mount(t);
+  assert.equal(w.bus.openIslandTab({ type: FAKE, params: { id: 'a' } }), null, 'no workspace: nothing opened');
+  assert.equal(w.bus.setIslandTabParams('nope', { id: 'b' }), false, 'no workspace: nothing re-targeted');
+  await w.render(w.tree.defaultIslandTree(), true);
+  let tabId: string | null = null;
+  await w.act(() => { tabId = w.bus.openIslandTab({ type: FAKE, params: { id: 'a' } }, { edge: 'right' }); });
+  assert.ok(tabId);
+  const opened = w.calls.at(-1)!.tree;
+  assert.equal(w.tree.allLeaves(opened).flatMap((leaf) => leaf.tabs).find((tab) => tab.id === tabId)?.content.params.id, 'a');
+  // The same singleton again: the open tab is named, not a new one.
+  let again: string | null = null;
+  await w.act(() => { again = w.bus.openIslandTab({ type: FAKE, params: { id: 'a' } }, { edge: 'center' }); });
+  assert.equal(again, tabId);
+
+  let changed = false;
+  await w.act(() => { changed = w.bus.setIslandTabParams(tabId!, { id: 'b' }); });
+  assert.equal(changed, true);
+  const tabs = w.tree.allLeaves(w.calls.at(-1)!.tree).flatMap((leaf) => leaf.tabs).filter((tab) => tab.content.type === FAKE);
+  assert.deepEqual(tabs.map((tab) => [tab.id, tab.content.params.id]), [[tabId, 'b']], 'one tab, the same, showing b');
+  assert.equal(document.querySelectorAll('[data-board="b"]').length, 1);
+  assert.equal(document.querySelectorAll('[data-board="a"]').length, 0);
+
+  const before = w.calls.length;
+  await w.act(() => { changed = w.bus.setIslandTabParams(tabId!, { id: 3 }); });
+  assert.equal(changed, false, 'params refused by the type');
+  await w.act(() => { changed = w.bus.setIslandTabParams('gone', { id: 'c' }); });
+  assert.equal(changed, false, 'no such tab');
+  assert.equal(w.calls.length, before, 'a refused re-target writes nothing');
 });
 
 test('the stored workspace, before its view key is known, is the frame alone and offers nothing', async (t) => {
@@ -1171,6 +1271,7 @@ test('a popup folds into a tab in the corner from its header or its menu, and co
   assert.ok(item, 'a "Minimize" entry in its menu');
   await w.act(() => { item!.click(); });
   assert.equal(w.tree.floatOf(w.calls.at(-1)!.tree, leafId)?.minimized, true);
+  assert.equal(document.activeElement, document.querySelector(`[data-island-minimized="${leafId}"]`), 'the closing menu does not pull the focus back');
 });
 
 test('the page alone with only folded popups is painted as it always was, their tabs in the corner', async (t) => {

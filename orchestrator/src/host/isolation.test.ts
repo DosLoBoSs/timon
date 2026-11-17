@@ -31,6 +31,13 @@ const {
 } = await import('./isolation.js');
 
 const FAKE_HOME = '/home/tester';
+/**
+ * These cases spell Linux and macOS paths on purpose (`/home/tester`, a systemd
+ * path list), and the module resolves them with the host's own path rules: on
+ * Windows `/home/tester` becomes `D:\home\tester` and the fixture no longer says
+ * what it means. Neither the masking nor the fence ever runs there.
+ */
+const POSIX_FIXTURES = process.platform === 'win32' && 'Linux and macOS fixtures, resolved with Windows path rules';
 
 /**
  * The "never" list of the fence framing (§1), copied here on purpose instead of
@@ -52,7 +59,7 @@ const FRAMING_REFUSED: readonly string[] = [
 const cfg = (isolation: Record<string, unknown> = {}) =>
   TimonConfigSchema.parse({ host: { isolation } });
 
-test('the rendered directives mask the credential paths, in the long property form', () => {
+test('the rendered directives mask the credential paths, in the long property form', { skip: POSIX_FIXTURES }, () => {
   const args = isolationArgsFor('service', cfg(), { home: FAKE_HOME, backend: 'claude' });
   const masking = args.filter((a) => a.startsWith('--property=InaccessiblePaths='));
   assert.equal(masking.length, 1, 'exactly one InaccessiblePaths directive');
@@ -68,7 +75,7 @@ test('the rendered directives mask the credential paths, in the long property fo
   }
 });
 
-test('the backend actually in use keeps its credentials, the others do not', () => {
+test('the backend actually in use keeps its credentials, the others do not', { skip: POSIX_FIXTURES }, () => {
   for (const [backend, dirs] of Object.entries(BACKEND_HOME_DIRS)) {
     const { deny } = resolveIsolation(cfg(), { home: FAKE_HOME, backend });
     for (const dir of dirs) {
@@ -81,7 +88,7 @@ test('the backend actually in use keeps its credentials, the others do not', () 
   }
 });
 
-test('a mission cwd living under a masked path is never masked away', () => {
+test('a mission cwd living under a masked path is never masked away', { skip: POSIX_FIXTURES }, () => {
   // Worktrees under a folder the default list masks: masking the ancestor
   // would hide the mission's own repository.
   const { deny } = resolveIsolation(cfg(), {
@@ -93,7 +100,7 @@ test('a mission cwd living under a masked path is never masked away', () => {
   assert.ok(deny.includes(`${FAKE_HOME}/.ssh`), 'the rest of the list still applies');
 });
 
-test('TIMON_HOME and its ancestors are never masked, the private files in it always are', () => {
+test('TIMON_HOME and its ancestors are never masked, the private files in it always are', { skip: POSIX_FIXTURES }, () => {
   const timonHome = `${FAKE_HOME}/state/timon`;
   const { deny } = resolveIsolation(cfg({ deny: ['~/state'] }), { home: FAKE_HOME, timonHome });
   assert.ok(!deny.includes(`${FAKE_HOME}/state`) && !deny.includes(timonHome), 'the folders themselves stay visible');
@@ -109,7 +116,7 @@ test('TIMON_HOME and its ancestors are never masked, the private files in it alw
   );
 });
 
-test('the masking launcher masks the copies of a private file, listed or read from the folder', () => {
+test('the masking launcher masks the copies of a private file, listed or read from the folder', { skip: POSIX_FIXTURES }, () => {
   const timonHome = `${FAKE_HOME}/.timon`;
   const listed = resolveIsolation(cfg(), {
     home: FAKE_HOME, timonHome, timonHomeEntries: ['timon.config.json.bak-20261025', 'license.state.json.tmp-7', 'skills'],
@@ -127,7 +134,7 @@ test('the masking launcher masks the copies of a private file, listed or read fr
   assert.ok(!read.deny.includes(join(real, 'notes.md')));
 });
 
-test('neither the cwd nor allow reopens a private file of the Timon home', () => {
+test('neither the cwd nor allow reopens a private file of the Timon home', { skip: POSIX_FIXTURES }, () => {
   const timonHome = `${FAKE_HOME}/.timon`;
   const { deny, readOnly } = resolveIsolation(
     cfg({ allow: ['~/.timon', '~/.timon/daemon-token'], readOnly: ['~/.timon/secret-key'] }),
@@ -150,7 +157,7 @@ test('the refused entries of the Timon home include the copies a prefix catches'
   }
 });
 
-test('allow wins over the built-in list, deny and readOnly extend it', () => {
+test('allow wins over the built-in list, deny and readOnly extend it', { skip: POSIX_FIXTURES }, () => {
   const policy = resolveIsolation(
     cfg({ allow: ['~/.ssh'], deny: ['~/secrets'], readOnly: ['/etc'] }),
     { home: FAKE_HOME },
@@ -202,7 +209,7 @@ test('the mission wrapper line is unchanged by the isolation wiring', async () =
   );
 });
 
-test('a folder a plugin declared for the running backend is spared, but never one of the user\'s credentials', () => {
+test('a folder a plugin declared for the running backend is spared, but never one of the user\'s credentials', { skip: POSIX_FIXTURES }, () => {
   try {
     setDeclaredCredentialDirsSource(() => ({ acme: ['.acme', '.config/acme'] }));
     const ok = resolveIsolation(cfg(), { home: FAKE_HOME, backend: 'acme' });
@@ -308,7 +315,7 @@ test('fence: a read-only workspace keeps the working tree and its git directorie
   }
 });
 
-test('fence: no private entry of the Timon home is reachable, copies included', () => {
+test('fence: no private entry of the Timon home is reachable, copies included', { skip: POSIX_FIXTURES }, () => {
   const policy = resolveFence(cfg(), fullTarget());
   assert.equal(policy.enabled, true);
   for (const name of FRAMING_REFUSED) {
@@ -350,7 +357,7 @@ test('fence: the mission writes its worktree, its repository, its TMPDIR and its
   assert.equal(access(policy, '/dev/null'), 'rw');
 });
 
-test('fence: the agent\'s package cache is writable and executable, nothing above it nor beside it', () => {
+test('fence: the agent\'s package cache is writable and executable, nothing above it nor beside it', { skip: POSIX_FIXTURES }, () => {
   const policy = resolveFence(cfg(), fullTarget());
   const own = `${TH}/provider-cache/.agents/timon.coder`;
   assert.equal(access(policy, `${own}/npm/_cacache/index-v5/ab`), 'rw');
@@ -371,7 +378,7 @@ test('fence: the agent\'s package cache is writable and executable, nothing abov
   assert.ok(odd.ignored.some((i) => i.path === '../timon.main'));
 });
 
-test('fence: no provider plugin id reaches the agents\' caches, nor does a handed-over path', () => {
+test('fence: no provider plugin id reaches the agents\' caches, nor does a handed-over path', { skip: POSIX_FIXTURES }, () => {
   // A provider plugin id starts with a letter or a digit: `.agents` is never one.
   const plugin = resolveFence(cfg(), fullTarget({ providerPlugin: '.agents' }));
   assert.equal(access(plugin, `${TH}/provider-cache/.agents/timon.main/npm/x`), 'none');
@@ -427,7 +434,7 @@ test('fence: a Timon home under a writable system folder stays refused', () => {
   assert.equal(access(policy, '/tmp/timon-x/worktrees/t/a'), 'rw');
 });
 
-test('fence: no grant lands on the Timon home, on a refused entry or outside the mission zones', () => {
+test('fence: no grant lands on the Timon home, on a refused entry or outside the mission zones', { skip: POSIX_FIXTURES }, () => {
   const policy = resolveFence(
     cfg({ writable: ['~/.timon', '~/.timon/plugins', '~/.cache'], allow: ['~/.timon/daemon-token'], readOnly: ['~/.timon/worktrees'] }),
     fullTarget({
@@ -509,7 +516,7 @@ test('fence: macOS writes go to the resolved temporary folders', () => {
   assert.equal(access(policy, '/Users/tester/.timon/daemon-token'), 'none');
 });
 
-test('fence: a handed-over path never opens a whole zone of the Timon home', () => {
+test('fence: a handed-over path never opens a whole zone of the Timon home', { skip: POSIX_FIXTURES }, () => {
   // The four measured exposures: each zone root handed over as it is.
   const cases: Array<[Record<string, unknown>, string]> = [
     [{ cwd: `${TH}/backend-accounts` }, `${TH}/backend-accounts/acc-other/.credentials.json`],
@@ -540,7 +547,7 @@ test('fence: a handed-over path never opens a whole zone of the Timon home', () 
   }
 });
 
-test('fence: a handed-over path never lands in another account\'s or mission\'s folder', () => {
+test('fence: a handed-over path never lands in another account\'s or mission\'s folder', { skip: POSIX_FIXTURES }, () => {
   const other = 'bbbbbbbb-0000-4000-8000-000000000002';
   for (const path of [
     `${TH}/backend-accounts/acc-other`,
@@ -664,9 +671,13 @@ test('fence: the Timon home is matched without case on macOS and Windows, with c
     });
     assert.ok(token.ignored.some((i) => i.path === join(upper, 'Daemon-Token')), `${platform}: the token in another case`);
   }
-  // On Linux, `.TIMON` is another folder of the user's home.
-  const linux = resolveFence(cfg(), { timonHome, home, platform: 'linux', realpath: (path: string) => path, cwd: handed.cwd });
-  assert.ok(linux.rw.includes(handed.cwd));
+  // On Linux, `.TIMON` is another folder of the user's home. A Windows host
+  // compares paths without case whatever the target says, and a Linux fence
+  // never runs there.
+  if (process.platform !== 'win32') {
+    const linux = resolveFence(cfg(), { timonHome, home, platform: 'linux', realpath: (path: string) => path, cwd: handed.cwd });
+    assert.ok(linux.rw.includes(handed.cwd));
+  }
 });
 
 /* ── The release a packaged daemon runs from (`FenceTarget.runtime`) ────────── */
@@ -680,7 +691,7 @@ const linuxRuntime = (release: string) => [
   `${RELEASES}/${release}/resources/orchestrator`,
 ];
 
-test('fence: the release the daemon runs from is readable and executable, never writable', () => {
+test('fence: the release the daemon runs from is readable and executable, never writable', { skip: POSIX_FIXTURES }, () => {
   const policy = resolveFence(cfg(), fullTarget({ runtime: linuxRuntime('9.9.9') }));
   const release = `${RELEASES}/9.9.9`;
   assert.ok(policy.ro.includes(release));
@@ -716,7 +727,7 @@ test('fence: no other release, nor the rest of the desktop runtime, nor a privat
   assert.equal(access(policy, TH), 'none');
 });
 
-test('fence: the macOS bundle layout opens its release the same way', () => {
+test('fence: the macOS bundle layout opens its release the same way', { skip: POSIX_FIXTURES }, () => {
   const release = `${RELEASES}/0.1.8-1a2b3c4d5e6f`;
   const resources = `${release}/Timon.app/Contents/Resources`;
   const policy = resolveFence(cfg(), fullTarget({
@@ -744,7 +755,7 @@ test('fence: a daemon running from elsewhere opens nothing in the Timon home', (
   }
 });
 
-test('fence: a path a mission hands over never opens the desktop runtime', () => {
+test('fence: a path a mission hands over never opens the desktop runtime', { skip: POSIX_FIXTURES }, () => {
   const release = `${RELEASES}/9.9.9`;
   const handed = resolveFence(cfg(), fullTarget({
     cwd: release, gitDirs: [release], timonRead: [release], pluginDirs: [release],
@@ -757,12 +768,16 @@ test('fence: a path a mission hands over never opens the desktop runtime', () =>
 });
 
 test('runtimeReleaseOf: the release folder below desktop-runtime/releases, nothing else', () => {
-  assert.equal(runtimeReleaseOf(TH, `${RELEASES}/9.9.9/resources/node/node`), `${RELEASES}/9.9.9`);
-  assert.equal(runtimeReleaseOf(TH, `${RELEASES}/9.9.9`), `${RELEASES}/9.9.9`);
-  assert.equal(runtimeReleaseOf(TH, RELEASES), null);
-  assert.equal(runtimeReleaseOf(TH, `${RELEASES}/../active-release`), null);
-  assert.equal(runtimeReleaseOf(TH, `${RELEASES}/-x/node`), null);
-  assert.equal(runtimeReleaseOf(TH, '/usr/bin/node'), null);
+  // Spelled with the host's path rules: the function joins with them.
+  const th = resolve(TH);
+  const releases = join(th, 'desktop-runtime', 'releases');
+  const release = join(releases, '9.9.9');
+  assert.equal(runtimeReleaseOf(th, join(release, 'resources', 'node', 'node')), release);
+  assert.equal(runtimeReleaseOf(th, release), release);
+  assert.equal(runtimeReleaseOf(th, releases), null);
+  assert.equal(runtimeReleaseOf(th, join(releases, '..', 'active-release')), null);
+  assert.equal(runtimeReleaseOf(th, join(releases, '-x', 'node')), null);
+  assert.equal(runtimeReleaseOf(th, resolve('/usr/bin/node')), null);
 });
 
 test('fence: a release that a link leads elsewhere in the Timon home is not opened', { skip: linkSkip }, () => {
@@ -783,7 +798,7 @@ test('fence: a release that a link leads elsewhere in the Timon home is not open
 
 const WS = `${TH}/workspace`;
 
-test('fence: an agent whose configured folder is the workspace folder itself keeps it, read and write', () => {
+test('fence: an agent whose configured folder is the workspace folder itself keeps it, read and write', { skip: POSIX_FIXTURES }, () => {
   const policy = resolveFence(cfg(), fullTarget({ cwd: WS, agentCwd: WS, gitDirs: [] }));
   assert.ok(policy.rw.includes(WS), 'the working directory is granted whole');
   assert.equal(policy.sharedWorkspace, WS);
@@ -799,7 +814,7 @@ test('fence: an agent whose configured folder is the workspace folder itself kee
   assert.equal(access(reading, `${WS}/notes.md`), 'rx');
 });
 
-test('fence: the workspace folder itself stays refused when it is not the agent\'s configured folder', () => {
+test('fence: the workspace folder itself stays refused when it is not the agent\'s configured folder', { skip: POSIX_FIXTURES }, () => {
   const cases: Array<[string, Record<string, unknown>]> = [
     ['no configured folder', { cwd: WS }],
     ['another configured folder', { cwd: WS, agentCwd: `${WS}/home` }],

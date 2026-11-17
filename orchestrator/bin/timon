@@ -791,6 +791,8 @@ Agents & missions:
   timon agent set-avatar <name> --clear  remove it
   timon agent rename <old> <new>          rename an agent and its references (refused if <new>
                                          exists or a mission of <old> is running)
+  timon agent set-main <name>             make <name> the main orchestrator: it receives the recaps
+                                         and notifications (a project-less orchestrator; never from a mission)
   timon agent doc list <agent>            list the identity docs (*.md at ~/.timon/agents/<agent>/)
   timon agent doc get <agent> <file>      print one (SOUL.md, system-prompt.md…)
   timon agent doc put <agent> <file> [--file PATH]
@@ -804,6 +806,8 @@ Agents & missions:
   timon agent import <FILE> [--yes] [--accept-cwd] [--prefix P] [--json]
                                          shows what would be created, asks, then imports
                                          (--accept-cwd takes the proposed working directories)
+                                         routines on at the source arrive off: --keep-routines
+                                         keeps them on, --keep-routines-for NAME[,NAME…] for some
   timon agent import --hermes [PROFILE…] [--yes] [--accept-cwd] [--prefix P] [--json]
                                          the same, read from Hermes on the machine running
                                          Timon (all its profiles, or those named); no zip
@@ -866,6 +870,8 @@ Tasks (Kanban backlog):
   timon task mark-merged <id> --sha SHA [--comment TEXT]
                                                branch merged outside Timon: records its merge commit
   timon task mark-as-failed [id] --reason TEXT closes it as BLOCKED
+  timon task attach <id> --series ID|current   attaches the task's chain (root, reviews, merge, doc)
+                                               to a series and its pilot; current = this mission
   timon task update <id> [--status ...] [--priority N] [--title ...] [--agent ...] [--type ...]
   timon task delete <id> [--chain]           --chain: also the verification chain it heads
 
@@ -1087,7 +1093,7 @@ Island workspace of the user's screen (an agent's mission owner):
                                              {open: {...}} or {layout: {...}})
   timon islands propose --arrangement ID [--view PATH] [--project SLUG] [--note TEXT]
                                              a card recalling a named arrangement on the view
-  timon setup avatar|soul|team|finish        the main agent's own setup conversation (refused elsewhere)
+  timon setup avatar|soul|team|tim|finish    the main agent's own setup conversation (refused elsewhere)
   timon navigate routes                      pages of the app an agent can send the user to
   timon navigate go <path> [--param k=v]... [--note TEXT]
                                              ask the user to go there (a card they follow)
@@ -1632,6 +1638,29 @@ async function cmdAgentRename(argv) {
   process.stdout.write(JSON.stringify(j, null, 2) + '\n');
 }
 
+/** Designates the main orchestrator (TIM-0142). The route refuses a mission:
+ *  re-seating the orchestrator is a person's decision. */
+async function cmdAgentSetMain(argv) {
+  const [name] = argv;
+  if (!name || argv.length > 1) {
+    process.stderr.write('usage: timon agent set-main <name>\n');
+    process.exit(64);
+  }
+  const r = await httpRaw('PUT', '/api/agents/main', { name });
+  if (!r.ok) {
+    const error = r.body && typeof r.body === 'object' && typeof r.body.error === 'string'
+      ? r.body.error
+      : `refused (HTTP ${r.status})`;
+    const why = r.body && typeof r.body === 'object' && typeof r.body.reason === 'string' ? ` — ${r.body.reason}` : '';
+    process.stderr.write(`timon: cannot set the main orchestrator: ${error}${why}\n`);
+    if (/^agent not found/.test(error)) {
+      process.stderr.write('timon: `timon list` shows the agents; `timon doctor` names the eligible orchestrators\n');
+    }
+    process.exit(2);
+  }
+  process.stdout.write(`main orchestrator: ${r.body.main}\n`);
+}
+
 const AGENT_TRASH_USAGE = 'usage: timon agent trash <list [--json] | restore <id> | purge <id>>\n';
 
 /** Deleted agents (TODO #476): list them, put one back, or empty one entry for good. */
@@ -1761,6 +1790,8 @@ async function cmdAgent(argv) {
       return cmdAgentSetAvatar(rest);
     case 'rename':
       return cmdAgentRename(rest);
+    case 'set-main':
+      return cmdAgentSetMain(rest);
     case 'doc':
     case 'docs':
       return cmdAgentDoc(rest);
@@ -1774,7 +1805,7 @@ async function cmdAgent(argv) {
       return cmdAgentExportSkill(rest, agentTransferIo());
     default:
       process.stderr.write(
-        'usage: timon agent <create|update|set-scope|set-avatar|rename|doc|trash|export|import|export-skill> <name> …\n' +
+        'usage: timon agent <create|update|set-scope|set-avatar|rename|set-main|doc|trash|export|import|export-skill> <name> …\n' +
         '       (deletion: the app or the agent_delete tool, which move the agent to the trash)\n',
       );
       process.exit(64);
@@ -2107,6 +2138,23 @@ async function cmdTaskMarkMerged(argv) {
   process.stdout.write(`task ${id} marked merged: ${sha}${j?.verified === false ? ' (commit not found locally: not verified)' : ''}\n`);
 }
 
+/**
+ * TODO #1013 — a chain created outside a mission (a `curl`, a board click) has
+ * no series: its returns reach no pilot. Attaches the whole chain the task
+ * belongs to; the daemon resolves the series and its current pilot.
+ */
+async function cmdTaskAttach(argv) {
+  const id = argv[0] && !argv[0].startsWith('--') ? argv.shift() : undefined;
+  const series = takeFlag(argv, 'series');
+  if (!id || !series) {
+    process.stderr.write('usage: timon task attach <id> --series ID|current\n');
+    process.exit(64);
+  }
+  const j = await http('POST', `/api/tasks/${encodeURIComponent(id)}/attach-series`, { series });
+  const count = Array.isArray(j?.attached) ? j.attached.length : 0;
+  process.stdout.write(`${count} task(s) attached to series ${j.series_id} (pilot ${j.pilot_mission_id})\n`);
+}
+
 /** Reads the closing comment: inline, from a file, or from redirected stdin.
  *  The last two avoid any shell-quoting truncation on a long comment. */
 async function readClosingComment(argv) {
@@ -2238,11 +2286,12 @@ async function cmdTask(argv) {
     case 'mark-as-done':   return cmdTaskMarkAsDone(rest);
     case 'mark-as-failed': return cmdTaskMarkAsFailed(rest);
     case 'mark-merged':    return cmdTaskMarkMerged(rest);
+    case 'attach':  return cmdTaskAttach(rest);
     case 'update':  return cmdTaskUpdate(rest);
     case 'delete':  return cmdTaskDelete(rest);
     case 'rm':      return cmdTaskDelete(rest);
     default:
-      process.stderr.write('usage: timon task <list|get|create|done|block|mark-as-done|mark-as-failed|mark-merged|update|delete> …\n');
+      process.stderr.write('usage: timon task <list|get|create|done|block|mark-as-done|mark-as-failed|mark-merged|attach|update|delete> …\n');
       process.exit(64);
   }
 }
@@ -3882,7 +3931,7 @@ async function cmdNavigate(argv) {
 }
 
 /**
- * `timon setup avatar|soul|team|finish` — the MCP tools `setup_*`: the main agent
+ * `timon setup avatar|soul|team|tim|finish` — the MCP tools `setup_*`: the main agent
  * builds itself in its own setup conversation. Refused anywhere else.
  */
 async function cmdNav(argv) {
@@ -3975,12 +4024,22 @@ async function cmdSetup(argv) {
       return;
     }
   }
+  if (sub === 'tim') {
+    const name = takeFlag(rest, 'name');
+    const role = takeFlag(rest, 'role');
+    const job = takeFlag(rest, 'job');
+    if (name && role) {
+      const body = { name, role, ...(job !== undefined ? { job } : {}) };
+      process.stdout.write(JSON.stringify(await http('POST', '/api/setup/agent/tim', body), null, 2) + '\n');
+      return;
+    }
+  }
   if (sub === 'finish') {
     const body = rest.includes('--no-tour') ? { tour: false } : {};
     process.stdout.write(JSON.stringify(await http('POST', '/api/setup/agent/finish', body), null, 2) + '\n');
     return;
   }
-  process.stderr.write('usage: timon setup <avatar|soul|team --coder NAME --reviewer NAME|finish [--no-tour]>\n');
+  process.stderr.write('usage: timon setup <avatar|soul|team --coder NAME --reviewer NAME|tim --name NAME --role ROLE [--job TEXT]|finish [--no-tour]>\n');
   process.exit(64);
 }
 

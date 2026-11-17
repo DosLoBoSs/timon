@@ -63,6 +63,7 @@ export function TerminalKeyBar({ ctrlArmed, canCopy = false, onCtrl, onKey, onCo
           ctrlArmed ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
         )}
       >
+        {/* i18n-exempt: keyboard key name */}
         Ctrl
       </button>
       {key('Tab', KEY_SEQUENCES.tab)}

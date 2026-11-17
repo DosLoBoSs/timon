@@ -25,11 +25,12 @@ function git(cwd: string, ...args: string[]): void {
   execFileSync('git', args, { cwd, stdio: 'ignore' });
 }
 
-/** Repo jetable avec un commit initial — un worktree ne peut pas être créé
- *  depuis un repo sans HEAD. `realpathSync` car /tmp est un symlink sur
- *  certaines plateformes et les chemins retournés sont résolus. */
+/** Throwaway repository with a first commit: a worktree cannot be created
+ *  from a repository without HEAD. `realpathSync.native` because git answers
+ *  with resolved long paths, while the temporary folder may be a symlink
+ *  (`/var` on macOS) or an 8.3 short name (`RUNNER~1` on Windows). */
 function makeRepo(): { root: string; dispose: () => void } {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'timon-gitroots-')));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'timon-gitroots-')));
   git(root, 'init', '-q', '.');
   git(root, 'config', 'user.email', 'test@timon.local');
   git(root, 'config', 'user.name', 'timon-test');
@@ -64,7 +65,7 @@ test('worktree lié : gitdir, common dir, puis l’arbre de travail principal', 
   const wt = join(root, '..', `wt-${process.pid}`);
   try {
     git(root, 'worktree', 'add', '-q', wt, '-b', 'feat/test');
-    const roots = gitWritableRoots(realpathSync(wt));
+    const roots = gitWritableRoots(realpathSync.native(wt));
     // Les deux premiers portent index + HEAD du worktree d'un côté, objects/ +
     // refs/ de l'autre : un commit écrit dans les deux. Le troisième est l'arbre
     // de travail du dépôt principal, que le fast-forward d'une task `merge`
@@ -94,7 +95,7 @@ test('repo normal : le dépôt principal n’est PAS ajouté — c’est déjà 
 });
 
 test('cwd hors repo git : aucun root, pas de crash', () => {
-  const outside = realpathSync(mkdtempSync(join(tmpdir(), 'timon-nogit-')));
+  const outside = realpathSync.native(mkdtempSync(join(tmpdir(), 'timon-nogit-')));
   try {
     // Un /tmp/xxx isolé n'est pas dans un repo — sauf si TMPDIR est lui-même
     // sous un repo, cas où git remonterait à lui : on ne teste alors rien.

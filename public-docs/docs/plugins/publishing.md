@@ -24,6 +24,11 @@ Timon verifies Ed25519 signatures over package contents. The authorised signing 
 timon plugin sign ./my-plugin
 ```
 
+The signature covers exactly the files `npm pack --dry-run` lists for the folder, the ones `timon plugin add` installs from the archive: tests, `node_modules` and anything else outside `files` are left out, so the command runs in the plugin's working folder. A folder that is already packed (an extracted archive) ships all of its files, and all of them are covered. The command needs `npm` to list the files and stops with a message when it cannot run it.
+
+- List `SIGNATURE` in `files` (`"files": ["lib", "README.md", "SIGNATURE"]`), then sign. Otherwise the archive ships without it, and the command warns.
+- Ship the archive made by `npm pack` after signing, or its extracted folder. A working folder installed by path is linked by npm as it stands, `node_modules` included, and does not match its signature.
+
 This command requires an authorised local private key. A plugin author does not automatically possess that key or the ability to create a signature trusted by every installation. Coordinate signing with the distributor; no public submission endpoint is specified here.
 
 :::danger Never ship signing credentials

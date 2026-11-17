@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { delimiter, join } from 'node:path';
+import { delimiter, join, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { FencePolicy } from './host/isolation.js';
@@ -41,7 +41,7 @@ assert.ok((await mountOfficialProviders()).includes('provider-codex'));
 setConfig({ ...config(), host: { ...config().host, isolation: { ...config().host.isolation, filesystem: 'auto' } } });
 
 // A main checkout, and a linked worktree of it under the Timon home, as the dispatcher makes them.
-const ROOT = realpathSync(mkdtempSync(join(tmpdir(), 'timon-fence-repo-')));
+const ROOT = realpathSync.native(mkdtempSync(join(tmpdir(), 'timon-fence-repo-')));
 const MAIN = join(ROOT, 'app');
 const WT = join(TIMON_HOME, 'worktrees', 'task-1');
 const WT_GIT = join(MAIN, '.git', 'worktrees', 'task-1');
@@ -50,6 +50,10 @@ mkdirSync(WT, { recursive: true });
 writeFileSync(join(WT, '.git'), `gitdir: ${WT_GIT}\n`);
 writeFileSync(join(WT_GIT, 'gitdir'), `${join(WT, '.git')}\n`);
 writeFileSync(join(WT_GIT, 'commondir'), '../..\n');
+// The policy holds each path the way it resolves (`/private/var` on macOS, the
+// long name of a `RUNNER~1` folder on Windows): its assertions use that spelling.
+const REAL_HOME = realpathSync.native(TIMON_HOME);
+const REAL_WT = join(REAL_HOME, 'worktrees', 'task-1');
 
 upsertAgent({
   name: 'fence.witness',
@@ -108,7 +112,7 @@ test('the CLI is spawned through the fence launcher, its own temporary folder as
   const tmp = join(TIMON_HOME, 'tmp', 'missions', run.missionId);
   assert.equal(run.env.TMPDIR, tmp);
   assert.equal(run.env.DISABLE_AUTOUPDATER, '1');
-  assert.ok(run.policy.rw.includes(tmp));
+  assert.ok(run.policy.rw.includes(join(REAL_HOME, 'tmp', 'missions', run.missionId)));
   assert.equal(missionFenced(run.missionId), true, 'the session driver learns the process is fenced');
 });
 
@@ -119,22 +123,22 @@ test('the CLI\'s package managers download into its agent\'s cache, which the po
   assert.equal(run.env.npm_config_cache_dir, join(cache, 'pnpm', 'cache'));
   assert.equal(run.env.npm_config_store_dir, join(cache, 'pnpm', 'store'));
   assert.equal(run.env.UV_CACHE_DIR, join(cache, 'uv'));
-  assert.ok(run.policy.rw.includes(cache));
+  assert.ok(run.policy.rw.includes(join(REAL_HOME, 'provider-cache', '.agents', 'fence.witness')));
 });
 
 test('the policy opens the mission\'s worktree, repository and provider folders, and nothing else of the Timon home', async () => {
   const run = await launch();
   const { policy } = run;
-  assert.ok(policy.rw.includes(WT));
+  assert.ok(policy.rw.includes(REAL_WT));
   assert.ok(policy.rw.includes(join(MAIN, '.git')), 'the repository the worktree names back');
   assert.ok(policy.rw.includes(MAIN), 'the main checkout, which a merge fast-forwards');
-  assert.ok(policy.rw.includes(join(TIMON_HOME, 'provider-runs', 'provider-codex', run.missionId)), 'the CLI\'s per-mission home');
-  assert.ok(policy.deny.includes(TIMON_HOME));
+  assert.ok(policy.rw.includes(join(REAL_HOME, 'provider-runs', 'provider-codex', run.missionId)), 'the CLI\'s per-mission home');
+  assert.ok(policy.deny.includes(REAL_HOME) && policy.deny.includes(TIMON_HOME), 'under both spellings');
   for (const path of policy.rw) {
-    if (!path.startsWith(`${TIMON_HOME}/`)) continue;
+    if (!path.startsWith(`${REAL_HOME}${sep}`)) continue;
     assert.ok(
-      [WT, join(TIMON_HOME, 'tmp', 'missions'), join(TIMON_HOME, 'provider-runs', 'provider-codex'), join(TIMON_HOME, 'provider-cache', 'provider-codex'), join(TIMON_HOME, 'provider-cache', '.agents', 'fence.witness'), join(TIMON_HOME, 'agents', 'fence.witness')]
-        .some((own) => path === own || path.startsWith(`${own}/`)),
+      [REAL_WT, join(REAL_HOME, 'tmp', 'missions'), join(REAL_HOME, 'provider-runs', 'provider-codex'), join(REAL_HOME, 'provider-cache', 'provider-codex'), join(REAL_HOME, 'provider-cache', '.agents', 'fence.witness'), join(REAL_HOME, 'agents', 'fence.witness')]
+        .some((own) => path === own || path.startsWith(`${own}${sep}`)),
       `${path} is one of the mission's own folders`,
     );
   }
@@ -147,12 +151,12 @@ test('fenced, codex runs without its own sandbox and the fence applies the agent
   const writing = await launch();
   assert.equal(sandboxLevel(writing.args), 'danger-full-access', 'bwrap and Seatbelt cannot start inside the fence');
   assert.equal(writing.args.filter((arg) => arg === '--sandbox').length, 1);
-  assert.ok(writing.policy.rw.includes(WT), 'workspace-write: the worktree stays writable');
+  assert.ok(writing.policy.rw.includes(REAL_WT), 'workspace-write: the worktree stays writable');
   const reading = await launch('fence.reader');
   assert.equal(sandboxLevel(reading.args), 'danger-full-access');
-  assert.ok(reading.policy.ro.includes(WT) && !reading.policy.rw.includes(WT), 'plan: the worktree is read-only');
+  assert.ok(reading.policy.ro.includes(REAL_WT) && !reading.policy.rw.includes(REAL_WT), 'plan: the worktree is read-only');
   assert.ok(reading.policy.ro.includes(join(MAIN, '.git')) && !reading.policy.rw.includes(join(MAIN, '.git')), 'and its repository too');
-  assert.ok(reading.policy.rw.includes(join(TIMON_HOME, 'provider-runs', 'provider-codex', reading.missionId)), 'the CLI\'s own home stays writable');
+  assert.ok(reading.policy.rw.includes(join(REAL_HOME, 'provider-runs', 'provider-codex', reading.missionId)), 'the CLI\'s own home stays writable');
 });
 
 test('without a fence on the machine, auto launches the bare CLI with the plain TMPDIR', async () => {

@@ -23,7 +23,7 @@ import {
   restartDesktopService, serviceStoppedByUser, startDesktopService, startStoppedServiceFailureMessage, stopServiceCopy, stopServiceFailureMessage,
   windowsRestartSeams, windowsServiceRefusedFile, windowsTaskState,
 } from './service.js';
-import { app, BrowserWindow, Menu, Tray, WebContentsView, clipboard, dialog, shell, nativeImage, ipcMain, screen, session, systemPreferences } from 'electron';
+import { app, BrowserWindow, Menu, Tray, WebContentsView, clipboard, dialog, shell, nativeImage, ipcMain, screen, session, systemPreferences, webContents } from 'electron';
 import { parseWindowSchemeReport, recordMachineScheme, WINDOW_BACKGROUND, WINDOW_SCHEME_CHANNEL, windowScheme, type Scheme } from './appearance.js';
 import {
   cascadeFrom, placeSavedWindows, readWindowLayout, routeOfUrl, WindowLayoutKeeper, writeWindowLayout, type DisplayArea, type SavedWindow, type WindowOpening,
@@ -54,7 +54,7 @@ import { isTransientLoadError, giveUpMessage } from './window-load.js';
 import { waitingUrl } from './waiting-page.js';
 import { FIRST_RUN_THEME } from './first-run-theme.js';
 import { StartupView, probeUi } from './startup-view.js';
-import { requestAppRearm } from './app-rearm.js';
+import { DaemonRevival, giveUpBox, recordingExec, requestAppRearm, serviceProgram, type GiveUpVerdict, type RelaunchOutcome } from './app-rearm.js';
 import { reportDesktopOpened } from './telemetry-ping.js';
 import { reloadShortcut } from './reload-shortcuts.js';
 import { externalUrl, navigationAction } from './external-links.js';
@@ -135,6 +135,8 @@ const EMBEDDED_BOOT_BUDGET_MS = 90_000;
 const SERVICE_BOOT_BUDGET_MS = 180_000;
 /** The service replacing the embedded daemon at the end of a first setup: its database is already migrated. */
 const HANDOVER_BUDGET_MS = 90_000;
+/** The one relaunch after the interface gave up (TIM-0154): a daemon that ran before, its database already migrated. */
+const REVIVE_BUDGET_MS = 90_000;
 
 let updateWindow: UpdateWindow | null = null;
 let updateApproved = false;
@@ -186,6 +188,10 @@ let speech: DesktopSpeech | null = null;
 const microphone = microphoneAccess(process.platform, systemPreferences);
 let tray: Tray | null = null;
 let daemonUp = false;
+/** The configuration `main` settled on: what a page that gave up probes and relaunches. */
+let startupCfg: DesktopConfig | null = null;
+/** At most one daemon relaunch per shell session, shared by every page that gives up. */
+const daemonRevival = new DaemonRevival();
 let stopEmbedded: (() => Promise<void>) | null = null;
 /** Where the embedded daemon listens, while it runs: the service taking its place must answer there. */
 let embeddedDaemonOrigin: string | null = null;
@@ -381,7 +387,9 @@ function watchDisplays(): void {
 /** Every page of a window covers its whole content area; Electron sizes views in DIPs, so a change of display density needs nothing more. */
 function layoutPages(record: AppWindow): void {
   if (record.window.isDestroyed()) return;
-  const [width = 0, height = 0] = record.window.getContentSize();
+  const { width, height } = record.window.getContentBounds();
+  // A window on its way to or from the screen reports an empty area: sizing the pages to it would blank them until the next event.
+  if (width <= 0 || height <= 0) return;
   for (const page of record.pages.list()) page.view.view.setBounds({ x: 0, y: 0, width, height });
 }
 
@@ -398,11 +406,39 @@ function noteRoute(record: AppWindow, page: Page, target: string): void {
   layoutKeeper?.changed();
 }
 
+/**
+ * Whom the page on screen may take the keyboard from: `ours`, the window's own
+ * webContents or another of its pages; `idle`, also nobody at all; `any`, also a
+ * native browser panel, when the page was just put on screen.
+ */
+type FocusTake = 'ours' | 'idle' | 'any';
+
+/**
+ * Gives the keyboard to the page on screen of a focused window (TIM-0152): a
+ * window restored by the OS can come back with no webContents focused, every
+ * field then refusing typing until a native dialog moves the focus. A page
+ * that already has it is left alone, so the field it was typing in stays.
+ */
+function focusActivePage(record: AppWindow, why: string, take: FocusTake): void {
+  const w = record.window;
+  if (w.isDestroyed() || !w.isFocused()) return;
+  const page = record.pages.active;
+  if (!page) return;
+  const contents = contentsOf(page);
+  if (contents.isDestroyed() || contents.isFocused()) return;
+  const holder = webContents.getFocusedWebContents();
+  const from = holder === null ? 'nobody' : holder.id === record.id ? 'window' : record.pages.byContents(holder.id) ? `page ${holder.id}` : null;
+  const allowed = take === 'any' || (from === 'nobody' ? take === 'idle' : from !== null);
+  if (!allowed) return;
+  contents.focus();
+  console.log(`[desktop] window ${record.id} ${why} → page (keyboard was: ${from ?? `view ${holder?.id}`})`);
+}
+
 function showPage(record: AppWindow, page: Page): void {
   record.route = page.view.route;
   layoutPages(record);
   page.view.view.setVisible(true);
-  if (record.window.isFocused()) contentsOf(page).focus();
+  focusActivePage(record, 'shown', 'any');
 }
 
 /** Hidden, alive: its scroll, drafts and panels are there when it comes back. The native panel it presented leaves with it. */
@@ -430,6 +466,65 @@ function closePage(page: Page): Promise<'closed' | 'kept'> {
   const closed = page.view.closed;
   contents.close({ waitForBeforeUnload: true });
   return closed;
+}
+
+/**
+ * How this shell can start the daemon again, mirroring `main`'s branches: the
+ * installed service through the host adapter (`/Run` on Windows, never the
+ * elevated restart), else the embedded daemon. Null when it runs neither.
+ */
+function daemonRelaunch(cfg: DesktopConfig): (() => Promise<RelaunchOutcome>) | null {
+  if (stopEmbedded === null && hasDesktopService(cfg.home)) {
+    return async () => {
+      const calls: string[] = [];
+      const started = await startDesktopService(cfg.home, false, recordingExec(serviceProgram(process.platform), calls));
+      if (started === 'never-ran') recordServiceRefused(cfg.home);
+      return { line: `start the service → ${started}${calls.length > 0 ? ` (${calls.join('; ')})` : ''}`, selfReported: false, waited: false };
+    };
+  }
+  if (stopEmbedded !== null || cfg.daemon.supervisor === 'none' || app.isPackaged) {
+    return async () => {
+      const stop = stopEmbedded;
+      stopEmbedded = null;
+      if (stop) await stop().catch((error: unknown) => console.warn(`[desktop] the previous embedded daemon did not stop: ${(error as Error).message}`));
+      // Says itself why it failed (crash loop, silence, port taken): no second dialog.
+      await startEmbeddedDaemon(cfg, originOf(cfg.app.listen));
+      return { line: `embedded daemon started again (${daemonUp ? 'answers' : 'silent'})`, selfReported: !daemonUp, waited: true };
+    };
+  }
+  return null;
+}
+
+/**
+ * A page stopped waiting for the interface. When nothing listens on the
+ * daemon's port, the daemon is started again once (`DaemonRevival`) and the
+ * dialog says the daemon is down rather than blaming the web app (TIM-0154).
+ */
+async function settleGiveUp(startup: StartupView, url: string): Promise<void> {
+  const cfg = startupCfg;
+  const verdict: GiveUpVerdict = cfg === null ? { kind: 'ui-missing' } : await daemonRevival.settle({
+    probe: () => probeHealth(originOf(cfg.daemon.listen)),
+    relaunch: daemonRelaunch(cfg),
+    wait: () => waitForHealth(originOf(cfg.daemon.listen), REVIVE_BUDGET_MS),
+    home: cfg.home,
+    // The page says Timon is starting while the relaunch runs.
+    relaunching: () => startup.start(),
+    log: (line) => console.log(line),
+  });
+  if (cfg !== null && verdict.kind !== 'ui-missing') {
+    daemonUp = verdict.kind === 'revived';
+    refreshTray(cfg, originOf(cfg.app.listen));
+  }
+  if (verdict.kind === 'revived') { void startup.begin(); return; }
+  // Back from the starting step after a relaunch; a no-op when the page already failed.
+  startup.fail();
+  const locale = uiLocale();
+  const box = giveUpBox(verdict, startupText(locale), {
+    giveUp: giveUpMessage(url, locale),
+    origin: cfg === null ? '' : originOf(cfg.daemon.listen),
+    logs: cfg === null ? '' : logDir(cfg.home),
+  });
+  if (box) void reportProblem({ type: 'warning', ...box });
 }
 
 /**
@@ -465,13 +560,7 @@ function createPage(record: AppWindow, machineId: string | null, url: string): P
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
     now: Date.now,
     onGiveUp: () => {
-      const locale = uiLocale();
-      const t = startupText(locale);
-      void reportProblem({
-        type: 'warning',
-        message: t('startup.uiMissing'),
-        detail: t('startup.uiMissingDetail', { giveUp: giveUpMessage(url, locale) }),
-      });
+      void settleGiveUp(startup, url).catch((error: unknown) => console.error('[desktop] startup give-up failed', error));
     },
   });
   const page: Page = { contentsId: id, machineId, view: { view, startup, closed: null, settle: null, route: routeOfUrl(url, record.origin) } };
@@ -496,7 +585,12 @@ function createPage(record: AppWindow, machineId: string | null, url: string): P
     record.pages.keep(id);
     settlePage(page, 'kept');
   });
-  contents.on('did-finish-load', () => { if (record.pages.isActive(id)) void refreshTitle(record); });
+  contents.on('did-finish-load', () => {
+    if (!record.pages.isActive(id)) return;
+    void refreshTitle(record);
+    // A reload does not hand the keyboard back on its own (TIM-0152).
+    focusActivePage(record, 'load', 'idle');
+  });
   contents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
     if (isMainFrame && !isInPlace) detachBrowser(id);
   });
@@ -657,21 +751,30 @@ function createWindow(url: string, begin: 'service' | 'interface', opening: Wind
   w.webContents.on('will-navigate', (event) => event.preventDefault());
   // The pages follow the window's content area: no view resizes on its own.
   const relayout = () => layoutPages(record);
+  // On Linux these events fire before the window manager applies the new size (TIM-0150): the size read then is the old one,
+  // so the pages are laid out again once it has landed.
+  const relayoutSettled = () => {
+    relayout();
+    setImmediate(relayout);
+    setTimeout(relayout, 100);
+  };
+  // The size actually applied to the content area, whatever event announced it.
+  w.contentView.on('bounds-changed', relayout);
   w.on('resize', () => { relayout(); layoutKeeper?.changed(); });
-  w.on('maximize', relayout);
-  w.on('unmaximize', relayout);
-  w.on('enter-full-screen', relayout);
-  w.on('leave-full-screen', relayout);
+  w.on('resized', relayoutSettled);
+  w.on('maximize', relayoutSettled);
+  w.on('unmaximize', relayoutSettled);
+  w.on('enter-full-screen', relayoutSettled);
+  w.on('leave-full-screen', relayoutSettled);
   w.on('restore', relayout);
   w.on('move', () => layoutKeeper?.changed());
   watchDisplays();
   layoutKeeper?.changed();
   // The window's own webContents, under the pages, takes the keyboard when the window comes back to the front: the page on screen gets it.
+  // A window the OS restores may still have nobody focused at first (TIM-0152): once it has settled, a keyboard nobody holds goes to the page too.
   w.on('focus', () => {
-    setImmediate(() => {
-      const page = record.pages.active;
-      if (page && !w.isDestroyed() && w.webContents.isFocused() && !contentsOf(page).isDestroyed()) contentsOf(page).focus();
-    });
+    setImmediate(() => focusActivePage(record, 'focus', 'ours'));
+    setTimeout(() => focusActivePage(record, 'focus', 'idle'), 100);
   });
   // The title is the machine's, not the page's: three windows on three machines must be told apart.
   w.on('page-title-updated', (event) => event.preventDefault());
@@ -1496,6 +1599,7 @@ async function main(): Promise<void> {
   }
   const uiUrl = originOf(cfg.app.listen);
   interfaceUrl = uiUrl;
+  startupCfg = cfg;
   daemonUp = isTimon(health, cfg.home);
   noteDesktopOpened(cfg);
   console.log(`[desktop] health of ${daemonOrigin}: ${describeHealth(health, cfg.home)}`);

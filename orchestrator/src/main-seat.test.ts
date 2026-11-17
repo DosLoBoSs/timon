@@ -100,6 +100,7 @@ test('several eligible orchestrators: nobody is picked, the card names them, wor
   assert.equal(recorded(), undefined, 'choosing among several is the user\'s call');
   assert.deepEqual([...n.raised[0]!].sort(), ['Atlas', 'Zeus']);
   assert.match(mainSeatNotice(['Atlas', 'Zeus']).body, /Atlas, Zeus/);
+  assert.match(mainSeatNotice(['Atlas', 'Zeus']).body, /`timon agent set-main <name>`/);
   assert.match(mainSeatNotice([]).body, /Create one/);
 });
 

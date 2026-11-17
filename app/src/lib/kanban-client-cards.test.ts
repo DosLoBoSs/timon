@@ -114,7 +114,7 @@ test('a card shows its agent, model, idea tags, schedule and dependency counts',
     assert.match(followUp, /#42/);
     assert.match(followUp, /Partially done|Partial/i);
     assert.match(followUp, /Scheduled/);
-    assert.ok(card('next-bbbbbb')!.querySelector('[aria-label="2 attachment(s)"]'), 'the attachment count');
+    assert.ok(card('next-bbbbbb')!.querySelector('[aria-label="2 attachments"]'), 'the attachment count');
     assert.match(card('next-bbbbbb')!.querySelector('[title="Priority 4"]')?.className ?? '', /text-warning/, 'P4 stands out');
     assert.doesNotMatch(text('base-aaaaaa'), /Scheduled/, 'no schedule line without a date');
 

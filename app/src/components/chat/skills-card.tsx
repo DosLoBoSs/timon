@@ -57,8 +57,9 @@ export function SkillsCard({
       </div>
       {allSkills.length === 0 ? (
         <p className="text-[11.5px] text-muted-foreground/70">
-          No skills installed — create one from{' '}
+          {i18n('chatCards.skillsEmpty')}{' '}
           <Link prefetch={false} href="/skills" className="text-primary">
+            {/* i18n-exempt: route path */}
             /skills
           </Link>
           .

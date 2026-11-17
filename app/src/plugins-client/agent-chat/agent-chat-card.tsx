@@ -7,22 +7,23 @@ import dynamic from 'next/dynamic';
 import { openAgentEditor } from '@/components/agent-editor/agent-editor-modal';
 import { Tile } from '@/components/tile';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { AjoutAgent } from './agent-add';
+import { AgentAdd } from './agent-add';
 import { AgentShortcuts } from './agent-shortcuts';
 import { AgentContextMenu, useChangeAvatar, type AgentMenuTarget } from './agent-context-menu';
 import { DuplicateAgentDialog } from '@/components/duplicate-agent-dialog';
 import { CustomizeAgentDialog } from './customize-agent-dialog';
 import {
-  agentAffiche,
-  modesDeLInstance,
-  personnalisationDe,
-  personnaliserAgent,
-  retirerAgent,
+  shownAgent,
+  instanceModes,
+  customizationOf,
+  customizeAgent,
+  removeAgent,
   type AgentChatInstance,
 } from './instances';
-import { useAgents, useProjets, visageAgent } from './use-agents';
+import { useAgents, useProjects, agentFace } from './use-agents';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
 
 // Loaded on demand: statically imported, it weighed on every page of the app.
@@ -43,8 +44,7 @@ async function arreterAgent(nom: string): Promise<void> {
     });
     const data: unknown = await res.json().catch(() => null);
     if (!res.ok) {
-      const error = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
-        ? data.error : `HTTP ${res.status}`;
+      const error = apiErrorMessage(data, { status: res.status });
       toast.error(t('agentChat.menu.stopFailed', { name: nom, error }));
       return;
     }
@@ -76,8 +76,7 @@ async function definirOrchestratrice(nom: string): Promise<void> {
     });
     const data: unknown = await res.json().catch(() => null);
     if (!res.ok) {
-      const error = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
-        ? data.error : `HTTP ${res.status}`;
+      const error = apiErrorMessage(data, { status: res.status });
       toast.error(t('agentChat.menu.makeMainFailed', { name: nom, error }));
       return;
     }
@@ -123,18 +122,18 @@ export function AgentChatCard({
   const [personnalise, setPersonnalise] = useState<string | null>(null);
   const [duplique, setDuplique] = useState<string | null>(null);
   const agents = useAgents();
-  const projets = useProjets();
+  const projets = useProjects();
 
-  const modes = useMemo(() => modesDeLInstance(instance), [instance]);
-  const surLaCarte = useMemo(() => new Set(modes.map((m) => m.value.toLowerCase())), [modes]);
-  const agent = agentAffiche(instance, selection);
+  const modes = useMemo(() => instanceModes(instance), [instance]);
+  const onCard = useMemo(() => new Set(modes.map((m) => m.value.toLowerCase())), [modes]);
+  const agent = shownAgent(instance, selection);
 
   const changerAgent = useCallback((nom: string) => {
     setSelection(nom);
   }, []);
 
   const retirer = useCallback((nom: string) => {
-    const suivante = retirerAgent(instance, nom);
+    const suivante = removeAgent(instance, nom);
     if (suivante) onSave(suivante);
     else onDelete();
   }, [instance, onSave, onDelete]);
@@ -160,10 +159,10 @@ export function AgentChatCard({
             onSelect={changerAgent}
             onContextMenu={(nom, e) => setMenu({ agent: nom, x: e.clientX, y: e.clientY })}
           />
-          <AjoutAgent
+          <AgentAdd
             agents={agents}
             projets={projets}
-            exclus={surLaCarte}
+            excluded={onCard}
             onAdd={(nom) => onSave({ ...instance, subAgents: [...instance.subAgents, { agent: nom }] })}
           />
         </div>
@@ -200,11 +199,11 @@ export function AgentChatCard({
       {personnalise && (
         <CustomizeAgentDialog
           agent={personnalise}
-          initial={personnalisationDe(instance, personnalise)}
-          visage={visageAgent(personnalise, agents, projets)}
+          initial={customizationOf(instance, personnalise)}
+          visage={agentFace(personnalise, agents, projets)}
           onClose={() => setPersonnalise(null)}
           onSave={(valeur) => {
-            onSave(personnaliserAgent(instance, personnalise, valeur));
+            onSave(customizeAgent(instance, personnalise, valeur));
             setPersonnalise(null);
           }}
         />

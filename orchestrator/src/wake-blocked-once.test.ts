@@ -129,3 +129,22 @@ test('a task blocked by an agent or the CLI still reaches the pilot, once', asyn
   representBlockedTasks();
   assert.equal(recapsFor(taskId).length, 1, 'already told when it blocked');
 });
+
+test('the blocking-loop escalation carries its code for the webview (TODO #1063)', () => {
+  const taskId = blockedTask('loops on itself');
+  dbApi.setTaskStatusOnly(taskId, 'BLOCKED');
+  // The anti-loop escalates past five closely spaced blockages of the same task.
+  for (let i = 0; i < 6; i++) handleTaskBlocked(taskId, 'same failure again');
+  const escalations = dbApi.listAllInbox({ limit: 500 })
+    .filter((m) => m.from_agent === 'orchestrator')
+    .map((m) => JSON.parse(m.payload) as { task_id?: string; code?: string; params?: Record<string, unknown> })
+    .filter((p) => p.task_id === taskId && p.code === 'blocking_loop_detected');
+  assert.equal(escalations.length, 1);
+  assert.deepEqual(escalations[0]!.params, {
+    title: 'loops on itself',
+    taskId,
+    group: 'none',
+    wakes: 6,
+    reason: 'same failure again',
+  });
+});

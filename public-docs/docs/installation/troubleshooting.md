@@ -115,7 +115,7 @@ The chat opens your main agent when no agent is named in the address. When it ca
 - **No agent is designated as the main agent:** each orchestrator without a project is listed with a **Make … the main agent** button. Pick the one you talk to; the chat opens it. Designating needs the right to manage agents. The same choice is in the right-click menu of an agent's avatar (**Set as main orchestrator**).
 - **No cross-project orchestrator:** create one from **Open agents**, or give the orchestrator role to an agent without a project.
 
-`timon doctor` prints a `main orchestrator` line: the agent that holds the seat, or `NONE` with the eligible orchestrators. While the seat is empty, recaps and notifications addressed to the main orchestrator have no recipient, and the notification centre shows **No main orchestrator** once.
+`timon doctor` prints a `main orchestrator` line: the agent that holds the seat, or `NONE` with the eligible orchestrators. While the seat is empty, recaps and notifications addressed to the main orchestrator have no recipient, and the notification centre shows **No main orchestrator** once. Designate one with `timon agent set-main <name>`.
 
 When reporting it, include the line the screen shows.
 
@@ -296,6 +296,10 @@ in a terminal on the machine that runs Timon.
 A packaged daemon verifies its installation, loads its plugins and checks each provider before it listens. On a managed work PC (antivirus scanning every file, a Microsoft Entra profile), that can take two or three minutes. Since the version that follows 0.1.5, the desktop waits up to three minutes for the background service, five minutes after an update, and says "still starting" rather than reporting a failed update.
 
 If the window stays empty after that: run the support diagnostic (tray icon). Its **Daemon** block says whether nothing listens on the port (the daemon is down: read the end of `daemon.log`), or whether a Timon process holds the port without replying (it is still starting, or busy: wait, then open the window again from the tray). Adding the Timon folders to the antivirus exclusions shortens the start: see [Slow start behind an antivirus](#slow-start-behind-an-antivirus).
+
+## "The background service is not running" (TIM-0154)
+
+The window waited two minutes for the interface and nothing listens on the daemon's port. Timon has already tried to start the daemon once more (the background service, or its built-in daemon) before showing this message. The message gives the folder of the logs, usually `.timon/tmp` in your user folder: send its `desktop-*.log` and `daemon.log` with the diagnostic (tray icon). On Windows, also check that the `TimonOrchestrator` task exists and is enabled in Task Scheduler.
 
 ## Slow start behind an antivirus
 

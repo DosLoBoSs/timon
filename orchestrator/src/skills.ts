@@ -1004,7 +1004,7 @@ If they hesitate, take the simpler one; they can always ask for more.
   },
   {
     id: 'timon-tour-automation',
-    version: 1,
+    version: 2,
     content: `# timon-tour-automation
 
 The person chose **Automating tasks**: a few agents that work on their own, and
@@ -1016,10 +1016,9 @@ Short turns, one card at a time, the rules of \`timon-onboarding\` §3.
 
 ## Steps
 
-1. **A calmer menu.** \`nav_get\`, then say which pages stay (Cockpit, Agents,
-   Triggers, Workflows, Activity) and that the others are only hidden —
-   **Customize the menu**, at the foot of the menu, brings them back. Propose
-   \`automation.nav\`.
+1. **A calmer menu.** \`nav_get\`, then say which pages go (Multichat, Dreams,
+   Terminal, Plugins) and that they are only hidden — **Customize the menu**,
+   at the foot of the menu, brings them back. Propose \`automation.nav\`.
 2. **The agent view.** Their agents on the left; a click opens that agent's
    chat on the right, with nothing else around it. \`islands_get\` and
    \`widgets_get\` on \`/chat\` with \`project: ""\`, then propose
@@ -1047,11 +1046,12 @@ ${renderRecipes('automation')}
   },
   {
     id: 'timon-tour-beginner',
-    version: 1,
+    version: 2,
     content: `# timon-tour-beginner
 
 The person is **New to AI**. Keep it to the least: they talk to you, you do
-the rest. Not a word about plugins, islands, projects or the Kanban.
+the rest. Not a word about plugins or islands; the other pages of the menu
+are there for later, explain one only if they ask.
 
 Short turns, one card at a time, the rules of \`timon-onboarding\` §3.
 
@@ -1060,14 +1060,17 @@ Short turns, one card at a time, the rules of \`timon-onboarding\` §3.
 1. One sentence: they write to you as they would to a colleague, and you take
    care of the rest.
 2. **A simpler screen?** Ask it with \`question\` (Yes / Not now). On yes, one
-   card at a time, each with one sentence on what changes: \`beginner.nav\`,
-   then \`beginner.chat\`, then \`ui_navigate\` to \`/\` and \`beginner.cockpit\`.
+   card at a time, each with one sentence on what changes: \`beginner.nav\`
+   (the menu keeps the pages they will use — Cockpit, Brain, Agents, TIMs,
+   Projects, Kanban — and only hides the advanced ones), then
+   \`beginner.chat\`, then \`ui_navigate\` to \`/\` and \`beginner.cockpit\`.
    On "not now", change nothing.
 3. **A first real request.** Two or three examples from everyday life ("find a
    recipe with what is left in my fridge", "rewrite this email more politely",
    "plan my week") and let them try one, here, now. Answer it well.
-4. Say they can ask anything this way, and that **Guided tour** in the
-   appearance menu starts this again. Stop.
+4. Say they can ask anything this way, that **Customize the menu**, at the
+   foot of the menu, brings a hidden page back, and that **Guided tour** in
+   the appearance menu starts this again. Stop.
 
 ${renderRecipes('beginner')}
 `,
@@ -1139,7 +1142,7 @@ ${renderRecipes('developer')}
   },
   {
     id: 'timon-main-agent-setup',
-    version: 12,
+    version: 13,
     content: `# timon-main-agent-setup
 
 You are the user's main agent, their first TIM, in the very first minutes of
@@ -1187,11 +1190,20 @@ your message. Labels and options are in their language.
   talk to it here, each one has its own conversation in this page, and it can
   also work on its own.
 - Ask with \`question\` WITHOUT \`options\` what the new TIM should do.
-- Then show them the way: the "New TIM" button under the list on the left
-  opens the TIM editor. Suggest a name and a one-line job from their answer,
-  to type there. Never create the TIM yourself.
-- \`setup_finish\` with \`tour: false\`, then one sentence: you stay here if
-  they want help filling it in.
+- From their answer, propose a short first name that fits their language and
+  a one-line job, with \`question\` and two options: **Create it** and
+  **Change something**. Change something: ask what, with \`question\`
+  WITHOUT \`options\`, then propose again.
+- Their yes: \`setup_create_tim\` with \`name\`, \`job\` = that line, and
+  \`role\` = the closest one: \`research\` (finds, reads, sums up),
+  \`ops\` (their machine, services, admin), \`librarian\` (notes and
+  documents), \`coder\` (writes code), \`reviewer\` (checks work). A name
+  refused as taken: pick another and say so in one sentence. Refused as over
+  the limit: show them the "New TIM" button under the list on the left
+  instead.
+- One sentence: the new TIM is in the list on the left; its look and its
+  settings are changed from its card.
+- \`setup_finish\` with \`tour: false\`.
 
 ### Create a project with a team of TIMs
 
@@ -1239,7 +1251,9 @@ Routines tab, a webhook in its Webhooks tab. Then \`setup_finish\` with
 
 You stay in this conversation: answer what they ask next as their main agent.
 The other options stay open: if they ask for one, follow its branch without
-calling \`setup_finish\` again.
+calling \`setup_finish\` again. \`setup_create_tim\` is refused from then
+on: for another TIM, show them the "New TIM" button under the list on the
+left, with the name and the job you suggest to type there.
 
 ## Hard rules
 
@@ -1253,8 +1267,8 @@ calling \`setup_finish\` again.
 - Never call \`setup_finish\` before they picked an option, and always with
   \`tour: false\`: there is no guided tour to start.
 - Never offer a guided tour, and never propose to hide pages from the menu.
-- Your tools here are \`question\`, \`setup_set_soul\`, \`setup_finish\`,
-  \`project_create\`, \`project_demo_create\`, \`agent_create\`,
+- Your tools here are \`question\`, \`setup_set_soul\`, \`setup_create_tim\`,
+  \`setup_finish\`, \`project_create\`, \`project_demo_create\`, \`agent_create\`,
   \`routine_create\` and \`trigger_create\`. Nothing else is needed.
 - If they type a message instead of answering a card, answer it briefly, then
   ask the same card again.
@@ -1264,7 +1278,7 @@ calling \`setup_finish\` again.
     // The conversion mission of a browser recording (TODO #461): started by
     // `@timon/browser-recording`'s learn route, which hands it this id.
     id: 'learn-browser-recording',
-    version: 5,
+    version: 6,
     content: `---
 name: learn-browser-recording
 description: Turn ONE reviewed recording of the user's built-in browser into a Timon skill that replays the flow with the timon-browser tools. Applied by the conversion mission Timon starts from the browser panel's "Learn" button; the recording id is in the brief.
@@ -1337,7 +1351,7 @@ Each step: \`n\` (its number), \`t\` (seconds since the first step), \`type\`,
 (\`password\` | \`otp\` | \`card\`), \`param\` (a parameter name the user chose
 at review), \`url\`, \`openerTabId\`, \`origin\`.
 
-Types: \`navigate click input enter switchTab newTab closeTab credential secret\`.
+Types: \`navigate click input enter switchTab newTab closeTab credential secret frame\`.
 
 The raw steps exist only while this mission runs: Timon deletes them when the
 mission ends. So keep everything you need from that one answer, and finish the
@@ -1361,6 +1375,8 @@ Merge the noise:
 
 - a \`click\` that only focuses the field an \`input\` fills next;
 - several \`input\` steps on the same field (keep the last value);
+- several \`frame\` steps in a row on the same \`origin\` (one manual part,
+  one pause);
 - a \`navigate\` that a \`click\` or \`enter\` just caused (it is the result to
   check with \`wait_for\`, not an action to replay);
 - a \`navigate\` whose \`url\` carries \`{SECRET:…}\` (a sign-in callback, a
@@ -1399,6 +1415,17 @@ the page found by its URL origin or title, never by its recorded \`tabId\`.
   themselves in the shared browser; it never asks for the value, never reads it
   back, never fills it. Then it checks the page moved on. Put \`attended: true\`
   in Requirements: such a skill needs a person and cannot run as a routine.
+- \`frame\` step: the user acted by hand inside an embedded frame of
+  \`origin\` (a payment form, a captcha, a sign-in widget). The recorder never
+  sees inside a frame, so nothing of what they did there is known. Treat it
+  exactly like a one-time code: a **PAUSE** step at that point. The skill asks
+  the user, with the \`question\` tool and a single "Done" option, to do that
+  part themselves in the shared browser (name the site of the frame, and what
+  the steps around it suggest: "enter the card details in the payment form");
+  it never asks for what they typed, never clicks, fills or reads inside the
+  frame, then checks the page moved on. Put \`attended: true\` in
+  Requirements: such a skill cannot run without a person. A frame step with
+  no \`origin\` is still a pause.
 
 ## 5. Write the skill
 
@@ -1459,11 +1486,13 @@ Quick Reference: the recorded selectors and visible names, as hints only.
 Pitfalls, when relevant: popups and new tabs (\`list_pages\`,
 \`select_page\`), file uploads (\`upload_file\` after opening the site's file
 picker), drag and drop (\`drag\`), JavaScript dialogs (\`handle_dialog\`),
-iframes (not recorded: the user may have to do that part), sites that change
-their layout.
+iframes (never recorded: each \`frame\` step is a pause for the user, never an
+action to automate), sites that change their layout.
 
 ## 6. Verify before you write it
 
+- Every \`frame\` step of the recording is a PAUSE in your draft, and the
+  draft says \`attended: true\`.
 - Search your draft for every \`{SECRET:\` and \`{PARAM:\` placeholder: each
   one must be a pause or a parameter, never a value to type. Search it for
   anything that looks like a secret: \`sk-\`, \`ghp_\`, \`github_pat_\`,

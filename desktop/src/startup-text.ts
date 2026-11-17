@@ -1,6 +1,7 @@
 /**
  * The words of the dialogs that report a failed start (daemon missing,
- * crashing, silent, port taken, interface missing, service not updated).
+ * crashing, silent, port taken, interface missing, daemon gone, service
+ * not updated).
  *
  * They may open before the session has a `timon-locale` cookie, or with the
  * daemon dead: the caller then passes the OS's language (`uiLocale()` falls
@@ -35,6 +36,9 @@ export const STARTUP_ENGLISH: Dictionary = {
       uiMissing: 'The interface did not come up.',
       uiMissingDetail:
         '{giveUp}\n\nThe daemon may be running without its web app: quit and reopen Timon. If it persists, copy the diagnostic and send it to support.',
+      daemonDown: 'The background service is not running.',
+      daemonDownDetail:
+        'Nothing answers on {origin}{retried, select, yes {, even after Timon started it again} other {}}. Its logs are in {logs}. If it persists, copy the diagnostic and send it to support.',
       crashing: 'The daemon keeps crashing.',
       crashingDetail: '{why}\n\nThe bundled daemon could not start. Your data remains in {home}.',
       slow: 'The daemon did not answer in time.',

@@ -58,6 +58,7 @@ Whatever the `timon` command does in a terminal, a tool of the same name does fo
 | Read the outbound connections a mission made, and the hosts it was the first of its project to reach; the record is off by default ([What your agents connect to](network-activity.md)) | `mission_egress` |
 | Repair the mission search index and the traces of older events | `mission_reindex`, `trace_backfill` |
 | Set the models and fallbacks of a series | `series_role_set`, `series_role_list`, `series_role_clear`, `series_fallback_set`, `series_fallback_list`, `series_fallback_clear` |
+| Attach a task chain created outside a mission to a series, so its returns reach the pilot ([Task returns in the chat](kanban.md#task-returns-in-the-chat)) | `kanban_attach_series` |
 | Remember a rule for later missions, or look memory up | `memory_rule_add`, `memory_rule_list`, `memory_rule_rm`, `memory_search`, `memory_overview`, `memory_show` |
 | Read this documentation (from a terminal: `timon docs search` and `timon docs read`) | `docs_search`, `docs_read` |
 | Post a message in the chat: a report, a comparison table, a step report during a long job | `chat_post_message` |
@@ -71,7 +72,7 @@ Whatever the `timon` command does in a terminal, a tool of the same name does fo
 | Store a new secret (a database password, an API key it generated) in the vault | `secret_create` |
 | Call an HTTP service under a secret's identity, without ever seeing the secret | `timon_http_call` |
 | Ask you for a password, a code or an API key it must never see | `secret_request` |
-| Set up itself during the setup conversation: write its character, recruit its two teammates, finish (and ask for a picture) | `setup_set_soul`, `setup_recruit_team`, `setup_finish`, `setup_request_avatar` |
+| Set up itself during the setup conversation: write its character, recruit its two teammates, create another TIM, finish (and ask for a picture) | `setup_set_soul`, `setup_recruit_team`, `setup_create_tim`, `setup_finish`, `setup_request_avatar` |
 
 `terminal_propose` is for a command the agent may not run itself: one that needs
 `sudo` or a password, or that would stop its own mission (restarting Timon's
@@ -308,16 +309,17 @@ The secret never reaches the agent's environment, its command lines or the respo
 
 ### The setup conversation
 
-Right after installation, your main agent builds itself in a conversation with you. These tools exist for that, and they work **only** in that conversation, while the step is pending: they are refused anywhere else, and they change nothing but the agent itself and the two teammates it may recruit.
+Right after installation, your main agent builds itself in a conversation with you. These tools exist for that, and they work **only** in that conversation, while the step is pending: they are refused anywhere else, and they change nothing but the agent itself and the TIMs it creates with you.
 
 - `setup_set_soul` writes the agent's character (`SOUL.md`, plain markdown, at most 20 000 characters) from the card you made for it, with an optional `objective` (one or two sentences, at most 2 000 characters) on what you expect of it. It can be called again to refine. It never touches the agent's technical instructions.
 - `setup_recruit_team` creates two teammates once you said yes: a coder and a reviewer, reporting to your main agent, on its working folder and its model. It takes their two first names; a name already used by another agent is refused. Calling it again returns the same two.
+- `setup_create_tim` creates one more TIM once you said yes to the name and the job it proposed: on your main agent's working folder and model, reporting to it. It takes a first `name`, a `role` of the Agents page (`research`, `ops`, `librarian`, `coder`, `reviewer` or one of your own roles; never `orchestrator`) and an optional `job` (one or two sentences, at most 300 characters). A name already used by another agent is refused; calling it again with the same name returns the same TIM. It creates three TIMs at most; beyond, and once the conversation is finished, the **New TIM** button under the TIMs list does it.
 - `setup_finish` ends the conversation: the agent's card appears on your cockpit and the setup moves on. With `tour: false` (you chose to get to work), the guided tour does not start.
 - `setup_request_avatar` asks you for a picture: a card with a file picker opens in the conversation. The setup conversation no longer uses it (your agent already has its mascot); a picture can be set from the agent's page.
 
 The routines and triggers the agent offers during that conversation are made with the usual `routine_create` and `trigger_create`, after your yes, and are saved switched off.
 
-The CLI counterparts are `timon setup soul`, `timon setup team --coder NAME --reviewer NAME`, `timon setup finish [--no-tour]` and `timon setup avatar`. See [First run](../installation/first-run.md) for the conversation from your side.
+The CLI counterparts are `timon setup soul`, `timon setup team --coder NAME --reviewer NAME`, `timon setup tim --name NAME --role ROLE [--job TEXT]`, `timon setup finish [--no-tour]` and `timon setup avatar`. See [First run](../installation/first-run.md) for the conversation from your side.
 
 ## The `timon_ask` server: two forms
 

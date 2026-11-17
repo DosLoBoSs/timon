@@ -1,26 +1,4 @@
 {
-  "mission": {
-    "title": "Nuova missione",
-    "description": "Avvia una conversazione con l’agente {agent} usando l’LLM che preferisci.",
-    "resumeDescription": "Puoi anche riprendere la missione precedente: il nuovo LLM leggerà un riassunto e continuerà da lì.",
-    "llm": "LLM",
-    "reasoningEffort": "Livello di ragionamento",
-    "default": "Predefinito",
-    "continue": "Continua dalla missione precedente",
-    "resumeWithSummary": "Il nuovo LLM leggerà un riassunto della cronologia per riprendere.",
-    "resumeSameLlm": "Riprende il contesto della missione precedente con lo stesso LLM.",
-    "followup": "Messaggio di seguito",
-    "firstMessage": "Primo messaggio",
-    "followupPlaceholder": "Es.: continua quello che stavamo facendo, concentrati su X…",
-    "firstMessagePlaceholder": "Es.: aiutami con…",
-    "cancel": "Annulla",
-    "continuing": "Ripresa…",
-    "creating": "Creazione…",
-    "start": "Avvia",
-    "continuedToast": "Missione ripresa su {backend} · {model}",
-    "createdToast": "Nuova missione su {backend} · {model}",
-    "failed": "Non riuscito: {message}"
-  },
   "llm": {
     "handoverTail": "Riassunto non riuscito: è passata solo la FINE della conversazione",
     "confirmWhole": "Passa tutto",
@@ -107,7 +85,6 @@
     "dismiss": "Ignora",
     "center": "Centro notifiche",
     "sure": "Sicuro?",
-    "close": "Chiudi",
     "empty": "Nessuna notifica",
     "clearAll": "Cancella tutto",
     "clearAlerts": "Cancella gli avvisi",
@@ -210,7 +187,7 @@
       "label": "Cerca agenti per nome, progetto, polo o team",
       "clear": "Cancella la ricerca",
       "ratio": "{count}/{total}",
-      "count": "{count} agenti corrispondenti",
+      "count": "{count, plural, one {# agente corrispondente} other {# agenti corrispondenti}}",
       "none": "Nessun agente corrisponde a “{query}”."
     },
     "grid": {
@@ -222,20 +199,13 @@
       "opened": "Griglia aperta nell’area di lavoro"
     }
   },
-  "calendar": {
-    "today": "Oggi",
-    "tomorrow": "Domani",
-    "upcoming": "In arrivo",
-    "overdue": "In ritardo · {date}",
-    "noDueDate": "Nessuna scadenza"
-  },
   "delegations": {
     "title": "In attesa di ritorno",
     "working": "In lavorazione",
     "idle": "In attesa del prossimo turno",
     "open": "Apri questa missione",
     "none": "Nulla in attesa",
-    "inline": "{count} missione/i delegata/e in corso"
+    "inline": "{count, plural, one {# missione delegata} other {# missioni delegate}} in corso"
   },
   "missionEgress": {
     "loading": "Lettura del journal di rete…",
@@ -247,7 +217,7 @@
     "newHost": "nuovo",
     "newHostHint": "Raggiunto per la prima volta nel suo progetto da questa missione: l’avviso lo nominava.",
     "connectionsCount": "{count} conn.",
-    "failures": "{count} non riuscite",
+    "failures": "{count} {count, plural, one {non riuscita} other {non riuscite}}",
     "sent": "Inviato",
     "received": "Ricevuto",
     "status": "Stato HTTP restituito al programma",
@@ -293,8 +263,8 @@
       "crash": "arresto imprevisto",
       "unknown": "causa sconosciuta"
     },
-    "pendingMessages": "{count} messaggio/i in attesa nella posta in arrivo",
-    "openDeliveries": "{count} richiesta/e senza ancora risposta"
+    "pendingMessages": "{count, plural, one {# messaggio} other {# messaggi}} in attesa nella posta in arrivo",
+    "openDeliveries": "{count, plural, one {# richiesta} other {# richieste}} senza ancora risposta"
   },
   "permissionRefusal": {
     "accountLacks": "Il tuo account non ha {permission}. Chiedi a un amministratore di aggiungerlo al tuo ruolo.",

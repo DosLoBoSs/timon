@@ -1,4 +1,4 @@
-import { composerDictee } from '@/lib/stt-dictee';
+import { composeDictation } from '@/lib/stt-dictation';
 
 import { CaptureError, type CaptureHandlers, type MicrophoneCapture } from './audio-capture';
 import {
@@ -23,7 +23,7 @@ import type { MicrophoneStatus } from './microphone';
  * contract — one out of schema, or one after `stopped`, is ignored.
  *
  * Segment fusion — why the local engine does NOT feed its utterances through
- * `fusionnerSegments` (lib/stt-transcript). That function repairs engines that
+ * `mergeSegments` (lib/stt-transcript). That function repairs engines that
  * re-emit the WHOLE sentence at every event (Android): a segment that starts
  * with everything said so far replaces it, one already at the end is dropped.
  * A contract engine is the opposite by construction (the sherpa one cuts
@@ -31,9 +31,9 @@ import type { MicrophoneStatus } from './microphone';
  * a `final` is to append (docs/DICTATION.md). On disjoint utterances those two
  * rules eat real speech: "We have to test." then "We have to test again."
  * would lose the first sentence, a "Thanks." said twice would keep one. So the
- * finals are joined here, plainly (`composerDictee`), and the consumers receive
+ * finals are joined here, plainly (`composeDictation`), and the consumers receive
  * at most ONE final result (the joined finals) and ONE interim (the current
- * partial). Their own `texteSession` / `lireResultats` still run, but over a
+ * partial). Their own `sessionText` / `readResults` still run, but over a
  * single final segment they are the identity; the only fusion left is between
  * the finals and the live partial, which is transient — the next final
  * replaces it with the plain join.
@@ -332,7 +332,7 @@ export class EngineRecognition implements RecognitionLike {
         this.emitResults();
         return;
       case 'final':
-        this.finals = composerDictee(this.finals, event.text);
+        this.finals = composeDictation(this.finals, event.text);
         this.partial = '';
         this.emitResults();
         return;

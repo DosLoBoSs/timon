@@ -278,7 +278,7 @@ export function moduleNotes(capabilities: readonly string[]): string[] {
 function mainSeatLine(seat: NonNullable<DoctorReport['mainSeat']>): string {
   if (seat.holder) return seat.holder;
   const who = seat.candidates.length > 0
-    ? `eligible: ${seat.candidates.join(', ')}; in Agents, choose "Set as main orchestrator" on one`
+    ? `eligible: ${seat.candidates.join(', ')}; run "timon agent set-main <name>", or choose "Set as main orchestrator" on one in Agents`
     : 'no project-less orchestrator exists; create one in Agents';
   return `NONE — recaps and notifications have no recipient (${who})`;
 }

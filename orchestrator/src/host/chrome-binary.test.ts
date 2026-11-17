@@ -2,6 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CHROME_EXECUTABLE_NAMES, detectChromeBinary, type ChromeProbe } from './chrome-binary.js';
 
+// The Linux and macOS searches split PATH and join paths with the host's own
+// separators: they only run on a POSIX host.
+const POSIX_ONLY = process.platform === 'win32' && 'the Linux and macOS searches use the host separators';
+
 /** A fake disk: the files that exist, the symlinks, the first bytes of scripts. */
 function probeOf(files: string[], options: { links?: Record<string, string>; scripts?: Record<string, string> } = {}): ChromeProbe {
   return {
@@ -21,7 +25,7 @@ test('Windows: Chrome per machine, then per user, then Edge', () => {
   assert.ok(both.found && both.binary.path === chromeUser && both.binary.flavour === 'chrome');
 });
 
-test('macOS: the system Applications folder, then the one of the account', () => {
+test('macOS: the system Applications folder, then the one of the account', { skip: POSIX_ONLY }, () => {
   const user = '/Users/sam/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
   const found = detectChromeBinary({ platform: 'darwin', env: {}, homeDir: '/Users/sam', probe: probeOf([user]) });
   assert.ok(found.found && found.binary.path === user);
@@ -30,7 +34,7 @@ test('macOS: the system Applications folder, then the one of the account', () =>
   assert.ok(both.found && both.binary.path === system);
 });
 
-test('Linux: PATH order, Chrome before Edge before Chromium', () => {
+test('Linux: PATH order, Chrome before Edge before Chromium', { skip: POSIX_ONLY }, () => {
   const env = { PATH: '/usr/local/bin:/usr/bin' };
   const chromium = '/usr/bin/chromium';
   const edge = '/usr/bin/microsoft-edge';
@@ -43,7 +47,7 @@ test('Linux: PATH order, Chrome before Edge before Chromium', () => {
   assert.ok(all.found && all.binary.path === chrome);
 });
 
-test('Linux: a snap or flatpak Chromium is reported as confined, never launched', () => {
+test('Linux: a snap or flatpak Chromium is reported as confined, never launched', { skip: POSIX_ONLY }, () => {
   const env = { PATH: '/usr/bin' };
   const viaLink = detectChromeBinary({ platform: 'linux', env, probe: probeOf(['/usr/bin/chromium'], { links: { '/usr/bin/chromium': '/snap/chromium/3000/usr/lib/chromium-browser/chrome' } }) });
   assert.deepEqual(viaLink, { found: false, reason: 'confined' });
@@ -53,7 +57,7 @@ test('Linux: a snap or flatpak Chromium is reported as confined, never launched'
   assert.deepEqual(flatpak, { found: false, reason: 'confined' });
 });
 
-test('Linux: a confined Chromium does not hide a real Chrome that comes later', () => {
+test('Linux: a confined Chromium does not hide a real Chrome that comes later', { skip: POSIX_ONLY }, () => {
   const env = { PATH: '/usr/bin' };
   const found = detectChromeBinary({ platform: 'linux', env, probe: probeOf(['/usr/bin/chromium', '/opt/google/chrome/chrome'],
     { links: { '/usr/bin/chromium': '/snap/chromium/1/chrome' } }) });
@@ -72,7 +76,7 @@ test('TIMON_CHROME_PATH wins, even a binary under a snap the user vouches for', 
   assert.ok(found.found && found.binary.path === pinned && found.binary.flavour === 'chromium');
 });
 
-test('the detection never carries the path in its user-facing name', () => {
+test('the detection never carries the path in its user-facing name', { skip: POSIX_ONLY }, () => {
   const found = detectChromeBinary({ platform: 'linux', env: { PATH: '/home/sam/bin' }, probe: probeOf(['/home/sam/bin/google-chrome']) });
   assert.ok(found.found && found.binary.name === 'Google Chrome');
 });

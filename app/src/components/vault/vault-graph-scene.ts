@@ -86,8 +86,8 @@ export interface SceneOptions {
   linkColor: string;
   linkOpacity: number;
   /** Cruising frame rate at the wide framing. The scene raises it itself when
-   *  zooming in — see `cadenceSouhaitee`. */
-  cadenceBase: number;
+   *  zooming in — see `targetFrameRate`. */
+  baseFrameRate: number;
   onClick: (node: SceneNode) => void;
   /** Any user gesture — used to pause the automatic rotation. */
   onInteract: () => void;
@@ -95,8 +95,8 @@ export interface SceneOptions {
 
 // Lighting copied as is from `3d-force-graph` so nodes look exactly as they did
 // before the switch (ambient strongly dominant).
-const AMBIANTE = 0xcccccc;
-const DIRECTIONNELLE = 0xffffff;
+const AMBIENT_LIGHT = 0xcccccc;
+const DIRECTIONAL_LIGHT = 0xffffff;
 
 // `nodeResolution` was 6: a coarse sphere, invisible at the size nodes are
 // drawn. With instancing the geometry is shared by the 496 instances — so we
@@ -113,31 +113,31 @@ const SEGMENTS_SPHERE = 8;
  *  Warm-up is pure computation, run in one go before the first frame: 300
  *  steps on 496 nodes cost a few tens of milliseconds and nothing on screen.
  *  The rest plays out during the first frames. */
-const PAS_REFROIDISSEMENT = 600;
-const PAS_PRECHAUFFAGE = 300;
+const COOLING_STEPS = 600;
+const WARMUP_STEPS = 300;
 const ALPHA_DECAY = 0.015;
 const VELOCITY_DECAY = 0.75;
 
-const RAYON_SPHERE = 180;
-const FORCE_SPHERE = 0.12;
+const SPHERE_RADIUS = 180;
+const SPHERE_FORCE = 0.12;
 
 /** Rotation: degrees per second, independent of the render rate. */
-export const VITESSE_ROTATION_DEG_S = 1.2;
+export const ROTATION_SPEED_DEG_S = 1.2;
 
 /** How long rendering stays at full vsync after the last gesture. Long enough
  *  to cover the gaps between two mouse events and the controls settling,
  *  short enough not to prolong the cost. */
-const TRAINE_GESTE_MS = 400;
+const GESTURE_TAIL_MS = 400;
 
-/** Ceiling of the zoom-adaptive frame rate — see `cadenceSouhaitee`. */
-const CADENCE_MAX = 60;
+/** Ceiling of the zoom-adaptive frame rate — see `targetFrameRate`. */
+const MAX_FRAME_RATE = 60;
 
 /** Hover delay before a node's label shows.
  *
  *  Without it, sweeping across the graph flashes a label for every node
  *  crossed. Half a second separates "passing over" from "looking at this one",
  *  and the count restarts from zero whenever the hovered node changes. */
-const DELAI_ETIQUETTE_MS = 500;
+const LABEL_DELAY_MS = 500;
 
 export class VaultGraphScene {
   private readonly opts: SceneOptions;
@@ -145,38 +145,38 @@ export class VaultGraphScene {
   private readonly scene: Scene;
   private readonly camera: PerspectiveCamera;
   private readonly controls: TrackballControls;
-  private readonly noeuds: InstancedMesh;
-  private readonly liens: LineSegments;
-  private readonly positionsLiens: Float32Array;
-  private readonly geometrieLiens: BufferGeometry;
+  private readonly nodeMesh: InstancedMesh;
+  private readonly linkLines: LineSegments;
+  private readonly linkPositions: Float32Array;
+  private readonly linkGeometry: BufferGeometry;
   private readonly simulation: ReturnType<typeof forceSimulation<SceneNode>>;
-  private readonly matrice = new Matrix4();
-  private readonly rayon = new Raycaster();
-  private readonly pointeur = new Vector2();
-  private readonly rayons: number[];
+  private readonly matrix = new Matrix4();
+  private readonly raycaster = new Raycaster();
+  private readonly pointer = new Vector2();
+  private readonly radii: number[];
   /** Label following the cursor. Driven through the DOM directly rather than
    *  React state: the position changes on every `pointermove`, and state would
    *  trigger one React render per mouse move. */
-  private readonly etiquette: HTMLDivElement;
+  private readonly label: HTMLDivElement;
 
-  private pasEcoules = 0;
+  private elapsedSteps = 0;
   private simulationActive = true;
   /** Positions only moved if the simulation ran or a node is being dragged.
    *  Otherwise a frame rewrites NO buffer: that is what makes a high frame
    *  rate truly free. */
-  private positionsSales = true;
+  private positionsDirty = true;
   private rotationActive = true;
-  private dernierRendu = 0;
+  private lastRenderAt = 0;
 
-  private survole: SceneNode | null = null;
-  private tire: SceneNode | null = null;
-  private profondeurTire = 0;
-  private detruit = false;
+  private hovered: SceneNode | null = null;
+  private dragged: SceneNode | null = null;
+  private dragDepth = 0;
+  private destroyed = false;
   /** Press position, to tell a click from a drag on release. */
-  private appuiEn: { x: number; y: number } | null = null;
-  private aGlisse = false;
+  private pressedAt: { x: number; y: number } | null = null;
+  private hasMoved = false;
   /** True from the first camera gesture on: stops the automatic reframing. */
-  private cameraPriseEnMain = false;
+  private cameraTaken = false;
   /** Timestamp of the last user gesture (orbit, wheel, drag).
    *
    *  During a gesture the cruising rate is not tenable: `TrackballControls`
@@ -184,14 +184,14 @@ export class VaultGraphScene {
    *  `update()`, called once per frame. At RENDER_FPS, orbiting the graph with
    *  the mouse gave a rotation that advanced only twelve times per second —
    *  it felt like "2 fps". A gesture must render at full vsync. */
-  private dernierGesteMs = 0;
+  private lastGestureMs = 0;
   /** Camera distance kept from the last automatic framing: the reference for
    *  the zoom factor of the adaptive frame rate. */
-  private distanceCadrage = 0;
+  private framingDistance = 0;
   /** Timer of the hover delay, for the node it is waiting to announce. */
-  private minuterieEtiquette: ReturnType<typeof setTimeout> | null = null;
+  private labelTimer: ReturnType<typeof setTimeout> | null = null;
   /** Visible ids, or `null` when no filter is active. */
-  private filtre: Set<string> | null = null;
+  private filter: Set<string> | null = null;
 
   constructor(opts: SceneOptions) {
     this.opts = opts;
@@ -207,8 +207,8 @@ export class VaultGraphScene {
     // version wrote in light lavender, unreadable on the graph's light
     // background: hence these inline styles, copied as is from the old
     // `nodeLabel`.
-    this.etiquette = document.createElement('div');
-    Object.assign(this.etiquette.style, {
+    this.label = document.createElement('div');
+    Object.assign(this.label.style, {
       position: 'absolute', zIndex: '20', pointerEvents: 'none', display: 'none',
       padding: '3px 8px', borderRadius: '6px',
       background: 'rgba(28,26,24,0.88)', color: '#fdf6f0',
@@ -216,11 +216,11 @@ export class VaultGraphScene {
       fontFamily: 'var(--font-sans), system-ui, sans-serif', fontSize: '11px',
       whiteSpace: 'nowrap', textShadow: 'none',
     } satisfies Partial<CSSStyleDeclaration>);
-    opts.container.appendChild(this.etiquette);
+    opts.container.appendChild(this.label);
 
     this.scene = new Scene();
-    this.scene.add(new AmbientLight(AMBIANTE, Math.PI));
-    this.scene.add(new DirectionalLight(DIRECTIONNELLE, 0.6 * Math.PI));
+    this.scene.add(new AmbientLight(AMBIENT_LIGHT, Math.PI));
+    this.scene.add(new DirectionalLight(DIRECTIONAL_LIGHT, 0.6 * Math.PI));
 
     this.camera = new PerspectiveCamera(50, opts.width / opts.height, 0.1, 20000);
     this.camera.position.set(0, 0, 600);
@@ -236,24 +236,24 @@ export class VaultGraphScene {
     this.controls.staticMoving = true;
 
     // ---- nodes: a single InstancedMesh ------------------------------------
-    const geoNoeud = new SphereGeometry(1, SEGMENTS_SPHERE, SEGMENTS_SPHERE);
-    const matNoeud = new MeshLambertMaterial();
-    this.noeuds = new InstancedMesh(geoNoeud, matNoeud, opts.nodes.length);
-    this.noeuds.instanceMatrix.setUsage(DynamicDrawUsage);
+    const nodeGeometry = new SphereGeometry(1, SEGMENTS_SPHERE, SEGMENTS_SPHERE);
+    const nodeMaterial = new MeshLambertMaterial();
+    this.nodeMesh = new InstancedMesh(nodeGeometry, nodeMaterial, opts.nodes.length);
+    this.nodeMesh.instanceMatrix.setUsage(DynamicDrawUsage);
     // An InstancedMesh's bounding sphere is computed from the GEOMETRY (here a
     // radius of 1), not from the instances spread over ~400 units. Leaving
     // culling on would make the whole graph vanish as soon as the camera moves
     // away from the origin — and that reads as a controls bug.
-    this.noeuds.frustumCulled = false;
+    this.nodeMesh.frustumCulled = false;
 
-    const couleur = new Color();
-    this.rayons = opts.nodes.map((n) => opts.nodeRadius(n));
+    const color = new Color();
+    this.radii = opts.nodes.map((n) => opts.nodeRadius(n));
     opts.nodes.forEach((n, i) => {
-      couleur.set(opts.nodeColor(n));
-      this.noeuds.setColorAt(i, couleur);
+      color.set(opts.nodeColor(n));
+      this.nodeMesh.setColorAt(i, color);
     });
-    if (this.noeuds.instanceColor) this.noeuds.instanceColor.needsUpdate = true;
-    this.scene.add(this.noeuds);
+    if (this.nodeMesh.instanceColor) this.nodeMesh.instanceColor.needsUpdate = true;
+    this.scene.add(this.nodeMesh);
 
     // ---- links: a single LineSegments --------------------------------------
     // Two vertices per link, written flat. `LineBasicMaterial.linewidth` is
@@ -261,13 +261,13 @@ export class VaultGraphScene {
     // instead of the former 0.35 tubes. That is the only visual difference of
     // the switch, and it is deliberate — the tube cost one three.js object per
     // link, 83% of the scene's budget.
-    this.positionsLiens = new Float32Array(opts.links.length * 2 * 3);
-    this.geometrieLiens = new BufferGeometry();
-    const attribut = new BufferAttribute(this.positionsLiens, 3);
-    attribut.setUsage(DynamicDrawUsage);
-    this.geometrieLiens.setAttribute('position', attribut);
-    this.liens = new LineSegments(
-      this.geometrieLiens,
+    this.linkPositions = new Float32Array(opts.links.length * 2 * 3);
+    this.linkGeometry = new BufferGeometry();
+    const attribute = new BufferAttribute(this.linkPositions, 3);
+    attribute.setUsage(DynamicDrawUsage);
+    this.linkGeometry.setAttribute('position', attribute);
+    this.linkLines = new LineSegments(
+      this.linkGeometry,
       new LineBasicMaterial({
         color: new Color(opts.linkColor),
         transparent: true,
@@ -275,8 +275,8 @@ export class VaultGraphScene {
         depthWrite: false,
       }),
     );
-    this.liens.frustumCulled = false;
-    this.scene.add(this.liens);
+    this.linkLines.frustumCulled = false;
+    this.scene.add(this.linkLines);
 
     // ---- simulation --------------------------------------------------------
     // CRITICAL ORDER. `forceSimulation` itself places the nodes on an initial
@@ -285,7 +285,7 @@ export class VaultGraphScene {
     // it: placed after, it is always true, warm-up is skipped and the graph
     // stays frozen on that spiral, never relaxed — 496 nodes packed into a
     // ball three times too small.
-    const dejaCalcule = opts.nodes.length > 0 && opts.nodes[0]!.x !== undefined;
+    const alreadyComputed = opts.nodes.length > 0 && opts.nodes[0]!.x !== undefined;
 
     // Same forces `3d-force-graph` installed by default, plus the radial force
     // that rounds the vault into a ball. The `3` is not decorative:
@@ -294,7 +294,7 @@ export class VaultGraphScene {
       .force('link', forceLink<SceneNode>(opts.links).id((n) => n.id))
       .force('charge', forceManyBody())
       .force('center', forceCenter())
-      .force('radial', forceRadial(RAYON_SPHERE).strength(FORCE_SPHERE))
+      .force('radial', forceRadial(SPHERE_RADIUS).strength(SPHERE_FORCE))
       .alphaDecay(ALPHA_DECAY)
       .velocityDecay(VELOCITY_DECAY)
       .stop();
@@ -302,46 +302,46 @@ export class VaultGraphScene {
     // An already relaxed layout is reused as is: switching to full screen must
     // not replay the settling. `forceLink` does not mind, it only resolves
     // `source`/`target` when they are not already node objects.
-    if (dejaCalcule) {
+    if (alreadyComputed) {
       this.simulationActive = false;
-      this.pasEcoules = PAS_REFROIDISSEMENT;
+      this.elapsedSteps = COOLING_STEPS;
     } else {
       // Warm-up runs in one go, before the first frame: without it the initial
       // cloud would be seen unfolding.
-      this.simulation.tick(PAS_PRECHAUFFAGE);
-      this.pasEcoules = PAS_PRECHAUFFAGE;
+      this.simulation.tick(WARMUP_STEPS);
+      this.elapsedSteps = WARMUP_STEPS;
     }
 
-    this.attacherEvenements();
-    this.majPositions();
-    this.cadrer();
+    this.attachEvents();
+    this.updatePositions();
+    this.frameCloud();
   }
 
   // -------------------------------------------------------------------------
   // Render loop — called by the component, never self-scheduled here.
   // -------------------------------------------------------------------------
-  rendre(): void {
-    if (this.detruit) return;
+  render(): void {
+    if (this.destroyed) return;
 
-    const maintenant = performance.now();
-    const dt = this.dernierRendu ? (maintenant - this.dernierRendu) / 1000 : 0;
-    this.dernierRendu = maintenant;
+    const now = performance.now();
+    const dt = this.lastRenderAt ? (now - this.lastRenderAt) / 1000 : 0;
+    this.lastRenderAt = now;
 
     if (this.simulationActive) {
       this.simulation.tick();
-      this.pasEcoules++;
-      this.positionsSales = true;
-      if (this.pasEcoules >= PAS_REFROIDISSEMENT) this.simulationActive = false;
+      this.elapsedSteps++;
+      this.positionsDirty = true;
+      if (this.elapsedSteps >= COOLING_STEPS) this.simulationActive = false;
       // The cloud keeps spreading throughout cooling: framing it only once at
       // construction let it overflow the panel. So we follow its spread —
       // unless the user has already taken the camera, in which case snatching
       // their framing away would be worse than anything.
-      if (!this.cameraPriseEnMain) this.cadrer();
+      if (!this.cameraTaken) this.frameCloud();
     }
 
-    if (this.positionsSales) {
-      this.majPositions();
-      this.positionsSales = false;
+    if (this.positionsDirty) {
+      this.updatePositions();
+      this.positionsDirty = false;
     }
 
     if (this.rotationActive && dt > 0) {
@@ -350,7 +350,7 @@ export class VaultGraphScene {
       // the apparent speed.
       const p = this.camera.position;
       const d = Math.sqrt(p.x * p.x + p.z * p.z);
-      const a = Math.atan2(p.x, p.z) + (VITESSE_ROTATION_DEG_S * Math.PI) / 180 * dt;
+      const a = Math.atan2(p.x, p.z) + (ROTATION_SPEED_DEG_S * Math.PI) / 180 * dt;
       p.x = d * Math.sin(a);
       p.z = d * Math.cos(a);
       this.camera.lookAt(0, 0, 0);
@@ -363,21 +363,21 @@ export class VaultGraphScene {
   /** Copies the simulation positions into the two GPU buffers. It is the only
    *  place that writes to video memory, and it is only called when something
    *  actually moved. */
-  private majPositions(): void {
-    const noeuds = this.opts.nodes;
-    for (let i = 0; i < noeuds.length; i++) {
-      const n = noeuds[i]!;
-      const r = this.visible(n) ? this.rayons[i]! : 0;
-      this.matrice.makeScale(r, r, r);
-      this.matrice.setPosition(n.x ?? 0, n.y ?? 0, n.z ?? 0);
-      this.noeuds.setMatrixAt(i, this.matrice);
+  private updatePositions(): void {
+    const nodes = this.opts.nodes;
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i]!;
+      const r = this.visible(n) ? this.radii[i]! : 0;
+      this.matrix.makeScale(r, r, r);
+      this.matrix.setPosition(n.x ?? 0, n.y ?? 0, n.z ?? 0);
+      this.nodeMesh.setMatrixAt(i, this.matrix);
     }
-    this.noeuds.instanceMatrix.needsUpdate = true;
+    this.nodeMesh.instanceMatrix.needsUpdate = true;
 
-    const liens = this.opts.links;
-    const pos = this.positionsLiens;
-    for (let i = 0; i < liens.length; i++) {
-      const l = liens[i]!;
+    const links = this.opts.links;
+    const pos = this.linkPositions;
+    for (let i = 0; i < links.length; i++) {
+      const l = links[i]!;
       // `forceLink` replaces ids with node objects during its initialisation;
       // before that pass, source/target are still strings and there is nothing
       // to draw.
@@ -386,136 +386,136 @@ export class VaultGraphScene {
       const o = i * 6;
       // A link is drawn only if BOTH ends are visible: otherwise it is reduced
       // to a point, which draws nothing.
-      const trace = s && t && this.visible(s) && this.visible(t);
+      const drawn = s && t && this.visible(s) && this.visible(t);
       pos[o] = s?.x ?? 0;
       pos[o + 1] = s?.y ?? 0;
       pos[o + 2] = s?.z ?? 0;
-      pos[o + 3] = trace ? (t?.x ?? 0) : (s?.x ?? 0);
-      pos[o + 4] = trace ? (t?.y ?? 0) : (s?.y ?? 0);
-      pos[o + 5] = trace ? (t?.z ?? 0) : (s?.z ?? 0);
+      pos[o + 3] = drawn ? (t?.x ?? 0) : (s?.x ?? 0);
+      pos[o + 4] = drawn ? (t?.y ?? 0) : (s?.y ?? 0);
+      pos[o + 5] = drawn ? (t?.z ?? 0) : (s?.z ?? 0);
     }
-    this.geometrieLiens.attributes.position!.needsUpdate = true;
+    this.linkGeometry.attributes.position!.needsUpdate = true;
   }
 
   // -------------------------------------------------------------------------
   // Interaction
   // -------------------------------------------------------------------------
-  private attacherEvenements(): void {
+  private attachEvents(): void {
     const el = this.renderer.domElement;
-    el.addEventListener('pointermove', this.surDeplacement);
-    el.addEventListener('pointerdown', this.surAppui);
-    el.addEventListener('pointerup', this.surRelache);
-    el.addEventListener('pointerleave', this.surSortie);
-    el.addEventListener('wheel', this.surInteraction, { passive: true });
+    el.addEventListener('pointermove', this.onPointerMove);
+    el.addEventListener('pointerdown', this.onPointerDown);
+    el.addEventListener('pointerup', this.onPointerUp);
+    el.addEventListener('pointerleave', this.onPointerLeave);
+    el.addEventListener('wheel', this.onInteraction, { passive: true });
   }
 
   /** The cursor leaves the canvas: release any drag AND clear the hover,
    *  otherwise the label would stay stuck to the panel edge. */
-  private surSortie = (ev: PointerEvent): void => {
-    this.surRelache(ev);
-    this.survole = null;
-    this.masquerEtiquette();
+  private onPointerLeave = (ev: PointerEvent): void => {
+    this.onPointerUp(ev);
+    this.hovered = null;
+    this.hideLabel();
   };
 
-  private surInteraction = (): void => {
-    this.cameraPriseEnMain = true;
-    this.dernierGesteMs = performance.now();
+  private onInteraction = (): void => {
+    this.cameraTaken = true;
+    this.lastGestureMs = performance.now();
     this.opts.onInteract();
   };
 
   /** Returns the node under the pointer, or null. A raycast on an
    *  `InstancedMesh` provides `instanceId`, which is the index in our array. */
-  private noeudSous(ev: PointerEvent): SceneNode | null {
+  private nodeUnder(ev: PointerEvent): SceneNode | null {
     const r = this.renderer.domElement.getBoundingClientRect();
-    this.pointeur.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
-    this.pointeur.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
-    this.rayon.setFromCamera(this.pointeur, this.camera);
-    const touches = this.rayon.intersectObject(this.noeuds, false);
-    const premier = touches[0];
-    if (!premier || premier.instanceId == null) return null;
-    return this.opts.nodes[premier.instanceId] ?? null;
+    this.pointer.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
+    this.pointer.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const hits = this.raycaster.intersectObject(this.nodeMesh, false);
+    const first = hits[0];
+    if (!first || first.instanceId == null) return null;
+    return this.opts.nodes[first.instanceId] ?? null;
   }
 
-  private surDeplacement = (ev: PointerEvent): void => {
-    if (this.appuiEn) {
-      const d = Math.hypot(ev.clientX - this.appuiEn.x, ev.clientY - this.appuiEn.y);
+  private onPointerMove = (ev: PointerEvent): void => {
+    if (this.pressedAt) {
+      const d = Math.hypot(ev.clientX - this.pressedAt.x, ev.clientY - this.pressedAt.y);
       // 4 px of tolerance: even a clean click always moves a little.
-      if (d > 4) this.aGlisse = true;
+      if (d > 4) this.hasMoved = true;
       // Button held = gesture in progress: keep the full frame rate.
-      this.dernierGesteMs = performance.now();
+      this.lastGestureMs = performance.now();
     }
-    if (this.tire) {
-      this.deplacerTire(ev);
+    if (this.dragged) {
+      this.moveDragged(ev);
       return;
     }
     // During an orbit hovering means nothing, and the raycast would cost 496
     // instance tests on every mouse move, for nothing.
-    if (this.appuiEn) return;
-    const n = this.noeudSous(ev);
-    if (n !== this.survole) {
-      this.survole = n;
+    if (this.pressedAt) return;
+    const n = this.nodeUnder(ev);
+    if (n !== this.hovered) {
+      this.hovered = n;
       this.renderer.domElement.style.cursor = n ? 'pointer' : '';
       // New node = the count restarts. Crossing the graph therefore shows no
       // label until the pointer stops on one of them.
-      this.masquerEtiquette();
+      this.hideLabel();
       if (n) {
         const x = ev.clientX, y = ev.clientY;
-        this.minuterieEtiquette = setTimeout(() => {
-          this.minuterieEtiquette = null;
-          if (this.survole !== n || this.detruit) return;
-          this.etiquette.textContent = n.title;
-          this.etiquette.style.display = 'block';
-          this.placerEtiquetteEn(x, y);
-        }, DELAI_ETIQUETTE_MS);
+        this.labelTimer = setTimeout(() => {
+          this.labelTimer = null;
+          if (this.hovered !== n || this.destroyed) return;
+          this.label.textContent = n.title;
+          this.label.style.display = 'block';
+          this.placeLabelAt(x, y);
+        }, LABEL_DELAY_MS);
       }
     }
     // Once shown, the label follows the cursor without rearming the delay.
-    if (this.etiquette.style.display === 'block') this.placerEtiquette(ev);
+    if (this.label.style.display === 'block') this.placeLabel(ev);
   };
 
-  private masquerEtiquette(): void {
-    if (this.minuterieEtiquette) {
-      clearTimeout(this.minuterieEtiquette);
-      this.minuterieEtiquette = null;
+  private hideLabel(): void {
+    if (this.labelTimer) {
+      clearTimeout(this.labelTimer);
+      this.labelTimer = null;
     }
-    this.etiquette.style.display = 'none';
+    this.label.style.display = 'none';
   }
 
   /** Sticks the label to the cursor, flipping it to the left or above when it
    *  would overflow the panel — otherwise it would be cut near the edges. */
-  private placerEtiquette(ev: PointerEvent): void {
-    this.placerEtiquetteEn(ev.clientX, ev.clientY);
+  private placeLabel(ev: PointerEvent): void {
+    this.placeLabelAt(ev.clientX, ev.clientY);
   }
 
-  private placerEtiquetteEn(clientX: number, clientY: number): void {
+  private placeLabelAt(clientX: number, clientY: number): void {
     const r = this.renderer.domElement.getBoundingClientRect();
     let x = clientX - r.left + 12;
     let y = clientY - r.top + 12;
-    const l = this.etiquette.offsetWidth;
-    const h = this.etiquette.offsetHeight;
+    const l = this.label.offsetWidth;
+    const h = this.label.offsetHeight;
     if (x + l > r.width) x = Math.max(0, clientX - r.left - l - 12);
     if (y + h > r.height) y = Math.max(0, clientY - r.top - h - 12);
-    this.etiquette.style.left = `${x}px`;
-    this.etiquette.style.top = `${y}px`;
+    this.label.style.left = `${x}px`;
+    this.label.style.top = `${y}px`;
   }
 
-  private surAppui = (ev: PointerEvent): void => {
-    this.surInteraction();
-    this.appuiEn = { x: ev.clientX, y: ev.clientY };
-    this.aGlisse = false;
-    const n = this.noeudSous(ev);
+  private onPointerDown = (ev: PointerEvent): void => {
+    this.onInteraction();
+    this.pressedAt = { x: ev.clientX, y: ev.clientY };
+    this.hasMoved = false;
+    const n = this.nodeUnder(ev);
     if (!n) return;
     // A press on a node starts a drag; the controls are disabled so the camera
     // does not move along with the node.
-    this.tire = n;
+    this.dragged = n;
     this.controls.enabled = false;
-    this.profondeurTire = new Vector3(n.x ?? 0, n.y ?? 0, n.z ?? 0)
+    this.dragDepth = new Vector3(n.x ?? 0, n.y ?? 0, n.z ?? 0)
       .project(this.camera).z;
     this.renderer.domElement.setPointerCapture(ev.pointerId);
   };
 
-  private deplacerTire(ev: PointerEvent): void {
-    const n = this.tire;
+  private moveDragged(ev: PointerEvent): void {
+    const n = this.dragged;
     if (!n) return;
     const r = this.renderer.domElement.getBoundingClientRect();
     // Unproject the pointer at the screen depth the node had when pressed: the
@@ -524,7 +524,7 @@ export class VaultGraphScene {
     const p = new Vector3(
       ((ev.clientX - r.left) / r.width) * 2 - 1,
       -((ev.clientY - r.top) / r.height) * 2 + 1,
-      this.profondeurTire,
+      this.dragDepth,
     ).unproject(this.camera);
     n.fx = p.x;
     n.fy = p.y;
@@ -532,38 +532,38 @@ export class VaultGraphScene {
     // A moved node must pull its neighbours: reheat the simulation.
     this.simulation.alpha(0.3);
     this.simulationActive = true;
-    this.pasEcoules = 0;
-    this.positionsSales = true;
+    this.elapsedSteps = 0;
+    this.positionsDirty = true;
   }
 
-  private surRelache = (ev: PointerEvent): void => {
+  private onPointerUp = (ev: PointerEvent): void => {
     // Release without drag on a node = click: open the note. Handled here
     // rather than with a separate `click` listener, which would also fire at
     // the end of a drag and open the note that was just moved.
-    if (this.appuiEn && !this.aGlisse) {
-      const n = this.noeudSous(ev);
+    if (this.pressedAt && !this.hasMoved) {
+      const n = this.nodeUnder(ev);
       if (n) {
         // The modal covers the canvas: without this the label would stay frozen
         // behind it, since `pointerleave` never happens.
-        this.masquerEtiquette();
+        this.hideLabel();
         this.opts.onClick(n);
       }
     }
-    if (this.appuiEn) {
+    if (this.pressedAt) {
       // The full-rate tail runs from the RELEASE, not from the last move: the
       // controls still have a few frames to play.
-      this.dernierGesteMs = performance.now();
+      this.lastGestureMs = performance.now();
     }
-    this.appuiEn = null;
+    this.pressedAt = null;
 
-    if (!this.tire) return;
-    const n = this.tire;
+    if (!this.dragged) return;
+    const n = this.dragged;
     // Release the constraint: the node returns to its place under the forces
     // instead of staying pinned where it was dropped.
     n.fx = null;
     n.fy = null;
     n.fz = null;
-    this.tire = null;
+    this.dragged = null;
     this.controls.enabled = true;
     try {
       this.renderer.domElement.releasePointerCapture(ev.pointerId);
@@ -575,18 +575,18 @@ export class VaultGraphScene {
   // -------------------------------------------------------------------------
   // Driven from the component
   // -------------------------------------------------------------------------
-  redimensionner(width: number, height: number): void {
-    if (this.detruit || width <= 0 || height <= 0) return;
+  resize(width: number, height: number): void {
+    if (this.destroyed || width <= 0 || height <= 0) return;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
     this.controls.handleResize();
     // Framing depends on the aspect ratio: the HUD panel is resizable, and a
     // cloud framed to the pixel would overflow otherwise.
-    if (!this.cameraPriseEnMain) this.cadrer();
+    if (!this.cameraTaken) this.frameCloud();
   }
 
-  definirRotation(active: boolean): void {
+  setRotation(active: boolean): void {
     this.rotationActive = active;
   }
 
@@ -595,22 +595,22 @@ export class VaultGraphScene {
    *  The HUD panel is almost square and can become taller than wide: so the
    *  tighter of the two half field-of-view angles is used. Settling for the
    *  vertical field let the cloud overflow sideways. */
-  cadrer(marge = 1.3): void {
+  frameCloud(margin = 1.3): void {
     let max = 0;
     for (const n of this.opts.nodes) {
       const d = Math.sqrt((n.x ?? 0) ** 2 + (n.y ?? 0) ** 2 + (n.z ?? 0) ** 2);
       if (d > max) max = d;
     }
     if (max <= 0) return;
-    const demiVertical = (this.camera.fov * Math.PI) / 360;
-    const demiHorizontal = Math.atan(Math.tan(demiVertical) * this.camera.aspect);
-    const demi = Math.min(demiVertical, demiHorizontal);
-    const distance = (max * marge) / Math.sin(demi);
+    const halfVertical = (this.camera.fov * Math.PI) / 360;
+    const halfHorizontal = Math.atan(Math.tan(halfVertical) * this.camera.aspect);
+    const half = Math.min(halfVertical, halfHorizontal);
+    const distance = (max * margin) / Math.sin(half);
     const p = this.camera.position;
-    const actuelle = p.length() || 1;
-    p.multiplyScalar(distance / actuelle);
+    const current = p.length() || 1;
+    p.multiplyScalar(distance / current);
     this.camera.lookAt(0, 0, 0);
-    this.distanceCadrage = distance;
+    this.framingDistance = distance;
   }
 
   /** True when the scene must render at full vsync rather than RENDER_FPS:
@@ -620,10 +620,10 @@ export class VaultGraphScene {
    *  arrive at regular intervals (dropping the rate between two `pointermove`
    *  would make the orbit stutter), and `TrackballControls` needs a few frames
    *  after release to settle. */
-  get enMouvement(): boolean {
+  get isMoving(): boolean {
     return this.simulationActive
-      || this.tire !== null
-      || performance.now() - this.dernierGesteMs < TRAINE_GESTE_MS;
+      || this.dragged !== null
+      || performance.now() - this.lastGestureMs < GESTURE_TAIL_MS;
   }
 
   /** Cruising frame rate to aim for, in frames per second.
@@ -639,12 +639,12 @@ export class VaultGraphScene {
    *
    *  The cost grows linearly (~0.7% of a core per frame/second), but it is
    *  only paid when zoomed in, that is when someone really looks at the graph. */
-  get cadenceSouhaitee(): number {
-    const base = this.opts.cadenceBase;
-    if (!this.distanceCadrage) return base;
-    const distance = this.camera.position.length() || this.distanceCadrage;
-    const zoom = this.distanceCadrage / distance;
-    return Math.min(CADENCE_MAX, Math.max(base, base * zoom));
+  get targetFrameRate(): number {
+    const base = this.opts.baseFrameRate;
+    if (!this.framingDistance) return base;
+    const distance = this.camera.position.length() || this.framingDistance;
+    const zoom = this.framingDistance / distance;
+    return Math.min(MAX_FRAME_RATE, Math.max(base, base * zoom));
   }
 
   /** Restricts the display to the given ids — `null` lifts the filter.
@@ -655,14 +655,14 @@ export class VaultGraphScene {
    *  graph that rearranges at every typed letter), and the draw call count
    *  stays at two. A node at scale 0 has a zero radius: the raycast no longer
    *  reaches it, so it also becomes unhoverable and unclickable, for free. */
-  definirFiltre(ids: Set<string> | null): void {
-    this.filtre = ids;
-    this.positionsSales = true;
-    this.masquerEtiquette();
+  setFilter(ids: Set<string> | null): void {
+    this.filter = ids;
+    this.positionsDirty = true;
+    this.hideLabel();
   }
 
   private visible(n: SceneNode): boolean {
-    return this.filtre === null || this.filtre.has(n.id);
+    return this.filter === null || this.filter.has(n.id);
   }
 
   /** Recolours the scene without rebuilding anything.
@@ -670,43 +670,43 @@ export class VaultGraphScene {
    *  The theme changes colours, never geometry: rebuilding the scene would
    *  replay the layout for a mere light/dark switch. So the instances' colour
    *  attribute and the links' material are rewritten instead. */
-  definirTheme(theme: {
+  setTheme(theme: {
     nodeColor: (node: SceneNode) => string;
     linkColor: string;
     linkOpacity: number;
   }): void {
-    const couleur = new Color();
+    const color = new Color();
     this.opts.nodes.forEach((n, i) => {
-      couleur.set(theme.nodeColor(n));
-      this.noeuds.setColorAt(i, couleur);
+      color.set(theme.nodeColor(n));
+      this.nodeMesh.setColorAt(i, color);
     });
-    if (this.noeuds.instanceColor) this.noeuds.instanceColor.needsUpdate = true;
+    if (this.nodeMesh.instanceColor) this.nodeMesh.instanceColor.needsUpdate = true;
 
-    const mat = this.liens.material as LineBasicMaterial;
+    const mat = this.linkLines.material as LineBasicMaterial;
     mat.color.set(theme.linkColor);
     mat.opacity = theme.linkOpacity;
     mat.needsUpdate = true;
   }
 
-  detruire(): void {
-    if (this.detruit) return;
-    this.detruit = true;
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
 
     const el = this.renderer.domElement;
-    el.removeEventListener('pointermove', this.surDeplacement);
-    el.removeEventListener('pointerdown', this.surAppui);
-    el.removeEventListener('pointerup', this.surRelache);
-    el.removeEventListener('pointerleave', this.surSortie);
-    el.removeEventListener('wheel', this.surInteraction);
+    el.removeEventListener('pointermove', this.onPointerMove);
+    el.removeEventListener('pointerdown', this.onPointerDown);
+    el.removeEventListener('pointerup', this.onPointerUp);
+    el.removeEventListener('pointerleave', this.onPointerLeave);
+    el.removeEventListener('wheel', this.onInteraction);
 
-    if (this.minuterieEtiquette) clearTimeout(this.minuterieEtiquette);
+    if (this.labelTimer) clearTimeout(this.labelTimer);
     this.simulation.stop();
     this.controls.dispose();
 
-    this.noeuds.geometry.dispose();
-    (this.noeuds.material as MeshLambertMaterial).dispose();
-    this.geometrieLiens.dispose();
-    (this.liens.material as LineBasicMaterial).dispose();
+    this.nodeMesh.geometry.dispose();
+    (this.nodeMesh.material as MeshLambertMaterial).dispose();
+    this.linkGeometry.dispose();
+    (this.linkLines.material as LineBasicMaterial).dispose();
 
     // The container is unmounted/remounted on every state change of the
     // component. Without an explicit release each pass would leave a WebGL
@@ -715,6 +715,6 @@ export class VaultGraphScene {
     this.renderer.dispose();
     this.renderer.forceContextLoss();
     el.remove();
-    this.etiquette.remove();
+    this.label.remove();
   }
 }

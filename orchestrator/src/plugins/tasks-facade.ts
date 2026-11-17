@@ -58,7 +58,7 @@ import {
   canonicalizePermissionMode, RESTRICTED, taskOverrideRefusal,
 } from '../users/privileged-overrides.js';
 import { scopedDb } from '../users/scoped-db.js';
-import { closeTask, mergedShaRefusal } from '../plugins-bundled/kanban/routes.js';
+import { closeTask, codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal, mergedShaRefusal } from '../plugins-bundled/kanban/routes.js';
 import {
   backendRefusal, isPlausibleGitRef, pipelineRefusal, planGroupRefusal, projectRefusal,
 } from '../plugins-bundled/kanban/task-field-guards.js';
@@ -516,6 +516,10 @@ export function tasksFor(scope: TaskCallerScope): ScopedTasks {
       }
       const shaRefusal = input.mergedSha ? mergedShaRefusal(task, input.mergedSha) : null;
       if (shaRefusal) throw new PluginTaskError('invalid', shaRefusal);
+      const mergeRefusal = mergeCloseRefusal(task, effectiveMergeSha(task, input.mergedSha, input.comment));
+      if (mergeRefusal) throw new PluginTaskError('conflict', mergeRefusal, 'merge_not_proven');
+      const codeRefusal = codeCloseRefusal(task);
+      if (codeRefusal) throw new PluginTaskError('conflict', codeRefusal, 'branch_unreviewable');
       return asPlugin(() => {
         // Before the status, like the routes: the merge guard refuses DONE without it.
         if (input.mergedSha) {

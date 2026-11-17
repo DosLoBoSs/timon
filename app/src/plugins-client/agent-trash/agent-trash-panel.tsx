@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { formatDateTime } from '@/lib/intl';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
@@ -23,7 +24,8 @@ function when(ms: number): string {
 
 async function errorOf(r: Response): Promise<string> {
   const body = await r.json().catch(() => ({})) as { error?: string; reason?: string };
-  return body.reason ?? body.error ?? String(r.status);
+  // A known code reads translated; otherwise the daemon's `reason` is the more precise sentence.
+  return apiErrorMessage({ ...body, error: body.reason ?? body.error }, { status: r.status });
 }
 
 /**

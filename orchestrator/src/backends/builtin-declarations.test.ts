@@ -5,7 +5,7 @@
 import { strict as assert } from 'node:assert';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-builtin-declarations-'));
@@ -23,6 +23,8 @@ const { INSTALLABLE_BACKENDS } = await import('../host/machine.js');
 const { BINARIES, BINARY_NAMES } = await import('../doctor.js');
 
 const HOME = '/home/tester';
+/** A folder of the fake home, spelled as the policy spells it: with the host's path rules. */
+const inHome = (dir: string) => resolve(HOME, dir);
 const cfg = () => TimonConfigSchema.parse({});
 
 test('every declaration of the product is one a plugin could write', () => {
@@ -73,23 +75,23 @@ test('a plugin cannot narrow what counts as a build of a desktop app: that is th
 test('the sign-in folder of every provider is masked from the others (TODO #402)', () => {
   const { deny } = resolveIsolation(cfg(), { home: HOME, backend: 'claude' });
   for (const dir of ['.copilot', '.config/opencode', '.local/share/opencode', '.hermes', '.gemini/antigravity-cli', '.pi', '.codex', '.grok', '.kimi', '.ollama']) {
-    assert.ok(deny.includes(`${HOME}/${dir}`), `~/${dir} must be masked from a claude mission`);
+    assert.ok(deny.includes(inHome(dir)), `~/${dir} must be masked from a claude mission`);
     assert.ok(DEFAULT_DENY_HOME_DIRS.includes(dir), dir);
   }
 });
 
 test('Antigravity masks its own folder only: the sign-in of the ACP registry\'s Antigravity agent stays visible to it', () => {
   const { deny } = resolveIsolation(cfg(), { home: HOME, backend: 'acp-antigravity-acp' });
-  assert.ok(deny.includes(`${HOME}/.gemini/antigravity-cli`));
-  assert.ok(!deny.includes(`${HOME}/.gemini`), 'the whole `.gemini` would take `antigravity-acp` with it');
-  assert.ok(!deny.some((path) => path.startsWith(`${HOME}/.gemini/antigravity-acp`)));
+  assert.ok(deny.includes(inHome('.gemini/antigravity-cli')));
+  assert.ok(!deny.includes(inHome('.gemini')), 'the whole `.gemini` would take `antigravity-acp` with it');
+  assert.ok(!deny.some((path) => path.startsWith(inHome('.gemini/antigravity-acp'))));
 });
 
 test('a mission keeps the folders of its own provider, and only those', () => {
   for (const [backend, dirs] of [['opencode', ['.config/opencode', '.local/share/opencode']], ['copilot', ['.copilot']], ['hermes', ['.hermes']], ['antigravity', ['.gemini/antigravity-cli']], ['pi', ['.pi']]] as const) {
     const { deny } = resolveIsolation(cfg(), { home: HOME, backend });
-    for (const dir of dirs) assert.ok(!deny.includes(`${HOME}/${dir}`), `${backend} must keep ~/${dir}`);
-    assert.ok(deny.includes(`${HOME}/.claude`), `${backend} must not see ~/.claude`);
+    for (const dir of dirs) assert.ok(!deny.includes(inHome(dir)), `${backend} must keep ~/${dir}`);
+    assert.ok(deny.includes(inHome('.claude')), `${backend} must not see ~/.claude`);
   }
 });
 

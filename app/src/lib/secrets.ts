@@ -12,6 +12,8 @@
  * jsdom) can cover it.
  */
 
+import { compareText } from './intl';
+
 export type SecretMode = 'inject' | 'broker';
 
 /** `backend` is a reservation the daemon intersects with the others: the
@@ -515,7 +517,7 @@ export function buildUpdatePayload(editor: SecretEditor): SecretWritePayload {
 }
 
 export function sortSecrets(secrets: SecretSummary[]): SecretSummary[] {
-  return [...secrets].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  return [...secrets].sort((a, b) => compareText(a.name, b.name) || a.id.localeCompare(b.id));
 }
 
 /** Search box of the list: case-insensitive, over the name, the note, the mode

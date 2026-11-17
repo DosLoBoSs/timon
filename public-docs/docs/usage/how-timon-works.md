@@ -39,7 +39,7 @@ Three diagrams give the overall picture: what runs where, what happens when an a
 A `code` task chooses its pipeline when it is created ([Choose the pipeline](kanban.md#choose-the-pipeline)). With the default `full` pipeline, Timon chains the next stages itself:
 
 1. **code**: the coder works on its own branch, in a dedicated worktree, and closes the task.
-2. **review**: when the branch holds changes, a review task goes to the project's reviewer, who reads the diff and gives a verdict.
+2. **review**: when the branch holds changes, a review task goes to the project's reviewer, who reads the diff and gives a verdict. If the coder already merged the branch into its base, the review reads the coder's own commits instead.
 3. **Changes requested** send the work back to another code round, which is reviewed again: three code rounds at most, the first one included. When the third is still not approved, or when Timon cannot read the verdict, the task moves to **Blocked** and waits for your decision.
 4. **merge**: a **pass** verdict creates a merge task for the project's merger, which integrates the branch.
 5. **doc**: once the work is merged, a doc task records the change, if an agent of the project holds the librarian role.

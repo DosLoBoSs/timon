@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { packagedLauncher } from '../bin/cli-runtime.mjs';
 
 const linuxBin = join('/opt', 'Timon', 'resources', 'orchestrator', 'bin', 'timon');
@@ -32,6 +32,7 @@ test('the app runtime, a source checkout, Windows and a relaunch keep the curren
 
 test('the Node the package ships keeps the current process: the launcher would only start it again', () => {
   const always = () => true;
-  const shipped = join('/opt', 'Timon', 'resources', 'node', 'node'); // portability: simulated path
+  // A Linux path, read as one by the module whatever the host: `posix`, not the host's `join`.
+  const shipped = posix.join('/opt', 'Timon', 'resources', 'node', 'node'); // portability: simulated path
   assert.equal(packagedLauncher(linuxBin, { versions: node, env: {}, platform: 'linux', exists: always, execPath: shipped }), null);
 });

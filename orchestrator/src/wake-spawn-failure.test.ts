@@ -89,6 +89,12 @@ test('owner NULL + a Claude account that belongs to a user: bounded failures, on
     const alerts = dbApi.listAllInbox({ status: 'pending', limit: 500 })
       .filter((m) => m.from_agent === 'orchestrator' && m.payload.includes('Wake abandoned'));
     assert.equal(alerts.length - alertsBefore, 1, 'exactly one notification');
+    // The webview translates it from its code (TODO #1063).
+    const payload = alerts
+      .map((m) => JSON.parse(m.payload) as { code?: string; params?: Record<string, unknown> })
+      .find((p) => p.params?.agent === 'wsf-main');
+    assert.equal(payload?.code, 'wake_abandoned');
+    assert.equal(payload?.params?.ceiling, 3);
   } finally {
     stop();
   }

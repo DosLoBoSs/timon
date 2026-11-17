@@ -57,6 +57,7 @@ import {
 } from '../../users/skills-mcp-guard.js';
 import { AGENT_ICON_URL_PREFIX, isServedIconUrl, readAgentIcon } from '../../uploads.js';
 import { registerSkillAttachmentRoutes } from './skill-attachment-routes.js';
+import { checkReasoningEffort } from './reasoning-effort.js';
 import { migrateTrashedAgentSkills } from '../../agent-skills-migration.js';
 import { journalMissionSkillRead } from '../../skill-reads.js';
 import { listSkillFiles, readSkillFile, SkillFileError } from '../../skill-files.js';
@@ -142,6 +143,13 @@ const agentLookRequestSchema = z.object({
 }).strict();
 
 const ICON_URL_REFUSAL = 'icon_url must be a picture served by Timon (/api/uploads/…); upload it with PUT /api/agents/:name/avatar';
+
+/** One literal code per import failure: the locale guard reads each one, and the values predate `apiError`. */
+function skillImportErrorBody(err: SkillImportError): ReturnType<typeof apiError> {
+  if (err.code === 'too_large') return apiError('too_large', err.message);
+  if (err.code === 'invalid_id') return apiError('invalid_id', err.message);
+  return apiError('unreadable', err.message);
+}
 
 const RECENT_DONE_MS = 2 * 60 * 1000;
 /** Extended window for manually started conversations: their pill is the only
@@ -449,11 +457,11 @@ export function registerRoutes(app: express.IRouter): void {
   app.post('/api/agent-roles', (req, res) => {
     if (!authorizeRoles(req, res, true)) return;
     const parsed = customRoleSchema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: 'Invalid role' }); return; }
+    if (!parsed.success) { res.status(400).json(apiError('agent_role_invalid', 'Invalid role')); return; }
     try {
       res.status(201).json(createRole(parsed.data));
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_role_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -462,12 +470,12 @@ export function registerRoutes(app: express.IRouter): void {
     try {
       const schema = getRole(req.params.id)?.builtin ? builtinPromptSchema : customRoleSchema.partial();
       const parsed = schema.safeParse(req.body);
-      if (!parsed.success) { res.status(400).json({ error: 'Invalid role update' }); return; }
+      if (!parsed.success) { res.status(400).json(apiError('agent_role_invalid', 'Invalid role update')); return; }
       res.json('reset_directives' in parsed.data
         ? resetRoleDirectives(req.params.id)
         : updateRole(req.params.id, parsed.data));
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_role_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -477,7 +485,7 @@ export function registerRoutes(app: express.IRouter): void {
       deleteRole(req.params.id);
       res.json({ ok: true });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_role_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -505,7 +513,7 @@ export function registerRoutes(app: express.IRouter): void {
     if (rejectIfDenied(req, res, 'agents:manage')) return;
     const parsed = TeamBody.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: 'name required (1-160 chars), optional color' });
+      res.status(400).json(apiError('team_invalid', 'name required (1-160 chars), optional color'));
       return;
     }
     const viewer = viewerFromRequest(req);
@@ -519,7 +527,7 @@ export function registerRoutes(app: express.IRouter): void {
     if (rejectIfDenied(req, res, 'agents:manage')) return;
     const parsed = TeamPatch.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: 'expected name and/or color' });
+      res.status(400).json(apiError('team_update_invalid', 'expected name and/or color'));
       return;
     }
     const next = dbApi.updateTeam(req.params.id, {
@@ -556,7 +564,7 @@ export function registerRoutes(app: express.IRouter): void {
     if (rejectIfDenied(req, res, 'agents:manage')) return;
     const parsed = MemberBody.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: 'agent required' });
+      res.status(400).json(apiError('agent_required', 'agent required'));
       return;
     }
     if (!dbApi.getTeam(req.params.id, viewerFromRequest(req))) {
@@ -566,7 +574,7 @@ export function registerRoutes(app: express.IRouter): void {
     try {
       res.json(patchAgentConfig(parsed.data.agent, { team: req.params.id }));
     } catch (err) {
-      res.status(404).json({ error: (err as Error).message });
+      res.status(404).json(apiError('agent_update_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -579,7 +587,7 @@ export function registerRoutes(app: express.IRouter): void {
     try {
       res.json(patchAgentConfig(req.params.name, { team: null }));
     } catch (err) {
-      res.status(404).json({ error: (err as Error).message });
+      res.status(404).json(apiError('agent_update_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -749,7 +757,7 @@ export function registerRoutes(app: express.IRouter): void {
     const id = approvalIdSchema.safeParse(req.params.id);
     // Someone else's rule answers like a missing one: its existence is theirs.
     if (!id.success || !revokeApproval(id.data, name, who.owner)) {
-      res.status(404).json({ error: 'approval not found' });
+      res.status(404).json(apiError('approval_not_found', 'approval not found'));
       return;
     }
     auditRequest(req, 'approval.revoke', `${name} ${id.data}`);
@@ -774,20 +782,20 @@ export function registerRoutes(app: express.IRouter): void {
     }
     const value = (req.body ?? {}) as { orchestrates?: unknown };
     if (!('orchestrates' in value)) {
-      res.status(400).json({ error: 'orchestrates required: a list of agent names, "*", or null' });
+      res.status(400).json(apiError('orchestrates_invalid', 'orchestrates required: a list of agent names, "*", or null'));
       return;
     }
     let next: string[] | '*' | undefined;
     if (value.orchestrates !== null) {
       const parsed = orchestratesSchema.safeParse(value.orchestrates);
       if (!parsed.success) {
-        res.status(400).json({ error: 'orchestrates must be a list of agent names, "*", or null' });
+        res.status(400).json(apiError('orchestrates_invalid', 'orchestrates must be a list of agent names, "*", or null'));
         return;
       }
       if (parsed.data !== '*') {
         const unknown = parsed.data.filter((n) => !getAgent(canonicalAgentName(n)));
         if (unknown.length) {
-          res.status(400).json({ error: `orchestrates: unknown agent(s) ${unknown.join(', ')}` });
+          res.status(400).json(apiError('orchestrates_unknown_agents', `orchestrates: unknown agent(s) ${unknown.join(', ')}`, { agents: unknown.join(', ') }));
           return;
         }
         next = [...new Set(parsed.data.map((n) => canonicalAgentName(n)))].filter((n) => n !== name);
@@ -808,7 +816,7 @@ export function registerRoutes(app: express.IRouter): void {
     if (!req.auth) { res.status(401).json({ error: 'unauthorized' }); return; }
     if (rejectUnlessAny(req, res, AGENT_READ)) return;
     const query = injectionsQuery.safeParse(req.query);
-    if (!query.success) { res.status(400).json({ error: 'Invalid query' }); return; }
+    if (!query.success) { res.status(400).json(apiError('invalid_query', 'Invalid query')); return; }
     if (!getAgent(req.params.name)) { res.status(404).json(apiError('agent_not_found', 'agent not found')); return; }
     try {
       // A mission of THIS agent only, and only one the caller may see.
@@ -818,7 +826,7 @@ export function registerRoutes(app: express.IRouter): void {
       const overrides = mission && mission.agent_name.toLowerCase() === req.params.name.toLowerCase() ? mission : null;
       res.json(buildInjections(req.params.name, query.data.mission_text ?? '', overrides));
     } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json(apiError('injections_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -845,7 +853,7 @@ export function registerRoutes(app: express.IRouter): void {
       writeGlobalInstructions(text);
       res.json({ ok: true, chars: text.length });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('global_instructions_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -859,13 +867,13 @@ export function registerRoutes(app: express.IRouter): void {
     const raw = body.newName ?? body.name;
     const newName = typeof raw === 'string' ? normalizeAgentName(raw.trim()) : '';
     if (!newName) {
-      res.status(400).json({ error: 'newName required' });
+      res.status(400).json(apiError('new_name_required', 'newName required'));
       return;
     }
     try {
       const r = renameAgentKeepingSeat(req.params.name, newName);
       if (!r.ok) {
-        res.status(409).json({ error: r.error });
+        res.status(409).json(apiError('agent_rename_refused', r.error ?? 'rename refused', { detail: r.error ?? 'rename refused' }));
         return;
       }
       // Same rule as the triggers API: another account's trigger stays unnamed
@@ -880,7 +888,7 @@ export function registerRoutes(app: express.IRouter): void {
         ...(toCheck.length ? { triggers_to_check: toCheck.map((t) => ({ id: t.id, name: t.name, reason })) } : {}),
       });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_rename_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -892,7 +900,7 @@ export function registerRoutes(app: express.IRouter): void {
       config?: import('../../agent.js').AgentConfig;
     };
     if (!body.name || typeof body.name !== 'string' || typeof body.system_prompt !== 'string') {
-      res.status(400).json({ error: 'name and system_prompt required' });
+      res.status(400).json(apiError('agent_fields_required', 'name and system_prompt required'));
       return;
     }
     body.name = normalizeAgentName(body.name);
@@ -907,7 +915,7 @@ export function registerRoutes(app: express.IRouter): void {
     }
     // The agent editor saves through here: same rule as the config PATCH.
     if (body.config && 'icon_url' in body.config && !agentIconUrlSchema.safeParse(body.config.icon_url).success) {
-      res.status(400).json({ error: ICON_URL_REFUSAL });
+      res.status(400).json(apiError('agent_icon_url_refused', ICON_URL_REFUSAL));
       return;
     }
     try {
@@ -994,7 +1002,7 @@ export function registerRoutes(app: express.IRouter): void {
       const killed = killRunningForAgent(body.name);
       res.json({ ...agent, _killed: killed });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_save_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1014,7 +1022,7 @@ export function registerRoutes(app: express.IRouter): void {
       trace_id?: string;
     };
     if (!body.mission || !body.system_prompt) {
-      res.status(400).json({ error: 'mission and system_prompt required' });
+      res.status(400).json(apiError('ephemeral_fields_required', 'mission and system_prompt required'));
       return;
     }
     try {
@@ -1060,12 +1068,12 @@ export function registerRoutes(app: express.IRouter): void {
     }
     const parsed = z.object({ name: z.string().min(1).max(128) }).strict().safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: 'name required' });
+      res.status(400).json(apiError('name_required', 'name required'));
       return;
     }
     const out = chooseMainAgent(parsed.data.name);
     if (!out.ok) {
-      res.status(400).json({ error: out.error });
+      res.status(400).json(apiError('main_agent_refused', out.error, { detail: out.error }));
       return;
     }
     res.json({ ok: true, main: out.name });
@@ -1080,7 +1088,7 @@ export function registerRoutes(app: express.IRouter): void {
       // Inside the try: an invalid name throws from the seat lookup, a 400.
       const seatRefusal = mainSeatRemovalRefusal(req.params.name);
       if (seatRefusal) {
-        res.status(409).json({ error: seatRefusal });
+        res.status(409).json(apiError('agent_delete_refused', seatRefusal, { detail: seatRefusal }));
         return;
       }
       const ok = deleteAgent(req.params.name, { deletedBy: deleterLabel(req) });
@@ -1092,7 +1100,7 @@ export function registerRoutes(app: express.IRouter): void {
       const trashed = listAgentTrash().find((e) => e.name === req.params.name) ?? null;
       res.json({ ok: true, trash_id: trashed?.id ?? null });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_delete_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1120,13 +1128,13 @@ export function registerRoutes(app: express.IRouter): void {
     try {
       const out = restoreAgent(req.params.id);
       if (!out.ok) {
-        res.status(out.code === 'conflict' ? 409 : 404).json({ error: out.error });
+        res.status(out.code === 'conflict' ? 409 : 404).json(apiError('agent_restore_refused', out.error, { detail: out.error }));
         return;
       }
       auditRequest(req, 'agent.trash.restore', `${out.entry.id} → ${out.entry.name}`);
       res.json({ ok: true, name: out.entry.name, agent: getAgent(out.entry.name) });
     } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json(apiError('agent_restore_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1152,7 +1160,7 @@ export function registerRoutes(app: express.IRouter): void {
       auditRequest(req, 'agent.trash.purge', req.params.id);
       res.json({ ok: true });
     } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json(apiError('agent_purge_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1168,7 +1176,7 @@ export function registerRoutes(app: express.IRouter): void {
         'skills', 'mcp_servers', 'excluded_mcp_servers', 'project',
         'emoji', 'color', 'icon_url', 'look', 'avatar',
         'role', 'directives', 'global_context', 'browser_profile_id',
-        'team', 'reports_to', 'memory_scope',
+        'team', 'reports_to', 'memory_scope', 'reasoningEffort',
       ];
       const patch: Record<string, unknown> = {};
       for (const k of allowed) {
@@ -1177,8 +1185,17 @@ export function registerRoutes(app: express.IRouter): void {
       // `timon agent set-scope` and agent_set_scope send this; it used to be
       // dropped here, so the scope never changed.
       if ('memory_scope' in patch && !['NONE', 'SESSION', 'AGENT', 'GLOBAL'].includes(patch.memory_scope as string)) {
-        res.status(400).json({ error: 'memory_scope must be NONE, SESSION, AGENT or GLOBAL' });
+        res.status(400).json(apiError('memory_scope_invalid', 'memory_scope must be NONE, SESSION, AGENT or GLOBAL'));
         return;
+      }
+      // Checked against the pair the agent runs on once patched: a level the
+      // model does not know would reach its CLI and fail the next spawn.
+      if ('reasoningEffort' in patch) {
+        const effort = checkReasoningEffort(patch.reasoningEffort, patch, (() => {
+          try { return loadConfig(req.params.name); } catch { return null; }
+        })());
+        if (!effort.ok) { res.status(400).json(apiError('reasoning_effort_refused', effort.error, { detail: effort.error })); return; }
+        patch.reasoningEffort = effort.value;
       }
       if ('reports_to' in patch) {
         patch.reports_to = checkReportsTo(req.params.name, patch.reports_to);
@@ -1187,7 +1204,7 @@ export function registerRoutes(app: express.IRouter): void {
       }
       if ('icon_url' in patch) {
         const icon = agentIconUrlSchema.safeParse(patch.icon_url);
-        if (!icon.success) { res.status(400).json({ error: ICON_URL_REFUSAL }); return; }
+        if (!icon.success) { res.status(400).json(apiError('agent_icon_url_refused', ICON_URL_REFUSAL)); return; }
       }
       if ('cwd' in patch) validateCwd(patch.cwd);
       if ('browser_profile_id' in patch || 'project' in patch || 'cwd' in patch) validateBrowserAssignment(req, req.params.name, { ...loadConfig(req.params.name), ...patch });
@@ -1233,7 +1250,7 @@ export function registerRoutes(app: express.IRouter): void {
       const respawnTriggers = [
         'skills', 'mcp_servers', 'excluded_mcp_servers',
         'allowed_tools', 'disallowed_tools', 'model', 'permission_mode',
-        'role', 'directives', 'browser_profile_id', 'memory_scope',
+        'role', 'directives', 'browser_profile_id', 'memory_scope', 'reasoningEffort',
       ] as const;
       const needsRespawn = respawnTriggers.some((k) => k in patch);
       let killed = 0;
@@ -1242,9 +1259,9 @@ export function registerRoutes(app: express.IRouter): void {
     } catch (err) {
       const msg = (err as Error).message;
       if (msg.startsWith('agent not found')) {
-        res.status(404).json({ error: msg });
+        res.status(404).json(apiError('agent_not_found', msg));
       } else {
-        res.status(400).json({ error: msg });
+        res.status(400).json(apiError('agent_update_refused', msg, { detail: msg }));
       }
     }
   });
@@ -1255,7 +1272,7 @@ export function registerRoutes(app: express.IRouter): void {
     if (rejectIfDenied(req, res, 'agents:manage')) return;
     const parsed = agentAvatarSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: 'expected { clear: true } or { dataUrl } or { mime, data } (png, jpeg, webp, gif)' });
+      res.status(400).json(apiError('agent_avatar_body_invalid', 'expected { clear: true } or { dataUrl } or { mime, data } (png, jpeg, webp, gif)'));
       return;
     }
     try {
@@ -1266,7 +1283,7 @@ export function registerRoutes(app: express.IRouter): void {
       }
       res.json({ ok: true, name: done.name, icon_url: done.icon_url });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('avatar_invalid', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1289,12 +1306,12 @@ export function registerRoutes(app: express.IRouter): void {
     }
     const parsed = agentLookRequestSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: 'expected { look: { shape, color, eyes, acc? }, use_mascot?: boolean, agent?: string } (look or use_mascot: true)' });
+      res.status(400).json(apiError('agent_look_invalid', 'expected { look: { shape, color, eyes, acc? }, use_mascot?: boolean, agent?: string } (look or use_mascot: true)'));
       return;
     }
     const { look, use_mascot: useMascot } = parsed.data;
     if (look === undefined && useMascot !== true) {
-      res.status(400).json({ error: 'nothing to change: pass look, or use_mascot: true' });
+      res.status(400).json(apiError('agent_look_empty', 'nothing to change: pass look, or use_mascot: true'));
       return;
     }
     const target = parsed.data.agent ?? caller;
@@ -1327,7 +1344,7 @@ export function registerRoutes(app: express.IRouter): void {
       auditRequest(req, 'agent.look', `${caller} → ${name}`);
       res.json({ ok: true, name: next.name, look: next.look, avatar: next.avatar });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_update_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1340,7 +1357,8 @@ export function registerRoutes(app: express.IRouter): void {
       res.send(bytes);
     } catch (err) {
       const msg = (err as Error).message;
-      res.status(msg === 'not found' ? 404 : 400).json({ error: msg });
+      if (msg === 'not found') res.status(404).json(apiError('not_found', msg));
+      else res.status(400).json(apiError('invalid_detail', msg, { detail: msg }));
     }
   });
 
@@ -1349,7 +1367,7 @@ export function registerRoutes(app: express.IRouter): void {
     const id = String(req.query.id ?? '');
     const depth = Math.max(1, Math.min(Number(req.query.depth ?? 3), 10));
     if (!['mission', 'task', 'routine'].includes(root) || !id) {
-      res.status(400).json({ error: 'root (mission|task|routine) and id required' });
+      res.status(400).json(apiError('graph_query_invalid', 'root (mission|task|routine) and id required'));
       return;
     }
     const scope = scopedDb(viewerFromRequest(req));
@@ -1518,7 +1536,7 @@ export function registerRoutes(app: express.IRouter): void {
       const cwd = typeof req.query.cwd === 'string' && req.query.cwd ? req.query.cwd : undefined;
       const origin = skillOriginQuery.safeParse({ source: req.query.source, format: req.query.format });
       if (!origin.success) {
-        res.status(400).json({ error: 'invalid source or format' });
+        res.status(400).json(apiError('skill_origin_invalid', 'invalid source or format'));
         return;
       }
       const entry = resolveSkill(req.params.id, { cwd, origin: origin.data.source ? { source: origin.data.source, format: origin.data.format } : undefined });
@@ -1531,7 +1549,7 @@ export function registerRoutes(app: express.IRouter): void {
       // The files `skill_get` names after the body: only a Timon skill is read by a mission.
       res.json(skillReadBody(req, { ...entry, content, ...(entry.source === 'timon' ? { files: listSkillFiles(entry.id) } : {}) }));
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('skill_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1541,14 +1559,14 @@ export function registerRoutes(app: express.IRouter): void {
   app.get('/api/skills/:id/file', (req, res) => {
     const parsed = skillFileQuery.safeParse(req.query);
     if (!parsed.success) {
-      res.status(400).json({ error: 'path required' });
+      res.status(400).json(apiError('path_required', 'path required'));
       return;
     }
     try {
       res.json(skillReadBody(req, { id: req.params.id, ...readSkillFile(req.params.id, parsed.data.path) }));
     } catch (err) {
       if (err instanceof SkillFileError) {
-        res.status(err.status).json({ error: err.message });
+        res.status(err.status).json(apiError('skill_file_refused', err.message, { detail: err.message }));
         return;
       }
       throw err;
@@ -1559,7 +1577,7 @@ export function registerRoutes(app: express.IRouter): void {
     if (rejectIfDenied(req, res, 'skills:manage')) return;
     const parsed = skillWriteSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid skill', fields: parsed.error.flatten().fieldErrors });
+      res.status(400).json({ ...apiError('invalid_fields', 'Invalid skill', { fields: Object.keys(parsed.error.flatten().fieldErrors).join(', ') }), fields: parsed.error.flatten().fieldErrors });
       return;
     }
     const body = parsed.data;
@@ -1573,11 +1591,9 @@ export function registerRoutes(app: express.IRouter): void {
       return;
     }
     if (isMissionToken(req) && overwritesMaskedValue(body.path ?? skillFile(body.id!), body.content)) {
-      res.status(409).json({
-        error: 'this skill holds vault values, and what a mission reads of it shows them as ***: writing that text back would destroy them. '
-          + 'Change it from the skill editor of the app, or write it without the mask',
-        code: 'skill_masked',
-      });
+      res.status(409).json(apiError('skill_masked',
+        'this skill holds vault values, and what a mission reads of it shows them as ***: writing that text back would destroy them. '
+          + 'Change it from the skill editor of the app, or write it without the mask'));
       return;
     }
     // The conversion mission of a browser recording never replaces a skill, asked or not.
@@ -1590,7 +1606,7 @@ export function registerRoutes(app: express.IRouter): void {
         return;
       }
       if (!body.id) {
-        res.status(400).json({ error: 'id required (new TIMON skill)' });
+        res.status(400).json(apiError('skill_id_required', 'id required (new TIMON skill)'));
         return;
       }
       const written = upsertSkill(body.id, body.content, { createOnly });
@@ -1601,10 +1617,10 @@ export function registerRoutes(app: express.IRouter): void {
       res.json(written);
     } catch (err) {
       if (err instanceof SkillExistsError) {
-        res.status(409).json({ error: err.message, code: 'skill_exists' });
+        res.status(409).json(apiError('skill_exists', err.message));
         return;
       }
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('skill_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1615,21 +1631,21 @@ export function registerRoutes(app: express.IRouter): void {
     if (rejectIfDenied(req, res, 'skills:manage')) return;
     const parsed = skillImportSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid import', fields: parsed.error.flatten().fieldErrors });
+      res.status(400).json({ ...apiError('invalid_fields', 'Invalid import', { fields: Object.keys(parsed.error.flatten().fieldErrors).join(', ') }), fields: parsed.error.flatten().fieldErrors });
       return;
     }
     const entry = findImportableSkill(req.params.id, parsed.data.source);
     if (!entry) {
-      res.status(404).json({ error: `no ${parsed.data.source} skill ${req.params.id}` });
+      res.status(404).json(apiError('skill_not_found', `no ${parsed.data.source} skill ${req.params.id}`));
       return;
     }
     const id = parsed.data.as ?? defaultImportId(entry.id);
     if (!isImportableId(id)) {
-      res.status(400).json({ error: `invalid skill id: ${id} (lowercase letters, digits, . _ -)`, code: 'invalid_id', suggested: defaultImportId(entry.id) });
+      res.status(400).json({ ...apiError('invalid_id', `invalid skill id: ${id} (lowercase letters, digits, . _ -)`), suggested: defaultImportId(entry.id) });
       return;
     }
     if (isSystemSkillId(id)) {
-      res.status(409).json({ error: `${id} is a product skill id: pick another id`, code: 'skill_exists' });
+      res.status(409).json(apiError('skill_exists', `${id} is a product skill id: pick another id`));
       return;
     }
     try {
@@ -1643,14 +1659,14 @@ export function registerRoutes(app: express.IRouter): void {
       res.status(201).json({ ok: true, ...importSkill(plan, id) });
     } catch (err) {
       if (err instanceof SkillExistsError) {
-        res.status(409).json({ error: `a Timon skill ${id} already exists: import it under another id`, code: 'skill_exists' });
+        res.status(409).json(apiError('skill_exists', `a Timon skill ${id} already exists: import it under another id`));
         return;
       }
       if (err instanceof SkillImportError) {
-        res.status(err.code === 'too_large' ? 413 : 400).json({ error: err.message, code: err.code });
+        res.status(err.code === 'too_large' ? 413 : 400).json(skillImportErrorBody(err));
         return;
       }
-      res.status(500).json({ error: 'skill import failed' });
+      res.status(500).json(apiError('skill_import_failed', 'skill import failed'));
     }
   });
 
@@ -1661,7 +1677,7 @@ export function registerRoutes(app: express.IRouter): void {
       // Without `?path=` the id is joined to the skills folder: a `..` or a
       // separator in it (`%2F` survives the router) would walk out of it.
       if (!queryPath && !isPlainSkillSegment(req.params.id)) {
-        res.status(400).json({ error: `invalid skill id: ${req.params.id}` });
+        res.status(400).json(apiError('invalid_id', `invalid skill id: ${req.params.id}`));
         return;
       }
       const path = queryPath ?? timonSkillPath(req.params.id);
@@ -1677,7 +1693,7 @@ export function registerRoutes(app: express.IRouter): void {
       }
       res.json({ ok: true });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('skill_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1688,7 +1704,7 @@ export function registerRoutes(app: express.IRouter): void {
       const r = browseAgentFiles(req.params.name, rel);
       res.json(r);
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_file_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1712,7 +1728,7 @@ export function registerRoutes(app: express.IRouter): void {
     try {
       res.json(readExternalFile(abs));
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_file_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1729,7 +1745,7 @@ export function registerRoutes(app: express.IRouter): void {
     try {
       res.json(writeExternalFile(abs, typeof req.body === 'string' ? req.body : ''));
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_file_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1740,7 +1756,7 @@ export function registerRoutes(app: express.IRouter): void {
       const r = deleteAgentPath(req.params.name, rel);
       res.json(r);
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_file_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1761,7 +1777,7 @@ export function registerRoutes(app: express.IRouter): void {
         res.json(writeAgentFile(req.params.name, rel, ''));
       }
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_file_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1775,7 +1791,7 @@ export function registerRoutes(app: express.IRouter): void {
     try {
       res.json(writeAgentFile(req.params.name, rel, content));
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('agent_file_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1783,7 +1799,7 @@ export function registerRoutes(app: express.IRouter): void {
     try {
       res.json({ servers: listMcp() });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('mcp_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1806,7 +1822,7 @@ export function registerRoutes(app: express.IRouter): void {
         && (req.auth?.isSuperadmin || requestHasPermission(req, 'mcp:manage'));
       res.json(full ? s : redactMcpServer(s));
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('mcp_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1832,7 +1848,7 @@ export function registerRoutes(app: express.IRouter): void {
       }
       if (rejectIfDenied(req, res, 'mcp:manage')) return;
       if (!id || !body.transport || typeof body.transport !== 'object') {
-        res.status(400).json({ error: 'id and transport are required' });
+        res.status(400).json(apiError('mcp_fields_required', 'id and transport are required'));
         return;
       }
       let transport = body.transport as McpStdioConfig | McpHttpConfig;
@@ -1864,7 +1880,7 @@ export function registerRoutes(app: express.IRouter): void {
       // a mission must not read them from the response of its own write.
       res.json(mission ? redactMcpServer(saved) : saved);
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('mcp_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1876,7 +1892,7 @@ export function registerRoutes(app: express.IRouter): void {
       const s = getMcp(id);
       if (!s) { res.status(404).json(apiError('mcp_not_found', 'mcp not found')); return; }
       if (s.transport.type !== 'http') {
-        res.status(400).json({ error: 'oauth only applies to http transport' });
+        res.status(400).json(apiError('mcp_oauth_http_only', 'oauth only applies to http transport'));
         return;
       }
       const redirectUri = oauthRedirectUri(publicApiUrl(), apiPort());
@@ -1908,7 +1924,7 @@ export function registerRoutes(app: express.IRouter): void {
       const authorize_url = buildAuthorizeUrl(metadata, client, redirectUri, state, challenge, scope);
       res.json({ authorize_url });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('mcp_oauth_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1959,7 +1975,7 @@ export function registerRoutes(app: express.IRouter): void {
       if (mission) auditRequest(req, 'mcp.delete', `mcp:${req.params.id} — ${missionActorLabel(req)}`);
       res.json({ ok: true });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('mcp_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 }

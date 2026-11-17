@@ -1,6 +1,5 @@
 {
   "webuiSettings": {
-    "category": "WebUI",
     "description": "Gdzie odpowiada Timon, jak otworzyć go z telefonu i czy jest to bezpieczne.",
     "loadError": "Nie udało się odczytać informacji o sieci z demona.",
     "forbidden": "Odczyt konfiguracji sieci tej maszyny wymaga konta administratora.",
@@ -9,7 +8,6 @@
     "servedExternally": "Serwowany poza demonem, przez reverse proxy",
     "statusRemote": "Dostęp zdalny",
     "remoteReady": "Gotowy",
-    "remoteReadyHint": "Otwórz go z dowolnego urządzenia zalogowanego do twojego tailnetu.",
     "remoteNotPublished": "Jeszcze nieopublikowany",
     "remoteStopped": "Tailscale jest zatrzymany",
     "remoteAbsent": "Tailscale niezainstalowany",

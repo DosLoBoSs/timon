@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 
 import { useAccess } from '@/hooks/use-me';
 import { cn } from '@/lib/utils';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { fileViewer } from '@/lib/file-viewer';
 import type { GitDashboard, GitRemote } from '@/lib/git-store';
@@ -56,7 +57,7 @@ export function GitBranches({
       );
       const j = await r.json();
       if (!r.ok || j.kind !== 'file') {
-        toast.error(j.error || t('chatPage.cannotOpen', { path: rel }));
+        toast.error(apiErrorMessage(j, t('chatPage.cannotOpen', { path: rel })));
         return;
       }
       fileViewer.openText(agentId, j as FileBody);

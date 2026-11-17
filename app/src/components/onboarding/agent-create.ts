@@ -132,3 +132,35 @@ export async function loadSheetCatalogs(fetcher: Fetcher = fetch): Promise<Sheet
   const [skills, mcp] = await Promise.all([read('/api/ui/skills', 'skills'), read('/api/ui/mcp', 'servers')]);
   return { skills: sheetSkills(skills), mcp: sheetMcp(mcp) };
 }
+
+/** The skills list as the daemon resolves it for `cwd`: the person's own plus that project's. */
+export function sheetSkillsPath(cwd: string): string {
+  return cwd ? `/api/ui/skills?cwd=${encodeURIComponent(cwd)}` : '/api/ui/skills';
+}
+
+/**
+ * The skills offered for the folder the sheet picked. `null` when the daemon
+ * refuses, cannot be reached or the read was cancelled: the sheet keeps the
+ * list it shows rather than emptying it.
+ */
+export async function loadSheetSkills(cwd: string, fetcher: Fetcher = fetch, signal?: AbortSignal): Promise<CatalogItem[] | null> {
+  try {
+    const res = await fetcher(sheetSkillsPath(cwd), { cache: 'no-store', signal });
+    if (!res.ok) return null;
+    const body = (await res.json()) as Record<string, unknown>;
+    return signal?.aborted ? null : sheetSkills(body.skills);
+  } catch { return null; }
+}
+
+/**
+ * The picks once the list changed: a pick the new list no longer offers is
+ * dropped (it would be written without being seen), and a skill the agent
+ * already has that the list now shows starts checked, as on the first read,
+ * so that the creation does not take it away.
+ */
+export function repickedSkills(picked: readonly string[], before: readonly CatalogItem[], after: readonly CatalogItem[], current: readonly string[]): string[] {
+  const offered = new Set(after.map((s) => s.id));
+  const shown = new Set(before.map((s) => s.id));
+  const surfaced = current.filter((id) => offered.has(id) && !shown.has(id));
+  return [...new Set([...picked.filter((id) => offered.has(id)), ...surfaced])];
+}

@@ -339,9 +339,9 @@ export default function SetupPage() {
           <h2 className="font-medium">{t('setupPage.resumeTitle')}</h2>
           <p className="text-muted-foreground">
             {t('setupPage.resumeFound', {
-              agents: String(existing.agents),
-              projects: String(existing.projects),
-              missions: String(existing.missions),
+              agents: existing.agents,
+              projects: existing.projects,
+              missions: existing.missions,
             })}
           </p>
           <div className="flex flex-wrap items-center gap-3">

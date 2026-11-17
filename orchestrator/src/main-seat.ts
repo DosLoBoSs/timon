@@ -48,7 +48,7 @@ export type MainSeatNotices = {
 export function mainSeatNotice(candidates: readonly string[]): { title: string; body: string } {
   const what = 'No agent holds the main orchestrator seat: recaps and notifications have no recipient.';
   const how = candidates.length > 0
-    ? `Eligible orchestrators: ${candidates.join(', ')}. In **Agents**, open the one you talk to and choose **Set as main orchestrator**.`
+    ? `Eligible orchestrators: ${candidates.join(', ')}. In **Agents**, open the one you talk to and choose **Set as main orchestrator**, or run \`timon agent set-main <name>\`.`
     : 'No project-less orchestrator exists. Create one in **Agents**: when it is the only one, it takes the seat by itself.';
   return { title: 'No main orchestrator', body: `${what} ${how}` };
 }

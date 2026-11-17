@@ -42,6 +42,7 @@
       "agents:docs:write",
       "agents:export",
       "backends:read",
+      "projects:read",
       "skills:read",
       "skills:write",
       "mcp-servers:read",

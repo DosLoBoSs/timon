@@ -15,6 +15,8 @@
 import { randomUUID } from 'node:crypto';
 import { dbApi } from './db.js';
 import { mainAgentNameOrSeed } from './main-agent.js';
+import { redactDaemonMessage, type DaemonMessage } from './daemon-message.js';
+import { redactText } from './secrets/redact.js';
 
 const SYSTEM_MISSION_ID = '00000000-0000-4000-8000-0000000000aa';
 let systemMissionReady = false;
@@ -55,6 +57,11 @@ export function notifyUser(
     type?: 'report' | 'alert' | 'action_required';
     /** The agent concerned, when there is one (a series' pilot); the manager agent otherwise. */
     toAgent?: string | null;
+    /**
+     * The code of `title` and `body` (`daemonMessages.<code>.title|body`), for the
+     * webview to translate (TODO #845). The English stays what agents read.
+     */
+    message?: DaemonMessage | null;
   } = {},
 ): void {
   try {
@@ -69,7 +76,13 @@ export function notifyUser(
       fromAgent: 'orchestrator',
       toAgent: to,
       kind: 'notification',
-      payload: JSON.stringify({ kind: opts.type ?? 'alert', title, body, task_id: opts.taskId ?? null }),
+      payload: JSON.stringify({
+        kind: opts.type ?? 'alert',
+        title,
+        body,
+        task_id: opts.taskId ?? null,
+        ...(opts.message ? redactDaemonMessage(opts.message, redactText) : {}),
+      }),
     });
     console.warn(`[notify] → ${to}: ${title}`);
   } catch (err) {

@@ -1,3 +1,4 @@
+import { apiErrorMessage } from '@/lib/api-error';
 import { toast } from 'sonner';
 import type { FileBody } from '@/components/chat/chat-types';
 import type { PreviewKind } from '@/lib/file-preview/kind';
@@ -87,6 +88,6 @@ export async function readAgentFile(agentId: string, rel: string, external = fal
     const r = await fetch('/api/ui/agents/' + encodeURIComponent(agentId) + (external ? '/files/external' : '/files') + '?path=' + encodeURIComponent(rel));
     const j = await r.json().catch(() => ({}));
     if (r.ok && j.kind === 'file') return { file: external ? { ...(j as FileBody), external: true } : (j as FileBody) };
-    return { status: r.status, error: typeof j.error === 'string' ? j.error : '' };
+    return { status: r.status, error: apiErrorMessage(j, { status: r.status }) };
   } catch (e) { return { status: 0, error: String(e) }; }
 }

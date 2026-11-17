@@ -9,7 +9,7 @@ import '../test-home.js';
 import '../../tests/helpers/paid-license.js';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { once } from 'node:events';
 import { createHmac, randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
@@ -32,7 +32,7 @@ const { readManifest } = await import('./manifest.js');
 const { createPluginContext, daemonHost } = await import('./context.js');
 const { registerPluginWebhookRoute, webhookPublisherOf } = await import('./webhooks.js');
 const { registerRoutes } = await import('../plugins-bundled/plugins/routes.js');
-const { apply } = await import(join(DIR, 'lib/index.js')) as { apply(ctx: unknown): void };
+const { apply } = await import(pathToFileURL(join(DIR, 'lib/index.js')).href) as { apply(ctx: unknown): void };
 resolveMasterKey({ keyring: null });
 dbApi.upsertProject('timon', {});
 

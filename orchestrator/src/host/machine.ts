@@ -308,6 +308,26 @@ export function installBackendPlanFor(binary: InstallableBackend, platform: Node
 }
 
 /**
+ * The variable an AI CLI's standalone installer finds the daemon's own copy of
+ * the CLI in: the path `whichBin` resolved, a `host.binaries.<cli>` pin first.
+ * Without it an "Update" line has to search for the CLI by itself, and a static
+ * line cannot follow a pin or every nvm folder the daemon accepts: it could
+ * update another copy than the one the card shows (TODO #799). Unset when the
+ * daemon finds no copy; an installer that ignores it runs as before.
+ */
+export const RESOLVED_BIN_ENV = 'TIMON_RESOLVED_BIN';
+
+/**
+ * The COMPLETE environment of an installer run: `base` with `RESOLVED_BIN_ENV`
+ * set to `resolved`, or removed when there is none, so that a value inherited
+ * from the daemon's own environment never names a copy this run did not find.
+ */
+export function installerEnv(base: NodeJS.ProcessEnv, resolved: string | null): NodeJS.ProcessEnv {
+  const { [RESOLVED_BIN_ENV]: _inherited, ...rest } = base;
+  return resolved ? { ...rest, [RESOLVED_BIN_ENV]: resolved } : rest;
+}
+
+/**
  * The command that installs `binary` on this machine, or `null` when we do not
  * know one — better an honest blank than a command that fails in the user's
  * terminal for a reason we invented.

@@ -19,6 +19,7 @@ import {
   type SkillReads,
 } from '@/lib/agent-injections';
 import { t } from '@/lib/i18n';
+import { isSkillVia } from '@/lib/skill-attachments';
 import { mdToSafeHtml } from '@/lib/markdown';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipArrow, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -307,7 +308,7 @@ export function BlockDetail({ agent, block, onSaved, reads = null }: { agent: st
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-xs font-medium">{it.label}</span>
                 {it.skill_mode && <Badge>{t(`agentInjections.skillMode.${it.skill_mode}`)}</Badge>}
-                {it.skill_via && <Badge>{t(`agentInjections.skillVia.${it.skill_via}`)}</Badge>}
+                {it.skill_via && isSkillVia(it.skill_via) && <Badge>{t(`agentInjections.skillVia.${it.skill_via}`)}</Badge>}
                 {readState && <SkillReadsBadge state={readState} />}
                 {it.editable && <Badge>{t('agentInjections.badge.editable')}</Badge>}
                 <span className="text-[10.5px] tabular-nums text-muted-foreground/80">{tokensLabel(it.tokens)}</span>

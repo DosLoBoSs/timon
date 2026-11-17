@@ -100,3 +100,28 @@ test('the store keeps 1 000 steps and 1 MB at most, and says it truncated', () =
   assert.ok(bounded.steps.length < 1_000);
   assert.equal(bounded.truncated, true);
 });
+
+test('a manual frame step keeps what the desktop built, and nothing a forged one adds (#944)', () => {
+  // Preload event -> desktop step -> sealed recording: the daemon stores the very step the desktop built.
+  const session = new desktop.RecordingSession('https://shop.example/checkout');
+  const event = { type: 'frame', selector: 'iframe[name="card"]', tag: 'iframe', name: 'Secure card payment input frame', origin: 'https://js.stripe.com' };
+  assert.ok(session.add(desktop.normalizePageEvent(event, { t: Date.now(), tabId: 't1' }), { page: true }));
+  const built = session.result();
+  const stored = sanitizeRecording(JSON.parse(JSON.stringify(built)))!;
+  assert.deepEqual(stored.steps, built.steps.map((step, index) => ({ n: index + 1, ...step })));
+  assert.deepEqual(stored.steps[0], { n: 1, t: 0, type: 'frame', tabId: 't1', selector: 'iframe[name="card"]', tag: 'iframe',
+    name: 'Secure card payment input frame', origin: 'https://js.stripe.com' });
+
+  // A desktop that let a value, a text, an address or a secret into the step: the daemon keeps the origin only.
+  const forged = sanitizeRecording(recording([
+    { t: 0, type: 'frame', tabId: 't1', tag: 'iframe', origin: 'https://user:pw@js.stripe.com/v3/inner.html?key=pk_live_abc#k=1',
+      value: 'hunter2', text: '4242 4242 4242 4242', url: 'https://evil.example/', secret: 'card', inputType: 'password',
+      role: 'textbox', credentialId: 'bc-1', name: '{SECRET:card}' },
+    { t: 1, type: 'frame', tabId: 't1', origin: 'javascript:alert(1)' },
+  ]))!;
+  assert.deepEqual(forged.steps, [
+    { n: 1, t: 0, type: 'frame', tabId: 't1', tag: 'iframe', origin: 'https://js.stripe.com' },
+    { n: 2, t: 1, type: 'frame', tabId: 't1' },
+  ]);
+  assert.equal(forged.steps.some((step) => step.flagged), false, 'a manual step never blocks Learn');
+});

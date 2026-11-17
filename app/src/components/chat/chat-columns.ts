@@ -56,32 +56,32 @@ export type ChatColumns = {
 };
 
 /** Narrowest reading column the user can drag the thread to. */
-export const FIL_LECTURE_MIN = 420;
+export const THREAD_READING_MIN = 420;
 /** Widest one, whatever the screen: past it a line no longer reads. */
-export const FIL_LECTURE_MAX = 2400;
+export const THREAD_READING_MAX = 2400;
 
-export function bornerFil(largeur: number): number {
-  return Math.round(Math.min(FIL_LECTURE_MAX, Math.max(FIL_LECTURE_MIN, largeur)));
+export function clampThreadWidth(width: number): number {
+  return Math.round(Math.min(THREAD_READING_MAX, Math.max(THREAD_READING_MIN, width)));
 }
 
 /** Sets the reading column's width, clamped; `null` goes back to the room the chat has. */
-export function poserFil(c: ChatColumns, largeur: number | null): ChatColumns {
-  return avec(c, { fil: largeur === null || !Number.isFinite(largeur) ? undefined : bornerFil(largeur) });
+export function setThreadWidth(c: ChatColumns, width: number | null): ChatColumns {
+  return withPatch(c, { fil: width === null || !Number.isFinite(width) ? undefined : clampThreadWidth(width) });
 }
 
 /** Longest tab name: a tab is a narrow pill. */
-export const NOM_ONGLET_MAX = 40;
+export const TAB_NAME_MAX = 40;
 
 /** Trimmed, inner spaces folded, capped; empty = no name. */
-function lireNom(brut: unknown): string | null {
-  if (typeof brut !== 'string') return null;
+function readName(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
   // eslint-disable-next-line no-control-regex
-  const nom = brut.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim().replace(/\s+/g, ' ').slice(0, NOM_ONGLET_MAX);
-  return nom || null;
+  const name = raw.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim().replace(/\s+/g, ' ').slice(0, TAB_NAME_MAX);
+  return name || null;
 }
 
 /** Physical side of a column: what the page chrome makes of it. */
-export type CoteColonne = 'left' | 'right';
+export type ColumnSide = 'left' | 'right';
 
 /** The `ui_layout` scope where the column order is persisted. */
 export const CHAT_COLUMNS_SCOPE = 'chat.columns';
@@ -93,13 +93,13 @@ export const CHAT_COLUMNS_SCOPE = 'chat.columns';
  * only knows one key, the cockpit's, and would write it here as a column
  * order; a card placement would become the column positions.
  */
-export function ioColonnes(io: LayoutIo = {}): LayoutIo {
+export function columnsIo(io: LayoutIo = {}): LayoutIo {
   return { ...io, scope: CHAT_COLUMNS_SCOPE, storage: null };
 }
 
 /** Original order: the zones in the order the caller declares them. */
-export function colonnesDefaut(connues: readonly string[]): ChatColumns {
-  return { ordre: [...connues], masquees: [] };
+export function defaultColumns(known: readonly string[]): ChatColumns {
+  return { ordre: [...known], masquees: [] };
 }
 
 /**
@@ -109,135 +109,135 @@ export function colonnesDefaut(connues: readonly string[]): ChatColumns {
  * by its column's slot: that is what lets the host place, drag and persist its
  * cards without knowing tabs exist.
  */
-const SEPARATEUR_ONGLET = '#';
+const TAB_SEPARATOR = '#';
 
 /** Zone of the column a tab belongs to — itself for the first tab. */
-export function zoneDeColonne(zone: string): string {
-  const i = zone.indexOf(SEPARATEUR_ONGLET);
+export function columnZoneOf(zone: string): string {
+  const i = zone.indexOf(TAB_SEPARATOR);
   return i < 0 ? zone : zone.slice(0, i);
 }
 
-function estOngletDe(zone: string, colonne: string): boolean {
-  return zone.startsWith(colonne + SEPARATEUR_ONGLET) && zone.length > colonne.length + 1;
+function isTabOf(zone: string, column: string): boolean {
+  return zone.startsWith(column + TAB_SEPARATOR) && zone.length > column.length + 1;
 }
 
 /**
  * Copies, emitting tabs only when there are some: a column back to a single
  * tab regains exactly the shape it had before tabs existed.
  */
-function avec(
+function withPatch(
   c: ChatColumns,
   patch: Partial<ChatColumns>,
 ): ChatColumns {
-  const suite = { ...c, ...patch };
-  const onglets: Record<string, string[]> = {};
-  for (const [colonne, liste] of Object.entries(suite.onglets ?? {})) {
-    if (liste.length > 0) onglets[colonne] = [...liste];
+  const next = { ...c, ...patch };
+  const tabs: Record<string, string[]> = {};
+  for (const [column, list] of Object.entries(next.onglets ?? {})) {
+    if (list.length > 0) tabs[column] = [...list];
   }
-  const actifs: Record<string, string> = {};
-  for (const [colonne, zone] of Object.entries(suite.actifs ?? {})) {
-    if (onglets[colonne]?.includes(zone)) actifs[colonne] = zone;
+  const active: Record<string, string> = {};
+  for (const [column, zone] of Object.entries(next.actifs ?? {})) {
+    if (tabs[column]?.includes(zone)) active[column] = zone;
   }
-  const secondes: Record<string, string> = {};
-  for (const [colonne, zone] of Object.entries(suite.secondes ?? {})) {
-    if (onglets[colonne]?.includes(zone)) secondes[colonne] = zone;
+  const seconds: Record<string, string> = {};
+  for (const [column, zone] of Object.entries(next.secondes ?? {})) {
+    if (tabs[column]?.includes(zone)) seconds[column] = zone;
   }
   // A width outlives nothing it measured: a closed tab takes its own along.
-  const zones = new Set(suite.ordre.flatMap((colonne) => [colonne, ...(onglets[colonne] ?? [])]));
-  const largeurs: Record<string, number> = {};
-  for (const [zone, largeur] of Object.entries(suite.largeurs ?? {})) {
-    if (zones.has(zone) && typeof largeur === 'number' && Number.isFinite(largeur)) {
-      largeurs[zone] = bornerLargeur(largeur);
+  const zones = new Set(next.ordre.flatMap((column) => [column, ...(tabs[column] ?? [])]));
+  const widths: Record<string, number> = {};
+  for (const [zone, width] of Object.entries(next.largeurs ?? {})) {
+    if (zones.has(zone) && typeof width === 'number' && Number.isFinite(width)) {
+      widths[zone] = clampWidth(width);
     }
   }
   // A name, like a width, leaves with its tab.
-  const noms: Record<string, string> = {};
-  for (const [zone, brut] of Object.entries(suite.noms ?? {})) {
-    const nom = lireNom(brut);
-    if (zones.has(zone) && nom) noms[zone] = nom;
+  const names: Record<string, string> = {};
+  for (const [zone, raw] of Object.entries(next.noms ?? {})) {
+    const name = readName(raw);
+    if (zones.has(zone) && name) names[zone] = name;
   }
-  const out: ChatColumns = { ordre: [...suite.ordre], masquees: [...suite.masquees] };
-  if (Object.keys(onglets).length > 0) out.onglets = onglets;
-  if (Object.keys(actifs).length > 0) out.actifs = actifs;
-  if (Object.keys(largeurs).length > 0) out.largeurs = largeurs;
-  if (Object.keys(secondes).length > 0) out.secondes = secondes;
-  if (Object.keys(noms).length > 0) out.noms = noms;
-  if (typeof suite.fil === 'number' && Number.isFinite(suite.fil)) out.fil = bornerFil(suite.fil);
+  const out: ChatColumns = { ordre: [...next.ordre], masquees: [...next.masquees] };
+  if (Object.keys(tabs).length > 0) out.onglets = tabs;
+  if (Object.keys(active).length > 0) out.actifs = active;
+  if (Object.keys(widths).length > 0) out.largeurs = widths;
+  if (Object.keys(seconds).length > 0) out.secondes = seconds;
+  if (Object.keys(names).length > 0) out.noms = names;
+  if (typeof next.fil === 'number' && Number.isFinite(next.fil)) out.fil = clampThreadWidth(next.fil);
   return out;
 }
 
-function listeDeChaines(brut: unknown): string[] {
-  return Array.isArray(brut) ? brut.filter((v): v is string => typeof v === 'string') : [];
+function stringList(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : [];
 }
 
 /**
  * Reads the stored value back, checking it against the zones the page mounts.
  *
- * Tolerant by construction, like `fusionnerLayout`: an unknown zone is ignored
+ * Tolerant by construction, like `mergeLayout`: an unknown zone is ignored
  * (rename, missing plugin), a known zone missing from storage is added at its
  * original place, and a duplicate counts once. An unreadable value is thus
  * never a broken page, only a return to the defaults.
  */
-export function lireColonnes(brut: unknown, connues: readonly string[]): ChatColumns {
-  const o = typeof brut === 'object' && brut !== null ? (brut as Record<string, unknown>) : {};
-  const admises = new Set(connues);
-  const vues = new Set<string>();
+export function readColumns(raw: unknown, known: readonly string[]): ChatColumns {
+  const o = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const allowed = new Set(known);
+  const seen = new Set<string>();
 
-  const ordre: string[] = [];
-  for (const zone of listeDeChaines(o.ordre)) {
-    if (!admises.has(zone) || vues.has(zone)) continue;
-    vues.add(zone);
-    ordre.push(zone);
+  const order: string[] = [];
+  for (const zone of stringList(o.ordre)) {
+    if (!allowed.has(zone) || seen.has(zone)) continue;
+    seen.add(zone);
+    order.push(zone);
   }
-  for (const zone of connues) if (!vues.has(zone)) ordre.push(zone);
+  for (const zone of known) if (!seen.has(zone)) order.push(zone);
 
-  const masquees = [...new Set(listeDeChaines(o.masquees).filter((z) => admises.has(z)))];
+  const collapsed = [...new Set(stringList(o.masquees).filter((z) => allowed.has(z)))];
 
   // A tab is only admitted under its own column: an id naming the other
   // column would show its cards in two places.
-  const ongletsBruts = typeof o.onglets === 'object' && o.onglets !== null
+  const rawTabs = typeof o.onglets === 'object' && o.onglets !== null
     ? (o.onglets as Record<string, unknown>) : {};
-  const onglets: Record<string, string[]> = {};
-  for (const colonne of connues) {
-    onglets[colonne] = [...new Set(listeDeChaines(ongletsBruts[colonne]).filter((z) => estOngletDe(z, colonne)))];
+  const tabs: Record<string, string[]> = {};
+  for (const column of known) {
+    tabs[column] = [...new Set(stringList(rawTabs[column]).filter((z) => isTabOf(z, column)))];
   }
-  const actifsBruts = typeof o.actifs === 'object' && o.actifs !== null
+  const rawActive = typeof o.actifs === 'object' && o.actifs !== null
     ? (o.actifs as Record<string, unknown>) : {};
-  const actifs: Record<string, string> = {};
-  for (const colonne of connues) {
-    const zone = actifsBruts[colonne];
-    if (typeof zone === 'string') actifs[colonne] = zone;
+  const active: Record<string, string> = {};
+  for (const column of known) {
+    const zone = rawActive[column];
+    if (typeof zone === 'string') active[column] = zone;
   }
-  const secondesBruts = typeof o.secondes === 'object' && o.secondes !== null
+  const rawSeconds = typeof o.secondes === 'object' && o.secondes !== null
     ? (o.secondes as Record<string, unknown>) : {};
-  const secondes: Record<string, string> = {};
-  for (const colonne of connues) {
-    const zone = secondesBruts[colonne];
-    if (typeof zone === 'string') secondes[colonne] = zone;
+  const seconds: Record<string, string> = {};
+  for (const column of known) {
+    const zone = rawSeconds[column];
+    if (typeof zone === 'string') seconds[column] = zone;
   }
-  const largeursBruts = typeof o.largeurs === 'object' && o.largeurs !== null
+  const rawWidths = typeof o.largeurs === 'object' && o.largeurs !== null
     ? (o.largeurs as Record<string, unknown>) : {};
-  const largeurs: Record<string, number> = {};
-  for (const [zone, largeur] of Object.entries(largeursBruts)) {
-    if (typeof largeur === 'number') largeurs[zone] = largeur;
+  const widths: Record<string, number> = {};
+  for (const [zone, width] of Object.entries(rawWidths)) {
+    if (typeof width === 'number') widths[zone] = width;
   }
-  const nomsBruts = typeof o.noms === 'object' && o.noms !== null
+  const rawNames = typeof o.noms === 'object' && o.noms !== null
     ? (o.noms as Record<string, unknown>) : {};
-  const noms: Record<string, string> = {};
-  for (const [zone, brut] of Object.entries(nomsBruts)) {
-    const nom = lireNom(brut);
-    if (nom) noms[zone] = nom;
+  const names: Record<string, string> = {};
+  for (const [zone, raw] of Object.entries(rawNames)) {
+    const name = readName(raw);
+    if (name) names[zone] = name;
   }
-  return avec({ ordre, masquees }, { onglets, actifs, secondes, largeurs, noms, ...(typeof o.fil === 'number' ? { fil: o.fil } : {}) });
+  return withPatch({ ordre: order, masquees: collapsed }, { onglets: tabs, actifs: active, secondes: seconds, largeurs: widths, noms: names, ...(typeof o.fil === 'number' ? { fil: o.fil } : {}) });
 }
 
 /** Names a tab (the first included); `null` or an empty name removes it. */
-export function nommerOnglet(c: ChatColumns, zone: string, nom: string | null): ChatColumns {
-  const noms = { ...c.noms };
-  const propre = lireNom(nom);
-  if (propre) noms[zone] = propre;
-  else delete noms[zone];
-  return avec(c, { noms });
+export function nameTab(c: ChatColumns, zone: string, name: string | null): ChatColumns {
+  const names = { ...c.noms };
+  const clean = readName(name);
+  if (clean) names[zone] = clean;
+  else delete names[zone];
+  return withPatch(c, { noms: names });
 }
 
 /**
@@ -246,17 +246,17 @@ export function nommerOnglet(c: ChatColumns, zone: string, nom: string | null): 
  * Collapsing follows the ZONE, not the side: a column collapsed then swapped
  * stays collapsed. It is the card that was put away, not half of the screen.
  */
-export function inverserColonnes(c: ChatColumns): ChatColumns {
-  return avec(c, { ordre: [...c.ordre].reverse() });
+export function swapColumns(c: ChatColumns): ChatColumns {
+  return withPatch(c, { ordre: [...c.ordre].reverse() });
 }
 
-export function estMasquee(c: ChatColumns, zone: string): boolean {
+export function isCollapsed(c: ChatColumns, zone: string): boolean {
   return c.masquees.includes(zone);
 }
 
 /** Collapses an expanded column, expands a collapsed one. */
-export function basculerMasquee(c: ChatColumns, zone: string): ChatColumns {
-  return poserMasquee(c, zone, !estMasquee(c, zone));
+export function toggleCollapsed(c: ChatColumns, zone: string): ChatColumns {
+  return setCollapsed(c, zone, !isCollapsed(c, zone));
 }
 
 /**
@@ -264,10 +264,10 @@ export function basculerMasquee(c: ChatColumns, zone: string): ChatColumns {
  * decided. Replayed over another window's write (TODO #647), a toggle would
  * undo the very click it stands for.
  */
-export function poserMasquee(c: ChatColumns, zone: string, masquee: boolean): ChatColumns {
-  const autres = c.masquees.filter((z) => z !== zone);
-  if (masquee === estMasquee(c, zone)) return c;
-  return avec(c, { masquees: masquee ? [...autres, zone] : autres });
+export function setCollapsed(c: ChatColumns, zone: string, collapsed: boolean): ChatColumns {
+  const others = c.masquees.filter((z) => z !== zone);
+  if (collapsed === isCollapsed(c, zone)) return c;
+  return withPatch(c, { masquees: collapsed ? [...others, zone] : others });
 }
 
 /**
@@ -275,26 +275,26 @@ export function poserMasquee(c: ChatColumns, zone: string, masquee: boolean): Ch
  * the left, everything else on the right, and `null` for a zone that is not a
  * column, for which the chrome must reserve nothing.
  */
-export function coteDe(c: ChatColumns, zone: string): CoteColonne | null {
+export function sideOf(c: ChatColumns, zone: string): ColumnSide | null {
   const i = c.ordre.indexOf(zone);
   if (i < 0) return null;
   return i === 0 ? 'left' : 'right';
 }
 
 /** Zone holding a side, or `null` if the order does not count that many. */
-export function zoneDuCote(c: ChatColumns, cote: CoteColonne): string | null {
-  return (cote === 'left' ? c.ordre[0] : c.ordre[1]) ?? null;
+export function zoneOfSide(c: ChatColumns, side: ColumnSide): string | null {
+  return (side === 'left' ? c.ordre[0] : c.ordre[1]) ?? null;
 }
 
 /** A column's tabs, in order: its own zone first. */
-export function ongletsDe(c: ChatColumns, colonne: string): string[] {
-  return [colonne, ...(c.onglets?.[colonne] ?? [])];
+export function tabsOf(c: ChatColumns, column: string): string[] {
+  return [column, ...(c.onglets?.[column] ?? [])];
 }
 
 /** Zone a column shows: the chosen tab, otherwise the first. */
-export function ongletActif(c: ChatColumns, colonne: string): string {
-  const choisi = c.actifs?.[colonne];
-  return choisi && ongletsDe(c, colonne).includes(choisi) ? choisi : colonne;
+export function activeTab(c: ChatColumns, column: string): string {
+  const chosen = c.actifs?.[column];
+  return chosen && tabsOf(c, column).includes(chosen) ? chosen : column;
 }
 
 /**
@@ -305,22 +305,22 @@ export function ongletActif(c: ChatColumns, colonne: string): string {
  * A new tab taking over its id would bring that card back inside it when the
  * plugin returns.
  */
-export function ajouterOnglet(c: ChatColumns, colonne: string, suffixe: string): ChatColumns {
-  const zone = `${colonne}${SEPARATEUR_ONGLET}${suffixe}`;
-  if (!c.ordre.includes(colonne) || !estOngletDe(zone, colonne) || ongletsDe(c, colonne).includes(zone)) return avec(c, {});
-  return avec(c, {
-    onglets: { ...c.onglets, [colonne]: [...(c.onglets?.[colonne] ?? []), zone] },
-    actifs: { ...c.actifs, [colonne]: zone },
+export function addTab(c: ChatColumns, column: string, suffix: string): ChatColumns {
+  const zone = `${column}${TAB_SEPARATOR}${suffix}`;
+  if (!c.ordre.includes(column) || !isTabOf(zone, column) || tabsOf(c, column).includes(zone)) return withPatch(c, {});
+  return withPatch(c, {
+    onglets: { ...c.onglets, [column]: [...(c.onglets?.[column] ?? []), zone] },
+    actifs: { ...c.actifs, [column]: zone },
   });
 }
 
 /** Shows a tab of the column. A zone that is not one of its tabs changes nothing. */
-export function choisirOnglet(c: ChatColumns, colonne: string, zone: string): ChatColumns {
-  if (!ongletsDe(c, colonne).includes(zone)) return avec(c, {});
-  const actifs = { ...c.actifs };
-  if (zone === colonne) delete actifs[colonne];
-  else actifs[colonne] = zone;
-  return avec(c, { actifs });
+export function selectTab(c: ChatColumns, column: string, zone: string): ChatColumns {
+  if (!tabsOf(c, column).includes(zone)) return withPatch(c, {});
+  const active = { ...c.actifs };
+  if (zone === column) delete active[column];
+  else active[column] = zone;
+  return withPatch(c, { actifs: active });
 }
 
 /**
@@ -330,49 +330,49 @@ export function choisirOnglet(c: ChatColumns, colonne: string, zone: string): Ch
  * What the tab held is not this model's business: the caller pours its cards
  * into the first tab before closing it.
  */
-export function retirerOnglet(c: ChatColumns, colonne: string, zone: string): ChatColumns {
-  const liste = c.onglets?.[colonne] ?? [];
-  const i = liste.indexOf(zone);
-  if (i < 0) return avec(c, {});
-  const reste = liste.filter((z) => z !== zone);
-  const actifs = { ...c.actifs };
-  if (ongletActif(c, colonne) === zone) {
-    const precedent = i > 0 ? liste[i - 1]! : colonne;
-    if (precedent === colonne) delete actifs[colonne];
-    else actifs[colonne] = precedent;
+export function removeTab(c: ChatColumns, column: string, zone: string): ChatColumns {
+  const list = c.onglets?.[column] ?? [];
+  const i = list.indexOf(zone);
+  if (i < 0) return withPatch(c, {});
+  const rest = list.filter((z) => z !== zone);
+  const active = { ...c.actifs };
+  if (activeTab(c, column) === zone) {
+    const previous = i > 0 ? list[i - 1]! : column;
+    if (previous === column) delete active[column];
+    else active[column] = previous;
   }
-  return avec(c, { onglets: { ...c.onglets, [colonne]: reste }, actifs });
+  return withPatch(c, { onglets: { ...c.onglets, [column]: rest }, actifs: active });
 }
 
 /** Narrowest a column gets: below this, the cards stop reading. */
-export const LARGEUR_MIN = 240;
+export const WIDTH_MIN = 240;
 /** Widest a column gets, whatever the screen. */
-export const LARGEUR_MAX = 800;
+export const WIDTH_MAX = 800;
 /** Default width of a second column. */
-export const LARGEUR_SECONDE = 300;
+export const SECOND_COLUMN_WIDTH = 300;
 
-export function bornerLargeur(largeur: number): number {
-  return Math.round(Math.min(LARGEUR_MAX, Math.max(LARGEUR_MIN, largeur)));
+export function clampWidth(width: number): number {
+  return Math.round(Math.min(WIDTH_MAX, Math.max(WIDTH_MIN, width)));
 }
 
 /**
- * Where a column and its mirror land for a gesture that asks `voulue` for the
+ * Where a column and its mirror land for a gesture that asks `wanted` for the
  * column. Both move by the same amount, held by whichever bound comes first:
  * the room left is shared by two columns growing at once.
  */
-export function largeursJumelees(
-  depart: number, voulue: number, max: number, jumelle: { largeur: number; max: number },
-): { largeur: number; jumelle: number } {
-  const min = Math.min(LARGEUR_MIN, max);
-  const hausseMax = Math.max(0, Math.min((max - depart) / 2, jumelle.max - jumelle.largeur));
-  const baisseMax = Math.max(0, Math.min(depart - min, jumelle.largeur - Math.min(LARGEUR_MIN, jumelle.max)));
-  const delta = Math.max(-baisseMax, Math.min(hausseMax, voulue - depart));
-  return { largeur: Math.round(depart + delta), jumelle: Math.round(jumelle.largeur + delta) };
+export function pairedWidths(
+  start: number, wanted: number, max: number, twin: { width: number; max: number },
+): { width: number; twin: number } {
+  const min = Math.min(WIDTH_MIN, max);
+  const growMax = Math.max(0, Math.min((max - start) / 2, twin.max - twin.width));
+  const shrinkMax = Math.max(0, Math.min(start - min, twin.width - Math.min(WIDTH_MIN, twin.max)));
+  const delta = Math.max(-shrinkMax, Math.min(growMax, wanted - start));
+  return { width: Math.round(start + delta), twin: Math.round(twin.width + delta) };
 }
 
 /** Width chosen for a shown zone, otherwise the default of its place. */
-export function largeurDe(c: ChatColumns, zone: string, defaut: number): number {
-  return c.largeurs?.[zone] ?? defaut;
+export function widthOf(c: ChatColumns, zone: string, fallback: number): number {
+  return c.largeurs?.[zone] ?? fallback;
 }
 
 /**
@@ -380,17 +380,17 @@ export function largeurDe(c: ChatColumns, zone: string, defaut: number): number 
  * the entry is dropped rather than written with the default value, so that a
  * default that changes later still applies.
  */
-export function poserLargeur(c: ChatColumns, zone: string, largeur: number | null): ChatColumns {
-  const largeurs = { ...c.largeurs };
-  if (largeur === null || !Number.isFinite(largeur)) delete largeurs[zone];
-  else largeurs[zone] = bornerLargeur(largeur);
-  return avec(c, { largeurs });
+export function setWidth(c: ChatColumns, zone: string, width: number | null): ChatColumns {
+  const widths = { ...c.largeurs };
+  if (width === null || !Number.isFinite(width)) delete widths[zone];
+  else widths[zone] = clampWidth(width);
+  return withPatch(c, { largeurs: widths });
 }
 
 /** The tab a column shows beside itself, if any. */
-export function secondeDe(c: ChatColumns, colonne: string): string | null {
-  const zone = c.secondes?.[colonne];
-  return zone && ongletsDe(c, colonne).includes(zone) ? zone : null;
+export function secondOf(c: ChatColumns, column: string): string | null {
+  const zone = c.secondes?.[column];
+  return zone && tabsOf(c, column).includes(zone) ? zone : null;
 }
 
 /**
@@ -398,16 +398,16 @@ export function secondeDe(c: ChatColumns, colonne: string): string | null {
  * than in its place. The tab shown in the column does not change. A column has
  * at most one second column; asking again changes nothing.
  *
- * Same rule for the suffix as `ajouterOnglet`: never reused.
+ * Same rule for the suffix as `addTab`: never reused.
  */
-export function ajouterSeconde(c: ChatColumns, colonne: string, suffixe: string): ChatColumns {
-  if (secondeDe(c, colonne) !== null) return avec(c, {});
-  const zone = `${colonne}${SEPARATEUR_ONGLET}${suffixe}`;
-  const ouvert = ajouterOnglet(c, colonne, suffixe);
-  if (!ongletsDe(ouvert, colonne).includes(zone)) return ouvert;
-  return avec(ouvert, {
+export function addSecond(c: ChatColumns, column: string, suffix: string): ChatColumns {
+  if (secondOf(c, column) !== null) return withPatch(c, {});
+  const zone = `${column}${TAB_SEPARATOR}${suffix}`;
+  const opened = addTab(c, column, suffix);
+  if (!tabsOf(opened, column).includes(zone)) return opened;
+  return withPatch(opened, {
     actifs: c.actifs,
-    secondes: { ...c.secondes, [colonne]: zone },
+    secondes: { ...c.secondes, [column]: zone },
   });
 }
 
@@ -415,134 +415,134 @@ export function ajouterSeconde(c: ChatColumns, colonne: string, suffixe: string)
  * Puts a second column back among the column's tabs. Nothing is lost: the tab
  * keeps its cards and stays reachable from the tab bar.
  */
-export function detacherSeconde(c: ChatColumns, colonne: string): ChatColumns {
-  const secondes = { ...c.secondes };
-  delete secondes[colonne];
-  return avec(c, { secondes });
+export function detachSecond(c: ChatColumns, column: string): ChatColumns {
+  const seconds = { ...c.secondes };
+  delete seconds[column];
+  return withPatch(c, { secondes: seconds });
 }
 
 /** Room the thread keeps, whatever the columns ask for. */
-export const FIL_MIN = 480;
+export const THREAD_MIN = 480;
 /** Gap between a column and the screen edge, or the thread on the left. */
-const BORD = 16;
+const EDGE = 16;
 /** Gap between two columns of a side, and between the column and the thread on the right. */
-const ECART = 12;
+const GAP = 12;
 
 /** What a side asks for, before the screen has its say. */
-export type DemandeCote = {
+export type SideRequest = {
   /** Width of the column itself. */
-  largeur: number;
+  width: number;
   /** Whether the column itself is shown (it may be empty outside a drag). */
-  premiere: boolean;
+  first: boolean;
   /** Width of its second column, or `null` when none is shown. */
-  seconde: number | null;
+  second: number | null;
 };
 
 /** What a side gets: widths actually painted, `null` for a column not shown. */
-export type PlaceCote = {
-  premiere: number | null;
-  seconde: number | null;
+export type SidePlacement = {
+  first: number | null;
+  second: number | null;
   /** The second column was asked for but folded back into the tabs. */
-  secondeRepliee: boolean;
+  secondFolded: boolean;
   /** Distance of the second column from the screen edge, in px. */
-  decalageSeconde: number;
+  secondOffset: number;
   /** Width the thread reserves for this side, in px (nav excluded). */
-  gouttiere: number;
+  gutter: number;
 };
 
-export type PlanRails = {
-  gauche: PlaceCote | null;
-  droite: PlaceCote | null;
+export type RailsPlan = {
+  left: SidePlacement | null;
+  right: SidePlacement | null;
   /** Room still free beyond the thread's minimum, in px. */
-  marge: number;
+  slack: number;
 };
 
-function largeursDe(p: Pick<PlaceCote, 'premiere' | 'seconde'>): number[] {
-  return [p.premiere, p.seconde].filter((w): w is number => w !== null);
+function widthsOf(p: Pick<SidePlacement, 'first' | 'second'>): number[] {
+  return [p.first, p.second].filter((w): w is number => w !== null);
 }
 
-function gouttiereDe(cote: CoteColonne, largeurs: number[]): number {
-  if (largeurs.length === 0) return 0;
-  const somme = largeurs.reduce((a, b) => a + b, 0) + ECART * (largeurs.length - 1);
+function gutterOf(side: ColumnSide, widths: number[]): number {
+  if (widths.length === 0) return 0;
+  const sum = widths.reduce((a, b) => a + b, 0) + GAP * (widths.length - 1);
   // Left: the figures the fixed classes used to carry (280 → 312, 300 → 332).
   // Right: the thread's scroll zone sits above the columns (`z-10`), so the
   // gutter must clear the width handle past the column's edge — the old 312
   // let the thread overlap the column by 4px; it is 328 now.
-  return cote === 'left' ? BORD + somme + BORD : BORD + somme + ECART;
+  return side === 'left' ? EDGE + sum + EDGE : EDGE + sum + GAP;
 }
 
-function placer(cote: CoteColonne, p: Pick<PlaceCote, 'premiere' | 'seconde' | 'secondeRepliee'>): PlaceCote {
+function place(side: ColumnSide, p: Pick<SidePlacement, 'first' | 'second' | 'secondFolded'>): SidePlacement {
   return {
     ...p,
-    decalageSeconde: p.premiere === null ? 0 : p.premiere + ECART,
-    gouttiere: gouttiereDe(cote, largeursDe(p)),
+    secondOffset: p.first === null ? 0 : p.first + GAP,
+    gutter: gutterOf(side, widthsOf(p)),
   };
 }
 
 /**
  * Lays the columns out on the width the chat has.
  *
- * The thread keeps `FIL_MIN`. When the columns ask for more, the second
+ * The thread keeps `THREAD_MIN`. When the columns ask for more, the second
  * columns fold back into their tabs first — the widest side first — then the
- * widths shrink in proportion, never below `LARGEUR_MIN`. `disponible <= 0`
+ * widths shrink in proportion, never below `WIDTH_MIN`. `available <= 0`
  * means not measured yet: everything is shown as asked.
  */
-export function planifierRails(
-  disponible: number,
-  gauche: DemandeCote | null,
-  droite: DemandeCote | null,
-): PlanRails {
-  const cotes: Array<[CoteColonne, DemandeCote | null]> = [['left', gauche], ['right', droite]];
-  const places = new Map<CoteColonne, PlaceCote>();
-  for (const [cote, d] of cotes) {
-    if (d) places.set(cote, placer(cote, {
-      premiere: d.premiere || d.seconde === null ? d.largeur : null,
-      seconde: d.seconde,
-      secondeRepliee: false,
+export function planRails(
+  available: number,
+  left: SideRequest | null,
+  right: SideRequest | null,
+): RailsPlan {
+  const sides: Array<[ColumnSide, SideRequest | null]> = [['left', left], ['right', right]];
+  const placements = new Map<ColumnSide, SidePlacement>();
+  for (const [side, d] of sides) {
+    if (d) placements.set(side, place(side, {
+      first: d.first || d.second === null ? d.width : null,
+      second: d.second,
+      secondFolded: false,
     }));
   }
-  const occupe = () => [...places.values()].reduce((a, p) => a + p.gouttiere, 0);
-  const libre = () => disponible - FIL_MIN - occupe();
-  const mesure = disponible > 0;
+  const used = () => [...placements.values()].reduce((a, p) => a + p.gutter, 0);
+  const free = () => available - THREAD_MIN - used();
+  const measured = available > 0;
 
-  while (mesure && libre() < 0) {
-    const avecSeconde = [...places.entries()]
-      .filter(([, p]) => p.seconde !== null)
-      .sort(([, a], [, b]) => b.gouttiere - a.gouttiere);
-    const premier = avecSeconde[0];
-    if (!premier) break;
-    const [cote] = premier;
-    const d = cote === 'left' ? gauche! : droite!;
-    places.set(cote, placer(cote, { premiere: d.largeur, seconde: null, secondeRepliee: true }));
+  while (measured && free() < 0) {
+    const withSecond = [...placements.entries()]
+      .filter(([, p]) => p.second !== null)
+      .sort(([, a], [, b]) => b.gutter - a.gutter);
+    const widest = withSecond[0];
+    if (!widest) break;
+    const [side] = widest;
+    const d = side === 'left' ? left! : right!;
+    placements.set(side, place(side, { first: d.width, second: null, secondFolded: true }));
   }
 
-  if (mesure && libre() < 0) {
-    const toutes = [...places.values()].flatMap(largeursDe);
-    const somme = toutes.reduce((a, b) => a + b, 0);
-    const facteur = somme > 0 ? Math.max(0, (somme + libre()) / somme) : 1;
-    const reduire = (w: number | null) => w === null ? null : Math.max(LARGEUR_MIN, Math.floor(w * facteur));
-    for (const [cote, p] of places) {
-      places.set(cote, placer(cote, { ...p, premiere: reduire(p.premiere), seconde: reduire(p.seconde) }));
+  if (measured && free() < 0) {
+    const all = [...placements.values()].flatMap(widthsOf);
+    const sum = all.reduce((a, b) => a + b, 0);
+    const factor = sum > 0 ? Math.max(0, (sum + free()) / sum) : 1;
+    const shrink = (w: number | null) => w === null ? null : Math.max(WIDTH_MIN, Math.floor(w * factor));
+    for (const [side, p] of placements) {
+      placements.set(side, place(side, { ...p, first: shrink(p.first), second: shrink(p.second) }));
     }
   }
 
   return {
-    gauche: places.get('left') ?? null,
-    droite: places.get('right') ?? null,
-    marge: mesure ? Math.max(0, libre()) : Number.POSITIVE_INFINITY,
+    left: placements.get('left') ?? null,
+    right: placements.get('right') ?? null,
+    slack: measured ? Math.max(0, free()) : Number.POSITIVE_INFINITY,
   };
 }
 
 /** Below this width the columns stop floating beside the thread: each one
  *  becomes a panel of the chat's island, opened on demand. The same breakpoint
  *  as `lg`, which used to hide them outright. */
-export const SEUIL_TIROIR = 1024;
+export const DRAWER_BREAKPOINT = 1024;
 
 /**
- * Whether the chat, `largeur` px wide (nav included), shows its columns as
+ * Whether the chat, `width` px wide (nav included), shows its columns as
  * panels. Unmeasured (0) is not narrow: the first paint keeps the floating
  * columns, which CSS hides on a small screen until the measure lands.
  */
-export function estEnTiroir(largeur: number): boolean {
-  return largeur > 0 && largeur < SEUIL_TIROIR;
+export function showsDrawers(width: number): boolean {
+  return width > 0 && width < DRAWER_BREAKPOINT;
 }

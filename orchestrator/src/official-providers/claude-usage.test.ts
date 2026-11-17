@@ -66,7 +66,8 @@ test('refreshes expired CLI credentials and persists rotated tokens', { concurre
     assert.equal(stored.claudeAiOauth.accessToken, 'fresh-access');
     assert.equal(stored.claudeAiOauth.refreshToken, 'refresh-new');
     assert.equal(stored.claudeAiOauth.subscriptionType, 'max');
-    assert.equal(statSync(path).mode & 0o777, 0o600);
+    // Windows reports 0o666 for any writable file: owner-only there is an ACL, not mode bits.
+    if (process.platform !== 'win32') assert.equal(statSync(path).mode & 0o777, 0o600);
   } finally {
     if (previousDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
     else process.env.CLAUDE_CONFIG_DIR = previousDir;

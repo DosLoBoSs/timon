@@ -37,7 +37,7 @@ function TuningControls({ tab, tuning, disabled, scheme, onChange, onReset }: {
   return (
     <div className={cn('flex flex-col gap-3', disabled && 'pointer-events-none opacity-60')}>
       <label className="flex flex-col gap-1 text-[13px] leading-snug">
-        <span className="flex items-center justify-between gap-3">{t('appearance.glassBlur')}<span className="tabular-nums text-[12px] text-muted-foreground">{tuning.blur} px</span></span>
+        <span className="flex items-center justify-between gap-3">{t('appearance.glassBlur')}<span className="tabular-nums text-[12px] text-muted-foreground">{tuning.blur} px{/* i18n-exempt: unit symbol */}</span></span>
         <input id={`${id}-blur`} type="range" min={GLASS_BLUR_RANGE.min} max={GLASS_BLUR_RANGE.max} value={tuning.blur} disabled={disabled} onChange={(e) => onChange({ blur: Number(e.target.value) })} className="w-full accent-primary" />
       </label>
       <label className="flex flex-col gap-1 text-[13px] leading-snug">

@@ -1,6 +1,5 @@
 {
   "webuiSettings": {
-    "category": "WebUI",
     "description": "Dónde responde Timon, cómo abrirlo desde el móvil y si es seguro.",
     "loadError": "No se pudieron leer los datos de red del daemon.",
     "forbidden": "Leer la configuración de red de esta máquina requiere una cuenta de administrador.",
@@ -9,7 +8,6 @@
     "servedExternally": "Servida fuera del daemon, a través de un proxy inverso",
     "statusRemote": "Acceso remoto",
     "remoteReady": "Listo",
-    "remoteReadyHint": "Ábrelo desde cualquier dispositivo con sesión iniciada en tu tailnet.",
     "remoteNotPublished": "Aún no publicado",
     "remoteStopped": "Tailscale está detenido",
     "remoteAbsent": "Tailscale no está instalado",
@@ -23,7 +21,7 @@
     "securityLoginNotEnforced": "inicio de sesión no exigido",
     "securityLoginOff": "inicio de sesión desactivado",
     "securityNoAccount": "Aún no hay cuenta: crea una antes de abrir el acceso.",
-    "securityAccounts": "{count} cuenta(s)",
+    "securityAccounts": "{count, plural, one {# cuenta} other {# cuentas}}",
     "statusApp": "Instalar como aplicación",
     "appAvailable": "Disponible aquí",
     "appUnavailable": "No en esta dirección",

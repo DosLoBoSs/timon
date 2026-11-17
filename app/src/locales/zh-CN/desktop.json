@@ -41,6 +41,8 @@
       "giveUp": "{url} 在 {seconds} 秒内未响应。",
       "uiMissing": "界面未能启动。",
       "uiMissingDetail": "{giveUp}\n\n守护进程可能在运行，但未启动其 Web 应用。请退出并重新打开 Timon。如果问题仍然存在，请复制诊断信息并发送给支持团队。",
+      "daemonDown": "后台服务未在运行。",
+      "daemonDownDetail": "{origin} 上没有任何响应{retried, select, yes {（即使 Timon 已重新启动它）} other {}}。其日志位于 {logs}。如果问题仍然存在，请复制诊断信息并发送给支持团队。",
       "crashing": "守护进程反复崩溃。",
       "crashingDetail": "{why}\n\n随应用附带的守护进程无法启动。你的数据仍保存在 {home}。",
       "slow": "守护进程未及时响应。",

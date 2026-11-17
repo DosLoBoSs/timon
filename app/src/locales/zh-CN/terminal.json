@@ -43,7 +43,6 @@
       "unauthorized": "请登录后打开终端。",
       "pty_unavailable": "此设备无法启动终端：伪终端组件加载失败。请查看守护进程日志。"
     },
-    "titleScoped": "终端 — {scope}",
     "scopes": {
       "none": "无项目",
       "label": "项目"

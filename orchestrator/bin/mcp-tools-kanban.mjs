@@ -1,6 +1,6 @@
 /**
  * MCP tools mirroring the CLI commands around the Kanban: `task get`,
- * `series … clear`, `worktree`, `pipeline`, `routine`.
+ * `task attach`, `series … clear`, `worktree`, `pipeline`, `routine`.
  */
 
 const enc = encodeURIComponent;
@@ -15,6 +15,23 @@ export const tools = [
     title: 'Read a Kanban task',
     description: 'Reads one task with all its fields, its attached files included (id, name, size, type; CLI `timon task get`).',
     inputSchema: { type: 'object', properties: { id: id('Task') }, required: ['id'] },
+  },
+  {
+    name: 'kanban_attach_series',
+    title: 'Attach a task chain to a series',
+    description:
+      'Attaches a task and its whole chain (the root it comes from, its reviews, merge, doc and repair iterations) ' +
+      'to a series and its current pilot (CLI `timon task attach`). For a chain created outside a mission ' +
+      '(a `curl`, the board): without a series its returns reach no pilot and its reviews ignore the series roles. ' +
+      'A task created with `kanban_add` or `timon task create` from inside a mission already belongs to its series.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: id('Task (any task of the chain)'),
+        series_id: { type: 'string', description: 'Series id, or the id of the mission piloting it; defaults to THIS mission (`current`).' },
+      },
+      required: ['id'],
+    },
   },
   {
     name: 'series_fallback_clear',
@@ -158,6 +175,9 @@ export const tools = [
 export const handlers = {
   async kanban_get(args, { call }) {
     return (await call('GET', `/api/tasks/${enc(args.id)}`)).task;
+  },
+  async kanban_attach_series(args, { call }) {
+    return await call('POST', `/api/tasks/${enc(args.id)}/attach-series`, { series: args.series_id ?? 'current' });
   },
   async series_fallback_clear(args, { call }) {
     const query = args.group ? `?group=${enc(args.group)}` : '';

@@ -131,6 +131,7 @@ export function BetaLockScreen({ lock, machine, onActivated = () => { window.loc
                 /* code-font: pasted license key */ className="min-h-24 w-full rounded-md border border-border bg-background p-3 font-mono text-xs"
                 value={key}
                 onChange={(event) => { setKey(event.target.value); }}
+                // i18n-exempt: licence key format
                 placeholder="TMN-XXXX-XXXX-XXXX-XXXX"
                 aria-label={t('betaLock.keyTitle')}
                 required

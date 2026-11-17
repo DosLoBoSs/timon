@@ -32,10 +32,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { delimiter, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { removeHomeOnExit } from '../../tests/helpers/test-home.js';
 
 /* TIMON_HOME jetable : les dialectes codex et grok matérialisent un home par
    mission sur disque au buildSpawn. Posé AVANT l'import du registry (paths.js lit
@@ -55,7 +56,7 @@ mkdirSync(FAKE_BIN, { recursive: true });
 writeFileSync(join(FAKE_BIN, 'copilot'), '', { mode: 0o755 });
 writeFileSync(join(FAKE_BIN, 'grok'), '', { mode: 0o755 });
 process.env.PATH = `${FAKE_BIN}${delimiter}${process.env.PATH ?? ''}`;
-process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
+removeHomeOnExit(TMP_HOME);
 
 const {
   backendNames, getBackend, NO_SESSION_CAPABILITIES, PERMISSION_MODELS,

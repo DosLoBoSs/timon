@@ -596,7 +596,7 @@ function GroupSection({
           <span className="flex items-baseline gap-1.5">
             <span className="truncate text-[12.5px] font-medium">{name}</span>
             <span className="shrink-0 text-[10.5px] tabular-nums text-muted-foreground">
-              {t(volets.length === 1 ? 'taskForm.seriesPlan.groups.countOne' : 'taskForm.seriesPlan.groups.countMany', { count: volets.length })}
+              {t('taskForm.seriesPlan.groups.count', { count: volets.length })}
             </span>
           </span>
           <span

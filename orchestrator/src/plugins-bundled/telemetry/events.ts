@@ -164,6 +164,11 @@ export const EVENT_SCHEMAS = {
     window: z.enum(['five_hour', 'seven_day', 'other']),
     kind: z.enum(['rate_limit', 'exhausted']),
   }).strict(),
+  /**
+   * An actor moved to its fallback backend. Both sides are product backends or
+   * `other`; the same value twice is a move to another account of that provider.
+   */
+  fallback_used: z.object({ from_backend: backend, to_backend: backend }).strict(),
   user_prompt_answered: z.object({
     kind: z.enum(['question', 'kanban_plan', 'permission']),
     decision: z.enum(['allow', 'deny', 'paste', 'expired']),

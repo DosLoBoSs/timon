@@ -23,8 +23,8 @@
 import { BRAND } from '@/lib/brand';
 import { t } from '@/lib/i18n';
 
-/** Last segment of a path, to talk about `panier.tsx` and not
- *  `/home/user/webdev/.../src/components/panier.tsx`. */
+/** Last segment of a path, to talk about `cart.tsx` and not
+ *  `/home/user/webdev/.../src/components/cart.tsx`. */
 function base(p: string): string {
   const clean = p.replace(/\/+$/, '');
   const seg = clean.split('/').filter(Boolean).pop();
@@ -33,7 +33,7 @@ function base(p: string): string {
 
 /** Strips the prefixes that carry no intent: `cd X &&`, `sudo`, `time`, the
  *  trailing redirections and the leading env variables. */
-function coeurDeCommande(cmd: string): string {
+function commandCore(cmd: string): string {
   let c = cmd.trim();
   // Chaining: keep the meaningful link, not the `cd` that introduces it.
   for (let i = 0; i < 4; i++) {
@@ -53,8 +53,8 @@ function coeurDeCommande(cmd: string): string {
 }
 
 /** Description of a shell command. */
-function decrireBash(commande: string): string {
-  const c = coeurDeCommande(commande);
+function describeBash(command: string): string {
+  const c = commandCore(command);
 
   // ── FIRST what stops / destroys ──────────────────────────────────────────
   // These patterns come first because they often quote their target:
@@ -67,10 +67,10 @@ function decrireBash(commande: string): string {
   if (/run-tests-chunked|scripts\/.*test/.test(c)) return t('humanizeTool.fullSuite');
   let m = /\bmake\s+test-only\s+T=(\S+)/.exec(c);
   if (m) {
-    const cible = m[1]!;
-    if (/\.php$|\.ts$|\.tsx$|Test\b/.test(cible)) return t('humanizeTool.testFile', { name: base(cible) });
-    if (cible.startsWith('--filter')) return t('humanizeTool.oneTest');
-    return t('humanizeTool.testFolder', { name: base(cible) });
+    const target = m[1]!;
+    if (/\.php$|\.ts$|\.tsx$|Test\b/.test(target)) return t('humanizeTool.testFile', { name: base(target) });
+    if (target.startsWith('--filter')) return t('humanizeTool.oneTest');
+    return t('humanizeTool.testFolder', { name: base(target) });
   }
   if (/\bmake\s+test\b/.test(c)) return t('humanizeTool.fullSuite');
   if (/\b(phpunit|pest|vitest|jest|pytest)\b/.test(c)) return t('humanizeTool.tests');
@@ -115,8 +115,8 @@ function decrireBash(commande: string): string {
   if (/\btimon\b/.test(c)) return t('humanizeTool.brandCommand', { brand: BRAND.displayName });
 
   // Clean degradation: the binary, without inventing an intent.
-  const binaire = /^([\w./-]+)/.exec(c)?.[1];
-  return binaire ? t('humanizeTool.runNamed', { name: base(binaire) }) : t('humanizeTool.runCommand');
+  const binary = /^([\w./-]+)/.exec(c)?.[1];
+  return binary ? t('humanizeTool.runNamed', { name: base(binary) }) : t('humanizeTool.runCommand');
 }
 
 /**
@@ -133,7 +133,7 @@ export function humanizeTool(
 
   switch (name) {
     case 'Bash':
-      return d ? decrireBash(d) : null;
+      return d ? describeBash(d) : null;
     case 'Read':
       return d ? t('humanizeTool.readNamed', { name: base(d) }) : t('humanizeTool.readFile');
     case 'Edit':

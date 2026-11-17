@@ -6,20 +6,26 @@
  * the agent's first words; its end releases the app without leaving the page
  * and keeps the conversation on screen; an unnamed agent goes back to the agent
  * step; a start refused offers to try again; skipping hands back the plain chat.
+ * A later visit reopens the welcome as it ended while it is the TIM's latest
+ * conversation, never one the reader skipped.
  */
 import '@/lib/i18n-test-locales';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ComponentType } from 'react';
 import { chatStepEntry } from '@/components/onboarding/setup-chat';
-import { botsChatMode, type WelcomeConversationProps } from './bots-welcome';
+import { botsChatMode, fetchEndedWelcome, type WelcomeConversationProps } from './bots-welcome';
 
 test('the main TIM shows its welcome while the daemon holds it, and for the rest of the visit once it was on screen', () => {
   const pending = { firstRun: false, mainAgentOnboarding: true };
   const done = { firstRun: false, mainAgentOnboarding: false };
   assert.equal(botsChatMode({ selected: 'nova', main: 'nova', caps: pending, welcomeAgent: null }), 'welcome');
   assert.equal(botsChatMode({ selected: 'ada', main: 'nova', caps: pending, welcomeAgent: null }), 'chat', 'another TIM keeps its plain chat');
-  assert.equal(botsChatMode({ selected: 'nova', main: 'nova', caps: done, welcomeAgent: null }), 'chat', 'a later visit: the plain chat');
+  assert.equal(botsChatMode({ selected: 'nova', main: 'nova', caps: done, welcomeAgent: null, ended: null }), 'chat', 'a later visit, the welcome not the latest: the plain chat');
+  const ended = { agent: 'nova', missionId: 'm1' };
+  assert.equal(botsChatMode({ selected: 'nova', main: 'nova', caps: done, welcomeAgent: null, ended }), 'ended', 'a later visit: the welcome as it ended');
+  assert.equal(botsChatMode({ selected: 'nova', main: 'nova', caps: done, welcomeAgent: null }), 'hold', 'no flash of the plain chat while it is looked up');
+  assert.equal(botsChatMode({ selected: 'ada', main: 'nova', caps: done, welcomeAgent: null }), 'chat', 'another TIM never waits for it');
   assert.equal(botsChatMode({ selected: 'nova', main: 'nova', caps: done, welcomeAgent: 'nova' }), 'welcome', 'ended in front of the reader: the same conversation stays');
   assert.equal(botsChatMode({ selected: 'nova', main: 'nova', caps: null, welcomeAgent: null }), 'hold', 'no flash of the plain chat before the welcome');
   assert.equal(botsChatMode({ selected: 'ada', main: 'nova', caps: null, welcomeAgent: null }), 'chat');
@@ -217,5 +223,158 @@ test('skipping the welcome answers the step and hands the page back to the plain
     assert.ok(calls.some((c) => c.method === 'POST' && c.url === '/api/ui/setup/main-agent'));
     assert.equal(released(), 1);
     assert.equal(closed(), 1);
+    const { welcomeSkipped } = await import('@/components/onboarding/setup-entry');
+    assert.equal(welcomeSkipped('mission-1'), true, 'a later visit does not reopen it');
+  });
+});
+
+test('the welcome waits until it is on screen: a hidden island tab or a background window spends no mission', async () => {
+  await withDom(async (dom, React) => {
+    const { createRoot } = await import('react-dom/client');
+    const { useShownOnce } = await import('./bots-welcome');
+    let notify: ((entries: Array<{ isIntersecting: boolean }>) => void) | null = null;
+    class FakeObserver {
+      constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void) { notify = callback; }
+      observe(): void {}
+      disconnect(): void { notify = null; }
+    }
+    let visibility: DocumentVisibilityState = 'hidden';
+    Object.defineProperty(dom.window.document, 'visibilityState', { configurable: true, get: () => visibility });
+    const savedObserver = Object.getOwnPropertyDescriptor(globalThis, 'IntersectionObserver');
+    Object.defineProperty(globalThis, 'IntersectionObserver', { value: FakeObserver, configurable: true, writable: true });
+    const seen: boolean[] = [];
+    function Probe(): ReturnType<typeof React.createElement> {
+      const box = React.useRef<HTMLDivElement>(null);
+      seen.push(useShownOnce(box));
+      return React.createElement('div', { ref: box });
+    }
+    const host = document.getElementById('root');
+    assert.ok(host);
+    const root = createRoot(host);
+    try {
+      await React.act(async () => { root.render(React.createElement(Probe)); });
+      assert.equal(seen.at(-1), false, 'mounted, not shown yet');
+      await React.act(async () => { notify?.([{ isIntersecting: true }]); });
+      assert.equal(seen.at(-1), false, 'laid out, but the window is in the background');
+      visibility = 'visible';
+      await React.act(async () => { document.dispatchEvent(new dom.window.Event('visibilitychange')); });
+      assert.equal(seen.at(-1), true, 'on screen');
+      assert.equal(notify, null, 'latched: nothing left to watch');
+    } finally {
+      await React.act(async () => { root.unmount(); });
+      if (savedObserver) Object.defineProperty(globalThis, 'IntersectionObserver', savedObserver);
+      else delete (globalThis as Record<string, unknown>).IntersectionObserver;
+    }
+  });
+});
+
+test('without IntersectionObserver there is nothing to wait for', async () => {
+  await withDom(async (_dom, React) => {
+    const { createRoot } = await import('react-dom/client');
+    const { useShownOnce } = await import('./bots-welcome');
+    assert.equal(typeof (globalThis as Record<string, unknown>).IntersectionObserver, 'undefined');
+    let shown = false;
+    function Probe(): ReturnType<typeof React.createElement> {
+      const box = React.useRef<HTMLDivElement>(null);
+      shown = useShownOnce(box);
+      return React.createElement('div', { ref: box });
+    }
+    const host = document.getElementById('root');
+    assert.ok(host);
+    const root = createRoot(host);
+    try {
+      await React.act(async () => { root.render(React.createElement(Probe)); });
+      assert.equal(shown, true);
+    } finally {
+      await React.act(async () => { root.unmount(); });
+    }
+  });
+});
+
+type Row = { id: string; agent_name: string; source_channel: string | null; started_at: number; last_event_at: number | null };
+const row = (id: string, source: string | null, at: number, agent = 'nova'): Row => ({ id, agent_name: agent, source_channel: source, started_at: at, last_event_at: at });
+
+function missionList(rows: Row[] | 'down'): { urls: string[]; fetcher: (input: string) => Promise<Response> } {
+  const urls: string[] = [];
+  return {
+    urls,
+    fetcher: async (input) => {
+      urls.push(input);
+      return rows === 'down' ? Response.json({ error: 'down' }, { status: 503 }) : Response.json({ missions: rows });
+    },
+  };
+}
+
+test('a later visit reopens the welcome while it is the TIM\'s latest conversation, never one walked out of', async () => {
+  await withDom(async () => {
+    const latest = missionList([row('plain-old', null, 10), row('welcome', 'setup', 20)]);
+    assert.deepEqual(await fetchEndedWelcome('nova', latest.fetcher), { agent: 'nova', missionId: 'welcome' });
+    assert.deepEqual(latest.urls, ['/api/ui/missions?agent=nova&limit=20']);
+    // Talked to since, even in an older conversation: the plain chat opens that one.
+    const since = missionList([row('welcome', 'setup', 20), { ...row('plain-old', null, 10), last_event_at: 30 }]);
+    assert.equal(await fetchEndedWelcome('nova', since.fetcher), null);
+    assert.equal(await fetchEndedWelcome('nova', missionList([]).fetcher), null);
+    assert.equal(await fetchEndedWelcome('nova', missionList('down').fetcher), null, 'any doubt: the plain chat');
+    const { markWelcomeSkipped } = await import('@/components/onboarding/setup-entry');
+    markWelcomeSkipped('welcome');
+    assert.equal(await fetchEndedWelcome('nova', missionList([row('welcome', 'setup', 20)]).fetcher), null, 'skipped: the plain chat');
+  });
+});
+
+test('the reopened welcome is the same conversation, with nothing above it left to skip', async () => {
+  await withDom(async (_dom, React) => {
+    const { createRoot } = await import('react-dom/client');
+    const { EndedWelcomeView } = await import('./bots-welcome');
+    let seen: WelcomeConversationProps | null = null;
+    const Conversation: ComponentType<WelcomeConversationProps> = (props) => {
+      seen = props;
+      return React.createElement('div', { 'data-fake-conversation': props.missionId });
+    };
+    const host = document.getElementById('root');
+    assert.ok(host);
+    const root = createRoot(host);
+    try {
+      await React.act(async () => { root.render(React.createElement(EndedWelcomeView, { Conversation, welcome: { agent: 'nova', missionId: 'welcome' } })); });
+      assert.ok(host.querySelector('[data-bots-welcome="ended"] [data-fake-conversation="welcome"]'));
+      assert.equal((seen as WelcomeConversationProps | null)?.agent, 'nova');
+      assert.ok(!host.querySelector('[data-welcome-escape]'), 'no way out to offer');
+      assert.ok(!host.querySelector('[role="status"]'), 'no loader: its words are already there');
+    } finally {
+      await React.act(async () => { root.unmount(); });
+    }
+  });
+});
+
+test('the ended welcome is looked up afresh at each visit of the main TIM', async () => {
+  await withDom(async (_dom, React) => {
+    const { createRoot } = await import('react-dom/client');
+    const { useEndedWelcome } = await import('./bots-welcome');
+    const list = missionList([row('welcome', 'setup', 20)]);
+    const seen: Array<unknown> = [];
+    let visit: (agent: string | null) => void = () => {};
+    function Probe(): null {
+      const [agent, setAgent] = React.useState<string | null>('nova');
+      visit = setAgent;
+      seen.push(useEndedWelcome(agent, list.fetcher));
+      return null;
+    }
+    const host = document.getElementById('root');
+    assert.ok(host);
+    const root = createRoot(host);
+    try {
+      await React.act(async () => { root.render(React.createElement(Probe)); });
+      await settle(React);
+      assert.equal(seen[0], undefined, 'looked up first: the page holds');
+      assert.deepEqual(seen.at(-1), { agent: 'nova', missionId: 'welcome' });
+      await React.act(async () => { visit(null); });
+      assert.equal(seen.at(-1), null);
+      const before = seen.length;
+      await React.act(async () => { visit('nova'); });
+      assert.equal(seen[before], undefined, 'back on the main TIM: never the previous answer');
+      await settle(React);
+      assert.equal(list.urls.length, 2);
+    } finally {
+      await React.act(async () => { root.unmount(); });
+    }
   });
 });

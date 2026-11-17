@@ -10,10 +10,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { removeHomeOnExit } from '../../tests/helpers/test-home.js';
 
 const TMP_HOME = mkdtempSync(join(tmpdir(), 'timon-local-backends-'));
 process.env.TIMON_HOME = TMP_HOME;
-process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
+removeHomeOnExit(TMP_HOME);
 
 const { parseLocalBackend, parsePackBackend, reloadLocalBackends, listLocalBackends, NO_KEY_PLACEHOLDER } = await import('./local-profiles.js');
 const { forbiddenEnvReason, FORBIDDEN_ENV_NAMES, FORBIDDEN_ENV_PREFIXES } = await import('./env-guard.js');

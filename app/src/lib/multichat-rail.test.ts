@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildRail, filterRail, firstAgent, foldText, readRailPrefs, type RailAgent } from './multichat-rail';
+import { getLocale, registerLocale, setLocale } from './i18n';
 
 const agents: RailAgent[] = [
   { name: 'timon.coder', project: 'timon', role: 'coder' },
@@ -45,6 +46,23 @@ test('poles head their projects; what is in no pole trails, without a heading', 
   assert.deepEqual(sections.map((s) => s.pole?.name ?? null), ['Life', 'Pro', null], 'a pole without agents is not shown');
   assert.deepEqual(sections[1]!.groups.map((g) => g.key), ['p:nimbus', 'p:timon'], 'project slugs match without case');
   assert.deepEqual(sections[2]!.groups.map((g) => g.key), ['t:team-1', 'none']);
+});
+
+test('project groups follow the interface language: pinyin order in Chinese', () => {
+  // Code-point order puts 张 (zhang) before 李 (li); a Chinese reader expects li first.
+  const chinese = [{ slug: 'zhang', name: '张' }, { slug: 'li', name: '李' }];
+  const members: RailAgent[] = [
+    { name: 'a', project: 'zhang', role: null },
+    { name: 'b', project: 'li', role: null },
+  ];
+  const previous = getLocale();
+  registerLocale('zh-CN', {});
+  try {
+    setLocale('zh-CN');
+    assert.deepEqual(buildRail(members, { projects: chinese }).at(0)!.groups.map((g) => g.label), ['李', '张']);
+  } finally {
+    setLocale(previous);
+  }
 });
 
 test('no agent, no section', () => {

@@ -56,7 +56,7 @@ For each agent found, the preview shows what will happen (**create**, **update**
 
 - leave the agent out;
 - change its name;
-- pick its role (**Research** by default), its project and its working folder;
+- pick its role (**Research** by default), its project (from the list of this Timon's projects) and its working folder;
 - untick what it brings: **Identity (SOUL)**, **Memory**, **Skills**, **MCP servers**, **Routines**, **Team**. Each box shows how many items would be written;
 - keep its routines active. Routines are imported **switched off** unless you turn on **Keep active the routines that run at the source** on the agent's card: an active routine starts tasks on its own, so check them first.
 
@@ -77,7 +77,7 @@ Warnings under each agent list what will not come over and why. After a change, 
 
 Agents are named after the tool they come from: `grok-bot.ada`, `hermes.coder`, `timon.researcher`. When agents the import did not create already use that prefix, the import uses `import.` instead. A name already taken gets `-2`, `-3`…
 
-Importing the same export again **updates** the agents it created, even if you renamed them since. An agent you changed by hand in the meantime is skipped, and the preview says so. Another account importing the same export gets agents of its own: it never updates yours.
+Importing the same export again **updates** the agents it created, even if you renamed them since. From another Timon, a new export of an agent updates its copy too, even if the agent was renamed on that Timon in between. An agent you changed by hand in the meantime is skipped, and the preview says so. Another account importing the same export gets agents of its own: it never updates yours.
 
 ## What stays behind
 
@@ -109,6 +109,13 @@ timon agent import --hermes default coder --yes
 ```
 
 It shows the preview, then asks before writing anything. `--yes` imports without asking (for a script), `--accept-cwd` takes the proposed working folders, `--prefix` replaces the source's name prefix, and `--json` prints the result as JSON. Without `--yes` and without a terminal to answer in, nothing is imported. `timon agent export` writes the archive another Timon imports, `timon agent export-skill` prints the export skill: see [Copy agents to another Timon](agents.md#copy-agents-to-another-timon) and the [CLI reference](cli-reference.md).
+
+Routines switched on at the source arrive **switched off** here too, and the preview counts them for each agent. To keep them on, say so: `--keep-routines` for every agent, or `--keep-routines-for` with the names the preview shows, separated by commas.
+
+```bash
+timon agent import agents.zip --keep-routines
+timon agent import --hermes --keep-routines-for default,coder
+```
 
 ## Who can import
 

@@ -1,6 +1,5 @@
 {
   "mascot": {
-    "field": {"shape": "头形", "fur": "毛色", "eyes": "眼睛", "acc": "配饰"},
     "shape": {"squircle": "经典", "tri": "梨形", "gem": "蛋形", "round": "圆形", "bean": "宽形", "cloud": "长形", "hex": "方形"},
     "fur": {
       "sand": "沙色", "cinnamon": "肉桂色", "cream": "奶油色", "cocoa": "可可色", "caramel": "焦糖色", "taupe": "灰褐色",

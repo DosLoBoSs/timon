@@ -1,26 +1,4 @@
 {
-  "mission": {
-    "title": "Nowa misja",
-    "description": "Rozpocznij rozmowę z agentem {agent} na wybranym LLM.",
-    "resumeDescription": "Możesz też wznowić poprzednią misję: nowy LLM przeczyta podsumowanie i będzie kontynuował od tego miejsca.",
-    "llm": "LLM",
-    "reasoningEffort": "Nakład rozumowania",
-    "default": "Domyślny",
-    "continue": "Kontynuuj poprzednią misję",
-    "resumeWithSummary": "Nowy LLM przeczyta podsumowanie historii, aby wznowić.",
-    "resumeSameLlm": "Wznawia kontekst poprzedniej misji na tym samym LLM.",
-    "followup": "Wiadomość uzupełniająca",
-    "firstMessage": "Pierwsza wiadomość",
-    "followupPlaceholder": "Np.: kontynuuj to, co robiliśmy, skup się na X…",
-    "firstMessagePlaceholder": "Np.: pomóż mi z…",
-    "cancel": "Anuluj",
-    "continuing": "Kontynuowanie…",
-    "creating": "Tworzenie…",
-    "start": "Rozpocznij",
-    "continuedToast": "Misja kontynuowana na {backend} · {model}",
-    "createdToast": "Nowa misja na {backend} · {model}",
-    "failed": "Niepowodzenie: {message}"
-  },
   "llm": {
     "handoverTail": "Podsumowanie nie powiodło się: przeszedł tylko KONIEC rozmowy",
     "confirmWhole": "Przekaż w całości",
@@ -107,7 +85,6 @@
     "dismiss": "Odrzuć",
     "center": "Centrum powiadomień",
     "sure": "Na pewno?",
-    "close": "Zamknij",
     "empty": "Brak powiadomień",
     "clearAll": "Wyczyść wszystko",
     "clearAlerts": "Wyczyść alerty",
@@ -221,13 +198,6 @@
       "openWorkspace": "Otwórz w obszarze roboczym",
       "opened": "Siatkę otwarto w obszarze roboczym"
     }
-  },
-  "calendar": {
-    "today": "Dziś",
-    "tomorrow": "Jutro",
-    "upcoming": "Nadchodzące",
-    "overdue": "Zaległe · {date}",
-    "noDueDate": "Bez terminu"
   },
   "delegations": {
     "title": "Czeka na powrót",

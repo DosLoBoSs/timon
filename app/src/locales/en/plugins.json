@@ -422,7 +422,7 @@
       "osCredentialAccount": "Reads the entry \"{service}\" ({account}) of your system credential store (macOS keychain). Read-only."
     },
     "install": {
-      "allow": "Allow Timon to run the program(s) listed above.",
+      "allow": "Allow Timon to run {count, plural, one {the program} other {the programs}} listed above.",
       "allowHint": "Without this, the provider is installed but stays inactive until you authorize it in {settingsPath}."
     },
     "plugins": {

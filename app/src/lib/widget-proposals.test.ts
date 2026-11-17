@@ -7,12 +7,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { ContraintesWidget, WidgetLayout } from '@/components/widget-host/widget-layout';
-import type { EntreeCatalogue } from '@/components/widget-host/widget-catalog';
+import type { WidgetConstraints, WidgetLayout } from '@/components/widget-host/widget-layout';
+import type { CatalogEntry } from '@/components/widget-host/widget-catalog';
 import { applyWidgetsProposal, buildWidgetSnapshot, newTabZones, parseWidgetsProposal } from './widget-proposals';
 
-const c = (id: string, railDefaut = 'chat.right.widget'): ContraintesWidget =>
-  ({ id, hauteurDefaut: 200, hauteurMin: 100, railDefaut, rangDefaut: 0 });
+const c = (id: string, defaultZone = 'chat.right.widget'): WidgetConstraints =>
+  ({ id, defaultHeight: 200, minHeight: 100, defaultZone, defaultRank: 0 });
 const GIT = 'plugin:@timon/git:Git';
 const MISSIONS = 'plugin:@timon/missions:Missions';
 const FILES = 'plugin:@timon/files-widget:Files';
@@ -121,8 +121,8 @@ test('the stored payload is parsed defensively, and new tab refs map to their co
 });
 
 test('the snapshot keeps stable ids only, hides what the configuration hides, and carries the starters', () => {
-  const entry = (id: string, extra: Partial<EntreeCatalogue> = {}): EntreeCatalogue => ({
-    ...c(id), titre: id.split(':').pop()!, slots: ['chat.right.widget'], registrationId: `${id}:1`, pluginId: '@timon/x', ...extra,
+  const entry = (id: string, extra: Partial<CatalogEntry> = {}): CatalogEntry => ({
+    ...c(id), title: id.split(':').pop()!, slots: ['chat.right.widget'], registrationId: `${id}:1`, pluginId: '@timon/x', ...extra,
   });
   const snap = buildWidgetSnapshot({
     entries: [entry(GIT), entry('@timon/x:3'), entry(MISSIONS, { bar: true, description: 'line\none' }), entry(FILES)],
@@ -138,7 +138,7 @@ test('the snapshot keeps stable ids only, hides what the configuration hides, an
   // A widget placed by default says where (TODO #479): the daemon puts it there
   // on a stored view that never named it, as the browser does.
   const bar = buildWidgetSnapshot({
-    entries: [entry(GIT, { placedByDefault: true, railDefaut: 'topbar.center.widget' }), entry(MISSIONS)], visible: () => true, view: null, zones: [],
+    entries: [entry(GIT, { placedByDefault: true, defaultZone: 'topbar.center.widget' }), entry(MISSIONS)], visible: () => true, view: null, zones: [],
   });
   assert.deepEqual([bar.catalog[0]?.placedByDefault, bar.catalog[0]?.zone], [true, 'topbar.center.widget']);
   assert.equal('zone' in (bar.catalog[1] ?? {}), false);

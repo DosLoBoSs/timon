@@ -1,6 +1,5 @@
 {
   "agentChat": {
-    "title": "Chat con agente",
     "newCard": "Nuevo chat con agente",
     "newCardHint": "Elige el agente que muestra esta tarjeta. Cuando se cree, añade otra tarjeta desde la paleta de widgets.",
     "newConversation": "Nueva conversación",
@@ -37,7 +36,7 @@
       "makeMainDone": "{name} es ahora el orquestador principal: los resúmenes de reactivación y las notificaciones le llegan a él",
       "makeMainFailed": "No se pudo establecer a {name} como orquestador principal: {error}",
       "stopConfirm": "¿Detener a {name} de verdad? Sus misiones en curso se terminan, su bandeja de entrada se vacía, sus tareas pendientes se bloquean y se desactivan sus disparadores y los workflows que lo despertarían.",
-      "stopped": "{name} detenido: {missions} misión(es), {messages} mensaje(s), {tasks} tarea(s), {triggers} disparador(es), {runs} ejecución(es) de workflow, {workflows} workflow(s) neutralizados",
+      "stopped": "{name} detenido: {missions, plural, one {# misión} other {# misiones}}, {messages, plural, one {# mensaje} other {# mensajes}}, {tasks, plural, one {# tarea} other {# tareas}}, {triggers, plural, one {# disparador} other {# disparadores}}, {runs, plural, one {# ejecución de workflow} other {# ejecuciones de workflow}}, {workflows, plural, one {# workflow} other {# workflows}} neutralizados",
       "stopFailed": "No se pudo detener a {name}: {error}",
       "duplicate": "Duplicar agente"
     },

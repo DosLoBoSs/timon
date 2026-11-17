@@ -4,16 +4,16 @@ import { useMemo, useSyncExternalStore, type ComponentType, type ReactNode } fro
 
 import { cn } from '@/lib/utils';
 import { Tile } from '@/components/tile';
-import { zoneDefautDuSlot } from '@/components/cockpit/cockpit-zones';
+import { defaultZoneForSlot } from '@/components/cockpit/cockpit-zones';
 import type { WidgetProps } from './widget-props';
 import { PluginBoundary } from '@/lib/plugin-host/plugin-boundary';
 import { slotNature } from '@/lib/plugin-host/slot-compat';
 import { slotEntries, slotNames, slotVersion, subscribeSlots } from '@/lib/plugin-host/slots';
 import type { SlotEntry } from '@/lib/plugin-host/slots';
-import { catalogueWidgets, idCourant, type EntreeCatalogue, type EntreeSlotWidget } from './widget-catalog';
+import { buildWidgetCatalog, currentWidgetId, type CatalogEntry, type WidgetSlotEntry } from './widget-catalog';
 
 /**
- * The catalogue as React sees it: the pure model (`widget-catalog.ts`), plus
+ * The catalog as React sees it: the pure model (`widget-catalog.ts`), plus
  * the component each entry paints.
  *
  * A single source now: the slot registry. The native table
@@ -23,17 +23,17 @@ import { catalogueWidgets, idCourant, type EntreeCatalogue, type EntreeSlotWidge
  * places what registered, wherever it comes from.
  */
 
-export type EntreeAffichable = EntreeCatalogue & {
+export type RenderableEntry = CatalogEntry & {
   /** Paints the card: framed by the host, or bare if it took its own frame. */
-  rendu: (props: WidgetProps) => ReactNode;
+  render: (props: WidgetProps) => ReactNode;
 };
 
-export type Catalogue = {
+export type WidgetCatalog = {
   /** The constraints, in order: what the layout model consumes. */
-  entrees: EntreeCatalogue[];
-  parId: ReadonlyMap<string, EntreeAffichable>;
-  /** Like `parId`, but a former id (`formerIds`) leads to its card too. */
-  trouver: (id: string) => EntreeAffichable | undefined;
+  entries: CatalogEntry[];
+  byId: ReadonlyMap<string, RenderableEntry>;
+  /** Like `byId`, but a former id (`formerIds`) leads to its card too. */
+  lookup: (id: string) => RenderableEntry | undefined;
 };
 
 /**
@@ -49,14 +49,14 @@ export type Catalogue = {
  * canvas, scrolling lists, input fields) would not bear a handle laid on hover
  * (see `widget-props.ts`). Hence two renders, a single placement.
  */
-function CartePlugin({
-  titre,
+function PluginCard({
+  title,
   pluginId,
-  Composant,
+  Component,
   poignee,
   className,
   compact,
-}: WidgetProps & { titre: string; pluginId: string; Composant: React.ComponentType }) {
+}: WidgetProps & { title: string; pluginId: string; Component: React.ComponentType }) {
   // A tile on a 36px line, or around two icons in a narrow sidebar, would be a
   // title bar and little else: a framed widget with a compact form
   // (`bar: true`) is painted bare there.
@@ -64,95 +64,95 @@ function CartePlugin({
     return (
       <>
         <PluginBoundary pluginId={pluginId}>
-          <Composant />
+          <Component />
         </PluginBoundary>
         {poignee}
       </>
     );
   }
   return (
-    <Tile title={titre} actions={poignee} className={cn(className)} bodyClassName="p-0">
+    <Tile title={title} actions={poignee} className={cn(className)} bodyClassName="p-0">
       <PluginBoundary pluginId={pluginId}>
-        <Composant />
+        <Component />
       </PluginBoundary>
     </Tile>
   );
 }
 
 /** Widget registrations, across all host zones. */
-function inscriptionsWidget(): Array<{ entree: EntreeSlotWidget; composant: SlotEntry }> {
-  const sortie: Array<{ entree: EntreeSlotWidget; composant: SlotEntry }> = [];
+function widgetRegistrations(): Array<{ entry: WidgetSlotEntry; component: SlotEntry }> {
+  const out: Array<{ entry: WidgetSlotEntry; component: SlotEntry }> = [];
   for (const slot of slotNames()) {
     if (slotNature(slot) !== 'widget') continue;
-    for (const entry of slotEntries(slot)) {
-      sortie.push({
-        entree: {
-          registrationId: entry.id,
-          pluginId: entry.pluginId,
-          key: entry.key,
+    for (const slotEntry of slotEntries(slot)) {
+      out.push({
+        entry: {
+          registrationId: slotEntry.id,
+          pluginId: slotEntry.pluginId,
+          key: slotEntry.key,
           slot,
-          options: entry.widget,
+          options: slotEntry.widget,
         },
-        composant: entry,
+        component: slotEntry,
       });
     }
   }
-  return sortie;
+  return out;
 }
 
-export function useWidgetCatalog(): Catalogue {
+export function useWidgetCatalog(): WidgetCatalog {
   // The registry is an external store: without a subscription, a plugin that
   // registers after the first render would only appear at the next render
   // caused by something else. The version also serves as the memo key:
-  // recomputing the catalogue at every render would change the identity of the
+  // recomputing the catalog at every render would change the identity of the
   // constraints, hence of the layout, hence of everything the host publishes,
   // and every widget would re-render continuously (3D canvas included).
   const version = useSyncExternalStore(subscribeSlots, slotVersion, slotVersion);
 
   return useMemo(() => {
     void version;
-    const inscriptions = inscriptionsWidget();
-    const entrees = catalogueWidgets(
+    const registrations = widgetRegistrations();
+    const entries = buildWidgetCatalog(
       [],
-      inscriptions.map((i) => i.entree),
-      zoneDefautDuSlot,
+      registrations.map((i) => i.entry),
+      defaultZoneForSlot,
     );
-    const composants = new Map(inscriptions.map((i) => [i.composant.id, i.composant]));
+    const components = new Map(registrations.map((i) => [i.component.id, i.component]));
 
-    const parId = new Map<string, EntreeAffichable>();
-    for (const entree of entrees) {
-      const inscription = entree.registrationId ? composants.get(entree.registrationId) : null;
-      // An entry whose registration has just disappeared: the catalogue is live,
+    const byId = new Map<string, RenderableEntry>();
+    for (const entry of entries) {
+      const registration = entry.registrationId ? components.get(entry.registrationId) : null;
+      // An entry whose registration has just disappeared: the catalog is live,
       // and a plugin can withdraw between two renders.
-      if (!inscription) continue;
+      if (!registration) continue;
       // `frame: 'none'`: the widget paints its own frame, like the product tiles
       // whose header carries a live subtitle and the handle. It then receives the
       // same props as a native one; framing it as well would give two borders and
       // two titles.
-      const Composant = inscription.Component as ComponentType<WidgetProps>;
-      const nu = inscription.widget?.frame === 'none';
-      parId.set(entree.id, {
-        ...entree,
-        rendu: (props) =>
-          nu ? (
-            <PluginBoundary pluginId={inscription.pluginId}>
-              <Composant {...props} />
+      const Component = registration.Component as ComponentType<WidgetProps>;
+      const bare = registration.widget?.frame === 'none';
+      byId.set(entry.id, {
+        ...entry,
+        render: (props) =>
+          bare ? (
+            <PluginBoundary pluginId={registration.pluginId}>
+              <Component {...props} />
             </PluginBoundary>
           ) : (
-            <CartePlugin
+            <PluginCard
               {...props}
-              titre={entree.titre}
-              pluginId={inscription.pluginId}
-              Composant={inscription.Component}
+              title={entry.title}
+              pluginId={registration.pluginId}
+              Component={registration.Component}
             />
           ),
       });
     }
 
-    const trouver = (id: string) => {
-      const courant = idCourant(entrees, id);
-      return courant === null ? undefined : parId.get(courant);
+    const lookup = (id: string) => {
+      const current = currentWidgetId(entries, id);
+      return current === null ? undefined : byId.get(current);
     };
-    return { entrees, parId, trouver };
+    return { entries, byId, lookup };
   }, [version]);
 }

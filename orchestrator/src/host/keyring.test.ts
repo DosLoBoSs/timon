@@ -75,6 +75,9 @@ test("secrets.keyring defaults to 'auto'", () => {
  * still recording that it was called (`clear-attempted` in the state dir).
  * Returns the state dir alongside the script so a case can inspect both.
  */
+// The witness is a `sh` script: Windows cannot run it (macOS can, and passes).
+const SH_WITNESS = process.platform === 'win32' && 'the secret-tool witness is a sh script';
+
 function witnessSecretTool(opts: { brokenClear?: boolean } = {}): { script: string; state: string } {
   const state = mkdtempSync(join(tmpdir(), 'timon-keyring-witness-'));
   const script = join(state, 'secret-tool');
@@ -108,7 +111,7 @@ function witnessSecretTool(opts: { brokenClear?: boolean } = {}): { script: stri
   return { script, state };
 }
 
-test('a working secret-tool exposes host.keyring and the capability', () => {
+test('a working secret-tool exposes host.keyring and the capability', { skip: SH_WITNESS }, () => {
   const host = createLinuxHost(cfg({ host: { binaries: { 'secret-tool': witnessSecretTool().script } } }));
   assert.ok(host.keyring, 'the probe should have succeeded against the witness secret-tool');
   assert.equal(host.capabilities().includes('keyring'), true);
@@ -125,7 +128,7 @@ test('a working secret-tool exposes host.keyring and the capability', () => {
   assert.equal(host.keyring.get('timon-test-account'), undefined);
 });
 
-test('a keyring whose clear fails is never exposed', () => {
+test('a keyring whose clear fails is never exposed', { skip: SH_WITNESS }, () => {
   // Store and lookup both work: without making deletion part of the verdict the
   // probe would pass here. It must not — `key.ts` purges the keyring before any
   // file fallback, and a keyring that cannot delete turns a fresh install into a
@@ -143,7 +146,7 @@ test('a keyring whose clear fails is never exposed', () => {
     'the probe must attempt the deletion, not skip it');
 });
 
-test('under the test runner, a secret-tool found on PATH is never probed (TODO #574)', () => {
+test('under the test runner, a secret-tool found on PATH is never probed (TODO #574)', { skip: SH_WITNESS }, () => {
   // The machine running the suite may have a working Secret Service: the
   // witness on PATH stands in for it. Probing it would put the suite's master
   // key in the user's real `timon` / `master-key` entry, the installed daemon's.

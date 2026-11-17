@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { SetupTrouble } from './setup-trouble';
+import type { SetupTrouble } from '@/components/onboarding/setup-trouble';
 
 type Sent = { url: string; method: string; body: unknown };
 
@@ -28,7 +28,8 @@ async function mount() {
   const React = await import('react');
   install('React', React);
   const { createRoot } = await import('react-dom/client');
-  const { SetupEscape, requestSkip } = await import('./setup-escape');
+  const { SetupEscape } = await import('./setup-escape');
+  const { requestSkip } = await import('@/components/onboarding/setup-skip');
   const root = createRoot(document.getElementById('root')!);
   const calls = { skip: 0, restart: 0 };
   const render = async (trouble: SetupTrouble) => {

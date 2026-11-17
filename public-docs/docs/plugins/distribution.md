@@ -69,7 +69,7 @@ It reads the folder without running any of its code, and prints one line per fin
 | It checks | Level |
 |---|---|
 | `package.json` and the `timon` manifest, as the recipient's Timon reads them, `apiVersion` included | error |
-| A `SIGNATURE` that no longer matches the files, or made with a key that Timon does not know | error |
+| A `SIGNATURE` that no longer matches the files that ship, made with a key that Timon does not know, or left out of the archive by `files` | error |
 | An `engines.node` range that the daemon's Node does not satisfy ([Node version](manifest.md#node-version-enginesnode)). The check asks the running daemon for its version; when no daemon answers, it uses the CLI's Node and says so | error |
 | An `engines.node` range Timon cannot read | warning |
 | No signature at all | warning |
@@ -109,7 +109,7 @@ timon plugin list
 
 The plugin must show as `active`. Open it: the interface loads without error and says what to configure. Go through the first-run flow to a working state, then run `timon plugin disable <id>` and `timon plugin enable <id>`: the surfaces disappear and come back without a restart.
 
-**4. Sign and retest.** Signing goes through the distributor ([Publishing](publishing.md#sign-the-final-contents)). Run `timon plugin check . --strict` in the signed folder, then install the exact signed archive once more before sending it.
+**4. Sign and retest.** Signing goes through the distributor ([Publishing](publishing.md#sign-the-final-contents)). `timon plugin sign` signs the files `npm pack` ships, not the whole folder, so it runs in your working folder: its tests, `node_modules` and other files outside `files` are not covered. Add `"SIGNATURE"` to `files` before signing, or the archive ships without it. Run `timon plugin check . --strict` in the signed folder, then pack it with `npm pack` and install that exact archive once more before sending it.
 
 ## See also
 

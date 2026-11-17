@@ -20,6 +20,13 @@ import { SANDBOX_EXEC, SEATBELT_PROBE_PROFILE } from './seatbelt.js';
 const cfg = (isolation: Record<string, unknown> = {}) =>
   TimonConfigSchema.parse({ host: { docker: 'disabled', isolation } });
 
+/**
+ * The fence policy comes from `resolveFence`, which resolves with the host's
+ * path rules: on Windows `/Users/tester` becomes `D:\Users\tester`, which the
+ * profile rightly refuses to spell. Seatbelt never runs there.
+ */
+const MACOS_FIXTURES = process.platform === 'win32' && 'macOS fixtures, resolved with Windows path rules';
+
 function fencePolicy(home: string, unixSockets: 'deny' | 'allow' = 'deny'): FencePolicy {
   const timonHome = join(home, '.timon');
   return resolveFence(cfg({ unixSockets }), {
@@ -42,7 +49,7 @@ test('a daemon that already runs sandboxed reports that it cannot fence', () => 
   assert.match(fence.probe().reason ?? '', /already runs inside a sandbox/);
 });
 
-test('wrap writes the profile, then launches the command through sandbox-exec', () => {
+test('wrap writes the profile, then launches the command through sandbox-exec', { skip: MACOS_FIXTURES }, () => {
   const written: Array<[string, string]> = [];
   const fence = createSeatbeltFence({
     realpath: (path) => path,
@@ -55,7 +62,7 @@ test('wrap writes the profile, then launches the command through sandbox-exec', 
   assert.ok(written[0]?.[1].includes('(deny file-read-data file-write* (subpath "/Users/tester/.timon"))'));
 });
 
-test('wrap renders the resolved spelling of each path, which is what Seatbelt matches', () => {
+test('wrap renders the resolved spelling of each path, which is what Seatbelt matches', { skip: MACOS_FIXTURES }, () => {
   let text = '';
   const fence = createSeatbeltFence({
     realpath: (path) => {
@@ -71,7 +78,7 @@ test('wrap renders the resolved spelling of each path, which is what Seatbelt ma
   assert.ok(text.includes('(deny file-read-data file-write* (subpath "/Volumes/Data/timon/daemon-token"))'));
 });
 
-test('a dropped grant is reported, and the profile is still written without it', () => {
+test('a dropped grant is reported, and the profile is still written without it', { skip: MACOS_FIXTURES }, () => {
   const warnings: string[] = [];
   const timonHome = '/Users/tester/.timon';
   const policy = resolveFence(cfg(), {
@@ -89,7 +96,7 @@ test('a dropped grant is reported, and the profile is still written without it',
   assert.doesNotMatch(text, /allow file-read-data file-write\* \(subpath "\/Users\/tester\/\.timon\/secrets\.env"\)/);
 });
 
-test('the release the daemon runs from is rendered readable and executable, never writable, and no other', () => {
+test('the release the daemon runs from is rendered readable and executable, never writable, and no other', { skip: MACOS_FIXTURES }, () => {
   const timonHome = '/Users/tester/.timon';
   const releases = `${timonHome}/desktop-runtime/releases`;
   const resources = `${releases}/9.9.9/Timon.app/Contents/Resources`;

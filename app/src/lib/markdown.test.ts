@@ -56,12 +56,12 @@ test('splitHighlightedLines rend une ligne par ligne source', () => {
 });
 
 test('splitHighlightedLines gère les spans imbriqués', () => {
-  const lignes = splitHighlightedLines(
+  const lines = splitHighlightedLines(
     '<span class="a"><span class="b">x\ny</span></span>',
   );
-  assert.equal(lignes.length, 2);
-  assert.equal(lignes[0], '<span class="a"><span class="b">x</span></span>');
-  assert.equal(lignes[1], '<span class="a"><span class="b">y</span></span>');
+  assert.equal(lines.length, 2);
+  assert.equal(lines[0], '<span class="a"><span class="b">x</span></span>');
+  assert.equal(lines[1], '<span class="a"><span class="b">y</span></span>');
 });
 
 test('highlightCode colore un langage enregistré et échappe le reste', async () => {
@@ -69,8 +69,8 @@ test('highlightCode colore un langage enregistré et échappe le reste', async (
   const json = highlightCode('{"a": 1}', 'json');
   assert.match(json, /hljs-attr/);
   // Langage inconnu : pas de coloration inventée, mais du HTML sûr.
-  const inconnu = highlightCode('<script>alert(1)</script>', 'klingon');
-  assert.doesNotMatch(inconnu, /<script>/);
+  const unknownLang = highlightCode('<script>alert(1)</script>', 'klingon');
+  assert.doesNotMatch(unknownLang, /<script>/);
 });
 
 test('highlightCode couvre les langages ajoutés pour l\'aperçu de fichier', async () => {

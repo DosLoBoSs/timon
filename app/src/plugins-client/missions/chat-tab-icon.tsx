@@ -8,14 +8,14 @@ import type { ReactElement } from 'react';
 import type { IslandParams } from '@/lib/island-tree';
 import { cn } from '@/lib/utils';
 import { FaceAgent, faceFrame } from '../agent-chat/agent-avatar';
-import { trouverAgent, useAgents, useProjets, visageAgent } from '../agent-chat/use-agents';
+import { findAgent, useAgents, useProjects, agentFace } from '../agent-chat/use-agents';
 
 export function ChatTabIcon({ params, className }: { params: IslandParams; className?: string }): ReactElement {
   const agent = typeof params.agent === 'string' ? params.agent : '';
   const agents = useAgents();
-  const projets = useProjets();
-  const visage = visageAgent(agent, agents, projets);
-  const name = trouverAgent(agents, agent)?.name ?? agent;
+  const projets = useProjects();
+  const visage = agentFace(agent, agents, projets);
+  const name = findAgent(agents, agent)?.name ?? agent;
   return (
     <span
       aria-hidden

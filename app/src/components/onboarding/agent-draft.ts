@@ -98,6 +98,8 @@ export type AgentDraft = {
   role: MascotRole;
   folder: string;
   model: ModelChoice | null;
+  /** The reasoning effort picked in the engine tab; '' = the model's default. */
+  effort: string;
   permission: PermissionMode;
   skills: string[];
   mcp: string[];
@@ -109,7 +111,7 @@ export function initialDraft(): AgentDraft {
     name: '', nameAuto: false, customLook: null,
     template: null, missions: [], other: '',
     tools: [], triggers: ['chat'], at: '08:00', autonomy: 'ask', notify: ['timon'], question: 1,
-    tab: 'base', role: 'orchestrator', folder: '', model: null, permission: 'acceptEdits', skills: [], mcp: [], rules: '',
+    tab: 'base', role: 'orchestrator', folder: '', model: null, effort: '', permission: 'acceptEdits', skills: [], mcp: [], rules: '',
   };
 }
 
@@ -272,7 +274,7 @@ export function directivesOf(view: AgentCreationView, draft: AgentDraft): string
 
 /**
  * The config PATCH (`PATCH /api/ui/agents/:name/config`): the look always;
- * the model, permission mode, skills, MCP servers and folder from the sheet; the permission mode from the interview's autonomy; the directives
+ * the model, reasoning effort, permission mode, skills, MCP servers and folder from the sheet; the permission mode from the interview's autonomy; the directives
  * from whatever the view asked.
  *
  * Skills and MCP servers are whole sets on the daemon (`skills` replaces the
@@ -286,6 +288,8 @@ export type AgentConfigPatch = {
   look: AgentLook;
   backend?: BackendName;
   model?: string;
+  /** One of the values the model's thinking bar offers: the daemon refuses any other. */
+  reasoningEffort?: string;
   permission_mode?: PermissionMode;
   skills?: string[];
   mcp_servers?: string[];
@@ -313,6 +317,8 @@ export function creationPatch(view: AgentCreationView, draft: AgentDraft, ctx: C
   if (view !== 'sheet') return patch;
   patch.permission_mode = draft.permission;
   if (draft.model) { patch.backend = draft.model.backend; patch.model = draft.model.model; }
+  // Unset stays the model's default: the field is simply not written.
+  if (draft.effort) patch.reasoningEffort = draft.effort;
   if (draft.folder.trim()) patch.cwd = draft.folder.trim();
   patch.skills = keepHidden(ctx.current.skills, ctx.shownSkills, draft.skills);
   patch.mcp_servers = keepHidden(ctx.current.mcp_servers, ctx.shownMcp, draft.mcp);

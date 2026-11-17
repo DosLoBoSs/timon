@@ -13,7 +13,7 @@ import '../../tests/helpers/paid-license.js';
 process.env.TIMON_TODO_OUTCOME_ENABLED = '1';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
@@ -57,8 +57,8 @@ const { resetPluginPolicyState, spawnCardsSettled } = await import('./policy.js'
 // The investigation a ticket opens is a mission: the operator approved the connector (TODO #562).
 const POLICY = { http: { allow: ['cdn.discordapp.com', 'media.discordapp.net'] }, spawn: { approved: ['todo-connector-discord'], max: 1000 } };
 setConfig(TimonConfigSchema.parse({ pluginPolicy: POLICY }));
-const { apply } = await import(join(EXAMPLE, 'lib/index.js')) as { apply(ctx: unknown): void };
-const { DEFAULT_PROMPT } = await import(join(EXAMPLE, 'lib/core.js')) as { DEFAULT_PROMPT: string };
+const { apply } = await import(pathToFileURL(join(EXAMPLE, 'lib/index.js')).href) as { apply(ctx: unknown): void };
+const { DEFAULT_PROMPT } = await import(pathToFileURL(join(EXAMPLE, 'lib/core.js')).href) as { DEFAULT_PROMPT: string };
 dbApi.upsertProject('timon', {});
 ensureOutcomeTable();
 registerTodoExtension(outcomeExtension);

@@ -23,6 +23,7 @@
  */
 import { readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { daemonMessage, type DaemonMessage } from './daemon-message.js';
 import { getHost } from './host/index.js';
 
 /** Task types whose mission runs in, reviews or merges a git worktree. */
@@ -30,6 +31,9 @@ export const GIT_TASK_TYPES: readonly string[] = ['code', 'review', 'merge'];
 
 export const GIT_MISSING_REASON =
   'git not found on this host: code, review and merge tasks of a git project need git. Install git, then restart Timon.';
+
+/** The code of `GIT_MISSING_REASON`, stored beside it on a blocked task (TODO #1063). */
+export const GIT_MISSING_MESSAGE: DaemonMessage = daemonMessage('git_missing_for_task');
 
 function isDirectory(path: string): boolean {
   try {

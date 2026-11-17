@@ -68,6 +68,20 @@ test('page events become tagged steps', () => {
   assert.equal(normalizePageEvent({ type: 'input', selector: '#user', tag: 'input', inputType: 'text', value: 'alice' }, at)?.value, 'alice');
 });
 
+test('a frame event of the preload becomes a manual step with the frame origin and no value (#944)', () => {
+  const event = { type: 'frame', selector: 'iframe[name="card"]', tag: 'iframe', name: 'Secure card payment input frame', origin: 'https://js.stripe.com' };
+  assert.deepEqual(normalizePageEvent(event, at),
+    { t: at.t, type: 'frame', tabId: 'tab-a', selector: 'iframe[name="card"]', tag: 'iframe', name: 'Secure card payment input frame', origin: 'https://js.stripe.com' });
+  // A forged event cannot smuggle an address, a value or a text through the frame step.
+  const forged = normalizePageEvent({ ...event, origin: 'https://user:pw@js.stripe.com/v3/inner.html?key=pk_live_abc#k=1',
+    value: 'hunter2', text: '4242 4242 4242 4242', url: 'https://evil.example/', inputType: 'password' }, at)!;
+  assert.equal(forged.origin, 'https://js.stripe.com');
+  assert.ok(!/hunter2|4242|pk_live|evil|user:pw/.test(json(forged)), json(forged));
+  // Not an HTTP(S) origin: the step stays, without an origin.
+  const opaque = normalizePageEvent({ type: 'frame', tag: 'iframe', origin: 'null' }, at)!;
+  assert.deepEqual(opaque, { t: at.t, type: 'frame', tabId: 'tab-a', selector: 'iframe', tag: 'iframe' });
+});
+
 test('an input masks a password the page failed to mask, and records it as a secret step', () => {
   const step = normalizePageEvent({ type: 'input', selector: 'input[name=pw]', tag: 'input', inputType: 'password', field: 'pw', value: 'hunter2' }, at)!;
   assert.equal(step.type, 'secret');
