@@ -1,6 +1,5 @@
 {
   "agentChat": {
-    "title": "Agent chat",
     "newCard": "New agent chat",
     "newCardHint": "Pick the agent this card shows. Add another card from the widget palette once this one is created.",
     "newConversation": "New conversation",

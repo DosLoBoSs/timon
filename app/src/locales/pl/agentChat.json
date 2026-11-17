@@ -1,6 +1,5 @@
 {
   "agentChat": {
-    "title": "Czat z agentem",
     "newCard": "Nowy czat z agentem",
     "newCardHint": "Wybierz agenta, którego pokazuje ta karta. Kolejną kartę dodasz z palety widżetów, gdy ta zostanie utworzona.",
     "newConversation": "Nowa rozmowa",

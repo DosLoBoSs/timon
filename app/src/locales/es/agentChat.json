@@ -1,6 +1,5 @@
 {
   "agentChat": {
-    "title": "Chat con agente",
     "newCard": "Nuevo chat con agente",
     "newCardHint": "Elige el agente que muestra esta tarjeta. Cuando se cree, añade otra tarjeta desde la paleta de widgets.",
     "newConversation": "Nueva conversación",

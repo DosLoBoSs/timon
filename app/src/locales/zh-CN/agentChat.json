@@ -1,6 +1,5 @@
 {
   "agentChat": {
-    "title": "智能体聊天",
     "newCard": "新建智能体聊天",
     "newCardHint": "选择此卡片要显示的智能体。创建后，可从小组件面板添加另一张卡片。",
     "newConversation": "新建对话",
