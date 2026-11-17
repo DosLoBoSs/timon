@@ -131,9 +131,10 @@ function versionForRun(workflowId: string, draft: boolean | undefined, ownerUser
     return { workflow, version };
   }
   const definition = parseWorkflowDefinition(parseJson(workflow.draft));
-  const number = (workflow.published_version ?? 0) + 1;
-  const version = { workflow_id: workflow.id, version: number, definition: JSON.stringify({ ...definition, draft: true }), published_at: Date.now(), published_by: ownerUserId ?? null };
-  dbApi.insertWorkflowVersion(version);
+  // Frozen under its own number and left unpublished: only a person's publish
+  // moves `published_version`, so the next published run still reads that one.
+  const version = { workflow_id: workflow.id, version: dbApi.nextWorkflowVersion(workflow.id), definition: JSON.stringify({ ...definition, draft: true }), published_at: Date.now(), published_by: ownerUserId ?? null };
+  dbApi.insertWorkflowDraftVersion(version);
   return { workflow, version };
 }
 
