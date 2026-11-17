@@ -6,6 +6,7 @@
  * own masking pass: never from what a Stop returns (metadata only).
  */
 
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 
 /** What the engine reports in the browser status, to every viewer of the profile. */
@@ -102,7 +103,7 @@ async function request<T>(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELE
     ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
   });
   const value = await response.json().catch(() => ({})) as { error?: unknown };
-  if (!response.ok) throw new BrowserRecordingRequestError(typeof value.error === 'string' ? value.error : `Browser recording request failed (${response.status})`, response.status);
+  if (!response.ok) throw new BrowserRecordingRequestError(apiErrorMessage(value, { status: response.status }), response.status);
   return value as T;
 }
 

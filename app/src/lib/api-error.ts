@@ -54,6 +54,11 @@ export function apiErrorMessage(body: unknown, fallback?: string | { status: num
   return t('apiErrors.unknown');
 }
 
+/** Like `apiErrorMessage`, but `null` when the body carries no error: for callers that word that case themselves. */
+export function apiErrorMessageOrNull(body: unknown): string | null {
+  return parseApiError(body) ? apiErrorMessage(body) : null;
+}
+
 /**
  * The message of a failed `Response`, body read as JSON. The body is consumed:
  * call it instead of `res.json()`, not after.

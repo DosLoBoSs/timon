@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './i18n-test-locales';
 import { getLocale, registerLocale, setLocale } from './i18n';
-import { apiErrorMessage, parseApiError, responseErrorMessage } from './api-error';
+import { apiErrorMessage, apiErrorMessageOrNull, parseApiError, responseErrorMessage } from './api-error';
 
 function inLocale<T>(tag: string, run: () => T): T {
   const before = getLocale();
@@ -36,6 +36,15 @@ test('a body that says nothing reads the fallback, then the status, then a gener
     assert.equal(apiErrorMessage(null, 'save failed'), 'save failed');
     assert.equal(apiErrorMessage({}, { status: 502 }), 'HTTP 502');
     assert.equal(apiErrorMessage('<!DOCTYPE html>'), 'Something went wrong.');
+  });
+});
+
+test('apiErrorMessageOrNull is null only for a body that carries no error', () => {
+  inLocale('en', () => {
+    assert.equal(apiErrorMessageOrNull(null), null);
+    assert.equal(apiErrorMessageOrNull({ ok: false }), null);
+    assert.equal(apiErrorMessageOrNull({ error: 'branch is dirty' }), 'branch is dirty');
+    assert.equal(apiErrorMessageOrNull({ error: 'mission not found', code: 'mission_not_found' }), 'This mission no longer exists.');
   });
 });
 

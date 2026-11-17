@@ -1,4 +1,6 @@
 /** Shared client contract. The daemon authorizes the selected profile on every call. */
+import { apiErrorMessage } from '@/lib/api-error';
+
 export type BrowserProfile = { id: string; name: string; scope_kind: string; scope_ref: string | null };
 export type NativeBrowserStatus = {
   running: boolean; profileId: string; tabs: { id: string; url: string; title: string }[];
@@ -29,7 +31,7 @@ export async function nativeBrowserRequest<T>(path: string, body?: unknown, sign
     ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
   });
   const value = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(typeof value.error === 'string' ? value.error : `Browser request failed (${response.status})`);
+  if (!response.ok) throw new Error(apiErrorMessage(value, { status: response.status }));
   return value as T;
 }
 

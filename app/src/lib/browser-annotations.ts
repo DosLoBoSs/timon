@@ -8,6 +8,8 @@
  * it as it comes and never builds annotation text of its own.
  */
 
+import { apiErrorMessage } from '@/lib/api-error';
+
 export type BrowserAnnotationStatus = 'draft' | 'pending' | 'resolved' | 'dismissed';
 
 /** What the engine reports in the browser status, to every viewer of the profile. */
@@ -94,7 +96,7 @@ async function request<T>(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELE
   });
   const value = await response.json().catch(() => ({})) as { error?: unknown; code?: unknown };
   if (!response.ok) {
-    throw new BrowserAnnotationRequestError(typeof value.error === 'string' ? value.error : `Browser annotation request failed (${response.status})`,
+    throw new BrowserAnnotationRequestError(apiErrorMessage(value, { status: response.status }),
       response.status, typeof value.code === 'string' ? value.code : null);
   }
   return value as T;
