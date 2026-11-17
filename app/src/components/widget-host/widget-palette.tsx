@@ -33,14 +33,14 @@ import type { WidgetLayout } from './widget-layout';
 type Position = { x: number; y: number };
 
 export function WidgetPalette() {
-  const { palette, paletteOpen, setPaletteOpen, dragging, widget: catalogue } = useWidgetHost();
-  const [recherche, setRecherche] = useState('');
+  const { palette, paletteOpen, setPaletteOpen, dragging, widget: entryOf } = useWidgetHost();
+  const [query, setQuery] = useState('');
   const [page, setPage] = useState<WidgetPage | 'all'>('all');
   const [position, setPosition] = useState<Position | null>(null);
-  const panneau = useRef<HTMLDivElement>(null);
-  const champ = useRef<HTMLInputElement>(null);
-  const prise = useRef<{ dx: number; dy: number } | null>(null);
-  const fermer = () => { setPaletteOpen(false); setRecherche(''); setPage('all'); };
+  const panel = useRef<HTMLDivElement>(null);
+  const field = useRef<HTMLInputElement>(null);
+  const grabOffset = useRef<{ dx: number; dy: number } | null>(null);
+  const close = () => { setPaletteOpen(false); setQuery(''); setPage('all'); };
 
   // Typing goes straight to the search. Focus is taken on the next frame: the
   // menu that opened the panel hands focus back to its trigger as it closes,
@@ -49,46 +49,46 @@ export function WidgetPalette() {
     if (!paletteOpen) return;
     // Hosts with no animation frames (a headless DOM): a timer stands in for the frame there.
     const frames = typeof requestAnimationFrame === 'function';
-    const focus = () => champ.current?.focus();
+    const focus = () => field.current?.focus();
     const handle = frames ? requestAnimationFrame(focus) : setTimeout(focus, 16);
     return () => { if (frames) cancelAnimationFrame(handle as number); else clearTimeout(handle as ReturnType<typeof setTimeout>); };
   }, [paletteOpen]);
 
   // Substring match on the title, the only thing the row shows: the user types
   // what they read. An empty field lists the whole inventory, entries without a
-  // catalogue entry included — filtering them out here would hide from the
+  // catalog entry included — filtering them out here would hide from the
   // unfiltered list what `PaletteItem` already declines to render.
   // The search reads what the card shows: its name and its sentence.
-  const pagesPresentes = useMemo(
-    () => WIDGET_PAGES.filter((p) => palette.some((entree) => { const w = !isAddWidgetPlaceholder(entree.id) && catalogue(entree.id); return w && widgetPage(w) === p; })),
-    [palette, catalogue],
+  const presentPages = useMemo(
+    () => WIDGET_PAGES.filter((p) => palette.some((entry) => { const w = !isAddWidgetPlaceholder(entry.id) && entryOf(entry.id); return w && widgetPage(w) === p; })),
+    [palette, entryOf],
   );
   // A tab whose widgets have all been placed disappears: fall back to All.
-  const pageActive = page === 'all' || pagesPresentes.includes(page) ? page : 'all';
-  const visibles = useMemo(() => {
-    const aiguille = recherche.trim().toLowerCase();
-    return palette.filter((entree) => {
-      if (isAddWidgetPlaceholder(entree.id)) return false;
-      const widget = catalogue(entree.id);
-      if (pageActive !== 'all' && (!widget || widgetPage(widget) !== pageActive)) return false;
-      if (!aiguille) return true;
-      return `${widget?.catalogTitle ?? widget?.title ?? ''} ${widget?.description ?? ''}`.toLowerCase().includes(aiguille);
+  const activePage = page === 'all' || presentPages.includes(page) ? page : 'all';
+  const visibleEntries = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return palette.filter((entry) => {
+      if (isAddWidgetPlaceholder(entry.id)) return false;
+      const widget = entryOf(entry.id);
+      if (activePage !== 'all' && (!widget || widgetPage(widget) !== activePage)) return false;
+      if (!needle) return true;
+      return `${widget?.catalogTitle ?? widget?.title ?? ''} ${widget?.description ?? ''}`.toLowerCase().includes(needle);
     });
-  }, [palette, recherche, pageActive, catalogue]);
+  }, [palette, query, activePage, entryOf]);
 
   // The panel moves by its header, out of the way of the zone the user aims
   // at. Plain pointer events, not dnd-kit: the panel is not a widget and must
   // never be offered a drop zone. The header stays reachable inside the window.
-  const deplacer = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!prise.current || !panneau.current) return;
-    const { width } = panneau.current.getBoundingClientRect();
+  const move = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!grabOffset.current || !panel.current) return;
+    const { width } = panel.current.getBoundingClientRect();
     setPosition({
-      x: Math.min(Math.max(e.clientX - prise.current.dx, 8 - width + 80), window.innerWidth - 80),
-      y: Math.min(Math.max(e.clientY - prise.current.dy, 8), window.innerHeight - 48),
+      x: Math.min(Math.max(e.clientX - grabOffset.current.dx, 8 - width + 80), window.innerWidth - 80),
+      y: Math.min(Math.max(e.clientY - grabOffset.current.dy, 8), window.innerHeight - 48),
     });
   };
-  const lacher = (e: React.PointerEvent<HTMLDivElement>) => {
-    prise.current = null;
+  const release = (e: React.PointerEvent<HTMLDivElement>) => {
+    grabOffset.current = null;
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
@@ -100,10 +100,10 @@ export function WidgetPalette() {
           are where the widget goes. */}
       {paletteOpen && (
         <div
-          ref={panneau}
+          ref={panel}
           role="dialog"
           aria-label={t('widgets.palette.title')}
-          onKeyDown={(e) => { if (e.key === 'Escape') fermer(); }}
+          onKeyDown={(e) => { if (e.key === 'Escape') close(); }}
           style={position ? { left: position.x, top: position.y } : undefined}
           className={cn(
             'fixed z-40 flex w-[min(46rem,calc(100vw-2rem))] flex-col rounded-xl border p-2 shadow-lg transition-opacity print:hidden',
@@ -115,15 +115,15 @@ export function WidgetPalette() {
           <div
             onPointerDown={(e) => {
               if (e.button !== 0 || (e.target as Element).closest('button')) return;
-              const box = panneau.current?.getBoundingClientRect();
+              const box = panel.current?.getBoundingClientRect();
               if (!box) return;
               e.preventDefault();
               e.currentTarget.setPointerCapture(e.pointerId);
-              prise.current = { dx: e.clientX - box.left, dy: e.clientY - box.top };
+              grabOffset.current = { dx: e.clientX - box.left, dy: e.clientY - box.top };
             }}
-            onPointerMove={deplacer}
-            onPointerUp={lacher}
-            onPointerCancel={lacher}
+            onPointerMove={move}
+            onPointerUp={release}
+            onPointerCancel={release}
             title={t('widgets.palette.move')}
             className="flex cursor-grab touch-none select-none items-center justify-between gap-2 px-1.5 pb-1.5 active:cursor-grabbing"
           >
@@ -134,7 +134,7 @@ export function WidgetPalette() {
             <button
               type="button"
               aria-label={t('widgets.palette.close')}
-              onClick={fermer}
+              onClick={close}
               className="rounded-md p-0.5 text-muted-foreground/60 transition-colors hover:text-primary"
             >
               <X className="size-3.5" />
@@ -144,23 +144,23 @@ export function WidgetPalette() {
           <div className="relative px-1.5 pb-2">
             <Search className="pointer-events-none absolute left-3.5 top-4 size-3.5 -translate-y-1/2 text-primary" />
             <Input
-              ref={champ}
-              value={recherche}
-              onChange={(event) => setRecherche(event.target.value)}
+              ref={field}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
               placeholder={t('widgets.palette.search')}
               aria-label={t('widgets.palette.search')}
               className="h-8 border-primary/40 bg-primary/5 pl-8 text-xs placeholder:text-muted-foreground/70 focus-visible:border-primary focus-visible:ring-primary/40"
             />
           </div>
 
-          {pagesPresentes.length > 1 && (
+          {presentPages.length > 1 && (
             // One tab per page the widgets belong to, as the column tabs do:
             // a surface the user looks for a widget by.
             <div role="tablist" aria-label={t('widgets.palette.pages')} className="mx-1.5 mb-2 flex min-w-0 items-center gap-0.5 rounded-lg bg-muted p-[3px]">
-              {(['all', ...pagesPresentes] as const).map((p) => (
-                <button key={p} type="button" role="tab" aria-selected={pageActive === p} onClick={() => setPage(p)}
+              {(['all', ...presentPages] as const).map((p) => (
+                <button key={p} type="button" role="tab" aria-selected={activePage === p} onClick={() => setPage(p)}
                   className={cn('h-7 min-w-0 flex-1 truncate rounded-md px-2.5 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-                    pageActive === p ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                    activePage === p ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
                   {t(`widgets.palette.page.${p}`)}
                 </button>
               ))}
@@ -168,12 +168,12 @@ export function WidgetPalette() {
           )}
 
           <ul className="grid max-h-[60dvh] grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-2 overflow-y-auto px-1.5 pb-1">
-            {visibles.map((entree) => (
-              <PaletteItem key={entree.id} entree={entree} />
+            {visibleEntries.map((entry) => (
+              <PaletteItem key={entry.id} entry={entry} />
             ))}
           </ul>
 
-          {visibles.length === 0 && recherche.trim() !== '' && (
+          {visibleEntries.length === 0 && query.trim() !== '' && (
             <p className="px-1.5 py-4 text-center text-[11px] text-muted-foreground">{t('widgets.palette.noMatch')}</p>
           )}
 
@@ -185,7 +185,7 @@ export function WidgetPalette() {
             <p className="text-[10.5px] leading-snug text-muted-foreground/70">
               {t('widgets.palette.hint')}
             </p>
-            <button type="button" onClick={fermer} className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground">{t('appearance.menu.done')}</button>
+            <button type="button" onClick={close} className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground">{t('appearance.menu.done')}</button>
           </div>
         </div>
       )}
@@ -196,7 +196,7 @@ export function WidgetPalette() {
 /** The place a widget's thumbnail will take. Until widgets ship one, a sketch
  *  of the form it takes: a line of icons for a widget with a flat form, a card
  *  with a header and rows otherwise. */
-function ApercuSchematique({ bar, icon }: { bar: boolean; icon?: string }) {
+function SchematicPreview({ bar, icon }: { bar: boolean; icon?: string }) {
   if (icon) {
     return (
       <div aria-hidden className="flex h-20 w-full items-center justify-center rounded-md bg-muted/60">
@@ -229,10 +229,10 @@ function ApercuSchematique({ bar, icon }: { bar: boolean; icon?: string }) {
  * on screen. No such zone on this page, and the button says so rather than
  * placing the widget somewhere invisible.
  */
-function PaletteItem({ entree }: { entree: WidgetLayout }) {
-  const { widget: catalogue } = useWidgetHost();
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: entree.id });
-  const widget = catalogue(entree.id);
+function PaletteItem({ entry }: { entry: WidgetLayout }) {
+  const { widget: entryOf } = useWidgetHost();
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: entry.id });
+  const widget = entryOf(entry.id);
 
   if (!widget) return null;
 
@@ -240,15 +240,15 @@ function PaletteItem({ entree }: { entree: WidgetLayout }) {
   // does not tell them apart: the surface of origin does. It is read from the
   // declared slot, never from the mounted zones: an entry is in the palette
   // precisely because its zone is not mounted.
-  const origine = widgetOrigin(widget);
-  const surface = origine.surfaceKey ? t(origine.surfaceKey) : origine.surface;
-  const contexte = origine.plugin
-    ? t('widgets.palette.origin', { surface, plugin: origine.plugin })
+  const origin = widgetOrigin(widget);
+  const surface = origin.surfaceKey ? t(origin.surfaceKey) : origin.surface;
+  const context = origin.plugin
+    ? t('widgets.palette.origin', { surface, plugin: origin.plugin })
     : surface;
   // The subtitle is only read by the eye: the assistive labels carry the same
   // disambiguation, otherwise the palette announces "Add Missions" three times,
   // and only one of those three acts.
-  const designation = `${widget.catalogTitle ?? widget.title} (${contexte})`;
+  const label = `${widget.catalogTitle ?? widget.title} (${context})`;
 
   return (
     // A card laid on a card goes one step up the surface scale (--surface-2 on
@@ -258,7 +258,7 @@ function PaletteItem({ entree }: { entree: WidgetLayout }) {
       <button
         ref={setNodeRef}
         type="button"
-        aria-label={t('widgets.palette.drag', { title: designation })}
+        aria-label={t('widgets.palette.drag', { title: label })}
         className={cn(
           'flex cursor-grab touch-none flex-col gap-1.5 rounded-md p-0.5 text-left',
           'text-[11px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary',
@@ -268,11 +268,11 @@ function PaletteItem({ entree }: { entree: WidgetLayout }) {
         {...attributes}
         {...listeners}
       >
-        <ApercuSchematique bar={widget.bar === true} icon={widget.icon} />
+        <SchematicPreview bar={widget.bar === true} icon={widget.icon} />
         <span className="flex w-full min-w-0 flex-col px-1">
           <span className="truncate font-medium text-foreground">{widget.catalogTitle ?? widget.title}</span>
           {widget.description && <span className="line-clamp-3 text-[10.5px] leading-snug text-muted-foreground">{widget.description}</span>}
-          <span className="truncate text-[9.5px] leading-tight text-muted-foreground/60">{contexte}</span>
+          <span className="truncate text-[9.5px] leading-tight text-muted-foreground/60">{context}</span>
         </span>
       </button>
 
