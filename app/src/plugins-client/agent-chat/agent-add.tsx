@@ -120,9 +120,9 @@ export function AjoutAgent({
           <NativeViewCover />
           <AgentPicker
             agents={agents}
-            projets={projets}
-            exclus={exclus}
-            ouvert
+            projects={projets}
+            excluded={exclus}
+            open
             autoFocus
             onPick={(agent) => {
               onAdd(agent);

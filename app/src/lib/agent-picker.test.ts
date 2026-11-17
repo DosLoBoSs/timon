@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { filtrerAgents } from '@/plugins-client/agent-chat/agent-picker';
+import { filterAgents } from '@/plugins-client/agent-chat/agent-picker';
 
 const AGENTS = [
   { name: 'timon.coder', role: 'coder', project: 'timon' },
@@ -16,7 +16,7 @@ const AGENTS = [
 const PROJECTS = [{ slug: 'perso', name: 'Vie personnelle' }, { slug: 'acme', name: 'Ácme' }];
 
 test('the search ignores accents and case, over name, role and project (slug and name)', () => {
-  const names = (q: string) => filtrerAgents(AGENTS, PROJECTS, q).map((a) => a.name);
+  const names = (q: string) => filterAgents(AGENTS, PROJECTS, q).map((a) => a.name);
   assert.deepEqual(names('EQUIPE'), ['Équipe.santé']);
   assert.deepEqual(names('sante'), ['Équipe.santé']);
   assert.deepEqual(names('coder timon'), ['timon.coder']);
@@ -27,7 +27,7 @@ test('the search ignores accents and case, over name, role and project (slug and
 
 test('no query lists every agent by name, never an ephemeral one', () => {
   // Accents do not push `Équipe` past `timon`.
-  assert.deepEqual(filtrerAgents(AGENTS, PROJECTS, '  ').map((a) => a.name), [
+  assert.deepEqual(filterAgents(AGENTS, PROJECTS, '  ').map((a) => a.name), [
     'acme.reviewer', 'Équipe.santé', 'timon.coder',
   ]);
 });
@@ -58,8 +58,8 @@ async function mount(excluded: string[]) {
       { onSubmit: (e: Event) => { e.preventDefault(); submits += 1; } },
       React.createElement(AgentPicker, {
         agents: AGENTS,
-        projets: PROJECTS,
-        exclus: new Set(excluded),
+        projects: PROJECTS,
+        excluded: new Set(excluded),
         onPick: (a: string) => { picked.push(a); },
       }),
     ));

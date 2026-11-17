@@ -172,7 +172,7 @@ export function InstanceConfig({
           </ul>
         )}
 
-        <AgentPicker agents={agents} projets={projets} exclus={surLaCarte} onPick={ajouterSousAgent} />
+        <AgentPicker agents={agents} projects={projets} excluded={surLaCarte} onPick={ajouterSousAgent} />
       </div>
 
       {saveError && <p role="alert" className="text-xs text-destructive">{t('widgets.saveError')}</p>}
