@@ -302,6 +302,20 @@
     "todo_project_missing": "This idea has no project: set one so it can be routed.",
     "todo_no_orchestrator": "No orchestrator for the project {project}: give one of its agents the orchestrator role.",
     "todo_already_promoted": "Idea #{id} is already promoted into a task.",
-    "todo_project_unknown": "The project {project} of this idea does not exist: fix the idea's project, or choose a known one."
+    "todo_project_unknown": "The project {project} of this idea does not exist: fix the idea's project, or choose a known one.",
+    "agent_doc_refused": "This identity document request was refused: {detail}",
+    "memory_file_refused": "This memory request was refused: {detail}",
+    "memory_read_failed": "The memory could not be read: {detail}",
+    "proposal_action_invalid": "Accept or reject the proposal.",
+    "proposal_id_invalid": "Invalid proposal identifier.",
+    "proposal_refused": "The decision on this proposal was refused: {detail}",
+    "memory_rule_refused": "This memory rule request was refused: {detail}",
+    "rule_id_invalid": "Invalid rule identifier.",
+    "memory_backfill_failed": "The memory rule cleanup failed: {detail}",
+    "memory_synthesis_failed": "The memory synthesis failed: {detail}",
+    "memory_search_failed": "The memory search failed: {detail}",
+    "agent_doc_not_found": "This identity document does not exist.",
+    "agent_doc_body_invalid": "Send the document text, as plain text or as a content field.",
+    "agent_doc_too_large": "This document is too large (at most {max, number} bytes)."
   }
 }

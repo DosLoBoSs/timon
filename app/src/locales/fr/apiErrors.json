@@ -302,6 +302,20 @@
     "todo_project_missing": "Cette idée n'a pas de projet : choisissez-en un pour pouvoir l'acheminer.",
     "todo_no_orchestrator": "Aucun orchestrateur pour le projet {project} : donnez le rôle d'orchestrateur à l'un de ses agents.",
     "todo_already_promoted": "L'idée n° {id} est déjà promue en tâche.",
-    "todo_project_unknown": "Le projet {project} de cette idée n'existe pas : corrigez le projet de l'idée, ou choisissez-en un connu."
+    "todo_project_unknown": "Le projet {project} de cette idée n'existe pas : corrigez le projet de l'idée, ou choisissez-en un connu.",
+    "agent_doc_refused": "Cette requête sur un document d'identité a été refusée : {detail}",
+    "memory_file_refused": "Cette requête sur la mémoire a été refusée : {detail}",
+    "memory_read_failed": "La mémoire n'a pas pu être lue : {detail}",
+    "proposal_action_invalid": "Acceptez ou rejetez la proposition.",
+    "proposal_id_invalid": "Identifiant de proposition invalide.",
+    "proposal_refused": "La décision sur cette proposition a été refusée : {detail}",
+    "memory_rule_refused": "Cette requête sur une règle de mémoire a été refusée : {detail}",
+    "rule_id_invalid": "Identifiant de règle invalide.",
+    "memory_backfill_failed": "Le nettoyage des règles de mémoire a échoué : {detail}",
+    "memory_synthesis_failed": "La synthèse de la mémoire a échoué : {detail}",
+    "memory_search_failed": "La recherche dans la mémoire a échoué : {detail}",
+    "agent_doc_not_found": "Ce document d'identité n'existe pas.",
+    "agent_doc_body_invalid": "Envoyez le texte du document, en texte brut ou dans un champ content.",
+    "agent_doc_too_large": "Ce document est trop volumineux ({max, number} octets au plus)."
   }
 }
