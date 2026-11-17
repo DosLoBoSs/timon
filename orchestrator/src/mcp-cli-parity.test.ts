@@ -54,6 +54,8 @@ const CASES: Array<[string, Record<string, unknown>, string, Record<string, unkn
   ['mission_reindex', {}, 'POST /api/missions/search/reindex'],
   ['trace_backfill', { days: 2 }, 'POST /api/trace/backfill', { days: 2 }],
   ['kanban_get', { id: 't' }, 'GET /api/tasks/t'],
+  ['kanban_attach_series', { id: 't' }, 'POST /api/tasks/t/attach-series', { series: 'current' }],
+  ['kanban_attach_series', { id: 't', series_id: 's1' }, 'POST /api/tasks/t/attach-series', { series: 's1' }],
   ['series_fallback_clear', { scope: 'code' }, 'DELETE /api/series/current/fallbacks/code'],
   ['series_role_clear', { scope: 'review', series_id: 's1' }, 'DELETE /api/series/s1/roles/review'],
   // A group rule is cleared by name, as a query (a label, never a path segment).
