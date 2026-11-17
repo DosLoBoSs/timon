@@ -23,7 +23,7 @@
     "securityLoginNotEnforced": "inicio de sesión no exigido",
     "securityLoginOff": "inicio de sesión desactivado",
     "securityNoAccount": "Aún no hay cuenta: crea una antes de abrir el acceso.",
-    "securityAccounts": "{count} cuenta(s)",
+    "securityAccounts": "{count, plural, one {# cuenta} other {# cuentas}}",
     "statusApp": "Instalar como aplicación",
     "appAvailable": "Disponible aquí",
     "appUnavailable": "No en esta dirección",

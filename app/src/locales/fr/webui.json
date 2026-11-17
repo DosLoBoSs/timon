@@ -23,7 +23,7 @@
     "securityLoginNotEnforced": "connexion non exigée",
     "securityLoginOff": "connexion désactivée",
     "securityNoAccount": "Aucun compte : crée-en un avant d'ouvrir l'accès.",
-    "securityAccounts": "{count} compte(s)",
+    "securityAccounts": "{count, plural, one {# compte} other {# comptes}}",
     "statusApp": "Installer en app",
     "appAvailable": "Disponible ici",
     "appUnavailable": "Pas sur cette adresse",

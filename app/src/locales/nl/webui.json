@@ -23,7 +23,7 @@
     "securityLoginNotEnforced": "aanmelding niet afgedwongen",
     "securityLoginOff": "aanmelding uitgeschakeld",
     "securityNoAccount": "Nog geen account: maak er een voordat je de toegang opent.",
-    "securityAccounts": "{count} account(s)",
+    "securityAccounts": "{count, plural, one {# account} other {# accounts}}",
     "statusApp": "Als app installeren",
     "appAvailable": "Hier beschikbaar",
     "appUnavailable": "Niet op dit adres",

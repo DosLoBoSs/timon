@@ -23,7 +23,7 @@
     "securityLoginNotEnforced": "login not enforced",
     "securityLoginOff": "login turned off",
     "securityNoAccount": "No account yet: create one before opening access.",
-    "securityAccounts": "{count} account(s)",
+    "securityAccounts": "{count, plural, one {# account} other {# accounts}}",
     "statusApp": "Install as an app",
     "appAvailable": "Available here",
     "appUnavailable": "Not on this address",

@@ -23,7 +23,7 @@
     "securityLoginNotEnforced": "Anmeldung nicht erzwungen",
     "securityLoginOff": "Anmeldung ausgeschaltet",
     "securityNoAccount": "Noch kein Konto: Erstelle eines, bevor du den Zugriff öffnest.",
-    "securityAccounts": "{count} Konto/Konten",
+    "securityAccounts": "{count, plural, one {# Konto} other {# Konten}}",
     "statusApp": "Als App installieren",
     "appAvailable": "Hier verfügbar",
     "appUnavailable": "Nicht unter dieser Adresse",
