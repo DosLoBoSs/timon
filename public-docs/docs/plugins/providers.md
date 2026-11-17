@@ -821,6 +821,21 @@ agent announced, and is never tried ahead of time because a method can open a
 browser. `modelProbe` costs an empty session in the agent's own history; Timon
 caches the answer for 12 hours.
 
+An agent that announces session modes in `session/new` (`modes`, or a `mode`
+config option) can follow the agent's permission mode. `sessionModes` maps each
+Timon permission mode to the id of one of the agent's own modes:
+
+```js
+sessionModes: { plan: 'read-only', default: 'ask', acceptEdits: 'accept-edits' },
+```
+
+When the session opens, Timon switches it to the mapped mode with
+`session/set_mode`, or through the `mode` config option. Timon sends nothing in
+three cases: the agent announced no modes, the mapped id is not among the modes
+it announced, or the agent's permission mode is not in the table. The session
+then keeps the mode the agent opened it in. Every permission request the agent
+sends still reaches the card and the classifier.
+
 An agent that decides its tool uses alone (`permissionsByAgent: true`) never
 asks Timon, so Timon cannot refuse anything to it. When Timon runs one of its
 own short prompts on it (a compaction summary, a conversation title, a memory

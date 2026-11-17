@@ -67,6 +67,12 @@
 
 ***
 
+### sessionModes?
+
+> `readonly` `optional` **sessionModes?**: `Readonly`\<`Partial`\<`Record`\<[`PermissionMode`](PermissionMode.md), `string`\>\>\>
+
+***
+
 ### signIn?
 
 > `readonly` `optional` **signIn?**: [`AcpSignIn`](AcpSignIn.md)
