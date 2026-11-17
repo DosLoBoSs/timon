@@ -120,3 +120,12 @@ jobs:
       - name: Publication policy
         working-directory: public-docs
         run: npm run check:policy
+      # The policy check reads the pages, not the site: a broken link, a bad
+      # front matter or a type error in the theme only shows when Docusaurus
+      # builds, and it used to surface at deploy time instead of in review.
+      - name: Typecheck
+        working-directory: public-docs
+        run: npm run typecheck
+      - name: Build
+        working-directory: public-docs
+        run: npm run build
