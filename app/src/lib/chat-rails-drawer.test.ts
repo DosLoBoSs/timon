@@ -77,25 +77,25 @@ test('narrow chat: each column is an island panel with its own tabs and cards', 
     return null;
   }
   function Page() {
-    const { colonnes: chatColumns, choisirOnglet: pickTab } = useChatColumns();
+    const { columns: chatColumns, selectTab: pickTab } = useChatColumns();
     const rails = useChatRailsLayout(chatColumns);
     const [openSide, setOpenSide] = React.useState<string | null>(null);
-    seen.drawer = rails.tiroir;
-    seen.gutters = [rails.gauche.gouttiere, rails.droite.gouttiere];
+    seen.drawer = rails.drawer;
+    seen.gutters = [rails.left.gutter, rails.right.gutter];
     seen.open = setOpenSide;
-    return React.createElement('div', { ref: rails.mesurer },
-      ...[rails.gauche, rails.droite].flatMap((side) => (side.visible ? side.rails : []).map((rail) =>
+    return React.createElement('div', { ref: rails.measure },
+      ...[rails.left, rails.right].flatMap((side) => (side.visible ? side.rails : []).map((rail) =>
         React.createElement(ChatWidgetRail, {
           key: rail.zone,
           zone: rail.zone,
           slot: rail.slot,
-          onglets: rail.onglets,
-          actif: rail.actif,
-          cote: side.cote,
-          label: side.cote,
-          onSelectTab: (z: string) => pickTab(side.colonne, z),
-          ...(rails.tiroir ? {
-            tiroir: { id: `panel-${side.cote}`, ouvert: openSide === side.cote, onFermer: () => setOpenSide(null), largeur: rail.largeur },
+          tabs: rail.tabs,
+          active: rail.active,
+          side: side.side,
+          label: side.side,
+          onSelectTab: (z: string) => pickTab(side.column, z),
+          ...(rails.drawer ? {
+            drawer: { id: `panel-${side.side}`, open: openSide === side.side, onClose: () => setOpenSide(null), width: rail.width },
           } : {}),
         }))));
   }

@@ -36,23 +36,23 @@ const CARDS: readonly { plugin: string; short: string; keys: readonly string[] }
 ];
 
 test('a role that opens the chat without any grant sees no card', async () => {
-  const { inscriptionsVisibles } = await import('../components/chat/chat-rails');
-  assert.deepEqual(inscriptionsVisibles(caps({ surfaces: restricted([]) })), []);
+  const { visibleRegistrations } = await import('../components/chat/chat-rails');
+  assert.deepEqual(visibleRegistrations(caps({ surfaces: restricted([]) })), []);
 });
 
 test('a card grant opens the cards of its plugin and no other', async () => {
-  const { inscriptionsVisibles } = await import('../components/chat/chat-rails');
+  const { visibleRegistrations } = await import('../components/chat/chat-rails');
   for (const { plugin, short, keys } of CARDS) {
-    const seen = (surfaces: Capabilities['surfaces']) => inscriptionsVisibles(caps({ surfaces })).map((i) => i.key).sort();
+    const seen = (surfaces: Capabilities['surfaces']) => visibleRegistrations(caps({ surfaces })).map((i) => i.key).sort();
     assert.deepEqual(seen(restricted([short], [plugin])), [...keys].sort(), `widget:${short}`);
     assert.deepEqual(seen(restricted([], [plugin])), [...keys].sort(), `plugin:${plugin}`);
   }
 });
 
 test('nothing changes for a viewer without restrictions', async () => {
-  const { inscriptionsVisibles } = await import('../components/chat/chat-rails');
+  const { visibleRegistrations } = await import('../components/chat/chat-rails');
   const all = CARDS.flatMap((card) => card.keys).sort();
-  const keys = (c: Capabilities | null) => inscriptionsVisibles(c).map((i) => i.key).sort();
+  const keys = (c: Capabilities | null) => visibleRegistrations(c).map((i) => i.key).sort();
   assert.deepEqual(keys(null), all, 'capabilities not loaded yet');
   assert.deepEqual(keys(caps()), all, 'install without accounts');
   assert.deepEqual(keys(caps({ surfaces: { all: true } })), all, 'superadmin or *');

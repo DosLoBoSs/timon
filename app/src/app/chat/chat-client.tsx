@@ -248,10 +248,10 @@ import {
   ChatRailWidgets,
   ChatWidgetRail,
   MISSIONS_WIDGET_ID,
-  PanneauTiroir,
+  DrawerPanel,
   useChatColumns,
   useChatRailsLayout,
-  PoigneesFil,
+  ThreadHandles,
   type ChatRailValue,
 } from '@/components/chat/chat-rails';
 import { isCollapsed } from '@/components/chat/chat-columns';
@@ -2215,17 +2215,17 @@ export function ChatClient({
   // that undoes itself on reload, or does not follow from one machine to the
   // next, is useless.
   const {
-    colonnes,
-    inverser: inverserColonnes,
-    basculer: basculerColonne,
-    ajouterOnglet: ajouterOngletColonne,
-    choisirOnglet: choisirOngletColonne,
-    fermerOnglet: fermerOngletColonne,
-    poserLargeur: poserLargeurColonne,
-    poserLargeurs: poserLargeursColonnes,
-    poserFil,
-    ajouterSeconde: ajouterSecondeColonne,
-    retirerSeconde: retirerSecondeColonne,
+    columns: colonnes,
+    swap: swapColumns,
+    toggle: basculerColonne,
+    addTab: ajouterOngletColonne,
+    selectTab: choisirOngletColonne,
+    closeTab: fermerOngletColonne,
+    setWidth: poserLargeurColonne,
+    setWidths: poserLargeursColonnes,
+    setThreadWidth,
+    addSecond: ajouterSecondeColonne,
+    removeSecond: retirerSecondeColonne,
   } = useChatColumns();
   // Lock during the header's CSS transition (max-h + opacity). Without
   // this lock, the reflow triggered by the collapse generates its own
@@ -5761,10 +5761,10 @@ export function ChatClient({
   // Across all tabs: an empty shown tab does not take the column away. Widths
   // come from the layout, then from the room the chat has (`planRails`).
   const rails = useChatRailsLayout(colonnes, { compact });
-  const zoneGauche = rails.gauche.colonne;
-  const zoneDroite = rails.droite.colonne;
-  const colonneGaucheOccupee = rails.gauche.occupee;
-  const colonneDroiteOccupee = rails.droite.occupee;
+  const zoneGauche = rails.left.column;
+  const zoneDroite = rails.right.column;
+  const colonneGaucheOccupee = rails.left.occupied;
+  const colonneDroiteOccupee = rails.right.occupied;
   // Focus mode sits ON TOP of the collapse, it does not write it: leaving it
   // gives the screen back exactly as it was on entry, collapsed column
   // included. It gives way to layout editing and to a drag in progress — cards
@@ -5772,13 +5772,13 @@ export function ChatClient({
   const focus = appearance.focusMode && widgetDragging === null && !layoutEditing;
   // A narrow chat shows its columns as panels of the island, one open at a
   // time; widening the chat closes whatever was open.
-  useEffect(() => { if (!rails.tiroir) setPanneauOuvert(null); }, [rails.tiroir]);
+  useEffect(() => { if (!rails.drawer) setPanneauOuvert(null); }, [rails.drawer]);
   const missionsAutorisees = useChatMissionsAllowed();
   // The missions list keeps a way in when the user took its card out of both
   // columns (moved it elsewhere, or removed it). Not when the role has no right
   // to the card: that is why it is in no column.
-  const missionsEnColonne = [rails.gauche, rails.droite].some((c) =>
-    c.visible && c.rails.some((r) => r.onglets.some((z) => widgetsOf(z).some((w) => w.id === MISSIONS_WIDGET_ID))));
+  const missionsEnColonne = [rails.left, rails.right].some((c) =>
+    c.visible && c.rails.some((r) => r.tabs.some((z) => widgetsOf(z).some((w) => w.id === MISSIONS_WIDGET_ID))));
   /**
    * What the columns look like, given whether this chat holds the zones (Q10).
    * Computed where the page's own flag is read synchronously: a chat that
@@ -5788,12 +5788,12 @@ export function ChatClient({
   const disposition = (holdsZones: boolean) => {
     // Not the primary chat: its columns are triggers only, as on a narrow chat.
     const passif = !compact && !holdsZones;
-    const tiroir = rails.tiroir || passif;
+    const tiroir = rails.drawer || passif;
     return {
       passif,
       tiroir,
-      railGaucheVisible: rails.gauche.visible && !tiroir,
-      railDroitVisible: rails.droite.visible && !tiroir,
+      railGaucheVisible: rails.left.visible && !tiroir,
+      railDroitVisible: rails.right.visible && !tiroir,
       panneau: tiroir && !compact && !passif ? panneauOuvert : null,
       accesMissions: tiroir && !compact && !missionsEnColonne && missionsAutorisees,
     };
@@ -5802,7 +5802,7 @@ export function ChatClient({
   // makes it primary. The panel opens only if that chat is narrow; wide, its
   // columns simply come back beside the thread.
   const ouvrirPanneau = (cible: 'left' | 'right' | 'missions') => {
-    if (!rails.tiroir) return;
+    if (!rails.drawer) return;
     setPanneauOuvert((p) => (p === cible ? null : cible));
   };
 
@@ -5834,7 +5834,7 @@ export function ChatClient({
       {/* Single column on mobile (chat only); the left/right rails float
           `fixed` over the central column from lg onward (like on
           /agents), the central column just reserves their width as
-          padding. Narrower, each one is a panel of the island (`PanneauTiroir`).
+          padding. Narrower, each one is a panel of the island (`DrawerPanel`).
           In compact mode, only the central column is rendered. */}
       <ChatRailProvider value={railValue} info={railInfo}>
       <ChatIslandHost embedded={compact || inIsland || !!chrome}>
@@ -5845,14 +5845,14 @@ export function ChatClient({
       // columns are out of the way or the room beside them is slim, then the
       // whole of it. Measured from the island, not the viewport: a chat in a
       // half-screen island is as tight as a phone.
-      const largeurFil = rails.disponible
-        - (railGaucheVisible ? rails.gauche.gouttiere : 0)
-        - (railDroitVisible ? rails.droite.gouttiere : 0);
+      const largeurFil = rails.available
+        - (railGaucheVisible ? rails.left.gutter : 0)
+        - (railDroitVisible ? rails.right.gutter : 0);
       // The setup conversation has no columns: its text keeps the setup composer's width.
       // A reading width chosen by the user keeps the thread centred and capped
       // whatever the columns do; only a phone-narrow chat still takes it all.
       const filChoisi = setup || dense ? undefined : colonnes.fil;
-      const larg = !setup && (narrow || (!dense && filChoisi === undefined && rails.disponible > 0
+      const larg = !setup && (narrow || (!dense && filChoisi === undefined && rails.available > 0
         && ((!railGaucheVisible && !railDroitVisible) || largeurFil < LARGEUR_FIL_PLEINE)));
       // A thread as slim as a phone, whatever the window: the `md:`/`lg:`
       // gutters and the avatar grid read the viewport, so a narrow island on
@@ -5860,7 +5860,7 @@ export function ChatClient({
       // means not narrow, or every first paint would flicker compact. The
       // island's width, not `largeurFil`: floating columns keep the thread at
       // 480px minimum, and a laptop with both open must stay a desktop chat.
-      const etroit = !dense && rails.disponible > 0 && rails.disponible < FIL_ETROIT;
+      const etroit = !dense && rails.available > 0 && rails.available < FIL_ETROIT;
       // The side margin follows the same measure. Once the columns fold into
       // panels for want of room (`rails.tiroir`), the thread and the composer
       // take the island's whole width: no margin left, the scrollbar on the
@@ -5869,8 +5869,8 @@ export function ChatClient({
       // (a 24px gutter there only eats text), the viewport's steps beyond.
       // Unmeasured (0), the viewport decides alone. 24px from
       // LARGEUR_FIL_PLEINE exactly: the capped thread's `+48px` below assumes it.
-      const margeChat = dense || rails.disponible === 0 ? MARGE_VIEWPORT
-        : rails.tiroir ? MARGE_NULLE
+      const margeChat = dense || rails.available === 0 ? MARGE_VIEWPORT
+        : rails.drawer ? MARGE_NULLE
           : largeurFil < LARGEUR_FIL_PLEINE ? MARGE_MOYENNE
             : MARGE_VIEWPORT;
       // Room to spare: the column grows with the thread, keeping a margin
@@ -5887,15 +5887,15 @@ export function ChatClient({
           page, the chat zones do not exist. Only the
           primary chat of the view registers them (Q10). */}
       {!compact && !passif && <ChatRailWidgets />}
-      <div ref={rails.mesurer} className="relative min-h-0 flex-1 overflow-hidden">
+      <div ref={rails.measure} className="relative min-h-0 flex-1 overflow-hidden">
         {!compact && !inIsland && <ChatIslandUnderlay />}
         {/* The columns on each side, from the edge towards the thread. The
             right one takes the place of the mission sheet, whose blocks it now
             carries — one per card. Emptied of everything, a column paints
             nothing and the thread gets the width back. */}
-        {!passif && ([rails.gauche, rails.droite] as const).map((cote) => cote.visible && cote.rails.map((rail) => {
-          const colonne = i18n(cote.cote === 'left' ? 'chatPage.leftRail' : 'chatPage.rightRail');
-          const label = rail.seconde ? i18n('chatPage.secondColumn', { column: colonne }) : colonne;
+        {!passif && ([rails.left, rails.right] as const).map((cote) => cote.visible && cote.rails.map((rail) => {
+          const colonne = i18n(cote.side === 'left' ? 'chatPage.leftRail' : 'chatPage.rightRail');
+          const label = rail.second ? i18n('chatPage.secondColumn', { column: colonne }) : colonne;
           if (tiroir) {
             // A panel: the column's real tabs and cards, none of the wide
             // screen's chrome (collapse, width, second column).
@@ -5904,20 +5904,20 @@ export function ChatClient({
                 key={rail.zone}
                 zone={rail.zone}
                 slot={rail.slot}
-                onglets={rail.onglets}
-                actif={rail.actif}
-                noms={rail.noms}
-                cote={cote.cote}
+                tabs={rail.tabs}
+                active={rail.active}
+                names={rail.names}
+                side={cote.side}
                 label={label}
-                onSwap={inverserColonnes}
-                onSelectTab={(z: string) => choisirOngletColonne(cote.colonne, z)}
-                onAddTab={() => ajouterOngletColonne(cote.colonne)}
-                onCloseTab={(z: string) => fermerOngletColonne(cote.colonne, z)}
-                tiroir={{
-                  id: `chat-panel-${cote.cote}`,
-                  ouvert: panneau === cote.cote,
-                  onFermer: fermerPanneau,
-                  largeur: rail.largeur,
+                onSwap={swapColumns}
+                onSelectTab={(z: string) => choisirOngletColonne(cote.column, z)}
+                onAddTab={() => ajouterOngletColonne(cote.column)}
+                onCloseTab={(z: string) => fermerOngletColonne(cote.column, z)}
+                drawer={{
+                  id: `chat-panel-${cote.side}`,
+                  open: panneau === cote.side,
+                  onClose: fermerPanneau,
+                  width: rail.width,
                 }}
               />
             );
@@ -5929,33 +5929,33 @@ export function ChatClient({
               key={rail.zone}
               zone={rail.zone}
               slot={rail.slot}
-              onglets={rail.onglets}
-              actif={rail.actif}
-              noms={rail.noms}
-              cote={cote.cote}
+              tabs={rail.tabs}
+              active={rail.active}
+              names={rail.names}
+              side={cote.side}
               label={label}
-              {...(rail.seconde ? {
-                onRemoveColumn: () => retirerSecondeColonne(cote.colonne),
+              {...(rail.second ? {
+                onRemoveColumn: () => retirerSecondeColonne(cote.column),
               } : {
-                onCollapse: () => basculerColonne(cote.colonne),
-                onSwap: inverserColonnes,
-                onSelectTab: (z: string) => choisirOngletColonne(cote.colonne, z),
-                onAddTab: () => ajouterOngletColonne(cote.colonne),
-                onCloseTab: (z: string) => fermerOngletColonne(cote.colonne, z),
-                onAddColumn: cote.aSeconde ? undefined : () => ajouterSecondeColonne(cote.colonne),
+                onCollapse: () => basculerColonne(cote.column),
+                onSwap: swapColumns,
+                onSelectTab: (z: string) => choisirOngletColonne(cote.column, z),
+                onAddTab: () => ajouterOngletColonne(cote.column),
+                onCloseTab: (z: string) => fermerOngletColonne(cote.column, z),
+                onAddColumn: cote.hasSecond ? undefined : () => ajouterSecondeColonne(cote.column),
               })}
-              ecartee={focus}
-              decalage={rail.decalage}
-              redimension={(() => {
+              pushedAside={focus}
+              offset={rail.offset}
+              resize={(() => {
                 // The same rank on the other side — a column mirrors a column,
                 // a second column a second column — so the screen stays
-                // symmetrical. Ctrl resizes this one alone (`PoigneeLargeur`).
-                const autre = cote.cote === 'left' ? rails.droite : rails.gauche;
-                const jumelle = autre.visible ? autre.rails.find((r) => r.seconde === rail.seconde) : undefined;
+                // symmetrical. Ctrl resizes this one alone (`WidthHandle`).
+                const autre = cote.side === 'left' ? rails.right : rails.left;
+                const jumelle = autre.visible ? autre.rails.find((r) => r.second === rail.second) : undefined;
                 return {
-                  largeur: rail.largeur,
+                  width: rail.width,
                   max: rail.max,
-                  ...(jumelle ? { jumelle: { largeur: jumelle.largeur, max: jumelle.max } } : {}),
+                  ...(jumelle ? { twin: { width: jumelle.width, max: jumelle.max } } : {}),
                   onChange: (largeur: number, persist: boolean, miroir: number | null) => poserLargeursColonnes(
                     jumelle && miroir !== null ? [[rail.zone, largeur], [jumelle.zone, miroir]] : [[rail.zone, largeur]],
                     persist,
@@ -5965,9 +5965,9 @@ export function ChatClient({
               })()}
               className="top-[calc(var(--timon-topbar-h)+16px)] bottom-4"
               // The pinned browser already shrinks the containing shell.
-              style={cote.cote === 'left'
-                ? { left: `calc(var(--timon-nav-w) + ${16 + rail.decalage}px)`, width: rail.largeur }
-                : { right: 16 + rail.decalage, width: rail.largeur }}
+              style={cote.side === 'left'
+                ? { left: `calc(var(--timon-nav-w) + ${16 + rail.offset}px)`, width: rail.width }
+                : { right: 16 + rail.offset, width: rail.width }}
             />
           );
         }))}
@@ -6007,16 +6007,16 @@ export function ChatClient({
         )}
 
         {accesMissions && (
-          <PanneauTiroir
+          <DrawerPanel
             id="chat-panel-missions"
-            cote="left"
+            side="left"
             label={i18n('chatPage.missionsPanel')}
-            ouvert={panneau === 'missions'}
-            onFermer={fermerPanneau}
-            largeur={340}
+            open={panneau === 'missions'}
+            onClose={fermerPanneau}
+            width={340}
           >
             <ChatMissionsList />
-          </PanneauTiroir>
+          </DrawerPanel>
         )}
 
         {/* Under an open panel, the rest of the island: a tap there closes it.
@@ -6057,8 +6057,8 @@ export function ChatClient({
           railDroitVisible && !focus && "lg:pr-[var(--chat-gutter-right)]",
         )}
         style={{
-          '--chat-gutter-left': `${rails.gauche.gouttiere}px`,
-          '--chat-gutter-right': `${rails.droite.gouttiere}px`,
+          '--chat-gutter-left': `${rails.left.gutter}px`,
+          '--chat-gutter-right': `${rails.right.gutter}px`,
           '--chat-col': `${colonneMax}px`,
         } as CSSProperties}
         // Read by the widget card's CSS (globals.css): a chat in a widget
@@ -6080,7 +6080,7 @@ export function ChatClient({
                 left: `calc(var(--timon-nav-w, 0px) + ${railGaucheVisible && !focus ? 'var(--chat-gutter-left)' : '0px'})`,
                 right: railDroitVisible && !focus ? 'var(--chat-gutter-right)' : '0px',
               }}>
-              <PoigneesFil onChange={(largeur, persist) => poserFil(largeur, persist)} onReset={() => poserFil(null)} />
+              <ThreadHandles onChange={(largeur, persist) => setThreadWidth(largeur, persist)} onReset={() => setThreadWidth(null)} />
             </div>
           )}
           <div ref={scrollRef} className={cn(
@@ -6212,11 +6212,11 @@ export function ChatClient({
               last line clear of them. */}
           {tiroir && !compact && (
             <div className="relative z-20 h-0">
-              {(rails.gauche.visible || accesMissions) && (
+              {(rails.left.visible || accesMissions) && (
                 // This strip sits in the column's flow, past its nav padding:
                 // adding `--timon-nav-w` again pushed the buttons 56px in on desktop.
                 <div className="absolute bottom-1 left-1.5 flex gap-1">
-                  {rails.gauche.visible && (
+                  {rails.left.visible && (
                     <DeclencheurPanneau
                       cible="chat-panel-left"
                       label={i18n('chatPage.openLeftColumn')}
@@ -6238,7 +6238,7 @@ export function ChatClient({
                   )}
                 </div>
               )}
-              {rails.droite.visible && (
+              {rails.right.visible && (
                 <div className="absolute bottom-1 right-1.5 md:right-[calc(var(--timon-island-gap)+6px)]">
                   <DeclencheurPanneau
                     cible="chat-panel-right"

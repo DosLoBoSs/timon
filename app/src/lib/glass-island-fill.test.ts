@@ -73,7 +73,7 @@ test('the chat\'s widget drawer frosts its own copy of the wallpaper in every gl
   // The components compile to the classic JSX runtime under the test runner.
   Object.defineProperty(globalThis, 'React', { value: React, configurable: true, writable: true });
   const { createRoot } = await import('react-dom/client');
-  const { PanneauTiroir } = await import('../components/chat/chat-rails');
+  const { DrawerPanel } = await import('../components/chat/chat-rails');
   const { IslandGlassScopeProvider } = await import('../components/glass-scope');
   const { applyGlassAttributes } = await import('../plugins-client/ui-theme-variants');
   const root = createRoot(document.getElementById('root')!);
@@ -87,8 +87,8 @@ test('the chat\'s widget drawer frosts its own copy of the wallpaper in every gl
   });
 
   const render = (scope: 'island' | 'widgets' | null) => React.act(async () => {
-    const drawer = React.createElement(PanneauTiroir, {
-      id: 'drawer', cote: 'right', label: 'Widgets', ouvert: true, onFermer: () => {}, largeur: 320,
+    const drawer = React.createElement(DrawerPanel, {
+      id: 'drawer', side: 'right', label: 'Widgets', open: true, onClose: () => {}, width: 320,
       children: React.createElement('p', null, 'card'),
     });
     root.render(React.createElement(IslandGlassScopeProvider, { value: scope }, drawer));

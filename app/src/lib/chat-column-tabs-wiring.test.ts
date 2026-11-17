@@ -74,9 +74,9 @@ test('column tabs: hidden tabs stay placed, switching hands the zone over, drop 
     const [active, setActive] = React.useState(COL);
     return React.createElement(ChatWidgetRail, {
       zone: COL,
-      onglets: [COL, TAB2],
-      actif: active,
-      cote: 'right',
+      tabs: [COL, TAB2],
+      active,
+      side: 'right',
       label: 'Right',
       onSelectTab: setActive,
     });

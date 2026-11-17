@@ -27,7 +27,7 @@ import {
 import type { CatalogEntry } from '@/components/widget-host/widget-catalog';
 import { readColumns, type ChatColumns } from '@/components/chat/chat-columns';
 
-/** The chat's two columns (`COLONNES` in `chat-rails.tsx`). */
+/** The chat's two columns (`COLUMNS` in `chat-rails.tsx`). */
 export const CHAT_COLUMN_ZONES = ['chat.left.widget', 'chat.right.widget'] as const;
 /** The product views whose starters the browser publishes. */
 export const PRODUCT_VIEWS = ['/', '/agents', '/chat'] as const;

@@ -31,10 +31,10 @@ const CARDS = [
 ] as const;
 
 test('the Skills and MCP cards follow their -widget module and their own grant', async () => {
-  const { inscriptionsVisibles } = await import('../components/chat/chat-rails');
+  const { visibleRegistrations } = await import('../components/chat/chat-rails');
   for (const card of CARDS) {
     const shown = (c: Capabilities | null) =>
-      inscriptionsVisibles(c).filter((i) => i.key === card.key).map((i) => i.pluginId);
+      visibleRegistrations(c).filter((i) => i.key === card.key).map((i) => i.pluginId);
     const off = { id: card.pluginId, tier: 'std' as const, active: false, reason: null, missing: [] };
 
     assert.deepEqual(shown(null), [card.pluginId], `${card.key}: capabilities not loaded yet, shown`);
@@ -49,16 +49,16 @@ test('the Skills and MCP cards follow their -widget module and their own grant',
   }
 
   // One grant opens one card, not its neighbour of the same stack.
-  const keys = inscriptionsVisibles(caps({ surfaces: restricted(['skills-widget'], ['@timon/skills-widget']) })).map((i) => i.key);
+  const keys = visibleRegistrations(caps({ surfaces: restricted(['skills-widget'], ['@timon/skills-widget']) })).map((i) => i.key);
   assert.ok(keys.includes('skills') && !keys.includes('mcp'));
   // Switching one module off leaves the other card.
-  const mcpOff = inscriptionsVisibles(caps({ modules: [{ id: '@timon/mcp-widget', tier: 'std', active: false, reason: null, missing: [] }] })).map((i) => i.key);
+  const mcpOff = visibleRegistrations(caps({ modules: [{ id: '@timon/mcp-widget', tier: 'std', active: false, reason: null, missing: [] }] })).map((i) => i.key);
   assert.ok(mcpOff.includes('skills') && !mcpOff.includes('mcp'));
 });
 
 test('a place saved under @timon/agents carries over to the -widget cards', async () => {
-  const { inscriptionsVisibles } = await import('../components/chat/chat-rails');
-  const all = inscriptionsVisibles(null);
+  const { visibleRegistrations } = await import('../components/chat/chat-rails');
+  const all = visibleRegistrations(null);
   for (const card of CARDS) {
     const entry = all.find((i) => i.key === card.key);
     assert.deepEqual(entry?.widget?.formerIds, [`plugin:@timon/agents:${card.key}`], card.key);

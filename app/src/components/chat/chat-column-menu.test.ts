@@ -67,8 +67,8 @@ async function mount(tabs: string[], withCommands = true) {
           React.createElement(WidgetHost, null,
             React.createElement(ChatWidgetRail, {
               zone: COL,
-              onglets: tabs,
-              cote: 'right',
+              tabs,
+              side: 'right',
               label: 'Right',
               ...(withCommands ? {
                 onAddTab: () => { calls.added += 1; },

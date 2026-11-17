@@ -50,11 +50,11 @@ test('column width handle: keyboard, double-click and drag, on both sides', asyn
         React.createElement(WidgetHost, null,
           React.createElement(ChatWidgetRail, {
             zone: COL,
-            cote: side,
+            side,
             label: 'Left',
-            ecartee: apart,
-            redimension: {
-              largeur: 300,
+            pushedAside: apart,
+            resize: {
+              width: 300,
               max: 500,
               onChange: (l: number, p: boolean) => { calls.push([l, p]); },
               onReset: () => { calls.push('reset'); },
