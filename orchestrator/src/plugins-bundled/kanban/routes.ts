@@ -10,7 +10,8 @@ import { z } from 'zod';
 import { AgentConfig, killAgent, listAgents } from '../../agent.js';
 import { backendIdForModel, catalogClaimsModel } from '../../backends/catalog.js';
 import { asBackendName } from '../../backends/index.js';
-import { branchInBase, branchWork, evaluateCodeDone, evaluateMergeClose, inspectGitBranch, mergedShaOwner, mergeSourceBranches, shaInBase } from '../../code-gate.js';
+import { codeCloseRefusal, effectiveMergeSha, evaluateCodeDone, inspectGitBranch, mergeCloseRefusal, shaInBase, taskRepo } from '../../code-gate.js';
+export { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal } from '../../code-gate.js';
 import { config } from '../../config/load.js';
 import { FALLBACK_SCOPES, TASK_TYPES, db, dbApi, isCodeOnlyPipeline, isFallbackScope, isTaskType, normalizeTaskStatusInput, rowVisible, type TaskDeleteOutcome, type TaskDeleteResult, type TaskRow, type TaskType } from '../../db.js';
 import { forbidden, forbiddenBody, isPersonAuth, rejectIfDenied, requireAuth, viewerFromRequest } from '../../users/identity.js';
@@ -364,12 +365,6 @@ function parseSummary(raw: unknown): string | undefined {
  * process (`stopClosedTaskMission`) — it is the process's exit that publishes
  * `mission_complete`, hence that primes the verification-loop and the doc task.
  */
-/** Where git can tell whether a task's sha landed: its worktree, else its agent's repository. */
-function taskRepo(task: TaskRow): string | null {
-  if (task.worktree_path && existsSync(task.worktree_path)) return task.worktree_path;
-  try { return loadConfig(task.agent_name).cwd ?? null; } catch { return null; }
-}
-
 /**
  * A sha on a full-pipeline `code` task skips its review, releases its
  * dependents and closes its idea (TIM-0109, marked merged by hand). Every
@@ -381,68 +376,6 @@ export function mergedShaRefusal(task: TaskRow, sha: string): string | null {
   if (task.type !== 'code' || isCodeOnlyPipeline(task.pipeline)) return null;
   if (shaInBase(taskRepo(task), task.base_branch, sha) !== 'not_contained') return null;
   return `Commit ${sha} is not in ${task.base_branch} of this repository. Check the sha of the merge.`;
-}
-
-/** The sha a `merge` task's DONE will carry: the one sent, else the stored one,
- *  else the full sha the merge guard (`db.ts`) reads from the comment. */
-export function effectiveMergeSha(task: TaskRow, sha: string | null | undefined, comment: string | null | undefined): string | null {
-  if (sha) return sha;
-  if (task.merged_commit_sha) return task.merged_commit_sha;
-  return /\b[0-9a-f]{40}\b/i.exec(comment ?? task.done_comment ?? '')?.[0] ?? null;
-}
-
-/**
- * Whether a `merge` task may go DONE with `sha` (TODO #1012). The daemon proves
- * the merge itself instead of trusting the merger: every source branch must be
- * in the base, the sha must be in the base and contain them, and no other task
- * may already carry it. What git cannot decide (branch deleted, git missing) is
- * let through, as before, and logged.
- */
-export function mergeCloseRefusal(task: TaskRow, sha: string | null): string | null {
-  if (task.type !== 'merge') return null;
-  if (sha) {
-    const owner = mergedShaOwner(task, sha);
-    if (owner) {
-      // Another user's task is not named: its id and title are theirs.
-      const which = owner.sameOwner ? `task ${owner.id} ("${owner.title}")` : 'another task';
-      return `Merge guard: commit ${sha} is already the merge of ${which}, ` +
-        `so it does not prove this one. Merge this task's branch, then close with the full sha of the ` +
-        `resulting base. If the branch was already in the base before this task, close with the full sha ` +
-        `of the branch head (\`git rev-parse <branch>\`), once \`git merge-base --is-ancestor <branch> <base>\` succeeds.`;
-    }
-  }
-  const sources = mergeSourceBranches(task);
-  const verdict = evaluateMergeClose({
-    repoPath: taskRepo(task),
-    baseBranch: task.base_branch,
-    sourceBranches: sources,
-    sha,
-  });
-  if (sources.length === 0) verdict.undecided.push('no source branch found in its dependencies');
-  if (verdict.undecided.length > 0) {
-    console.warn(`[merge-guard] task ${task.id}: merge not fully verified (${verdict.undecided.join('; ')})`);
-  }
-  return verdict.refusal;
-}
-
-/**
- * Whether a `full` code task may go DONE (TODO #1012). When its coder merged
- * the branch into the base, the review reads the coder's commits from where the
- * branch started, found in its reflog. Without that start the review would
- * see an empty diff: the closing is refused rather than letting the chain skip
- * the review.
- */
-export function codeCloseRefusal(task: TaskRow): string | null {
-  if (task.type !== 'code' || !task.branch_name || isCodeOnlyPipeline(task.pipeline)) return null;
-  if (task.merged_commit_sha) return null;
-  const repo = taskRepo(task);
-  if (branchInBase(repo, task.branch_name, task.base_branch) !== true) return null;
-  const work = branchWork(repo, task.branch_name);
-  if (!work || work.start) return null;
-  return `Code guard: branch ${task.branch_name} is already contained in ${task.base_branch}, and where it ` +
-    `started cannot be found, so its review would see an empty diff. In the full pipeline the chained merge ` +
-    `task integrates the branch, never the coder. Mark the task failed with this reason so a person decides ` +
-    `how to review it.`;
 }
 
 /** Answers 409 when a `merge` or `full` code task may not go DONE yet; true if it did. */
