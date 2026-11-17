@@ -110,17 +110,17 @@ test('no session, no toggle — the fix must not open the route', async () => {
 
 test('invalid toggle inputs return explicit field errors without changing config', async () => {
   const before = readFileSync(CONFIG_FILE, 'utf8');
-  for (const [id, body, error] of [
-    [' ', { enabled: true }, '`id` must be a non-empty string'],
-    [OPTIONAL, { wanted: true }, '`enabled` must be a boolean'],
-    [OPTIONAL, { enabled: 'false' }, '`enabled` must be a boolean'],
-    [OPTIONAL, null, '`enabled` must be a boolean'],
+  for (const [id, body, code, error] of [
+    [' ', { enabled: true }, 'invalid_id', '`id` must be a non-empty string'],
+    [OPTIONAL, { wanted: true }, 'invalid_body', '`enabled` must be a boolean'],
+    [OPTIONAL, { enabled: 'false' }, 'invalid_body', '`enabled` must be a boolean'],
+    [OPTIONAL, null, 'invalid_body', '`enabled` must be a boolean'],
   ] as const) {
     const response = await fetch(`http://127.0.0.1:${port}/api/plugins/${encodeURIComponent(id)}/enabled`, {
       method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(body),
     });
     assert.equal(response.status, 400);
-    if (body !== null) assert.deepEqual(await response.json(), { error });
+    if (body !== null) assert.deepEqual(await response.json(), { code, error });
   }
   assert.equal(readFileSync(CONFIG_FILE, 'utf8'), before);
 });
