@@ -13,9 +13,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { waitUntil } from '../../lib/test-wait';
 
-type MountOptions = { url?: string; session?: boolean };
+type MountOptions = { url?: string; session?: boolean; downloadMs?: number; delayMs?: number };
 
-async function mount({ url = 'http://localhost/?update-preview=1', session = true }: MountOptions = {}) {
+async function mount({ url = 'http://localhost/?update-preview=1', session = true, downloadMs = 400, delayMs = 20 }: MountOptions = {}) {
   const { JSDOM } = await import('jsdom');
   const options = { url, pretendToBeVisual: true, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130 Timon/0.1.9' };
   const dom = new JSDOM('<html><body><div id="root"></div></body></html>', options as ConstructorParameters<typeof JSDOM>[1]);
@@ -75,7 +75,7 @@ async function mount({ url = 'http://localhost/?update-preview=1', session = tru
   await React.act(async () => {
     root.render(React.createElement(React.Fragment, null,
       React.createElement(NoticesHost),
-      React.createElement(UpdatePreviewHost, { downloadMs: 400, delayMs: 20 })));
+      React.createElement(UpdatePreviewHost, { downloadMs, delayMs })));
   });
   const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);
   const click = async (el: Element | null | undefined) => {
@@ -114,7 +114,7 @@ function assertNothingSent(m: Awaited<ReturnType<typeof mount>>): void {
 }
 
 test('?update-preview=1 plays the whole journey in the real window, and sends nothing', async () => {
-  const m = await mount();
+  const m = await mount({ downloadMs: 1_500 });
   try {
     await m.until(() => windowEl() !== null, 'the window, open at once');
     assert.equal(windowEl()?.getAttribute('data-update-dialog'), '0.2.0');
@@ -145,7 +145,8 @@ test('?update-preview=1 plays the whole journey in the real window, and sends no
 });
 
 test('the selector jumps to each state, and Install anyway closes the window', async () => {
-  const m = await mount();
+  // Slow enough that a loaded machine still sees the resumed download and the install under way.
+  const m = await mount({ downloadMs: 20_000, delayMs: 400 });
   try {
     await m.until(() => selector() !== null, 'the selector, inside the window');
     assert.deepEqual(Array.from(selector()!.querySelectorAll('button'), (el) => el.textContent),
