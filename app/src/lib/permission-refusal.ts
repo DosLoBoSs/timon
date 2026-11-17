@@ -8,6 +8,7 @@
  * refusal shows the daemon's own reason and hint, which it words for a person.
  */
 
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 
 /** The sentence a greyed control and a refused call share. */
@@ -32,13 +33,10 @@ export function refusalText(body: unknown): string | null {
   return hint ? `${reason} — ${hint}` : reason;
 }
 
-/** The message of any failed response body: its refusal, else its `error`,
- *  else `fallback`. */
+/** The message of any failed response body: its refusal, else its error
+ *  (translated when its code is known), else `fallback`. */
 export function responseErrorText(body: unknown, fallback: string): string {
-  const refusal = refusalText(body);
-  if (refusal) return refusal;
-  const error = body && typeof body === 'object' ? text((body as Record<string, unknown>).error) : null;
-  return error ?? fallback;
+  return refusalText(body) ?? apiErrorMessage(body, fallback);
 }
 
 /** A control gated on a permission: enabled only once it is known to be held,
