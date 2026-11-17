@@ -72,7 +72,7 @@
       },
       "windowRefused": "Decisión registrada, pero el terminal de {scope} no está en pantalla. Abre una conversación de {scope} para pegarlo allí; el comando está en tu portapapeles.",
       "windowRefusedNoClipboard": "Decisión registrada, pero el terminal de {scope} no está en pantalla. Abre una conversación de {scope} y copia el comando desde la tarjeta.",
-      "pendingBadge": "{count} comando(s) esperando tu decisión"
+      "pendingBadge": "{count, plural, one {# comando} other {# comandos}} esperando tu decisión"
     }
   }
 }

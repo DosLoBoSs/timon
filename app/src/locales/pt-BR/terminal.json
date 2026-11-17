@@ -72,7 +72,7 @@
       },
       "windowRefused": "Decisão registrada, mas o terminal de {scope} não está na tela. Abra uma conversa de {scope} para colá-lo lá; o comando está na sua área de transferência.",
       "windowRefusedNoClipboard": "Decisão registrada, mas o terminal de {scope} não está na tela. Abra uma conversa de {scope} e copie o comando do cartão.",
-      "pendingBadge": "{count} comando(s) aguardando sua decisão"
+      "pendingBadge": "{count, plural, one {# comando} other {# comandos}} aguardando sua decisão"
     }
   }
 }

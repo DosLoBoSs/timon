@@ -72,7 +72,7 @@
       },
       "windowRefused": "Decision recorded, but the terminal of {scope} is not on screen. Open a conversation of {scope} to paste it there; the command is in your clipboard.",
       "windowRefusedNoClipboard": "Decision recorded, but the terminal of {scope} is not on screen. Open a conversation of {scope}, then copy the command from the card.",
-      "pendingBadge": "{count} command(s) waiting for your decision"
+      "pendingBadge": "{count, plural, one {# command} other {# commands}} waiting for your decision"
     }
   }
 }
