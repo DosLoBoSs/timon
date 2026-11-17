@@ -1929,7 +1929,7 @@
     "orgActions": "Aktionen für {name}",
     "orgRootDrop": "Hier ablegen, um einen Agenten wieder unter seinen Standardvorgesetzten zu stellen",
     "mainSeatEmpty": "Kein Haupt-Orchestrator",
-    "mainSeatEmptyHint": "Agenten ohne Vorgesetzten bleiben auf oberster Ebene, bis ein Agent diese Rolle übernimmt.",
+    "mainSeatEmptyHint": "Agenten ohne Vorgesetzten bleiben auf oberster Ebene, bis ein Agent diese Rolle übernimmt. Im Terminal: `timon agent set-main <name>`.",
     "mainSeatNoCandidate": "Kein Agent kann diese Rolle übernehmen: Geben Sie einem Agenten ohne Projekt die Orchestrator-Rolle.",
     "mainSeatSet": "{name} als Haupt-Orchestrator festlegen"
   },

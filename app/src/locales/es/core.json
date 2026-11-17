@@ -1929,7 +1929,7 @@
     "orgActions": "Acciones de {name}",
     "orgRootDrop": "Suelta aquí para devolver un agente a su responsable predeterminado",
     "mainSeatEmpty": "Ningún orquestador principal",
-    "mainSeatEmptyHint": "Los agentes sin responsable permanecen en la raíz hasta que un agente ocupe el puesto.",
+    "mainSeatEmptyHint": "Los agentes sin responsable permanecen en la raíz hasta que un agente ocupe el puesto. Desde una terminal: `timon agent set-main <name>`.",
     "mainSeatNoCandidate": "Ningún agente puede ocupar el puesto: asigna el rol de orquestador a un agente sin proyecto.",
     "mainSeatSet": "Definir {name} como orquestador principal"
   },

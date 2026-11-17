@@ -1929,7 +1929,7 @@
     "orgActions": "{name} 작업",
     "orgRootDrop": "여기에 놓으면 에이전트를 기본 상위 에이전트 아래로 되돌립니다",
     "mainSeatEmpty": "메인 오케스트레이터 없음",
-    "mainSeatEmptyHint": "에이전트가 이 역할을 맡을 때까지 상위가 없는 에이전트는 최상위에 표시됩니다.",
+    "mainSeatEmptyHint": "에이전트가 이 역할을 맡을 때까지 상위가 없는 에이전트는 최상위에 표시됩니다. 터미널에서는 `timon agent set-main <name>`을 실행하세요.",
     "mainSeatNoCandidate": "이 역할을 맡을 수 있는 에이전트가 없습니다. 프로젝트가 없는 에이전트에게 오케스트레이터 역할을 부여하세요.",
     "mainSeatSet": "{name}을(를) 메인 오케스트레이터로 설정"
   },

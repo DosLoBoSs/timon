@@ -1929,7 +1929,7 @@
     "orgActions": "Ações para {name}",
     "orgRootDrop": "Solte aqui para devolver um agente ao seu gestor padrão",
     "mainSeatEmpty": "Nenhum orquestrador principal",
-    "mainSeatEmptyHint": "Agentes sem gestor ficam na raiz até que um agente ocupe o posto.",
+    "mainSeatEmptyHint": "Agentes sem gestor ficam na raiz até que um agente ocupe o posto. Pelo terminal: `timon agent set-main <name>`.",
     "mainSeatNoCandidate": "Nenhum agente pode ocupar o posto: dê a função de orquestrador a um agente sem projeto.",
     "mainSeatSet": "Definir {name} como orquestrador principal"
   },

@@ -1929,7 +1929,7 @@
     "orgActions": "Akcje dla {name}",
     "orgRootDrop": "Upuść tutaj, aby przywrócić agenta pod domyślnego przełożonego",
     "mainSeatEmpty": "Brak głównego orkiestratora",
-    "mainSeatEmptyHint": "Agenci bez przełożonego pozostają na najwyższym poziomie, dopóki żaden agent nie obejmie tej roli.",
+    "mainSeatEmptyHint": "Agenci bez przełożonego pozostają na najwyższym poziomie, dopóki żaden agent nie obejmie tej roli. Z terminala: `timon agent set-main <name>`.",
     "mainSeatNoCandidate": "Żaden agent nie może objąć tej roli: nadaj rolę orkiestratora agentowi bez projektu.",
     "mainSeatSet": "Ustaw {name} jako głównego orkiestratora"
   },

@@ -1705,7 +1705,7 @@
     "orgTitle": "Organisation",
     "orgHint": "Glissez un agent sur un autre pour changer son responsable. Glissez le lead d'un projet sur un pôle pour y déplacer le projet.",
     "orgActions": "Actions pour {name}",
-    "orgRootDrop": "Déposez ici pour remettre un agent sous son responsable par défaut", "mainSeatEmpty": "Aucun orchestrateur principal", "mainSeatEmptyHint": "Les agents sans responsable restent à la racine tant que personne n'occupe la place.", "mainSeatNoCandidate": "Aucun agent ne peut occuper la place : donnez le rôle d'orchestrateur à un agent sans projet.", "mainSeatSet": "Définir {name} comme orchestrateur principal"
+    "orgRootDrop": "Déposez ici pour remettre un agent sous son responsable par défaut", "mainSeatEmpty": "Aucun orchestrateur principal", "mainSeatEmptyHint": "Les agents sans responsable restent à la racine tant que personne n'occupe la place. Depuis un terminal : `timon agent set-main <name>`.", "mainSeatNoCandidate": "Aucun agent ne peut occuper la place : donnez le rôle d'orchestrateur à un agent sans projet.", "mainSeatSet": "Définir {name} comme orchestrateur principal"
   },
   "chatPage": {
     "allowSession": "Autoriser pour cette session",

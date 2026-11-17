@@ -1959,7 +1959,7 @@
     "orgActions": "{name} 的操作",
     "orgRootDrop": "拖到此处可恢复智能体的默认直属上级",
     "mainSeatEmpty": "未设置主协调器",
-    "mainSeatEmptyHint": "未设置主协调器时，没有直属上级的智能体会留在顶层。",
+    "mainSeatEmptyHint": "未设置主协调器时，没有直属上级的智能体会留在顶层。也可在终端运行 `timon agent set-main <name>`。",
     "mainSeatNoCandidate": "没有符合条件的智能体。请为一个不属于任何项目的智能体分配协调器角色。",
     "mainSeatSet": "将 {name} 设为主协调器"
   },

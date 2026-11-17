@@ -1705,7 +1705,7 @@
     "orgTitle": "Organization",
     "orgHint": "Drag an agent onto another to change who it reports to. Drag a project lead onto a pole to move the project.",
     "orgActions": "Actions for {name}",
-    "orgRootDrop": "Drop here to put an agent back under its default manager", "mainSeatEmpty": "No main orchestrator", "mainSeatEmptyHint": "Agents without a manager stay at the root until an agent holds the seat.", "mainSeatNoCandidate": "No agent can hold the seat: give the orchestrator role to an agent without a project.", "mainSeatSet": "Set {name} as main orchestrator"
+    "orgRootDrop": "Drop here to put an agent back under its default manager", "mainSeatEmpty": "No main orchestrator", "mainSeatEmptyHint": "Agents without a manager stay at the root until an agent holds the seat. From a terminal: `timon agent set-main <name>`.", "mainSeatNoCandidate": "No agent can hold the seat: give the orchestrator role to an agent without a project.", "mainSeatSet": "Set {name} as main orchestrator"
   },
   "chatPage": {
     "allowSession": "Allow for this session",
