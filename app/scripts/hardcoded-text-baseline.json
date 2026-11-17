@@ -79,11 +79,6 @@
   "app/src/plugins-client/backends/claude-token.tsx": {
     "jsxAttr": 1
   },
-  "app/src/plugins-client/company/client.tsx": {
-    "jsxText": 1,
-    "jsxAttr": 1,
-    "french": 13
-  },
   "app/src/plugins-client/dreams/cockpit-dreams-tile.tsx": {
     "jsxAttr": 1
   },
