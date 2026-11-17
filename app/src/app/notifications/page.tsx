@@ -36,6 +36,7 @@ type Notification = {
   /** Agent that raised it; null = Timon itself. */
   agent?: string | null;
   presentation?: SystemNotificationPresentation;
+  message_code?: string | null;
 };
 
 function fmtDate(ts: number): string {

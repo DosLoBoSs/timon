@@ -1,3 +1,4 @@
+import { daemonNotificationText } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { settingsPath } from '@/lib/settings-path';
 
@@ -14,12 +15,14 @@ export type PresentableNotification = {
   title: string;
   body: string | null;
   presentation?: SystemNotificationPresentation;
+  /** JSON code of a title and body the daemon wrote (TODO #845); null for anyone else's text. */
+  message_code?: string | null;
 };
 
 /** Leave agent, plugin and user-authored text untouched, including Markdown. */
 export function systemNotificationText(n: PresentableNotification): { title: string; body: string | null } {
   const metadata = n.presentation;
-  if (metadata?.kind !== 'backend-binary') return { title: n.title, body: n.body };
+  if (metadata?.kind !== 'backend-binary') return daemonNotificationText(n.message_code, { title: n.title, body: n.body });
   const vars = {
     cmd: metadata.cmd,
     backends: metadata.backends.join(', '),

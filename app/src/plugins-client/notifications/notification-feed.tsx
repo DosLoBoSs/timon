@@ -48,6 +48,7 @@ export type FeedNotification = {
   /** Agent that raised it (its mission's, else its task's); null = Timon itself. */
   agent?: string | null;
   presentation?: SystemNotificationPresentation;
+  message_code?: string | null;
 };
 
 const POLL_MS = 20_000;

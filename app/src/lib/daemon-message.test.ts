@@ -1,0 +1,106 @@
+/**
+ * Stored daemon sentences on screen (TODO #845): a code the dictionary knows
+ * reads in the reader's language; anything else keeps the stored English.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import './i18n-test-locales';
+import { getLocale, setLocale } from './i18n';
+import { daemonMessageText, daemonNotificationText, parseDaemonMessage } from './api-error';
+import { localizedNoticePayload } from './daemon-notice-payload';
+import { systemNotificationText } from './system-notifications';
+
+function inLocale<T>(tag: string, run: () => T): T {
+  const before = getLocale();
+  setLocale(tag);
+  try { return run(); } finally { setLocale(before); }
+}
+
+const ENGLISH = 'Merge guard: DONE is rejected without merged_commit_sha (stored English).';
+const MERGE = JSON.stringify({ code: 'merge_sha_abbreviated', params: { guard: 'merge', short: 'fe2dd84' } });
+
+test('a stored code reads in French, its params interpolated', () => {
+  const text = inLocale('fr', () => daemonMessageText(MERGE, ENGLISH));
+  assert.match(text, /^Garde de merge/);
+  assert.match(text, /git rev-parse fe2dd84/);
+});
+
+test('without a code, the stored English is shown as it is', () => {
+  assert.equal(inLocale('fr', () => daemonMessageText(null, ENGLISH)), ENGLISH);
+  assert.equal(inLocale('fr', () => daemonMessageText('not json', ENGLISH)), ENGLISH);
+});
+
+test('a code nobody knows, or one missing a param, keeps the English rather than raw ICU', () => {
+  assert.equal(inLocale('fr', () => daemonMessageText(JSON.stringify({ code: 'never_heard_of', params: {} }), ENGLISH)), ENGLISH);
+  assert.equal(inLocale('fr', () => daemonMessageText(JSON.stringify({ code: 'merge_sha_abbreviated', params: { guard: 'merge' } }), ENGLISH)), ENGLISH);
+});
+
+test('an interruption reads its cause, its quota window and the retries running out', () => {
+  const stored = {
+    code: 'task_interrupted',
+    params: {
+      reason: 'rate_limit', window: 'five_hour', reopens: '04:05', observed: '03:05',
+      context: 'none', lastError: 'none', exhausted: 4, taskId: 't1',
+    },
+  };
+  const fr = inLocale('fr', () => daemonMessageText(stored, 'English'));
+  assert.match(fr, /limite d’usage du compte atteinte \(five_hour\), le quota rouvre à 04:05/);
+  assert.match(fr, /4 morts système d’affilée/);
+  assert.match(fr, /timon task update t1 --status PENDING/);
+  const en = inLocale('en', () => daemonMessageText({ ...stored, params: { ...stored.params, exhausted: 0, reason: 'killed' } }, 'English'));
+  assert.match(en, /^Mission interrupted: process killed/);
+  assert.doesNotMatch(en, /retries are exhausted/);
+});
+
+test('a notification title and body each fall back to their own English', () => {
+  const english = { title: 'Backend codex: signed out — log in again', body: 'English body' };
+  const stored = JSON.stringify({ code: 'backend_signed_out', params: { backend: 'codex', until: Date.UTC(2026, 10, 17, 3) } });
+  const fr = inLocale('fr', () => daemonNotificationText(stored, english));
+  assert.equal(fr.title, 'Backend codex : déconnecté — reconnectez-vous');
+  assert.match(fr.body ?? '', /Backend écarté jusqu’au/);
+  assert.deepEqual(inLocale('fr', () => daemonNotificationText(null, english)), english);
+});
+
+test('the notification centre translates a coded card and leaves an agent card alone', () => {
+  const coded = systemNotificationText({
+    title: 'Backend claude: sidelined by the circuit breaker',
+    body: 'English',
+    message_code: JSON.stringify({
+      code: 'backend_breaker_tripped',
+      params: { backend: 'claude', failures: 3, signature: '0 turn', seconds: 9, minutes: 0, until: 0 },
+    }),
+  });
+  assert.equal(inLocale('en', () => coded.title), 'Backend claude: sidelined by the circuit breaker');
+  const fr = inLocale('fr', () => systemNotificationText({
+    title: 'x', body: 'y',
+    message_code: JSON.stringify({
+      code: 'backend_breaker_tripped',
+      params: { backend: 'claude', failures: 3, signature: '0 turn', seconds: 9, minutes: 5, until: 0 },
+    }),
+  }));
+  assert.equal(fr.title, 'Backend claude : écarté par le disjoncteur');
+  assert.match(fr.body ?? '', /Il n’est écarté que 5 min/);
+  const agent = { title: 'Deploy done', body: '**ok**' };
+  assert.deepEqual(inLocale('fr', () => systemNotificationText(agent)), agent);
+});
+
+test('an orchestrator notice payload shows translated, without its code as a field', () => {
+  const payload = JSON.stringify({
+    kind: 'alert', title: 'Review with no usable verdict: x', body: 'English', task_id: 't1',
+    code: 'review_verdict_unusable', params: { title: 'x', taskId: 't1', excerpt: 'none' },
+  });
+  const shown = JSON.parse(inLocale('fr', () => localizedNoticePayload(payload))) as Record<string, unknown>;
+  assert.equal(shown.title, 'Review sans verdict exploitable : x');
+  assert.match(String(shown.body), /Le relecteur a écrit : \(vide\)/);
+  assert.equal('code' in shown, false);
+  assert.equal(shown.task_id, 't1');
+  const plain = JSON.stringify({ kind: 'alert', title: 'Hand-written', body: 'b' });
+  assert.equal(localizedNoticePayload(plain), plain);
+  assert.equal(localizedNoticePayload('free text'), 'free text');
+});
+
+test('parseDaemonMessage accepts the column and the object, refuses a bad code', () => {
+  assert.deepEqual(parseDaemonMessage(MERGE), { code: 'merge_sha_abbreviated', params: { guard: 'merge', short: 'fe2dd84' } });
+  assert.equal(parseDaemonMessage({ code: 'Bad-Code' }), null);
+  assert.equal(parseDaemonMessage(null), null);
+});
