@@ -166,7 +166,7 @@ export function KanbanTaskCard({
       {waits > 0 && (
         <TaskLinksBadge
           tone="plain"
-          label={i18n(waits === 1 ? 'kanbanPage.card.waitsOne' : 'kanbanPage.card.waitsMany', { count: waits })}
+          label={i18n('kanbanPage.card.waits', { count: waits })}
           header={i18n('kanbanPage.depsTitle')}
           links={deps.map((id) => ({ id }))}
           byId={byId}
@@ -175,7 +175,7 @@ export function KanbanTaskCard({
       {unblocks > 0 && (
         <TaskLinksBadge
           tone={chain > 0 ? 'chain' : 'plain'}
-          label={i18n(unblocks === 1 ? 'kanbanPage.card.unblocksOne' : 'kanbanPage.card.unblocksMany', { count: unblocks })}
+          label={i18n('kanbanPage.card.unblocks', { count: unblocks })}
           header={i18n('kanbanPage.dependentsTitle')}
           links={dependents}
           byId={byId}

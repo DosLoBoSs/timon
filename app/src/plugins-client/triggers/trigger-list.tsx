@@ -165,7 +165,7 @@ export function TriggerList({ source, excludeRoutines = false }: { source: Trigg
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={() => setEditing('new')} className="h-7 px-3 text-[12px]">{t(`triggersPage.new.${source}`)}</Button>
         <span className="text-[11.5px] text-muted-foreground">
-          {t(triggers.length > 1 ? 'triggersPage.countOther' : 'triggersPage.countOne', { count: triggers.length })}
+          {t('triggersPage.count', { count: triggers.length })}
         </span>
       </div>
       {triggers.length === 0 && (

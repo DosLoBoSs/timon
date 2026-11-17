@@ -483,7 +483,7 @@ export function KanbanClient({ defaultAgent }: { defaultAgent?: string }) {
                     onClick={() => setDoneLimit((l) => l + DONE_PAGE_SIZE)}
                     className="w-full rounded-lg px-2 py-2 text-left text-[12.5px] tabular-nums text-primary transition-colors hover:bg-muted/50"
                   >
-                    {i18n('kanbanPage.moreTasks', { count: formatNumber(doneCount - doneLimit) })}
+                    {i18n('kanbanPage.moreTasks', { count: doneCount - doneLimit })}
                   </button>
                 )}
               </div>

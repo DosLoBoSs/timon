@@ -272,7 +272,7 @@ export function RoutinesClient() {
 
       <div className="mt-4 flex items-center gap-2">
         <Button size="sm" onClick={() => setShowNew(true)} className="h-7 px-3 text-[12px]">{t('routinesPage.newButton')}</Button>
-        <span className="text-[11.5px] text-muted-foreground">{t(routines.length > 1 ? 'routinesPage.countOther' : 'routinesPage.countOne', { count: routines.length })}</span>
+        <span className="text-[11.5px] text-muted-foreground">{t('routinesPage.count', { count: routines.length })}</span>
       </div>
 
       <div className="mt-3 space-y-2">
