@@ -121,7 +121,8 @@ test('MCP transfers local files through bounded profile commands without sending
   assert.deepEqual(requests.at(-1)?.body, { action: 'fileUploadCommit', chooserId: 'chooser-id', uploadIds: ['upload-1', 'upload-2'] });
   const downloaded = await rpc('tools/call', { name: 'download_file', arguments: { downloadId: 'download-id', filePath: destination } });
   assert.ok(!downloaded.result.isError); assert.deepEqual(await readFile(destination), payload);
-  assert.equal((await stat(destination)).mode & 0o777, 0o600);
+  // Windows reports 0o666 for any writable file: owner-only there is an ACL, not mode bits.
+  if (process.platform !== 'win32') assert.equal((await stat(destination)).mode & 0o777, 0o600);
   assert.ok(!JSON.stringify(requests).includes(directory), 'filesystem paths never leave the MCP process');
   const previousReads = requests.filter(({ body }) => body.action === 'downloadRead').length;
   const collision = await rpc('tools/call', { name: 'download_file', arguments: { downloadId: 'download-id', filePath: destination } });

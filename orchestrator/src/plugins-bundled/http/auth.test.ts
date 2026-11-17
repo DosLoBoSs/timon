@@ -86,7 +86,8 @@ test('fichier absent : jeton 64 hex, mode 0600, sous TIMON_HOME', () => {
   const token = ensureDaemonToken();
   assert.match(token, /^[0-9a-f]{64}$/);
   assert.equal(readFileSync(DAEMON_TOKEN_FILE, 'utf8').trim(), token);
-  assert.equal(statSync(DAEMON_TOKEN_FILE).mode & 0o777, 0o600);
+  // Windows reports 0o666 for any writable file: owner-only there is an ACL, not mode bits.
+  if (process.platform !== 'win32') assert.equal(statSync(DAEMON_TOKEN_FILE).mode & 0o777, 0o600);
   assert.equal(DAEMON_TOKEN_FILE, join(process.env.TIMON_HOME!, 'daemon-token'));
   assert.ok(ZONES.secrets.includes('daemon-token'));
 });
@@ -272,6 +273,11 @@ test('loopback with users: anonymous is 401, daemon-token Bearer still works, he
   }
 });
 
+// `setsid` is a util-linux command: macOS and Windows have none, so the half of
+// these tests that boots a real daemon runs on Linux only. The config checks
+// before it still run everywhere.
+const CAN_BOOT_IN_OWN_SESSION = process.platform === 'linux';
+
 /** Boots a real daemon on a throwaway home and returns its exit code and stderr. */
 async function bootWith(userConfig: unknown): Promise<{ code: number | null; stderr: string }> {
   const home = mkdtempSync(join(tmpdir(), 'timon-auth-off-boot-'));
@@ -312,13 +318,14 @@ async function bootWith(userConfig: unknown): Promise<{ code: number | null; std
   return { code, stderr };
 }
 
-test('auth off + 0.0.0.0 : loadConfig refuse, le daemon sort en code 2', async () => {
+test('auth off + 0.0.0.0 : loadConfig refuse, le daemon sort en code 2', async (t) => {
   assert.throws(
     () => loadConfig(writeConfig({ daemon: { listen: { host: '0.0.0.0' }, auth: 'off' } })),
     (e: unknown) => e instanceof ConfigError
       && /auth disabled on a non-loopback interface/.test((e as Error).message),
   );
 
+  if (!CAN_BOOT_IN_OWN_SESSION) { t.diagnostic('daemon boot skipped: no setsid on this system'); return; }
   const { code, stderr } = await bootWith({ daemon: { listen: { host: '0.0.0.0' }, auth: 'off' } });
   assert.equal(code, 2, `code=${code} stderr=${stderr}`);
   assert.match(stderr, /auth disabled on a non-loopback interface/);
@@ -326,7 +333,7 @@ test('auth off + 0.0.0.0 : loadConfig refuse, le daemon sort en code 2', async (
 
 // TODO #528: a loopback daemon behind an exposed WebUI or a TLS proxy is
 // reached on behalf of remote visitors; `off` would hand them the whole API.
-test('auth off + WebUI exposée ou proxy TLS : loadConfig refuse, le daemon sort en code 2', async () => {
+test('auth off + WebUI exposée ou proxy TLS : loadConfig refuse, le daemon sort en code 2', async (t) => {
   for (const appHost of ['0.0.0.0', '10.0.0.5', '::']) {
     assert.throws(
       () => loadConfig(writeConfig({
@@ -348,6 +355,7 @@ test('auth off + WebUI exposée ou proxy TLS : loadConfig refuse, le daemon sort
     assert.equal(ok.daemon.auth, 'off');
   }
 
+  if (!CAN_BOOT_IN_OWN_SESSION) { t.diagnostic('daemon boot skipped: no setsid on this system'); return; }
   const { code, stderr } = await bootWith({
     daemon: { listen: { host: '127.0.0.1' }, auth: 'off' },
     app: { listen: { host: '0.0.0.0' } },

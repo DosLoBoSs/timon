@@ -240,7 +240,8 @@ test('daemon add : fichier 0600 sous TIMON_HOME, stdout sans le token', async ()
   };
   assert.equal(parsed.vps.url, 'https://timon.example.ts.net');
   assert.equal(parsed.vps.token, 's3cr3t-token');
-  assert.equal(statSync(file).mode & 0o777, 0o600);
+  // Windows reports 0o666 for any writable file: owner-only there is an ACL, not mode bits.
+  if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o777, 0o600);
 
   const listed = await runTimon(['daemon', 'list'], baseEnv(home));
   assert.equal(listed.code, 0, listed.stderr);
