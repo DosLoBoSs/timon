@@ -6,7 +6,7 @@
 import './test-home.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -85,6 +85,29 @@ test('a repository that holds the home folder is never opened', () => {
   const notes = worktreeGitDirs(join(home, 'notes'), home);
   assert.deepEqual(notes.dirs, []);
   assert.match(notes.refused ?? '', /holds the home folder/);
+});
+
+test('a home reached through a link is recognised as the folder a repository holds', () => {
+  const { root, home, main, common, wt } = layout();
+  // A junction on Windows needs no privilege; elsewhere the type is ignored.
+  const linked = join(root, 'linked-home');
+  symlinkSync(home, linked, 'junction');
+  // The project checkout under the home still opens, the home given through its link.
+  assert.deepEqual(worktreeGitDirs(wt, linked), { dirs: [common, main], refused: null });
+  // A dotfiles repository at the home: refused, whether the worktree links to it…
+  const wtGit = join(home, '.git', 'worktrees', 'task-1');
+  mkdirSync(wtGit, { recursive: true });
+  writeFileSync(join(wtGit, 'gitdir'), `${join(wt, '.git')}\n`);
+  writeFileSync(join(wtGit, 'commondir'), '../..\n');
+  writeFileSync(join(wt, '.git'), `gitdir: ${wtGit}\n`);
+  assert.match(worktreeGitDirs(wt, linked).refused ?? '', /holds the home folder/);
+  // …or the mission works in a folder of the home, named through the link too.
+  mkdirSync(join(home, 'notes'));
+  const notes = worktreeGitDirs(join(linked, 'notes'), linked);
+  assert.deepEqual(notes.dirs, []);
+  assert.match(notes.refused ?? '', /holds the home folder/);
+  assert.match(worktreeGitDirs(join(home, 'notes'), linked).refused ?? '', /holds the home folder/);
+  assert.match(worktreeGitDirs(join(linked, 'notes'), home).refused ?? '', /holds the home folder/);
 });
 
 test('a checkout\'s own .git folder adds nothing; from a sub-folder it is opened', () => {
