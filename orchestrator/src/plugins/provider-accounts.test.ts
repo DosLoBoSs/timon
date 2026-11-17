@@ -14,6 +14,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathKeyOf } from '../host/launch-path.js';
 import type { ChildProcess } from 'node:child_process';
 import { Context } from '@deepseek-ai/cordis';
 import type { NativeProviderDefinition } from '../backends/engine/definition.js';
@@ -148,7 +149,8 @@ test('the daemon plays the driver: prompt, staging, identity, install, and the a
   const staging = accounts.accountLoginStagingDir(row.id);
   assert.equal(call.cwd, staging);
   assert.equal(call.env.ACME_HOME, staging, 'the CLI signs in in the staging folder');
-  assert.ok(call.env.PATH, 'on the system whitelist');
+  // Windows keeps the spelling it read (`Path`): look the key up as the product does.
+  assert.ok(call.env[pathKeyOf(call.env, process.platform)], 'on the system whitelist');
   assert.equal(call.env.DAEMON_SECRET_WITNESS, undefined);
 
   for (let i = 0; i < 100 && getAccountLogin(row.id, initiator)?.state === 'starting'; i++) await new Promise((r) => setTimeout(r, 10));

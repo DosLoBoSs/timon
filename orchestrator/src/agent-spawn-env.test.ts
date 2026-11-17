@@ -16,6 +16,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { tmpdir } from 'node:os';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { pathKeyOf } from './host/launch-path.js';
 
 process.env.TIMON_RESOURCE_GUARD_ENABLED = '0';
 
@@ -158,7 +159,8 @@ test('missionEnv : la liste blanche remplace l\'héritage de process.env', () =>
     // `process.env` du daemon, et chaque agent en héritait.
     assert.equal(env.SECRET_DU_DAEMON, undefined);
     assert.equal(env.PATH_TEMOIN, undefined, 'un préfixe ne suffit pas : PATH est un nom exact');
-    assert.equal(env.PATH, process.env.PATH);
+    // Windows keeps the spelling it read (`Path`): look the key up as the product does.
+    assert.equal(env[pathKeyOf(env, process.platform)], process.env.PATH);
     assert.equal(env.SSH_AUTH_SOCK, '/run/ssh-agent', 'gardé sciemment : sinon plus aucun git push SSH');
     assert.equal(env.TIMON_HOME, process.env.TIMON_HOME, 'sinon le CLI de l\'agent vise le mauvais home');
   });

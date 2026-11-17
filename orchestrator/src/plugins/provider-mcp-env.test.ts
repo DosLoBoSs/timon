@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os';
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { pathKeyOf } from '../host/launch-path.js';
 import { Context } from '@deepseek-ai/cordis';
 import type { BuildSpawnOpts, Dialect, SessionDriver } from '../backends/types.js';
 
@@ -386,7 +387,8 @@ test('S2: the base environment of a third-party provider has no vault value, no 
     assert.equal(Object.keys(plan.env).some((key) => key.toUpperCase() === 'TIMON_API_TOKEN'), false);
     assert.equal(plan.env.TIMON_MISSION_ID, 'm-env');
     assert.equal(plan.env.TIMON_AGENT, 'acme.agent');
-    assert.ok(plan.env.PATH, 'the system whitelist stays');
+    // Windows keeps the spelling it read (`Path`): look the key up as the product does.
+    assert.ok(plan.env[pathKeyOf(plan.env, process.platform)], 'the system whitelist stays');
   } finally {
     setConfig(previous);
     delete process.env.DAEMON_ONLY_ACME_WITNESS;
