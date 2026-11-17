@@ -78,7 +78,7 @@ test('with Chrome: open, then done copies the sign-in and reports how many cooki
     assert.match(document.body.textContent ?? '', /Chrome is open on the computer running Timon/);
     assert.equal(buttons(/Open Chrome/).length, 0, 'a window already open is not opened twice');
     await React.act(async () => { buttons(/Done, copy the sign-in/)[0]!.click(); });
-    assert.match(document.querySelector('[role="status"]')?.textContent ?? '', /12 cookie\(s\) copied/);
+    assert.match(document.querySelector('[role="status"]')?.textContent ?? '', /12 cookies copied/);
     assert.deepEqual(sent.filter((action) => action !== 'chromeSigninStatus'), ['chromeSigninStart', 'chromeSigninFinish']);
   });
 });
@@ -137,7 +137,7 @@ test('a result left by an earlier sign-in leads nowhere when the dialog opens', 
         command: (async () => ({ state: 'finished', imported: 9 })) as never,
       }));
     });
-    assert.match(document.querySelector('[role="status"]')?.textContent ?? '', /9 cookie\(s\) copied/);
+    assert.match(document.querySelector('[role="status"]')?.textContent ?? '', /9 cookies copied/);
     assert.equal(signedIn.length, 0);
   });
 });

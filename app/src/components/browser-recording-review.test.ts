@@ -110,7 +110,7 @@ test('each edit is one PATCH, and Learn stays off while a flagged step is not se
     assert.ok(document.querySelector('[data-flagged-notice]'));
     assert.equal(card(3)?.querySelector('button')?.textContent, 'Mask value', 'mask comes first on a flagged step');
     assert.equal(learn()?.disabled, true);
-    assert.match(document.querySelector('[aria-label="Learn"]')?.textContent ?? '', /Settle the 1 flagged step/);
+    assert.match(document.querySelector('[aria-label="Learn"]')?.textContent ?? '', /Settle the flagged step/);
 
     await ui.click(inCard(2, 'Make a parameter'));
     const nameField = card(2)?.querySelector<HTMLInputElement>('input[aria-label="Parameter name"]') ?? null;

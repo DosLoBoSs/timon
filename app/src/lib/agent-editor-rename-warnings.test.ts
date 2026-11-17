@@ -93,7 +93,7 @@ test('renaming from the agent form shows the triggers to check, and is quiet whe
     assert.deepEqual(renamed, { from: 'Zeus', body: { newName: 'Jupiter' } });
     assert.equal(warned.length, 2);
     assert.match(warned[0]!.message, /Zeus is now Jupiter/);
-    assert.match(warned[0]!.message, /2 trigger\(s\)/);
+    assert.match(warned[0]!.message, /the 2 triggers/);
     assert.match(warned[0]!.message, /nightly watch, deploy watch/);
     assert.equal(warned[0]!.action?.label, 'Open triggers');
     assert.equal(warned[1]!.message, 'browser profile "x": still targets "Zeus"');

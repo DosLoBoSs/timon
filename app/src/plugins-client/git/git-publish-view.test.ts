@@ -111,7 +111,7 @@ test('another remote than the upstream keeps the stronger warning', () => {
   const c = pushConfirmation({ ...plan, remote: 'mirror', url: 'backup/p', upstream: false, ahead: 5 });
   assert.equal(c.title, 'Push 5 commits of main to backup/p?');
   assert.match(c.description ?? '', /mirror is not the upstream of main\./);
-  assert.match(c.description ?? '', /5 commit\(s\) of main will be published on mirror \(backup\/p\)/);
+  assert.match(c.description ?? '', /5 commits of main will be published on mirror \(backup\/p\)/);
   assert.equal(c.destructive, true);
   assert.equal(c.confirmLabel, 'Push to mirror');
 });

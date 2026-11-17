@@ -12,7 +12,7 @@ useSourceLocaleLoader();
 
 test('collecte les fragments de la locale anglaise', () => {
   setLocale('en');
-  assert.equal(t('agentsGrid.gitPush', { count: 2 }), 'git push — 2 commit(s)');
+  assert.equal(t('agentsGrid.gitPush', { count: 2 }), 'git push — 2 commits');
   assert.equal(t('taskForm.create'), 'Create task');
   assert.equal(t('browserPanel.actions.reload'), 'Reload view');
   assert.equal(t('mission.title'), 'New mission');

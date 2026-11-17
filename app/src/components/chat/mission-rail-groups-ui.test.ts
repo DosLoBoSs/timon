@@ -71,13 +71,13 @@ test('a group starts folded, unfolds at a click onto its island, and the head pu
     const toggle = group()!.querySelector<HTMLButtonElement>('button[aria-expanded]');
     if (!toggle) assert.fail('the head has no fold toggle');
     assert.equal(toggle.getAttribute('aria-expanded'), 'false', 'groups start folded');
-    assert.equal(toggle.getAttribute('aria-label'), 'Show its 1 missions');
+    assert.equal(toggle.getAttribute('aria-label'), 'Show its mission');
     assert.ok(!group()!.textContent?.includes('Code the feature'), 'folded, the child is hidden');
     assert.equal(group()!.querySelector('[data-chip-avatar]')?.getAttribute('data-state'), 'thinking', 'folded, the head pulses for its working child');
 
     await ui.React.act(async () => { toggle.click(); });
     assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-    assert.equal(toggle.getAttribute('aria-label'), 'Hide its 1 missions');
+    assert.equal(toggle.getAttribute('aria-label'), 'Hide its mission');
     assert.ok(group()!.textContent?.includes('Code the feature'), 'the child is inside the group');
     assert.ok(!group()!.textContent?.includes('A chat on its own'), 'a lone mission stays outside');
     const heads = group()!.querySelectorAll('[data-chip-avatar]');

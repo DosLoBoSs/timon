@@ -64,8 +64,8 @@ test('the four live states read differently, each with its own label', async () 
 test('what a mission still owes shows next to its state', async () => {
   await withLivenessOccupant(async () => {
     const html = await paint({ running: true, turn_complete: true, liveness: 'turn_done', pending_messages: 3, open_deliveries: 1 });
-    assert.match(html, /3 message\(s\) waiting/);
-    assert.match(html, /1 request\(s\) not answered/);
+    assert.match(html, /3 messages waiting/);
+    assert.match(html, /1 request not answered/);
   });
 });
 
