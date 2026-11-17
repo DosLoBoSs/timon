@@ -123,6 +123,10 @@ test('a task with attached files is refused on a backend that cannot read this h
   dbApi.createTask(id, 'Remote chore with a mockup', 'caps.agent', { type: 'chore' });
   assert.equal(blockIfBackendCannot(dbApi.getTask(id)!, 'remote-llm', 1), true);
   assert.match(dbApi.getTask(id)!.blocked_reason ?? '', /attached file/);
+  // The webview translates this one (TODO #845).
+  assert.deepEqual(JSON.parse(dbApi.getTask(id)!.blocked_reason_code ?? 'null'), {
+    code: 'backend_cannot_read_attachments', params: { backend: 'remote-llm', count: 1 },
+  });
 });
 
 test('the refused task is BLOCKED with its reason, not lost', () => {
@@ -132,6 +136,9 @@ test('the refused task is BLOCKED with its reason, not lost', () => {
   const task = dbApi.getTask(id)!;
   assert.equal(task.status, 'BLOCKED');
   assert.match(task.blocked_reason ?? '', /worktree/);
+  assert.deepEqual(JSON.parse(task.blocked_reason_code ?? 'null'), {
+    code: 'backend_cannot_use_worktree', params: { backend: 'remote-llm', type: 'code' },
+  });
 
   const local = randomUUID();
   dbApi.createTask(local, 'Local code task', 'caps.agent', { type: 'code' });

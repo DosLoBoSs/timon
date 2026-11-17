@@ -44,12 +44,16 @@ export function encodeDaemonMessage(
   message: DaemonMessage | null | undefined,
   redact: (text: string) => string,
 ): string | null {
-  if (!message) return null;
+  return message ? JSON.stringify(redactDaemonMessage(message, redact)) : null;
+}
+
+/** `message` with every string param passed through `redact`. */
+export function redactDaemonMessage(message: DaemonMessage, redact: (text: string) => string): DaemonMessage {
   const params: Record<string, string | number> = {};
   for (const [name, value] of Object.entries(message.params)) {
     params[name] = typeof value === 'string' ? redact(value) : value;
   }
-  return JSON.stringify({ code: message.code, params });
+  return { code: message.code, params };
 }
 
 /** The stored value read back; `null` for a NULL, a malformed or a foreign value. */

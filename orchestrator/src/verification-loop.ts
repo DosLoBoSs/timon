@@ -54,6 +54,7 @@ import { taskProjectSlug } from './task-project.js';
 import { readRoles } from './projects.js';
 import { inheritedLlm, resolveRoleAgent } from './agent-seed.js';
 import { notifyUser } from './notify.js';
+import { daemonMessage } from './daemon-message.js';
 import { warnSandboxCascadeAhead } from './sandbox-cascade.js';
 import { parseReviewVerdict } from './review-verdict.js';
 import { execFileHost } from './host/index.js';
@@ -421,15 +422,25 @@ async function handleReviewDone(task: TaskRow): Promise<void> {
     // (a reviewer writing prose instead of JSON). We now move the review to
     // BLOCKED → emits task_blocked → the wake loop wakes the orchestrator
     // (which can re-drive or escalate to the user). Never silent again.
+    const excerpt = (task.done_comment ?? '(empty)').slice(0, 300);
     const reason =
       `Review verdict not parsable in done_comment (expected: JSON {"verdict":"pass"|"changes_requested",...}). ` +
-      `done_comment received: ${(task.done_comment ?? '(empty)').slice(0, 300)}`;
+      `done_comment received: ${excerpt}`;
+    // `none`, not the English placeholder: the webview words an empty comment itself.
+    const shown = task.done_comment ? excerpt : 'none';
     console.warn(`[verification] review ${task.id} verdict not parsable → BLOCKED (escalated through wake)`);
-    dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason: reason });
+    dbApi.updateTaskStatus(task.id, 'BLOCKED', {
+      blockedReason: reason,
+      blockedReasonCode: daemonMessage('review_verdict_unparsable', { excerpt: shown }),
+    });
     notifyUser(
       `Review with no usable verdict: ${task.title}`,
       `Review ${task.id} closed without a parsable JSON verdict, so the code→review→merge chain cannot continue.\n\n${reason}\n\nRe-trigger the review or decide manually (merge / new code iteration).`,
-      { taskId: task.id, fromMission: task.mission_id },
+      {
+        taskId: task.id,
+        fromMission: task.mission_id,
+        message: daemonMessage('review_verdict_unusable', { title: task.title, taskId: task.id, excerpt: shown }),
+      },
     );
     return;
   }
@@ -455,7 +466,12 @@ async function handleReviewDone(task: TaskRow): Promise<void> {
       ``,
       `Human intervention required — unblock manually after review.`,
     ].join('\n');
-    dbApi.updateTaskStatus(rootId, 'BLOCKED', { blockedReason: reason });
+    dbApi.updateTaskStatus(rootId, 'BLOCKED', {
+      blockedReason: reason,
+      blockedReasonCode: daemonMessage('verification_cap_reached', {
+        max: MAX_ITERATIONS, reviewId: task.id, feedback: parsed.feedback || 'none',
+      }),
+    });
     console.warn(
       `[verification] root ${rootId} → BLOCKED (cap ${MAX_ITERATIONS} reached, review ${task.id})`,
     );

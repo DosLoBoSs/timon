@@ -3019,9 +3019,12 @@ function guardMergeDone(
     // Three agents exhausted themselves on this on one series (2026-08-20). So we name
     // the problem and give the command that solves it.
     const short = /\b[0-9a-f]{7,39}\b/i.exec(text ?? '')?.[0];
+    const guard = prev?.type === 'code' ? 'code_self' : 'merge';
     return {
       status: 'BLOCKED',
-      blockedReasonCode: null,
+      blockedReasonCode: short
+        ? daemonMessage('merge_sha_abbreviated', { guard, short })
+        : daemonMessage('merge_sha_missing', { guard }),
       blockedReason:
         (prev?.type === 'code'
           ? 'Code-self guard: this task must merge its own branch. '

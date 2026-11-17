@@ -18,6 +18,8 @@
  *     query, but `interrupted_reason` is what settles which family it is.
  */
 
+import { daemonMessage, type DaemonMessage } from './daemon-message.js';
+
 export const INTERRUPTION_REASONS = [
   'rate_limit',
   'exhausted',
@@ -131,6 +133,32 @@ export function describeInterruption(
   }
   return `Mission interrupted (${reason}): ${label} — observed at ${hhmm(at)}. `
     + `This is NOT a business block: the task was never closed out by the agent.`;
+}
+
+/**
+ * The code of `describeInterruption`'s sentence, for the webview to translate
+ * (TODO #845). `context` names the sentence a caller adds after it, `lastError`
+ * the backend's own words (left as they came). Every param is always present,
+ * `none` when it does not apply, so the message selects on it; `exhausted` and
+ * `taskId` are filled in by `setTaskInterrupted` once the retries run out.
+ */
+export function interruptionMessage(
+  reason: InterruptionReason,
+  at: number = Date.now(),
+  detail?: InterruptionDetail,
+  extra: { context?: 'spawn_refused' | 'boot_orphan'; lastError?: string | null } = {},
+): DaemonMessage {
+  const quota = reason === 'rate_limit';
+  return daemonMessage('task_interrupted', {
+    reason,
+    window: quota && detail?.rateLimitType ? detail.rateLimitType : 'none',
+    reopens: quota && detail?.resetsAt ? hhmm(detail.resetsAt) : 'none',
+    observed: hhmm(at),
+    context: extra.context ?? 'none',
+    lastError: extra.lastError || 'none',
+    exhausted: 0,
+    taskId: '',
+  });
 }
 
 /**
