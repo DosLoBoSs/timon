@@ -21,9 +21,9 @@ test('claude passes the module’s list, plus the ask-form tools, to --allowedTo
   assert.ok(flag >= 0);
   const passed = spawn.args[flag + 1]!.split(',');
   assert.deepEqual(passed, ['Read', ...claudeAskToolNames(), ...PRE_APPROVED_MCP_TOOLS]);
-  assert.equal(passed.length - 1, 47, 'the 47 names PROVIDERS-SDK S1 counts');
+  assert.equal(passed.length - 1, 48, 'the 47 names PROVIDERS-SDK S1 counts, plus setup_create_tim');
   // The setup conversation calls them: a card in front of them stalls the first minutes of a fresh install.
-  for (const name of ['setup_set_soul', 'setup_recruit_team', 'setup_finish', 'onboarding_profile_get', 'onboarding_profile_set']) {
+  for (const name of ['setup_set_soul', 'setup_recruit_team', 'setup_create_tim', 'setup_finish', 'onboarding_profile_get', 'onboarding_profile_set']) {
     assert.ok(PRE_APPROVED_MCP_TOOLS.includes(`mcp__timon__${name}`), name);
   }
   assert.equal(PRE_APPROVED_MCP_TOOLS.includes('mcp__timon__project_todo_attachments_add'), false, 'reading a host file stays behind a decision');

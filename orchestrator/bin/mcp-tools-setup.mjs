@@ -53,6 +53,29 @@ export const tools = [
     },
   },
   {
+    name: 'setup_create_tim',
+    title: 'Create another TIM',
+    description:
+      'Creates one more TIM for the user, on your folder and your model, reporting to you '
+      + '(CLI `timon setup tim --name NAME --role ROLE [--job TEXT]`). Only after the user said yes to the name and the job you proposed. '
+      + '`name` is a short first name, different from yours; a name already taken is refused (409 name_taken): pick another. '
+      + '`role` is the closest role of the Agents page: `research` (finds, reads, sums up), `ops` (machine, services, admin), '
+      + '`librarian` (notes and documentation), `coder` (writes code), `reviewer` (checks work); never `orchestrator` (409 invalid_role). '
+      + '`job` is what the TIM does, one or two sentences in the user\'s words (at most 300 characters). '
+      + 'Calling it again with the same name returns the same TIM; at most 3 TIMs this way (409 tim_limit): beyond, '
+      + 'the "New TIM" button. Works only before `setup_finish`.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'First name of the new TIM.' },
+        role: { type: 'string', description: 'Role id: research, ops, librarian, coder, reviewer, or a custom role.' },
+        job: { type: 'string', description: 'What the new TIM does, one or two sentences.' },
+      },
+      required: ['name', 'role'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'setup_finish',
     title: 'Finish the setup',
     description:
@@ -82,6 +105,12 @@ export const handlers = {
   async setup_recruit_team(args, { call, env }) {
     if (!env.missionId) throw new Error('setup_recruit_team only works inside the setup conversation');
     return await call('POST', '/api/setup/agent/team', { coder: args.coder, reviewer: args.reviewer });
+  },
+  async setup_create_tim(args, { call, env }) {
+    if (!env.missionId) throw new Error('setup_create_tim only works inside the setup conversation');
+    const body = { name: args.name, role: args.role };
+    if (args.job !== undefined) body.job = args.job;
+    return await call('POST', '/api/setup/agent/tim', body);
   },
   async setup_finish(args, { call, env }) {
     if (!env.missionId) throw new Error('setup_finish only works inside the setup conversation');

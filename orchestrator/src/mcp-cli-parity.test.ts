@@ -117,21 +117,26 @@ test('setup: the main agent\'s tools and `timon setup` take the same routes, and
       { method: 'tools/call', params: { name: 'setup_set_soul', arguments: { soul: 'Direct.', objective: 'Keep me organised.' } } },
       { method: 'tools/call', params: { name: 'setup_request_avatar', arguments: {} } },
       { method: 'tools/call', params: { name: 'setup_recruit_team', arguments: { coder: 'Ada', reviewer: 'Linus' } } },
+      { method: 'tools/call', params: { name: 'setup_create_tim', arguments: { name: 'Iris', role: 'research', job: 'Sorts my emails.' } } },
       { method: 'tools/call', params: { name: 'setup_finish', arguments: { tour: false } } },
     ], true);
     assert.deepEqual(seen.find((x) => x.url === '/api/setup/agent/soul')?.body, { soul: 'Direct.', objective: 'Keep me organised.' });
     assert.deepEqual(seen.find((x) => x.url === '/api/setup/agent/team')?.body, { coder: 'Ada', reviewer: 'Linus' });
+    assert.deepEqual(seen.find((x) => x.url === '/api/setup/agent/tim')?.body, { name: 'Iris', role: 'research', job: 'Sorts my emails.' });
     assert.deepEqual(seen.find((x) => x.url === '/api/setup/agent/finish')?.body, { tour: false });
     assert.ok(seen.some((x) => x.method === 'POST' && x.url === '/api/setup/agent/avatar-request'));
     assert.ok(seen.some((x) => x.method === 'POST' && x.url === '/api/setup/agent/finish'));
     seen.length = 0;
     assert.equal((await cli(base, ['setup', 'avatar'])).code, 0);
     assert.equal((await cli(base, ['setup', 'team', '--coder', 'Ada', '--reviewer', 'Linus'])).code, 0);
+    assert.equal((await cli(base, ['setup', 'tim', '--name', 'Iris', '--role', 'research', '--job', 'Sorts my emails.'])).code, 0);
     assert.equal((await cli(base, ['setup', 'finish', '--no-tour'])).code, 0);
     assert.ok(seen.some((x) => x.url === '/api/setup/agent/avatar-request'));
+    assert.deepEqual(seen.find((x) => x.url === '/api/setup/agent/tim')?.body, { name: 'Iris', role: 'research', job: 'Sorts my emails.' });
     assert.deepEqual(seen.find((x) => x.url === '/api/setup/agent/team')?.body, { coder: 'Ada', reviewer: 'Linus' });
     assert.deepEqual(seen.find((x) => x.url === '/api/setup/agent/finish')?.body, { tour: false });
     assert.equal((await cli(base, ['setup', 'team', '--coder', 'Ada'])).code, 64);
+    assert.equal((await cli(base, ['setup', 'tim', '--name', 'Iris'])).code, 64);
     assert.equal((await cli(base, ['setup', 'nope'])).code, 64);
   });
 });

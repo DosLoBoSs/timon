@@ -103,6 +103,7 @@ export const PRE_APPROVED_MCP_TOOLS: readonly string[] = Object.freeze([
   'mcp__timon__setup_request_avatar',
   'mcp__timon__setup_set_soul',
   'mcp__timon__setup_recruit_team',
+  'mcp__timon__setup_create_tim',
   'mcp__timon__setup_finish',
   // The onboarding profile the setup conversation reads, and records when the
   // screens did not: one value of the launching account, nothing runs.

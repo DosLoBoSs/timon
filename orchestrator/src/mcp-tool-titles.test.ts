@@ -48,7 +48,7 @@ const TITLED = [
   // mcp-tools-onboarding.mjs
   'onboarding_profile_get', 'onboarding_profile_set',
   // mcp-tools-setup.mjs
-  'setup_request_avatar', 'setup_set_soul', 'setup_recruit_team', 'setup_finish',
+  'setup_request_avatar', 'setup_set_soul', 'setup_recruit_team', 'setup_create_tim', 'setup_finish',
   // mcp-tools-ui-documents.mjs
   'ui_render', 'ui_document_get',
   // timon-mcp-catalog.mjs
