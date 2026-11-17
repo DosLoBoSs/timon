@@ -107,7 +107,7 @@ The object you pass is read at each call, not copied: you may create the transla
 ```js
 import { formatDate, formatRelativeTime, formatBytes } from '@timon/ui'
 formatDate(item.createdAt)          // "Nov 4, 2026", « 4 nov. 2026 », "04.11.2026"
-formatRelativeTime(item.updatedAt)  // "3 min. ago", « il y a 3 min », "vor 3 Min."
+formatRelativeTime(item.updatedAt)  // "3 min ago", « il y a 3 min », "vor 3 Min."
 formatBytes(file.size)              // "1.2 MB", « 1,2 Mo »
 ```
 

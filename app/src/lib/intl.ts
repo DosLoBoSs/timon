@@ -194,11 +194,16 @@ function ageParts(ms: number): { unit: AgeUnit; n: number } {
   return { unit: 'year', n: Math.floor(abs / YEAR) };
 }
 
+/** English, whatever its region: the language whose `Intl` wording is amended below. */
+function isEnglish(tag: string): boolean {
+  return tag === 'en' || tag.startsWith('en-');
+}
+
 /**
  * How long ago (or how far ahead) `value` is from `now`: `il y a 3 min` in French,
- * "3 hr. ago", "in 2 days"; under a minute, the language's "now". `style`
- * goes to `Intl.RelativeTimeFormat` (`short` by default, `long` spells the
- * units out).
+ * "3 hr ago", "in 2 days"; under a minute, the language's "now" ("just now"
+ * in English). `style` goes to `Intl.RelativeTimeFormat` (`short` by default,
+ * `long` spells the units out).
  */
 export function formatRelativeTime(
   value: DateInput,
@@ -211,8 +216,14 @@ export function formatRelativeTime(
   const delta = date.getTime() - now;
   const { unit, n } = ageParts(delta);
   const format = relativeTimeFormat({ numeric: 'auto', style }, locale);
-  if (unit === 'second') return format.format(0, 'second');
-  return format.format(delta < 0 ? -n : n, unit);
+  // English is the one language where Intl's wording differs from what the
+  // product wrote by hand before, and from what testers expect: "now" for
+  // something that just happened, and a period after the abbreviated unit
+  // ("3 min. ago"). Every other language keeps Intl's own wording.
+  const english = isEnglish(intlLocale(locale));
+  if (unit === 'second') return english && delta <= 0 ? 'just now' : format.format(0, 'second');
+  const text = format.format(delta < 0 ? -n : n, unit);
+  return english ? text.replace(/\.(?=\s|$)/g, '') : text;
 }
 
 /**

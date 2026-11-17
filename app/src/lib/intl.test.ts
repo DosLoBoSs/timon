@@ -68,11 +68,26 @@ test('the active language is used when no tag is given', () => {
 });
 
 test('relative times pick the largest unit and say "now" under a minute', () => {
-  assert.equal(formatRelativeTime(NOW - 20_000, NOW, 'short', 'en'), 'now');
+  assert.equal(formatRelativeTime(NOW - 20_000, NOW, 'short', 'en'), 'just now');
   assert.equal(formatRelativeTime(NOW - 20_000, NOW, 'short', 'fr'), 'maintenant');
   assert.equal(formatRelativeTime(NOW - 3 * HOUR, NOW, 'long', 'en'), '3 hours ago');
   assert.equal(formatRelativeTime(NOW - 400 * DAY, NOW, 'long', 'en'), 'last year');
   assert.equal(formatRelativeTime(NOW + 10 * MIN, NOW, 'long', 'en'), 'in 10 minutes');
+});
+
+test('English relative times read as the product wrote them: no period, "just now"', () => {
+  assert.equal(formatRelativeTime(NOW - 3 * MIN, NOW, 'short', 'en'), '3 min ago');
+  assert.equal(formatRelativeTime(NOW - 5 * HOUR, NOW, 'short', 'en'), '5 hr ago');
+  assert.equal(formatRelativeTime(NOW + 10 * MIN, NOW, 'short', 'en'), 'in 10 min');
+  assert.equal(formatRelativeTime(NOW - 3 * DAY, NOW, 'short', 'en'), '3 days ago');
+  assert.equal(formatRelativeTime(NOW - DAY, NOW, 'short', 'en'), 'yesterday');
+  assert.equal(formatRelativeTime(NOW, NOW, 'short', 'en'), 'just now');
+  assert.equal(formatRelativeTime(NOW - 3 * MIN, NOW, 'short', 'en-GB'), '3 min ago');
+  // A moment still ahead is not "just now".
+  assert.equal(formatRelativeTime(NOW + 20_000, NOW, 'short', 'en'), 'now');
+  // Other languages keep Intl's abbreviations.
+  assert.equal(formatRelativeTime(NOW - 3 * MIN, NOW, 'short', 'de'), 'vor 3 Min.');
+  assert.equal(formatRelativeTime(NOW - 20_000, NOW, 'short', 'de'), 'jetzt');
 });
 
 test('an unreadable value or a forged tag never throws', () => {
