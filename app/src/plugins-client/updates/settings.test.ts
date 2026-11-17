@@ -121,7 +121,7 @@ test('up to date: the version, when it was checked, and "Check" asking the daemo
   try {
     await m.until(() => row()?.getAttribute('data-update-settings') === 'upToDate', 'the status');
     assert.match(row()?.textContent ?? '', /Timon 0\.1\.8/);
-    assert.match(row()?.textContent ?? '', /Up to date · checked 2 hr\. ago/);
+    assert.match(row()?.textContent ?? '', /Up to date · checked 2 hr ago/);
     assert.equal(action()?.getAttribute('data-update-settings-action'), 'check');
     await m.click(action());
     await m.until(() => m.requests.includes('POST /api/ui/updates/check'), 'the check');

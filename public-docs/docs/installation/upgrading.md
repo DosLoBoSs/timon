@@ -64,7 +64,7 @@ Clicking **Restart and install** or **Install** is your approval of the update: 
 
 ### From the settings
 
-**Settings › System › Updates** shows the version you run and its state, for example **Up to date · checked 2 hr. ago**, with one button:
+**Settings › System › Updates** shows the version you run and its state, for example **Up to date · checked 2 hr ago**, with one button:
 
 - **Check**: asks now. When the check cannot reach the list, the row says **Check failed** and the button becomes **Retry**;
 - **Update**, when a newer version is out: opens the update window, as the card does.
