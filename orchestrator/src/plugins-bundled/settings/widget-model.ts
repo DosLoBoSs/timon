@@ -41,7 +41,7 @@ export const COLUMNS_SUFFIX = 'columns';
 /** Where the owner's browser stores the catalog snapshot. One row per account. */
 export const SNAPSHOT_SCOPE = 'widgets.snapshot';
 
-/** The chat's two columns, in their default order (`COLONNES` in `chat-rails.tsx`). */
+/** The chat's two columns, in their default order (`COLUMNS` in `chat-rails.tsx`). */
 export const CHAT_COLUMNS = ['chat.left.widget', 'chat.right.widget'] as const;
 /** Separator between a column's zone and its tab suffix (`chat-columns.ts`). */
 export const TAB_SEPARATOR = '#';
