@@ -11,8 +11,8 @@ test('segments disjoints : simple concaténation', () => {
 });
 
 test('moteur qui réécrit la phrase entière : une seule copie', () => {
-  const etapes = ['ok', 'ok je', 'ok je fais', 'ok je fais un nouveau test de voix'];
-  assert.equal(fusionnerSegments(etapes), 'ok je fais un nouveau test de voix');
+  const steps = ['ok', 'ok je', 'ok je fais', 'ok je fais un nouveau test de voix'];
+  assert.equal(fusionnerSegments(steps), 'ok je fais un nouveau test de voix');
 });
 
 test('la ponctuation et la casse ne cassent pas la détection de réécriture', () => {
@@ -62,8 +62,8 @@ test('lireResultats lit tous les résultats, pas seulement les derniers', () => 
 });
 
 test('le texte envoyé à l’agent ne répète aucun mot', () => {
-  const acquis = 'ok je fais';
+  const settled = 'ok je fais';
   const session = 'ok je fais un nouveau test de voix pour voir comment ça marche';
-  const envoye = fusionnerSegments([acquis, session]);
-  assert.equal(envoye, session);
+  const sent = fusionnerSegments([settled, session]);
+  assert.equal(sent, session);
 });
