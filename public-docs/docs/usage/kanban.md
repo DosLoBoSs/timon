@@ -341,6 +341,8 @@ Each return is a card:
 
 Everything written for the orchestrator (task id, full comment, review JSON) sits behind **Details**. The orchestrator still receives all the returns of a batch together, in one message, once the reviews and merges that follow its coding tasks are done too.
 
+Returns go to the orchestrator of the task's series. A task an orchestrator creates with `kanban_add`, or with `timon task create` from its own terminal, belongs to its series. A task created otherwise (from the board, or by a raw call to the API) belongs to none: no orchestrator gets its returns, and its reviews use the project's roles instead of the series' ones. To attach such a task to a series, with the reviews, merge and documentation tasks of its chain, run `timon task attach TASK_ID --series SERIES_ID` (the series id, or the id of the orchestrator mission piloting it; `--series current` from inside that mission), or ask the orchestrator to use `kanban_attach_series`.
+
 
 ## When a task keeps failing
 

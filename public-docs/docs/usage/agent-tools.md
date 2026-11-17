@@ -58,6 +58,7 @@ Whatever the `timon` command does in a terminal, a tool of the same name does fo
 | Read the outbound connections a mission made, and the hosts it was the first of its project to reach; the record is off by default ([What your agents connect to](network-activity.md)) | `mission_egress` |
 | Repair the mission search index and the traces of older events | `mission_reindex`, `trace_backfill` |
 | Set the models and fallbacks of a series | `series_role_set`, `series_role_list`, `series_role_clear`, `series_fallback_set`, `series_fallback_list`, `series_fallback_clear` |
+| Attach a task chain created outside a mission to a series, so its returns reach the pilot ([Task returns in the chat](kanban.md#task-returns-in-the-chat)) | `kanban_attach_series` |
 | Remember a rule for later missions, or look memory up | `memory_rule_add`, `memory_rule_list`, `memory_rule_rm`, `memory_search`, `memory_overview`, `memory_show` |
 | Read this documentation (from a terminal: `timon docs search` and `timon docs read`) | `docs_search`, `docs_read` |
 | Post a message in the chat: a report, a comparison table, a step report during a long job | `chat_post_message` |
