@@ -33,6 +33,7 @@ import type { AcpConversation } from './conversation-transport.js';
 import { extractAcpSessionId } from './events.js';
 import type { AcpSignIn } from './auth.js';
 import { acpExtensionMethodProblem, type AcpExtensionHandler } from './extensions.js';
+import { PERMISSION_MODES, resolveSupportedPermissionMode, type PermissionMode } from '../permission-models.js';
 
 /** What a plugin writes for an ACP agent. */
 export type AcpAgentSpec = {
@@ -78,6 +79,15 @@ export type AcpAgentSpec = {
    * tools. Never applied to a mission.
    */
   readonly oneShotEnv?: Readonly<Record<string, string>>;
+  /**
+   * Which of the agent's own session modes each Timon permission mode selects, by the ids the agent
+   * announces in `session/new` (`modes.availableModes`, or a `mode` config option): `{ plan: 'plan',
+   * default: 'default', acceptEdits: 'accept-edits' }`. The session switches to the mapped mode when
+   * the agent announced it, through `session/set_mode` (or the config option). A permission mode left
+   * out, a mode the agent did not announce, or no table at all: the session keeps the mode the agent
+   * opened it in, and every request it does send still reaches the card and the classifier.
+   */
+  readonly sessionModes?: Readonly<Partial<Record<PermissionMode, string>>>;
   /**
    * The agent's own blocking requests this provider answers, by method (`cursor/ask_question`): each handler
    * translates the request into a card the daemon lends (`cards.ask`, `cards.approvePlan`) and the answer into
@@ -130,6 +140,36 @@ function modelsOf(services: AcpProviderServices, spec: AcpAgentSpec): ModelsStra
   };
 }
 
+function checkedSessionModes(spec: AcpAgentSpec): Readonly<Partial<Record<PermissionMode, string>>> | undefined {
+  if (spec.sessionModes === undefined) return undefined;
+  const table: unknown = spec.sessionModes;
+  if (table === null || typeof table !== 'object' || Array.isArray(table)) {
+    throw new Error(`provider \`${spec.id}\`: \`sessionModes\` must map permission modes to the agent's mode ids`);
+  }
+  const known: readonly string[] = PERMISSION_MODES;
+  for (const [mode, id] of Object.entries(table)) {
+    if (!known.includes(mode)) {
+      throw new Error(`provider \`${spec.id}\`: \`sessionModes\` names the unknown permission mode ${JSON.stringify(mode)}; known: ${PERMISSION_MODES.join(', ')}`);
+    }
+    if (typeof id !== 'string' || id.trim().length === 0) {
+      throw new Error(`provider \`${spec.id}\`: \`sessionModes.${mode}\` must be the id of one of the agent's modes`);
+    }
+  }
+  return { ...spec.sessionModes };
+}
+
+/**
+ * The agent mode the mission's permission mode maps to. A sandbox name counts as the mode it means, and a
+ * value Timon does not know as `plan`, as everywhere a mode is resolved. No permission mode set = none:
+ * the session keeps the agent's own.
+ */
+function sessionModeFor(table: Readonly<Partial<Record<PermissionMode, string>>> | undefined, mode: string | undefined): string | null {
+  if (!table || !mode) return null;
+  const canonical = resolveSupportedPermissionMode(mode, PERMISSION_MODES);
+  const entry = Object.entries(table).find(([m]) => m === canonical)?.[1];
+  return entry?.trim() || null;
+}
+
 export function defineProvider(services: AcpProviderServices, spec: AcpAgentSpec): NativeProviderDefinition {
   const permissionsByAgent = spec.permissionsByAgent ?? false;
   const extensionRequests = spec.extensionRequests ? { ...spec.extensionRequests } : undefined;
@@ -138,6 +178,7 @@ export function defineProvider(services: AcpProviderServices, spec: AcpAgentSpec
     if (problem) throw new Error(`provider \`${spec.id}\`: extension request ${problem}`);
     if (typeof handler !== 'function') throw new Error(`provider \`${spec.id}\`: extension request \`${method}\` has no handler`);
   }
+  const sessionModes = checkedSessionModes(spec);
   const models = modelsOf(services, spec);
   // Open sessions by mission, so that killing a mission lets go of its pipes.
   const sessions = new Map<string, AcpSessionDriver>();
@@ -157,6 +198,7 @@ export function defineProvider(services: AcpProviderServices, spec: AcpAgentSpec
           systemPrompt: spawn.systemPrompt,
           model: spawn.cfg.model ?? null,
           reasoningEffort: spawn.cfg.reasoningEffort ?? null,
+          sessionMode: sessionModeFor(sessionModes, spawn.cfg.permission_mode),
           resumeSession: spawn.resumeSession,
           // Only the stdio servers are declared: the HTTP shape of ACP was not verified on any agent, and a wrong one
           // fails the whole `session/new`, not that server alone.

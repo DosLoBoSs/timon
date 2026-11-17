@@ -3765,6 +3765,7 @@
         "modelProbe?": "\"session-new\" | undefined",
         "env?": "((spawn: BuildSpawnOpts) => Record<string, string>) | undefined",
         "oneShotEnv?": "Readonly<Record<string, string>> | undefined",
+        "sessionModes?": "Readonly<Partial<Record<\"plan\" | \"default\" | \"acceptEdits\" | \"auto\" | \"dontAsk\" | \"bypassPermissions\", string>>> | undefined",
         "extensionRequests?": "Readonly<Record<string, AcpExtensionHandler>> | undefined"
       }
     },
