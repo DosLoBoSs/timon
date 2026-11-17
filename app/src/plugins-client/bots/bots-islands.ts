@@ -48,17 +48,26 @@ export function botsSeedTree(): IslandTree {
   };
 }
 
+/** `/bots` on that bot: where a pick goes when no workspace takes its chat. */
+export function botsHref(agent: string): string {
+  return `${BOTS_ROUTE}?agent=${encodeURIComponent(agent)}`;
+}
+
 export type BotPick =
   /** On `/bots`: the route's island follows `?agent=`. */
   | { kind: 'route'; href: string }
   /** A chat of that bot is already open somewhere in the workspace. */
   | { kind: 'activate'; tabId: TabId }
+  /** The chat the rail drives is still open: it is given to that bot, no new island. */
+  | { kind: 'retarget'; tabId: TabId; params: IslandContent['params'] }
   /** Open its chat: beside the rail when the rail is an island, else as a tab of the active island. */
   | { kind: 'open'; content: IslandContent; edge: 'right' | 'center' };
 
 /**
  * Where a pick in the rail sends the user. Never a page change outside
- * `/bots`: the chat comes to the view the rail is on.
+ * `/bots`: the chat comes to the view the rail is on, and once the rail
+ * opened one (`driven`), the next picks re-target that chat instead of
+ * stacking another one beside it.
  */
 export function routeBotPick(input: {
   agent: string;
@@ -69,14 +78,21 @@ export function routeBotPick(input: {
   tabs: readonly IslandTab[];
   /** The rail is itself painted inside an island content. */
   inIsland: boolean;
+  /** The tab of the chat the rail opened last, if any: the one it drives. */
+  driven?: TabId | null;
 }): BotPick {
-  const href = `${BOTS_ROUTE}?agent=${encodeURIComponent(input.agent)}`;
+  const href = botsHref(input.agent);
   if (input.pathname === BOTS_ROUTE || !input.workspace) return { kind: 'route', href };
-  const open = input.tabs.find((tab) => tab.content.type === CHAT_ISLAND_TYPE && tab.content.params.agent === input.agent);
+  const isChat = (tab: IslandTab) => tab.content.type === CHAT_ISLAND_TYPE;
+  const open = input.tabs.find((tab) => isChat(tab) && tab.content.params.agent === input.agent);
   if (open) return { kind: 'activate', tabId: open.id };
+  const params = { agent: input.agent, missionId: null, fresh: false };
+  // Only a chat the rail opened itself: one the user opened elsewhere keeps its bot.
+  const driven = input.driven ? input.tabs.find((tab) => tab.id === input.driven && isChat(tab)) : undefined;
+  if (driven) return { kind: 'retarget', tabId: driven.id, params };
   return {
     kind: 'open',
-    content: { type: CHAT_ISLAND_TYPE, params: { agent: input.agent, missionId: null, fresh: false } },
+    content: { type: CHAT_ISLAND_TYPE, params },
     // In an island, the active one is the rail's own: a tab there would hide the rail.
     edge: input.inIsland ? 'right' : 'center',
   };

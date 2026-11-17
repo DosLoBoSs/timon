@@ -53,3 +53,18 @@ test('elsewhere a new chat opens beside the rail island, or in the active island
 test('without a workspace the pick falls back on /bots', () => {
   assert.deepEqual(routeBotPick({ ...base, pathname: '/', workspace: false }), { kind: 'route', href: '/bots?agent=ada' });
 });
+
+test('elsewhere the chat the rail drives is re-targeted instead of a new one', () => {
+  const chat = (id: string, agent: string) => ({ id, content: { type: CHAT_ISLAND_TYPE, params: { agent, missionId: 'm', fresh: false } } });
+  const tabs = [chat('mine', 'ada'), chat('theirs', 'cy')];
+  const params = { agent: 'bob', missionId: null, fresh: false };
+  assert.deepEqual(routeBotPick({ ...base, agent: 'bob', pathname: '/', tabs, driven: 'mine' }), { kind: 'retarget', tabId: 'mine', params });
+  // A chat of the picked bot already open wins over the driven one.
+  assert.deepEqual(routeBotPick({ ...base, agent: 'cy', pathname: '/', tabs, driven: 'mine' }), { kind: 'activate', tabId: 'theirs' });
+  // The driven chat closed, or a tab that is not a chat: a new chat opens.
+  assert.equal(routeBotPick({ ...base, agent: 'bob', pathname: '/', tabs, driven: 'closed' }).kind, 'open');
+  const board = [{ id: 'b', content: { type: 'fixture:board', params: {} } }];
+  assert.equal(routeBotPick({ ...base, agent: 'bob', pathname: '/', tabs: board, driven: 'b' }).kind, 'open');
+  // On /bots the route still follows ?agent=, whatever the rail drives elsewhere.
+  assert.equal(routeBotPick({ ...base, agent: 'bob', pathname: '/bots', tabs, driven: 'mine' }).kind, 'route');
+});
