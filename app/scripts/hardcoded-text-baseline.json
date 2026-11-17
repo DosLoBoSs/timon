@@ -17,9 +17,6 @@
   "app/src/app/events/page.tsx": {
     "jsxText": 3
   },
-  "app/src/app/remote/sessions/page.tsx": {
-    "jsxText": 12
-  },
   "app/src/components/beta-lock-screen.tsx": {
     "jsxAttr": 1
   },
@@ -104,9 +101,6 @@
   },
   "app/src/plugins-client/memory/memory-page.tsx": {
     "jsxText": 1
-  },
-  "app/src/plugins-client/notifications/notification-icon.tsx": {
-    "french": 11
   },
   "app/src/plugins-client/routines/routines-page.tsx": {
     "jsxAttr": 1

@@ -1,0 +1,23 @@
+{
+  "remoteSessions": {
+    "title": "Remote sessions",
+    "introBefore": "The remote API tokens issued, active or not. Revoke one with",
+    "introAfter": "and the master credentials.",
+    "column": {
+      "client": "Client",
+      "id": "ID",
+      "issued": "Issued",
+      "expires": "Expires",
+      "state": "State",
+      "calls": "Calls",
+      "lastCall": "Last call",
+      "recent": "Recent"
+    },
+    "state": {
+      "active": "active",
+      "expired": "expired",
+      "revoked": "revoked"
+    },
+    "empty": "No tokens issued."
+  }
+}
