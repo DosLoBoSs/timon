@@ -233,8 +233,8 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
       bc = new BroadcastChannel('timon-mcp-oauth');
       bc.onmessage = (ev) => {
         const m = ev.data as { ok?: boolean; mcpId?: string; error?: string };
-        if (m?.ok) toast.success('authorized ' + (m.mcpId || ''));
-        else if (m?.error) toast.error('oauth: ' + String(m.error).slice(0, 120));
+        if (m?.ok) toast.success(t('mcpPage.authorizedServer', { id: m.mcpId || '' }));
+        else if (m?.error) toast.error(t('mcpPage.oauthFailed', { error: String(m.error).slice(0, 120) }));
         refresh();
       };
     } catch { /* not supported, the redirect-back path handles it */ }
@@ -247,7 +247,7 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
       void openEditor(null);
     }
     const o = url.searchParams.get('oauth');
-    if (o === 'success') toast.success('MCP authorized');
+    if (o === 'success') toast.success(t('mcpPage.authorized'));
     else if (o === 'error') toast.error(t('mcpPage.oauthFailed', { error: url.searchParams.get('error') || t('apiErrors.unknown') }));
     if (o) {
       url.searchParams.delete('oauth');
@@ -287,7 +287,7 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
       try {
         const r = await fetch(`/api/ui/mcp/${encodeURIComponent(id)}`);
         if (!r.ok) {
-          toast.error('mcp not found');
+          toast.error(t('apiErrors.mcp_not_found'));
           return;
         }
         const d: Detail & { transport: HttpConfig & { oauth?: { tokens?: { expires_at?: number; refresh_token?: string } } } } = await r.json();
@@ -304,7 +304,7 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
           setEditingOAuthStatus('none');
         }
       } catch {
-        toast.error('failed to load mcp');
+        toast.error(t('mcpPage.loadFailed'));
         return;
       }
     }
@@ -370,7 +370,7 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
       method: 'DELETE',
     });
     if (r.ok) {
-      toast.success('deleted');
+      toast.success(t('mcpPage.deleted', { id: editing }));
       setOpen(false);
       await refresh();
     } else {

@@ -61,6 +61,10 @@
       "saving": "Saving…"
     },
     "heading": "MCP servers",
-    "headline": "Model Context Protocol servers: local stdio processes and remote HTTP endpoints you can attach to agents."
+    "headline": "Model Context Protocol servers: local stdio processes and remote HTTP endpoints you can attach to agents.",
+    "authorizedServer": "{id} authorized",
+    "authorized": "MCP server authorized",
+    "loadFailed": "Could not load the MCP server.",
+    "deleted": "{id} deleted"
   }
 }
