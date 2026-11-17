@@ -16,7 +16,7 @@ import { upgradeDesktopService, type UpgradeDeps } from './packaged-upgrade.js';
 import {
   LINUX_UNIT, MACOS_LABEL, WINDOWS_SERVICE_REVISION, WINDOWS_TASK, elevatedScriptPath, installService, launchDaemonPath, macosLauncherPath, plistPath,
   readServiceDefinition, removeServiceDefinition, renderLaunchDaemonPlist, renderMacLauncher, renderPlist, renderTaskXml, renderUnit, renderWindowsLauncher,
-  restartWindowsService, restoreServiceDefinition, serviceStoppedMarker, startService, stopService, taskXmlPath, uninstallService, unitPath, windowsLauncherPath, windowsServiceFiles,
+  restartService, restartWindowsService, restoreServiceDefinition, serviceStoppedMarker, startService, stopService, taskXmlPath, uninstallService, unitPath, windowsLauncherPath, windowsServiceFiles,
   type ServiceOpts, type ServiceResult,
 } from './service-install.js';
 import { actOnOwnService, foreignService, guardServiceGesture, readInstalledService, serviceOfAnotherHome, servicesSharingHome } from './service-ownership.js';
@@ -1031,7 +1031,7 @@ test('macOS and Windows have one service name per account: nothing else to read'
 
 /** TODO #735: the desktop's runners act on a name fixed per account, whoever registered it. */
 for (const platform of ['darwin', 'win32'] as const) {
-  const gestures = platform === 'win32' ? [stopService, startService, restartWindowsService] : [stopService, startService];
+  const gestures = platform === 'win32' ? [stopService, startService, restartService, restartWindowsService] : [stopService, startService, restartService];
 
   test(`${platform}: the desktop's service gestures leave the service of another home running`, { skip: platform === 'linux' && SYSTEMD_IDENTITY }, () => {
     for (const gesture of gestures) {
@@ -1073,6 +1073,8 @@ test('darwin: a LaunchDaemon of another home is not booted out by the desktop', 
 
 test('the runners the desktop launches go through that check', () => {
   const here = dirname(fileURLToPath(import.meta.url));
-  assert.match(readFileSync(join(here, 'desktop-service-runner.ts'), 'utf8'), /actOnOwnService\(opts, action === 'stop' \? stopService : startService\)/);
+  const runner = readFileSync(join(here, 'desktop-service-runner.ts'), 'utf8');
+  assert.match(runner, /const GESTURES = \{ stop: stopService, start: startService, restart: restartService \} as const;/);
+  assert.match(runner, /actOnOwnService\(opts, GESTURES\[action\]\)/);
   assert.match(readFileSync(join(here, 'windows-restart-runner.ts'), 'utf8'), /actOnOwnService\(serviceOptsFromEnvironment\(cfg, \(\) => host\), restartWindowsService\)/);
 });

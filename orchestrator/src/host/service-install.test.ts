@@ -54,6 +54,7 @@ import {
   readServiceDefinition,
   removeServiceDefinition,
   restoreServiceDefinition,
+  restartService,
   restartWindowsService,
   windowsRestartSteps,
   repairSessionWitness,
@@ -847,16 +848,63 @@ test('windows: install ends the daemon of this installation that holds the port'
 test('windows: restart ends the launcher tree then runs the task, under one elevation', () => {
   const calls: string[][] = [];
   const opts = fixture('win32', (n, a) => { calls.push([n, ...a]); return { code: 0, stdout: '', stderr: '' }; });
-  const steps = windowsRestartSteps(opts.timonHome);
-  assert.deepEqual(steps.map((s) => s.label), ['stop', 'run']);
-  const res = restartWindowsService({ ...opts, readFile: () => transcript({ stop: 0, run: 0 }) });
+  const steps = windowsRestartSteps(opts);
+  // The launcher's tree, then what no launcher holds any more: an update that
+  // replaced the application under a running daemon left it without one, still
+  // on the port with the previous version (0.1.7 to 0.1.8).
+  assert.deepEqual(steps.map((s) => s.label), ['stop', 'stop-port', 'sweep', 'run']);
+  assert.deepEqual(steps[1], stopPortOwnerStep(opts));
+  assert.deepEqual(steps[2], stopInstallationProcessesStep(opts));
+  const res = restartWindowsService({ ...opts, readFile: () => transcript({ stop: 0, 'stop-port': 0, sweep: 0, run: 0 }) });
   assert.equal(res.ok, true);
   assert.equal(calls.length, 1, 'a single elevated process');
   assert.equal(calls[0]![0], 'powershell');
   assert.match(calls[0]!.join(' '), /-Verb RunAs/);
   const batch = readFileSync(elevatedScriptPath(), 'utf8');
-  assert.ok(batch.indexOf('taskkill.exe /F /T') < batch.indexOf('schtasks /Run /TN TimonOrchestrator'));
+  const order = [windowsLauncherPath(opts.timonHome).toLowerCase(), `Get-NetTCPConnection -State Listen -LocalPort ${opts.port}`, 'Start-Sleep -Seconds 1', 'schtasks /Run /TN TimonOrchestrator']
+    .map((needle) => batch.indexOf(needle));
+  assert.ok(order.every((at) => at >= 0), batch);
+  assert.deepEqual([...order].sort((x, y) => x - y), order, 'everything is ended before the task runs again');
+  // Only this installation's daemon on the port, and its own background programs: never the directory alone.
+  assert.ok(batch.includes(installationProcessNeedles(opts.installDir)[0]!.toLowerCase()), 'the daemon of this installation');
   assert.doesNotMatch(batch, /\/Create|\/Delete|\/End/, 'the task itself is left as it is');
+});
+
+test('windows: restart says when a program of the installation outlived it', () => {
+  const opts = fixture('win32', () => ({ code: 0, stdout: '', stderr: '' }));
+  const res = restartWindowsService({ ...opts, readFile: () => transcript({ stop: 0, 'stop-port': 0, sweep: PROCESSES_REMAIN, run: 0 }) });
+  assert.equal(res.ok, true);
+  assert.match(res.lines.join('\n'), /still running after the stop/);
+});
+
+test('restartService: Windows restarts the task under one elevation', () => {
+  const win = fixture('win32', () => ({ code: 0, stdout: '', stderr: '' }));
+  const restarted = restartService({ ...win, readFile: () => transcript({ stop: 0, 'stop-port': 0, sweep: 0, run: 0 }) });
+  assert.equal(restarted.ok, true);
+  assert.match(restarted.lines.join('\n'), /service restarted/);
+  assert.deepEqual(readFileSync(elevatedScriptPath(), 'utf8'), renderElevatedScript(windowsRestartSteps(win), elevatedLogPath()));
+});
+
+test('restartService: systemd stops then starts its unit, and a failed stop starts nothing', { skip: SYSTEMD_IDENTITY }, () => {
+  const calls: string[][] = [];
+  const opts = fixture('linux', (n, a) => { calls.push([n, ...a]); return { code: 0, stdout: '', stderr: '' }; });
+  assert.equal(installService(opts).ok, true);
+  calls.length = 0;
+  const res = restartService(opts);
+  assert.equal(res.ok, true, res.lines.join('\n'));
+  assert.deepEqual(calls, [['systemctl', '--user', 'stop', LINUX_UNIT], ['systemctl', '--user', 'start', LINUX_UNIT]]);
+  assert.match(res.lines.join('\n'), /service stopped[\s\S]*service started/);
+  assert.equal(existsSync(serviceStoppedMarker(opts.timonHome)), false, 'a restart is not a stop the user asked for');
+
+  // Nothing is started over a daemon that could not be stopped.
+  const refusing: string[][] = [];
+  const refused = fixture('linux', (n, a) => { refusing.push([n, ...a]); return { code: a.includes('stop') ? 1 : 0, stdout: '', stderr: a.includes('stop') ? 'denied' : '' }; });
+  assert.equal(installService(refused).ok, true);
+  refusing.length = 0;
+  const failed = restartService(refused);
+  assert.equal(failed.ok, false);
+  assert.equal(failed.reason, 'denied');
+  assert.deepEqual(refusing, [['systemctl', '--user', 'stop', LINUX_UNIT]]);
 });
 
 test('windows: restart reports a refused elevation and a task that would not start', () => {
@@ -865,7 +913,7 @@ test('windows: restart reports a refused elevation and a task that would not sta
   assert.equal(refused.ok, false);
   assert.equal(refused.reason, 'elevation refused');
   const ok = fixture('win32', () => ({ code: 0, stdout: '', stderr: '' }));
-  const notStarted = restartWindowsService({ ...ok, readFile: () => transcript({ stop: 0, run: 1 }) });
+  const notStarted = restartWindowsService({ ...ok, readFile: () => transcript({ stop: 0, 'stop-port': 0, sweep: 0, run: 1 }) });
   assert.equal(notStarted.ok, false);
   assert.match(notStarted.reason ?? '', /could not be started|TIMON-STEP/);
   assert.equal(restartWindowsService(fixture('linux')).ok, false);

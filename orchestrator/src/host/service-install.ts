@@ -1152,16 +1152,31 @@ function removeWindowsDefinition(opts: ServiceOpts, lines: string[]): ServiceRes
  * elevated cannot kill it, and without that the `/Run` is dropped by
  * `IgnoreNew` while the old daemon still lives. The task is not deleted or
  * rewritten, so nothing here depends on the revision.
+ *
+ * The launcher's tree is not the whole of it: a daemon whose launcher is
+ * already gone has no tree to be ended with. An update that replaced the
+ * application under a running daemon left exactly that — the task had been
+ * stopped, its daemon lived on with the previous version, and the restart
+ * started a launcher whose daemon found the port and the data directory taken
+ * (0.1.7 to 0.1.8). So the daemon of this installation that holds the port is
+ * ended too, then every background program of the installation, as a stop
+ * does; a foreign program on the port is left alone.
  */
-export function windowsRestartSteps(timonHome: string): ElevatedStep[] {
-  return [stopLauncherStep(timonHome), { label: 'run', args: ['/Run', '/TN', WINDOWS_TASK] }];
+export function windowsRestartSteps(opts: Pick<ServiceOpts, 'timonHome' | 'installDir' | 'port' | 'nodePath'>): ElevatedStep[] {
+  return [
+    stopLauncherStep(opts.timonHome),
+    stopPortOwnerStep(opts),
+    stopInstallationProcessesStep(opts),
+    { label: 'run', args: ['/Run', '/TN', WINDOWS_TASK] },
+  ];
 }
 
 export function restartWindowsService(opts: ServiceOpts): ServiceResult {
   const lines: string[] = [];
   if (opts.platform !== 'win32') return { ok: false, code: 1, lines, reason: `no Windows task to restart on ${opts.platform}` };
-  const { codes, output, cancelled } = runElevated(opts, lines, windowsRestartSteps(opts.timonHome));
+  const { codes, output, cancelled } = runElevated(opts, lines, windowsRestartSteps(opts));
   if (cancelled) return { ok: false, code: 1, lines, reason: 'elevation refused' };
+  if (codes.get('sweep') === PROCESSES_REMAIN) lines.push(PROCESSES_REMAIN_NOTICE);
   const started = codes.get('run');
   if (started !== 0) {
     return { ok: false, code: 1, lines, reason: output.trim() || `the scheduled task ${WINDOWS_TASK} could not be started (exit ${started ?? 'unknown'})` };
@@ -2318,6 +2333,21 @@ export function startService(opts: ServiceOpts): ServiceResult {
   if (opts.platform === 'darwin') return startDarwin(opts, lines);
   if (opts.platform === 'linux') return startLinux(opts, lines);
   return { ok: false, code: 1, lines, reason: `no service to start on ${opts.platform}` };
+}
+
+/**
+ * Replaces the daemon the service runs, for the desktop: after an update, the
+ * daemon that answers may still be the previous version's. Windows ends it
+ * and what the installation left running, then runs the task again, under one
+ * elevation. launchd and systemd restart their own job: a stop, then a start.
+ * The service stays registered and `TIMON_HOME` is never touched.
+ */
+export function restartService(opts: ServiceOpts): ServiceResult {
+  if (opts.platform === 'win32') return restartWindowsService(opts);
+  const stopped = stopService(opts);
+  if (!stopped.ok) return stopped;
+  const started = startService(opts);
+  return { ...started, lines: [...stopped.lines, ...started.lines] };
 }
 
 /** `LastTaskResult` of a scheduled task that was registered and never started. */
