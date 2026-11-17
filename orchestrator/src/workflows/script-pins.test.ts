@@ -165,24 +165,54 @@ test('a file changed since the approval is refused, told once, and only a person
   assert.equal(ran(slug), 'v1\nv2\n');
 });
 
-test('a person saving or publishing approves; an agent saving the rest of the draft does not', async () => {
+test('saving approves only a script node a person added or changed; publishing approves them all', async () => {
   const slug = `saved-${randomUUID().slice(0, 8)}`;
   const id = await published(slug, job('a'));
   writeFileSync(join(folderOf(slug), 'job.js'), job('b'));
-  // An agent edits a node next to the script: its save keeps the old approval.
-  const edited = { ...definition(), nodes: definition().nodes.map((node) => node.id === 'manual' ? { ...node, label: 'Start' } : node) };
-  assert.equal((await api('PUT', `/api/workflows/${id}`, { draft: edited }, 'agent')).status, 200);
+  const withNodes = (edit: (node: ReturnType<typeof definition>['nodes'][number]) => object) => ({ ...definition(), nodes: definition().nodes.map(edit) });
+  // A label next to the script, or the script moved: saved by an agent or a person, it approves nothing.
+  const labelled = withNodes((node) => node.id === 'manual' ? { ...node, label: 'Start' } : node);
+  const moved = withNodes((node) => node.id === 'job' ? { ...node, position: { x: 400, y: 80 } } : node);
+  assert.equal((await api('PUT', `/api/workflows/${id}`, { draft: labelled }, 'agent')).status, 200);
   assert.match((await runOnce(id)).node.error ?? '', /changed since it was approved/);
-  // A person's save of the draft is their approval.
-  assert.equal((await api('PUT', `/api/workflows/${id}`, { draft: edited })).status, 200);
+  for (const draft of [labelled, moved]) {
+    assert.equal((await api('PUT', `/api/workflows/${id}`, { draft })).status, 200);
+    assert.match((await runOnce(id)).node.error ?? '', /changed since it was approved/);
+  }
+  assert.equal(ran(slug), '', 'the rewritten file never ran');
+
+  // A person who changes the script node's own config approves its files as they are now.
+  const slower = withNodes((node) => node.id === 'job' ? { ...node, config: { ...node.config, timeoutMs: 20_000 } } : node);
+  assert.equal((await api('PUT', `/api/workflows/${id}`, { draft: slower })).status, 200);
   assert.equal((await runOnce(id)).run.status, 'completed');
   assert.equal(ran(slug), 'b\n');
 
+  // Publishing approves every script node of the draft.
   writeFileSync(join(folderOf(slug), 'job.js'), job('c'));
+  const relabelled = withNodes((node) => node.id === 'job' ? { ...node, config: { ...node.config, timeoutMs: 20_000 } } : { ...node, label: 'Again' });
+  assert.equal((await api('PUT', `/api/workflows/${id}`, { draft: relabelled })).status, 200);
   assert.equal((await runOnce(id)).run.status, 'failed');
   assert.equal((await api('POST', `/api/workflows/${id}/publish`)).status, 200);
   assert.equal((await runOnce(id)).run.status, 'completed');
   assert.equal(ran(slug), 'b\nc\n');
+});
+
+test('accepting a proposal approves only the script nodes it adds or changes', async () => {
+  const slug = `proposed-${randomUUID().slice(0, 8)}`;
+  const id = await published(slug, job('p1'));
+  writeFileSync(join(folderOf(slug), 'job.js'), job('p2'));
+  const labelled = { ...definition(), nodes: definition().nodes.map((node) => node.id === 'manual' ? { ...node, label: 'Start' } : node) };
+  const propose = async (draft: object) => {
+    const proposed = await api('POST', `/api/workflows/${id}/proposals`, { definition: draft, rationale: 'edit' }, 'agent');
+    assert.equal(proposed.status, 201, String(proposed.body.error));
+    const pid = String((proposed.body.proposal as Json).id);
+    assert.equal((await api('POST', `/api/workflows/${id}/proposals/${pid}/accept`)).status, 200);
+  };
+  await propose(labelled);
+  assert.match((await runOnce(id)).node.error ?? '', /changed since it was approved/);
+  await propose({ ...labelled, nodes: labelled.nodes.map((node) => node.id === 'job' ? { ...node, config: { ...node.config, timeoutMs: 20_000 } } : node) });
+  assert.equal((await runOnce(id)).run.status, 'completed');
+  assert.equal(ran(slug), 'p2\n');
 });
 
 test('a file that appears where none was approved, or a folder gone, is refused too', async () => {

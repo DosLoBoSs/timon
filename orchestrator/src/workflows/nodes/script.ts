@@ -12,11 +12,13 @@
  *    put there, whatever its token holds (a developer-owner mission carries
  *    every permission): it proposes the change (`workflow_propose`) and a
  *    person accepts it;
- *  - the local files a node runs are fingerprinted when a person saves,
- *    publishes or re-approves the workflow, and checked again right before
- *    every run: the project folder is one missions write in, so a file
- *    rewritten since, or a workflow saved before this check existed, runs
- *    nothing until a person approves it (the trigger's own check, reused).
+ *  - the local files a node runs are fingerprinted when a person saves a
+ *    script node they added or changed, publishes the workflow or re-approves
+ *    its scripts, and checked again right before every run: the project
+ *    folder is one missions write in, so a file rewritten since, or a
+ *    workflow saved before this check existed, runs nothing until a person
+ *    approves it (the trigger's own check, reused). Saving the rest of the
+ *    draft approves nothing.
  */
 import { mkdirSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
