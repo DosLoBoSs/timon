@@ -41,6 +41,8 @@
       "giveUp": "{url} n’a pas répondu en {seconds} s.",
       "uiMissing": "L’interface n’a pas démarré.",
       "uiMissingDetail": "{giveUp}\n\nLe daemon tourne peut-être sans son application web : quittez puis rouvrez Timon. Si le problème persiste, copiez le diagnostic et envoyez-le au support.",
+      "daemonDown": "Le service d’arrière-plan ne tourne pas.",
+      "daemonDownDetail": "Rien ne répond sur {origin}{retried, select, yes {, même après une relance par Timon} other {}}. Ses journaux sont dans {logs}. Si le problème persiste, copiez le diagnostic et envoyez-le au support.",
       "crashing": "Le daemon plante sans cesse.",
       "crashingDetail": "{why}\n\nLe daemon intégré n’a pas pu démarrer. Vos données restent dans {home}.",
       "slow": "Le daemon n’a pas répondu à temps.",

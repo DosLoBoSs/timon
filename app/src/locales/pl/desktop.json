@@ -49,6 +49,8 @@
       "giveUp": "{url} nie odpowiedział w ciągu {seconds} s.",
       "uiMissing": "Interfejs się nie pojawił.",
       "uiMissingDetail": "{giveUp}\n\nDemon może działać bez swojej aplikacji webowej: zamknij i ponownie otwórz Timon. Jeśli problem się powtarza, skopiuj diagnostykę i wyślij ją do wsparcia.",
+      "daemonDown": "Usługa w tle nie działa.",
+      "daemonDownDetail": "Nic nie odpowiada pod adresem {origin}{retried, select, yes {, nawet po ponownym uruchomieniu przez Timon} other {}}. Jej logi są w {logs}. Jeśli problem się powtarza, skopiuj diagnostykę i wyślij ją do wsparcia.",
       "crashing": "Demon ciągle się zawiesza.",
       "crashingDetail": "{why}\n\nNie udało się uruchomić dołączonego demona. Twoje dane pozostają w {home}.",
       "slow": "Demon nie odpowiedział na czas.",

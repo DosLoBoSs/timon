@@ -49,6 +49,8 @@
       "giveUp": "{url} hat nicht innerhalb von {seconds} s geantwortet.",
       "uiMissing": "Die Oberfläche ist nicht erschienen.",
       "uiMissingDetail": "{giveUp}\n\nDer Daemon läuft vielleicht ohne seine Web-App: Beende Timon und öffne es erneut. Bleibt das Problem, kopiere die Diagnose und sende sie an den Support.",
+      "daemonDown": "Der Hintergrunddienst läuft nicht.",
+      "daemonDownDetail": "Unter {origin} antwortet nichts{retried, select, yes {, auch nicht nach einem Neustart durch Timon} other {}}. Seine Protokolle liegen in {logs}. Bleibt das Problem, kopiere die Diagnose und sende sie an den Support.",
       "crashing": "Der Daemon stürzt immer wieder ab.",
       "crashingDetail": "{why}\n\nDer mitgelieferte Daemon konnte nicht starten. Deine Daten bleiben in {home}.",
       "slow": "Der Daemon hat nicht rechtzeitig geantwortet.",
