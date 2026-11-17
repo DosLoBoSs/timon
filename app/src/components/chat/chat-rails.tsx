@@ -22,6 +22,7 @@ import { useStoredLayout } from '@/hooks/use-stored-layout';
 import { workspaceRowHandover } from '@/lib/workspace-route';
 import { useWorkspaceLayout } from '@/components/workspace-layout-provider';
 import { WidgetZone } from '@/components/widget-host/widget-zone';
+import { GlassClear } from '@/components/glass-scope';
 import { useAfterConversation } from '@/lib/load-priority';
 import { useWidgetHost } from '@/components/widget-host/widget-host';
 import { declareSlot, register, slotKind, type WidgetOptions } from '@/lib/plugin-host/slots';
@@ -539,7 +540,7 @@ export function PanneauTiroir({
         ...(ouvert ? {} : { transform: dehors, visibility: 'hidden', transitionDelay: '0s, 200ms' }),
       }}
       className={cn(
-        'chat-widget-drawer timon-island absolute top-[var(--timon-island-gap)] bottom-[var(--timon-island-gap)] z-30 flex min-h-0 flex-col gap-2 bg-background p-2 shadow-elev-2',
+        'chat-widget-drawer timon-island absolute top-[var(--timon-island-gap)] bottom-[var(--timon-island-gap)] z-30 flex min-h-0 flex-col gap-2 p-2 shadow-elev-2',
         // Inside the island where it is painted (md+), on the page below.
         'md:bottom-[calc(2*var(--timon-island-gap))]',
         cote === 'right' && 'right-[var(--timon-island-gap)] md:right-[calc(2*var(--timon-island-gap))]',
@@ -565,6 +566,11 @@ export function PanneauTiroir({
       // The browser took the gesture over (a scroll): not a swipe.
       onPointerCancel={() => { depart.current = null; }}
     >
+      {/* It slides over the thread, not over the wallpaper: with the glass on
+          it lays its own frosted copy of the wallpaper, like an island of the
+          workspace, so the thread never shows through it. The scope decides
+          the rest (frosted plate, or the wallpaper left sharp). */}
+      <GlassClear />
       {children}
     </div>
   );
