@@ -175,6 +175,8 @@ const OWNER_PLACEMENT: Readonly<Record<string, Placement>> = {
   '@timon/browser-annotations': { category: 'network', tab: 'browser' },
   '@timon/web-push': { category: 'network', tab: 'urls' },
   '@timon/terminal-native': { category: 'interface', tab: 'terminal' },
+  // The built-in terminal's own switch: "terminal unavailable" sends people to Interface › Terminal.
+  '@timon/terminal-web': { category: 'interface', tab: 'terminal' },
   '@timon/dreams': { category: 'memory', tab: 'dreaming' },
 };
 

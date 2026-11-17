@@ -56,6 +56,12 @@ test('an owner with a functional home files there, any other owner under Plugins
   assert.deepEqual(placeSetting(ROWS[8]!), { category: 'plugins', tab: '@timon/video-factory' });
 });
 
+test('the built-in terminal switch sits in Interface › Terminal, where "terminal unavailable" points', () => {
+  const row: SettingsRowLike = { key: 'TIMON_TERMINAL_WEB_ENABLED', group: 'Terminal', advanced: false, owner: '@timon/terminal-web' };
+  assert.deepEqual(placeSetting(row), { category: 'interface', tab: 'terminal' });
+  assert.ok(!tabIds(buildSettingsLayout(input({ rows: [...ROWS, row] })), 'plugins').includes('@timon/terminal-web'));
+});
+
 test('an unknown group falls back to System › Diagnostics instead of vanishing', () => {
   assert.deepEqual(
     placeSetting({ key: 'X', group: 'Tomorrow', advanced: false }),
