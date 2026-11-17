@@ -46,7 +46,9 @@ sharing the key. See [Command-line interface](cli.md) for targeting an instance.
 ## Renewal
 
 Once activated, Timon renews the licence in the background, a few minutes
-apart. A short loss of connection, or a restart, does not turn it off. If
+apart. A short loss of connection, or a restart, does not turn it off. When
+the network is not ready yet as Timon starts, it tries again after 30 seconds,
+1 minute and 2 minutes before going back to its usual pace. If
 Timon starts with its licence not valid and cannot renew it, an alert in the
 Notification center gives the cause (network, or the licence server's answer).
 When a renewal goes through, the modules the licence covers turn back on by
