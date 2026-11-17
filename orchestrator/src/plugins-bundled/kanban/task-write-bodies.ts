@@ -52,3 +52,9 @@ export const parseWorktreeCreateBody = strictParser({
 
 /** `POST /api/tasks/:id/worktree/detach` carries nothing. */
 export const parseEmptyBody = strictParser({});
+
+/** `POST /api/tasks/:id/attach-series` — the series to attach the task's chain to. */
+export const parseAttachSeriesBody = strictParser({
+  /** A series id, the id of the mission piloting it, or `current`. Shape checked by the route. */
+  series: z.string().max(255).optional(),
+});

@@ -4051,6 +4051,40 @@ const remapSeriesStmt = db.prepare(
   `UPDATE tasks SET creator_mission_id = ?, updated_at = ?
     WHERE series_id = ? AND status IN ('PENDING', 'IN_PROGRESS', 'BLOCKED')`,
 );
+// The pilot NOW: a live task carries the latest remap (`remapSeriesStmt` leaves
+// terminal tasks on their old pilot), else the most recently touched one.
+const seriesPilotStmt = db.prepare(
+  `SELECT creator_mission_id FROM tasks
+    WHERE series_id = ? AND creator_mission_id IS NOT NULL
+    ORDER BY status IN ('PENDING', 'IN_PROGRESS', 'BLOCKED') DESC, updated_at DESC, created_at DESC
+    LIMIT 1`,
+);
+// What the orchestrator creates in reaction to a task: it points back by
+// `parent_task_id` or `verification_root_id`, or (a follow-up created by hand,
+// an older row) only by `deps`.
+const listFollowUpsStmt = db.prepare(
+  `SELECT * FROM tasks
+    WHERE parent_task_id = @id OR verification_root_id = @id
+       OR (type IN ('review', 'merge', 'doc') AND EXISTS (SELECT 1 FROM json_each(tasks.deps) WHERE value = @id))
+    ORDER BY created_at ASC`,
+);
+const attachTaskSeriesStmt = db.prepare(
+  `UPDATE tasks SET series_id = ?, creator_mission_id = ?, updated_at = ? WHERE id = ?`,
+);
+
+/**
+ * The task a follow-up was born from, or null for a chain root. Follows the
+ * same links as `listFollowUpsStmt`, upwards.
+ */
+function followedTask(task: TaskRow): TaskRow | undefined {
+  const up = task.parent_task_id ?? task.verification_root_id;
+  if (up) return getTaskStmt.get(up) as TaskRow | undefined;
+  if (task.type !== 'review' && task.type !== 'merge' && task.type !== 'doc') return undefined;
+  let deps: unknown;
+  try { deps = JSON.parse(task.deps); } catch { return undefined; }
+  const first = Array.isArray(deps) ? deps.find((d): d is string => typeof d === 'string') : undefined;
+  return first ? getTaskStmt.get(first) as TaskRow | undefined : undefined;
+}
 const setTaskLlmStmt = db.prepare(
   `UPDATE tasks SET backend_override = ?, model_override = ?, scheduled_at = NULL, updated_at = ?
     WHERE id = ? AND status = 'PENDING'`,
@@ -5414,6 +5448,51 @@ export const dbApi = {
    * otherwise takes the "spawn a new mission" path, i.e. exactly the dispersion we
    * want to eliminate.
    */
+  /** The mission piloting this series now, or null when none of its tasks names one. */
+  seriesPilotMission(seriesId: string): string | null {
+    const row = seriesPilotStmt.get(seriesId) as { creator_mission_id: string | null } | undefined;
+    return row?.creator_mission_id ?? null;
+  },
+  /**
+   * A task's whole lineage: the root it descends from (climbing review, merge,
+   * doc and repair iterations back up) and every follow-up below that root,
+   * the root first. A task with no lineage is a lineage of one. Undefined when
+   * the task does not exist.
+   */
+  listTaskLineage(taskId: string): TaskRow[] | undefined {
+    let root = getTaskStmt.get(taskId) as TaskRow | undefined;
+    if (!root) return undefined;
+    // A hand-written link can loop: a visited set bounds the climb.
+    const climbed = new Set([root.id]);
+    for (let up = followedTask(root); up && !climbed.has(up.id); up = followedTask(up)) {
+      climbed.add(up.id);
+      root = up;
+    }
+    const lineage = new Map<string, TaskRow>([[root.id, root]]);
+    const frontier = [root.id];
+    while (frontier.length > 0) {
+      const id = frontier.shift() as string;
+      for (const t of listFollowUpsStmt.all({ id }) as TaskRow[]) {
+        if (lineage.has(t.id)) continue;
+        lineage.set(t.id, t);
+        frontier.push(t.id);
+      }
+    }
+    return [...lineage.values()];
+  },
+  /**
+   * Attach tasks to a series and its pilot, in one transaction: a chain half
+   * attached would send half its returns nowhere. The caller picks the tasks
+   * (`listTaskLineage`) and checks the series exists.
+   */
+  attachTasksToSeries(taskIds: readonly string[], seriesId: string, pilotMissionId: string): number {
+    let changed = 0;
+    db.transaction(() => {
+      const now = Date.now();
+      for (const id of taskIds) changed += attachTaskSeriesStmt.run(seriesId, pilotMissionId, now, id).changes;
+    })();
+    return changed;
+  },
   remapSeriesOrchestratorMission(seriesId: string, oldMissionId: string | null, newMissionId: string): number {
     let changed = 0;
     db.transaction(() => {

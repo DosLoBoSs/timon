@@ -45,7 +45,7 @@ import { gitTaskRefusal, isPlausibleGitRef } from '../../task-git.js';
 import { taskOriginFromRequest, withTaskOrigin } from '../../task-origin.js';
 import { backendRefusal, pipelineRefusal, planGroupRefusal, projectRefusal } from './task-field-guards.js';
 import { isClosingOnly, parseTaskUpdateBody } from './task-update-body.js';
-import { parseMarkMergedBody, parseTaskCloseBody } from './task-write-bodies.js';
+import { parseAttachSeriesBody, parseMarkMergedBody, parseTaskCloseBody } from './task-write-bodies.js';
 import { parsePipelineCreateBody, parsePipelineRunBody, parsePipelineUpdateBody } from './pipeline-body.js';
 import { isOwnMissionTask, ownMissionTaskId } from './own-task.js';
 import { parseTaskCreateBody, type TaskCreateBody } from './task-create-body.js';
@@ -1355,6 +1355,63 @@ export function registerRoutes(app: Router): void {
     }
     auditRequest(req, 'task.mark_merged', `${task.id} ${sha}`);
     res.json({ task: scope.getTask(task.id), verified: found === 'contained' });
+  });
+
+  /**
+   * Attach a task's whole chain to a series (TODO #1013): its root, and every
+   * review, merge, doc and repair iteration below it, get the series and its
+   * current pilot. A task created without a mission (a `curl` with the
+   * daemon-token, a board click) has neither, so its returns reach no pilot
+   * and its reviews ignore the series' roles; this is the gesture that repairs
+   * it without touching the database by hand.
+   *
+   * `series`: the series id, the id of the mission piloting it, or `current`
+   * (the caller's own mission). A mission that pilots no task yet starts its
+   * series here. Neither a series nor a mission = 404, and a series the caller
+   * cannot see answers the same, so the refusal confirms nothing.
+   */
+  app.post('/api/tasks/:id/attach-series', (req, res) => {
+    if (!requireAuth(req, res)) return;
+    if (rejectIfDenied(req, res, 'kanban:write')) return;
+    const params = z.object({ id: z.string().min(1).max(255).regex(/^[A-Za-z0-9_-]+$/) }).safeParse(req.params);
+    if (!params.success) { res.status(400).json(apiError('task_invalid', 'Invalid task identifier.')); return; }
+    const parsed = parseAttachSeriesBody(req.body);
+    if (!parsed.ok) { res.status(400).json({ error: parsed.error, code: 'task_body_invalid' }); return; }
+    const named = parsed.value.series;
+    if (!named || !SeriesParamSchema.safeParse({ id: named }).success) {
+      res.status(400).json(apiError('series_invalid', 'series must be a series id, a pilot mission id or "current".'));
+      return;
+    }
+    const viewer = viewerFromRequest(req);
+    const scope = scopedDb(viewer);
+    const task = scope.getTask(params.data.id);
+    if (!task) { res.status(404).json(apiError('task_not_found', 'Task not found.')); return; }
+    // A mission-bound token IS its mission; the header is only a claim (`pilotMissionOf`).
+    const tokenMission = req.auth?.kind === 'api-token' ? req.auth.missionId : undefined;
+    const raw = named === 'current' ? (tokenMission ?? req.header('X-TIMON-Mission') ?? '').trim() : named;
+    if (!raw) {
+      res.status(400).json(apiError('series_invalid', 'series "current" needs a mission: call from inside one, or name the series.'));
+      return;
+    }
+    const notFound = () => res.status(404).json(apiError('series_not_found', `Series ${raw} not found: name a series id or the id of the mission piloting it.`));
+    const known = dbApi.seriesIdForMission(raw);
+    const seriesId = known ?? (scope.getMission(raw) ? raw : null);
+    if (!seriesId || !seriesVisible(req, seriesId)) { notFound(); return; }
+    const pilotId = (known ? dbApi.seriesPilotMission(known) : null) ?? seriesId;
+    // The stored pilot seeds follow-up agents on its backend (TIM-0082): a
+    // restricted caller may only name a pilot it can see.
+    const pilot = scope.getMission(pilotId);
+    if (!pilot) { notFound(); return; }
+    if (pilot.task_id) {
+      res.status(400).json(apiError('series_pilot_is_task', `Mission ${pilot.id} runs a task: a series is piloted by the mission that plans it.`));
+      return;
+    }
+    // Only what the caller sees moves: someone else's follow-up keeps its row.
+    const lineage = (dbApi.listTaskLineage(task.id) ?? []).filter((t) => scope.getTask(t.id));
+    const ids = lineage.map((t) => t.id);
+    dbApi.attachTasksToSeries(ids, seriesId, pilot.id);
+    auditRequest(req, 'task.attach_series', `${task.id} series:${seriesId} pilot:${pilot.id} tasks:${ids.length}`);
+    res.json({ series_id: seriesId, pilot_mission_id: pilot.id, attached: ids, task: scope.getTask(task.id) });
   });
 
   app.get('/api/tasks/:id', (req, res) => {
