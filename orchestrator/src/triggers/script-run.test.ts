@@ -339,11 +339,16 @@ test('a script file rewritten since it was approved is refused, once told, until
   const created = await create([{ type: 'script', command: process.execPath, args: [file], cwd: projectDir }]);
   assert.equal(created.status, 201);
   const id = String((created.body.trigger as Json).id);
+  assert.equal((created.body.trigger as Json).script_approval, 'approved');
   const first = await runOnce(id);
   assert.equal(first.status, 'received');
   assert.match(String((JSON.parse(first.result!) as Json).stdout_tail), /approved/);
 
   writeFileSync(file, 'console.log("swapped")');
+  // Read from the files at every answer: the page sees it before the next run.
+  assert.equal(((await api('GET', `/api/triggers/${id}`)).body.trigger as Json).script_approval, 'changed');
+  const listed = (await api('GET', '/api/triggers')).body.triggers as Json[];
+  assert.equal(listed.find((row) => row.id === id)!.script_approval, 'changed');
   const refused = await runOnce(id);
   assert.equal(refused.status, 'error');
   assert.match(String(refused.reason), /^script changed since it was approved \(watch\.js\): .*timon trigger approve-script/);
@@ -366,6 +371,7 @@ test('a script file rewritten since it was approved is refused, once told, until
   const approved = await api('POST', `/api/triggers/${id}/approve-script`, {});
   assert.equal(approved.status, 200);
   assert.deepEqual((approved.body.approved as Json[])[0]!.files, ['watch.js']);
+  assert.equal((approved.body.trigger as Json).script_approval, 'approved');
   const after = await runOnce(id);
   assert.equal(after.status, 'received');
   assert.match(String((JSON.parse(after.result!) as Json).stdout_tail), /swapped/);
@@ -396,6 +402,7 @@ test('a script trigger saved before the check runs nothing until approved', asyn
   const created = await create([{ type: 'script', command: process.execPath, args: [file], cwd: projectDir }]);
   const id = String((created.body.trigger as Json).id);
   db.prepare('UPDATE triggers SET script_pins = NULL WHERE id = ?').run(id);
+  assert.equal(((await api('GET', `/api/triggers/${id}`)).body.trigger as Json).script_approval, 'unapproved');
   const refused = await runOnce(id);
   assert.equal(refused.status, 'error');
   assert.match(String(refused.reason), /^script not approved: /);
@@ -412,5 +419,6 @@ test('what cannot be fingerprinted is not approved: a file outside the project, 
   assert.match(String(out.body.error), /cannot be fingerprinted: \.\.\/elsewhere\/out\.js \(outside cwd\)/);
   const plain = await create([{ type: 'notify', title: 'x' }]);
   const plainId = String((plain.body.trigger as Json).id);
+  assert.equal((plain.body.trigger as Json).script_approval, null);
   assert.equal((await api('POST', `/api/triggers/${plainId}/approve-script`, {})).status, 400);
 });

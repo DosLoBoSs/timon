@@ -210,6 +210,31 @@ export function scriptPinProblem(pins: readonly ScriptPin[], run: ScriptRun, pla
   return null;
 }
 
+/**
+ * Where a trigger's scripts stand, as the Triggers page shows it: `approved`
+ * when every script would pass `scriptApprovalProblem` now, `unapproved` when
+ * one has no approval recorded, `changed` when one no longer matches it (files
+ * rewritten, folder moved or gone, unreadable). Null: no script action.
+ */
+export type ScriptApprovalState = 'approved' | 'unapproved' | 'changed';
+
+export function scriptApprovalState(
+  actions: readonly TriggerAction[], pins: readonly ScriptPin[],
+): ScriptApprovalState | null {
+  const scripts = actions.filter((action): action is ScriptAction => action.type === 'script');
+  if (!scripts.length) return null;
+  let changed = false;
+  for (const action of scripts) {
+    const pin = pinFor(pins, action);
+    if (!pin) return 'unapproved';
+    if (changed) continue;
+    const place = scriptCwd(action.cwd);
+    const now = 'error' in place ? place : fingerprintScript(action, place);
+    changed = 'error' in now || now.root !== pin.root || now.real_cwd !== pin.real_cwd || now.state !== pin.state;
+  }
+  return changed ? 'changed' : 'approved';
+}
+
 /** The executable as written, a path relative to `cwd` made absolute. */
 function executable(command: string, cwd: string): string {
   if (isAbsolute(command)) return command;

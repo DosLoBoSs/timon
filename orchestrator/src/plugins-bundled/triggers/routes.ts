@@ -13,7 +13,8 @@
  *                                            actions → shown once (also born, and shown
  *                                            once, when a first `webhook` action is saved)
  *   POST   /api/triggers/:id/test            dry run by default, `execute` to run
- *   POST   /api/triggers/:id/approve-script  fingerprint its scripts again (a person only)
+ *   POST   /api/triggers/:id/approve-script  fingerprint its scripts again (a person only);
+ *                                            every trigger answer carries `script_approval`
  *   GET    /api/triggers/:id/deliveries      call journal
  *
  * What a trigger may do is frozen in its `grants` when it is saved: the
@@ -55,10 +56,10 @@ import { ACTION_UNAVAILABLE, actionProvider, grantsAllow } from '../../triggers/
 import { nextScheduleAt } from '../../triggers/engine.js';
 import { webhookUrlRefusal } from '../../triggers/outbound.js';
 import {
-  ACTION_PERMISSION, TRIGGER_SOURCES, providedSecretSchema, scheduleCadenceProblem, testTriggerSchema,
+  ACTION_PERMISSION, TRIGGER_SOURCES, actionSchema, providedSecretSchema, scheduleCadenceProblem, testTriggerSchema,
   triggerDefinitionSchema, updateTriggerSchema, type TriggerAction, type TriggerDefinition, type TriggerSource,
 } from '../../triggers/schema.js';
-import { pinScripts, scriptCwd } from '../../triggers/script-run.js';
+import { pinScripts, scriptApprovalState, scriptCwd } from '../../triggers/script-run.js';
 import { generateSecret } from '../../triggers/signature.js';
 import { runTriggerTest } from '../../triggers/test-run.js';
 import {
@@ -110,6 +111,22 @@ function safeJson(text: string | null): unknown {
   try { return JSON.parse(text); } catch { return null; }
 }
 
+/**
+ * Read live from the files at every answer: a script rewritten since its
+ * approval shows as `changed` before its next run is refused. An action the
+ * schema no longer reads counts for nothing here; the run refuses it anyway.
+ */
+function scriptApprovalOf(row: TriggerRow) {
+  const raw = safeJson(row.actions);
+  if (!Array.isArray(raw)) return null;
+  const actions = raw.flatMap((action: unknown) => {
+    const parsed = actionSchema.safeParse(action);
+    return parsed.success ? [parsed.data] : [];
+  });
+  if (!actions.some((action) => action.type === 'script')) return null;
+  return scriptApprovalState(actions, getScriptPins(row.id));
+}
+
 /** Everything but the secret. */
 export function publicTrigger(row: TriggerRow) {
   return {
@@ -129,6 +146,8 @@ export function publicTrigger(row: TriggerRow) {
     has_secret: row.secret !== null,
     has_outbound_secret: (row.outbound_secret ?? null) !== null,
     url: row.source === 'webhook' && row.slug ? `/api/triggers/hooks/${row.slug}` : null,
+    /** `approved` | `unapproved` | `changed` for a trigger that runs a script, else null. */
+    script_approval: scriptApprovalOf(row),
     last_run_at: row.last_run_at,
     next_run_at: row.next_run_at,
     created_at: row.created_at,
