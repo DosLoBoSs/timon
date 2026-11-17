@@ -86,10 +86,17 @@ export function useSetupChat(opts: {
    * the form has a way forward of its own).
    */
   statusFailure?: 'unavailable' | 'unnamed';
+  /**
+   * The conversation is on screen. Until it is, nothing is read and nothing
+   * starts: a page mounted in a hidden tab spends no mission. Defaults to
+   * `true` (`/setup/agent` is the conversation's own screen).
+   */
+  shown?: boolean;
 } = {}): SetupChat {
   const fetcher = opts.fetcher ?? fetch;
   const leaveRef = useRef<(why: SetupLeave) => void>(opts.leave ?? releaseApp);
   const statusFailure = useRef(opts.statusFailure ?? 'unavailable');
+  const shown = opts.shown ?? true;
   const [stage, setStage] = useState<ChatStepStage>({ kind: 'loading' });
   const [status, setStatus] = useState<MainAgentStatus | null>(null);
   const [spoke, setSpoke] = useState(false);
@@ -149,9 +156,10 @@ export function useSetupChat(opts: {
   }, []);
 
   // Where are we: a conversation already open (a reload), a named agent whose chat never started, or no agent yet.
+  // Once per mount, and only once on screen: the start below is the one a mission costs.
   const entered = useRef(false);
   useEffect(() => {
-    if (entered.current) return;
+    if (!shown || entered.current) return;
     entered.current = true;
     void (async () => {
       try {
@@ -168,7 +176,7 @@ export function useSetupChat(opts: {
         setStage(statusFailure.current === 'unnamed' ? { kind: 'unnamed' } : { kind: 'unavailable', agent: '' });
       }
     })();
-  }, [start]);
+  }, [shown, start]);
 
   // The conversation's mission: one that ended (a reload included) will never call `setup_finish`.
   const missionId = stage.kind === 'chat' ? stage.missionId : null;

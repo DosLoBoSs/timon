@@ -10,11 +10,13 @@
  * conversation stays on screen afterwards: the TIM is still there to talk to.
  *
  * The page decides when this replaces the plain chat (`bots-page.tsx`); this
- * module starts or resumes the conversation (`useSetupChat`), lifts the loader
- * on the agent's first words, and keeps a way out — "Skip the welcome",
+ * module starts or resumes the conversation (`useSetupChat`) once it is on
+ * screen — the page may be mounted in a hidden island tab or a background
+ * window, and a mission is not spent on a welcome nobody sees — lifts the
+ * loader on the agent's first words, and keeps a way out: "Skip the welcome",
  * quiet while it goes well, a warning when the conversation is stuck.
  */
-import { useEffect, useRef, type ComponentType, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ComponentType, type ReactElement, type RefObject } from 'react';
 import dynamic from 'next/dynamic';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -195,18 +197,49 @@ export function BotsWelcomeView({ Conversation, chat, onMission, onClosed, onUnn
   );
 }
 
+/**
+ * The element is on screen, latched: laid out in the viewport (a hidden island
+ * tab is `display: none`, which never intersects) while the window is visible.
+ * Without `IntersectionObserver` there is nothing to wait for: shown.
+ */
+export function useShownOnce(ref: RefObject<HTMLElement | null>): boolean {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (shown) return;
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver !== 'function') { setShown(true); return; }
+    let inView = false;
+    const check = (): void => { if (inView && document.visibilityState !== 'hidden') setShown(true); };
+    const observer = new IntersectionObserver((entries) => {
+      inView = entries.some((entry) => entry.isIntersecting);
+      check();
+    });
+    observer.observe(el);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [ref, shown]);
+  return shown;
+}
+
 export function BotsWelcome({ onMission, onClosed }: {
   onMission: (agent: string, missionId: string) => void;
   onClosed: () => void;
 }): ReactElement {
-  const chat = useSetupChat();
+  const box = useRef<HTMLDivElement>(null);
+  const shown = useShownOnce(box);
+  const chat = useSetupChat({ shown });
   return (
-    <BotsWelcomeView
-      Conversation={ProductConversation}
-      chat={chat}
-      onMission={onMission}
-      onClosed={onClosed}
-      onUnnamed={() => window.location.assign(stepHref('agent'))}
-    />
+    <div ref={box} className="flex min-h-0 flex-1 flex-col">
+      <BotsWelcomeView
+        Conversation={ProductConversation}
+        chat={chat}
+        onMission={onMission}
+        onClosed={onClosed}
+        onUnnamed={() => window.location.assign(stepHref('agent'))}
+      />
+    </div>
   );
 }

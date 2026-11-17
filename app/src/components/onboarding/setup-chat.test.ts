@@ -3,7 +3,8 @@
  * daemon: a status the daemon does not answer leaves the reader on the name
  * form (the welcome keeps the start's error), and the hook says why it hands
  * the reader back — the step already over, the agent ending it after its last
- * words, or the reader skipping it.
+ * words, or the reader skipping it. A conversation not on screen yet reads
+ * nothing and starts nothing; shown, it starts once.
  */
 import '@/lib/i18n-test-locales';
 import assert from 'node:assert/strict';
@@ -30,11 +31,14 @@ function fakeDaemon(state: Daemon): Fetcher {
   };
 }
 
-type Rendered = { chat: () => SetupChat; left: SetupLeave[]; react: typeof import('react'); state: Daemon };
+type Rendered = {
+  chat: () => SetupChat; left: SetupLeave[]; react: typeof import('react'); state: Daemon;
+  calls: string[]; setShown: (shown: boolean) => Promise<void>;
+};
 
 async function renderHook(
   state: Daemon,
-  opts: { statusFailure?: 'unavailable' | 'unnamed' },
+  opts: { statusFailure?: 'unavailable' | 'unnamed'; shown?: boolean },
   run: (r: Rendered) => Promise<void>,
 ): Promise<void> {
   const { JSDOM } = await import('jsdom');
@@ -48,7 +52,9 @@ async function renderHook(
     install(key, key === 'window' ? dom.window : (dom.window as unknown as Record<string, unknown>)[key]);
   }
   install('IS_REACT_ACT_ENVIRONMENT', true);
-  const fetcher = fakeDaemon(state);
+  const daemon = fakeDaemon(state);
+  const calls: string[] = [];
+  const fetcher: Fetcher = (input, init) => { calls.push(`${init?.method ?? 'GET'} ${input}`); return daemon(input, init); };
   // `requestSkip` reads the daemon through the global fetch.
   install('fetch', ((input: RequestInfo | URL, init?: RequestInit) => fetcher(String(input), init)) as typeof fetch);
   try {
@@ -57,8 +63,12 @@ async function renderHook(
     const { useSetupChat } = await import('./setup-chat');
     const left: SetupLeave[] = [];
     let latest: SetupChat | null = null;
+    let show: (shown: boolean) => void = () => {};
+    const { shown: initiallyShown, ...hookOpts } = opts;
     function Harness(): null {
-      latest = useSetupChat({ fetcher, leave: (why) => { left.push(why); }, ...opts });
+      const [shown, setShown] = React.useState(initiallyShown ?? true);
+      show = setShown;
+      latest = useSetupChat({ fetcher, leave: (why) => { left.push(why); }, shown, ...hookOpts });
       return null;
     }
     const host = document.getElementById('root');
@@ -67,7 +77,10 @@ async function renderHook(
     await React.act(async () => { root.render(React.createElement(Harness)); });
     await settle(React);
     try {
-      await run({ chat: () => { assert.ok(latest); return latest; }, left, react: React, state });
+      await run({
+        chat: () => { assert.ok(latest); return latest; }, left, react: React, state, calls,
+        setShown: async (shown) => { await React.act(async () => { show(shown); }); await settle(React); },
+      });
     } finally {
       await React.act(async () => { root.unmount(); });
     }
@@ -115,5 +128,19 @@ test('skipping hands the reader back as skipped', async () => {
     await react.act(async () => { await chat().skip(); });
     assert.equal(chat().skipped, true);
     assert.deepEqual(left, ['skipped']);
+  });
+});
+
+test('a conversation not on screen reads nothing and starts nothing, and starts once when it shows', async () => {
+  const startsOf = (calls: readonly string[]): number => calls.filter((c) => c === 'POST /api/ui/setup/main-agent/chat').length;
+  await renderHook({ status: 'pending', named: true }, { shown: false }, async ({ chat, calls, setShown }) => {
+    assert.deepEqual(calls, [], 'a hidden page asks the daemon nothing');
+    assert.deepEqual(chat().stage, { kind: 'loading' });
+    await setShown(true);
+    assert.equal(startsOf(calls), 1, 'shown: the conversation starts');
+    assert.deepEqual(chat().stage, { kind: 'chat', agent: 'nova', missionId: 'mission-1' });
+    await setShown(false);
+    await setShown(true);
+    assert.equal(startsOf(calls), 1, 'hidden and shown again: no second mission');
   });
 });

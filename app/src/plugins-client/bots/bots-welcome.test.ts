@@ -219,3 +219,66 @@ test('skipping the welcome answers the step and hands the page back to the plain
     assert.equal(closed(), 1);
   });
 });
+
+test('the welcome waits until it is on screen: a hidden island tab or a background window spends no mission', async () => {
+  await withDom(async (dom, React) => {
+    const { createRoot } = await import('react-dom/client');
+    const { useShownOnce } = await import('./bots-welcome');
+    let notify: ((entries: Array<{ isIntersecting: boolean }>) => void) | null = null;
+    class FakeObserver {
+      constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void) { notify = callback; }
+      observe(): void {}
+      disconnect(): void { notify = null; }
+    }
+    let visibility: DocumentVisibilityState = 'hidden';
+    Object.defineProperty(dom.window.document, 'visibilityState', { configurable: true, get: () => visibility });
+    const savedObserver = Object.getOwnPropertyDescriptor(globalThis, 'IntersectionObserver');
+    Object.defineProperty(globalThis, 'IntersectionObserver', { value: FakeObserver, configurable: true, writable: true });
+    const seen: boolean[] = [];
+    function Probe(): ReturnType<typeof React.createElement> {
+      const box = React.useRef<HTMLDivElement>(null);
+      seen.push(useShownOnce(box));
+      return React.createElement('div', { ref: box });
+    }
+    const host = document.getElementById('root');
+    assert.ok(host);
+    const root = createRoot(host);
+    try {
+      await React.act(async () => { root.render(React.createElement(Probe)); });
+      assert.equal(seen.at(-1), false, 'mounted, not shown yet');
+      await React.act(async () => { notify?.([{ isIntersecting: true }]); });
+      assert.equal(seen.at(-1), false, 'laid out, but the window is in the background');
+      visibility = 'visible';
+      await React.act(async () => { document.dispatchEvent(new dom.window.Event('visibilitychange')); });
+      assert.equal(seen.at(-1), true, 'on screen');
+      assert.equal(notify, null, 'latched: nothing left to watch');
+    } finally {
+      await React.act(async () => { root.unmount(); });
+      if (savedObserver) Object.defineProperty(globalThis, 'IntersectionObserver', savedObserver);
+      else delete (globalThis as Record<string, unknown>).IntersectionObserver;
+    }
+  });
+});
+
+test('without IntersectionObserver there is nothing to wait for', async () => {
+  await withDom(async (_dom, React) => {
+    const { createRoot } = await import('react-dom/client');
+    const { useShownOnce } = await import('./bots-welcome');
+    assert.equal(typeof (globalThis as Record<string, unknown>).IntersectionObserver, 'undefined');
+    let shown = false;
+    function Probe(): ReturnType<typeof React.createElement> {
+      const box = React.useRef<HTMLDivElement>(null);
+      shown = useShownOnce(box);
+      return React.createElement('div', { ref: box });
+    }
+    const host = document.getElementById('root');
+    assert.ok(host);
+    const root = createRoot(host);
+    try {
+      await React.act(async () => { root.render(React.createElement(Probe)); });
+      assert.equal(shown, true);
+    } finally {
+      await React.act(async () => { root.unmount(); });
+    }
+  });
+});
