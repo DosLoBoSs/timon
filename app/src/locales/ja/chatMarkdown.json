@@ -15,7 +15,6 @@
     "markdownImageAlt": "画像は表示されていません: {alt}"
   },
   "filePreview": {
-    "close": "閉じる",
     "previousImage": "前の画像",
     "nextImage": "次の画像",
     "imagePosition": "画像 {index} / {total}",
@@ -29,25 +28,18 @@
     "emptyDoc": "このドキュメントにはテキストがありません。",
     "longDoc": "長いドキュメントのため、冒頭のみ表示しています。",
     "sheetRows": "最初の {count} 行のみ表示しています。",
-    "sheetColumns": "最初の {count} 列のみ表示しています。",
     "emptySheet": "このシートは空です。",
     "slide": "スライド {n}",
     "untitledSlide": "(無題)",
     "moreSlides": "最初の {count} 枚のスライドのみ表示しています。",
-    "sheets": "シート",
-    "image": "画像",
-    "video": "動画"
+    "sheets": "シート"
   },
   "fileEditor": {
     "view": "表示",
     "edit": "編集",
     "save": "保存",
     "saving": "保存中…",
-    "closeTab": "{name} を閉じる",
-    "modified": "変更あり",
-    "tabs": "開いているファイル",
-    "discard": "{name} の保存されていない変更を破棄しますか？",
-    "discardAll": "保存されていない変更を破棄しますか？"
+    "modified": "変更あり"
   },
   "fileLink": {
     "openFailed": "{path} を開けませんでした。",

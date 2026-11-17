@@ -15,7 +15,6 @@
     "markdownImageAlt": "图片未显示：{alt}"
   },
   "filePreview": {
-    "close": "关闭",
     "previousImage": "上一张图片",
     "nextImage": "下一张图片",
     "imagePosition": "第 {index} 张图片，共 {total} 张",
@@ -29,25 +28,18 @@
     "emptyDoc": "此文档没有文本。",
     "longDoc": "文档较长，仅显示开头部分。",
     "sheetRows": "仅显示前 {count} 行。",
-    "sheetColumns": "仅显示前 {count} 列。",
     "emptySheet": "此工作表为空。",
     "slide": "第 {n} 张幻灯片",
     "untitledSlide": "（无标题）",
     "moreSlides": "仅显示前 {count} 张幻灯片。",
-    "sheets": "工作表",
-    "image": "图片",
-    "video": "视频"
+    "sheets": "工作表"
   },
   "fileEditor": {
     "view": "查看",
     "edit": "编辑",
     "save": "保存",
     "saving": "正在保存…",
-    "closeTab": "关闭 {name}",
-    "modified": "已修改",
-    "tabs": "已打开的文件",
-    "discard": "要放弃对 {name} 尚未保存的更改吗？",
-    "discardAll": "要放弃尚未保存的更改吗？"
+    "modified": "已修改"
   },
   "fileLink": {
     "openFailed": "无法打开 {path}。",

@@ -15,7 +15,6 @@
     "markdownImageAlt": "Afbeelding niet getoond: {alt}"
   },
   "filePreview": {
-    "close": "Sluiten",
     "previousImage": "Vorige afbeelding",
     "nextImage": "Volgende afbeelding",
     "imagePosition": "Afbeelding {index} van {total}",
@@ -29,25 +28,18 @@
     "emptyDoc": "Dit document bevat geen tekst.",
     "longDoc": "Lang document: alleen het begin wordt getoond.",
     "sheetRows": "Alleen de eerste {count} rijen worden getoond.",
-    "sheetColumns": "Alleen de eerste {count} kolommen worden getoond.",
     "emptySheet": "Dit blad is leeg.",
     "slide": "Dia {n}",
     "untitledSlide": "(zonder titel)",
     "moreSlides": "Alleen de eerste {count} dia's worden getoond.",
-    "sheets": "Bladen",
-    "image": "Afbeelding",
-    "video": "Video"
+    "sheets": "Bladen"
   },
   "fileEditor": {
     "view": "Bekijken",
     "edit": "Bewerken",
     "save": "Opslaan",
     "saving": "Opslaan…",
-    "closeTab": "{name} sluiten",
-    "modified": "Gewijzigd",
-    "tabs": "Geopende bestanden",
-    "discard": "Niet-opgeslagen wijzigingen in {name} verwerpen?",
-    "discardAll": "Niet-opgeslagen wijzigingen verwerpen?"
+    "modified": "Gewijzigd"
   },
   "fileLink": {
     "openFailed": "Kan {path} niet openen.",

@@ -15,7 +15,6 @@
     "markdownImageAlt": "Image non affichée : {alt}"
   },
   "filePreview": {
-    "close": "Fermer",
     "previousImage": "Image précédente",
     "nextImage": "Image suivante",
     "imagePosition": "Image {index} sur {total}",
@@ -29,25 +28,18 @@
     "emptyDoc": "Ce document ne contient pas de texte.",
     "longDoc": "Document long : seul le début est affiché.",
     "sheetRows": "Seules les {count} premières lignes sont affichées.",
-    "sheetColumns": "Seules les {count} premières colonnes sont affichées.",
     "emptySheet": "Cette feuille est vide.",
     "slide": "Diapositive {n}",
     "untitledSlide": "(sans titre)",
     "moreSlides": "Seules les {count} premières diapositives sont affichées.",
-    "sheets": "Feuilles",
-    "image": "Image",
-    "video": "Vidéo"
+    "sheets": "Feuilles"
   },
   "fileEditor": {
     "view": "Lecture",
     "edit": "Édition",
     "save": "Enregistrer",
     "saving": "Enregistrement…",
-    "closeTab": "Fermer {name}",
-    "modified": "Modifié",
-    "tabs": "Fichiers ouverts",
-    "discard": "Abandonner les modifications non enregistrées de {name} ?",
-    "discardAll": "Abandonner les modifications non enregistrées ?"
+    "modified": "Modifié"
   },
   "fileLink": {
     "openFailed": "Impossible d'ouvrir {path}.",
