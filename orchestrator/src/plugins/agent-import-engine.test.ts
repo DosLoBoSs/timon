@@ -535,3 +535,29 @@ test('the preview leaves out what the caller may not write, and what the import 
     assert.equal(cfg.mcp_servers, undefined);
   } finally { await dispose(); }
 });
+
+test('the preview lists the projects of this Timon by name, and an empty list when they cannot be read', async () => {
+  dbApi.upsertProject('zeta-proj', { name: 'Zeta' });
+  dbApi.upsertProject('alpha-proj', { name: 'Alpha' });
+  const { engine, dispose } = await loaded();
+  try {
+    const m = manifestOf(app(), [agent('ada')]);
+    const preview = await as(ada, () => engine.preview(m)) as Preview & { projects?: Array<{ slug: string; name: string | null }> };
+    const listed = (preview.projects ?? []).filter((p) => p.slug === 'alpha-proj' || p.slug === 'zeta-proj');
+    assert.deepEqual(listed, [{ slug: 'alpha-proj', name: 'Alpha' }, { slug: 'zeta-proj', name: 'Zeta' }], 'sorted by name, no host path');
+    assert.ok((preview.projects ?? []).every((p) => Object.keys(p).sort().join() === 'name,slug'));
+  } finally { await dispose(); }
+
+  // A host without the projects facade: the preview still answers, with no list.
+  const root = new Context();
+  let inner!: Context;
+  await root.plugin({ name: 'plugin-holder', apply(ctx: Context) { inner = ctx; } });
+  const manifest = readManifest(pkg);
+  assert.ok(manifest.ok);
+  const plugin = createPluginContext(inner, { manifest: manifest.manifest, version: '0.1.0' }, { ...daemonHost(root), projects: undefined });
+  try {
+    const preview = await as(ada, () => lib.createEngine(plugin).preview(manifestOf(app(), [agent('bea')]))) as Preview & { projects?: unknown[] };
+    assert.deepEqual(preview.projects, []);
+    assert.equal(preview.agents.length, 1);
+  } finally { await root.fiber.dispose(); }
+});

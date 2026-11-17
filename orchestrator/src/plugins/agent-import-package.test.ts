@@ -53,6 +53,7 @@ test('the permissions are exactly what the engine will use', () => {
     'memory:read', // an exported agent's own rules
     'memory:write', // imported memories as the agent's rules
     'missions:spawn', // a routine enabled at the source runs here too
+    'projects:read', // the preview offers the projects by name instead of a typed slug
     'skills:read', // an id already taken is not overwritten
     'skills:write', // imported skills
     'storage', // staged imports, re-import map

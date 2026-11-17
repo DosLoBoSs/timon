@@ -91,11 +91,19 @@ export type PreviewAgent = {
   elements?: Partial<Record<ImportElement, PreviewElement>>;
 };
 
+/** A project an imported agent may be put on. */
+export type PreviewProject = { slug: string; name: string | null };
+
 export type ImportPreview = {
   agents: PreviewAgent[];
   warnings: string[];
   /** The application the manifest came from, and when it was exported. */
   source?: { app: string; exportedAt: string | null };
+  /**
+   * The projects of this Timon the account may give an agent, by name. Empty
+   * or absent when the daemon cannot list them: the slug is then typed.
+   */
+  projects?: PreviewProject[];
 };
 
 export type PreviewResponse = {

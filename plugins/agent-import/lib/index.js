@@ -5524,6 +5524,15 @@ async function readManifestFromZip(path, sources = BUILTIN_SOURCES) {
   }
   return manifestFromSource(source, await readZip(path, source.wants));
 }
+async function projectsOf(ctx) {
+  try {
+    const projects = await ctx.projects.list();
+    return projects.map((p) => ({ slug: p.slug, name: p.name })).sort((a, b) => (a.name ?? a.slug).localeCompare(b.name ?? b.slug) || a.slug.localeCompare(b.slug));
+  } catch (err2) {
+    ctx.log.warn("projects could not be listed for the preview:", err2 instanceof Error ? err2.message : "unknown error");
+    return [];
+  }
+}
 function createEngine(ctx) {
   const records = createRecords(ctx.storage.kv);
   trackAgents(ctx, records);
@@ -5535,7 +5544,10 @@ function createEngine(ctx) {
     return run;
   };
   return {
-    preview: (manifest, options) => serial(async () => (await planImport(engineCtx, records, manifest, options)).preview),
+    preview: (manifest, options) => serial(async () => {
+      const { preview } = await planImport(engineCtx, records, manifest, options);
+      return { ...preview, projects: await projectsOf(ctx) };
+    }),
     apply: (manifest, options) => serial(async () => applyPlan(engineCtx, records, await planImport(engineCtx, records, manifest, options)))
   };
 }

@@ -56,7 +56,7 @@ For each agent found, the preview shows what will happen (**create**, **update**
 
 - leave the agent out;
 - change its name;
-- pick its role (**Research** by default), its project and its working folder;
+- pick its role (**Research** by default), its project (from the list of this Timon's projects) and its working folder;
 - untick what it brings: **Identity (SOUL)**, **Memory**, **Skills**, **MCP servers**, **Routines**, **Team**. Each box shows how many items would be written;
 - keep its routines active. Routines are imported **switched off** unless you turn on **Keep active the routines that run at the source** on the agent's card: an active routine starts tasks on its own, so check them first.
 
