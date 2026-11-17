@@ -61,11 +61,12 @@ contextBridge.exposeInMainWorld('__timonNativePrompt', (message: string, default
   const INTERACTIVE = 'a,button,input,select,textarea,label,summary,[role=button],[role=link],[role=menuitem],[role=tab],[role=checkbox],[role=radio],[role=option],[role=switch]';
   // A "show password" toggle turns the field into text before `change`: remember what was secret.
   const everSecret = new WeakSet<Element>();
-  // The frame the last manual step names, until a step of the page itself ends that stay (#944).
+  // The frame the last manual step names, until the stay in it ends (#944): see the blur listener.
   let lastFrame: Element | null = null;
   let recording = false;
   try { recording = ipcRenderer.sendSync('timon:record-state') === true; } catch { /* Never break the page. */ }
-  ipcRenderer.on('timon:record-toggle', (_event: unknown, active: unknown) => { recording = active === true; });
+  // A new recording owes its own step to the frame the user is in, even the one the last recording named.
+  ipcRenderer.on('timon:record-toggle', (_event: unknown, active: unknown) => { recording = active === true; lastFrame = null; });
 
   const lower = (value: unknown) => String(value ?? '').toLowerCase();
   const attribute = (element: Element, name: string) => element.getAttribute(name) ?? '';
@@ -189,7 +190,8 @@ contextBridge.exposeInMainWorld('__timonNativePrompt', (message: string, default
   // an iframe (a payment form, a captcha, a sign-in widget) never reaches it, and the frame is never
   // read. The one trace is the page's window losing the focus to an iframe: it becomes a manual step
   // naming the frame's origin alone, since a payment frame's address carries keys in its query and
-  // fragment. One step per stay in the same frame; a step of the page itself ends the stay.
+  // fragment. One step per stay in the same frame; a step of the page itself ends the stay, and so
+  // does the page's window taking the focus back, which a Tab out of the frame does without any step.
   const FRAME_TAGS = ['IFRAME', 'FRAME'];
   const focusedFrame = () => {
     let element: Element | null = document.activeElement;
@@ -205,6 +207,10 @@ contextBridge.exposeInMainWorld('__timonNativePrompt', (message: string, default
       return /^https?:\/\//.test(origin) ? origin : '';
     } catch { return ''; }
   };
+  window.addEventListener('focus', (event) => {
+    // An element's focus reaches this capture listener too: only the window's own ends the stay.
+    if (event.isTrusted && event.target === window) lastFrame = null;
+  }, true);
   window.addEventListener('blur', (event) => {
     // An element's blur reaches this capture listener too: only the window's own counts.
     if (!recording || !event.isTrusted || event.target !== window) return;

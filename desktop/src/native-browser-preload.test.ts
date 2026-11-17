@@ -171,7 +171,13 @@ function load(initialState: unknown = false, annotateState: unknown = false) {
     for (const { listener } of listeners.get('blur') ?? []) listener(fake);
     await new Promise((resolve) => setTimeout(resolve, 0));
   };
-  return { capabilities, syncCalls, mainWorld, sent, annotated, listeners, dispatch, toggle, annotate, pickAt, track, document, blurWindow };
+  /** The page's window takes the focus back, as a Tab out of an iframe does. */
+  const focusWindow = (extra: Record<string, unknown> = {}) => {
+    const fake = event('focus', new FakeElement('BODY'), { target: page, ...extra });
+    for (const { listener } of listeners.get('focus') ?? []) listener(fake);
+  };
+  return { capabilities, syncCalls, mainWorld, sent, annotated, listeners, dispatch, toggle, annotate, pickAt, track, document, blurWindow,
+    focusWindow };
 }
 
 test('browser preload exposes only the synchronous prompt capability to the page', () => {
@@ -179,7 +185,7 @@ test('browser preload exposes only the synchronous prompt capability to the page
   assert.deepEqual([...capabilities.keys()], ['__timonNativePrompt']);
   assert.equal(capabilities.get('__timonNativePrompt')!('Question', 'Default'), 'answer');
   assert.deepEqual(syncCalls, [[BROWSER_RECORD_STATE_CHANNEL], [BROWSER_ANNOTATE_STATE_CHANNEL], [BROWSER_PROMPT_CHANNEL, 'Question', 'Default']]);
-  assert.deepEqual([...listeners.keys()].sort(), ['auxclick', 'blur', 'change', 'click', 'contextmenu', 'dblclick', 'input', 'keydown', 'keyup',
+  assert.deepEqual([...listeners.keys()].sort(), ['auxclick', 'blur', 'change', 'click', 'contextmenu', 'dblclick', 'focus', 'input', 'keydown', 'keyup',
     'mousedown', 'mouseup', 'pointerdown', 'pointermove', 'pointerup', 'resize', 'scroll', 'touchcancel', 'touchend', 'touchmove', 'touchstart']);
 });
 
@@ -314,7 +320,7 @@ test('the focus leaving for an iframe is one manual step naming the frame origin
     name: 'Secure card payment input frame', origin: 'https://js.stripe.com' }]);
   assert.ok(!JSON.stringify(sent).includes('pk_live'), 'neither the query nor the fragment of the frame leaves');
 
-  // Still in the same frame (the window focused and blurred again, nothing of the page recorded): no second step.
+  // Still in the same frame (the window blurred again without taking the focus back, nothing of the page recorded): no second step.
   await blurWindow();
   assert.equal(sent.length, 1);
   // A step of the page itself ends the stay: coming back to the frame is a new manual step.
@@ -349,6 +355,33 @@ test('the focus leaving for an iframe is one manual step naming the frame origin
   document.activeElement = captcha;
   await blurWindow();
   assert.equal(sent.length, count);
+});
+
+test('leaving a frame with the keyboard, or starting a new recording, ends the stay in it (#944)', async () => {
+  const { sent, document, blurWindow, focusWindow, toggle } = load(true);
+  const stripe = new FakeElement('IFRAME', { name: 'card' });
+  Object.assign(stripe, { src: 'https://js.stripe.com/v3/elements-inner-card.html' });
+  document.activeElement = stripe;
+  await blurWindow();
+  assert.equal(sent.length, 1);
+
+  // A forged focus, or an element of the page taking the focus, does not end the stay.
+  focusWindow({ isTrusted: false });
+  focusWindow({ target: new FakeElement('INPUT') });
+  await blurWindow();
+  assert.equal(sent.length, 1);
+
+  // Tab out of the frame (the page's window takes the focus back, no step of the page), then back in: a new step.
+  focusWindow();
+  await blurWindow();
+  assert.deepEqual(sent.map((event) => event.type), ['frame', 'frame']);
+
+  // A new recording while the last step still names that frame: its own step for it.
+  toggle(false);
+  toggle(true);
+  await blurWindow();
+  assert.deepEqual(sent.map((event) => event.type), ['frame', 'frame', 'frame']);
+  assert.ok(sent.every((event) => event.origin === 'https://js.stripe.com'));
 });
 
 test('the preload copies the exact secret rule of native-browser-recorder.ts', () => {
