@@ -5,6 +5,10 @@ sidebar_position: 8.5
 
 A server that never sleeps (a VPS, a home server, a NAS) is the best home for agents that work while you are away: scheduled Kanban tasks, overnight series and long missions keep running whatever your own computer does. This page puts the pieces together: install Timon as a background service, reach it safely, keep it up to date, and drive it from the Timon you already use on your computer.
 
+:::warning Choose an x86-64 server
+Timon runs on Linux on x86-64 processors only. ARM servers (aarch64, arm64) are not supported: a Raspberry Pi, an Ampere-based VPS or an AWS Graviton instance cannot run Timon, and the install command stops on them with `no Timon package for linux-arm64`. When you rent a VPS, pick an x86-64 (amd64) plan; on the server, `uname -m` prints `x86_64`.
+:::
+
 :::tip The short version
 1. Install Timon on the server, as the account that will own it: `curl -fsSL https://timon-ai.com/install.sh | sh`. On a Debian or Ubuntu server it installs the package and the background service.
 2. Create your account on the server, before opening any access: `timon init`.

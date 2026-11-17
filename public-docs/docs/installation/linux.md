@@ -5,11 +5,15 @@ sidebar_position: 3
 
 ## One command
 
+:::info x86-64 only
+Timon runs on Linux on x86-64 processors only. Linux on ARM (aarch64, arm64), such as a Raspberry Pi or an ARM cloud server, is not supported: no package is published for it. `uname -m` prints `x86_64` on a supported machine.
+:::
+
 ```bash
 curl -fsSL https://timon-ai.com/install.sh | sh
 ```
 
-It installs the deb package on Debian and Ubuntu (it asks for your password once, for `apt`) and the AppImage in `~/Applications` elsewhere. On a machine without a display, it also installs the background service and ends on `timon init`; see [Run Timon on a headless server](headless-server.md). Options and checks: [Install with one command](overview.md#install-with-one-command).
+It installs the deb package on Debian and Ubuntu (it asks for your password once, for `apt`) and the AppImage in `~/Applications` elsewhere. On a machine without a display, it also installs the background service and ends on `timon init`; see [Run Timon on a headless server](headless-server.md). On an ARM machine it stops before installing anything, with `no Timon package for linux-arm64`. Options and checks: [Install with one command](overview.md#install-with-one-command).
 
 ## Desktop package
 
