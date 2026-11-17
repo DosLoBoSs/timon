@@ -15,5 +15,14 @@
   },
   "pluginHost": {
     "renderFailed": "The plugin {id} failed to render."
+  },
+  "roles": {
+    "custom": "Custom",
+    "idPlaceholder": "e.g. designer",
+    "labelPlaceholder": "Designer"
+  },
+  "projectsForm": {
+    "workspacePlaceholder": "personal / clients / side projects…",
+    "speechPlaceholder": "Short project description, context, goal…"
   }
 }

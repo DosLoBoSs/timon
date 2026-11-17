@@ -15,5 +15,14 @@
   },
   "pluginHost": {
     "renderFailed": "Le plugin {id} n'a pas pu s'afficher."
+  },
+  "roles": {
+    "custom": "Personnalisés",
+    "idPlaceholder": "ex. designer",
+    "labelPlaceholder": "Designer"
+  },
+  "projectsForm": {
+    "workspacePlaceholder": "perso / clients / projets annexes…",
+    "speechPlaceholder": "Courte description du projet, contexte, objectif…"
   }
 }

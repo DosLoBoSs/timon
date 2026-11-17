@@ -27,13 +27,6 @@
   "app/src/components/plugin-media-carousel.tsx": {
     "jsxAttr": 1
   },
-  "app/src/components/project-edit-dialog.tsx": {
-    "jsxAttr": 3
-  },
-  "app/src/components/role-manager.tsx": {
-    "jsxText": 1,
-    "jsxAttr": 2
-  },
   "app/src/components/settings/integration-receipts.tsx": {
     "jsxAttr": 3
   },
