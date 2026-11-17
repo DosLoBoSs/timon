@@ -85,23 +85,23 @@ const WidgetPalette = dynamic(() => import('./widget-palette').then((m) => m.Wid
 /** A tab (and the end of the bar after the last one) lies ON its card's
  *  docking target: without an explicit priority, aiming at the tab bar would
  *  dock instead of reorder. */
-const CIBLES = /^(tab:|tab-end:|dock:|insert:|rail:)/;
-const ONGLET = /^tab(-end)?:/;
-const precis = (ids: readonly string[]) => ids.some((id) => ONGLET.test(id));
+const DROP_TARGETS = /^(tab:|tab-end:|dock:|insert:|rail:)/;
+const TAB_TARGET = /^tab(-end)?:/;
+const hitsATab = (ids: readonly string[]) => ids.some((id) => TAB_TARGET.test(id));
 
 const widgetCollision: CollisionDetection = (args) => {
   const hits = pointerWithin(args);
   if (hits.length) {
-    const specific = hits.filter((hit) => CIBLES.test(String(hit.id)));
+    const specific = hits.filter((hit) => DROP_TARGETS.test(String(hit.id)));
     const ids = specific.map((hit) => String(hit.id));
-    if (precis(ids)) return specific.filter((hit) => ONGLET.test(String(hit.id)));
+    if (hitsATab(ids)) return specific.filter((hit) => TAB_TARGET.test(String(hit.id)));
     return specific.length ? specific : hits;
   }
   if (args.pointerCoordinates) return [];
   // The keyboard getter positions the dragged rectangle's centre on a target.
   const centre = { x: args.collisionRect.left + args.collisionRect.width / 2, y: args.collisionRect.top + args.collisionRect.height / 2 };
   const keyboardHits = pointerWithin({ ...args, pointerCoordinates: centre });
-  return keyboardHits.filter((hit) => CIBLES.test(String(hit.id))).slice(0, 1);
+  return keyboardHits.filter((hit) => DROP_TARGETS.test(String(hit.id))).slice(0, 1);
 };
 
 type WidgetHostValue = {
@@ -161,8 +161,8 @@ export function useWidgetEditing(): boolean {
  *  covers more than a third of the window, scaled around the grab point so the
  *  pointer stays on the spot it picked up. `dx`/`dy` place the frame relative to
  *  the dragged node (a tab, for a stack). */
-type Apercu = { node?: HTMLElement; /** Id of a widget that is not on screen (picked from the window): painted live. */ live?: string; w: number; h: number; dx: number; dy: number; gx: number; gy: number; scale: number };
-const APERCU_MAX = 0.33;
+type DragPreview = { node?: HTMLElement; /** Id of a widget that is not on screen (picked from the window): painted live. */ live?: string; w: number; h: number; dx: number; dy: number; gx: number; gy: number; scale: number };
+const PREVIEW_MAX = 0.33;
 
 /** A stack's body drags as `frame:<id>` (its active tab already owns `<id>`):
  *  both gestures move the same widget. */
@@ -170,7 +170,7 @@ export function widgetIdOfDrag(dragId: string): string {
   return dragId.startsWith('frame:') ? dragId.slice(6) : dragId;
 }
 
-function captureApercu(dragId: string, e: DragStartEvent): Apercu | null {
+function capturePreview(dragId: string, e: DragStartEvent): DragPreview | null {
   const id = widgetIdOfDrag(dragId);
   // The node dnd-kit dragged, which the overlay wrapper sits on: the tab for a
   // tab, the card itself for a lone card or a stack picked by its body.
@@ -194,60 +194,60 @@ function captureApercu(dragId: string, e: DragStartEvent): Apercu | null {
   node.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
   node.style.opacity = '1';
   node.style.margin = '0';
-  const scale = Math.min(1, (APERCU_MAX * window.innerWidth) / box.width, (APERCU_MAX * window.innerHeight) / box.height);
+  const scale = Math.min(1, (PREVIEW_MAX * window.innerWidth) / box.width, (PREVIEW_MAX * window.innerHeight) / box.height);
   return { node, w: box.width, h: box.height, dx: box.left - origin.left, dy: box.top - origin.top, gx, gy, scale };
 }
 
-const APERCU_CLASSES = 'pointer-events-none absolute overflow-hidden rounded-xl opacity-90 shadow-elev-2 ring-1 ring-primary/40';
-const apercuStyle = (a: Apercu): React.CSSProperties => ({ left: a.dx, top: a.dy, width: a.w, height: a.h, transformOrigin: `${a.gx}px ${a.gy}px`, transform: `scale(${a.scale})` });
+const PREVIEW_CLASSES = 'pointer-events-none absolute overflow-hidden rounded-xl opacity-90 shadow-elev-2 ring-1 ring-primary/40';
+const previewStyle = (a: DragPreview): React.CSSProperties => ({ left: a.dx, top: a.dy, width: a.w, height: a.h, transformOrigin: `${a.gx}px ${a.gy}px`, transform: `scale(${a.scale})` });
 
-function ApercuWidget({ apercu }: { apercu: Apercu }) {
+function WidgetPreview({ preview }: { preview: DragPreview }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
-    if (!el || !apercu.node) return;
-    el.replaceChildren(apercu.node);
+    if (!el || !preview.node) return;
+    el.replaceChildren(preview.node);
     return () => el.replaceChildren();
-  }, [apercu]);
-  return <div ref={ref} aria-hidden className={APERCU_CLASSES} style={apercuStyle(apercu)} />;
+  }, [preview]);
+  return <div ref={ref} aria-hidden className={PREVIEW_CLASSES} style={previewStyle(preview)} />;
 }
 
 /** The hand for a widget picked from the window: the widget itself, painted at
  *  its default size, exactly as it will be placed. A widget that paints nothing
  *  outside its own page (the chat's panels read the open conversation) falls
  *  back to a card with its name, so the hand is never empty. */
-function ApercuVivant({ apercu, id }: { apercu: Apercu; id: string }) {
+function LivePreview({ preview, id }: { preview: DragPreview; id: string }) {
   const { widget } = useWidgetHost();
-  const entree = widget(id);
+  const entry = widget(id);
   const ref = useRef<HTMLDivElement>(null);
-  const [vide, setVide] = useState(false);
+  const [empty, setEmpty] = useState(false);
   useLayoutEffect(() => {
     const el = ref.current;
-    if (el && el.childElementCount === 0) setVide(true);
+    if (el && el.childElementCount === 0) setEmpty(true);
   }, []);
-  if (!entree) return null;
-  return <div ref={ref} aria-hidden className={cn(APERCU_CLASSES, 'bg-background')} style={apercuStyle(apercu)}>
-    {vide ? (
+  if (!entry) return null;
+  return <div ref={ref} aria-hidden className={cn(PREVIEW_CLASSES, 'bg-background')} style={previewStyle(preview)}>
+    {empty ? (
       <div className="flex h-full flex-col gap-2 p-3">
-        <span className="text-xs font-semibold text-foreground">{entree.catalogTitle ?? entree.title}</span>
+        <span className="text-xs font-semibold text-foreground">{entry.catalogTitle ?? entry.title}</span>
         {[0, 1, 2, 3].map((n) => <span key={n} className="h-2 rounded-full bg-muted-foreground/15" style={{ width: `${90 - n * 12}%` }} />)}
       </div>
-    ) : entree.render({ editing: false, poignee: null, className: 'h-full', orientation: 'vertical', compact: false })}
+    ) : entry.render({ editing: false, poignee: null, className: 'h-full', orientation: 'vertical', compact: false })}
   </div>;
 }
 
 /** Width of a column: what a widget from the window is painted at in the hand. */
-const APERCU_LARGEUR = 320;
+const PREVIEW_WIDTH = 320;
 
-function apercuDepuisFenetre(e: DragStartEvent, hauteur: number): Apercu {
-  const carte = e.active.rect.current.initial;
+function previewFromWindow(e: DragStartEvent, height: number): DragPreview {
+  const cardRect = e.active.rect.current.initial;
   const ev = e.activatorEvent as Partial<PointerEvent>;
-  const scale = Math.min(1, (APERCU_MAX * window.innerWidth) / APERCU_LARGEUR, (APERCU_MAX * window.innerHeight) / hauteur);
+  const scale = Math.min(1, (PREVIEW_MAX * window.innerWidth) / PREVIEW_WIDTH, (PREVIEW_MAX * window.innerHeight) / height);
   // The pointer keeps the spot it picked on the thumbnail, now over the new
   // widget's title bar, wherever it is on the card.
-  const px = carte && typeof ev.clientX === 'number' ? ev.clientX - carte.left : 0;
-  const py = carte && typeof ev.clientY === 'number' ? ev.clientY - carte.top : 0;
-  return { live: widgetIdOfDrag(String(e.active.id)), w: APERCU_LARGEUR, h: hauteur, dx: px - 28 * scale, dy: py - 14 * scale, gx: 0, gy: 0, scale };
+  const px = cardRect && typeof ev.clientX === 'number' ? ev.clientX - cardRect.left : 0;
+  const py = cardRect && typeof ev.clientY === 'number' ? ev.clientY - cardRect.top : 0;
+  return { live: widgetIdOfDrag(String(e.active.id)), w: PREVIEW_WIDTH, h: height, dx: px - 28 * scale, dy: py - 14 * scale, gx: 0, gy: 0, scale };
 }
 
 export function WidgetHost({ children }: { children: React.ReactNode }) {
@@ -263,37 +263,37 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   // (`known`), the board stays empty: painting the factory defaults would show
   // an arrangement that is nobody's, replaced a second later by the account's.
   const workspace = useWorkspaceLayout();
-  const { raw: stocke, update: updateLayout, ready, known } = useStoredLayout(
+  const { raw: stored, update: updateLayout, ready, known } = useStoredLayout(
     workspace.key ? `${workspace.key}.widgets` : null,
     workspaceRowHandover(workspace.previousKey, 'widgets', 'cockpit'),
   );
-  const [enCours, setEnCours] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
   // The whole widget in the hand, not a label: a snapshot taken at pickup.
-  const [apercu, setApercu] = useState<Apercu | null>(null);
-  const retiresRef = useRef<ReadonlySet<string>>(new Set());
+  const [preview, setPreview] = useState<DragPreview | null>(null);
+  const removedRef = useRef<ReadonlySet<string>>(new Set());
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const editing = paletteOpen || enCours !== null;
+  const editing = paletteOpen || dragging !== null;
   // One registration per call, not per id: a chat column tab is declared
   // hidden by its column while not shown, then by its own `WidgetZone` once
   // picked. If the first disposal erased the id, the second registrant would
   // lose its zone depending on the order React runs effects in.
-  const [inscrites, setInscrites] = useState<ReadonlyArray<{ jeton: number; zone: WidgetZoneDef }>>([]);
-  const prochainJeton = useRef(0);
+  const [zoneRegistrations, setZoneRegistrations] = useState<ReadonlyArray<{ token: number; zone: WidgetZoneDef }>>([]);
+  const nextToken = useRef(0);
   const zones = useMemo<readonly WidgetZoneDef[]>(() => {
     const byId = new Map<ZoneId, WidgetZoneDef>();
-    for (const { zone } of inscrites) {
-      const deja = byId.get(zone.id);
+    for (const { zone } of zoneRegistrations) {
+      const existing = byId.get(zone.id);
       // The zone on screen wins over its hidden declaration.
-      if (!deja || (deja.hidden && !zone.hidden)) byId.set(zone.id, zone);
+      if (!existing || (existing.hidden && !zone.hidden)) byId.set(zone.id, zone);
     }
     return [...byId.values()];
-  }, [inscrites]);
+  }, [zoneRegistrations]);
 
   // A chat open on a view that is not `/chat` starts from `/chat`'s places (Q14).
   const chatZonesMounted = useMemo(() => zones.some((z) => isChatZone(z.id)), [zones]);
   const layout = useMemo(
-    () => workspaceWidgets(stocke, known, catalog.entries, workspace.view, chatZonesMounted),
-    [stocke, known, catalog, workspace.view, chatZonesMounted],
+    () => workspaceWidgets(stored, known, catalog.entries, workspace.view, chatZonesMounted),
+    [stored, known, catalog, workspace.view, chatZonesMounted],
   );
 
   /**
@@ -303,15 +303,15 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
    * is written: losing them would erase for good the place of a plugin still
    * loading, or of a plugin just turned off.
    */
-  const muter = useCallback(
-    (op: (l: WidgetLayout[]) => WidgetLayout[], ecrire: boolean) => {
-      updateLayout((brut: unknown) => {
-        const suivant = [
-          ...op(mergeWorkspaceWidgets(brut, catalog.entries, workspace.view, chatZonesMounted)),
-          ...orphanPlacements(brut, catalog.entries),
+  const mutate = useCallback(
+    (op: (l: WidgetLayout[]) => WidgetLayout[], write: boolean) => {
+      updateLayout((raw: unknown) => {
+        const next = [
+          ...op(mergeWorkspaceWidgets(raw, catalog.entries, workspace.view, chatZonesMounted)),
+          ...orphanPlacements(raw, catalog.entries),
         ];
-        return suivant;
-      }, ecrire);
+        return next;
+      }, write);
     },
     [catalog, updateLayout, workspace.view, chatZonesMounted],
   );
@@ -330,7 +330,7 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
     [declaredSlotsOf, catalog],
   );
 
-  const titreDe = useCallback(
+  const titleOf = useCallback(
     (widgetId: string | null): string =>
       (widgetId && catalog.byId.get(widgetId)?.title) || '',
     [catalog],
@@ -342,9 +342,9 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   );
 
   const registerZone = useCallback((zone: WidgetZoneDef) => {
-    const jeton = prochainJeton.current++;
-    setInscrites((liste) => [...liste, { jeton, zone }]);
-    return () => setInscrites((liste) => liste.filter((i) => i.jeton !== jeton));
+    const token = nextToken.current++;
+    setZoneRegistrations((list) => [...list, { token, zone }]);
+    return () => setZoneRegistrations((list) => list.filter((i) => i.token !== token));
   }, []);
 
   const sensors = useSensors(
@@ -367,16 +367,16 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
     () => widgetsAllowedByConfig(layout, (id) => isZoneVisible(caps, `cockpit.${id}`)),
     [layout, caps],
   );
-  retiresRef.current = useMemo(() => new Set(removedWidgets(layout).map((w) => w.id)), [layout]);
+  removedRef.current = useMemo(() => new Set(removedWidgets(layout).map((w) => w.id)), [layout]);
 
   // What an agent's `widgets_get` reads, and its `widgets_propose` is checked against.
-  const affichable = useCallback((id: string) => isZoneVisible(caps, `cockpit.${id}`), [caps]);
-  const zonesPubliees = useMemo(
+  const isVisible = useCallback((id: string) => isZoneVisible(caps, `cockpit.${id}`), [caps]);
+  const publishedZones = useMemo(
     () => zones.map((z) => ({ id: z.id, slot: z.slot, ...(z.orientation ? { orientation: z.orientation } : {}) })),
     [zones],
   );
   usePublishWidgetSnapshot({
-    owner: workspace.owner, entries: catalog.entries, visible: affichable, view: workspace.view, zones: zonesPubliees,
+    owner: workspace.owner, entries: catalog.entries, visible: isVisible, view: workspace.view, zones: publishedZones,
   });
 
   const widgetsOf = useCallback(
@@ -385,8 +385,8 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   );
 
   const accepts = useCallback(
-    (zone: WidgetZoneDef) => (enCours === null ? true : admissible(enCours, zone)),
-    [enCours, admissible],
+    (zone: WidgetZoneDef) => (dragging === null ? true : admissible(dragging, zone)),
+    [dragging, admissible],
   );
 
   // Removing and putting back write right away: they are one-off gestures, not
@@ -397,27 +397,27 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   // widget has been put back by other means in the meantime. Only that widget
   // goes back (`restoreWidget`): writing the whole placement from before
   // would undo, too, whatever another window changed since (TODO #647).
-  const stockeRef = useRef(stocke);
-  stockeRef.current = stocke;
+  const storedRef = useRef(stored);
+  storedRef.current = stored;
   const onRemove = useCallback(
     (id: string) => {
-      const avant = mergeWorkspaceWidgets(stockeRef.current, catalog.entries, workspace.view, chatZonesMounted);
-      muter((l) => removeWidget(l, id), true);
+      const before = mergeWorkspaceWidgets(storedRef.current, catalog.entries, workspace.view, chatZonesMounted);
+      mutate((l) => removeWidget(l, id), true);
       toast(t('widgets.removed', { title: catalog.byId.get(id)?.title ?? id }), {
         action: {
           label: t('widgets.undo'),
-          onClick: () => { if (!retiresRef.current.has(id)) return; muter((l) => restoreWidget(l, avant, id), true); },
+          onClick: () => { if (!removedRef.current.has(id)) return; mutate((l) => restoreWidget(l, before, id), true); },
         },
       });
     },
-    [muter, catalog, workspace.view, chatZonesMounted],
+    [mutate, catalog, workspace.view, chatZonesMounted],
   );
   const onReplace = useCallback(
-    (id: string, replacement: string) => muter((l) => replaceWidget(l, id, replacement), true),
-    [muter],
+    (id: string, replacement: string) => mutate((l) => replaceWidget(l, id, replacement), true),
+    [mutate],
   );
 
-  const admis = useCallback(
+  const canDrop = useCallback(
     (widgetId: string, zoneId: ZoneId) => {
       const zone = zones.find((z) => z.id === zoneId);
       return zone ? admissible(widgetId, zone) : false;
@@ -436,18 +436,18 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   // is the usual cross-container move, which follows its node from one parent
   // to another; freezing the inventory during the drag would render it twice,
   // hence two nodes registered under a single id.
-  const retires = useMemo(() => availableWidgets(layoutVisible, zones.map(z => z.id)), [layoutVisible, zones]);
+  const paletteWidgets = useMemo(() => availableWidgets(layoutVisible, zones.map(z => z.id)), [layoutVisible, zones]);
 
   /** Mounted zone that would take the widget back, its default zone by preference. */
   const restoreTargetOf = useCallback(
     (id: string): ZoneId | null => {
-      const admises = zones.filter((z) => admissible(id, z));
-      const prefere = catalog.byId.get(id)?.defaultZone;
+      const allowed = zones.filter((z) => admissible(id, z));
+      const preferred = catalog.byId.get(id)?.defaultZone;
       // A click putting the card into a hidden tab would make it vanish
       // before the eyes of whoever just asked for it.
-      return (admises.find((z) => z.id === prefere && !z.hidden)
-        ?? admises.find((z) => !z.hidden)
-        ?? admises[0])?.id ?? null;
+      return (allowed.find((z) => z.id === preferred && !z.hidden)
+        ?? allowed.find((z) => !z.hidden)
+        ?? allowed[0])?.id ?? null;
     },
     [zones, admissible, catalog],
   );
@@ -459,24 +459,24 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   const onRestore = useCallback(
     (id: string, destination?: ZoneId) => {
       const zone = destination ?? restoreTargetOf(id);
-      if (!zone || !admis(id, zone)) return;
-      muter((l) => moveWidget(l, id, zone, null), true);
+      if (!zone || !canDrop(id, zone)) return;
+      mutate((l) => moveWidget(l, id, zone, null), true);
     },
-    [restoreTargetOf, admis, muter],
+    [restoreTargetOf, canDrop, mutate],
   );
 
   const onMergeZone = useCallback(
-    (from: ZoneId, to: ZoneId) => muter((l) => pourZone(l, from, to), true),
-    [muter],
+    (from: ZoneId, to: ZoneId) => mutate((l) => pourZone(l, from, to), true),
+    [mutate],
   );
 
   // Navigation invalidates any gesture started in the previous workspace.
-  useEffect(() => { setEnCours(null); }, [workspace.key]);
+  useEffect(() => { setDragging(null); }, [workspace.key]);
   const onDragStart = useCallback((e: DragStartEvent) => {
     if (!ready) return;
-    setEnCours(widgetIdOfDrag(String(e.active.id)));
+    setDragging(widgetIdOfDrag(String(e.active.id)));
     const id = widgetIdOfDrag(String(e.active.id));
-    setApercu(captureApercu(String(e.active.id), e) ?? apercuDepuisFenetre(e, catalog.byId.get(id)?.defaultHeight ?? 260));
+    setPreview(capturePreview(String(e.active.id), e) ?? previewFromWindow(e, catalog.byId.get(id)?.defaultHeight ?? 260));
   }, [ready, catalog]);
 
   useEffect(() => { setPaletteOpen(false); }, [workspace.owner]);
@@ -484,41 +484,41 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   // Docking and insertion have distinct targets. Hover never mutates the
   // layout: a disappearing source must not displace the target under the pointer.
   const onDragEnd = useCallback((e: DragEndEvent) => {
-    setEnCours(null);
+    setDragging(null);
     const id = widgetIdOfDrag(String(e.active.id));
     const over = e.over ? String(e.over.id) : null;
-    if (!over || enCours === null) return;
-    muter((l) => {
+    if (!over || dragging === null) return;
+    mutate((l) => {
       // Drop after the last tab: the only way to put a widget from elsewhere at the
       // end of the stack, since a tab only orders around itself.
       if (over.startsWith('tab-end:')) {
         const target = l.find((w) => w.id === over.slice(8) && !w.removed);
         const source = l.find((w) => w.id === id && !w.removed);
         if (!target) return l;
-        const memePile = !!source?.group && source.group === target.group && source.rail === target.rail;
-        return memePile || admis(id, target.rail) ? placeAtStackEnd(l, id, target.id) : l;
+        const sameStack = !!source?.group && source.group === target.group && source.rail === target.rail;
+        return sameStack || canDrop(id, target.rail) ? placeAtStackEnd(l, id, target.id) : l;
       }
       // Drop on a tab: reorder if it is the same stack, dock otherwise. It is the
       // same gesture from the user's side, "put it here".
       if (over.startsWith('tab:')) {
-        const cible = over.slice(4);
+        const tabId = over.slice(4);
         const source = l.find((w) => w.id === id && !w.removed);
-        const target = l.find((w) => w.id === cible && !w.removed);
-        if (!target || cible === id) return l;
+        const target = l.find((w) => w.id === tabId && !w.removed);
+        if (!target || tabId === id) return l;
         if (source?.group && source.group === target.group && source.rail === target.rail) {
-          return moveStackTab(l, id, cible);
+          return moveStackTab(l, id, tabId);
         }
         // From elsewhere: dock, then move BEFORE the hovered tab. `dockWidget` alone
         // would put the new tab at the head of the stack, far from the line the user
         // saw under the pointer.
-        return admis(id, target.rail) ? moveStackTab(dockWidget(l, id, target.id), id, cible, 'avant') : l;
+        return canDrop(id, target.rail) ? moveStackTab(dockWidget(l, id, target.id), id, tabId, 'avant') : l;
       }
       const docking = over.startsWith('dock:');
       const insertion = over.startsWith('insert:');
       const targetId = docking ? over.slice(5) : insertion ? over.slice(7) : over;
       const target = l.find((w) => w.id === targetId && !w.removed);
       const zone = /^(rail:|zone:)/.test(over) ? over.slice(5) : target?.rail;
-      if (!zone || !admis(id, zone) || targetId === id) return l;
+      if (!zone || !canDrop(id, zone) || targetId === id) return l;
       if (docking && target) {
         const grouped = dockWidget(l, id, target.id);
         const group = grouped.find((w) => w.id === id)?.group;
@@ -527,19 +527,19 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
       }
       return moveWidget(l, id, zone, target?.id ?? null);
     }, true);
-  }, [muter, admis, enCours, catalog]);
+  }, [mutate, canDrop, dragging, catalog]);
 
   const onShares = useCallback((shares: ReadonlyArray<{ id: string; percent: number }>, persist: boolean) =>
-    muter((l) => distributeHeights(l, shares), persist), [muter]);
+    mutate((l) => distributeHeights(l, shares), persist), [mutate]);
 
 
-  const onSelectTab = useCallback((id: string) => muter((l) => selectWidgetTab(l, id), true), [muter]);
-  const onDetach = useCallback((id: string) => muter((l) => {
+  const onSelectTab = useCallback((id: string) => mutate((l) => selectWidgetTab(l, id), true), [mutate]);
+  const onDetach = useCallback((id: string) => mutate((l) => {
     const entry = l.find((w) => w.id === id);
     return entry ? moveWidget(l, id, entry.rail, null) : l;
-  }, true), [muter]);
+  }, true), [mutate]);
   const onStyle = useCallback((id: string, patch: { borderless?: boolean | undefined; transparent?: boolean | undefined; untitled?: boolean }) =>
-    muter((l) => l.map((w) => {
+    mutate((l) => l.map((w) => {
       if (w.id !== id) return w;
       const next = { ...w, ...patch };
       // A choice is dated: it outranks the site's style only if made after the
@@ -547,20 +547,20 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
       if ('borderless' in patch) { if (patch.borderless === undefined) delete next.borderlessAt; else next.borderlessAt = Date.now(); }
       if ('transparent' in patch) { if (patch.transparent === undefined) delete next.transparentAt; else next.transparentAt = Date.now(); }
       return next;
-    }), true), [muter]);
+    }), true), [mutate]);
 
   // Hover has not changed state, so Escape only dismisses the preview.
-  const onDragCancel = useCallback(() => setEnCours(null), []);
+  const onDragCancel = useCallback(() => setDragging(null), []);
 
   // The closed hand follows the whole gesture, over any element: the pointer
   // is captured by the drag, so a per-element cursor would flicker.
   useEffect(() => {
-    if (enCours === null) { setApercu(null); return; }
+    if (dragging === null) { setPreview(null); return; }
     document.documentElement.classList.add('widget-dragging');
     return () => document.documentElement.classList.remove('widget-dragging');
-  }, [enCours]);
+  }, [dragging]);
 
-  const titreEnCours = enCours ? titreDe(enCours) : null;
+  const draggingTitle = dragging ? titleOf(dragging) : null;
 
   // Without these messages, a keyboard user hears "button" and nothing else:
   // neither where the widget is, nor what the next arrow will do.
@@ -570,42 +570,42 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   );
   // What the screen reader names: a widget by its title, a zone by its label.
   // Never the drop id, which means nothing to the ear.
-  const nomDeCible = useCallback(
+  const targetName = useCallback(
     (id: string) => {
-      if (id.startsWith('tab-end:')) return t('widgets.lastTabWith', { title: titreDe(id.slice(8)) });
-      if (id.startsWith('tab:')) return t('widgets.groupWith', { title: titreDe(id.slice(4)) });
-      if (id.startsWith('dock:')) return t('widgets.groupWith', { title: titreDe(id.slice(5)) });
-      if (id.startsWith('insert:')) return t('widgets.insertBefore', { title: titreDe(id.slice(7)) });
-      if (!isZoneDropId(id)) return titreDe(id);
+      if (id.startsWith('tab-end:')) return t('widgets.lastTabWith', { title: titleOf(id.slice(8)) });
+      if (id.startsWith('tab:')) return t('widgets.groupWith', { title: titleOf(id.slice(4)) });
+      if (id.startsWith('dock:')) return t('widgets.groupWith', { title: titleOf(id.slice(5)) });
+      if (id.startsWith('insert:')) return t('widgets.insertBefore', { title: titleOf(id.slice(7)) });
+      if (!isZoneDropId(id)) return titleOf(id);
       const zone = zones.find((z) => zoneDropId(z.id) === id);
       return zone?.label ?? '';
     },
-    [zones, titreDe],
+    [zones, titleOf],
   );
 
   const announcements = useMemo<Announcements>(
     () => ({
-      onDragStart: ({ active }) => t('widgets.a11y.picked', { title: titreDe(widgetIdOfDrag(String(active.id))) }),
+      onDragStart: ({ active }) => t('widgets.a11y.picked', { title: titleOf(widgetIdOfDrag(String(active.id))) }),
       onDragOver: ({ active, over }) => {
-        const cible = over ? nomDeCible(String(over.id)) : '';
-        return cible
-          ? t('widgets.a11y.over', { title: titreDe(widgetIdOfDrag(String(active.id))), target: cible })
+        const target = over ? targetName(String(over.id)) : '';
+        return target
+          ? t('widgets.a11y.over', { title: titleOf(widgetIdOfDrag(String(active.id))), target })
           : undefined;
       },
-      onDragEnd: ({ active }) => t('widgets.a11y.dropped', { title: titreDe(widgetIdOfDrag(String(active.id))) }),
-      onDragCancel: ({ active }) => t('widgets.a11y.cancelled', { title: titreDe(widgetIdOfDrag(String(active.id))) }),
+      onDragEnd: ({ active }) => t('widgets.a11y.dropped', { title: titleOf(widgetIdOfDrag(String(active.id))) }),
+      onDragCancel: ({ active }) => t('widgets.a11y.cancelled', { title: titleOf(widgetIdOfDrag(String(active.id))) }),
     }),
-    [nomDeCible, titreDe],
+    [targetName, titleOf],
   );
 
-  const valeur = useMemo<WidgetHostValue>(
+  const value = useMemo<WidgetHostValue>(
     () => ({
       editing, paletteOpen, setPaletteOpen, zones,
       widgetsOf,
       registerZone,
-      dragging: enCours,
+      dragging,
       accepts,
-      palette: retires,
+      palette: paletteWidgets,
       widget,
       onRemove,
       onReplace,
@@ -619,9 +619,9 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
       editing, paletteOpen, zones,
       widgetsOf,
       registerZone,
-      enCours,
+      dragging,
       accepts,
-      retires,
+      paletteWidgets,
       widget,
       onRemove,
       onReplace,
@@ -642,13 +642,13 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
       onDragEnd={onDragEnd}
       onDragCancel={onDragCancel}
     >
-      <WidgetHostContext.Provider value={valeur}>
+      <WidgetHostContext.Provider value={value}>
         {children}
         {paletteOpen && <WidgetPalette />}
       </WidgetHostContext.Provider>
 
       <DragOverlay dropAnimation={null}>
-        {apercu?.live ? <WidgetHostContext.Provider value={valeur}><ApercuVivant apercu={apercu} id={apercu.live} /></WidgetHostContext.Provider> : apercu ? <ApercuWidget apercu={apercu} /> : titreEnCours ? (
+        {preview?.live ? <WidgetHostContext.Provider value={value}><LivePreview preview={preview} id={preview.live} /></WidgetHostContext.Provider> : preview ? <WidgetPreview preview={preview} /> : draggingTitle ? (
           <div
             className={cn(
               'flex items-center gap-2 rounded-2xl border px-4 py-2.5 shadow-lg',
@@ -657,7 +657,7 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
           >
             <GripVertical className="size-3.5 text-primary/70" />
             <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {titreEnCours}
+              {draggingTitle}
             </span>
           </div>
         ) : null}

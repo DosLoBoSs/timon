@@ -148,9 +148,9 @@ export function resolveDrop(
   if (!overId) return layout;
 
   if (layout.find((w) => w.id === activeId)?.removed) {
-    const cible = zoneOfDragId(layout, overId, zones);
-    if (!cible || !accepts(activeId, cible)) return layout;
-    return moveWidget(layout, activeId, cible, isZoneDropId(overId) ? null : overId);
+    const targetZone = zoneOfDragId(layout, overId, zones);
+    if (!targetZone || !accepts(activeId, targetZone)) return layout;
+    return moveWidget(layout, activeId, targetZone, isZoneDropId(overId) ? null : overId);
   }
 
   const zone = zoneOfDragId(layout, activeId, zones);

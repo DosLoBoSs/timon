@@ -16,14 +16,14 @@ import { Fragment } from 'react';
 import { useMobile } from '@/hooks/use-mobile';
 
 /** Space between two cards of a column, in px (`.widget-frame ~ .widget-frame`). */
-const ECART_CARTES = 12;
+const CARD_GAP = 12;
 
 /** Flex weight of a stack: its share in percent. A card saved with a height of
  *  its own (before every column was shared out) counts for its height against
  *  the column's: it keeps its look until an edge is first dragged. */
-function poidsDe(tete: WidgetLayout, hauteurZone: number): number {
-  if (tete.heightMode === 'fill') return tete.fillPercent ?? 100;
-  return hauteurZone > 0 ? Math.max(5, (tete.hauteur / hauteurZone) * 100) : tete.hauteur / 6;
+function weightOf(head: WidgetLayout, zoneHeight: number): number {
+  if (head.heightMode === 'fill') return head.fillPercent ?? 100;
+  return zoneHeight > 0 ? Math.max(5, (head.hauteur / zoneHeight) * 100) : head.hauteur / 6;
 }
 
 /**
@@ -32,21 +32,21 @@ function poidsDe(tete: WidgetLayout, hauteurZone: number): number {
  * to the known shares (`HEIGHT_SNAPS`); Shift drags freely. Arrow keys move it
  * by 24px, Shift for 96.
  */
-function BordHauteur({ index, label, deplacer }: {
+function HeightEdge({ index, label, moveEdgeBy }: {
   index: number;
   label: string;
-  deplacer: (index: number, depart: readonly number[] | null, delta: number, libre: boolean, persist: boolean) => readonly number[] | null;
+  moveEdgeBy: (index: number, start: readonly number[] | null, delta: number, free: boolean, persist: boolean) => readonly number[] | null;
 }) {
-  const glisse = useRef<{ pointeur: number; y: number; hauteurs: readonly number[] } | null>(null);
-  const image = useRef<number | null>(null);
-  const [actif, setActif] = useState(false);
-  useEffect(() => () => { if (image.current !== null) cancelAnimationFrame(image.current); }, []);
-  const finir = (y: number | null, libre: boolean) => {
-    const depart = glisse.current;
-    glisse.current = null;
-    setActif(false);
-    if (image.current !== null) { cancelAnimationFrame(image.current); image.current = null; }
-    if (depart) deplacer(index, depart.hauteurs, y === null ? 0 : y - depart.y, libre, true);
+  const drag = useRef<{ pointer: number; y: number; heights: readonly number[] } | null>(null);
+  const frameRequest = useRef<number | null>(null);
+  const [active, setActive] = useState(false);
+  useEffect(() => () => { if (frameRequest.current !== null) cancelAnimationFrame(frameRequest.current); }, []);
+  const finish = (y: number | null, free: boolean) => {
+    const start = drag.current;
+    drag.current = null;
+    setActive(false);
+    if (frameRequest.current !== null) { cancelAnimationFrame(frameRequest.current); frameRequest.current = null; }
+    if (start) moveEdgeBy(index, start.heights, y === null ? 0 : y - start.y, free, true);
   };
   return <div className="relative z-30 h-0 shrink-0" data-widget-edge={index}>
     <div
@@ -60,42 +60,42 @@ function BordHauteur({ index, label, deplacer }: {
         'absolute inset-x-2 top-0.5 h-2 cursor-row-resize touch-none outline-none',
         'after:absolute after:inset-x-0 after:top-1/2 after:h-0.5 after:-translate-y-1/2 after:rounded-full after:transition-colors',
         'hover:after:bg-primary/50 focus-visible:after:bg-primary',
-        actif && 'after:bg-primary',
+        active && 'after:bg-primary',
       )}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
-        const hauteurs = deplacer(index, null, 0, true, false);
-        if (!hauteurs) return;
+        const heights = moveEdgeBy(index, null, 0, true, false);
+        if (!heights) return;
         e.preventDefault();
         e.stopPropagation();
         e.currentTarget.setPointerCapture?.(e.pointerId);
-        glisse.current = { pointeur: e.pointerId, y: e.clientY, hauteurs };
-        setActif(true);
+        drag.current = { pointer: e.pointerId, y: e.clientY, heights };
+        setActive(true);
       }}
       onPointerMove={(e) => {
-        const depart = glisse.current;
-        if (depart?.pointeur !== e.pointerId) return;
+        const start = drag.current;
+        if (start?.pointer !== e.pointerId) return;
         const y = e.clientY;
-        const libre = e.shiftKey;
+        const free = e.shiftKey;
         // One layout per frame: a pointer reports far more often than the
         // screen repaints, and each report re-renders the column.
-        if (image.current !== null) cancelAnimationFrame(image.current);
-        image.current = requestAnimationFrame(() => {
-          image.current = null;
-          deplacer(index, depart.hauteurs, y - depart.y, libre, false);
+        if (frameRequest.current !== null) cancelAnimationFrame(frameRequest.current);
+        frameRequest.current = requestAnimationFrame(() => {
+          frameRequest.current = null;
+          moveEdgeBy(index, start.heights, y - start.y, free, false);
         });
       }}
       onPointerUp={(e) => {
-        if (glisse.current?.pointeur !== e.pointerId) return;
-        finir(e.clientY, e.shiftKey);
+        if (drag.current?.pointer !== e.pointerId) return;
+        finish(e.clientY, e.shiftKey);
         e.currentTarget.releasePointerCapture?.(e.pointerId);
       }}
-      onLostPointerCapture={() => { if (glisse.current) finir(null, true); }}
+      onLostPointerCapture={() => { if (drag.current) finish(null, true); }}
       onKeyDown={(e) => {
         if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
         e.preventDefault();
-        const pas = (e.shiftKey ? 96 : 24) * (e.key === 'ArrowDown' ? 1 : -1);
-        deplacer(index, null, pas, true, true);
+        const step = (e.shiftKey ? 96 : 24) * (e.key === 'ArrowDown' ? 1 : -1);
+        moveEdgeBy(index, null, step, true, true);
       }}
     />
   </div>;
@@ -162,60 +162,60 @@ export function WidgetZone({
   );
   useEffect(() => registerZone(definition), [registerZone, definition]);
 
-  const admis = accepts(definition);
-  const { setNodeRef, isOver } = useDroppable({ id: `zone:${zone}`, disabled: !admis });
-  const entrees = widgetsOf(zone);
+  const allowed = accepts(definition);
+  const { setNodeRef, isOver } = useDroppable({ id: `zone:${zone}`, disabled: !allowed });
+  const entries = widgetsOf(zone);
   const aside = useRef<HTMLElement | null>(null);
-  const [hauteurZone, setHauteurZone] = useState(0);
+  const [zoneHeight, setZoneHeight] = useState(0);
   useEffect(() => {
     const el = aside.current;
     if (!el || horizontal || typeof ResizeObserver === 'undefined') return;
-    const lire = () => setHauteurZone(el.clientHeight);
-    lire();
-    const observateur = new ResizeObserver(lire);
-    observateur.observe(el);
-    return () => observateur.disconnect();
+    const measure = () => setZoneHeight(el.clientHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [horizontal]);
 
-  const stacks = widgetStacks(entrees);
-  const tete = (members: WidgetLayout[]) => members.find((w) => w.activeTab) ?? members[0]!;
+  const stacks = widgetStacks(entries);
+  const head = (members: WidgetLayout[]) => members.find((w) => w.activeTab) ?? members[0]!;
   // A bare form (an icon column) keeps its natural height; every other card of
   // a column takes a share of what is left, and the shares always make 100 %.
   // "Your widget here" alone in its column keeps its own height, docked at
   // the bottom (`add-widget.ts`); beside other cards it takes its share.
   const docked = !horizontal && stacks.length === 1 && stacks[0]!.length === 1 && isAddWidgetPlaceholder(stacks[0]![0]!.id);
-  const nu = (members: WidgetLayout[]) => horizontal || docked || (compact && members.length === 1 && widget(members[0]!.id)?.bar === true);
-  const partages = horizontal ? [] : stacks.filter((members) => !nu(members));
+  const bare = (members: WidgetLayout[]) => horizontal || docked || (compact && members.length === 1 && widget(members[0]!.id)?.bar === true);
+  const shared = horizontal ? [] : stacks.filter((members) => !bare(members));
   // Weights against each other, rescaled to 100 %: the card left alone when
   // its neighbour moves away fills the column instead of keeping its half.
-  const parts = normalizedShares(partages.map((members) =>
-    poidsDe(tete(members), Math.max(0, hauteurZone - ECART_CARTES * (partages.length - 1)))));
-  const fillsHeight = partages.length > 0;
-  const vide = entrees.length === 0;
+  const parts = normalizedShares(shared.map((members) =>
+    weightOf(head(members), Math.max(0, zoneHeight - CARD_GAP * (shared.length - 1)))));
+  const fillsHeight = shared.length > 0;
+  const empty = entries.length === 0;
 
   /**
    * Moves the edge `index` (below the `index`-th shared card) by `delta` px,
-   * from the heights measured when the gesture began (`depart`, or measured
+   * from the heights measured when the gesture began (`start`, or measured
    * now). Writes every share of the column, so a column saved with heights of
    * its own comes out of its first drag shared at exactly 100 %. Returns the
    * heights it started from, `null` when the column cannot be measured.
    */
-  const deplacer = useCallback((index: number, depart: readonly number[] | null, delta: number, libre: boolean, persist: boolean) => {
+  const moveEdgeBy = useCallback((index: number, start: readonly number[] | null, delta: number, free: boolean, persist: boolean) => {
     const el = aside.current;
     if (!el) return null;
-    const enfants = Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement && c.classList.contains('widget-frame'));
-    const cadres = partages.map((members) => enfants.find((c) => c.dataset.widgetId === tete(members).id));
-    if (cadres.some((c) => !c)) return null;
-    const hauteurs = depart ?? cadres.map((c) => c!.getBoundingClientRect().height);
-    if (delta === 0 && depart === null && !persist) return hauteurs;
-    const minimums = partages.map((members) => Math.max(...members.map((m) => widget(m.id)?.minHeight ?? 0)) + (members.length > 1 ? 46 : 0));
-    const suivantes = moveEdge(hauteurs, minimums, index, delta, !libre);
-    const parts = sharesFromHeights(suivantes);
-    onShares(partages.map((members, i) => ({ id: tete(members).id, percent: parts[i]! })), persist);
-    return hauteurs;
-  }, [partages, widget, onShares]);
+    const cards = Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement && c.classList.contains('widget-frame'));
+    const frames = shared.map((members) => cards.find((c) => c.dataset.widgetId === head(members).id));
+    if (frames.some((c) => !c)) return null;
+    const heights = start ?? frames.map((c) => c!.getBoundingClientRect().height);
+    if (delta === 0 && start === null && !persist) return heights;
+    const minimums = shared.map((members) => Math.max(...members.map((m) => widget(m.id)?.minHeight ?? 0)) + (members.length > 1 ? 46 : 0));
+    const nextHeights = moveEdge(heights, minimums, index, delta, !free);
+    const parts = sharesFromHeights(nextHeights);
+    onShares(shared.map((members, i) => ({ id: head(members).id, percent: parts[i]! })), persist);
+    return heights;
+  }, [shared, widget, onShares]);
 
-  if (hideWhenEmpty && vide && !dragging && (!editing || !revealWhenEditing)) return null;
+  if (hideWhenEmpty && empty && !dragging && (!editing || !revealWhenEditing)) return null;
 
   return (
     <aside
@@ -227,41 +227,41 @@ export function WidgetZone({
       // The refusal shows BEFORE the drop: the zone greys out and takes the
       // not-allowed cursor as soon as the lifted widget has no place there, rather
       // than swallowing the gesture and undoing it afterwards.
-      aria-disabled={dragging !== null && !admis ? true : undefined}
-      title={dragging !== null && !admis ? t('widgets.notAllowed') : undefined}
+      aria-disabled={dragging !== null && !allowed ? true : undefined}
+      title={dragging !== null && !allowed ? t('widgets.notAllowed') : undefined}
       className={cn(
         className,
         'widget-zone gap-0',
-        editing && vide && (horizontal
+        editing && empty && (horizontal
           ? 'h-9 min-w-9 items-center rounded-md border border-dashed border-border'
           : 'min-h-24 rounded-lg border border-dashed border-border'),
-        hideWhenEmpty && vide && emptyClassName,
-        dragging !== null && !admis && 'cursor-not-allowed opacity-40',
-        isOver && dragging && admis && 'bg-primary/5',
+        hideWhenEmpty && empty && emptyClassName,
+        dragging !== null && !allowed && 'cursor-not-allowed opacity-40',
+        isOver && dragging && allowed && 'bg-primary/5',
       )}
     >
-      {editing && vide && !dragging && (horizontal
+      {editing && empty && !dragging && (horizontal
         ? <p className="whitespace-nowrap px-2 text-[11px] text-muted-foreground">{t('widgets.dropHere')}</p>
         : <p className="p-3 text-center text-xs text-muted-foreground">{label} · {t('widgets.dropHere')}</p>)}
-      <SortableContext items={entrees.map((e) => e.id)} strategy={horizontal ? horizontalListSortingStrategy : verticalListSortingStrategy}>
+      <SortableContext items={entries.map((e) => e.id)} strategy={horizontal ? horizontalListSortingStrategy : verticalListSortingStrategy}>
         {docked && <div aria-hidden data-add-widget-spacer className="min-h-0 flex-1" />}
         {stacks.map((members) => {
-          const rang = partages.indexOf(members);
+          const sharedIndex = shared.indexOf(members);
           return (
             <Fragment key={members[0]!.group ?? members[0]!.id}>
               <WidgetInsertion id={members[0]!.id} zone={zone} horizontal={horizontal} />
               <WidgetCard
-                entree={tete(members)}
+                entry={head(members)}
                 members={members}
-                part={rang >= 0 ? parts[rang] : undefined}
+                part={sharedIndex >= 0 ? parts[sharedIndex] : undefined}
                 orientation={orientation}
                 compact={horizontal || compact}
               />
-              {!mobile && rang >= 0 && rang < partages.length - 1 && (
-                <BordHauteur
-                  index={rang}
-                  label={t('widgets.resizeEdge', { above: widget(tete(members).id)?.title ?? '', below: widget(tete(partages[rang + 1]!).id)?.title ?? '' })}
-                  deplacer={deplacer}
+              {!mobile && sharedIndex >= 0 && sharedIndex < shared.length - 1 && (
+                <HeightEdge
+                  index={sharedIndex}
+                  label={t('widgets.resizeEdge', { above: widget(head(members).id)?.title ?? '', below: widget(head(shared[sharedIndex + 1]!).id)?.title ?? '' })}
+                  moveEdgeBy={moveEdgeBy}
                 />
               )}
             </Fragment>

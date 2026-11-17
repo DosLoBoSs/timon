@@ -15,7 +15,7 @@ import type { WidgetOrientation } from './widget-dnd';
 /** Side where the insertion cursor is drawn on `targetId`. A widget coming
  *  from another stack has no rank here: it lands BEFORE the hovered tab,
  *  which the drop applies literally. */
-function coteDuCurseur(members: WidgetLayout[], dragging: string | null, targetId: string): 'avant' | 'apres' | null {
+function cursorSide(members: WidgetLayout[], dragging: string | null, targetId: string): 'avant' | 'apres' | null {
   if (!dragging || dragging === targetId) return null;
   if (!members.some((m) => m.id === dragging)) return 'avant';
   return insertionSide(members, dragging, targetId);
@@ -23,11 +23,11 @@ function coteDuCurseur(members: WidgetLayout[], dragging: string | null, targetI
 
 /** A tab is a drag source AND a drop target, at any time: a stack is reordered
  *  between its tabs, not in the card's body, which belongs to docking. */
-function WidgetTab({ entry, selected, onSelect, panelId, cote }: { entry: WidgetLayout; selected: boolean; onSelect: () => void; panelId: string; cote: 'avant' | 'apres' | null }) {
+function WidgetTab({ entry, selected, onSelect, panelId, side }: { entry: WidgetLayout; selected: boolean; onSelect: () => void; panelId: string; side: 'avant' | 'apres' | null }) {
   const host = useWidgetHost();
   const { listeners, setNodeRef, isDragging } = useDraggable({ id: entry.id });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `tab:${entry.id}`, disabled: !host.editing || host.dragging === entry.id });
-  const curseur = isOver && cote !== null && host.dragging !== entry.id ? cote : null;
+  const cursor = isOver && side !== null && host.dragging !== entry.id ? side : null;
   // Only the pointer lifts a tab: dnd-kit's attributes and keyboard listener
   // would turn Enter and Space on a tab into a drag. A tab keeps its tab
   // semantics; the stack's grip carries the keyboard drag.
@@ -40,7 +40,7 @@ function WidgetTab({ entry, selected, onSelect, panelId, cote }: { entry: Widget
         target shows what is hovered, which still leaves you guessing on which
         side the tab will fall. The side is the one `insertionSide` will decide
         on drop; same function, so the line cannot lie. */}
-    {curseur && <span aria-hidden data-cursor={curseur} className={cn('pointer-events-none absolute inset-y-0.5 z-10 w-[3px] rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.7)]', curseur === 'avant' ? '-left-[2px]' : '-right-[2px]')} />}
+    {cursor && <span aria-hidden data-cursor={cursor} className={cn('pointer-events-none absolute inset-y-0.5 z-10 w-[3px] rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.7)]', cursor === 'avant' ? '-left-[2px]' : '-right-[2px]')} />}
     <span className="max-w-40 truncate">{host.widget(entry.id)?.title}</span>
   </button>;
 }
@@ -50,28 +50,28 @@ function WidgetTab({ entry, selected, onSelect, panelId, cote }: { entry: Widget
  *  elsewhere lands before it; without this target, the last place was out of
  *  reach. Outside the tablist, `min-w-6` keeps it visible even when the tabs
  *  overflow. */
-function WidgetTabEnd({ entree, members }: { entree: WidgetLayout; members: WidgetLayout[] }) {
+function WidgetTabEnd({ entry, members }: { entry: WidgetLayout; members: WidgetLayout[] }) {
   const host = useWidgetHost();
-  const { setNodeRef, isOver } = useDroppable({ id: `tab-end:${entree.id}`, disabled: !host.editing });
+  const { setNodeRef, isOver } = useDroppable({ id: `tab-end:${entry.id}`, disabled: !host.editing });
   // Already last: the drop changes nothing, the line must promise nothing.
-  const curseur = isOver && !!host.dragging && members[members.length - 1]?.id !== host.dragging;
+  const cursor = isOver && !!host.dragging && members[members.length - 1]?.id !== host.dragging;
   return <div ref={setNodeRef} aria-hidden className="relative h-8 min-w-2 flex-1 self-center">
-    {curseur && <span className="pointer-events-none absolute inset-y-0.5 left-0 z-10 w-[3px] rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.7)]" />}
+    {cursor && <span className="pointer-events-none absolute inset-y-0.5 left-0 z-10 w-[3px] rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.7)]" />}
   </div>;
 }
 
 /** What a press may never lift the card from: the controls inside the title
  *  bar keep their own click, and a tab lifts itself. */
-const INTERACTIF = 'button, a[href], input, textarea, select, label, summary, [role="button"], [role="tab"], [role="menuitem"], [role="slider"], [contenteditable=""], [contenteditable="true"], [data-no-drag]';
+const INTERACTIVE = 'button, a[href], input, textarea, select, label, summary, [role="button"], [role="tab"], [role="menuitem"], [role="slider"], [contenteditable=""], [contenteditable="true"], [data-no-drag]';
 
 /** Height of the strip a card without a header row is lifted by. */
-const BANDE_SANS_ENTETE = 28;
+const HEADERLESS_STRIP = 28;
 
 /** How long the pointer rests on a title before the drag hint shows. */
-export const DELAI_INDICE_DRAG = 2000;
+export const DRAG_HINT_DELAY = 2000;
 
 /** The widget's own title bar: the header of the section it paints, if any. */
-function enteteDe(frame: HTMLElement): HTMLElement | null {
+function headerOf(frame: HTMLElement): HTMLElement | null {
   return frame.querySelector<HTMLElement>(':scope > .widget-content > section > header');
 }
 
@@ -80,28 +80,28 @@ function enteteDe(frame: HTMLElement): HTMLElement | null {
  * strip (between the tabs), the whole of a bare form — never a control. A card
  * that paints no header is lifted by its top strip.
  */
-export function surPoigneeTitre(
-  frame: HTMLElement, target: Element, clientY: number, forme: { bare: boolean; tabbed: boolean }, ongletsCompris = false,
+export function isOnTitleHandle(
+  frame: HTMLElement, target: Element, clientY: number, shape: { bare: boolean; tabbed: boolean }, includeTabs = false,
 ): boolean {
   if (!frame.contains(target)) return false;
   // A stack's tabs ARE its titles: they arm the hint and take the right
   // click. They are left out of the press only, since each lifts itself.
-  const onglet = forme.tabbed && ongletsCompris ? target.closest('.widget-tabbar [role="tab"]') : null;
-  if (onglet && frame.contains(onglet)) return true;
-  const controle = target.closest(INTERACTIF);
-  if (controle && frame.contains(controle)) return false;
-  if (forme.bare) return true;
-  if (forme.tabbed) return !!target.closest('.widget-tabbar');
-  const entete = enteteDe(frame);
-  if (entete) return entete.contains(target);
-  return clientY - frame.getBoundingClientRect().top <= BANDE_SANS_ENTETE;
+  const tab = shape.tabbed && includeTabs ? target.closest('.widget-tabbar [role="tab"]') : null;
+  if (tab && frame.contains(tab)) return true;
+  const control = target.closest(INTERACTIVE);
+  if (control && frame.contains(control)) return false;
+  if (shape.bare) return true;
+  if (shape.tabbed) return !!target.closest('.widget-tabbar');
+  const header = headerOf(frame);
+  if (header) return header.contains(target);
+  return clientY - frame.getBoundingClientRect().top <= HEADERLESS_STRIP;
 }
 
 /** A stack has a tab strip and a single visible body. Tabs themselves remain
  * drag sources so they can be detached, reordered or docked into another stack.
  *
  * There is no layout mode: a card is lifted by its title at any time. Resting
- * the pointer on the title for `DELAI_INDICE_DRAG` shows the hint — the grab
+ * the pointer on the title for `DRAG_HINT_DELAY` shows the hint — the grab
  * cursor, and a small pill with the grip and the gear at the top of the card
  * (`data-drag-ready`). The gear's menu also opens by a right click on the
  * title. Heights are the zone's business (`WidgetZone`): a card only receives
@@ -114,8 +114,8 @@ export function surPoigneeTitre(
  * A compact column (a sidebar) does the same for a widget that has a compact
  * form (`bar: true`) and stands alone: it takes its natural height, its icons
  * stacked. Any other widget keeps its card there, and a stack keeps its tabs. */
-export function WidgetCard({ entree, members = [entree], part, orientation = 'vertical', compact = false }: {
-  entree: WidgetLayout;
+export function WidgetCard({ entry, members = [entry], part, orientation = 'vertical', compact = false }: {
+  entry: WidgetLayout;
   members?: WidgetLayout[];
   /** Share of the column's height (a flex weight); absent = natural height. */
   part?: number;
@@ -125,8 +125,8 @@ export function WidgetCard({ entree, members = [entree], part, orientation = 've
 }) {
   const host = useWidgetHost();
   const siteStyle = useWidgetStyleDefaults();
-  const style = effectiveWidgetStyle(entree, siteStyle);
-  const widget = host.widget(entree.id);
+  const style = effectiveWidgetStyle(entry, siteStyle);
+  const widget = host.widget(entry.id);
   const horizontal = orientation === 'horizontal';
   const grouped = members.length > 1 && !horizontal;
   // The frame-less form: always on a line, and in a compact column for a lone
@@ -135,11 +135,11 @@ export function WidgetCard({ entree, members = [entree], part, orientation = 've
   // Only a stack has tabs: a lone widget shows its title in its own header,
   // and an untitled one drops even that — a stack ignores the flag, it needs
   // its tabs.
-  const untitled = !grouped && !!entree.untitled;
+  const untitled = !grouped && !!entry.untitled;
   const tabbed = grouped;
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({ id: tabbed ? `frame:${entree.id}` : entree.id });
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({ id: tabbed ? `frame:${entry.id}` : entry.id });
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
-  const { setNodeRef: setDockRef, isOver } = useDroppable({ id: `dock:${entree.id}`, disabled: bare || !host.editing || host.dragging === entree.id });
+  const { setNodeRef: setDockRef, isOver } = useDroppable({ id: `dock:${entry.id}`, disabled: bare || !host.editing || host.dragging === entry.id });
   const mobile = useMobile();
   const tablist = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement | null>(null);
@@ -147,13 +147,13 @@ export function WidgetCard({ entree, members = [entree], part, orientation = 've
   // The drag hint: armed while the pointer rests on the title, shown after
   // the delay, kept until the pointer leaves the card — the pill it shows
   // sits below the title, and must stay while the pointer goes to it.
-  const [pret, setPret] = useState(false);
-  const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const desarmer = useCallback(() => {
-    if (minuteur.current !== null) { clearTimeout(minuteur.current); minuteur.current = null; }
+  const [hintShown, setHintShown] = useState(false);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const disarm = useCallback(() => {
+    if (hintTimer.current !== null) { clearTimeout(hintTimer.current); hintTimer.current = null; }
   }, []);
-  useEffect(() => desarmer, [desarmer]);
-  useEffect(() => { if (host.dragging) { desarmer(); setPret(false); } }, [host.dragging, desarmer]);
+  useEffect(() => disarm, [disarm]);
+  useEffect(() => { if (host.dragging) { disarm(); setHintShown(false); } }, [host.dragging, disarm]);
   // The scrollbar is hidden, so a mouse without a horizontal wheel needs its
   // vertical wheel translated. Non-passive listener (React's onWheel is passive,
   // it cannot preventDefault), and only while the strip can still move that
@@ -185,49 +185,49 @@ export function WidgetCard({ entree, members = [entree], part, orientation = 've
     const right = left + rect.width;
     if (left < el.scrollLeft) el.scrollLeft = left;
     else if (right > el.scrollLeft + el.clientWidth) el.scrollLeft = right - el.clientWidth;
-  }, [entree.id, memberKey]);
+  }, [entry.id, memberKey]);
   if (!widget) return null;
   const minimum = Math.max(...members.map((member) => host.widget(member.id)?.minHeight ?? 0)) + (tabbed ? 46 : 0);
-  const panelId = `panel-${entree.id}`;
-  const forme = { bare, tabbed };
-  const surTitre = (e: { target: EventTarget | null; clientY: number }, ongletsCompris = false) =>
-    !!frame.current && e.target instanceof Element && surPoigneeTitre(frame.current, e.target, e.clientY, forme, ongletsCompris);
+  const panelId = `panel-${entry.id}`;
+  const shape = { bare, tabbed };
+  const onTitle = (e: { target: EventTarget | null; clientY: number }, includeTabs = false) =>
+    !!frame.current && e.target instanceof Element && isOnTitleHandle(frame.current, e.target, e.clientY, shape, includeTabs);
   // Keyboard drag goes through the grip (a real button), shown in the pill.
   const grip = <button type="button" ref={setActivatorNodeRef} aria-label={t('cockpit.board.move', { title: widget.title })} className={cn(CONTROL, 'cursor-grab touch-none active:cursor-grabbing')} {...attributes} {...listeners}>{bare ? <GripVertical className="size-3.5" /> : <GripHorizontal className="size-3.5" />}</button>;
-  const gear = <WidgetGear entree={entree} grouped={grouped} bare={bare} />;
+  const gear = <WidgetGear entry={entry} grouped={grouped} bare={bare} />;
   // A bare form has no title bar to float a pill over: the grip leads, the
   // gear follows it, in a box as tall as the line — once hinted.
-  const montrerOutils = pret || host.paletteOpen;
-  const inline = bare && montrerOutils ? <span className="flex shrink-0 items-center self-center">{gear}</span> : null;
-  const leadingGrip = bare && montrerOutils ? <span className="flex shrink-0 items-center self-center">{grip}</span> : null;
+  const showTools = hintShown || host.paletteOpen;
+  const inline = bare && showTools ? <span className="flex shrink-0 items-center self-center">{gear}</span> : null;
+  const leadingGrip = bare && showTools ? <span className="flex shrink-0 items-center self-center">{grip}</span> : null;
   const openMenu = (e: React.MouseEvent) => { e.preventDefault(); setMenuAt({ x: e.clientX, y: e.clientY }); };
   return <div ref={(node) => { setNodeRef(node); frame.current = node; }}
     onPointerDown={(e) => {
-      if (e.button !== 0 || !surTitre(e)) return;
+      if (e.button !== 0 || !onTitle(e)) return;
       (listeners?.onPointerDown as React.PointerEventHandler<HTMLDivElement> | undefined)?.(e);
     }}
     onPointerMove={(e) => {
-      if (e.pointerType !== 'mouse' || host.dragging || pret) return;
-      if (!surTitre(e, true)) { desarmer(); return; }
-      if (minuteur.current === null) minuteur.current = setTimeout(() => { minuteur.current = null; setPret(true); }, DELAI_INDICE_DRAG);
+      if (e.pointerType !== 'mouse' || host.dragging || hintShown) return;
+      if (!onTitle(e, true)) { disarm(); return; }
+      if (hintTimer.current === null) hintTimer.current = setTimeout(() => { hintTimer.current = null; setHintShown(true); }, DRAG_HINT_DELAY);
     }}
-    onPointerLeave={() => { desarmer(); setPret(false); }}
+    onPointerLeave={() => { disarm(); setHintShown(false); }}
     // The title bar's right click is the gear's menu; a stack's strip brings
     // the tab under the pointer forward first, the menu is about it.
     onContextMenu={(e) => {
-      if (wantsNativeMenu(e.target) || !surTitre(e, true)) return;
+      if (wantsNativeMenu(e.target) || !onTitle(e, true)) return;
       if (tabbed) {
         const tab = (e.target as Element).closest<HTMLElement>('[role="tab"]');
         const id = tab?.id.startsWith('tab-') ? tab.id.slice(4) : null;
-        if (id && id !== entree.id) host.onSelectTab(id);
+        if (id && id !== entry.id) host.onSelectTab(id);
       }
       openMenu(e);
     }}
-    data-widget-id={entree.id} data-borderless={style.borderless || undefined} data-transparent={style.transparent || undefined} data-tabbed={tabbed || undefined} data-untitled={untitled || undefined}
+    data-widget-id={entry.id} data-borderless={style.borderless || undefined} data-transparent={style.transparent || undefined} data-tabbed={tabbed || undefined} data-untitled={untitled || undefined}
     // A phone stacks cards at their natural height; only the cockpit's centre
     // still stretches its `fill` cards there (cockpit-board.tsx).
-    data-height-mode={(mobile ? entree.heightMode === 'fill' : part !== undefined) ? 'fill' : 'fixed'}
-    data-drag-ready={pret || undefined}
+    data-height-mode={(mobile ? entry.heightMode === 'fill' : part !== undefined) ? 'fill' : 'fixed'}
+    data-drag-ready={hintShown || undefined}
     // Flex basis at ZERO, and the share as the grow factor: the distributed space
     // is then the whole free height, so three cards at 33 % are equal.
     // `minHeight` stays the floor: a share too small cannot crush a widget below
@@ -244,24 +244,24 @@ export function WidgetCard({ entree, members = [entree], part, orientation = 've
         if (host.dragging) return;
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
         e.preventDefault();
-        const index = members.findIndex((w) => w.id === entree.id);
+        const index = members.findIndex((w) => w.id === entry.id);
         const next = e.key === 'Home' ? 0 : e.key === 'End' ? members.length - 1 : (index + (e.key === 'ArrowRight' ? 1 : -1) + members.length) % members.length;
         host.onSelectTab(members[next]!.id);
         document.getElementById(`tab-${members[next]!.id}`)?.focus();
       }}>
-      {members.map((entry) => <WidgetTab key={entry.id} entry={entry} selected={entry.id === entree.id} onSelect={() => host.onSelectTab(entry.id)} panelId={`panel-${entry.id}`} cote={coteDuCurseur(members, host.dragging, entry.id)} />)}
-    </div><WidgetTabEnd entree={entree} members={members} /></div>}
+      {members.map((member) => <WidgetTab key={member.id} entry={member} selected={member.id === entry.id} onSelect={() => host.onSelectTab(member.id)} panelId={`panel-${member.id}`} side={cursorSide(members, host.dragging, member.id)} />)}
+    </div><WidgetTabEnd entry={entry} members={members} /></div>}
     {/* The hint: a pill at the top of the card, over the middle of its title
         bar, with the grip (the keyboard's way to move it) and the gear. It
         stays reachable from the keyboard: focusing it shows it. */}
     {!bare && <div data-widget-hint className={cn('widget-chrome absolute left-1/2 top-1.5 z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-lg bg-popover/95 p-0.5 shadow-elev-2 ring-1 ring-border transition-opacity duration-150',
-      montrerOutils ? 'opacity-100' : 'pointer-events-none opacity-0 focus-within:pointer-events-auto focus-within:opacity-100')}>{grip}{gear}</div>}
+      showTools ? 'opacity-100' : 'pointer-events-none opacity-0 focus-within:pointer-events-auto focus-within:opacity-100')}>{grip}{gear}</div>}
     {leadingGrip}
-    <div id={panelId} role={tabbed ? 'tabpanel' : undefined} aria-labelledby={tabbed ? `tab-${entree.id}` : undefined} className={cn('widget-content flex', horizontal ? 'h-full items-center gap-0.5' : bare ? 'min-w-0 flex-col items-start' : 'min-h-0 min-w-0 flex-1 flex-col', tabbed && 'overflow-hidden', host.dragging && !bare && '[&_*]:!pointer-events-none pointer-events-none')}>
-      {widget.render({ editing: host.editing || pret, className: mobile || bare ? undefined : 'h-full', poignee: inline ?? undefined, onReplace: (id) => host.onReplace(entree.id, id), orientation, compact: bare })}
+    <div id={panelId} role={tabbed ? 'tabpanel' : undefined} aria-labelledby={tabbed ? `tab-${entry.id}` : undefined} className={cn('widget-content flex', horizontal ? 'h-full items-center gap-0.5' : bare ? 'min-w-0 flex-col items-start' : 'min-h-0 min-w-0 flex-1 flex-col', tabbed && 'overflow-hidden', host.dragging && !bare && '[&_*]:!pointer-events-none pointer-events-none')}>
+      {widget.render({ editing: host.editing || hintShown, className: mobile || bare ? undefined : 'h-full', poignee: inline ?? undefined, onReplace: (id) => host.onReplace(entry.id, id), orientation, compact: bare })}
     </div>
-    {grouped && members.filter((entry) => entry.id !== entree.id).map((entry) => (
-      <div key={entry.id} id={`panel-${entry.id}`} role="tabpanel" aria-labelledby={`tab-${entry.id}`} hidden />
+    {grouped && members.filter((member) => member.id !== entry.id).map((member) => (
+      <div key={member.id} id={`panel-${member.id}`} role="tabpanel" aria-labelledby={`tab-${member.id}`} hidden />
     ))}
     {/* The docking target covers the whole card (the surface the hand
         aims at), but the veil is drawn on the TAB BAR, at the top: that is
@@ -273,6 +273,6 @@ export function WidgetCard({ entree, members = [entree], part, orientation = 've
         </div>
       )}
     </div>}
-    <WidgetContextMenu entree={entree} grouped={grouped} bare={bare} at={menuAt} onClose={() => setMenuAt(null)} />
+    <WidgetContextMenu entry={entry} grouped={grouped} bare={bare} at={menuAt} onClose={() => setMenuAt(null)} />
   </div>;
 }
