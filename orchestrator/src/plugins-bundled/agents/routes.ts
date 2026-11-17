@@ -57,6 +57,7 @@ import {
 } from '../../users/skills-mcp-guard.js';
 import { AGENT_ICON_URL_PREFIX, isServedIconUrl, readAgentIcon } from '../../uploads.js';
 import { registerSkillAttachmentRoutes } from './skill-attachment-routes.js';
+import { checkReasoningEffort } from './reasoning-effort.js';
 import { migrateTrashedAgentSkills } from '../../agent-skills-migration.js';
 import { journalMissionSkillRead } from '../../skill-reads.js';
 import { listSkillFiles, readSkillFile, SkillFileError } from '../../skill-files.js';
@@ -1168,7 +1169,7 @@ export function registerRoutes(app: express.IRouter): void {
         'skills', 'mcp_servers', 'excluded_mcp_servers', 'project',
         'emoji', 'color', 'icon_url', 'look', 'avatar',
         'role', 'directives', 'global_context', 'browser_profile_id',
-        'team', 'reports_to', 'memory_scope',
+        'team', 'reports_to', 'memory_scope', 'reasoningEffort',
       ];
       const patch: Record<string, unknown> = {};
       for (const k of allowed) {
@@ -1179,6 +1180,15 @@ export function registerRoutes(app: express.IRouter): void {
       if ('memory_scope' in patch && !['NONE', 'SESSION', 'AGENT', 'GLOBAL'].includes(patch.memory_scope as string)) {
         res.status(400).json({ error: 'memory_scope must be NONE, SESSION, AGENT or GLOBAL' });
         return;
+      }
+      // Checked against the pair the agent runs on once patched: a level the
+      // model does not know would reach its CLI and fail the next spawn.
+      if ('reasoningEffort' in patch) {
+        const effort = checkReasoningEffort(patch.reasoningEffort, patch, (() => {
+          try { return loadConfig(req.params.name); } catch { return null; }
+        })());
+        if (!effort.ok) { res.status(400).json({ error: effort.error }); return; }
+        patch.reasoningEffort = effort.value;
       }
       if ('reports_to' in patch) {
         patch.reports_to = checkReportsTo(req.params.name, patch.reports_to);
@@ -1233,7 +1243,7 @@ export function registerRoutes(app: express.IRouter): void {
       const respawnTriggers = [
         'skills', 'mcp_servers', 'excluded_mcp_servers',
         'allowed_tools', 'disallowed_tools', 'model', 'permission_mode',
-        'role', 'directives', 'browser_profile_id', 'memory_scope',
+        'role', 'directives', 'browser_profile_id', 'memory_scope', 'reasoningEffort',
       ] as const;
       const needsRespawn = respawnTriggers.some((k) => k in patch);
       let killed = 0;
