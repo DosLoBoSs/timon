@@ -19,6 +19,7 @@ import { idempotencyKey, idempotentMission, rememberIdempotentMission } from './
 import { loadConfig } from './agent-config.js';
 import { agentCommunicationAllowed, isDeveloperAccount } from './users/agent-permissions.js';
 import { overrideAuthority, rejectOverride, spawnOverrideRefusal, spawnWideningDenied } from './users/privileged-overrides.js';
+import { apiError } from './api-error.js';
 
 const Ids = z.array(z.string().min(1).max(200)).max(50);
 const Body = z.object({
@@ -69,7 +70,7 @@ export function createDelegationHandler(launch: typeof spawnAgent = spawnAgent) 
     }
     const refusal = delegationRefusal(req, target.name);
     if (refusal) {
-      res.status(403).json({ error: `delegation refused: ${refusal}`, code: 'orchestration_denied' });
+      res.status(403).json(apiError('orchestration_denied', `delegation refused: ${refusal}`, { detail: refusal }));
       return;
     }
     const data = parsed.data;

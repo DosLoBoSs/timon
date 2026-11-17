@@ -30,6 +30,7 @@ import { ATTACHMENTS_UNSUPPORTED, attachmentsRefusal } from './backends/capabili
 import { rejectIfDenied } from './users/identity.js';
 import { launchErrorStatus, missionLaunchErrorBody } from './resources.js';
 import { isPrivilegedCaller, overrideAuthority, rejectOverride, type SpawnOverrides, spawnOverrideRefusal, spawnWideningDenied } from './users/privileged-overrides.js';
+import { apiError } from './api-error.js';
 
 type SpawnBody = {
   trace_id?: string;
@@ -156,7 +157,7 @@ const handleSpawnOnce = async (req: express.Request, res: express.Response) => {
     ? (body.source_meta as Record<string, unknown>).parent_mission_id : null;
   const orchestrationRefusal = delegationRefusal(req, agent, typeof parentMission === 'string' ? parentMission : null);
   if (orchestrationRefusal) {
-    res.status(403).json({ error: `spawn refused: ${orchestrationRefusal}`, code: 'orchestration_denied' });
+    res.status(403).json(apiError('orchestration_denied', `spawn refused: ${orchestrationRefusal}`, { detail: orchestrationRefusal }));
     return;
   }
   // secu-4: the body may widen what an admin granted to the target agent
