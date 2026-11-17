@@ -1,0 +1,35 @@
+{
+  "chatCards": {
+    "mcpEmpty": "No MCP servers. Add some from",
+    "mcpExternalToggle": "turn it off to deny it with --disallowedTools",
+    "skillsEmpty": "No skills installed. Create one from",
+    "toolError": "error",
+    "thinking": "thinking"
+  },
+  "composerUsage": {
+    "commandBadge": "cmd",
+    "now": "now",
+    "days": "{d}d",
+    "daysHours": "{d}d {h}h",
+    "hours": "{h}h",
+    "hoursMinutes": "{h}h {m}m",
+    "minutes": "{m}m",
+    "status": {
+      "ok": "ok",
+      "nearLimit": "near limit",
+      "blocked": "blocked"
+    },
+    "cap": {
+      "fiveHour": "5h cap",
+      "fiveHourTitle": "rolling 5-hour subscription limit",
+      "sevenDay": "7d cap",
+      "sevenDayTitle": "rolling 7-day subscription limit",
+      "monthly": "month cap",
+      "monthlyTitle": "monthly premium request allowance"
+    },
+    "capLabel": "{cap}:",
+    "reset": "reset {when}",
+    "overage": "overage:",
+    "overageTitle": "Overage credits used this month: {used} of {limit} {currency}"
+  }
+}

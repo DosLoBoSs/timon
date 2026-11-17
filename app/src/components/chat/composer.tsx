@@ -787,7 +787,7 @@ function SlashPopup({
                   </span>
                   {s.format === 'claude-cmd' && (
                     <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      cmd
+                      {i18n('composerUsage.commandBadge')}
                     </span>
                   )}
                   {s.format === 'claude-cmd' && s.argument_hint && (
@@ -1325,12 +1325,12 @@ function ComposerContextGauge({
 /** `now` / `43m` / `4h 12m` / `2d 3h` — time before reset, stable width. */
 function fmtUntil(ms: number): string {
   const d = ms - Date.now();
-  if (d <= 0) return 'now';
+  if (d <= 0) return i18n('composerUsage.now');
   const h = Math.floor(d / 3_600_000);
   const m = Math.floor((d % 3_600_000) / 60_000);
-  if (h >= 24) return Math.floor(h / 24) + 'd' + (h % 24 ? ' ' + (h % 24) + 'h' : '');
-  if (h > 0) return h + 'h' + (m ? ' ' + m + 'm' : '');
-  return m + 'm';
+  if (h >= 24) return h % 24 ? i18n('composerUsage.daysHours', { d: Math.floor(h / 24), h: h % 24 }) : i18n('composerUsage.days', { d: Math.floor(h / 24) });
+  if (h > 0) return m ? i18n('composerUsage.hoursMinutes', { h, m }) : i18n('composerUsage.hours', { h });
+  return i18n('composerUsage.minutes', { m });
 }
 
 /** Map anthropic's raw status enum to a friendly label.
@@ -1339,20 +1339,20 @@ function fmtUntil(ms: number): string {
  *  `warned` (codex?)   → "near limit"
  *  `blocked` / fallback → "blocked"   (destructive). */
 function friendlyStatus(raw: string): { label: string; cls: string } {
-  if (raw === 'allowed') return { label: 'ok', cls: 'text-[hsl(var(--success))]' };
+  if (raw === 'allowed') return { label: i18n('composerUsage.status.ok'), cls: 'text-[hsl(var(--success))]' };
   if (raw === 'allowed_warning' || raw === 'warned') {
-    return { label: 'near limit', cls: 'text-[hsl(var(--warning))]' };
+    return { label: i18n('composerUsage.status.nearLimit'), cls: 'text-[hsl(var(--warning))]' };
   }
-  if (raw === 'blocked') return { label: 'blocked', cls: 'text-destructive' };
+  if (raw === 'blocked') return { label: i18n('composerUsage.status.blocked'), cls: 'text-destructive' };
   return { label: raw, cls: 'text-destructive' };
 }
 
 type CapKey = 'five_hour' | 'seven_day' | 'monthly';
 
 const CAP_LABELS: Record<CapKey, { label: string; title: string }> = {
-  five_hour: { label: '5h cap', title: 'rolling 5-hour subscription limit' },
-  seven_day: { label: '7d cap', title: 'rolling 7-day subscription limit' },
-  monthly: { label: 'month cap', title: 'monthly premium request allowance' },
+  five_hour: { label: 'composerUsage.cap.fiveHour', title: 'composerUsage.cap.fiveHourTitle' },
+  seven_day: { label: 'composerUsage.cap.sevenDay', title: 'composerUsage.cap.sevenDayTitle' },
+  monthly: { label: 'composerUsage.cap.monthly', title: 'composerUsage.cap.monthlyTitle' },
 };
 
 /**
@@ -1411,11 +1411,11 @@ const UsageStrip = memo(function UsageStrip({
           'text-foreground';
         const fs = friendlyStatus(rl.status);
         return (
-          <span key={k} title={title} className="shrink-0">
-            {label}:{' '}
+          <span key={k} title={i18n(title)} className="shrink-0">
+            {i18n('composerUsage.capLabel', { cap: i18n(label) })}{' '}
             {pct !== null ? <span className={pctCls}>{pct}%</span> : <span className={fs.cls}>{fs.label}</span>}
             {rl.resetsAt > 0 && (
-              <span className="text-muted-foreground/70"> · reset {fmtUntil(rl.resetsAt * 1000)}</span>
+              <span className="text-muted-foreground/70"> · {i18n('composerUsage.reset', { when: fmtUntil(rl.resetsAt * 1000) })}</span>
             )}
           </span>
         );
@@ -1424,8 +1424,8 @@ const UsageStrip = memo(function UsageStrip({
         const pct = Math.round(eu.utilization);
         const pctCls = pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-[hsl(var(--warning))]' : 'text-foreground';
         return (
-          <span title={`overage credits used this month: ${fmtMoney(eu.usedCredits)} of ${fmtMoney(eu.monthlyLimit)} ${eu.currency}`} className="shrink-0">
-            overage: <span className={pctCls}>{pct}%</span>
+          <span title={i18n('composerUsage.overageTitle', { used: fmtMoney(eu.usedCredits), limit: fmtMoney(eu.monthlyLimit), currency: eu.currency })} className="shrink-0">
+            {i18n('composerUsage.overage')} <span className={pctCls}>{pct}%</span>
             <span className="ml-1 text-muted-foreground/70">
               ({fmtMoney(eu.usedCredits)} / {fmtMoney(eu.monthlyLimit)} {eu.currency})
             </span>

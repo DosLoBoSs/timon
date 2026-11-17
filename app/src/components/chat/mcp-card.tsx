@@ -40,8 +40,9 @@ export function McpCard({
       </div>
       {allMcp.length === 0 ? (
         <p className="text-[11.5px] text-muted-foreground/70">
-          Aucun serveur MCP — ajoute-en depuis{' '}
+          {i18n('chatCards.mcpEmpty')}{' '}
           <Link prefetch={false} href="/mcp" className="text-primary">
+            {/* i18n-exempt: route path */}
             /mcp
           </Link>
           .
@@ -61,8 +62,8 @@ export function McpCard({
                 onClick={() => onToggleMcp(m.id)}
                 title={
                   isExternal
-                    ? `${i18n(`mcpPage.external.${m.source === 'claude_ai' ? 'claudeAi' : 'claudeCli'}.badge`)} · ${m.tools_count} tool${m.tools_count === 1 ? '' : 's'} · toggle to deny via --disallowedTools`
-                    : `${m.transport_type} · ${m.tools_count} tool${m.tools_count === 1 ? '' : 's'}`
+                    ? `${i18n(`mcpPage.external.${m.source === 'claude_ai' ? 'claudeAi' : 'claudeCli'}.badge`)} · ${i18n('mcpPage.toolCount', { count: m.tools_count })} · ${i18n('chatCards.mcpExternalToggle')}`
+                    : `${m.transport_type} · ${i18n('mcpPage.toolCount', { count: m.tools_count })}`
                 }
                 className={cn(
                   'rounded-md border px-2 py-0.5 text-[11px] transition-colors',
