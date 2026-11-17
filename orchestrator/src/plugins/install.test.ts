@@ -16,7 +16,7 @@
 import { createTestAccount, grantTestPermissions } from '../../tests/helpers/accounts.js';
 import '../test-home.js';
 import '../../tests/helpers/paid-license.js';
-import { test } from 'node:test';
+import { test, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { generateKeyPairSync, randomUUID, sign as signCrypto } from 'node:crypto';
@@ -25,7 +25,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Context } from '@deepseek-ai/cordis';
 
-const { addPlugin, removePlugin, inventory, pluginProvenance } = await import('./install.js');
+const { addPlugin, removePlugin, inventory, isLocalSpec, pluginProvenance, registryPackageName } = await import('./install.js');
 import type { NpmRunner } from './install.js';
 const { PluginLoader } = await import('./loader.js');
 const { hashPluginDirectory } = await import('./signature.js');
@@ -366,8 +366,14 @@ const connectionOwner = (pluginIds: string[]): string => {
   return id;
 };
 
-function daemonConnections() {
+/**
+ * Closed by `t.after`, not at the end of the test: a test that fails before
+ * its last line would leave the real `integrations.db` open, and Windows then
+ * refuses every later test that renames or deletes it (EBUSY).
+ */
+function daemonConnections(t: TestContext) {
   const store = new IntegrationStore(INTEGRATIONS_DB_PATH);
+  t.after(() => store.close());
   const connections = new UserConnectionStore(store.db);
   const service = new UserConnectionService(connections, daemonUserConnectionHost());
   const admin = { userId: 'test-admin', isAdmin: true };
@@ -381,12 +387,12 @@ function daemonConnections() {
     daemonUserConnectionHost().writeSecret(pluginId, `@connections/${id}/apiKey`, `key-of-${id}`);
     return id;
   };
-  return { service, connections, seed, admin, close: () => store.close() };
+  return { service, connections, seed, admin };
 }
 
-test('remove sends the connections of the plugin and the children it takes back to approval, keys deleted', async () => {
+test('remove sends the connections of the plugin and the children it takes back to approval, keys deleted', async (t) => {
   const f = fixture();
-  const daemon = daemonConnections();
+  const daemon = daemonConnections(t);
   await addPlugin(WIDGET, f.root, { npm: f.npm, config: f.config });
   await addPlugin(BUNDLE, f.root, { npm: f.npm, config: f.config });
   const owner = connectionOwner(['example-bundle', 'example-page', 'example-widget', 'someone-else']);
@@ -426,13 +432,12 @@ test('remove sends the connections of the plugin and the children it takes back 
   assert.deepEqual(daemon.service.destination('someone-else', new URL('https://page.example/x')), { allowPrivateNetwork: true });
   assert.equal(daemon.service.secret('someone-else', owner, stranger, 'apiKey'), `key-of-${stranger}`);
 
-  daemon.close();
   cleanup(f);
 });
 
-test('the same id reinstalled is refused towards the old origin and reads no key, until someone approves it', async () => {
+test('the same id reinstalled is refused towards the old origin and reads no key, until someone approves it', async (t) => {
   const f = fixture();
-  const daemon = daemonConnections();
+  const daemon = daemonConnections(t);
   await addPlugin(WIDGET, f.root, { npm: f.npm, config: f.config });
   const owner = connectionOwner(['example-widget']);
   const id = daemon.seed('example-widget', owner, 'https://reinstall.example');
@@ -452,13 +457,12 @@ test('the same id reinstalled is refused towards the old origin and reads no key
   assert.equal(daemon.service.secret('example-widget', owner, id, 'apiKey'), undefined);
 
   await removePlugin('example-widget', f.root, { npm: f.npm, config: f.config });
-  daemon.close();
   cleanup(f);
 });
 
-test('remove of a user copy of a built-in leaves the connections the built-in still serves', async () => {
+test('remove of a user copy of a built-in leaves the connections the built-in still serves', async (t) => {
   const f = fixture();
-  const daemon = daemonConnections();
+  const daemon = daemonConnections(t);
   await addPlugin(QUOTA, f.root, { npm: f.npm, config: f.config });
   const owner = connectionOwner(['quota-monitor']);
   const id = daemon.seed('quota-monitor', owner, 'https://builtin.example');
@@ -466,7 +470,6 @@ test('remove of a user copy of a built-in leaves the connections the built-in st
   assert.deepEqual(removed.connections, []);
   assert.equal(daemon.connections.get(id)?.approval, 'approved');
   assert.equal(daemon.service.secret('quota-monitor', owner, id, 'apiKey'), `key-of-${id}`);
-  daemon.close();
   cleanup(f);
 });
 
@@ -945,4 +948,33 @@ test('a relative local spec reaches npm as an absolute path (npm runs from the p
   await addPlugin(relativeSpec, f.root, { npm: f.npm, config: f.config });
   const installed = f.calls.find((c) => c[0] === 'install')!;
   assert.equal(installed[installed.length - 1], WIDGET, 'resolved against the caller\'s directory, not the plugins root');
+});
+
+/**
+ * A folder picked on Windows arrives as `C:\…`, `\\server\share\…` or `..\…`.
+ * Read as a registry name, it lost its source folder: a bundle's `file:`
+ * children were resolved against the `node_modules` copy and stayed
+ * unresolved, and a local plugin installed again found "no new package".
+ * Both grammars are recognised on every system, so these cases run here too.
+ */
+test('a local spec is recognised in the Windows and POSIX forms, and an npm spec never is', () => {
+  const local = [
+    'C:\\Users\\someone\\plugins\\plugin-bundle', 'C:/Users/someone/plugins/plugin-bundle', 'd:\\plugins\\x',
+    '\\\\server\\share\\plugins\\x', '\\\\?\\C:\\plugins\\x', '\\plugins\\x',
+    '.\\plugin-bundle', '..\\plugin-page', '.', '..',
+    './plugin-bundle', '../plugin-page', '/opt/plugins/x',
+    'file:C:\\plugins\\x', 'file:../plugin-page', 'file:/opt/plugins/x',
+  ];
+  for (const spec of local) {
+    assert.equal(isLocalSpec(spec), true, spec);
+    assert.equal(registryPackageName(spec), null, spec);
+  }
+  // npm's own grammars, and the drive-relative forms Windows does not read as a folder.
+  const notLocal = [
+    'plugin-hello', '@timon-ai/plugin-widget', 'plugin-hello@1.2.3', '@timon-ai/plugin-widget@^1',
+    'plugin-hello@latest', 'github:acme/plugin', 'acme/plugin', 'acme/plugin#main',
+    'git+https://github.com/acme/plugin.git', 'https://example.com/plugin-1.0.0.tgz', 'npm:plugin-hello@1',
+    'C:', 'C:plugins', '.plugin', '..plugin',
+  ];
+  for (const spec of notLocal) assert.equal(isLocalSpec(spec), false, spec);
 });
