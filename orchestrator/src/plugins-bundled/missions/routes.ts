@@ -39,7 +39,7 @@ import {
   skippedAttachmentsField,
   type SkippedAttachment,
 } from '../../chat-attachments.js';
-import { ATTACHMENTS_UNSUPPORTED, attachmentsRefusal } from '../../backends/capabilities.js';
+import { attachmentsRefusal } from '../../backends/capabilities.js';
 import { forkMission, summarizeMission } from '../../summary.js';
 import { CompactBodySchema, compactOperation, defaultCompactDeps, startCompaction, type CompactDeps } from '../../mission-compact.js';
 import { join } from 'node:path';
@@ -310,7 +310,7 @@ async function deliverMissionTurn(
     ?? defaultBackendName();
   const attachmentRefusal = attachmentsRefusal(sendBackend, body.attachments);
   if (attachmentRefusal) {
-    return { status: 400, body: { error: attachmentRefusal, code: ATTACHMENTS_UNSUPPORTED } };
+    return { status: 400, body: { ...apiError('attachments_unsupported', attachmentRefusal) } };
   }
   const sendCwd = m.cwd_override
     ?? (() => { try { return loadConfig(m.agent_name).cwd; } catch { return undefined; } })()
@@ -338,10 +338,7 @@ async function deliverMissionTurn(
       // one, falling back to the agent config and losing context.
       return {
         status: 409,
-        body: {
-          error: 'a turn is in progress — wait for it to finish (or stop it) before sending',
-          code: 'turn_in_progress',
-        },
+        body: { ...apiError('turn_in_progress', 'a turn is in progress — wait for it to finish (or stop it) before sending') },
       };
     }
     if (outcome === 'no_live_process') {
@@ -352,7 +349,7 @@ async function deliverMissionTurn(
       // mission that fragments the conversation.
       const resumed = await respawnWithResume(m.id, turn.text, images, inputOrigin, turn.presentation, logMessage, resumeTurn);
       if (!resumed) {
-        return { status: 404, body: { error: 'no running agent for that mission' } };
+        return { status: 404, body: { ...apiError('mission_not_running', 'no running agent for that mission') } };
       }
       delivered = true;
       return { status: 200, body: { ok: true, resumed: true, ...skippedAttachmentsField(skipped) } };
@@ -383,9 +380,9 @@ async function deliverMissionTurn(
         return {
           status: 400,
           body: {
-            error: `Backend ${err.backend} is ${cooldownReason(err.backend)}, and its fallback ${target.backend} does not accept attached files: `
-              + `remove the files to continue on ${target.backend}, or send again once ${err.backend} is back.`,
-            code: ATTACHMENTS_UNSUPPORTED,
+            ...apiError('attachments_unsupported',
+              `Backend ${err.backend} is ${cooldownReason(err.backend)}, and its fallback ${target.backend} does not accept attached files: `
+                + `remove the files to continue on ${target.backend}, or send again once ${err.backend} is back.`),
             backend: err.backend,
             fallback: target.backend,
             resetsAt: cooldown?.until ?? null,
@@ -466,7 +463,7 @@ export function registerRoutes(
     if (rejectUnlessAny(req, res, STOP_PERMISSIONS)) return;
     const body = StopBodySchema.safeParse(req.body ?? {});
     if (!body.success) {
-      res.status(400).json({ error: 'expected { "agent": NAME } or { "project": SLUG }' });
+      res.status(400).json(apiError('stop_scope_invalid', 'expected { "agent": NAME } or { "project": SLUG }'));
       return;
     }
     const viewer = viewerFromRequest(req);
@@ -475,8 +472,8 @@ export function registerRoutes(
       const report = stopScope(body.data, { owner: viewer.isSuperadmin ? undefined : viewer.id, by: stopActor(auth, viewer) });
       res.json({ ok: true, ...report });
     } catch (err) {
-      if (err instanceof UnknownScopeError) { res.status(404).json({ error: err.message }); return; }
-      res.status(500).json({ error: (err as Error).message });
+      if (err instanceof UnknownScopeError) { res.status(404).json(apiError('stop_target_not_found', err.message, { detail: err.message })); return; }
+      res.status(500).json(apiError('stop_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -520,14 +517,16 @@ export function registerRoutes(
     }
     const parsed = TitleModelBodySchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: 'value must be "auto", "off", { backend, model } or null' });
+      res.status(400).json(apiError('title_model_invalid', 'value must be "auto", "off", { backend, model } or null'));
       return;
     }
     const value = parsed.data.value;
     if (value !== null) {
       const refusal = titleChoiceRefusal(value);
       if (refusal) {
-        res.status(400).json({ error: refusal.reason, code: refusal.code });
+        res.status(400).json(refusal.code === 'ineligible'
+          ? apiError('ineligible', refusal.reason, { detail: refusal.reason })
+          : apiError('unknown_model', refusal.reason, { detail: refusal.reason }));
         return;
       }
     }
@@ -548,14 +547,14 @@ export function registerRoutes(
     const STATUSES = ['running', 'completed', 'failed', 'terminated'] as const;
     const statusFilter = typeof req.query.status === 'string' ? req.query.status : null;
     if (statusFilter && !STATUSES.includes(statusFilter as (typeof STATUSES)[number])) {
-      res.status(400).json({ error: `unknown status: ${statusFilter} (expected: ${STATUSES.join(', ')})` });
+      res.status(400).json(apiError('mission_status_unknown', `unknown status: ${statusFilter} (expected: ${STATUSES.join(', ')})`, { status: statusFilter, expected: STATUSES.join(', ') }));
       return;
     }
     // Same rule for the origin (TODO #284): `?origin=user` on a typo would
     // otherwise show every automated mission as the user's own.
     const originParam = req.query.origin;
     if (originParam !== undefined && !isMissionOriginFilter(originParam)) {
-      res.status(400).json({ error: `unknown origin: ${String(originParam)} (expected: ${MISSION_ORIGIN_FILTERS.join(', ')})` });
+      res.status(400).json(apiError('mission_origin_unknown', `unknown origin: ${String(originParam)} (expected: ${MISSION_ORIGIN_FILTERS.join(', ')})`, { origin: String(originParam), expected: MISSION_ORIGIN_FILTERS.join(', ') }));
       return;
     }
     const originFilter = originParam;
@@ -682,7 +681,7 @@ export function registerRoutes(
     if (!requireAuth(req, res)) return;
     const agent = typeof req.query.agent === 'string' ? req.query.agent.trim() : '';
     if (!agent) {
-      res.status(400).json({ error: 'expected ?agent=NAME' });
+      res.status(400).json(apiError('agent_query_required', 'expected ?agent=NAME'));
       return;
     }
     const pick = pickLatestMission(scopedDb(viewerFromRequest(req)).listLatestMissionCandidates(agent), isRunning);
@@ -766,7 +765,7 @@ export function registerRoutes(
       // not mean "it does not exist", and callers must be able to distinguish it.
       res.json({ q, count: hits.length, hits, progress: dbApi.missionSearchProgress() });
     } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json(apiError('mission_search_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -777,11 +776,11 @@ export function registerRoutes(
       payload: query.success ? query.data.payload : true,
     });
     if (!view) {
-      res.status(404).json({ error: 'trace not found' });
+      res.status(404).json(apiError('trace_not_found', 'trace not found'));
       return;
     }
     if (!query.success) {
-      res.status(400).json({ error: 'invalid query', issues: query.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`) });
+      res.status(400).json({ ...apiError('invalid_query', 'invalid query'), issues: query.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`) });
       return;
     }
     res.json(view);
@@ -793,7 +792,7 @@ export function registerRoutes(
     const limit = body.limit === undefined ? undefined : Number(body.limit);
     if ((days !== undefined && (!Number.isFinite(days) || days < 0))
       || (limit !== undefined && (!Number.isFinite(limit) || limit < 1))) {
-      res.status(400).json({ error: 'days and limit must be positive numbers' });
+      res.status(400).json(apiError('backfill_bounds_invalid', 'days and limit must be positive numbers'));
       return;
     }
     res.json(backfillTraceSpans({ days, limit }));
@@ -804,7 +803,7 @@ export function registerRoutes(
       const batch = Number((req.body as { batch?: number } | undefined)?.batch ?? 500);
       res.json(dbApi.reindexMissionSearch(batch));
     } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json(apiError('reindex_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -830,17 +829,17 @@ export function registerRoutes(
   app.get('/api/missions/:id', (req, res) => {
     const view = parseMissionView(req.query.view);
     if (!view) {
-      res.status(400).json({ error: `unknown view (expected: ${MISSION_VIEWS.join(', ')})` });
+      res.status(400).json(apiError('mission_view_unknown', `unknown view (expected: ${MISSION_VIEWS.join(', ')})`, { expected: MISSION_VIEWS.join(', ') }));
       return;
     }
     const history = parseHistoryQuery({ tail: req.query.tail, before: req.query.before, after: req.query.after });
     if (!history.ok) {
-      res.status(400).json({ error: 'invalid query', issues: history.issues });
+      res.status(400).json({ ...apiError('invalid_query', 'invalid query'), issues: history.issues });
       return;
     }
     const query = history.value;
     if (query && view !== 'chat') {
-      res.status(400).json({ error: 'tail, before and after only page the chat view' });
+      res.status(400).json(apiError('history_paging_chat_only', 'tail, before and after only page the chat view'));
       return;
     }
     const timing = new ServerTiming();
@@ -983,7 +982,7 @@ export function registerRoutes(
     }
     const query = SpansQuerySchema.safeParse(req.query);
     if (!query.success) {
-      res.status(400).json({ error: 'invalid query', issues: query.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`) });
+      res.status(400).json({ ...apiError('invalid_query', 'invalid query'), issues: query.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`) });
       return;
     }
     const { limit, kind, before, from, ids } = query.data;
@@ -1006,7 +1005,7 @@ export function registerRoutes(
       return;
     }
     if (dbApi.prunedSpanCount(mission.id) === 0 || dbApi.listSpansPage(mission.id, { limit: 1 }).total > 0) {
-      res.status(409).json({ error: 'this mission has no removed timeline to rebuild' });
+      res.status(409).json(apiError('no_timeline_to_rebuild', 'this mission has no removed timeline to rebuild'));
       return;
     }
     res.json(rebuildMissionSpans(mission));
@@ -1016,7 +1015,7 @@ export function registerRoutes(
     const mission = scopedDb(viewerFromRequest(req)).getMission(req.params.id);
     const span = mission ? dbApi.getSpan(mission.id, req.params.spanId) : undefined;
     if (!mission || !span) {
-      res.status(404).json({ error: 'span not found' });
+      res.status(404).json(apiError('span_not_found', 'span not found'));
       return;
     }
     res.json({ mission_id: mission.id, span });
@@ -1077,7 +1076,7 @@ export function registerRoutes(
   app.post('/api/agents/:id/send', async (req, res) => {
     const body = req.body as MissionTurnBody;
     if (typeof body?.input !== 'string') {
-      res.status(400).json({ error: 'input (string) required' });
+      res.status(400).json(apiError('input_required', 'input (string) required'));
       return;
     }
     // Slash chat command (see handleSpawn) — rewrites the follow-up turn. cwd =
@@ -1107,7 +1106,7 @@ export function registerRoutes(
     }
     const parsed = SteerBodySchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: 'input (non-empty string, 20000 characters at most) required' });
+      res.status(400).json(apiError('steer_input_invalid', 'input (non-empty string, 20000 characters at most) required'));
       return;
     }
     const reply = resolveReplyTo(owned.id, parsed.data.reply_to);
@@ -1139,10 +1138,10 @@ export function registerRoutes(
       res.status(404).json(apiError('mission_not_running', 'no running agent for that mission'));
     } catch (err) {
       if (err instanceof BackendExhaustedError) {
-        res.status(400).json({ error: err.message, code: 'steer_unsupported' });
+        res.status(400).json(apiError('steer_unsupported', err.message));
         return;
       }
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json(apiError('steer_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1185,7 +1184,7 @@ export function registerRoutes(
       const out = await summarizeMission(owned.id, { force: !!force });
       res.json(out);
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('summarize_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1198,7 +1197,7 @@ export function registerRoutes(
       reasoning_effort?: string | null;
     };
     if (!body.agent) {
-      res.status(400).json({ error: 'agent (target name) required' });
+      res.status(400).json(apiError('fork_agent_required', 'agent (target name) required'));
       return;
     }
     // The fork copies the source transcript into a mission of the caller:
@@ -1216,7 +1215,7 @@ export function registerRoutes(
       });
       res.json(out);
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('fork_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1241,7 +1240,7 @@ export function registerRoutes(
       const out = startCompaction(owned.id, parsed.data, compactDeps);
       res.status(out.status).json(out.body);
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('compact_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1265,7 +1264,7 @@ export function registerRoutes(
   app.post('/api/missions/:id/title', (req, res) => {
     const parsed = TitleBodySchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: 'title must be a string of at most 200 characters, or null' });
+      res.status(400).json(apiError('title_invalid', 'title must be a string of at most 200 characters, or null'));
       return;
     }
     const owned = ownedMissionOr404(req, res);
@@ -1283,7 +1282,7 @@ export function registerRoutes(
     const raw = (req.body ?? {}) as { model?: unknown };
     const model = typeof raw.model === 'string' ? raw.model.trim() : '';
     if (!model) {
-      res.status(400).json({ error: 'model required' });
+      res.status(400).json(apiError('model_required', 'model required'));
       return;
     }
     const owned = ownedMissionOr404(req, res);
@@ -1297,7 +1296,7 @@ export function registerRoutes(
       res.json({ ok: true, ...out });
     } catch (err) {
       // Only throw path: the model/backend mismatch guard.
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('model_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1336,7 +1335,7 @@ export function registerRoutes(
   app.post('/api/missions/:id/permission-mode', (req, res) => {
     const parsed = PermissionModeBodySchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: 'mode must be a permission mode name' });
+      res.status(400).json(apiError('permission_mode_invalid', 'mode must be a permission mode name'));
       return;
     }
     const owned = ownedMissionOr404(req, res);
@@ -1344,7 +1343,7 @@ export function registerRoutes(
     const wanted = parsed.data.mode;
     // Fail closed: a typo must not read as "no ceiling".
     if (!isKnownPermissionMode(wanted)) {
-      res.status(400).json({ error: `unknown permission mode: ${wanted}` });
+      res.status(400).json(apiError('permission_mode_unknown', `unknown permission mode: ${wanted}`, { mode: wanted }));
       return;
     }
     // Judged and stored as the backend serving the mission runs it: one that
@@ -1357,7 +1356,7 @@ export function registerRoutes(
       return;
     }
     if (!missionPermissionSwitchable(owned.id)) {
-      res.status(409).json({ error: 'this backend cannot change its permission mode during a mission' });
+      res.status(409).json(apiError('permission_mode_fixed', 'this backend cannot change its permission mode during a mission'));
       return;
     }
     const previous = missionPermissionState(owned.id, RESTRICTED)?.mode ?? null;
@@ -1375,7 +1374,7 @@ export function registerRoutes(
     const backend = typeof req.query.backend === 'string' ? req.query.backend.trim() : '';
     const target = asBackendName(backend);
     if (!target) {
-      res.status(400).json({ error: `unknown backend "${backend}"` });
+      res.status(400).json(apiError('backend_unknown', `unknown backend "${backend}"`));
       return;
     }
     const owned = ownedMissionOr404(req, res);
@@ -1404,7 +1403,7 @@ export function registerRoutes(
     };
     const backend = typeof raw.backend === 'string' ? raw.backend.trim() : '';
     if (!backend) {
-      res.status(400).json({ error: 'backend required' });
+      res.status(400).json(apiError('backend_required', 'backend required'));
       return;
     }
     // Anything unrecognised falls back to `auto`: an automated caller (quota
@@ -1465,16 +1464,16 @@ export function registerRoutes(
     const toAgent = body.to_agent;
     const payload = body.payload;
     if (typeof toAgent !== 'string' || payload === undefined) {
-      res.status(400).json({ error: 'to_agent and payload required' });
+      res.status(400).json(apiError('message_fields_required', 'to_agent and payload required'));
       return;
     }
     const { fromMission, fromAgent } = extractFromMission(req, body);
     if (!fromMission || !fromAgent) {
-      res.status(400).json({ error: 'from_mission/from_agent required (header X-TIMON-Mission or body)' });
+      res.status(400).json(apiError('message_sender_required', 'from_mission/from_agent required (header X-TIMON-Mission or body)'));
       return;
     }
     if (body.to_mission && !scopedDb(viewerFromRequest(req)).getMission(body.to_mission)) {
-      res.status(404).json({ error: 'recipient mission not found' });
+      res.status(404).json(apiError('recipient_mission_not_found', 'recipient mission not found'));
       return;
     }
     const { randomUUID } = await import('node:crypto');
@@ -1498,7 +1497,7 @@ export function registerRoutes(
       // name that only exists in the other home got a raw SQLite constraint
       // back, which killed the SENDING mission (03/09/2026).
       if (err instanceof UnknownAgentError) {
-        res.status(404).json({ error: err.message });
+        res.status(404).json(apiError('unknown_agent', err.message, { agent: err.agent }));
         return;
       }
       // A cross-team refusal is a rule, not a failure: 403 and the two names,
@@ -1511,7 +1510,7 @@ export function registerRoutes(
         return;
       }
       if (err instanceof UnknownMissionError || err instanceof InvalidReplyError) {
-        res.status(400).json({ error: err.message });
+        res.status(400).json(apiError('message_refused', err.message, { detail: err.message }));
         return;
       }
       throw err;
@@ -1524,7 +1523,7 @@ export function registerRoutes(
     if (!communicationAllowed(req, res)) return;
     const to = String(req.query.to ?? '');
     if (!to) {
-      res.status(400).json({ error: 'to (agent name) required' });
+      res.status(400).json(apiError('recipient_required', 'to (agent name) required'));
       return;
     }
     const status = req.query.status
@@ -1553,7 +1552,7 @@ export function registerRoutes(
     if (!communicationAllowed(req, res)) return;
     const row = scopedDb(viewerFromRequest(req)).pickMessage(req.params.id);
     if (!row) {
-      res.status(404).json({ error: 'message not found or already picked' });
+      res.status(404).json(apiError('inbox_message_not_found', 'message not found or already picked'));
       return;
     }
     const { fromMission } = extractFromMission(req, {});
@@ -1570,7 +1569,7 @@ export function registerRoutes(
     if (!communicationAllowed(req, res)) return;
     const row = scopedDb(viewerFromRequest(req)).getMessage(req.params.id);
     if (!row) {
-      res.status(404).json({ error: 'message not found' });
+      res.status(404).json(apiError('inbox_message_not_found', 'message not found'));
       return;
     }
     res.json({ message: row });
@@ -1584,7 +1583,7 @@ export function registerRoutes(
       tool_name?: string; input?: unknown; tool_use_id?: string;
     };
     if (!body.mission_id || !body.tool_name || !body.tool_use_id) {
-      res.status(400).json({ error: 'mission_id, tool_name and tool_use_id are required' });
+      res.status(400).json(apiError('permission_fields_required', 'mission_id, tool_name and tool_use_id are required'));
       return;
     }
     // audit CLI/MCP P3-17: `body.mission_id` is client-controlled (the shim forwards it). A
@@ -1623,7 +1622,7 @@ export function registerRoutes(
     const m = scopedDb(viewerFromRequest(req)).getMission(body.mission_id);
     if (m && m.status !== 'running'
         && !dbApi.findResolvedPermission(body.mission_id, body.tool_use_id)) {
-      res.status(410).json({ error: 'mission finished — permission expired' });
+      res.status(410).json(apiError('permission_request_expired', 'mission finished — permission expired'));
       return;
     }
     if (!conversion && req.auth?.kind === 'api-token' && req.auth.missionId === body.mission_id
@@ -1661,7 +1660,7 @@ export function registerRoutes(
       }
       res.json(decision);
     } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json(apiError('permission_request_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -1685,11 +1684,11 @@ export function registerRoutes(
     };
     const scope = APPROVAL_SCOPES.find((candidate) => candidate === body.scope);
     if (body.scope !== undefined && !scope) {
-      res.status(400).json({ error: 'scope must be "session" or "always"' });
+      res.status(400).json(apiError('approval_scope_invalid', 'scope must be "session" or "always"'));
       return;
     }
     if (scope && body.behavior !== 'allow') {
-      res.status(400).json({ error: 'a scope goes with "allow" only' });
+      res.status(400).json(apiError('approval_scope_allow_only', 'a scope goes with "allow" only'));
       return;
     }
     let decision: PermissionAnswer;
@@ -1709,7 +1708,7 @@ export function registerRoutes(
           : DENY_REASONS.noMessage,
       };
     } else {
-      res.status(400).json({ error: 'behavior must be "allow", "deny" or "paste"' });
+      res.status(400).json(apiError('permission_behavior_invalid', 'behavior must be "allow", "deny" or "paste"'));
       return;
     }
     // A card exists because a person has to decide. An api-token is an agent
@@ -1752,7 +1751,7 @@ export function registerRoutes(
     // Only what the card offered: a scope the agent never listed is not a thing
     // it understands, and granting it would be a decision nobody was asked.
     if (scope && !pending.scopes?.includes(scope)) {
-      res.status(400).json({ error: `this request does not offer the scope "${scope}"` });
+      res.status(400).json(apiError('approval_scope_not_offered', `this request does not offer the scope "${scope}"`, { scope }));
       return;
     }
     // A wider Allow is a standing grant over the owner's missions: given by the
@@ -1768,7 +1767,7 @@ export function registerRoutes(
     }
     if (decision.behavior === 'paste') {
       if (!pending.choices?.includes('paste')) {
-        res.status(400).json({ error: 'this request offers no "paste"' });
+        res.status(400).json(apiError('paste_not_offered', 'this request offers no "paste"'));
         return;
       }
       // Pasting opens the owner's own terminal: the web terminal's rule holds
