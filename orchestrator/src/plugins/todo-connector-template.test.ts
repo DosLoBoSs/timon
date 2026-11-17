@@ -6,7 +6,7 @@ import '../test-home.js';
 import '../../tests/helpers/paid-license.js';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Context } from '@deepseek-ai/cordis';
@@ -15,7 +15,7 @@ import type { PluginHost, PluginTodoEventKind } from './context.js';
 const DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../examples/plugin-todo-connector');
 const { readManifest } = await import('./manifest.js');
 const { createPluginContext } = await import('./context.js');
-const { apply } = await import(join(DIR, 'lib/index.js')) as { apply(ctx: unknown): void };
+const { apply } = await import(pathToFileURL(join(DIR, 'lib/index.js')).href) as { apply(ctx: unknown): void };
 
 test('the template has a valid manifest and registers its webhook and its closure handler', async () => {
   const parsed = readManifest(JSON.parse(readFileSync(join(DIR, 'package.json'), 'utf8')));
