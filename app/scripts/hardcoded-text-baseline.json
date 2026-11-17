@@ -36,9 +36,6 @@
   "app/src/components/terminal/terminal-key-bar.tsx": {
     "jsxText": 1
   },
-  "app/src/lib/emoji-data.ts": {
-    "french": 6
-  },
   "app/src/plugins-client/backends/claude-token.tsx": {
     "jsxAttr": 1
   },
