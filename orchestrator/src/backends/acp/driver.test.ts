@@ -496,6 +496,89 @@ test('an agent without set_config_option still starts with a thinking level aske
   await driver.start();
 });
 
+/* ── Session modes ─────────────────────────────────────────────────────── */
+
+test('session modes announced: the mapped mode is selected through session/set_mode', async () => {
+  const { driver, events } = launch({ sessionMode: 'plan', env: { FAKE_ACP_MODES: '1' } });
+  await driver.start();
+  assert.equal(initPayload(events).session_mode, 'plan');
+  events.length = 0;
+  await driver.prompt('mode');
+  assert.equal(said(events), 'mode:plan via:set_mode');
+});
+
+test('no session modes announced: nothing is sent, whatever the mode asked', async () => {
+  const { driver, events } = launch({ sessionMode: 'plan' });
+  await driver.start();
+  assert.equal(initPayload(events).session_mode, undefined);
+  events.length = 0;
+  await driver.prompt('mode');
+  assert.equal(said(events), 'mode:default via:null');
+});
+
+test('session modes announced but none asked (no table): the agent keeps its own', async () => {
+  const { driver, events } = launch({ env: { FAKE_ACP_MODES: '1' } });
+  await driver.start();
+  assert.equal(initPayload(events).session_mode, 'default');
+  events.length = 0;
+  await driver.prompt('mode');
+  assert.equal(said(events), 'mode:default via:null');
+});
+
+test('the mode the session already runs is not selected again', async () => {
+  const { driver, events } = launch({ sessionMode: 'default', env: { FAKE_ACP_MODES: '1' } });
+  await driver.start();
+  events.length = 0;
+  await driver.prompt('mode');
+  assert.equal(said(events), 'mode:default via:null');
+});
+
+test('a mapped mode the agent did not announce is never replaced by another one', async () => {
+  const { driver, events } = launch({ sessionMode: 'read-only', env: { FAKE_ACP_MODES: '1' } });
+  await driver.start();
+  assert.equal(initPayload(events).session_mode, 'default');
+  events.length = 0;
+  await driver.prompt('mode');
+  assert.equal(said(events), 'mode:default via:null');
+});
+
+test('modes announced as a config option: selected through session/set_config_option', async () => {
+  const { driver, events } = launch({ sessionMode: 'accept-edits', model: 'b', env: { FAKE_ACP_MODES: 'config' } });
+  await driver.start();
+  assert.equal(initPayload(events).session_mode, 'accept-edits');
+  assert.equal(initPayload(events).model, 'b', 'the model is still selected after the mode');
+  events.length = 0;
+  await driver.prompt('mode');
+  assert.equal(said(events), 'mode:accept-edits via:set_config_option');
+});
+
+test('an agent that refuses session/set_mode gets the mode through its mode config option', async () => {
+  const { driver, events } = launch({ sessionMode: 'plan', env: { FAKE_ACP_MODES: 'both', FAKE_ACP_NO_SET_MODE: '1' } });
+  await driver.start();
+  events.length = 0;
+  await driver.prompt('mode');
+  assert.equal(said(events), 'mode:plan via:set_config_option');
+});
+
+test('a mode no way selects leaves the agent in its own, and the mission starts', async () => {
+  const { driver, events } = launch({ sessionMode: 'plan', env: { FAKE_ACP_MODES: '1', FAKE_ACP_NO_SET_MODE: '1' } });
+  const info = await driver.start();
+  assert.equal(info.sessionId, 'sess-1');
+  assert.equal(initPayload(events).session_mode, 'default');
+  events.length = 0;
+  await driver.prompt('mode');
+  assert.equal(said(events), 'mode:default via:null');
+});
+
+test('a reopened session that announces its modes is switched too', async () => {
+  const { driver, events } = launch({ resumeSession: 'old-9', sessionMode: 'plan', env: { FAKE_ACP_RESUME: '1', FAKE_ACP_MODES: '1' } });
+  const info = await driver.start();
+  assert.equal(info.resumed, true);
+  events.length = 0;
+  await driver.prompt('mode');
+  assert.equal(said(events), 'mode:plan via:set_mode');
+});
+
 test('an agent that wants a sign-in fails start with what to do, and lets go', async () => {
   const rig = launch({ env: { FAKE_ACP_AUTH: '1' } });
   await assert.rejects(() => rig.driver.start(), /sign in first \(Log in\)/);

@@ -18,6 +18,7 @@
  *   mcp       reports the mcpServers of session/new (JSON)
  *   model     reports the model id of the last session/set_model
  *   effort    reports the thinking level the last session/set_config_option chose
+ *   mode      reports the session mode last selected and how (`mode:<id> via:<method>`)
  *   permalways  asks permission with an allow_always option only
  *   permhyphen  asks permission with options that carry no `kind`, only the ids `allow-once`, `allow-always`, `reject-once` (Cursor's), reports the answer
  *   permshell   asks permission for a one-line shell command (`execute`), reports the answer
@@ -43,6 +44,9 @@
  * FAKE_ACP_MUTE=1 reads its stdin and never answers anything (an agent waiting for something else),
  * FAKE_ACP_EXIT=<code> exits with that code at start, after FAKE_ACP_STDERR,
  * FAKE_ACP_NO_SET_MODEL=1 answers session/set_model with -32601 (opencode, TIM-0129).
+ * FAKE_ACP_MODES=1 announces the session modes `default` (current), `plan`, `accept-edits` as `modes`
+ *   (session/set_mode), FAKE_ACP_MODES=config as a `mode` config option instead, FAKE_ACP_MODES=both as both;
+ *   session/resume and session/load announce them too. FAKE_ACP_NO_SET_MODE=1 answers session/set_mode with -32601.
  *
  * Models: `a` offers the thinking levels low and high, `b` offers none — like
  * opencode, which leaves the `effort` option out for a model with no variants.
@@ -71,11 +75,25 @@ let cancelWaiter = null;
 const cancelled = new Promise((resolve) => { cancelWaiter = resolve; });
 
 const configOptions = () => [
+  ...modeOption(),
   { id: 'model', category: 'model', currentValue: currentModel, options: [{ value: 'a' }, { value: 'b' }] },
   ...(currentModel === 'a'
     ? [{ id: 'effort', category: 'thought_level', currentValue: 'low', options: [{ value: 'low' }, { value: 'high' }, { value: 'default' }] }]
     : []),
 ];
+
+const MODE_IDS = ['default', 'plan', 'accept-edits'];
+const MODES = process.env.FAKE_ACP_MODES ?? '';
+let currentMode = 'default';
+let lastModeVia = null;
+const modeFields = () => ({
+  ...(MODES === '1' || MODES === 'both'
+    ? { modes: { currentModeId: currentMode, availableModes: MODE_IDS.map((id) => ({ id, name: id })) } }
+    : {}),
+});
+const modeOption = () => (MODES === 'config' || MODES === 'both'
+  ? [{ id: 'mode', category: 'mode', currentValue: currentMode, options: MODE_IDS.map((value) => ({ value })) }]
+  : []);
 
 const USAGE = { inputTokens: 12, outputTokens: 34, thoughtTokens: 5, cachedReadTokens: 7 };
 let seenClientCapabilities = null;
@@ -192,6 +210,9 @@ async function prompt(id, sessionId, text) {
     case 'effort':
       chunk(sessionId, `effort:${lastEffort}`);
       return out({ id, result: { stopReason: 'end_turn' } });
+    case 'mode':
+      chunk(sessionId, `mode:${currentMode} via:${lastModeVia}`);
+      return out({ id, result: { stopReason: 'end_turn' } });
     case 'model':
       chunk(sessionId, `model:${lastModel}`);
       return out({ id, result: { stopReason: 'end_turn' } });
@@ -282,6 +303,7 @@ rl.on('line', (line) => {
         result: {
           sessionId: 'sess-1',
           configOptions: configOptions(),
+          ...modeFields(),
           seenMcp: p.mcpServers ?? null,
           seenCwd: p.cwd ?? null,
         },
@@ -297,7 +319,14 @@ rl.on('line', (line) => {
       seenMcpServers = p.mcpServers ?? null;
       // Hermes replays the history even on resume.
       chunk(p.sessionId, 'replayed');
+      if (MODES) return out({ id: msg.id, result: { ...modeFields(), ...(modeOption().length ? { configOptions: configOptions() } : {}) } });
       return out({ id: msg.id, result: msg.method === 'session/load' ? null : {} });
+    case 'session/set_mode':
+      if (process.env.FAKE_ACP_NO_SET_MODE === '1') return out({ id: msg.id, error: { code: -32601, message: 'Method not found: session/set_mode' } });
+      if (!MODE_IDS.includes(p.modeId)) return out({ id: msg.id, error: { code: -32602, message: `unknown mode ${p.modeId}` } });
+      currentMode = p.modeId;
+      lastModeVia = 'set_mode';
+      return out({ id: msg.id, result: {} });
     case 'session/set_model':
       if (process.env.FAKE_ACP_NO_SET_MODEL === '1') return out({ id: msg.id, error: { code: -32601, message: 'Method not found' } });
       lastModel = p.modelId ?? null;
@@ -308,6 +337,11 @@ rl.on('line', (line) => {
       if (p.configId === 'model' && (p.value === 'a' || p.value === 'b')) {
         lastModel = p.value;
         currentModel = p.value;
+        return out({ id: msg.id, result: { configOptions: configOptions() } });
+      }
+      if (p.configId === 'mode' && modeOption().length && MODE_IDS.includes(p.value)) {
+        currentMode = p.value;
+        lastModeVia = 'set_config_option';
         return out({ id: msg.id, result: { configOptions: configOptions() } });
       }
       if (p.configId === 'effort' && currentModel === 'a' && (p.value === 'low' || p.value === 'high' || p.value === 'default')) {
