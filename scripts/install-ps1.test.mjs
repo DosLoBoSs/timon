@@ -169,7 +169,8 @@ test('the P-256 signature is checked, and an altered or unknown one refused', { 
     ['altered payload', { p256, alter: (e) => ({ ...e, payload: Buffer.from(Buffer.from(e.payload, 'base64').toString().replace('0.2.0', '0.2.1')).toString('base64') }) }, /signature is INVALID/],
     ['signed by another P-256 key', { p256: { ...other, keyId: p256.keyId } }, /signature is INVALID/],
     ['unknown P-256 key', { p256: other }, /unknown P-256 key/],
-    ['no P-256 signature', { p256: null }, /has no P-256 signature: nothing was installed/],
+    // PowerShell wraps a long error at the console width: match the start only.
+    ['no P-256 signature', { p256: null }, /has no P-256 signature/],
   ];
   for (const [label, options, expected] of cases) {
     const ctx = setup(stable, options);
