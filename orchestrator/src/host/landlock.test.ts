@@ -92,6 +92,13 @@ function assertFaithful(policy: FencePolicy, rules: LauncherPolicy, paths: reado
   }
 }
 
+/**
+ * The fence policy comes from `resolveFence`, which resolves with the host's
+ * path rules: on Windows `/home/u` becomes `D:\home\u`, which the Linux
+ * renderer rightly refuses. Landlock never runs there.
+ */
+const LINUX_FIXTURES = process.platform === 'win32' && 'Linux fixtures, resolved with Windows path rules';
+
 const HOME = '/home/u';
 const TH = `${HOME}/.timon`;
 const MISSION = 'aaaaaaaa-0000-4000-8000-000000000001';
@@ -127,7 +134,7 @@ function fakePolicy(isolation: Record<string, unknown> = {}): FencePolicy {
   });
 }
 
-test('the rendered rules grant exactly what the fence policy says, on every path of the tree', () => {
+test('the rendered rules grant exactly what the fence policy says, on every path of the tree', { skip: LINUX_FIXTURES }, () => {
   const policy = fakePolicy();
   const rules = renderLandlockPolicy(policy, FAKE);
   assertFaithful(policy, rules, FAKE.paths);
@@ -140,7 +147,7 @@ test('the rendered rules grant exactly what the fence policy says, on every path
   assert.equal(rules.unixSockets, 'deny');
 });
 
-test('a folder holding a refused path is listed instead of granted, along the way to it only', () => {
+test('a folder holding a refused path is listed instead of granted, along the way to it only', { skip: LINUX_FIXTURES }, () => {
   const rules = renderLandlockPolicy(fakePolicy(), FAKE);
   for (const level of ['/', '/home', HOME, TH]) {
     assert.ok(!rules.readOnly.includes(level) && !rules.readWrite.includes(level), `${level} is never granted whole`);
@@ -151,7 +158,7 @@ test('a folder holding a refused path is listed instead of granted, along the wa
   assert.ok(rules.readOnly.includes(`${HOME}/notes.txt`), 'a file is granted on its own');
 });
 
-test('the private files and the other missions stay out of every rule', () => {
+test('the private files and the other missions stay out of every rule', { skip: LINUX_FIXTURES }, () => {
   const rules = renderLandlockPolicy(fakePolicy(), FAKE);
   const all = [...rules.readOnly, ...rules.readWrite];
   for (const secret of ['daemon-token', 'timon.db', 'timon.config.json', 'worktrees/task-2', 'tmp/fence', 'tmp/missions/other-mission', 'backend-accounts/accother', 'agents/other']) {
@@ -161,12 +168,12 @@ test('the private files and the other missions stay out of every rule', () => {
   assert.ok(!all.includes(`${HOME}/.codex`), 'another backend\'s state is refused');
 });
 
-test('a link met while listing is never granted: it would reopen what it points to', () => {
+test('a link met while listing is never granted: it would reopen what it points to', { skip: LINUX_FIXTURES }, () => {
   const rules = renderLandlockPolicy(fakePolicy(), FAKE);
   assert.ok(![...rules.readOnly, ...rules.readWrite].includes(`${HOME}/to-ssh`));
 });
 
-test('a path is rendered in its resolved spelling, the only one the kernel matches', () => {
+test('a path is rendered in its resolved spelling, the only one the kernel matches', { skip: LINUX_FIXTURES }, () => {
   const linked = tree({
     '/': ['data', 'home'],
     '/data': ['ssh', 'work'],
@@ -179,7 +186,7 @@ test('a path is rendered in its resolved spelling, the only one the kernel match
   assert.equal(landlockLevel(rules, '/data/work'), 'ro');
 });
 
-test('the write list and the read-only list of the configuration are rendered too', () => {
+test('the write list and the read-only list of the configuration are rendered too', { skip: LINUX_FIXTURES }, () => {
   const policy = fakePolicy({ writable: ['~/.local/share'], readOnly: ['~/.local/share/fonts'] });
   const rules = renderLandlockPolicy(policy, FAKE);
   assert.equal(landlockLevel(rules, `${HOME}/.local/share/fonts`), 'ro');
@@ -188,7 +195,7 @@ test('the write list and the read-only list of the configuration are rendered to
   assertFaithful(policy, rules, FAKE.paths);
 });
 
-test('the release the daemon runs from becomes one read-only rule, the other releases none', () => {
+test('the release the daemon runs from becomes one read-only rule, the other releases none', { skip: LINUX_FIXTURES }, () => {
   const releases = `${TH}/desktop-runtime/releases`;
   const withRuntime = tree({
     '/': ['usr', 'tmp', 'dev', 'home'],
@@ -243,7 +250,7 @@ test('the probe is asked again at every launch: an altered launcher shows at onc
   assert.equal(fence.mechanism, 'landlock');
 });
 
-test('wrap writes the encoded policy, then launches the command through the checked launcher', () => {
+test('wrap writes the encoded policy, then launches the command through the checked launcher', { skip: LINUX_FIXTURES }, () => {
   const written: Array<[string, Buffer]> = [];
   const fence = createLandlockFence({ status: () => READY, fs: FAKE, writePolicy: (file, data) => { written.push([file, data]); } });
   assert.throws(() => fence.wrap(fakePolicy(), '/usr/bin/claude', [], `${TH}/run/fence/u.policy`), /probe the fence/);

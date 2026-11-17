@@ -1,6 +1,7 @@
 /**
  * The Seatbelt profile of a mission, rendered from the fence policy. Pure, so
- * it runs on every platform; the real `sandbox-exec` run is in `darwin.test.ts`.
+ * it runs on Linux and macOS (Windows resolves the fixtures with its own path
+ * rules, see below); the real `sandbox-exec` run is in `darwin.test.ts`.
  *
  * The strongest assertion here is the small evaluator below: it reads the
  * profile back the way Seatbelt does (everything allowed, last matching rule
@@ -16,6 +17,13 @@ import {
   canonicalPaths, MDNS_RESPONDER_SOCKET, parseSeatbeltProbe, renderSeatbeltProfile, SANDBOX_EXEC,
   SeatbeltRenderError, sbplString, seatbeltLaunch,
 } from './seatbelt.js';
+
+/**
+ * The fence policy comes from `resolveFence`, which resolves with the host's
+ * path rules: on Windows `/Users/tester` becomes `D:\Users\tester`, which the
+ * profile rightly refuses to spell. Seatbelt never runs there.
+ */
+const MACOS_FIXTURES = process.platform === 'win32' && 'macOS fixtures, resolved with Windows path rules';
 
 const HOME = '/Users/tester';
 const TH = `${HOME}/.timon`;
@@ -70,7 +78,7 @@ const PROBED_PATHS = [
   '/usr/bin/git', '/private/tmp/x', '/private/var/folders/ab/cd/T/x', '/dev/null', '/Applications/x',
 ];
 
-test('the profile agrees with fenceAccess on every path a mission may try', () => {
+test('the profile agrees with fenceAccess on every path a mission may try', { skip: MACOS_FIXTURES }, () => {
   for (const policy of [policyFor(), policyFor({}, { account: undefined }), policyFor({ writable: ['~/.npm'] })]) {
     const rules = rulesOf(renderSeatbeltProfile(policy).text);
     for (const path of PROBED_PATHS) {
@@ -79,7 +87,7 @@ test('the profile agrees with fenceAccess on every path a mission may try', () =
   }
 });
 
-test('the private files of the Timon home are refused, its own folders reopened', () => {
+test('the private files of the Timon home are refused, its own folders reopened', { skip: MACOS_FIXTURES }, () => {
   const rules = rulesOf(renderSeatbeltProfile(policyFor()).text);
   for (const path of [`${TH}/daemon-token`, `${TH}/secret-key`, `${TH}/timon.db`, `${TH}/timon.config.json`]) {
     assert.deepEqual(evaluate(rules, path), { read: false, write: false, exec: false }, path);
@@ -89,14 +97,14 @@ test('the private files of the Timon home are refused, its own folders reopened'
   assert.deepEqual(evaluate(rules, `${HOME}/.gitconfig`), { read: true, write: false, exec: true });
 });
 
-test('the profile allows by default and refuses metadata nowhere, which git needs', () => {
+test('the profile allows by default and refuses metadata nowhere, which git needs', { skip: MACOS_FIXTURES }, () => {
   const text = renderSeatbeltProfile(policyFor()).text;
   assert.match(text, /^;; [^\n]*\n\(version 1\)\n\(allow default\)\n/);
   assert.doesNotMatch(text, /file-read\*/);
   assert.doesNotMatch(text, /file-read-metadata/);
 });
 
-test('Unix sockets are refused but the DNS resolver, unless the policy allows them', () => {
+test('Unix sockets are refused but the DNS resolver, unless the policy allows them', { skip: MACOS_FIXTURES }, () => {
   const denied = renderSeatbeltProfile(policyFor()).text;
   assert.ok(denied.includes('(deny network-outbound (remote unix-socket))'));
   assert.ok(denied.includes(`(allow network-outbound (remote unix-socket (path-literal "${MDNS_RESPONDER_SOCKET}")))`));
@@ -105,7 +113,7 @@ test('Unix sockets are refused but the DNS resolver, unless the policy allows th
   assert.doesNotMatch(allowed, /unix-socket/);
 });
 
-test('launchctl, LaunchServices and Apple Events are shut whatever the policy', () => {
+test('launchctl, LaunchServices and Apple Events are shut whatever the policy', { skip: MACOS_FIXTURES }, () => {
   for (const policy of [policyFor(), policyFor({ unixSockets: 'allow' })]) {
     const text = renderSeatbeltProfile(policy).text;
     assert.ok(text.includes('(deny process-exec* (literal "/bin/launchctl"))'));
@@ -114,7 +122,7 @@ test('launchctl, LaunchServices and Apple Events are shut whatever the policy', 
   }
 });
 
-test('on the very same path the refusal is emitted last, so it wins', () => {
+test('on the very same path the refusal is emitted last, so it wins', { skip: MACOS_FIXTURES }, () => {
   // The configuration makes the Timon home itself writable: refused, deeper or equal.
   const policy = policyFor({ writable: [TH] });
   const rules = rulesOf(renderSeatbeltProfile(policy).text);
@@ -139,7 +147,7 @@ test('a fence path is spelled as an escaped SBPL string', () => {
   assert.throws(() => sbplString('/x/\u007f'), SeatbeltRenderError);
 });
 
-test('a home with quotes, spaces and backslashes renders rules that still mean the same paths', () => {
+test('a home with quotes, spaces and backslashes renders rules that still mean the same paths', { skip: MACOS_FIXTURES }, () => {
   const home = '/Users/we ird"q\\b\tt';
   const th = `${home}/.timon`;
   const policy = resolveFence(cfg(), {
@@ -173,7 +181,7 @@ test('canonical spellings: the path as given, and resolved through its deepest e
   assert.deepEqual(canonicalPaths('/nowhere/at/all', (p) => { if (p === '/') return '/'; throw new Error('ENOENT'); }), ['/nowhere/at/all']);
 });
 
-test('a Timon home behind a link is refused under both spellings', () => {
+test('a Timon home behind a link is refused under both spellings', { skip: MACOS_FIXTURES }, () => {
   const spellings = (path: string) => (path === TH || path.startsWith(`${TH}/`) ? [path, path.replace(TH, '/Volumes/Data/timon')] : [path]);
   const rules = rulesOf(renderSeatbeltProfile(policyFor(), { spellings }).text);
   for (const root of [TH, '/Volumes/Data/timon']) {
@@ -182,7 +190,7 @@ test('a Timon home behind a link is refused under both spellings', () => {
   }
 });
 
-test('a grant that resolves onto a private entry of the Timon home is dropped', () => {
+test('a grant that resolves onto a private entry of the Timon home is dropped', { skip: MACOS_FIXTURES }, () => {
   // The working folder is a link into the browser profiles: the profile must not reopen them.
   const cwd = '/Users/tester/project';
   const policy = policyFor({}, { cwd });
