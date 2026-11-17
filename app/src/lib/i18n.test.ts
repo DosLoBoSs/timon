@@ -32,7 +32,7 @@ test('le français ne s\'active qu\'une fois chargé', async () => {
 
 test('collecte les fragments de la locale française', async () => {
   await loadLocale('fr');
-  assert.equal(t('projectsPage.projectCount', { count: 2 }), '2 projet(s)');
+  assert.equal(t('projectsPage.projectCount', { count: 2 }), '2 projets');
   assert.equal(t('taskForm.create'), 'Créer la tâche');
   assert.equal(t('browserPanel.actions.reload'), 'Recharger la vue');
   assert.equal(t('mission.title'), 'Nouvelle mission');

@@ -428,7 +428,7 @@ export function ProjectEditDialog({ slug: editingSlug, onSaved, onClose }: Proje
         <Dialog open onOpenChange={(v) => { if (!v) setFate(null); }}>
           <DialogContent className="sm:max-w-[460px]">
             <DialogHeader>
-              <DialogTitle>{t('projectsPage.fateTitle', { slug: editingSlug, count: String(fate.agents.length) })}</DialogTitle>
+              <DialogTitle>{t('projectsPage.fateTitle', { slug: editingSlug, count: fate.agents.length })}</DialogTitle>
             </DialogHeader>
             <div className="flex flex-col gap-3 text-[13px]">
               <div className="text-[11px] text-muted-foreground">
