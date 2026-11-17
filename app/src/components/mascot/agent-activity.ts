@@ -1,8 +1,8 @@
 /**
  * What an agent is doing in its conversation, as the chat sees it, and the
- * mascot state that shows it (docs/AGENT-MASCOT.md, "Le vivant"). Pure: the
- * chat reports an `AgentActivity` (`ChatClient`'s `onAgentActivity`), a screen
- * that draws the agent's face turns it into a `MascotState` here.
+ * mascot state that shows it (docs/AGENT-MASCOT.md, "Le vivant"). Pure: a
+ * screen that draws the agent's face turns an `AgentActivity` into a
+ * `MascotState` here.
  */
 import type { MascotState } from './mascot-states';
 

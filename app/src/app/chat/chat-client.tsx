@@ -268,7 +268,6 @@ import { ChatComposerSlot } from '@/components/chat/composer';
 import { ComposerReplyProvider, MessageActionBar, mountMessageActionSlot, type ComposerReply } from '@/components/chat/message-actions';
 import { ReplyQuote } from '@/components/chat/reply-quote';
 import type { SetupAvatarRequest } from '@/components/chat/setup-avatar-card';
-import type { AgentActivity } from '@/components/mascot/agent-activity';
 import { DelegationsBar } from '@/components/chat/delegations-bar';
 import { ComposerTrays, composerTrayClass } from '@/components/chat/composer-trays';
 import { useDelegations } from '@/hooks/use-delegations';
@@ -1177,7 +1176,6 @@ export function ChatClient({
   keepInView,
   onAgentSpoke,
   onSetupTrouble,
-  onAgentActivity,
   routeParams,
 }: {
   /** Override URL ?agent= param. Used by /multichat to pin a slot to a
@@ -1239,9 +1237,6 @@ export function ChatClient({
    *  alone (a refused tool, a cut turn, the mission ending) — the wizard then
    *  puts its "Skip" forward. */
   onSetupTrouble?: (signal: SetupChatSignal) => void;
-  /** What the agent is doing, at every change: a face that shows it (the
-   *  onboarding chat's mascot, `components/mascot/agent-activity.ts`). */
-  onAgentActivity?: (activity: AgentActivity) => void;
   /** The address this conversation was keyed on, from `ChatRoute`: the live
    *  one moves first, while the previous conversation is still on screen. */
   routeParams?: URLSearchParams;
@@ -3298,11 +3293,6 @@ export function ChatClient({
   // composer's queue when the agent is mid-turn. Documents themselves are not
   // counted: a pending one is precisely what may be shown in full screen.
   const awaitingUser = useMemo(() => messages.some(isPendingCard), [messages]);
-  const activityRef = useRef(onAgentActivity);
-  activityRef.current = onAgentActivity;
-  useEffect(() => {
-    activityRef.current?.({ busy: thinking, tool: thinking ? thinkingHint : null, awaitingUser });
-  }, [thinking, thinkingHint, awaitingUser]);
   // The latest `openStream`: the callback below lives across renders.
   const openStreamLatest = useRef(openStream);
   openStreamLatest.current = openStream;
