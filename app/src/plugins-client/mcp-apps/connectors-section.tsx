@@ -17,6 +17,7 @@ import { useMcpTab } from '@/lib/mcp-tab-context';
 import { AppCardHost } from '@/components/app-card/app-card';
 import type { AppCardApp, AppCardCategory, AppCardLogo, AppCardStatus, AppCardValue } from '@/components/app-card/app-card-context';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
+import { apiErrorMessage } from '@/lib/api-error';
 import { getLocale, t } from '@/lib/i18n';
 
 type Localized = { en: string; fr: string };
@@ -96,7 +97,8 @@ export function appMatches(app: AppCardApp, query: string, categoryLabel: string
 
 async function readError(r: Response): Promise<string> {
   const j = (await r.json().catch(() => ({}))) as { reason?: string; error?: string };
-  return (j.reason || j.error || r.statusText || String(r.status)).slice(0, 160);
+  // A known code reads translated; otherwise the daemon's `reason` is the more precise sentence.
+  return apiErrorMessage({ ...j, error: j.reason || j.error }, r.statusText || { status: r.status }).slice(0, 160);
 }
 
 export function ConnectorsSection(): ReactElement | null {

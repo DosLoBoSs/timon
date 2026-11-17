@@ -21,6 +21,7 @@ import { useEffect, useState } from 'react';
 import { GitBranch, GitCommitHorizontal, CloudUpload, RefreshCw } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { apiErrorMessageOrNull } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { isZoneVisible, useCapabilities } from '@/lib/capabilities';
 import { gitRepoId, invalidateGit, useGit, type GitRemote } from '@/lib/git-store';
@@ -111,7 +112,7 @@ export function GitPanel({ agentId, slug }: { agentId: string; slug: string | nu
   const branch = data?.currentBranch ?? remote?.branch ?? null;
   const detached = !!data?.ok && !data.currentBranch;
   const showRemote = !!remote && remote.state !== 'no-cwd' && remote.state !== 'not-a-repo';
-  const error = dash.error ?? (data && !data.ok ? data.error ?? null : null);
+  const error = dash.error ?? (data && !data.ok ? apiErrorMessageOrNull(data) : null);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

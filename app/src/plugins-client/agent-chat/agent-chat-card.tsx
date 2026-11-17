@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import { openAgentEditor } from '@/components/agent-editor/agent-editor-modal';
 import { Tile } from '@/components/tile';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { AjoutAgent } from './agent-add';
@@ -43,8 +44,7 @@ async function arreterAgent(nom: string): Promise<void> {
     });
     const data: unknown = await res.json().catch(() => null);
     if (!res.ok) {
-      const error = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
-        ? data.error : `HTTP ${res.status}`;
+      const error = apiErrorMessage(data, { status: res.status });
       toast.error(t('agentChat.menu.stopFailed', { name: nom, error }));
       return;
     }
@@ -76,8 +76,7 @@ async function definirOrchestratrice(nom: string): Promise<void> {
     });
     const data: unknown = await res.json().catch(() => null);
     if (!res.ok) {
-      const error = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
-        ? data.error : `HTTP ${res.status}`;
+      const error = apiErrorMessage(data, { status: res.status });
       toast.error(t('agentChat.menu.makeMainFailed', { name: nom, error }));
       return;
     }

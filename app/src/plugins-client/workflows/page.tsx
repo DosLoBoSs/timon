@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { RunStatusBadge } from './trace-panel';
@@ -112,7 +113,7 @@ export function WorkflowsPage() {
       const response = await fetch('/api/ui/workflows', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ slug: nextSlug, name: trimmedName, agent_name: agent, draft: EMPTY_DEFINITION }) });
       const payload = await readJson(response);
       const created = payload.workflow as Workflow | undefined;
-      if (!response.ok || !created || typeof created.slug !== 'string') throw new Error(typeof payload.error === 'string' ? payload.error : t('workflows.createError'));
+      if (!response.ok || !created || typeof created.slug !== 'string') throw new Error(apiErrorMessage(payload, t('workflows.createError')));
       setOpen(false);
       resetDialog();
       router.push(`/workflows/${encodeURIComponent(created.slug)}`);

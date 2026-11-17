@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { responseErrorMessage } from '@/lib/api-error';
 import { parseSkillReads, type AgentInjections, type SkillReads } from '@/lib/agent-injections';
 
 export type Load =
@@ -11,11 +12,7 @@ export type Load =
   | { state: 'ready'; data: AgentInjections };
 
 export async function readError(res: Response): Promise<string> {
-  try {
-    const body = await res.json() as { error?: string };
-    if (body.error) return body.error;
-  } catch { /* not JSON */ }
-  return `HTTP ${res.status}`;
+  return responseErrorMessage(res);
 }
 
 /**

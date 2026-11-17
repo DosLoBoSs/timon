@@ -38,6 +38,7 @@ import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { ArchitectChat } from './architect-chat';
@@ -233,7 +234,7 @@ function SettingsDialog({ open, workflow, definition, onChange, onWorkflow, onCl
       const response = await fetch(`/api/ui/workflows/${workflow.id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: trimmed || workflow.name, description, ...(agentChanged ? { agent_name: agent } : {}) }) });
       const value = await readJson(response);
       if (response.ok && value.workflow) onWorkflow({ ...workflow, ...(value.workflow as Workflow) });
-      else { toast.error(typeof value.error === 'string' ? value.error : t(agentChanged ? 'workflows.agentSaveError' : 'workflows.save.error')); return; }
+      else { toast.error(apiErrorMessage(value, t(agentChanged ? 'workflows.agentSaveError' : 'workflows.save.error'))); return; }
     }
     onClose();
   };
@@ -385,7 +386,7 @@ export function WorkflowBuilder({ slug }: { slug: string }) {
     try {
       const response = await fetch(`/api/ui/workflows/${workflow.id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ draft: current }) });
       const value = await readJson(response);
-      if (!response.ok) throw new Error(typeof value.error === 'string' ? value.error : t('workflows.save.error'));
+      if (!response.ok) throw new Error(apiErrorMessage(value, t('workflows.save.error')));
       dirty.current = false;
       setSaveState('saved');
       setSaveError(null);
@@ -455,7 +456,7 @@ export function WorkflowBuilder({ slug }: { slug: string }) {
       if (!(await saveNow())) return;
       const response = await fetch(`/api/ui/workflows/${workflow.id}/publish`, { method: 'POST' });
       const value = await readJson(response);
-      if (!response.ok) { setIssues(Array.isArray(value.issues) ? (value.issues as WorkflowIssue[]) : null); toast.error(typeof value.error === 'string' ? value.error : t('workflows.publishError')); return; }
+      if (!response.ok) { setIssues(Array.isArray(value.issues) ? (value.issues as WorkflowIssue[]) : null); toast.error(apiErrorMessage(value, t('workflows.publishError'))); return; }
       setIssues(null);
       const version = typeof value.version === 'number' ? value.version : (workflow.published_version ?? 0) + 1;
       setWorkflow({ ...workflow, published_version: version });
@@ -471,7 +472,7 @@ export function WorkflowBuilder({ slug }: { slug: string }) {
       const response = await fetch(`/api/ui/workflows/${workflow.id}/run`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ draft }) });
       const value = await readJson(response);
       const created = value.run as { id?: string } | undefined;
-      if (!response.ok || !created?.id) { setIssues(Array.isArray(value.issues) ? (value.issues as WorkflowIssue[]) : null); toast.error(typeof value.error === 'string' ? value.error : t('workflows.runError')); return; }
+      if (!response.ok || !created?.id) { setIssues(Array.isArray(value.issues) ? (value.issues as WorkflowIssue[]) : null); toast.error(apiErrorMessage(value, t('workflows.runError'))); return; }
       setIssues(null);
       router.push(`/workflows/${encodeURIComponent(slug)}/runs/${created.id}`);
     } finally { setBusy(null); }

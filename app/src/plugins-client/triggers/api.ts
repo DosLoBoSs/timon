@@ -4,6 +4,8 @@
  * instead of a bare status.
  */
 
+import { apiErrorMessage } from '@/lib/api-error';
+
 export type ApiResult<T> = { ok: true; status: number; data: T } | { ok: false; status: number; error: string };
 
 export async function requestJson<T>(method: string, url: string, body?: unknown): Promise<ApiResult<T>> {
@@ -20,9 +22,7 @@ export async function requestJson<T>(method: string, url: string, body?: unknown
   }
   const data: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const error = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
-      ? data.error
-      : `HTTP ${response.status}`;
+    const error = apiErrorMessage(data, { status: response.status });
     return { ok: false, status: response.status, error };
   }
   return { ok: true, status: response.status, data: data as T };

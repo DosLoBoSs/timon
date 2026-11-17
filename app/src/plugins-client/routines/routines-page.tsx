@@ -9,7 +9,7 @@ import { resolveRole } from '@/lib/roles';
 import { t } from '@/lib/i18n';
 import { formatDate, formatTime } from '@/lib/intl';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
-import { apiErrorMessage } from '@/lib/api-error';
+import { apiErrorMessage, responseErrorMessage } from '@/lib/api-error';
 
 type Routine = {
   id: string;
@@ -90,8 +90,7 @@ function RoutineDialog({
         },
       );
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || t('routinesPage.failed', { status: res.status }));
+        throw new Error(await responseErrorMessage(res, t('routinesPage.failed', { status: res.status })));
       }
       toast.success(t(isEdit ? 'routinesPage.updated' : 'routinesPage.created'));
       onSaved();
