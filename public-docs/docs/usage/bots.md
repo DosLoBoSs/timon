@@ -17,7 +17,7 @@ On a phone, the list opens as a drawer from the same button.
 
 ## Use the list on another view
 
-The **TIMs** card is in the widget gallery: drop it on the cockpit, in a sidebar or in an island of any view. A click on a TIM there opens its chat on that view, without leaving it: beside the list when the list is in an island, as a tab of the active island otherwise. A TIM whose chat is already open is brought forward instead of being opened twice.
+The **TIMs** card is in the widget gallery: drop it on the cockpit, in a sidebar or in an island of any view. A click on a TIM there opens its chat on that view, without leaving it: beside the list when the list is in an island, as a tab of the active island otherwise. The next TIM you pick takes over that same chat instead of opening another one, and a TIM whose chat is already open is brought forward instead of being opened twice.
 
 ## Search, create a TIM or a team
 
