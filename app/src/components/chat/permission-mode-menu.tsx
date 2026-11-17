@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t as i18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -135,8 +136,9 @@ export function PermissionModeMenu({
       });
       const body = (await r.json().catch(() => ({}))) as { mode?: unknown; reason?: unknown; error?: unknown };
       if (!r.ok) {
-        const why = typeof body.reason === 'string' ? body.reason : typeof body.error === 'string' ? body.error : '';
-        throw new Error(why || i18n('chatPage.permMode.changeFailed'));
+        // A known code reads translated; otherwise the daemon's `reason` is the more precise sentence.
+        const error = typeof body.reason === 'string' && body.reason ? body.reason : body.error;
+        throw new Error(apiErrorMessage({ ...body, error }, i18n('chatPage.permMode.changeFailed')));
       }
       setState({ ...state, mode: typeof body.mode === 'string' ? body.mode : mode });
       toast.success(i18n('chatPage.permMode.changed', { mode: permissionModeLabel(mode) }));

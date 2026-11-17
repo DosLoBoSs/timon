@@ -5,6 +5,7 @@ import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { compareText } from '@/lib/intl';
 import { FramedFace } from '@/plugins-client/agent-chat/agent-avatar';
@@ -93,9 +94,9 @@ export function checkedNames(
 async function refusalReason(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { reason?: unknown; error?: unknown };
-    for (const value of [body.reason, body.error]) {
-      if (typeof value === 'string' && value) return value;
-    }
+    // A known code reads translated; otherwise the daemon's `reason` is the more precise sentence.
+    const error = typeof body.reason === 'string' && body.reason ? body.reason : body.error;
+    return apiErrorMessage({ ...body, error }, t('orchestration.reasonUnknown'));
   } catch {}
   return t('orchestration.reasonUnknown');
 }

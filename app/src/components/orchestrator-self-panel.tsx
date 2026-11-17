@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Hammer, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { fmtRelativeShort } from '@/components/chat/chat-format';
 
@@ -73,7 +74,7 @@ export function OrchestratorSelfPanel({ slug }: { slug: string | null }) {
       try {
         const r = await fetch(`/api/ui/orchestrator/self/${action}`, { method: 'POST' });
         const j = (await r.json().catch(() => ({}))) as { error?: string };
-        if (!r.ok && j.error) setErr(j.error);
+        if (!r.ok) setErr(apiErrorMessage(j, { status: r.status }));
       } catch {
         // `restart` responds then kills the process writing the response: a
         // failed fetch here is the normal flow, not a failure.
