@@ -115,3 +115,41 @@ test('an unread "Task blocked" recap of a requeued task is expired', () => {
   assert.equal(dbApi.getTask(id)?.status, 'PENDING');
   assert.deepEqual(recaps().map((m) => m.status), ['expired'], 'the pilot is not woken on a stale block');
 });
+
+test('a replay consumes the death: a person who blocks it before dispatch is not overruled', () => {
+  const id = deadTask('review: replayed, then cancelled by hand', MAX_SYSTEM_REQUEUES + 1);
+  const now = Date.now();
+
+  requeueRecentSystemDeaths(now);
+  let t = dbApi.getTask(id);
+  assert.equal(t?.status, 'PENDING');
+  assert.equal(t?.interrupted_reason, null, 'the cause of the replayed death is cleared');
+  assert.equal(t?.mission_id, null, 'the dead mission is detached');
+
+  // Still waiting out its backoff, the task is blocked from the board.
+  dbApi.updateTaskStatus(id, 'BLOCKED', { blockedReason: 'do not relaunch', byPerson: true });
+  requeueRecentSystemDeaths(now + 60_000);
+  t = dbApi.getTask(id);
+  assert.equal(t?.status, 'BLOCKED', 'the next boot leaves the human decision alone');
+  assert.equal(t?.blocked_reason, 'do not relaunch');
+});
+
+test('a replayed task that dies again is still counted and bounded by the ceiling', () => {
+  const id = deadTask('review: replayed, dies again', CRASH_LOOP_HARD_CEILING - 1);
+  requeueRecentSystemDeaths();
+  assert.equal(dbApi.getTask(id)?.status, 'PENDING');
+
+  const missionId = randomUUID();
+  dbApi.createMission(missionId, 'boot-requeue-worker', 'review: replayed, dies again');
+  dbApi.setMissionLineage(missionId, { parentAgent: PILOT, taskId: id });
+  dbApi.assignTaskMission(id, missionId);
+  dbApi.finishMission(missionId, 'terminated', null);
+  dbApi.setTaskInterrupted(id, 'killed', 'mission killed');
+  const t = dbApi.getTask(id);
+  assert.equal(t?.status, 'BLOCKED');
+  assert.equal(t?.interrupted_reason, 'killed');
+  assert.equal(t?.requeue_count, CRASH_LOOP_HARD_CEILING);
+
+  requeueRecentSystemDeaths();
+  assert.equal(dbApi.getTask(id)?.status, 'BLOCKED', 'at the ceiling only a human restarts it');
+});

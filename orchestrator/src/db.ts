@@ -2784,6 +2784,12 @@ const countBlindQuotaDeathStmt = db.prepare(
 const deferTaskStmt = db.prepare(
   `UPDATE tasks SET scheduled_at = max(COALESCE(scheduled_at, 0), ?), updated_at = ? WHERE id = ?`,
 );
+// Forgets the death a task was blocked by, once something other than
+// `setTaskInterrupted` sends it back to PENDING (the boot replay): left in
+// place, a later block by a person would still read as a system death.
+const clearTaskInterruptionStmt = db.prepare(
+  `UPDATE tasks SET interrupted_reason = NULL, mission_id = NULL WHERE id = ?`,
+);
 const requeueInterruptedStmt = db.prepare(
   `UPDATE tasks SET status = 'PENDING', mission_id = NULL, interrupted_reason = NULL,
                     blocked_reason = NULL, blocked_reason_code = NULL, requeue_count = requeue_count + 1,
@@ -5289,6 +5295,11 @@ export const dbApi = {
   /** One more death read as a quota wall on the exclusion alone. */
   countBlindQuotaDeath(id: string): void {
     countBlindQuotaDeathStmt.run(id);
+  },
+  /** Detaches the dead mission and its cause from a task requeued outside
+   *  `setTaskInterrupted`. `requeue_count` is kept: it counts the deaths. */
+  clearTaskInterruption(id: string): void {
+    clearTaskInterruptionStmt.run(id);
   },
   /** Postpones dispatch until `until` at the earliest, never earlier than a
    *  date already set. */

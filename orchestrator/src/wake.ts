@@ -1207,6 +1207,11 @@ export function requeueRecentSystemDeaths(now: number = Date.now()): number {
     const deaths = t.requeue_count ?? 0;
     if (deaths >= CRASH_LOOP_HARD_CEILING) continue;
     dbApi.updateTaskStatus(t.id, 'PENDING');
+    // The death is consumed by this replay. Kept, it would outlive a block a
+    // person sets before the dispatch, and the next boot would replay the
+    // task against their decision. Nothing reads it afterwards: the age check
+    // ran above, and the next death writes its own cause and mission.
+    dbApi.clearTaskInterruption(t.id);
     // Same backoff as an agent's requeue: an overloaded backend may still be.
     dbApi.deferTask(t.id, now + requeueBackoffMs(Math.max(1, deaths)));
     console.log(`[wake] boot: task ${t.id} requeued after a system death (${reason}, ${deaths}/${CRASH_LOOP_HARD_CEILING} deaths)`);
