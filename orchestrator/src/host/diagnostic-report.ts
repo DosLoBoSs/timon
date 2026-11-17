@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { loadConfig } from '../config/load.js';
 import type { TimonConfig } from '../config/schema.js';
 import { compareVersions, readDataVersion, readSnapshotFailure, timonVersion } from '../data-version.js';
-import { localTimestamp, logDir, parseDatedLog, readRecentLines, supervisorLogFile, tailLines } from '../log-file.js';
+import { localTimestamp, logDir, parseDatedLog, readRecentLines, servicePauseLogFile, supervisorLogFile, tailLines } from '../log-file.js';
 import { redactText } from '../secrets/redact.js';
 import { createGenericHost } from './generic.js';
 import { builtinBinaries } from '../backends/builtin-declarations.js';
@@ -375,6 +375,11 @@ export async function buildDiagnosticReport(opts: CollectOptions): Promise<{ tex
   section(`Daemon log (${dir}, newest first)`, tail(readRecentLines(dir, 'daemon', REPORT_LOG_LINES)));
   section('Supervisor output daemon.log (newest first)', tail(tailLines(supervisorLogFile(opts.home), REPORT_LOG_LINES).reverse()));
   section('Desktop log (newest first)', tail(readRecentLines(dir, 'desktop', REPORT_LOG_LINES)));
+  // What the last installers found running and ended: an update that left the
+  // previous daemon alive is read here, not guessed from the daemon's own log.
+  if (platform === 'win32') {
+    section('Installer service pause timon-service-pause.log (newest first)', tail(tailLines(servicePauseLogFile(opts.home), REPORT_LOG_LINES).reverse()));
+  }
 
   const text = redactReport(out.join('\n') + '\n', knownSecretValues(opts.home));
   return { text, findings };

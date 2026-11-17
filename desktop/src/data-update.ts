@@ -281,19 +281,89 @@ export class DaemonStartTimeoutError extends Error {
  */
 export const START_BUDGET_MS = 300_000;
 
-export async function finishUpdate(input: { home: string; origin: string; version: string; locale: string;
+/**
+ * How long the installed version gets to answer its update routes once the
+ * previous version's daemon was replaced: the task starts, the launcher waits
+ * for the session, the daemon verifies its release. Bounded, so a service
+ * that never comes back ends in a message and not in a window that waits.
+ */
+export const REPLACE_BUDGET_MS = 180_000;
+
+export type FinishUpdateInput = { home: string; origin: string; version: string; locale: string;
   progress: (message: string, progress?: Progress | null) => void;
   warning: (message: string, detail: string) => Promise<void>;
   /** Called once the daemon holds the approval: from here, the data may change. */
   approving?: () => void;
-}, deps = { request: requestUpdate, health: probeHealth, sleep: (ms: number) => new Promise<void>(r => setTimeout(r, ms)), now: Date.now }): Promise<void> {
+  /** Called before the previous version's daemon is replaced: from here, the service was touched. */
+  replacing?: () => void;
+};
+
+export type FinishUpdateDeps = {
+  request: typeof requestUpdate;
+  health: typeof probeHealth;
+  sleep: (ms: number) => Promise<void>;
+  now?: () => number;
+  /**
+   * Ends the daemon of this data directory that still runs another version
+   * and starts the installed one (the service runner's `restart`). Absent:
+   * this shell has nothing that could replace it, and the failure says what
+   * the person can do.
+   */
+  replaceStaleDaemon?: () => Promise<void>;
+};
+
+export const finishUpdateDeps: FinishUpdateDeps = {
+  request: requestUpdate, health: probeHealth, sleep: (ms: number) => new Promise<void>(r => setTimeout(r, ms)), now: Date.now,
+};
+
+const STALE_ADVICE = 'Quit Timon, restart the computer, then open Timon again.';
+
+/**
+ * The daemon that answers runs another version than the one installed: an
+ * update replaced the application under a daemon that was never ended, which
+ * keeps the port and the data directory, so the installed version cannot
+ * start (Windows, 0.1.7 to 0.1.8). It used to be a dead end, "The running
+ * daemon is not the installed version", at every launch.
+ *
+ * Replaced once, and only when it is the daemon of THIS data directory: a
+ * daemon of another home on the port is someone else's, and is never ended.
+ * Nothing was approved yet, so the data are untouched whatever happens here.
+ */
+async function replaceStaleDaemon(input: FinishUpdateInput, deps: FinishUpdateDeps, health: HealthResult, running: string): Promise<UpdateStatus> {
+  const wrong = `The running daemon is not the installed version: it runs ${running}, and Timon ${input.version} is installed.`;
+  if (!deps.replaceStaleDaemon || !isTimon(health, input.home)) throw new Error(`${wrong} ${STALE_ADVICE}`);
+  input.replacing?.();
+  input.progress(updateCopy(input.locale).working);
+  try {
+    await deps.replaceStaleDaemon();
+  } catch (error) {
+    throw new Error(`${wrong} Timon could not replace it: ${(error as Error).message || String(error)}\n\n${STALE_ADVICE}`);
+  }
+  const now = deps.now ?? Date.now;
+  const deadline = now() + REPLACE_BUDGET_MS;
+  let last = `version ${running} still answers`;
+  while (now() < deadline) {
+    try {
+      const status = await deps.request(input.origin, input.home);
+      if (status.daemonVersion === input.version) return status;
+      last = `version ${status.daemonVersion} still answers`;
+    } catch (error) {
+      // The service is restarting: a refused connection is the expected answer for a while.
+      last = (error as Error).message || String(error);
+    }
+    await deps.sleep(500);
+  }
+  throw new Error(`${wrong} Timon restarted its background service, but version ${input.version} did not answer in time (${last}).\n\n${STALE_ADVICE}`);
+}
+
+export async function finishUpdate(input: FinishUpdateInput, deps: FinishUpdateDeps = finishUpdateDeps): Promise<void> {
   const copy = updateCopy(input.locale);
   const initialHealth = await deps.health(input.origin);
   // Another shell or an interrupted, already approved boot may have finished meanwhile.
   if (isTimon(initialHealth, input.home) && initialHealth.ok && !initialHealth.updatePending
     && readDataVersion(input.home) === input.version) return;
-  const status = await deps.request(input.origin, input.home);
-  if (status.daemonVersion !== input.version) throw new Error('The running daemon is not the installed version.');
+  let status = await deps.request(input.origin, input.home);
+  if (status.daemonVersion !== input.version) status = await replaceStaleDaemon(input, deps, initialHealth, status.daemonVersion);
   const since = Date.now();
   input.progress(copy.waiting);
   const timer = setInterval(() => {

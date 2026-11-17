@@ -94,14 +94,14 @@ import { performUninstall, prepareCleanup, stopInstalledService, verifyStopped }
 import { runUninstallHelper } from './uninstall-helper.js';
 import { BROWSER_ATTACH_CHANNEL, BROWSER_DETACH_CHANNEL, trustedBrowserSender } from './native-browser-protocol.js';
 
-import { DaemonStartTimeoutError, updateOffer, finishUpdate, updateCopy, updateFailureDialog, unmanagedDaemon, type UpdateStage } from './data-update.js';
+import { DaemonStartTimeoutError, updateOffer, finishUpdate, finishUpdateDeps, updateCopy, updateFailureDialog, unmanagedDaemon, type UpdateStage } from './data-update.js';
 import { UpdateWindow } from './update-window.js';
 import { consentApproves, grantUpdateConsent, revokeUpdateConsent, takeUpdateConsent } from './update-consent.js';
 import { UpdateDownloader } from './update-download.js';
 import { UPDATE_CHANNELS, UpdateController, localDaemonGet, registerUpdateIpc } from './update-ipc.js';
 import { checkLocalUpdatesIfStale } from './update-freshness.js';
 import { missionsAtStake, readMissionCount, removeAppImageBackup } from './update-install.js';
-import { nodeInstallerSystem, silentInstall } from './update-installer.js';
+import { nodeInstallerSystem, silentInstall, takeWindowsInstallFailure } from './update-installer.js';
 import { aboutCopy, readThirdPartyNotices, registerAboutIpc, thirdPartyNoticesPath } from './about.js';
 import { showAboutWindow } from './about-window.js';
 import { appMenuTemplate, newWindowCopy, newWindowShortcut } from './app-menu.js';
@@ -1298,12 +1298,37 @@ function reportRestore(home: string, id: string): void {
   });
 }
 
+/**
+ * The silent Windows installer shows nothing, and the shell that started it
+ * had quit: its watcher left the verdict in the update's folder. Said once, by
+ * the Timon that starts next, instead of an app that only seemed to restart.
+ */
+function reportSilentInstallFailure(home: string): void {
+  if (process.platform !== 'win32') return;
+  const failure = takeWindowsInstallFailure(join(home, 'updates'));
+  if (!failure) return;
+  console.log(`[updates] the silent installer of ${failure.version} ended with ${failure.outcome}: ${failure.reason}`);
+  void reportProblem({ type: 'warning', message: shellText(uiLocale())('update.failure'), detail: failure.reason });
+}
+
 async function completeApprovedUpdate(cfg: DesktopConfig): Promise<void> {
   if (!updateApproved || !updateWindow) return;
   await finishUpdate({ home: cfg.home, origin: originOf(cfg.daemon.listen), version: app.getVersion(), locale: uiLocale(),
     progress: (message, progress) => updateWindow?.progress(message, progress),
     approving: () => { updateStage = 'approval'; },
+    replacing: () => { updateStage = 'service'; },
     warning: async (message, detail) => { await dialog.showMessageBox(updateWindow!.window, { type: 'warning', title: DISPLAY_NAME, message, detail }); },
+  }, {
+    ...finishUpdateDeps,
+    // Windows replaces the application in place and never rewrites the task:
+    // a daemon the installer did not end still runs the previous version.
+    // macOS and Linux move their service to the new release before this point.
+    ...(process.platform === 'win32' && app.isPackaged && hasDesktopService(cfg.home) ? {
+      replaceStaleDaemon: async () => {
+        console.log('[desktop] the daemon of this data directory runs another version: restarting the service');
+        console.log(`[desktop] service restarted: ${await controlDesktopService('restart', runnerSeams(cfg))}`);
+      },
+    } : {}),
   });
   // Keep a window alive while the main window is constructed (macOS lifecycle).
   const completed = updateWindow;
@@ -1588,6 +1613,7 @@ async function main(): Promise<void> {
       });
     }
   }
+  reportSilentInstallFailure(cfg.home);
   if (restoreId) await waitForRestoreBoot(cfg, restoreId);
   let daemonOrigin = originOf(cfg.daemon.listen);
   let health = await probeHealth(daemonOrigin);

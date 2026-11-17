@@ -7,12 +7,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  CHECKSUM_EXIT, MAC_ADMIN_SCRIPT, NSIS_SILENT_ARGS, ROOT_INSTALL_SCRIPT, WINDOWS_WATCHER,
-  debCommand, debOutcome, macCommand, macOutcome, silentInstall, windowsCommand,
+  CHECKSUM_EXIT, MAC_ADMIN_SCRIPT, NSIS_SERVICE_PAUSE_FAILED, NSIS_SERVICE_STILL_RUNNING, NSIS_SILENT_ARGS, ROOT_INSTALL_SCRIPT, WINDOWS_NOT_STARTED, WINDOWS_RESULT_FILE,
+  WINDOWS_WATCHER, debCommand, debOutcome, macCommand, macOutcome, silentInstall, takeWindowsInstallFailure, windowsCommand,
+  windowsInstallFailureReason, windowsResultFile,
   type Command, type CommandResult, type InstallerSystem,
 } from './update-installer.js';
 
@@ -50,6 +51,7 @@ test('Windows: a detached PowerShell watcher, by absolute path, runs the install
   assert.equal(command!.env!.TIMON_UPDATE_INSTALLER, path);
   assert.equal(command!.env!.TIMON_UPDATE_SHA256, SHA);
   assert.equal(command!.env!.TIMON_UPDATE_APP, system.appExe);
+  assert.equal(command!.env!.TIMON_UPDATE_RESULT, `C:\\Users\\Ana\\.timon\\updates\\0.1.9\\${WINDOWS_RESULT_FILE}`, 'the verdict stays in the update\'s own folder');
   assert.equal(command!.env!.ELECTRON_RUN_AS_NODE, undefined, 'Timon started again is the application, never Node');
   assert.equal(command!.env!.TIMON_HOME, 'C:\\Users\\Ana\\.timon');
   assert.equal(command!.cwd, 'C:\\Users\\Ana\\.timon\\updates\\0.1.9', 'never inside the folder being replaced');
@@ -145,4 +147,54 @@ test('the watcher is detached and never runs from the install folder', () => {
   const command = windowsCommand({ path: 'C:\\Users\\Ana\\.timon\\updates\\0.1.9\\Timon Setup 0.1.9.exe', sha256: SHA, appExe: 'C:\\Program Files\\Timon\\Timon.exe', env: {} });
   assert.equal(command.file, 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
   assert.equal(command.cwd, 'C:\\Users\\Ana\\.timon\\updates\\0.1.9');
+});
+
+// 0.1.7 to 0.1.8 update: the installer went on over a daemon it had not ended.
+// It now stops with a code of its own, silently under /S: the watcher is the
+// only witness, and the shell had quit.
+test('Windows: the watcher writes how the installer ended, unless it ended well', () => {
+  const started = WINDOWS_WATCHER.indexOf('[Diagnostics.Process]::Start($info)');
+  const waited = WINDOWS_WATCHER.indexOf('$process.WaitForExit()');
+  const read = WINDOWS_WATCHER.indexOf('$outcome = [string]$process.ExitCode');
+  const written = WINDOWS_WATCHER.indexOf("if ($result -and $outcome -ne '0') { try { [IO.File]::WriteAllText($result, $outcome) } catch { } }");
+  assert.ok(started > 0 && started < waited && waited < read && read < written, WINDOWS_WATCHER);
+  assert.ok(written < WINDOWS_WATCHER.indexOf('Start-Sleep -Seconds 5'), 'written before Timon is started again, which reads it');
+  // An installer that never ran (changed bytes, a start Windows refused) is said too, and a stale verdict is not kept.
+  assert.ok(WINDOWS_WATCHER.includes(`$outcome = '${WINDOWS_NOT_STARTED}'`));
+  const cleared = WINDOWS_WATCHER.indexOf('if ($result) { try { [IO.File]::Delete($result) } catch { } }');
+  assert.ok(cleared > 0 && cleared < started);
+  assert.ok(WINDOWS_WATCHER.includes('$result = $env:TIMON_UPDATE_RESULT'), 'the path travels in the environment only');
+  assert.equal(windowsResultFile('D:\\Data\\updates\\0.1.9\\Timon Setup 0.1.9.exe'), `D:\\Data\\updates\\0.1.9\\${WINDOWS_RESULT_FILE}`);
+});
+
+test('Windows: the next launch reports the installer\'s failure code once, and says what to do', () => {
+  const root = mkdtempSync(join(tmpdir(), 'timon-updates-'));
+  assert.equal(takeWindowsInstallFailure(root), null);
+  assert.equal(takeWindowsInstallFailure(join(root, 'absent')), null);
+  const dir = join(root, '0.1.9');
+  mkdirSync(dir);
+  const file = join(dir, WINDOWS_RESULT_FILE);
+
+  writeFileSync(file, `${NSIS_SERVICE_STILL_RUNNING}\r\n`);
+  const failure = takeWindowsInstallFailure(root);
+  assert.deepEqual(failure, { version: '0.1.9', outcome: '5', reason: windowsInstallFailureReason('5') });
+  assert.match(failure!.reason, /still running in the background.*nothing was installed.*permission prompt.*restart the computer/);
+  assert.equal(existsSync(file), false, 'said once');
+  assert.equal(takeWindowsInstallFailure(root), null);
+
+  // The installer that could not run its check stopped too, and says something else to do.
+  writeFileSync(file, String(NSIS_SERVICE_PAUSE_FAILED));
+  const unchecked = takeWindowsInstallFailure(root);
+  assert.deepEqual(unchecked, { version: '0.1.9', outcome: '6', reason: windowsInstallFailureReason('6') });
+  assert.match(unchecked!.reason, /could not check that Timon was stopped.*nothing was installed.*restart the computer/);
+  assert.notEqual(unchecked!.reason, windowsInstallFailureReason(String(NSIS_SERVICE_STILL_RUNNING)));
+
+  writeFileSync(file, WINDOWS_NOT_STARTED);
+  assert.match(takeWindowsInstallFailure(root)!.reason, /could not be started/);
+  writeFileSync(file, '2');
+  assert.match(takeWindowsInstallFailure(root)!.reason, /ended with code 2/);
+  // Only an exit code or the watcher's own word is ever shown: the file sits in a folder the user can write.
+  writeFileSync(file, 'Run this: <script>');
+  assert.equal(takeWindowsInstallFailure(root), null);
+  assert.equal(existsSync(file), false);
 });

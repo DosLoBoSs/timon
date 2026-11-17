@@ -259,16 +259,18 @@ export function serviceStoppedByUser(home: string): boolean { return existsSync(
 /** The daemon answers anyway (`timon service start`, a boot that loaded the service): never prompt for a start that happened. */
 export function forgetServiceStopped(home: string): void { rmSync(serviceStoppedMarkerFile(home), { force: true }); }
 
-/** The host adapter's `stop|start` runner, launched from the packaged resources like the restart runner. */
+/** The host adapter's `stop|start|restart` runner, launched from the packaged resources like the restart runner. */
 export function desktopServiceRunner(resourcesPath: string): string {
   return join(resourcesPath, 'orchestrator', 'dist', 'host', 'desktop-service-runner.js');
 }
-export type ServiceControl = 'stop' | 'start';
+export type ServiceControl = 'stop' | 'start' | 'restart';
 /**
- * `stop` or `start` of the installed service, through the host adapter: the
- * commands live there only. Windows prompts once (the task is elevated), a
- * LaunchDaemon asks for an administrator, the agent and systemd ask nothing.
- * The same environment as the restart runner, so it reads the same home.
+ * `stop`, `start` or `restart` of the installed service, through the host
+ * adapter: the commands live there only. Windows prompts once (the task is
+ * elevated), a LaunchDaemon asks for an administrator, the agent and systemd
+ * ask nothing. The same environment as the restart runner, so it reads the
+ * same home. `restart` also ends a daemon no launcher holds any more: the one
+ * an update left running on the previous version (`finishUpdate`).
  */
 export async function controlDesktopService(
   action: ServiceControl,

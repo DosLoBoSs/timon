@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
-import { accessSync, constants } from 'node:fs';
-import { dirname, isAbsolute, win32 } from 'node:path';
+import { accessSync, constants, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { dirname, isAbsolute, join, win32 } from 'node:path';
 
 /**
  * The silent installation of a verified update, from inside the app
@@ -88,6 +88,27 @@ export const NSIS_SILENT_ARGS = ['/S', '--updated', '--force-run', '--timon-app-
 export const CHECKSUM_EXIT = 65;
 
 /**
+ * Exit status of the NSIS installer when something of Timon still ran after
+ * its service pause (`TIMON_SERVICE_STILL_RUNNING` in `installer.nsh`): it
+ * replaced nothing, since a daemon left alive keeps the port and the new
+ * version cannot start. `packaging.test.ts` holds the two together.
+ */
+export const NSIS_SERVICE_STILL_RUNNING = 5;
+
+/**
+ * Exit status of the NSIS installer when its service pause did not run to its
+ * verdict (`TIMON_SERVICE_PAUSE_FAILED` in `installer.nsh`): Windows would not
+ * start PowerShell, or the script ended on an error. Nothing checked that the
+ * daemon was gone, so the installer replaced nothing either.
+ */
+export const NSIS_SERVICE_PAUSE_FAILED = 6;
+
+/** Written by the Windows watcher beside the installer when it did not end with 0; the next launch reads it. */
+export const WINDOWS_RESULT_FILE = 'install-result.txt';
+/** What the watcher writes when the installer never ran: its bytes changed, or Windows would not start it. */
+export const WINDOWS_NOT_STARTED = 'not-started';
+
+/**
  * Windows watcher, run by PowerShell from a constant text: the installer, its
  * sha256 and Timon's executable come from the environment, as strings that
  * are never parsed. The file is held with read-only sharing from its hash
@@ -95,11 +116,22 @@ export const CHECKSUM_EXIT = 65;
  * between. Once the installer is done, if no Timon runs in this session (a
  * refused elevation, a failed install), the installed Timon is started again:
  * the person is never left without the app.
+ *
+ * A silent installer says nothing on screen, and this shell has quit by then:
+ * the watcher writes how the installer ended to `TIMON_UPDATE_RESULT` unless
+ * it ended with 0, and the Timon that starts next reports it
+ * (`takeWindowsInstallFailure`). Without that, an update the installer refused
+ * (the previous service could not be stopped) only looked like an app that
+ * closed and opened again on the same version.
  */
 export const WINDOWS_WATCHER = [
   "$ErrorActionPreference = 'Stop'",
   '$installer = $env:TIMON_UPDATE_INSTALLER',
   '$app = $env:TIMON_UPDATE_APP',
+  '$result = $env:TIMON_UPDATE_RESULT',
+  `$outcome = '${WINDOWS_NOT_STARTED}'`,
+  // An earlier attempt's verdict must not be read as this one's.
+  'if ($result) { try { [IO.File]::Delete($result) } catch { } }',
   '$hold = $null',
   'try {',
   '  $hold = [IO.File]::Open($installer, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)',
@@ -113,10 +145,12 @@ export const WINDOWS_WATCHER = [
   '  $info.WorkingDirectory = [IO.Path]::GetDirectoryName($installer)',
   '  $process = [Diagnostics.Process]::Start($info)',
   '  $process.WaitForExit()',
+  '  $outcome = [string]$process.ExitCode',
   '} catch {',
   '} finally {',
   '  if ($hold) { $hold.Dispose() }',
   '}',
+  "if ($result -and $outcome -ne '0') { try { [IO.File]::WriteAllText($result, $outcome) } catch { } }",
   // The installer's `--force-run` starts Timon as it exits: give it a moment to appear.
   'Start-Sleep -Seconds 5',
   '$name = [IO.Path]::GetFileNameWithoutExtension($app)',
@@ -176,6 +210,52 @@ export function windowsPowershell(env: NodeJS.ProcessEnv): string {
   return win32.join(env.SystemRoot ?? env.windir ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 }
 
+/** Where the watcher leaves the verdict of this installer: in its own folder, which the next download prunes. */
+export function windowsResultFile(installer: string): string {
+  return win32.join(win32.dirname(installer), WINDOWS_RESULT_FILE);
+}
+
+export type WindowsInstallFailure = { version: string; outcome: string; reason: string };
+
+/** What a silent Windows installer that did not end with 0 means, in words the person can act on. */
+export function windowsInstallFailureReason(outcome: string): string {
+  if (outcome === String(NSIS_SERVICE_STILL_RUNNING)) {
+    return 'Timon was still running in the background and could not be stopped, so nothing was installed. '
+      + 'Install the update again and accept the Windows permission prompt; if it fails again, restart the computer first.';
+  }
+  if (outcome === String(NSIS_SERVICE_PAUSE_FAILED)) {
+    return 'The installer could not check that Timon was stopped in the background (Windows PowerShell did not run its check), so nothing was installed. '
+      + 'Install the update again; if it fails again, restart the computer first, or run the Timon installer yourself to read its message.';
+  }
+  if (outcome === WINDOWS_NOT_STARTED) return 'The installer could not be started. Nothing was installed.';
+  return `The installer ended with code ${outcome}. Nothing may have been installed.`;
+}
+
+/**
+ * The verdict a watcher left under `<home>/updates/<version>/`, read once: the
+ * file is removed, so a failure is said at one launch and not at every one.
+ * `null` when the last silent installation ended well, or never ran.
+ */
+export function takeWindowsInstallFailure(updatesRoot: string): WindowsInstallFailure | null {
+  let versions: string[];
+  try {
+    versions = readdirSync(updatesRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  } catch {
+    return null;
+  }
+  let found: WindowsInstallFailure | null = null;
+  for (const version of versions) {
+    const file = join(updatesRoot, version, WINDOWS_RESULT_FILE);
+    let outcome: string;
+    try { outcome = readFileSync(file, 'utf8').trim(); } catch { continue; }
+    rmSync(file, { force: true });
+    // Only what the watcher writes: an exit code, or its "never ran" word.
+    if (!/^-?\d{1,10}$/.test(outcome) && outcome !== WINDOWS_NOT_STARTED) continue;
+    found = { version, outcome, reason: windowsInstallFailureReason(outcome) };
+  }
+  return found;
+}
+
 /** Windows: the detached watcher that verifies and starts the silent installer. */
 export function windowsCommand(input: { path: string; sha256: string; appExe: string; env: NodeJS.ProcessEnv }): Command {
   const env: NodeJS.ProcessEnv = {
@@ -183,6 +263,7 @@ export function windowsCommand(input: { path: string; sha256: string; appExe: st
     TIMON_UPDATE_INSTALLER: input.path,
     TIMON_UPDATE_SHA256: input.sha256,
     TIMON_UPDATE_APP: input.appExe,
+    TIMON_UPDATE_RESULT: windowsResultFile(input.path),
   };
   // Timon started again by the watcher is the application, never Node (I2 of audit-packaged-os).
   delete env.ELECTRON_RUN_AS_NODE;
