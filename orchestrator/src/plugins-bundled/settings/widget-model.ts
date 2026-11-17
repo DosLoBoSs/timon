@@ -45,7 +45,7 @@ export const SNAPSHOT_SCOPE = 'widgets.snapshot';
 export const CHAT_COLUMNS = ['chat.left.widget', 'chat.right.widget'] as const;
 /** Separator between a column's zone and its tab suffix (`chat-columns.ts`). */
 export const TAB_SEPARATOR = '#';
-/** Bounds of a column width (`LARGEUR_MIN` / `LARGEUR_MAX` in `chat-columns.ts`). */
+/** Bounds of a column width (`WIDTH_MIN` / `WIDTH_MAX` in `chat-columns.ts`). */
 export const COLUMN_MIN_WIDTH = 240;
 export const COLUMN_MAX_WIDTH = 800;
 
@@ -175,7 +175,7 @@ export function visibleCatalog(snapshot: StoredSnapshot | null, allowed: PluginA
   });
 }
 
-/** Columns as `lireColonnes` would keep them, enough to list zones and tabs. */
+/** Columns as `readColumns` would keep them, enough to list zones and tabs. */
 export type ColumnsState = {
   order: string[];
   hidden: string[];
