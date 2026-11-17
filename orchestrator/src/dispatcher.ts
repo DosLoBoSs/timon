@@ -45,7 +45,7 @@ import {
 } from './interruption.js';
 import { MissionFenceRefusedError, profileLimits } from './resources.js';
 import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal } from './code-gate.js';
-import { gitTaskRefusal } from './task-git.js';
+import { GIT_MISSING_MESSAGE, GIT_MISSING_REASON, gitTaskRefusal } from './task-git.js';
 import { spawnWideningRefusal } from './users/privileged-overrides.js';
 import { isMirrorTask } from './task-mirror.js';
 import {
@@ -788,7 +788,10 @@ export function blockIfGitMissing(task: TaskRow, capabilities?: readonly string[
   const reason = gitTaskRefusal(task.type, { cwd, ...(capabilities ? { capabilities } : {}) });
   if (!reason) return false;
   console.warn(`[dispatcher] task ${task.id} → BLOCKED: ${reason}`);
-  dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason: reason });
+  dbApi.updateTaskStatus(task.id, 'BLOCKED', {
+    blockedReason: reason,
+    blockedReasonCode: reason === GIT_MISSING_REASON ? GIT_MISSING_MESSAGE : null,
+  });
   return true;
 }
 
