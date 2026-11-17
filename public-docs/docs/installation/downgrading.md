@@ -11,6 +11,18 @@ When a newer desktop version opens existing data, Timon asks you to **Update** o
 
 **Update** records your approval, prepares the service, then backs up and migrates your data. Keep Timon open while the backup runs; a large copy can take several minutes. If the backup is partial or fails, Timon explains the result. A refused update does not automatically roll back the service or data: follow the displayed instructions before restarting.
 
+### An AppImage you refused to update
+
+When the desktop app installed an update itself (**Install and restart**), the AppImage you launched now holds the new version, under the same name. The version it replaced is still next to it, as a hidden file named `.<name>.previous`, until you approve the update. If you choose **Quit** on the update screen, nothing removes it, and opening the AppImage again shows the same screen. To go back to the previous version, quit Timon, then put that file back in place (here for the default `~/Applications/Timon.AppImage`):
+
+```bash
+cd ~/Applications
+ls -a                                    # .Timon.AppImage.previous
+mv .Timon.AppImage.previous Timon.AppImage
+```
+
+Open the AppImage again: it is the previous version, on your data and service, which the refused update did not change. Once you approve an update, the previous file is deleted: going back then means downloading the older AppImage and following [Linux AppImage](#linux-appimage).
+
 ## Reinstall the previous installer
 
 Install the package of the version you want over the current one, the same way you installed it the first time, then open Timon.
