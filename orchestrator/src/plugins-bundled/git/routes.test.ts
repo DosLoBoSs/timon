@@ -271,12 +271,12 @@ test('worktrees lists the main checkout and a linked worktree', async () => {
     assert.equal(body.ok, true);
     assert.equal(body.worktrees.length, 2);
     const [main, wt] = body.worktrees as [Record<string, unknown>, Record<string, unknown>];
-    assert.equal(realpathSync(main.path as string), realpathSync(work));
+    assert.equal(realpathSync.native(main.path as string), realpathSync.native(work));
     assert.equal(main.main, true);
     assert.equal(main.current, true);
     assert.equal(main.branch, 'main');
     assert.equal(main.head, git(work, 'rev-parse', 'HEAD'));
-    assert.equal(realpathSync(wt.path as string), realpathSync(linked));
+    assert.equal(realpathSync.native(wt.path as string), realpathSync.native(linked));
     assert.deepEqual({ ...wt, path: null }, {
       path: null, head: git(linked, 'rev-parse', 'HEAD'), branch: 'graph-wt', main: false, current: false,
       bare: false, detached: false, locked: null, prunable: null,
