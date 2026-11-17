@@ -109,21 +109,44 @@ export function bootLicenseState(opts: VerifyOptions = {}): LicenseState {
  * is rewritten by every activation and renewal, so its date is the last server
  * contact that survived; the tolerance counts from it, as it would have.
  *
- * Only with an activation key: without one, the token was installed by hand
- * and its date says nothing about the server.
+ * Only with an activation key: without one, the token was installed by hand,
+ * nothing renews it, and its date says nothing about the server.
+ *
+ * The clock anchors went with the file too. The token's own `srv` is the
+ * server clock of the last token this install accepted, so it restores
+ * `maxSrv` (an older token replayed after the reset is refused again) and,
+ * with the file date, `lastSeen`. Never later than now: a forged `srv` could
+ * only push the anchors into the future, which locks its own author out.
  */
 function recoverLicenseStore(now: Date): LicenseStore {
   const store = readLicenseStore();
   if (!licenseStoreDamaged() || !readLicenseKey()) return store;
   let tokenWritten: number;
   try { tokenWritten = statSync(LICENSE_FILE).mtimeMs; } catch { return store; }
-  const lastContact = Math.floor(Math.min(tokenWritten, now.getTime()) / 1000);
+  const nowSeconds = Math.floor(now.getTime() / 1000);
+  const lastContact = Math.min(Math.floor(tokenWritten / 1000), nowSeconds);
+  const srv = tokenServerClock();
+  const patch: LicenseStore = {
+    lastContact,
+    lastSeen: lastContact,
+    ...(srv !== null ? { maxSrv: Math.min(srv, nowSeconds) } : {}),
+  };
   console.warn(`[license] license.state.json is unreadable; offline tolerance counted from the licence file date (${new Date(lastContact * 1000).toISOString()})`);
-  try { return writeLicenseStore({ lastContact }); }
+  try { return writeLicenseStore(patch); }
   catch (err) {
     console.warn('[license] could not rewrite license.state.json:', (err as Error).message);
-    return { ...store, lastContact };
+    return { ...store, ...patch };
   }
+}
+
+/** The `srv` claim of the installed token, unverified: only ever used to restore an anchor. */
+function tokenServerClock(): number | null {
+  try {
+    const claims = readFileSync(LICENSE_FILE, 'utf8').trim().split('.')[1];
+    if (!claims) return null;
+    const srv = (JSON.parse(Buffer.from(claims, 'base64url').toString('utf8')) as { srv?: unknown }).srv;
+    return typeof srv === 'number' && Number.isInteger(srv) && srv >= 0 ? srv : null;
+  } catch { return null; }
 }
 
 // ── The loop ────────────────────────────────────────────────────────────────

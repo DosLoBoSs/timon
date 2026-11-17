@@ -277,6 +277,21 @@ test('bootLicenseState: without an activation key, a damaged store grants nothin
   assert.equal(bootLicenseState({ keys, now: new Date(nowMs()) }).reason, 'expired', 'a hand-installed token says nothing about the server');
 });
 
+test('bootLicenseState: a damaged store gets its clock anchors back from the token', () => {
+  activated();
+  const contact = clock;
+  utimesSync(LICENSE_FILE, contact, contact);
+  writeFileSync(LICENSE_STATE_FILE, '');
+  clock = contact + 3600;
+  assert.equal(bootLicenseState({ keys, now: new Date(nowMs()) }).status, 'valid');
+  assert.equal(readLicenseStore().maxSrv, contact, 'the server clock of the last accepted token');
+  assert.ok((readLicenseStore().lastSeen ?? 0) >= contact, 'and a local clock seen since');
+  // An older token replayed after the reset is a rollback again.
+  writeFileSync(LICENSE_FILE, token(contact - 3600) + '\n');
+  assert.equal(readLicense(LICENSE_FILE, { keys, device: DEVICE, now: new Date(nowMs()) }).reason, 'invalid:clock:rollback');
+  writeFileSync(LICENSE_FILE, '');
+});
+
 /**
  * No licence is Free (the maintainer's decision, 17/11/2026): whatever is left
  * on disk, an expired paid token and its activation key included, the loop
