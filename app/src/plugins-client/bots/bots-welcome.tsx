@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { ProviderCliCards } from '@/components/provider-cli/provider-cli-cards';
 import { stepHref } from '@/components/onboarding/onboarding-flow';
 import { useSetupChat, type SetupChat } from '@/components/onboarding/setup-chat';
-import type { SetupChatSignal } from '@/app/setup/agent/setup-trouble';
+import type { SetupChatSignal } from '@/components/onboarding/setup-trouble';
 import { t } from '@/lib/i18n';
 import { settingsPath } from '@/lib/settings-path';
 

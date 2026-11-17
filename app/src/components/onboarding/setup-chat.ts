@@ -18,11 +18,11 @@ import { fetchCapabilities } from '@/lib/capabilities';
 import { armAutoTour } from '@/lib/guided-tour';
 import { getLocale } from '@/lib/i18n';
 import { machineScopedStorage } from '@/lib/machines/machine-storage';
-import { readResume, RESUME_KEY, setupEntry, type MainAgentStatus } from '@/app/setup/agent/setup-entry';
-import { requestSkip } from '@/app/setup/agent/setup-escape';
+import { readResume, RESUME_KEY, setupEntry, type MainAgentStatus } from './setup-entry';
+import { requestSkip } from './setup-skip';
 import {
   SILENT_AFTER_MS, setupTrouble, type SetupChatSignal, type SetupMissionState, type SetupTrouble,
-} from '@/app/setup/agent/setup-trouble';
+} from './setup-trouble';
 import { MAIN_AGENT_STATUS_PATH, type Fetcher } from './agent-create';
 
 export const SETUP_CHAT_PATH = '/api/ui/setup/main-agent/chat';

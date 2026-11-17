@@ -143,7 +143,7 @@ import type { WorkingEnterMode } from '@/components/chat/chat-appearance';
 import { endsStreamingBubble, routeStreamDelta } from '@/lib/stream-delta';
 import { spawnFailureNotice, type SpawnFailedPayload } from '@/lib/spawn-failure-notice';
 import { turnInterruptedNotice, type TurnInterruptedPayload } from '@/lib/turn-interrupted-notice';
-import { chatTroubleSignal, type SetupChatSignal } from '@/app/setup/agent/setup-trouble';
+import { chatTroubleSignal, type SetupChatSignal } from '@/components/onboarding/setup-trouble';
 import {
   lineOnAbandoned, lineOnOutput, lineOnProviderRetry, lineOnReplayStarted, lineOnResult, retryLineOpen, type RetryLine,
 } from '@/lib/provider-retry-line';
