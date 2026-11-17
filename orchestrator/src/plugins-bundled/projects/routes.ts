@@ -41,14 +41,15 @@ const WorkspacePatch = z.object({
 /** The service's refusal as the route answers it; a cwd refusal also leaves its audit trail. */
 function answerProjectError(req: Request, res: Response, err: unknown): void {
   if (!(err instanceof ProjectServiceError)) {
-    res.status(500).json({ error: (err as Error).message });
+    res.status(500).json(apiError('project_request_failed', (err as Error).message, { detail: (err as Error).message }));
     return;
   }
   if (err.audit) {
     rejectOverride(req, res, err.audit.action, err.audit.target, err.message);
     return;
   }
-  res.status(err.code === 'not_found' ? 404 : err.code === 'forbidden' ? 403 : 400).json({ error: err.message });
+  if (err.code === 'not_found') { res.status(404).json(apiError('project_not_found', err.message)); return; }
+  res.status(err.code === 'forbidden' ? 403 : 400).json(apiError('project_refused', err.message, { detail: err.message }));
 }
 
 /**
@@ -116,25 +117,27 @@ export function registerRoutes(app: Router): void {
   // `projects:manage`, the same permission as creating the projects it groups.
   app.get('/api/workspaces', (_req, res) => {
     try { res.json({ workspaces: listWorkspaceRecords() }); }
-    catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    catch (err) { res.status(500).json(apiError('project_request_failed', (err as Error).message, { detail: (err as Error).message })); }
   });
 
   app.post('/api/workspaces', (req, res) => {
     if (rejectIfDenied(req, res, 'projects:manage')) return;
     const parsed = WorkspaceCreate.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues.map((i) => i.message).join('; ') });
+      const detail = parsed.error.issues.map((i) => i.message).join('; ');
+      res.status(400).json(apiError('invalid_detail', detail, { detail }));
       return;
     }
     try { res.status(201).json({ workspace: createWorkspace(parsed.data) }); }
-    catch (err) { res.status(400).json({ error: (err as Error).message }); }
+    catch (err) { res.status(400).json(apiError('workspace_refused', (err as Error).message, { detail: (err as Error).message })); }
   });
 
   app.patch('/api/workspaces/:slug', (req, res) => {
     if (rejectIfDenied(req, res, 'projects:manage')) return;
     const parsed = WorkspacePatch.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues.map((i) => i.message).join('; ') });
+      const detail = parsed.error.issues.map((i) => i.message).join('; ');
+      res.status(400).json(apiError('invalid_detail', detail, { detail }));
       return;
     }
     if (!getWorkspace(req.params.slug)) {
@@ -142,7 +145,7 @@ export function registerRoutes(app: Router): void {
       return;
     }
     try { res.json({ workspace: updateWorkspace(req.params.slug, parsed.data) }); }
-    catch (err) { res.status(400).json({ error: (err as Error).message }); }
+    catch (err) { res.status(400).json(apiError('workspace_refused', (err as Error).message, { detail: (err as Error).message })); }
   });
 
   app.delete('/api/workspaces/:slug', (req, res) => {
@@ -152,7 +155,7 @@ export function registerRoutes(app: Router): void {
       return;
     }
     try { deleteWorkspace(req.params.slug); res.json({ ok: true }); }
-    catch (err) { res.status(400).json({ error: (err as Error).message }); }
+    catch (err) { res.status(400).json(apiError('workspace_refused', (err as Error).message, { detail: (err as Error).message })); }
   });
 
   app.get('/api/projects/activity', (_req, res) => {
@@ -176,7 +179,7 @@ export function registerRoutes(app: Router): void {
 
       res.json({ activity: Object.fromEntries(byProject) });
     } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json(apiError('project_request_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -208,7 +211,7 @@ export function registerRoutes(app: Router): void {
     try {
       res.json(createDemoProject({ inherit: inheritedLlm(req.auth?.missionId), origin: todoOriginFromRequest(req) }));
     } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json(apiError('demo_project_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -218,7 +221,7 @@ export function registerRoutes(app: Router): void {
     try {
       res.json(saveProjectIcon(body));
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('icon_invalid', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -230,7 +233,8 @@ export function registerRoutes(app: Router): void {
       res.send(bytes);
     } catch (err) {
       const msg = (err as Error).message;
-      res.status(msg === 'not found' ? 404 : 400).json({ error: msg });
+      if (msg === 'not found') { res.status(404).json(apiError('not_found', msg)); return; }
+      res.status(400).json(apiError('icon_invalid', msg, { detail: msg }));
     }
   });
 
@@ -248,7 +252,8 @@ export function registerRoutes(app: Router): void {
     if (rejectIfDenied(req, res, 'projects:manage')) return;
     const query = projectRemovalQuery.safeParse(req.query);
     if (!query.success) {
-      res.status(400).json({ error: query.error.issues[0]?.message ?? 'invalid query' });
+      const detail = query.error.issues[0]?.message ?? 'invalid query';
+      res.status(400).json(apiError('invalid_detail', detail, { detail }));
       return;
     }
     const { agents, to } = query.data;
@@ -259,16 +264,16 @@ export function registerRoutes(app: Router): void {
       res.json({ ok: true, ...removeProject(req.params.slug, fate) });
     } catch (err) {
       if (err instanceof ProjectHasAgentsError) {
-        res.status(409).json({ error: err.message, agents: err.agents });
+        res.status(409).json({ ...apiError('project_has_agents', err.message, { count: err.agents.length }), agents: err.agents });
         return;
       }
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('project_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
   app.get('/api/projects/:slug/meta', (req, res) => {
     try { res.json({ meta: readMeta(req.params.slug) }); }
-    catch (err) { res.status(400).json({ error: (err as Error).message }); }
+    catch (err) { res.status(400).json(apiError('project_refused', (err as Error).message, { detail: (err as Error).message })); }
   });
 
   app.put('/api/projects/:slug/meta', (req, res) => {
@@ -294,7 +299,7 @@ export function registerRoutes(app: Router): void {
       }
       res.json({ roles, resolved });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('project_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -302,7 +307,7 @@ export function registerRoutes(app: Router): void {
     if (rejectIfDenied(req, res, 'projects:manage')) return;
     const body = req.body as Record<string, unknown>;
     if (!body || typeof body !== 'object') {
-      res.status(400).json({ error: 'body must be an object {role: {agent, model?, permission_mode?}}' });
+      res.status(400).json(apiError('invalid_body', 'body must be an object {role: {agent, model?, permission_mode?}}'));
       return;
     }
     const force = body.force === true;
@@ -310,13 +315,13 @@ export function registerRoutes(app: Router): void {
     for (const [k, v] of Object.entries(body)) {
       if (k === 'force') continue; // override flag, not a role
       if (!(TASK_ROLES as string[]).includes(k)) {
-        res.status(400).json({ error: `invalid role "${k}"` });
+        res.status(400).json(apiError('role_invalid', `invalid role "${k}"`, { role: k }));
         return;
       }
       const spec = parseRoleSpecInput(v);
       if (spec) {
         const err = roleAgentCwdError(req.params.slug, k, spec.agent, force);
-        if (err) { res.status(400).json({ error: err }); return; }
+        if (err) { res.status(400).json(apiError('role_agent_refused', err, { detail: err })); return; }
         const refusal = roleLlmRefusal(req, req.params.slug, k, spec);
         if (refusal) { rejectOverride(req, res, 'project.role_denied', `${req.params.slug}/${k}`, refusal); return; }
         roles[k] = spec;
@@ -327,7 +332,7 @@ export function registerRoutes(app: Router): void {
       announceProjectUpdated(req.params.slug, ['roles'], todoOriginFromRequest(req));
       res.json({ roles: written });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('project_refused', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
