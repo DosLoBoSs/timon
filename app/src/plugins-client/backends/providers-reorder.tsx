@@ -13,6 +13,7 @@ import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, us
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { BrandMark } from '@/components/brand-mark';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { sseOn } from '@/lib/sse-stream';
 import type { CustomBackend } from './form';
@@ -28,7 +29,7 @@ async function errorText(res: Response): Promise<string> {
   if (res.status === 403) return t('backendsSettings.errors.forbidden');
   const raw = (await res.text().catch(() => '')).trim();
   try {
-    return (JSON.parse(raw) as { error?: string }).error || `HTTP ${res.status}`;
+    return apiErrorMessage(JSON.parse(raw), { status: res.status });
   } catch {
     return raw || `HTTP ${res.status}`;
   }
