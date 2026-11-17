@@ -122,10 +122,19 @@ const definitionOf = (h: Host): string | null => {
   return readFileSync(h.o.platform === 'linux' ? unitPath(h.o.homeDir) : plistPath(h.o.homeDir), 'utf8');
 };
 
+/**
+ * The Linux guard reads the effective unit back from `systemctl show` and only
+ * trusts POSIX paths there. The fixtures write units naming the temporary
+ * folder, `C:\…` on a Windows runner: the unit is then judged foreign or
+ * unproven. That code runs on Linux only, so its cases are skipped on Windows.
+ */
+const SYSTEMD_IDENTITY = process.platform === 'win32'
+  && 'the systemd unit identity is read as POSIX paths, which a Windows temporary folder is not';
+
 for (const platform of ['linux', 'darwin', 'win32'] as const) {
   const name = { linux: LINUX_UNIT, darwin: MACOS_LABEL, win32: WINDOWS_TASK }[platform];
 
-  test(`${platform}: the service of another home is refused, and nothing is touched`, () => {
+  test(`${platform}: the service of another home is refused, and nothing is touched`, { skip: platform === 'linux' && SYSTEMD_IDENTITY }, () => {
     const h = host(platform);
     const realHome = join(h.o.homeDir, 'real-home');
     const realInstall = join(h.o.homeDir, 'packaged', 'orchestrator');
@@ -150,14 +159,14 @@ for (const platform of ['linux', 'darwin', 'win32'] as const) {
     assert.ok(h.calls.every(READ_ONLY), JSON.stringify(h.calls));
   });
 
-  test(`${platform}: the same install on another home is refused`, () => {
+  test(`${platform}: the same install on another home is refused`, { skip: platform === 'linux' && SYSTEMD_IDENTITY }, () => {
     const h = host(platform);
     register(h, { timonHome: join(h.o.homeDir, 'real-home'), installDir: h.o.installDir });
     assert.equal(foreignService(h.o)?.why, 'home');
     assert.match(guardServiceGesture(h.o, 'install').refusal!.lines[0]!, /belongs to another data directory/);
   });
 
-  test(`${platform}: the same home on another install is refused too`, () => {
+  test(`${platform}: the same home on another install is refused too`, { skip: platform === 'linux' && SYSTEMD_IDENTITY }, () => {
     const h = host(platform);
     register(h, { timonHome: h.o.timonHome, installDir: join(h.o.homeDir, 'packaged', 'orchestrator') });
     const foreign = foreignService(h.o);
@@ -165,7 +174,7 @@ for (const platform of ['linux', 'darwin', 'win32'] as const) {
     assert.match(guardServiceGesture(h.o, 'install').refusal!.lines[0]!, /runs from another installation/);
   });
 
-  test(`${platform}: reinstalling over one's own service needs no flag`, () => {
+  test(`${platform}: reinstalling over one's own service needs no flag`, { skip: platform === 'linux' && SYSTEMD_IDENTITY }, () => {
     const h = host(platform);
     register(h, { timonHome: h.o.timonHome, installDir: h.o.installDir });
     const guard = guardServiceGesture(h.o, 'install');
@@ -175,13 +184,13 @@ for (const platform of ['linux', 'darwin', 'win32'] as const) {
     assert.ok(res.lines.some((l) => l.includes('service installed')), res.lines.join('\n'));
   });
 
-  test(`${platform}: no service at all needs no flag either`, () => {
+  test(`${platform}: no service at all needs no flag either`, { skip: platform === 'linux' && SYSTEMD_IDENTITY }, () => {
     const h = host(platform);
     assert.equal(readInstalledService(h.o), null);
     assert.deepEqual(guardServiceGesture(h.o, 'install'), { refusal: null, replacing: null, notice: null });
   });
 
-  test(`${platform}: another home with --force is replaced, and says so`, () => {
+  test(`${platform}: another home with --force is replaced, and says so`, { skip: platform === 'linux' && SYSTEMD_IDENTITY }, () => {
     const h = host(platform);
     const realHome = join(h.o.homeDir, 'real-home');
     register(h, { timonHome: realHome, installDir: join(h.o.homeDir, 'packaged', 'orchestrator') });
@@ -208,7 +217,7 @@ for (const platform of ['linux', 'darwin', 'win32'] as const) {
     }
   });
 
-  test(`${platform}: a dry run reports the refusal, and never claims an install`, () => {
+  test(`${platform}: a dry run reports the refusal, and never claims an install`, { skip: platform === 'linux' && SYSTEMD_IDENTITY }, () => {
     const h = host(platform);
     register(h, { timonHome: join(h.o.homeDir, 'real-home'), installDir: join(h.o.homeDir, 'packaged', 'orchestrator') });
     const dry = { ...h.o, dryRun: true };
@@ -227,7 +236,7 @@ for (const platform of ['linux', 'darwin', 'win32'] as const) {
     assert.match(text, /\(dry-run\) would install/);
   });
 
-  test(`${platform}: uninstall, stop and start refuse another home; only uninstall takes --force`, () => {
+  test(`${platform}: uninstall, stop and start refuse another home; only uninstall takes --force`, { skip: platform === 'linux' && SYSTEMD_IDENTITY }, () => {
     const h = host(platform);
     register(h, { timonHome: join(h.o.homeDir, 'real-home'), installDir: join(h.o.homeDir, 'packaged', 'orchestrator') });
     const uninstall = guardServiceGesture(h.o, 'uninstall');
@@ -242,7 +251,7 @@ for (const platform of ['linux', 'darwin', 'win32'] as const) {
   });
 }
 
-test('linux: the real template and the live hand-written form both read back', () => {
+test('linux: the real template and the live hand-written form both read back', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const shipped = resolve('src/host/../../');
   const file = unitPath(h.o.homeDir);
@@ -268,7 +277,7 @@ test('linux: the real template and the live hand-written form both read back', (
   assert.equal(guardServiceGesture(h.o, 'stop').refusal, null, 'an unreadable service can still be stopped');
 });
 
-test('linux: --force gets past the identity check an installed unit would otherwise answer', () => {
+test('linux: --force gets past the identity check an installed unit would otherwise answer', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   register(h, { timonHome: join(h.o.homeDir, 'real-home'), installDir: join(h.o.homeDir, 'packaged', 'orchestrator') });
   const refused = installService(h.o);
@@ -403,7 +412,7 @@ const UNPROVEN: Record<Platform, (h: Host) => void> = {
 };
 
 for (const platform of ['linux', 'darwin', 'win32'] as const) {
-  test(`${platform}: its own home without a named installation is not proof it is ours`, () => {
+  test(`${platform}: its own home without a named installation is not proof it is ours`, { skip: platform === 'linux' && SYSTEMD_IDENTITY }, () => {
     const h = host(platform);
     UNPROVEN[platform](h);
     const before = definitionOf(h);
@@ -453,6 +462,7 @@ test('darwin: a LaunchDaemon on its own home whose launcher is missing or unknow
 
 test('a packaged upgrade moves a service that names its home and no installation: home-only, on purpose', async () => {
   for (const platform of ['linux', 'darwin', 'win32'] as const) {
+    if (platform === 'linux' && SYSTEMD_IDENTITY) continue; // see SYSTEMD_IDENTITY
     const h = host(platform);
     UNPROVEN[platform](h);
     const steps: string[] = [];
@@ -655,7 +665,7 @@ function registerPackaged(h: Host, timonHome = h.o.timonHome, version = '0.2.0')
   return packaged;
 }
 
-test('linux: a clone on the home of a packaged service is refused, and nothing is touched', () => {
+test('linux: a clone on the home of a packaged service is refused, and nothing is touched', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const packaged = registerPackaged(h);
   const before = readFileSync(unitPath(h.o.homeDir, packaged.unitName), 'utf8');
@@ -681,7 +691,7 @@ test('linux: a clone on the home of a packaged service is refused, and nothing i
   assert.notEqual(dry.refusal!.code, 0);
 });
 
-test('linux: a package on the home of a clone service is refused the same way', () => {
+test('linux: a package on the home of a clone service is refused the same way', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   register(h, { timonHome: h.o.timonHome, installDir: h.o.installDir });
   const packaged = packagedServiceOptions(h.o, join(h.o.homeDir, 'Timon'), 3110, '0.2.0');
@@ -694,7 +704,7 @@ test('linux: a package on the home of a clone service is refused the same way', 
   assert.equal(existsSync(unitPath(h.o.homeDir, packaged.unitName)), false);
 });
 
-test('linux: the same data reached through a link is the same data', () => {
+test('linux: the same data reached through a link is the same data', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   mkdirSync(h.o.timonHome, { recursive: true });
   const link = join(h.o.homeDir, 'linked-home');
@@ -703,7 +713,7 @@ test('linux: the same data reached through a link is the same data', () => {
   assert.ok(guardServiceGesture({ ...h.o, timonHome: link }, 'install').refusal, 'another hash, the same database');
 });
 
-test('linux: units on another home are none of this gesture\'s business', () => {
+test('linux: units on another home are none of this gesture\'s business', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const otherHome = join(h.o.homeDir, 'other-home');
   registerPackaged(h, otherHome);
@@ -716,7 +726,7 @@ test('linux: units on another home are none of this gesture\'s business', () => 
   assert.deepEqual(guardServiceGesture(rc, 'install'), { refusal: null, replacing: null, notice: null });
 });
 
-test('linux: a package updating over its own unit, with no other on the home, needs no flag', () => {
+test('linux: a package updating over its own unit, with no other on the home, needs no flag', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   registerPackaged(h, h.o.timonHome, '0.1.9');
   const update = packagedServiceOptions(h.o, join(h.o.homeDir, 'Timon'), 3110, '0.2.0');
@@ -724,7 +734,7 @@ test('linux: a package updating over its own unit, with no other on the home, ne
   assert.deepEqual(guardServiceGesture(update, 'uninstall'), { refusal: null, replacing: null, notice: null });
 });
 
-test('linux: only a unit proven to run on this home counts', () => {
+test('linux: only a unit proven to run on this home counts', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const dir = dirname(unitPath(h.o.homeDir));
   mkdirSync(dir, { recursive: true });
@@ -740,7 +750,7 @@ test('linux: only a unit proven to run on this home counts', () => {
   assert.deepEqual(servicesSharingHome({ ...h.o, timonHome: join(h.o.homeDir, '.timon') }), []);
 });
 
-test('linux: a no-TIMON_HOME clone unit runs on the default home, so it shares that one', () => {
+test('linux: a no-TIMON_HOME clone unit runs on the default home, so it shares that one', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const defaultHome = join(h.o.homeDir, '.timon');
   const file = unitPath(h.o.homeDir);
@@ -758,7 +768,7 @@ function dropIn(h: Host, unit: string, content: string): void {
   writeFileSync(join(dir, 'override.conf'), content);
 }
 
-test('linux: a drop-in that brings another unit onto this home is refused, and --force takes it down', () => {
+test('linux: a drop-in that brings another unit onto this home is refused, and --force takes it down', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const packaged = registerPackaged(h, join(h.o.homeDir, 'other-home'));
   dropIn(h, packaged.unitName, `[Service]\nEnvironment="TIMON_HOME=${h.o.timonHome}"\n`);
@@ -772,7 +782,7 @@ test('linux: a drop-in that brings another unit onto this home is refused, and -
   assert.deepEqual(guardServiceGesture(h.o, 'install', { force: true }).replacing?.units, [packaged.unitName]);
 });
 
-test('linux: a drop-in that takes another unit off this home leaves it alone, even with --force', () => {
+test('linux: a drop-in that takes another unit off this home leaves it alone, even with --force', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const packaged = registerPackaged(h);
   dropIn(h, packaged.unitName, `[Service]\nEnvironment="TIMON_HOME=${join(h.o.homeDir, 'other-home')}"\n`);
@@ -789,14 +799,14 @@ test('linux: a drop-in that takes another unit off this home leaves it alone, ev
   assert.ok(!h.calls.some((c) => c.includes('disable')), JSON.stringify(h.calls));
 });
 
-test('linux: the working directory shown is the one systemd runs too', () => {
+test('linux: the working directory shown is the one systemd runs too', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const packaged = registerPackaged(h);
   dropIn(h, packaged.unitName, '[Service]\nWorkingDirectory=/srv/moved/orchestrator\n');
   assert.equal(servicesSharingHome(h.o)[0]?.installDir, '/srv/moved/orchestrator');
 });
 
-test('linux: the home is read out of the whole environment, as systemctl serializes it', () => {
+test('linux: the home is read out of the whole environment, as systemctl serializes it', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const packaged = registerPackaged(h, join(h.o.homeDir, 'other-home'));
   h.systemd.set(packaged.unitName, () => ({
@@ -819,7 +829,7 @@ const UNVERIFIED: Record<string, () => ExecResult> = {
 };
 
 for (const [why, answer] of Object.entries(UNVERIFIED)) {
-  test(`linux: ${why}: refused, --force does not get past it, and the unit stays`, () => {
+  test(`linux: ${why}: refused, --force does not get past it, and the unit stays`, { skip: SYSTEMD_IDENTITY }, () => {
     const h = host('linux');
     const packaged = registerPackaged(h);
     const file = unitPath(h.o.homeDir, packaged.unitName);
@@ -850,7 +860,7 @@ for (const [why, answer] of Object.entries(UNVERIFIED)) {
   });
 }
 
-test('linux: one unit proven and one that cannot be checked: --force touches neither', () => {
+test('linux: one unit proven and one that cannot be checked: --force touches neither', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const packaged = registerPackaged(h);
   const dir = dirname(unitPath(h.o.homeDir));
@@ -867,7 +877,7 @@ test('linux: one unit proven and one that cannot be checked: --force touches nei
   assert.doesNotMatch(text, /install --force/);
 });
 
-test('linux: a foreign service in place and an unchecked unit: the reason is the one --force cannot answer', () => {
+test('linux: a foreign service in place and an unchecked unit: the reason is the one --force cannot answer', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   register(h, { timonHome: join(h.o.homeDir, 'real-home'), installDir: join(h.o.homeDir, 'packaged', 'orchestrator') });
   const packaged = registerPackaged(h);
@@ -881,13 +891,13 @@ test('linux: a foreign service in place and an unchecked unit: the reason is the
   assert.doesNotMatch(refusal.lines.join('\n'), /install --force/);
 });
 
-test('linux: no other unit means no call to systemd at all', () => {
+test('linux: no other unit means no call to systemd at all', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   assert.deepEqual(guardServiceGesture(h.o, 'install'), { refusal: null, replacing: null, notice: null });
   assert.deepEqual(h.calls, []);
 });
 
-test('linux: start refuses to bring up a second daemon, stop and uninstall still clear the double', () => {
+test('linux: start refuses to bring up a second daemon, stop and uninstall still clear the double', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   register(h, { timonHome: h.o.timonHome, installDir: h.o.installDir });
   const packaged = registerPackaged(h);
@@ -906,7 +916,7 @@ test('linux: start refuses to bring up a second daemon, stop and uninstall still
   assert.ok(existsSync(unitPath(h.o.homeDir, packaged.unitName)), 'the package keeps its unit');
 });
 
-test('linux: --force takes the other unit down before starting its own', () => {
+test('linux: --force takes the other unit down before starting its own', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const packaged = registerPackaged(h);
   const marker = join(h.o.timonHome, 'desktop-runtime', 'installed');
@@ -933,7 +943,7 @@ test('linux: --force takes the other unit down before starting its own', () => {
   assert.equal(guardServiceGesture(h.o, 'install').refusal, null, 'one service left, this one');
 });
 
-test('linux: --force over a clone unit leaves the marker of another unit alone', () => {
+test('linux: --force over a clone unit leaves the marker of another unit alone', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   register(h, { timonHome: h.o.timonHome, installDir: h.o.installDir });
   const packaged = packagedServiceOptions(h.o, join(h.o.homeDir, 'Timon'), 3110, '0.2.0');
@@ -951,7 +961,7 @@ test('linux: --force over a clone unit leaves the marker of another unit alone',
   assert.equal(readFileSync(marker, 'utf8'), packaged.unitName);
 });
 
-test('linux: --force writes nothing when the other unit will not stop', () => {
+test('linux: --force writes nothing when the other unit will not stop', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const packaged = registerPackaged(h);
   const guard = guardServiceGesture(h.o, 'install', { force: true });
@@ -971,7 +981,7 @@ test('linux: --force writes nothing when the other unit will not stop', () => {
   assert.ok(existsSync(unitPath(h.o.homeDir, packaged.unitName)));
 });
 
-test('linux: a dry run with --force says what it would take down, and does it not', () => {
+test('linux: a dry run with --force says what it would take down, and does it not', { skip: SYSTEMD_IDENTITY }, () => {
   const h = host('linux');
   const packaged = registerPackaged(h);
   const dry = { ...h.o, dryRun: true };
@@ -985,7 +995,7 @@ test('linux: a dry run with --force says what it would take down, and does it no
   assert.equal(existsSync(unitPath(h.o.homeDir)), false);
 });
 
-test('linux: an update of the package is not judged on a clone unit beside it', async () => {
+test('linux: an update of the package is not judged on a clone unit beside it', { skip: SYSTEMD_IDENTITY }, async () => {
   const h = host('linux');
   register(h, { timonHome: h.o.timonHome, installDir: h.o.installDir });
   registerPackaged(h, h.o.timonHome, '0.1.9');
@@ -1023,7 +1033,7 @@ test('macOS and Windows have one service name per account: nothing else to read'
 for (const platform of ['darwin', 'win32'] as const) {
   const gestures = platform === 'win32' ? [stopService, startService, restartWindowsService] : [stopService, startService];
 
-  test(`${platform}: the desktop's service gestures leave the service of another home running`, () => {
+  test(`${platform}: the desktop's service gestures leave the service of another home running`, { skip: platform === 'linux' && SYSTEMD_IDENTITY }, () => {
     for (const gesture of gestures) {
       const h = host(platform);
       const realHome = join(h.o.homeDir, 'real-home');
@@ -1039,7 +1049,7 @@ for (const platform of ['darwin', 'win32'] as const) {
     }
   });
 
-  test(`${platform}: the desktop's service gestures act on this home's own service`, () => {
+  test(`${platform}: the desktop's service gestures act on this home's own service`, { skip: platform === 'linux' && SYSTEMD_IDENTITY }, () => {
     for (const gesture of gestures) {
       const h = host(platform);
       // Another release of this home: an update moves it, the gesture still applies.

@@ -360,7 +360,8 @@ test('macos: the plist declares KeepAlive, RunAtLoad and an explicit PATH', () =
   assert.match(xml, /<key>RunAtLoad<\/key>\s*<true\/>/);
   assert.match(xml, /<string>\/usr\/bin\/node<\/string>/);
   assert.match(xml, /--max-old-space-size=4096/);
-  assert.match(xml, /\.local\/bin/, 'PATH must carry ~/.local/bin, where claude lives');
+  // Joined with the host separator: only a macOS host writes a plist for real.
+  assert.match(xml, /\.local[\\/]bin/, 'PATH must carry ~/.local/bin, where claude lives');
   assert.ok(xml.includes(join(opts.timonHome, 'tmp', 'daemon.log')));
 });
 

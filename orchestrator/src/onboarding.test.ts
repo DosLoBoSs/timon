@@ -441,7 +441,11 @@ test('the install button refuses the service of another installation, and its ow
   assert.match(foreignServiceRefusal(opts, installDir)?.reason ?? '', /does not say which installation/);
 });
 
-test('the install button of a package refuses a clone unit on its home, and only there (TODO #736)', () => {
+// The Linux guard reads the effective unit's identity as POSIX paths; a Windows
+// temporary folder (`C:\…`) leaves it unproven. That code runs on Linux only.
+test('the install button of a package refuses a clone unit on its home, and only there (TODO #736)', {
+  skip: process.platform === 'win32' && 'the systemd unit identity is read as POSIX paths',
+}, () => {
   const homeDir = mkdtempSync(join(tmpdir(), 'timon-onboarding-shared-'));
   const installDir = join(homeDir, 'app', 'orchestrator');
   const timonHome = join(homeDir, 'test-home');

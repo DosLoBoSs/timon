@@ -133,7 +133,8 @@ test('TODO #206: the macOS launcher of `timon service install` runs Electron as 
   assert.match(launcher, /^export ELECTRON_RUN_AS_NODE='1'$/m);
   assert.match(launcher, /^export TIMON_DESKTOP_SERVICE='1'$/m);
   // The staged copy of this release, not the app bundle the user may replace.
-  assert.match(launcher, /desktop-runtime\/releases\/0\.1\.3-[0-9a-f]{12}\/Timon\.app\/Contents\/MacOS\/Timon/);
+  // Staged with the host separator: only a macOS host writes it for real.
+  assert.match(launcher, /desktop-runtime[\\/]releases[\\/]0\.1\.3-[0-9a-f]{12}[\\/]Timon\.app[\\/]Contents[\\/]MacOS[\\/]Timon/);
   // Unmarked, as before the fix: the Timon binary started as an application.
   assert.doesNotMatch(renderMacLauncher(cliOptions('darwin', node)), /ELECTRON_RUN_AS_NODE/);
 });
@@ -174,7 +175,11 @@ test('uninstallWithRuntime: removing the packaged unit removes the marker the Li
 
 test('markPackagedCli: the Node the package ships marks a packaged service too', () => {
   const env: NodeJS.ProcessEnv = {};
-  markPackagedCli(env, node, '0.1.3', configuredHome(), '/opt/Timon/resources/node/node'); // portability: simulated path
+  // markPackagedCli judges the runtime of the host it runs on: its own spelling of the shipped Node.
+  const shipped = process.platform === 'win32'
+    ? 'C:\\Program Files\\Timon\\resources\\node\\node.exe'
+    : '/opt/Timon/resources/node/node'; // portability: simulated path
+  markPackagedCli(env, node, '0.1.3', configuredHome(), shipped);
   assert.equal(env.TIMON_DESKTOP_SERVICE, '1');
   assert.equal(env.TIMON_DESKTOP_VERSION, '0.1.3');
 });
