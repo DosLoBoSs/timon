@@ -559,7 +559,9 @@ function TabContent({
     }
   }
   return (
-    <div className="flex flex-col">
+    // The same measure as the panes beside it (Installation, Web interface):
+    // on a wide dialog a control no longer sits a screen away from its label.
+    <div className="flex max-w-3xl flex-col">
       {rows.map((s) => (
         <SettingsRow
           key={s.key}
