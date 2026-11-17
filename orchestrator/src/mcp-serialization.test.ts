@@ -8,13 +8,14 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { removeHomeOnExit } from '../tests/helpers/test-home.js';
 
 const TMP_HOME = mkdtempSync(join(tmpdir(), 'timon-mcp-serialize-'));
 process.env.TIMON_HOME = TMP_HOME;
-process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
+removeHomeOnExit(TMP_HOME);
 
 const { upsertMcp, buildMcpConfig, buildCodexMcpToml, buildGrokMcpToml } = await import('./mcp.js');
 

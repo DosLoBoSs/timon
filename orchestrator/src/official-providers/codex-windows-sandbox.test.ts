@@ -9,9 +9,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { removeHomeOnExit } from '../../tests/helpers/test-home.js';
 
 /* Throwaway TIMON_HOME, set BEFORE any import: paths.js reads it at load time. */
 const TMP_HOME = mkdtempSync(join(tmpdir(), 'timon-codex-winsandbox-'));
@@ -19,7 +20,7 @@ process.env.TIMON_HOME = TMP_HOME;
 process.env.CODEX_AUTH_DIR = join(TMP_HOME, 'codex-auth');
 mkdirSync(process.env.CODEX_AUTH_DIR, { recursive: true });
 writeFileSync(join(process.env.CODEX_AUTH_DIR, 'auth.json'), JSON.stringify({ tokens: { access_token: 'test-only' } }));
-process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
+removeHomeOnExit(TMP_HOME);
 
 const { windowsSandboxToml } = await import('../../official-providers/provider-codex/lib/codex.js');
 const { mountOfficialProviders, buildUnderSeal } = await import('../../tests/helpers/official-providers.js');

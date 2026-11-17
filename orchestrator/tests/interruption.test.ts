@@ -9,14 +9,15 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { removeHomeOnExit } from './helpers/test-home.js';
 
 const HOME = mkdtempSync(join(tmpdir(), 'timon-interruption-'));
 process.env.TIMON_HOME = HOME;
-process.on('exit', () => rmSync(HOME, { recursive: true, force: true }));
+removeHomeOnExit(HOME);
 
 const { dbApi, db } = await import('../src/db.js');
 const { reconcileOrphanedTasks, watchMissionComplete } = await import('../src/dispatcher.js');
