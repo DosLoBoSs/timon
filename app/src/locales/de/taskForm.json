@@ -112,7 +112,7 @@
     },
     "deps": {
       "filter": "Aufgaben filtern…",
-      "count": "{selected} ausgewählt · {count} Kandidaten",
+      "count": "{selected} ausgewählt · {count, plural, one {# Kandidat} other {# Kandidaten}}",
       "none": "Keine infrage kommende Aufgabe.",
       "noMatch": "Keine passende Aufgabe."
     },
@@ -216,8 +216,7 @@
         "general": "Allgemeine Einstellungen — gelten für jede Gruppe, die nichts festlegt",
         "other": "Weitere Arbeitsstränge",
         "inherits": "erbt die allgemeinen Einstellungen",
-        "countOne": "{count} Arbeitsstrang",
-        "countMany": "{count} Arbeitsstränge",
+        "count": "{count, plural, one {# Arbeitsstrang} other {# Arbeitsstränge}}",
         "inheritGeneral": "{value} (allgemeine Einstellung)",
         "fallbackSummary": "Fallback {value}",
         "noRolesInMode": "Dieser Modus erstellt keine Aufgabe: kein Modell pro Gruppe zu wählen.",

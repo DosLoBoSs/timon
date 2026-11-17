@@ -112,7 +112,7 @@
     },
     "deps": {
       "filter": "Filtra le attività…",
-      "count": "{selected} selezionate · {count} candidate",
+      "count": "{selected} {selected, plural, one {selezionata} other {selezionate}} · {count, plural, one {# candidata} other {# candidate}}",
       "none": "Nessuna attività idonea.",
       "noMatch": "Nessuna attività corrisponde."
     },
@@ -125,7 +125,7 @@
     },
     "skills": "Skill",
     "skillsFilter": "Filtra le skill…",
-    "selectedCount": "{count} selezionate",
+    "selectedCount": "{count} {count, plural, one {selezionata} other {selezionate}}",
     "noneSelected": "nessuna selezionata",
     "noSkills": "nessuna skill installata",
     "noSkillMatch": "Nessuna skill corrisponde.",
@@ -216,8 +216,7 @@
         "general": "Impostazioni generali: valgono per ogni gruppo che non imposta nulla",
         "other": "Altri filoni di lavoro",
         "inherits": "eredita le impostazioni generali",
-        "countOne": "{count} filone di lavoro",
-        "countMany": "{count} filoni di lavoro",
+        "count": "{count, plural, one {# filone di lavoro} other {# filoni di lavoro}}",
         "inheritGeneral": "{value} (impostazione generale)",
         "fallbackSummary": "alternativa {value}",
         "noRolesInMode": "Questa modalità non crea attività: nessun modello per gruppo da scegliere.",

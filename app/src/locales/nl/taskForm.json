@@ -112,7 +112,7 @@
     },
     "deps": {
       "filter": "Taken filteren…",
-      "count": "{selected} geselecteerd · {count} kandidaten",
+      "count": "{selected} geselecteerd · {count, plural, one {# kandidaat} other {# kandidaten}}",
       "none": "Geen geschikte taak.",
       "noMatch": "Geen taak gevonden."
     },
@@ -216,8 +216,7 @@
         "general": "Algemene instellingen — gelden voor elke groep die niets instelt",
         "other": "Andere werkstromen",
         "inherits": "neemt de algemene instellingen over",
-        "countOne": "{count} werkstroom",
-        "countMany": "{count} werkstromen",
+        "count": "{count, plural, one {# werkstroom} other {# werkstromen}}",
         "inheritGeneral": "{value} (algemene instelling)",
         "fallbackSummary": "reserve {value}",
         "noRolesInMode": "Deze modus maakt geen taak aan: geen model per groep te kiezen.",

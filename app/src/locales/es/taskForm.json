@@ -112,7 +112,7 @@
     },
     "deps": {
       "filter": "Filtrar tareas…",
-      "count": "{selected} seleccionada(s) · {count} candidata(s)",
+      "count": "{selected} {selected, plural, one {seleccionada} other {seleccionadas}} · {count, plural, one {# candidata} other {# candidatas}}",
       "none": "Ninguna tarea elegible.",
       "noMatch": "Ninguna tarea coincide."
     },
@@ -125,7 +125,7 @@
     },
     "skills": "Skills",
     "skillsFilter": "Filtrar skills…",
-    "selectedCount": "{count} seleccionada(s)",
+    "selectedCount": "{count} {count, plural, one {seleccionada} other {seleccionadas}}",
     "noneSelected": "ninguna seleccionada",
     "noSkills": "no hay skills instaladas",
     "noSkillMatch": "Ninguna skill coincide.",
@@ -216,8 +216,7 @@
         "general": "Ajustes generales: se aplican a todos los grupos que no definen nada",
         "other": "Otras líneas de trabajo",
         "inherits": "hereda los ajustes generales",
-        "countOne": "{count} línea de trabajo",
-        "countMany": "{count} líneas de trabajo",
+        "count": "{count, plural, one {# línea de trabajo} other {# líneas de trabajo}}",
         "inheritGeneral": "{value} (ajuste general)",
         "fallbackSummary": "respaldo {value}",
         "noRolesInMode": "Este modo no crea ninguna tarea: no hay modelo por grupo que elegir.",
