@@ -326,6 +326,62 @@ function recordRefresh(taskId: string, base: string, outcome: RefreshOutcome): v
 }
 
 /**
+ * How a task moves its base to `source` (the merger's branch, or `HEAD` of a
+ * `code-self` coder's worktree) without writing to the shared checkout.
+ *
+ * By reference (`push .`) unless the main repo stands ON the base: `push .`
+ * only accepts a fast-forward and git refuses it for a branch checked out
+ * anywhere, so it can never move another worktree's files. A detached or
+ * unreadable HEAD is no exception: a `merge --ff-only` there moves the user's
+ * own position and leaves the base where it was (#1018). Only when the user's
+ * checkout IS the base does the fast-forward go through it, the working
+ * directory following its branch. Either way the agent reads the base back
+ * and compares it with its own tip before reporting a sha.
+ */
+export function baseAdvanceInstructions(
+  repo: string,
+  base: string,
+  source: string,
+  activeBranch: string | null,
+): string {
+  // `HEAD` named in `git -C <repo>` would be the MAIN repo's HEAD: resolve it in
+  // the agent's worktree first, and give the destination as a full ref (git
+  // needs one when the source is a bare sha).
+  const from = source === 'HEAD' ? '$(git rev-parse HEAD)' : source;
+  const to = source === 'HEAD' ? `refs/heads/${base}` : base;
+  const check =
+    `Check the move before reporting anything — both shas must be equal:\n\n` +
+    `\`\`\`bash\ngit -C ${repo} rev-parse ${base}\ngit rev-parse ${source}\n\`\`\`\n\n` +
+    `If they differ, the base did not move: do not close as merged.`;
+  if (activeBranch != null && activeBranch === base) {
+    return (
+      `The main repo is checked out ON \`${base}\`: the fast-forward goes through ` +
+      `the user's checkout, which follows its branch. ONE command, and only one:\n\n` +
+      `\`\`\`bash\ngit -C ${repo} merge --ff-only ${from}\n\`\`\`\n\n` +
+      `If it refuses (\`${base}\` moved while you were working), bring it into ` +
+      `YOUR worktree (\`git merge --no-edit -m "${refreshMergeMessage(base)}" ${base}\`), ` +
+      `resolve, then retry. Never force.\n\n${check}`
+    );
+  }
+  const where = activeBranch
+    ? `The main repo is on \`${activeBranch}\`, NOT on the base \`${base}\``
+    : `The main repo has a detached HEAD (or its branch could not be read)`;
+  return (
+    `${where}: a fast-forward done IN that repo would move the user's position, ` +
+    `not the base. Move the base **by reference**, without touching the ` +
+    `working directory, with ONE command:\n\n` +
+    `\`\`\`bash\ngit -C ${repo} push . ${from}:${to}\n\`\`\`\n\n` +
+    `\`push .\` only accepts a fast-forward. If it refuses (\`${base}\` moved ` +
+    `while you were working), go back to YOUR worktree, ` +
+    `\`git merge --no-edit -m "${refreshMergeMessage(base)}" ${base}\`, ` +
+    `resolve, then try again. If it refuses because \`${base}\` is checked out ` +
+    `in another worktree, do not work around it: \`timon task block\` with the reason. ` +
+    `Never force, never \`git checkout ${base}\` or \`git merge\` in the main ` +
+    `repo.\n\n${check}`
+  );
+}
+
+/**
  * What the agent needs to know about ITS worktree when it starts.
  *
  * Two things it can't guess: that its base was refreshed under its feet
@@ -336,7 +392,8 @@ function recordRefresh(taskId: string, base: string, outcome: RefreshOutcome): v
 export function worktreeDirective(
   task: TaskRow,
   wt: WorktreeInfo | null,
-  /** Branch checked out in `wt.sourceRepo`, read by the caller (merge only). */
+  /** Branch checked out in `wt.sourceRepo`, read by the caller (merge only);
+   *  null for a detached HEAD, which never takes the fast-forward. */
   activeBranch?: string | null,
 ): string {
   if (!wt) return '';
@@ -386,28 +443,7 @@ export function worktreeDirective(
     );
   }
   if (task.type === 'merge') {
-    // Base ≠ active branch: the final fast-forward must not move the branch the
-    // user is standing on. `activeBranch` unknown (detached HEAD, git error) is
-    // treated like "same": the historical ff-only.
-    const offActive = activeBranch != null && activeBranch !== wt.base && wt.base !== 'HEAD';
-    const finish = offActive
-      ? `The main repo is on \`${activeBranch}\`, NOT on the base \`${wt.base}\` of ` +
-        `this task: a fast-forward done IN that repo would move the user's branch and ` +
-        `pour the work into it. Move the base **by reference**, without touching the ` +
-        `working directory, with ONE command:\n\n` +
-        `\`\`\`bash\n` +
-        `git -C ${wt.sourceRepo} push . ${wt.branch}:${wt.base}\n` +
-        `\`\`\`\n\n` +
-        `\`push .\` only accepts a fast-forward. If it refuses (\`${wt.base}\` moved ` +
-        `while you were working), go back to YOUR worktree, ` +
-        `\`git merge --no-edit -m "${refreshMergeMessage(wt.base)}" ${wt.base}\`, ` +
-        `resolve, then try again. If it refuses because \`${wt.base}\` is checked out ` +
-        `in another worktree, do not work around it: \`timon task block\` with the reason. ` +
-        `Never force, and do NOT run \`git checkout ${wt.base}\` in the main ` +
-        `repo.\n\n` +
-        `Then get the FULL sha with \`git -C ${wt.sourceRepo} rev-parse ${wt.base}\` ` +
-        `(40 hex) for \`timon task done --merged-sha\`.`
-      : `git -C ${wt.sourceRepo} merge --ff-only ${wt.branch}`;
+    const finish = baseAdvanceInstructions(wt.sourceRepo, wt.base, wt.branch, activeBranch ?? null);
     parts.push(
       `\n\n## Where you merge — hard rule\n\n` +
       `You have YOUR worktree: \`${wt.path}\` (branch \`${wt.branch}\`). Do all ` +
@@ -427,19 +463,10 @@ export function worktreeDirective(
       `internal ids otherwise. Integrate each source branch with:\n\n` +
       `\`\`\`bash\ngit merge --no-ff -m "${integrateMergeMessage(wt.base)}" <source-branch>\n\`\`\`\n\n` +
       `After resolving a conflict, conclude with \`git commit --no-edit\`: the ` +
-      `message given with \`-m\` is kept. The final fast-forward below creates ` +
+      `message given with \`-m\` is kept. Moving the base below creates ` +
       `no commit.\n\n` +
-      (offActive
-        ? `When your worktree is green, the final merge:\n\n${finish}`
-        : `When your worktree is green, the final merge is ONE command, and only ` +
-          `one:\n\n` +
-          `\`\`\`bash\n${finish}\n\`\`\`\n\n` +
-          `If it refuses (\`${wt.base}\` moved while you were working), go back to ` +
-          `YOUR worktree, \`git merge --no-edit -m "${refreshMergeMessage(wt.base)}" ${wt.base}\`, ` +
-          `resolve, then retry the fast-forward. ` +
-          `Never force.\n\n` +
-          `Then get the FULL sha (\`git -C ${wt.sourceRepo} rev-parse HEAD\`, ` +
-          `40 hex) for \`timon task done --merged-sha\`.`),
+      `When your worktree is green, the final move:\n\n${finish}\n\n` +
+      `Then use that FULL sha (40 hex) for \`timon task done --merged-sha\`.`,
     );
   }
   return parts.join('');
@@ -891,17 +918,34 @@ export function composeTaskPrompt(
  * auto review) lives in verification-loop; this one just prevents the
  * agent from creating the tasks by hand out of habit.
  */
-export function pipelineDirective(task: TaskRow): string {
+export function pipelineDirective(
+  task: TaskRow,
+  /** The main repo and the branch it stands on, read by the caller at spawn. */
+  place?: { sourceRepo: string; activeBranch: string | null },
+): string {
   if (task.type !== 'code') return '';
   if (task.pipeline === 'code-self') {
+    const base = task.base_branch ?? '<base>';
+    const branch = task.branch_name ?? '<your-branch>';
+    const repo = place?.sourceRepo ?? '<main-repository>';
+    // The integration happens on a DETACHED copy of the base inside the
+    // coder's own worktree: the merge commit has the base as first parent, as
+    // a merger's has, and neither the base branch nor the shared checkout is
+    // ever checked out or written.
     return (
       `\n\n---\nPIPELINE: \`code-self\`. Create NO \`review\` or \`merge\` task — ` +
-      `the user chose the fast mode. When your code is ready: merge your ` +
-      `branch into its base YOURSELF with an explicit message that carries no ` +
-      `task id (\`git merge --no-ff -m "${integrateMergeMessage(task.base_branch ?? '<base>')}" ` +
-      `${task.branch_name ?? '<your-branch>'}\`; git's default message names ` +
-      `the task id, which a public repository's hook refuses), then close with ` +
-      `\`timon task done <TASK_ID> --comment "..." --merged-sha <SHA of the merge commit>\`. ` +
+      `the user chose the fast mode. When your code is ready and committed, ` +
+      `integrate your branch into its base YOURSELF, from YOUR worktree only:\n\n` +
+      `\`\`\`bash\n` +
+      `git checkout --detach ${base}\n` +
+      `git merge --no-ff -m "${integrateMergeMessage(base)}" ${branch}\n` +
+      `\`\`\`\n\n` +
+      `The message is explicit and carries no task id: git's default names the ` +
+      `task id, which a public repository's hook refuses. After resolving a ` +
+      `conflict, conclude with \`git commit --no-edit\`. Then move the base:\n\n` +
+      `${baseAdvanceInstructions(repo, base, 'HEAD', place?.activeBranch ?? null)}\n\n` +
+      `Finally \`git checkout ${branch}\` to leave your worktree on its branch, and ` +
+      `close with \`timon task done <TASK_ID> --comment "..." --merged-sha <the base's FULL sha>\`. ` +
       `The sha is REQUIRED: without it the task goes back to BLOCKED (guard against ` +
       `never-merged branches). On a conflict you cannot resolve cleanly, ` +
       `do not force: \`timon task block\` with the reason.`
@@ -1080,6 +1124,10 @@ async function dispatch(): Promise<void> {
       // worktree, we also inject the timon-worktree skill so it knows
       // where it is and how to commit/cleanup properly.
       const wt = await resolveWorktree(task);
+      // Only the tasks that move a base read it: a detached HEAD reads as null.
+      const activeBranch = wt && (task.type === 'merge' || (task.type === 'code' && task.pipeline === 'code-self'))
+        ? await currentBranch(wt.sourceRepo)
+        : null;
       const baseSkills = ['timon-task', ...taskExtraSkills];
       if (wt) baseSkills.push('timon-worktree');
 
@@ -1109,11 +1157,8 @@ async function dispatch(): Promise<void> {
         taskId,
         brief,
         attachments,
-        pipelineDirective(task) + worktreeDirective(
-          task,
-          wt,
-          wt && task.type === 'merge' ? await currentBranch(wt.sourceRepo) : null,
-        ),
+        pipelineDirective(task, wt ? { sourceRepo: wt.sourceRepo, activeBranch } : undefined) +
+          worktreeDirective(task, wt, activeBranch),
       );
       const missionId = await spawnAgent(
         effectiveAgentName,
