@@ -20,7 +20,7 @@ import {
   type ImportResultStatus, type PreviewAgent, type PreviewResponse, type StageResponse,
 } from './contract.js';
 import {
-  IMPORT_ROLES, applySummary, failureOf, fileFailure, importOptions, mergeChoices, requestBody, shownChoice,
+  IMPORT_ROLES, applySummary, failureOf, fileFailure, importOptions, mergeChoices, projectOptions, requestBody, shownChoice,
   type ImportFailure,
 } from './assistant-state.js';
 import { ExportAgentMenuItem, ExportEntry } from './export-dialog.js';
@@ -454,10 +454,14 @@ function ElementToggle({ element, count, on, disabled, onToggle }: {
   );
 }
 
+/** The list's "no project" entry: a value no project slug can take (a slug has no colon). */
+const NO_PROJECT = ':none';
+
 function AgentCard({ agent }: { agent: PreviewAgent }) {
   const { value, controls } = useImport();
   const choice = value.choices[agent.sourceRef];
   const shown = shownChoice(agent, choice);
+  const projects = projectOptions(value.preview?.projects, shown.project);
   const id = React.useId();
   const included = shown.include;
   const locked = value.busy || !included;
@@ -507,14 +511,33 @@ function AgentCard({ agent }: { agent: PreviewAgent }) {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`${id}-project`} className="text-xs">{t('agent.project')}</Label>
-            <Input
-              id={`${id}-project`}
-              value={shown.project ?? ''}
-              placeholder={t('agent.projectNone')}
-              maxLength={64}
-              disabled={locked}
-              onChange={(event) => controls.setChoice(agent.sourceRef, { project: event.target.value.trim() || null })}
-            />
+            {projects ? (
+              <Select
+                value={shown.project ?? NO_PROJECT}
+                disabled={locked}
+                onValueChange={(project) => controls.setChoice(agent.sourceRef, { project: project === NO_PROJECT ? null : project })}
+              >
+                <SelectTrigger id={`${id}-project`} aria-label={t('agent.project')}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_PROJECT}>{t('agent.projectNone')}</SelectItem>
+                  {projects.map((option) => (
+                    <SelectItem key={option.slug} value={option.slug}>
+                      {option.known ? option.label : t('agent.projectUnknown', { slug: option.slug })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              // A daemon that lists no project (an older one, or none to list): the slug is typed.
+              <Input
+                id={`${id}-project`}
+                value={shown.project ?? ''}
+                placeholder={t('agent.projectNone')}
+                maxLength={64}
+                disabled={locked}
+                onChange={(event) => controls.setChoice(agent.sourceRef, { project: event.target.value.trim() || null })}
+              />
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`${id}-cwd`} className="text-xs">{t('agent.cwd')}</Label>

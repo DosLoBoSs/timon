@@ -67,6 +67,18 @@ function shownChoice(agent, choice) {
     keepRoutinesActive: choice?.keepRoutinesActive === true
   };
 }
+function projectOptions(projects, current) {
+  if (!projects || projects.length === 0) return null;
+  const names = /* @__PURE__ */ new Map();
+  for (const p of projects) if (p.name) names.set(p.name, (names.get(p.name) ?? 0) + 1);
+  const options = projects.map((p) => ({
+    slug: p.slug,
+    label: !p.name ? p.slug : (names.get(p.name) ?? 0) > 1 ? `${p.name} (${p.slug})` : p.name,
+    known: true
+  }));
+  if (current !== null && !projects.some((p) => p.slug === current)) options.push({ slug: current, label: current, known: false });
+  return options;
+}
 function mergeChoices(previous, preview) {
   const next = {};
   for (const agent of preview.agents) next[agent.sourceRef] = previous[agent.sourceRef] ?? { sourceRef: agent.sourceRef };
@@ -212,6 +224,7 @@ var messages_default = {
     "agent.role": "Role",
     "agent.project": "Project",
     "agent.projectNone": "No project (bot)",
+    "agent.projectUnknown": "{slug} (not on this Timon)",
     "agent.cwd": "Working folder",
     "agent.cwdNone": "None",
     "agent.cwdMissing": "This folder does not exist on this machine: pick another one, or leave it empty.",
@@ -331,6 +344,7 @@ var messages_default = {
     "agent.role": "R\xF4le",
     "agent.project": "Projet",
     "agent.projectNone": "Sans projet (bot)",
+    "agent.projectUnknown": "{slug} (absent de ce Timon)",
     "agent.cwd": "Dossier de travail",
     "agent.cwdNone": "Aucun",
     "agent.cwdMissing": "Ce dossier n'existe pas sur cette machine : choisissez-en un autre, ou laissez vide.",
@@ -450,6 +464,7 @@ var messages_default = {
     "agent.role": "\u89D2\u8272",
     "agent.project": "\u9879\u76EE",
     "agent.projectNone": "\u65E0\u9879\u76EE\uFF08\u673A\u5668\u4EBA\uFF09",
+    "agent.projectUnknown": "{slug}\uFF08\u6B64 Timon \u4E2D\u4E0D\u5B58\u5728\uFF09",
     "agent.cwd": "\u5DE5\u4F5C\u76EE\u5F55",
     "agent.cwdNone": "\u65E0",
     "agent.cwdMissing": "\u6B64\u76EE\u5F55\u5728\u8FD9\u53F0\u673A\u5668\u4E0A\u4E0D\u5B58\u5728\u3002\u8BF7\u9009\u62E9\u5176\u4ED6\u76EE\u5F55\uFF0C\u6216\u7559\u7A7A\u3002",
@@ -1075,10 +1090,12 @@ function ElementToggle({ element, count, on, disabled, onToggle }) {
     count > 0 ? t3("elementCount", { label, count }) : label
   );
 }
+var NO_PROJECT = ":none";
 function AgentCard({ agent }) {
   const { value, controls } = useImport();
   const choice = value.choices[agent.sourceRef];
   const shown = shownChoice(agent, choice);
+  const projects = projectOptions(value.preview?.projects, shown.project);
   const id = React5.useId();
   const included = shown.include;
   const locked = value.busy || !included;
@@ -1109,16 +1126,28 @@ function AgentCard({ agent }) {
     },
     /* @__PURE__ */ React5.createElement(SelectTrigger2, { id: `${id}-role`, "aria-label": t3("agent.role") }, /* @__PURE__ */ React5.createElement(SelectValue2, null)),
     /* @__PURE__ */ React5.createElement(SelectContent2, null, IMPORT_ROLES.map((role) => /* @__PURE__ */ React5.createElement(SelectItem2, { key: role, value: role }, t3(`role.${role}`))), !IMPORT_ROLES.includes(shown.role) && /* @__PURE__ */ React5.createElement(SelectItem2, { value: shown.role }, shown.role))
-  )), /* @__PURE__ */ React5.createElement("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ React5.createElement(Label4, { htmlFor: `${id}-project`, className: "text-xs" }, t3("agent.project")), /* @__PURE__ */ React5.createElement(
-    Input2,
+  )), /* @__PURE__ */ React5.createElement("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ React5.createElement(Label4, { htmlFor: `${id}-project`, className: "text-xs" }, t3("agent.project")), projects ? /* @__PURE__ */ React5.createElement(
+    Select2,
     {
-      id: `${id}-project`,
-      value: shown.project ?? "",
-      placeholder: t3("agent.projectNone"),
-      maxLength: 64,
+      value: shown.project ?? NO_PROJECT,
       disabled: locked,
-      onChange: (event) => controls.setChoice(agent.sourceRef, { project: event.target.value.trim() || null })
-    }
+      onValueChange: (project) => controls.setChoice(agent.sourceRef, { project: project === NO_PROJECT ? null : project })
+    },
+    /* @__PURE__ */ React5.createElement(SelectTrigger2, { id: `${id}-project`, "aria-label": t3("agent.project") }, /* @__PURE__ */ React5.createElement(SelectValue2, null)),
+    /* @__PURE__ */ React5.createElement(SelectContent2, null, /* @__PURE__ */ React5.createElement(SelectItem2, { value: NO_PROJECT }, t3("agent.projectNone")), projects.map((option) => /* @__PURE__ */ React5.createElement(SelectItem2, { key: option.slug, value: option.slug }, option.known ? option.label : t3("agent.projectUnknown", { slug: option.slug }))))
+  ) : (
+    // A daemon that lists no project (an older one, or none to list): the slug is typed.
+    /* @__PURE__ */ React5.createElement(
+      Input2,
+      {
+        id: `${id}-project`,
+        value: shown.project ?? "",
+        placeholder: t3("agent.projectNone"),
+        maxLength: 64,
+        disabled: locked,
+        onChange: (event) => controls.setChoice(agent.sourceRef, { project: event.target.value.trim() || null })
+      }
+    )
   )), /* @__PURE__ */ React5.createElement("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ React5.createElement(Label4, { htmlFor: `${id}-cwd`, className: "text-xs" }, t3("agent.cwd")), /* @__PURE__ */ React5.createElement(
     Input2,
     {

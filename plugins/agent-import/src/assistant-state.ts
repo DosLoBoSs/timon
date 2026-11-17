@@ -6,7 +6,7 @@
 import {
   DEFAULT_IMPORT_ROLE, IMPORT_ELEMENTS,
   type AgentChoice, type AgentImportErrorCode, type ImportElement, type ImportOptions, type ImportPreview,
-  type ImportRequest, type PreviewAgent,
+  type ImportRequest, type PreviewAgent, type PreviewProject,
 } from './contract.js';
 import { ZIP_UPLOAD_MAX_BYTES } from './readers/limits.js';
 
@@ -40,6 +40,29 @@ export function shownChoice(agent: PreviewAgent, choice: AgentChoice | undefined
     /** Routines on at the source stay on only when the user says so: off by default. */
     keepRoutinesActive: choice?.keepRoutinesActive === true,
   };
+}
+
+/** One entry of the project list; `known: false` is a slug this Timon does not have. */
+export type ProjectOption = { slug: string; label: string; known: boolean };
+
+/**
+ * The project list of an agent card, or `null` when the daemon gave none and
+ * the slug is typed. Two projects of the same name are told apart by their
+ * slug. A project chosen elsewhere (the source's, an earlier typed one) that
+ * the list does not hold stays shown, marked unknown, rather than silently
+ * becoming "no project".
+ */
+export function projectOptions(projects: readonly PreviewProject[] | undefined, current: string | null): ProjectOption[] | null {
+  if (!projects || projects.length === 0) return null;
+  const names = new Map<string, number>();
+  for (const p of projects) if (p.name) names.set(p.name, (names.get(p.name) ?? 0) + 1);
+  const options = projects.map((p): ProjectOption => ({
+    slug: p.slug,
+    label: !p.name ? p.slug : (names.get(p.name) ?? 0) > 1 ? `${p.name} (${p.slug})` : p.name,
+    known: true,
+  }));
+  if (current !== null && !projects.some((p) => p.slug === current)) options.push({ slug: current, label: current, known: false });
+  return options;
 }
 
 /**
