@@ -76,6 +76,7 @@ import {
   redactText,
   setRedactionSource,
 } from './secrets/redact.js';
+import { daemonMessage, encodeDaemonMessage, type DaemonMessage } from './daemon-message.js';
 
 mkdirSync(dirname(DB_PATH), { recursive: true });
 
@@ -1936,6 +1937,24 @@ if (!taskCols.includes('started_at')) {
 // Task the orchestrator created in reaction to another (review, merge, doc,
 // repair iteration): the start of such a follow-up is not announced.
 if (!taskCols.includes('parent_task_id')) db.exec(`ALTER TABLE tasks ADD COLUMN parent_task_id TEXT`);
+// TODO #845: the code and params of a sentence the daemon wrote, as JSON
+// (`daemon-message.ts`), for the webview to translate. The English columns stay
+// what every other reader shows; NULL = no code, which describes every earlier row.
+if (!taskCols.includes('blocked_reason_code')) db.exec(`ALTER TABLE tasks ADD COLUMN blocked_reason_code TEXT`);
+if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
+// A writer that changes the reason without naming its code (an agent's own
+// reason, a scope stop, a statement written before the column) must not leave
+// the previous code behind: the webview would translate another sentence.
+db.exec(`
+CREATE TRIGGER IF NOT EXISTS tasks_blocked_reason_code_follows
+AFTER UPDATE OF blocked_reason ON tasks
+WHEN NEW.blocked_reason IS NOT OLD.blocked_reason
+  AND NEW.blocked_reason_code IS OLD.blocked_reason_code
+  AND NEW.blocked_reason_code IS NOT NULL
+BEGIN
+  UPDATE tasks SET blocked_reason_code = NULL WHERE id = NEW.id;
+END;
+`);
 const msgCols = (db.prepare(`PRAGMA table_info(agent_messages)`).all() as { name: string }[]).map((c) => c.name);
 if (!msgCols.includes('trace_id')) db.exec(`ALTER TABLE agent_messages ADD COLUMN trace_id TEXT`);
 // Who raised a card in a conversation: the mission's agent (default) or a third-party
@@ -2157,6 +2176,8 @@ export type TaskRow = {
   updated_at: number;
   scheduled_at: number | null;
   blocked_reason: string | null;
+  /** JSON `{ code, params }` of a reason the daemon wrote (`daemon-message.ts`); null otherwise. */
+  blocked_reason_code: string | null;
   done_comment: string | null;
   extra_skills: string | null;
   extra_mcp_servers: string | null;
@@ -2620,6 +2641,8 @@ export type NotificationRow = {
   dismiss_on: string | null;
   /** Epoch ms after which the card is dismissed by the sweep; null = never. */
   expires_at: number | null;
+  /** JSON `{ code, params }` of a title and body the daemon wrote (`daemon-message.ts`); null otherwise. */
+  message_code: string | null;
   created_at: number;
   read_at: number | null;
   dismissed_at: number | null;
@@ -2712,7 +2735,7 @@ const countInProgressStmt = db.prepare(
   `SELECT COUNT(*) as n FROM tasks WHERE status = 'IN_PROGRESS' AND mirror = 0`,
 );
 const updateTaskStatusStmt = db.prepare(
-  `UPDATE tasks SET status = ?, updated_at = ?, blocked_reason = ?, done_comment = ? WHERE id = ?`,
+  `UPDATE tasks SET status = ?, updated_at = ?, blocked_reason = ?, blocked_reason_code = ?, done_comment = ? WHERE id = ?`,
 );
 // interrupted_reason reset to NULL on
 // (re-)dispatch: the previous attempt's death cause
@@ -2730,6 +2753,7 @@ const assignTaskMissionStmt = db.prepare(
 const setTaskInterruptedStmt = db.prepare(
   `UPDATE tasks SET status = 'BLOCKED', updated_at = ?, interrupted_reason = ?,
                     quota_resets_at = ?,
+                    blocked_reason_code = CASE WHEN COALESCE(blocked_reason, '') = '' THEN ? ELSE blocked_reason_code END,
                     blocked_reason = COALESCE(NULLIF(blocked_reason, ''), ?)
    WHERE id = ?`,
 );
@@ -2762,7 +2786,7 @@ const deferTaskStmt = db.prepare(
 );
 const requeueInterruptedStmt = db.prepare(
   `UPDATE tasks SET status = 'PENDING', mission_id = NULL, interrupted_reason = NULL,
-                    blocked_reason = NULL, requeue_count = requeue_count + 1,
+                    blocked_reason = NULL, blocked_reason_code = NULL, requeue_count = requeue_count + 1,
                     scheduled_at = max(COALESCE(scheduled_at, 0), ?),
                     updated_at = ?
    WHERE id = ?`,
@@ -2774,7 +2798,7 @@ const requeueInterruptedStmt = db.prepare(
 // without re-evaluating anything: if the condition still holds for the new type, the
 // guard will fire again on the next dispatch. `scheduled_at`: COALESCE alone makes the
 const clearBlockedReasonsStmt = db.prepare(
-  `UPDATE tasks SET blocked_reason = NULL, interrupted_reason = NULL, updated_at = ?
+  `UPDATE tasks SET blocked_reason = NULL, blocked_reason_code = NULL, interrupted_reason = NULL, updated_at = ?
    WHERE id = ?`,
 );
 // field UNERASABLE — passing null is indistinguishable from "field absent", so the old
@@ -2976,7 +3000,8 @@ function guardMergeDone(
   status: TaskStatus,
   blockedReason: string | null,
   doneComment?: string | null,
-): { status: TaskStatus; blockedReason: string | null; mergedSha?: string } {
+  blockedReasonCode: DaemonMessage | null = null,
+): { status: TaskStatus; blockedReason: string | null; blockedReasonCode: DaemonMessage | null; mergedSha?: string } {
   const needsSha =
     prev?.type === 'merge' ||
     (prev?.type === 'code' && isSelfMergePipeline(prev.pipeline));
@@ -2986,7 +3011,7 @@ function guardMergeDone(
     // stay BLOCKED for lack of --merged-sha.
     const text = doneComment ?? prev?.done_comment;
     const sha = extractGitSha(text);
-    if (sha) return { status, blockedReason, mergedSha: sha };
+    if (sha) return { status, blockedReason, blockedReasonCode, mergedSha: sha };
     // By far the most common case: the merge DID happen, but the agent wrote the
     // ABBREVIATED sha git displays everywhere (`fe2dd84`). The guard refuses — rightly,
     // a 7-hex fragment proves nothing — and the agent re-reads a message that does not
@@ -2996,6 +3021,7 @@ function guardMergeDone(
     const short = /\b[0-9a-f]{7,39}\b/i.exec(text ?? '')?.[0];
     return {
       status: 'BLOCKED',
+      blockedReasonCode: null,
       blockedReason:
         (prev?.type === 'code'
           ? 'Code-self guard: this task must merge its own branch. '
@@ -3011,7 +3037,7 @@ function guardMergeDone(
             + '`git rev-parse HEAD`), or include that full sha in your comment.'),
     };
   }
-  return { status, blockedReason };
+  return { status, blockedReason, blockedReasonCode };
 }
 
 /**
@@ -3054,9 +3080,12 @@ function blockOnInterruption(
   reason: InterruptionReason,
   blockedReason: string,
   quotaResetsAt: number | null,
+  blockedReasonCode: DaemonMessage | null,
 ): 'blocked' {
   const prev = getTaskStmt.get(id) as TaskRow | undefined;
-  setTaskInterruptedStmt.run(Date.now(), reason, quotaResetsAt, blockedReason, id);
+  setTaskInterruptedStmt.run(
+    Date.now(), reason, quotaResetsAt, encodeDaemonMessage(blockedReasonCode, redactText), blockedReason, id,
+  );
   const after = getTaskStmt.get(id) as TaskRow | undefined;
   bus.publish({ kind: 'task_blocked', taskId: id, reason: after?.blocked_reason ?? blockedReason });
   publishTaskDiff(prev);
@@ -3708,8 +3737,8 @@ const countPendingCommandRequestsStmt = db.prepare(
 
 // a grouped MAX(timestamp) on it would cost a full scan on every UI poll, for a
 const insertNotificationStmt = db.prepare(
-  `INSERT INTO notifications (id, type, urgent, title, body, task_id, mission_id, anchor, source, created_at, owner_user_id, dismiss_on, expires_at)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  `INSERT INTO notifications (id, type, urgent, title, body, task_id, mission_id, anchor, source, created_at, owner_user_id, dismiss_on, expires_at, message_code)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 );
 const listActiveDismissOnByMissionStmt = db.prepare(
   `SELECT * FROM notifications WHERE mission_id = ? AND dismiss_on IS NOT NULL AND dismissed_at IS NULL`,
@@ -4174,7 +4203,7 @@ const clearSeriesGroupRoleStmt = db.prepare(
 // dry itself) stays where it is, and unblocking it would send it back onto the
 // dead backend at the next tick — the failure mode of the requeue, inverted.
 const requeueRateLimitedStmt = db.prepare(
-  `UPDATE tasks SET status = 'PENDING', interrupted_reason = NULL, blocked_reason = NULL,
+  `UPDATE tasks SET status = 'PENDING', interrupted_reason = NULL, blocked_reason = NULL, blocked_reason_code = NULL,
                     mission_id = NULL, quota_resets_at = NULL, updated_at = ?
     WHERE id = ? AND status = 'BLOCKED'
       AND interrupted_reason IN (${BACKEND_FALLBACK_REASONS.map((r) => `'${r}'`).join(', ')})`,
@@ -4836,7 +4865,13 @@ export const dbApi = {
   updateTaskStatus(
     id: string,
     status: TaskStatus,
-    opts: { blockedReason?: string | null; doneComment?: string | null; byPerson?: boolean } = {},
+    opts: {
+      blockedReason?: string | null;
+      /** The code of `blockedReason` when the daemon wrote it; never for an agent's or a person's reason. */
+      blockedReasonCode?: DaemonMessage | null;
+      doneComment?: string | null;
+      byPerson?: boolean;
+    } = {},
   ): void {
     const prev = getTaskStmt.get(id) as TaskRow | undefined;
     // §7, at the entry rather than at the SQL: `guardMergeDone` reads the text
@@ -4847,11 +4882,15 @@ export const dbApi = {
       doneComment: redactNullable(opts.doneComment),
       blockedReason: redactNullable(opts.blockedReason),
     };
-    const g = guardMergeDone(prev, status, opts.blockedReason ?? null, opts.doneComment ?? prev?.done_comment ?? null);
+    const g = guardMergeDone(
+      prev, status, opts.blockedReason ?? null, opts.doneComment ?? prev?.done_comment ?? null,
+      opts.blockedReason ? opts.blockedReasonCode ?? null : null,
+    );
     updateTaskStatusStmt.run(
       g.status,
       Date.now(),
       g.blockedReason,
+      g.blockedReason ? encodeDaemonMessage(g.blockedReasonCode, redactText) : null,
       opts.doneComment ?? null,
       id,
     );
@@ -5206,6 +5245,8 @@ export const dbApi = {
     reason: InterruptionReason,
     blockedReason: string,
     quotaResetsAt: number | null = null,
+    /** The code of `blockedReason`; the cap's sentence is added to its params here, as to the text. */
+    blockedReasonCode: DaemonMessage | null = null,
   ): TaskInterruptionOutcome {
     const prev = getTaskStmt.get(id) as TaskRow | undefined;
     // Terminal status = the agent reached its own guard (business verdict, close
@@ -5231,7 +5272,10 @@ export const dbApi = {
     const reasonText = requeueable
       ? `${blockedReason} ${describeExhaustedRequeues(id, attempt)}`
       : blockedReason;
-    blockOnInterruption(id, reason, reasonText, quotaResetsAt);
+    const reasonCode = blockedReasonCode && requeueable
+      ? daemonMessage(blockedReasonCode.code, { ...blockedReasonCode.params, exhausted: attempt, taskId: id })
+      : blockedReasonCode;
+    blockOnInterruption(id, reason, reasonText, quotaResetsAt, reasonCode);
     // Cap reached: this is no longer a fluke, the caller must warn a human.
     return requeueable ? 'escalated' : 'blocked';
   },
@@ -5270,7 +5314,10 @@ export const dbApi = {
       // Merge guard fired (blocked_reason to write), or an automatic closure to
       // qualify: setTaskStatusOnlyStmt writes neither, so we switch to the full
       // statement — with the comment resolved above, never a clobber.
-      updateTaskStatusStmt.run(g.status, Date.now(), g.blockedReason, comment, id);
+      updateTaskStatusStmt.run(
+        g.status, Date.now(), g.blockedReason,
+        g.blockedReason ? encodeDaemonMessage(g.blockedReasonCode, redactText) : null, comment, id,
+      );
     } else {
       setTaskStatusOnlyStmt.run(status, Date.now(), id);
     }
@@ -6808,6 +6855,8 @@ export const dbApi = {
     traceId?: string | null;
     dismissOn?: readonly NotificationDismissOn[] | null;
     expiresAt?: number | null;
+    /** The code of `title` and `body` when the daemon wrote them (`daemonMessages.<code>.title|body`). */
+    message?: DaemonMessage | null;
   }): NotificationRow {
     const now = Date.now();
     // §7: the title carries as much prose as the body — a report headline is a
@@ -6815,6 +6864,7 @@ export const dbApi = {
     n = { ...n, title: redactText(n.title), body: redactNullable(n.body) };
     const owner = resolveNotificationOwner(n);
     const dismissOn = n.dismissOn && n.dismissOn.length > 0 ? JSON.stringify(n.dismissOn) : null;
+    const messageCode = encodeDaemonMessage(n.message, redactText);
     insertNotificationStmt.run(
       n.id,
       n.type,
@@ -6829,6 +6879,7 @@ export const dbApi = {
       owner,
       dismissOn,
       n.expiresAt ?? null,
+      messageCode,
     );
     return {
       id: n.id,
@@ -6842,6 +6893,7 @@ export const dbApi = {
       source: n.source ?? null,
       dismiss_on: dismissOn,
       expires_at: n.expiresAt ?? null,
+      message_code: messageCode,
       created_at: now,
       read_at: null,
       dismissed_at: null,
