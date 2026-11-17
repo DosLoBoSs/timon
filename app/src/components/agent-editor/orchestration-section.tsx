@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
+import { compareText } from '@/lib/intl';
 import { FramedFace } from '@/plugins-client/agent-chat/agent-avatar';
 import { visageAgent, type ProjetConnu } from '@/plugins-client/agent-chat/use-agents';
 
@@ -192,7 +193,7 @@ export function OrchestrationSection({ agent: given, roster, teams = [], project
 
   const self = roster.find((a) => a.name === agent.name);
   const rest = roster.filter((a) => a.name !== agent.name);
-  const names = rest.map((a) => a.name).sort((a, b) => a.localeCompare(b));
+  const names = rest.map((a) => a.name).sort((a, b) => compareText(a, b));
   const checked = checkedNames(selection, agent.effective_orchestrates, names);
   const { direct, below } = canvasReports(agent.name, roster);
   const teamOf = (id: string | null | undefined) => (id ? teams.find((x) => x.id === id) : undefined);
@@ -202,7 +203,7 @@ export function OrchestrationSection({ agent: given, roster, teams = [], project
   // Who is in, the canvas reports first: what the operator drew comes before what was added by hand.
   const chosen = rest
     .filter((a) => checked.has(a.name))
-    .sort((a, b) => Number(below.has(b.name)) - Number(below.has(a.name)) || a.name.localeCompare(b.name));
+    .sort((a, b) => Number(below.has(b.name)) - Number(below.has(a.name)) || compareText(a.name, b.name));
   const needle = filter.trim().toLowerCase();
   const candidates = needle
     ? rest.filter((a) => !checked.has(a.name) && [a.name, a.project, a.role].some((v) => v?.toLowerCase().includes(needle))).slice(0, 8)

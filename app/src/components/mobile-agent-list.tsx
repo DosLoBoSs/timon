@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Users, X, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
+import { compareText } from '@/lib/intl';
 import { mainAgentOf } from '@/lib/main-agent';
 import { onAgentStateEvent } from '@/lib/active-agents';
 import { STATE_VISUALS, type ActiveState } from '@/lib/agent-state';
@@ -109,7 +110,7 @@ export function MobileAgentList() {
         .sort((x, y) => {
           if (x.name === principal) return -1;
           if (y.name === principal) return 1;
-          return x.name.localeCompare(y.name);
+          return compareText(x.name, y.name);
         });
       setAgents(mains);
     } catch { /* ignore */ }

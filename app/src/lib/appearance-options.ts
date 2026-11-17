@@ -13,6 +13,7 @@ import {
   isThemeSurfaceAllowed,
   type Capabilities,
 } from './capabilities';
+import { compareText } from './intl';
 import { pluginGalleryLabel } from './plugin-gallery';
 import { PRODUCT_LAYOUT_PLUGIN, PRODUCT_THEME_PLUGIN } from './plugin-host/loader';
 
@@ -47,7 +48,7 @@ export function appearanceOptions(
   });
   return allowed
     .map((row) => ({ id: row.id, label: pluginGalleryLabel(row) }))
-    .sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+    .sort((a, b) => compareText(a.label, b.label) || a.id.localeCompare(b.id));
 }
 
 export function chromeSelection(

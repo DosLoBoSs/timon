@@ -29,6 +29,7 @@ import { AGENT_MENU_SLOT, AgentMenuSlot } from './agent-menu-slot';
 import { addMember, removeMember } from './teams-api';
 import { TeamDialog, removeTeam, type TeamEditing } from './teams-menu';
 import { NO_TEAM, mainBotOf, type Bot, type Team } from './types';
+import { compareText } from '@/lib/intl';
 
 export type BotGroup = { key: string; team: Team | null; bots: Bot[] };
 
@@ -43,11 +44,11 @@ export function groupBots(bots: Bot[], teams: Team[]): BotGroup[] {
     const list = byTeam.get(key);
     if (list) list.push(bot); else byTeam.set(key, [bot]);
   }
-  const sorted = [...teams].sort((a, b) => a.name.localeCompare(b.name));
+  const sorted = [...teams].sort((a, b) => compareText(a.name, b.name));
   const groups: BotGroup[] = sorted.map((team) => ({
     key: team.id,
     team,
-    bots: (byTeam.get(team.id) ?? []).sort((a, b) => a.name.localeCompare(b.name)),
+    bots: (byTeam.get(team.id) ?? []).sort((a, b) => compareText(a.name, b.name)),
   }));
   // A team a bot points to but the viewer cannot see (scoped list, or a team
   // deleted between two reads) must not swallow that bot: it falls back into
@@ -56,7 +57,7 @@ export function groupBots(bots: Bot[], teams: Team[]): BotGroup[] {
   const loose = [...byTeam.entries()]
     .filter(([key]) => key === NO_TEAM || !known.has(key))
     .flatMap(([, list]) => list)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => compareText(a.name, b.name));
   if (loose.length > 0) groups.push({ key: NO_TEAM, team: null, bots: loose });
   return groups;
 }
@@ -518,7 +519,7 @@ export function BotsRail({
         <RailMenuView
           key={`${menu.kind}:${menu.x}:${menu.y}`}
           menu={menu}
-          teams={[...teams].sort((a, b) => a.name.localeCompare(b.name))}
+          teams={[...teams].sort((a, b) => compareText(a.name, b.name))}
           onClose={() => setMenu(null)}
           onMove={(bot, teamId) => { void move(bot, teamId); }}
           onEditTeam={(team) => setEditing({ team })}

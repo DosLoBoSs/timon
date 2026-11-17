@@ -5,6 +5,7 @@ import { FilePlus2, Pencil, Plus, X } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
 import { t } from '@/lib/i18n';
+import { compareText } from '@/lib/intl';
 import { mdToSafeHtml } from '@/lib/markdown';
 import { cn } from '@/lib/utils';
 
@@ -34,7 +35,7 @@ export function docNameOf(raw: string): string | null {
 /** The list of docs the agent has, `system-prompt.md` first, then `SOUL.md`, then by name. */
 export function orderedDocs(names: readonly string[]): string[] {
   const rank = (n: string): number => (same(n, 'soul.md') ? 0 : 1);
-  return [SYSTEM_PROMPT_DOC, ...names.filter((n) => !same(n, SYSTEM_PROMPT_DOC)).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))];
+  return [SYSTEM_PROMPT_DOC, ...names.filter((n) => !same(n, SYSTEM_PROMPT_DOC)).sort((a, b) => rank(a) - rank(b) || compareText(a, b))];
 }
 
 export type IdentityDocsProps = {

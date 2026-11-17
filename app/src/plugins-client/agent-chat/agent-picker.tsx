@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import { Search } from 'lucide-react';
 
 import { t } from '@/lib/i18n';
+import { compareText } from '@/lib/intl';
 import { foldText } from '@/lib/multichat-rail';
 import { cn } from '@/lib/utils';
 import { FramedFace } from './agent-avatar';
@@ -34,7 +35,7 @@ export function filtrerAgents(
       const botte = foldText([a.name, a.role ?? '', a.project ?? '', projet?.name ?? '', a.team ?? ''].join(' '));
       return mots.every((mot) => botte.includes(mot));
     })
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    .sort((a, b) => compareText(a.name, b.name));
 }
 
 /**

@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, MoreHorizontal } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { workspaceNodeId, type Hierarchy } from '@/lib/hierarchy';
 import { t } from '@/lib/i18n';
+import { compareText } from '@/lib/intl';
 import { cn } from '@/lib/utils';
 import type { PoleRecord } from './agents-client';
 import type { MenuTarget } from './node-menu';
@@ -54,7 +55,7 @@ export function OrgTree({ open, onOpenChange, agents, poles, hierarchy, main, no
       seen.add(id);
       const children = (kids.get(id) ?? [])
         .filter((c) => !seen.has(c))
-        .sort((a, b) => a.localeCompare(b))
+        .sort((a, b) => compareText(a, b))
         .map((c) => build(c, seen));
       const pole = poleName.has(id);
       return { id, label: pole ? poleName.get(id)! : leadLabel(id), pole, children };
@@ -62,7 +63,7 @@ export function OrgTree({ open, onOpenChange, agents, poles, hierarchy, main, no
     const seen = new Set<string>();
     // The main agent first, then the poles, then whoever else stands alone.
     const order = (id: string) => (id === main ? 0 : hierarchy.workspaceOfLead.has(id) ? 1 : 2);
-    const agentRoots = top.sort((a, b) => order(a) - order(b) || a.localeCompare(b)).map((id) => build(id, seen));
+    const agentRoots = top.sort((a, b) => order(a) - order(b) || compareText(a, b)).map((id) => build(id, seen));
     const poleRoots = lonePoles.map((p) => build(workspaceNodeId(p.slug), seen));
     return [...agentRoots.slice(0, 1), ...poleRoots, ...agentRoots.slice(1)];
   }, [agents, poles, hierarchy, main]);
