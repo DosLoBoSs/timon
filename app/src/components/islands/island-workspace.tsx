@@ -1046,6 +1046,8 @@ export function IslandWorkspaceView({
           onReorder={reorderStacked}
           islandOf={(tabId) => leaves.find((leaf) => leaf.tabs.some((x) => x.id === tabId))?.id}
           canDrag={!narrow}
+          glassOf={(leafId) => leaves.find((leaf) => leaf.id === leafId)?.glassScope ?? null}
+          onGlassScope={(leafId, scope) => { apply((tr) => setLeafGlassScope(tr, leafId, scope)); }}
         />
       </div>,
     );
@@ -1797,6 +1799,8 @@ function StackPicker({
   onReorder,
   islandOf,
   canDrag,
+  glassOf,
+  onGlassScope,
 }: {
   tabs: readonly IslandTab[];
   shown: TabId;
@@ -1812,6 +1816,10 @@ function StackPicker({
   islandOf: (tabId: TabId) => string | undefined;
   /** Too small but wide: a pointer that drags. Narrow: a touch screen, nothing is draggable (§10). */
   canDrag: boolean;
+  /** The glass an island chose; `null` follows the Appearance setting. */
+  glassOf: (leafId: string) => GlassScope | null;
+  /** Stacked, no island header offers its Glass menu: the tab's menu does, for the tab's island. */
+  onGlassScope: (leafId: string, scope: GlassScope | null) => void;
 }): ReactElement {
   const [menuTabId, setMenuTabId] = useState<TabId | null>(null);
   const [dragged, setDragged] = useState<TabId | null>(null);
@@ -1825,6 +1833,8 @@ function StackPicker({
   const menuDetach = menuTab ? detachOf(menuTab) : undefined;
   const earlier = menuTab ? step(menuTab, -1) : undefined;
   const later = menuTab ? step(menuTab, 1) : undefined;
+  const glassOn = useGlassScope() !== null;
+  const menuIsland = menuTab ? islandOf(menuTab.id) : undefined;
   return (
     <div
       role="tablist"
@@ -1932,6 +1942,7 @@ function StackPicker({
                 {t('islands.detach')}
               </DropdownMenuItem>
             )}
+            {glassOn && menuIsland && <IslandGlassSubmenu value={glassOf(menuIsland)} onChange={(scope) => { onGlassScope(menuIsland, scope); }} />}
             {menuTab.content.type !== HOST_ROUTE && (
               <DropdownMenuItem data-stack-menu-item="close" onSelect={() => onClose(menuTab.id)}>
                 <X className="size-4" aria-hidden />

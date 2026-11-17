@@ -313,6 +313,47 @@ test('stacked for lack of room, a tab keeps its menu and its drag, within its ow
   assert.deepEqual(order(), [['route'], ['a', 'b'], ['c'], ['d']]);
 });
 
+/** Opens a Radix submenu from its trigger, as the keyboard does (jsdom has no pointer hover). */
+async function openSubmenu(act: (fn: () => void) => Promise<void>, trigger: HTMLElement) {
+  await act(() => {
+    trigger.focus();
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+  });
+}
+
+test('stacked, the menu of a tab sets the glass of its island (TODO #806)', async (t) => {
+  const w = await mount(t, { width: 600 });
+  // The glass is on for the account: the Appearance screen sets it on <html>.
+  document.documentElement.setAttribute('data-glass', '');
+  const base = w.tree.defaultIslandTree();
+  const split = w.tree.insertAt(base, base.root.id, 'right', { type: FAKE, params: { id: 'a' } }).tree;
+  await w.render(split);
+  assert.equal(w.workspace().dataset.islandWorkspace, 'stacked');
+  const boardLeaf = w.tree.allLeaves(split).find((leaf) => leaf.tabs.some((tab) => tab.content.params.id === 'a'))!;
+  const handle = document.querySelector<HTMLElement>(`[data-island-tab-handle="${boardLeaf.tabs[0]!.id}"]`)!;
+  await w.act(() => { handle.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })); });
+  const trigger = document.querySelector<HTMLElement>('[data-island-menu="glass"]');
+  assert.ok(trigger, 'the Glass entry, as in an island header');
+  await openSubmenu(w.act, trigger!);
+  assert.equal(document.querySelector('[data-island-glass="follow"]')?.getAttribute('aria-checked'), 'true', 'no choice yet: it follows Appearance');
+  assert.ok(!document.querySelector('[data-island-glass="both"]'), '"both" stays hidden while glass tuning is');
+  await w.act(() => { document.querySelector<HTMLElement>('[data-island-glass="widgets"]')!.click(); });
+  const after = w.calls.at(-1)!.tree;
+  assert.equal(w.tree.allLeaves(after).find((leaf) => leaf.id === boardLeaf.id)?.glassScope, 'widgets');
+  assert.equal(w.tree.allLeaves(after).find((leaf) => leaf.id !== boardLeaf.id)?.glassScope, undefined, 'the island of the page keeps its own');
+});
+
+test('stacked with the glass off, the menu of a tab offers no Glass entry', async (t) => {
+  const w = await mount(t, { width: 600 });
+  const base = w.tree.defaultIslandTree();
+  const split = w.tree.insertAt(base, base.root.id, 'right', { type: FAKE, params: { id: 'a' } }).tree;
+  await w.render(split);
+  const handle = document.querySelector<HTMLElement>('[data-island-tab-handle]')!;
+  await w.act(() => { handle.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })); });
+  assert.ok(document.querySelector('[data-stack-menu-item]') || document.querySelector('[role="menu"]'), 'the menu is open');
+  assert.ok(!document.querySelector('[data-island-menu="glass"]'));
+});
+
 test('an announced workspace opens a content next to the focused island, once', async (t) => {
   const w = await mount(t);
   assert.equal(w.bus.openInIsland({ type: FAKE, params: { id: 'a' } }), false, 'no workspace: refused');
