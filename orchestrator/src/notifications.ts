@@ -16,6 +16,7 @@ import { bus, type BusEvent } from './bus.js';
 import { moduleActive } from './kernel/module-state.js';
 import { isMirrorTask } from './task-mirror.js';
 import { sandboxCascadeNotice } from './sandbox-cascade.js';
+import type { DaemonMessage } from './daemon-message.js';
 
 /**
  * Outcome of a Web Push fan-out, returned to the caller so that it can REASON
@@ -112,6 +113,8 @@ export function createNotification(opts: {
   dismissOn?: readonly NotificationDismissOn[] | null;
   /** Epoch ms after which the expiry sweep dismisses the card. */
   expiresAt?: number | null;
+  /** The code of `title` and `body` when the daemon wrote them, for the webview to translate (TODO #845). */
+  message?: DaemonMessage | null;
   /** See `PushSink.notify`: enables the Approve / Refuse buttons on the device. */
   pushPermissionId?: string | null;
   /**

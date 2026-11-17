@@ -52,6 +52,7 @@ import { backendBinaryAvailable } from './backends/binary-check.js';
 import { providerSignedOut } from './backends/sign-in-state.js';
 import { messageDateTime, messageTime } from './message-dates.js';
 import { bus } from './bus.js';
+import { daemonMessage } from './daemon-message.js';
 
 export type FallbackTarget = { backend: BackendName; model: string | null };
 
@@ -229,6 +230,17 @@ export function noteBackendUnavailable(trip: BreakerTrip): void {
       `- Backend sidelined until ${messageDateTime(until)}, or until a turn succeeds on it.`,
       '- Missions and tasks that depend on it switch onto their fallback plan.',
     ].join('\n'),
+    {
+      message: daemonMessage('backend_breaker_tripped', {
+        backend: name,
+        failures: trip.failures,
+        signature: trip.signature,
+        seconds: Math.round(trip.spanMs / 1000),
+        // 0 for a proven backend: the message then leaves out the setup paragraph.
+        minutes: proven ? 0 : Math.max(1, Math.round((until - Date.now()) / 60_000)),
+        until,
+      }),
+    },
   );
 }
 
@@ -249,6 +261,7 @@ function notifyAuthFailure(name: string, until: number): void {
       type: 'alert',
       urgent: true,
       title: `Backend ${name}: signed out — log in again`,
+      message: daemonMessage('backend_signed_out', { backend: name, until }),
       body: [
         `The \`${name}\` CLI reports an authentication failure (its session expired and could not be refreshed).`,
         '',
@@ -273,6 +286,7 @@ function notifyAccountSignedOut(backend: string, accountId: string): void {
       type: 'alert',
       urgent: true,
       title: `${backend} account "${label}": signed out — sign in again`,
+      message: daemonMessage('backend_account_signed_out', { backend, account: label }),
       body: [
         `The \`${backend}\` CLI reports an authentication failure on the account "${label}".`,
         '',
@@ -323,11 +337,19 @@ export function interruptionForCooldown(
  * for a quota that was never measured (TIM-0111).
  */
 export function cooldownReason(backend: string | null | undefined): string {
+  const cause = cooldownCause(backend);
+  if (cause === 'quota') return 'out of quota';
+  const by = cause === 'auth' ? 'after an authentication failure' : 'by the circuit breaker';
+  const until = dbApi.getBackendCooldown(asBackendName(backend) ?? '')?.until ?? 0;
+  return `sidelined ${by} until ${messageTime(until)}, no quota measured`;
+}
+
+/** Which of `cooldownReason`'s sentences applies: the param a translated message selects on. */
+export function cooldownCause(backend: string | null | undefined): 'quota' | 'auth' | 'breaker' {
   const name = asBackendName(backend);
   const row = name ? dbApi.getBackendCooldown(name) : undefined;
-  if (row?.kind !== 'unavailable') return 'out of quota';
-  const by = row.quota_window === 'authentication failed' ? 'after an authentication failure' : 'by the circuit breaker';
-  return `sidelined ${by} until ${messageTime(row.until)}, no quota measured`;
+  if (row?.kind !== 'unavailable') return 'quota';
+  return row.quota_window === 'authentication failed' ? 'auth' : 'breaker';
 }
 
 /** True if the registry still records an exclusion for this backend. An expired
@@ -521,6 +543,14 @@ function alertPilotStranded(from: string | null | undefined, seriesId: string | 
       urgent: true,
       ownerUserId,
       title: `Orchestrator stopped: no usable fallback for ${name}`,
+      message: daemonMessage('orchestrator_stranded', {
+        backend: name,
+        provider: backend,
+        series: seriesId ? seriesId.slice(0, 8) : 'none',
+        seriesFlag: series,
+        cause: cooldownCause(name),
+        until,
+      }),
       body: [
         `The orchestrator${seriesId ? ` of series \`${seriesId.slice(0, 8)}\`` : ''} runs on \`${name}\`, which is ${cooldownReason(name)}.`,
         `Its declared fallback, the other ${backend} connections it may use, the equivalent models and the global fallback are all unavailable: it stays stopped, and the returns of its tasks wait.`,

@@ -118,3 +118,24 @@ test('a notification without a code keeps its payload as before', () => {
   assert.equal(payload.title, 'Hand-written title');
   assert.equal('code' in payload, false);
 });
+
+test('a signed-out backend raises a coded card; the breaker a coded notice', async () => {
+  const { mountOfficialProviders } = await import('../tests/helpers/official-providers.js');
+  await mountOfficialProviders();
+  const { noteBackendUnavailable } = await import('./backend-fallback.js');
+  const trip = { failures: 3, threshold: 3, windowMs: 600_000, spanMs: 9_000, signature: '0 turn / 0 token / 295 ms' };
+  noteBackendUnavailable({ ...trip, backend: 'codex', cause: 'auth' });
+  // The card is written behind a dynamic import.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const card = dbApi.listNotifications({ limit: 20 }).find((n) => n.title.startsWith('Backend codex: signed out'));
+  const code = decodeDaemonMessage(card?.message_code);
+  assert.equal(code?.code, 'backend_signed_out');
+  assert.equal(code?.params.backend, 'codex');
+  assert.equal(typeof code?.params.until, 'number');
+
+  noteBackendUnavailable({ ...trip, backend: 'claude', cause: 'burst' });
+  const payload = lastNotification();
+  assert.match(String(payload.title), /claude: sidelined by the circuit breaker/);
+  assert.equal(payload.code, 'backend_breaker_tripped');
+  assert.equal((payload.params as Record<string, unknown>).failures, 3);
+});
