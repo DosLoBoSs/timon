@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "Ogólny",
     "aria": {
-      "embeddedBrowser": "Wbudowana przeglądarka",
-      "resizePanel": "Zmień rozmiar panelu przeglądarki",
-      "projectBrowser": "Przeglądarka dla {project}"
-    },
-    "actions": {
-      "collapse": "Zwiń przeglądarkę",
-      "reload": "Odśwież widok",
-      "openInTab": "Otwórz w karcie przeglądarki",
-      "startProjectBrowser": "Uruchom przeglądarkę tego projektu",
-      "stopProjectBrowser": "Zatrzymaj kontener przeglądarki tego projektu",
-      "start": "Uruchom",
-      "stop": "Zatrzymaj",
-      "retry": "Ponów",
-      "takeControl": "Przejmij kontrolę",
-      "watchOnly": "Tylko podgląd"
-    },
-    "display": {
-      "desktop": "Widok desktopowy",
-      "adapted": "Widok mobilny / dopasowany",
-      "desktopTitle": "Pełny widok desktopowy ({width}×{height}), wyśrodkowany na czarnym tle — przełącz na mobilny",
-      "adaptedTitle": "Widok dopasowany do panelu (mobilne wersje stron) — przełącz na desktopowy"
-    },
-    "viewer": {
-      "takeControl": "Przejmij kontrolę",
-      "watchOnly": "Przełącz na tryb widza",
-      "watchOnlyTitle": "Widz (tylko odczyt) — przejęcie kontroli rozłączy urządzenie, które obecnie steruje sesją",
-      "controlTitle": "Sterowanie — przełącz na tryb widza, by oglądać bez wypychania innego urządzenia"
-    },
-    "pin": {
-      "attach": "Przypnij panel",
-      "detach": "Odepnij panel",
-      "attachTitle": "Przypnij — treść przesuwa się na bok zamiast znikać pod panelem",
-      "detachTitle": "Odepnij — panel nakłada się na treść"
-    },
-    "empty": {
-      "noBrowser": "Brak przeglądarki dla tego projektu — uruchomisz ją przyciskiem Przeglądarka na górnym pasku."
-    },
-    "stream": {
-      "stalled": "Strumień się nie wyświetla. Być może inna karta lub urządzenie przejęło kontrolę — serwer akceptuje tylko jednego sterującego klienta."
-    },
-    "status": {
-      "stopped": "Przeglądarka zatrzymana",
-      "starting": "Uruchamianie przeglądarki {project}…"
-    },
-    "errors": {
-      "streamUnavailable": "Kontener działa, ale jego strumień jest niedostępny",
-      "startRejected": "Uruchomienie odrzucone (HTTP {status})",
-      "startTimeout": "Kontener nie uruchomił się na czas",
-      "unknown": "Nieznany błąd"
+      "embeddedBrowser": "Wbudowana przeglądarka"
     },
     "native": {
       "title": "Przeglądarka",

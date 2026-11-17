@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "Algemeen",
     "aria": {
-      "embeddedBrowser": "Ingebouwde browser",
-      "resizePanel": "Grootte van browserpaneel wijzigen",
-      "projectBrowser": "Browser voor {project}"
-    },
-    "actions": {
-      "collapse": "Browser inklappen",
-      "reload": "Weergave herladen",
-      "openInTab": "In een browsertabblad openen",
-      "startProjectBrowser": "Browser van dit project starten",
-      "stopProjectBrowser": "Browsercontainer van dit project stoppen",
-      "start": "Starten",
-      "stop": "Stoppen",
-      "retry": "Opnieuw proberen",
-      "takeControl": "Besturing overnemen",
-      "watchOnly": "Alleen kijken"
-    },
-    "display": {
-      "desktop": "Desktopweergave",
-      "adapted": "Mobiele / aangepaste weergave",
-      "desktopTitle": "Volledige desktopweergave ({width}×{height}), gecentreerd op zwart — naar mobiel wisselen",
-      "adaptedTitle": "Weergave aangepast aan het paneel (mobiele versie van sites) — naar desktop wisselen"
-    },
-    "viewer": {
-      "takeControl": "Besturing overnemen",
-      "watchOnly": "Naar toeschouwer wisselen",
-      "watchOnlyTitle": "Toeschouwer (alleen lezen) — besturing overnemen verbreekt het apparaat dat de sessie nu bestuurt",
-      "controlTitle": "Besturing — wissel naar toeschouwer om te kijken zonder een ander apparaat te verdringen"
-    },
-    "pin": {
-      "attach": "Paneel vastzetten",
-      "detach": "Paneel losmaken",
-      "attachTitle": "Vastzetten — de inhoud schuift opzij in plaats van eronder te liggen",
-      "detachTitle": "Losmaken — het paneel ligt boven de inhoud"
-    },
-    "empty": {
-      "noBrowser": "Geen browser voor dit project — de knop Browser in de bovenbalk start er een."
-    },
-    "stream": {
-      "stalled": "De stream wordt niet getoond. Misschien heeft een ander tabblad of apparaat de besturing overgenomen — de server accepteert maar één besturende client."
-    },
-    "status": {
-      "stopped": "Browser gestopt",
-      "starting": "Browser van {project} wordt gestart…"
-    },
-    "errors": {
-      "streamUnavailable": "De container draait, maar de stream is niet beschikbaar",
-      "startRejected": "Starten geweigerd (HTTP {status})",
-      "startTimeout": "De container is niet op tijd gestart",
-      "unknown": "Onbekende fout"
+      "embeddedBrowser": "Ingebouwde browser"
     },
     "native": {
       "title": "Browser",

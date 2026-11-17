@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "Allgemein",
     "aria": {
-      "embeddedBrowser": "Eingebetteter Browser",
-      "resizePanel": "Größe des Browserbereichs ändern",
-      "projectBrowser": "Browser für {project}"
-    },
-    "actions": {
-      "collapse": "Browser einklappen",
-      "reload": "Ansicht neu laden",
-      "openInTab": "In einem Browser-Tab öffnen",
-      "startProjectBrowser": "Browser dieses Projekts starten",
-      "stopProjectBrowser": "Browser-Container dieses Projekts stoppen",
-      "start": "Starten",
-      "stop": "Stoppen",
-      "retry": "Wiederholen",
-      "takeControl": "Steuerung übernehmen",
-      "watchOnly": "Nur zusehen"
-    },
-    "display": {
-      "desktop": "Desktop-Anzeige",
-      "adapted": "Mobile / angepasste Anzeige",
-      "desktopTitle": "Volle Desktop-Ansicht ({width}×{height}), zentriert auf Schwarz — zu Mobil wechseln",
-      "adaptedTitle": "An den Bereich angepasste Anzeige (mobile Version der Seiten) — zu Desktop wechseln"
-    },
-    "viewer": {
-      "takeControl": "Steuerung übernehmen",
-      "watchOnly": "Zum Zuschauer wechseln",
-      "watchOnlyTitle": "Zuschauer (nur lesen) — Steuerung übernehmen trennt das Gerät, das die Sitzung gerade steuert",
-      "controlTitle": "Steuerung — zum Zuschauer wechseln, um zuzusehen, ohne ein anderes Gerät zu verdrängen"
-    },
-    "pin": {
-      "attach": "Bereich anheften",
-      "detach": "Bereich lösen",
-      "attachTitle": "Anheften — der Inhalt weicht zur Seite aus, statt darunter zu liegen",
-      "detachTitle": "Lösen — der Bereich liegt über dem Inhalt"
-    },
-    "empty": {
-      "noBrowser": "Kein Browser für dieses Projekt — der Browser-Knopf in der oberen Leiste startet einen."
-    },
-    "stream": {
-      "stalled": "Der Stream wird nicht angezeigt. Möglicherweise hat ein anderer Tab oder ein anderes Gerät die Steuerung übernommen — der Server akzeptiert nur einen steuernden Client."
-    },
-    "status": {
-      "stopped": "Browser gestoppt",
-      "starting": "Browser von {project} wird gestartet…"
-    },
-    "errors": {
-      "streamUnavailable": "Der Container läuft, aber sein Stream ist nicht verfügbar",
-      "startRejected": "Start abgelehnt (HTTP {status})",
-      "startTimeout": "Der Container ist nicht rechtzeitig gestartet",
-      "unknown": "Unbekannter Fehler"
+      "embeddedBrowser": "Eingebetteter Browser"
     },
     "native": {
       "title": "Browser",

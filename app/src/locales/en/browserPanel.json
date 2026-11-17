@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "General",
     "aria": {
-      "embeddedBrowser": "Embedded browser",
-      "resizePanel": "Resize browser panel",
-      "projectBrowser": "Browser for {project}"
-    },
-    "actions": {
-      "collapse": "Collapse browser",
-      "reload": "Reload view",
-      "openInTab": "Open in a browser tab",
-      "startProjectBrowser": "Start this project's browser",
-      "stopProjectBrowser": "Stop this project's browser container",
-      "start": "Start",
-      "stop": "Stop",
-      "retry": "Retry",
-      "takeControl": "Take control",
-      "watchOnly": "Watch only"
-    },
-    "display": {
-      "desktop": "Desktop display",
-      "adapted": "Mobile / adapted display",
-      "desktopTitle": "Full desktop view ({width}×{height}), centered on black — switch to mobile",
-      "adaptedTitle": "Display adapted to the panel (mobile version of sites) — switch to desktop"
-    },
-    "viewer": {
-      "takeControl": "Take control",
-      "watchOnly": "Switch to spectator",
-      "watchOnlyTitle": "Spectator (read-only) — taking control will disconnect the device that currently controls the session",
-      "controlTitle": "Control — switch to spectator to watch without evicting another device"
-    },
-    "pin": {
-      "attach": "Pin panel",
-      "detach": "Unpin panel",
-      "attachTitle": "Pin — content moves aside instead of going underneath",
-      "detachTitle": "Unpin — panel moves above the content"
-    },
-    "empty": {
-      "noBrowser": "No browser for this project — the Browser button in the top bar starts one."
-    },
-    "stream": {
-      "stalled": "The stream is not displaying. Another tab or device may have taken control — the server accepts only one controlling client."
-    },
-    "status": {
-      "stopped": "Browser stopped",
-      "starting": "Starting the {project} browser…"
-    },
-    "errors": {
-      "streamUnavailable": "The container is running but its stream is unavailable",
-      "startRejected": "Start rejected (HTTP {status})",
-      "startTimeout": "The container did not start in time",
-      "unknown": "Unknown error"
+      "embeddedBrowser": "Embedded browser"
     },
     "native": {
       "title": "Browser",

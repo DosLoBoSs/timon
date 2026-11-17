@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "General",
     "aria": {
-      "embeddedBrowser": "Navegador integrado",
-      "resizePanel": "Cambiar el tamaño del panel del navegador",
-      "projectBrowser": "Navegador de {project}"
-    },
-    "actions": {
-      "collapse": "Contraer navegador",
-      "reload": "Recargar la vista",
-      "openInTab": "Abrir en una pestaña del navegador",
-      "startProjectBrowser": "Iniciar el navegador de este proyecto",
-      "stopProjectBrowser": "Detener el contenedor del navegador de este proyecto",
-      "start": "Iniciar",
-      "stop": "Detener",
-      "retry": "Reintentar",
-      "takeControl": "Tomar el control",
-      "watchOnly": "Solo observar"
-    },
-    "display": {
-      "desktop": "Pantalla de escritorio",
-      "adapted": "Pantalla móvil / adaptada",
-      "desktopTitle": "Vista de escritorio completa ({width}×{height}), centrada sobre negro: cambiar a móvil",
-      "adaptedTitle": "Pantalla adaptada al panel (versión móvil de los sitios): cambiar a escritorio"
-    },
-    "viewer": {
-      "takeControl": "Tomar el control",
-      "watchOnly": "Pasar a espectador",
-      "watchOnlyTitle": "Espectador (solo lectura): al tomar el control se desconectará el dispositivo que controla la sesión ahora",
-      "controlTitle": "Control: pasa a espectador para mirar sin expulsar a otro dispositivo"
-    },
-    "pin": {
-      "attach": "Fijar panel",
-      "detach": "Desfijar panel",
-      "attachTitle": "Fijar: el contenido se desplaza en lugar de quedar debajo",
-      "detachTitle": "Desfijar: el panel se coloca sobre el contenido"
-    },
-    "empty": {
-      "noBrowser": "Este proyecto no tiene navegador: el botón Navegador de la barra superior inicia uno."
-    },
-    "stream": {
-      "stalled": "La transmisión no se muestra. Puede que otra pestaña u otro dispositivo haya tomado el control: el servidor solo acepta un cliente que controle."
-    },
-    "status": {
-      "stopped": "Navegador detenido",
-      "starting": "Iniciando el navegador de {project}…"
-    },
-    "errors": {
-      "streamUnavailable": "El contenedor está en ejecución pero su transmisión no está disponible",
-      "startRejected": "Inicio rechazado (HTTP {status})",
-      "startTimeout": "El contenedor no se inició a tiempo",
-      "unknown": "Error desconocido"
+      "embeddedBrowser": "Navegador integrado"
     },
     "native": {
       "title": "Navegador",

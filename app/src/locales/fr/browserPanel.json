@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "Général",
     "aria": {
-      "embeddedBrowser": "Navigateur intégré",
-      "resizePanel": "Redimensionner le panneau navigateur",
-      "projectBrowser": "Navigateur de {project}"
-    },
-    "actions": {
-      "collapse": "Replier le navigateur",
-      "reload": "Recharger la vue",
-      "openInTab": "Ouvrir dans un onglet du navigateur",
-      "startProjectBrowser": "Démarrer le navigateur de ce projet",
-      "stopProjectBrowser": "Arrêter le conteneur navigateur de ce projet",
-      "start": "Démarrer",
-      "stop": "Arrêter",
-      "retry": "Réessayer",
-      "takeControl": "Reprendre la main",
-      "watchOnly": "Passer spectateur"
-    },
-    "display": {
-      "desktop": "Affichage bureau",
-      "adapted": "Affichage mobile / adapté",
-      "desktopTitle": "Version bureau entière ({width}×{height}), centrée sur fond noir — passer en mobile",
-      "adaptedTitle": "Affichage mobile / adapté au panneau (version mobile des sites) — passer en bureau"
-    },
-    "viewer": {
-      "takeControl": "Reprendre le contrôle",
-      "watchOnly": "Passer en spectateur",
-      "watchOnlyTitle": "Spectateur (lecture seule) — reprendre le contrôle déconnectera l’appareil qui contrôle actuellement la session",
-      "controlTitle": "Contrôle — passer en spectateur pour regarder sans évincer un autre appareil"
-    },
-    "pin": {
-      "attach": "Épingler le panneau",
-      "detach": "Détacher le panneau",
-      "attachTitle": "Épingler — le contenu se décale au lieu de passer dessous",
-      "detachTitle": "Détacher — le panneau repasse au-dessus du contenu"
-    },
-    "empty": {
-      "noBrowser": "Aucun navigateur pour ce projet — le bouton Navigateur de la barre du haut en démarre un."
-    },
-    "stream": {
-      "stalled": "Le flux ne s’affiche pas. Un autre onglet ou appareil a peut-être pris la main — le serveur n’accepte qu’un seul client en contrôle."
-    },
-    "status": {
-      "stopped": "Navigateur arrêté",
-      "starting": "Démarrage du navigateur de {project}…"
-    },
-    "errors": {
-      "streamUnavailable": "Le conteneur tourne mais son flux ne répond pas",
-      "startRejected": "Démarrage refusé (HTTP {status})",
-      "startTimeout": "Le conteneur n’a pas démarré dans les temps",
-      "unknown": "Erreur inconnue"
+      "embeddedBrowser": "Navigateur intégré"
     },
     "native": {
       "title": "Navigateur",

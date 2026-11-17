@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "通用",
     "aria": {
-      "embeddedBrowser": "嵌入式浏览器",
-      "resizePanel": "调整浏览器面板大小",
-      "projectBrowser": "{project} 的浏览器"
-    },
-    "actions": {
-      "collapse": "收起浏览器",
-      "reload": "重新加载视图",
-      "openInTab": "在浏览器标签页中打开",
-      "startProjectBrowser": "启动此项目的浏览器",
-      "stopProjectBrowser": "停止此项目的浏览器容器",
-      "start": "启动",
-      "stop": "停止",
-      "retry": "重试",
-      "takeControl": "接管控制",
-      "watchOnly": "仅观看"
-    },
-    "display": {
-      "desktop": "桌面显示",
-      "adapted": "移动版 / 自适应显示",
-      "desktopTitle": "在黑色背景上居中显示完整桌面视图（{width}×{height}）— 切换到移动版",
-      "adaptedTitle": "适配面板大小（显示网站移动版）— 切换到桌面版"
-    },
-    "viewer": {
-      "takeControl": "接管控制",
-      "watchOnly": "切换到观看模式",
-      "watchOnlyTitle": "观看模式（只读）— 接管控制会断开当前控制此会话的设备",
-      "controlTitle": "控制模式 — 切换到观看模式即可观看，不会断开其他设备"
-    },
-    "pin": {
-      "attach": "固定面板",
-      "detach": "取消固定面板",
-      "attachTitle": "固定 — 内容会移到一旁，不会被面板遮挡",
-      "detachTitle": "取消固定 — 面板会浮在内容上方"
-    },
-    "empty": {
-      "noBrowser": "此项目尚未启动浏览器。点击顶部栏中的「浏览器」按钮即可启动。"
-    },
-    "stream": {
-      "stalled": "无法显示画面。其他标签页或设备可能已接管控制，服务器只允许一个客户端控制浏览器。"
-    },
-    "status": {
-      "stopped": "浏览器已停止",
-      "starting": "正在启动 {project} 的浏览器…"
-    },
-    "errors": {
-      "streamUnavailable": "容器正在运行，但无法获取其画面",
-      "startRejected": "启动请求被拒绝（HTTP {status}）",
-      "startTimeout": "容器启动超时",
-      "unknown": "未知错误"
+      "embeddedBrowser": "嵌入式浏览器"
     },
     "native": {
       "title": "浏览器",

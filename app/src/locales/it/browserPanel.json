@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "Generale",
     "aria": {
-      "embeddedBrowser": "Browser integrato",
-      "resizePanel": "Ridimensiona il pannello del browser",
-      "projectBrowser": "Browser di {project}"
-    },
-    "actions": {
-      "collapse": "Comprimi il browser",
-      "reload": "Ricarica la vista",
-      "openInTab": "Apri in una scheda del browser",
-      "startProjectBrowser": "Avvia il browser di questo progetto",
-      "stopProjectBrowser": "Ferma il container del browser di questo progetto",
-      "start": "Avvia",
-      "stop": "Ferma",
-      "retry": "Riprova",
-      "takeControl": "Prendi il controllo",
-      "watchOnly": "Solo visione"
-    },
-    "display": {
-      "desktop": "Visualizzazione desktop",
-      "adapted": "Visualizzazione mobile / adattata",
-      "desktopTitle": "Vista desktop completa ({width}×{height}), centrata su nero — passa a mobile",
-      "adaptedTitle": "Visualizzazione adattata al pannello (versione mobile dei siti) — passa a desktop"
-    },
-    "viewer": {
-      "takeControl": "Prendi il controllo",
-      "watchOnly": "Passa a spettatore",
-      "watchOnlyTitle": "Spettatore (sola lettura) — prendere il controllo disconnetterà il dispositivo che controlla ora la sessione",
-      "controlTitle": "Controllo — passa a spettatore per guardare senza disconnettere un altro dispositivo"
-    },
-    "pin": {
-      "attach": "Fissa il pannello",
-      "detach": "Sblocca il pannello",
-      "attachTitle": "Fissa — il contenuto si sposta di lato invece di finire sotto",
-      "detachTitle": "Sblocca — il pannello si sposta sopra il contenuto"
-    },
-    "empty": {
-      "noBrowser": "Nessun browser per questo progetto — il pulsante Browser nella barra in alto ne avvia uno."
-    },
-    "stream": {
-      "stalled": "Lo stream non viene mostrato. Un’altra scheda o un altro dispositivo potrebbe aver preso il controllo — il server accetta un solo client di controllo."
-    },
-    "status": {
-      "stopped": "Browser fermo",
-      "starting": "Avvio del browser di {project}…"
-    },
-    "errors": {
-      "streamUnavailable": "Il container è in esecuzione ma il suo stream non è disponibile",
-      "startRejected": "Avvio rifiutato (HTTP {status})",
-      "startTimeout": "Il container non si è avviato in tempo",
-      "unknown": "Errore sconosciuto"
+      "embeddedBrowser": "Browser integrato"
     },
     "native": {
       "title": "Browser",

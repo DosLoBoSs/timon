@@ -1,56 +1,7 @@
 {
   "browserPanel": {
-    "generalProfile": "Geral",
     "aria": {
-      "embeddedBrowser": "Navegador embutido",
-      "resizePanel": "Redimensionar o painel do navegador",
-      "projectBrowser": "Navegador de {project}"
-    },
-    "actions": {
-      "collapse": "Recolher o navegador",
-      "reload": "Recarregar a visualização",
-      "openInTab": "Abrir em uma aba do navegador",
-      "startProjectBrowser": "Iniciar o navegador deste projeto",
-      "stopProjectBrowser": "Parar o contêiner do navegador deste projeto",
-      "start": "Iniciar",
-      "stop": "Parar",
-      "retry": "Tentar novamente",
-      "takeControl": "Assumir o controle",
-      "watchOnly": "Somente observar"
-    },
-    "display": {
-      "desktop": "Exibição para desktop",
-      "adapted": "Exibição móvel / adaptada",
-      "desktopTitle": "Visualização completa para desktop ({width}×{height}), centralizada sobre preto — mudar para móvel",
-      "adaptedTitle": "Exibição adaptada ao painel (versão móvel dos sites) — mudar para desktop"
-    },
-    "viewer": {
-      "takeControl": "Assumir o controle",
-      "watchOnly": "Mudar para espectador",
-      "watchOnlyTitle": "Espectador (somente leitura) — assumir o controle desconectará o dispositivo que controla a sessão no momento",
-      "controlTitle": "Controle — mude para espectador para assistir sem expulsar outro dispositivo"
-    },
-    "pin": {
-      "attach": "Fixar o painel",
-      "detach": "Desafixar o painel",
-      "attachTitle": "Fixar — o conteúdo se desloca em vez de ficar por baixo",
-      "detachTitle": "Desafixar — o painel fica sobre o conteúdo"
-    },
-    "empty": {
-      "noBrowser": "Nenhum navegador para este projeto — o botão Navegador na barra superior inicia um."
-    },
-    "stream": {
-      "stalled": "O fluxo não está sendo exibido. Outra aba ou dispositivo pode ter assumido o controle — o servidor aceita apenas um cliente no controle."
-    },
-    "status": {
-      "stopped": "Navegador parado",
-      "starting": "Iniciando o navegador de {project}…"
-    },
-    "errors": {
-      "streamUnavailable": "O contêiner está em execução, mas seu fluxo está indisponível",
-      "startRejected": "Início rejeitado (HTTP {status})",
-      "startTimeout": "O contêiner não iniciou a tempo",
-      "unknown": "Erro desconhecido"
+      "embeddedBrowser": "Navegador embutido"
     },
     "native": {
       "title": "Navegador",
