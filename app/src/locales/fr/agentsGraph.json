@@ -1,0 +1,11 @@
+{
+  "agentsPage": {
+    "graph": {
+      "workspace": "Espace de travail",
+      "readout": "{nodes, plural, one {# nœud} other {# nœuds}} · {edges, plural, one {# lien} other {# liens}} · {subagents, plural, one {# sous-agent} other {# sous-agents}}",
+      "readoutIdle": "graphe des agents",
+      "newTask": "Nouvelle tâche",
+      "newAgent": "Nouvel agent"
+    }
+  }
+}

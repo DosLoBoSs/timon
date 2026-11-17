@@ -1647,7 +1647,7 @@ export function AgentsClient() {
           // Counts = what's actually displayed (filtered view), not the
           // master, so the readout follows the selected workspace.
           const subs = Math.max(0, viewNodes.length - 1);
-          readoutRef.current.textContent = `${viewNodes.length} nodes · ${viewLinks.length} edges · ${subs} subagents`;
+          readoutRef.current.textContent = i18n('agentsPage.graph.readout', { nodes: viewNodes.length, edges: viewLinks.length, subagents: subs });
         }
         const names = state.nodes.map((n) => n.id);
         setAgentNames((prev) => (prev.length === names.length && prev.every((n, i) => n === names[i]) ? prev : names));
@@ -1729,7 +1729,7 @@ export function AgentsClient() {
           {/* Workspace header chip — centered, aligned under the header */}
           <div className="pointer-events-auto relative flex items-center justify-center rounded-xl bg-card/90 px-6 py-2 shadow-elev-1 backdrop-blur-sm">
             <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground">
-              Workspace
+              {i18n('agentsPage.graph.workspace')}
             </span>
           </div>
           {/* Toggles chip */}
@@ -1763,7 +1763,7 @@ export function AgentsClient() {
         </div>
       {/* Mobile pole chips — floating under the topbar */}
         <div className="fixed left-[calc(var(--timon-nav-w)+8px)] top-[calc(var(--timon-topbar-h)+58px)] z-[5] flex flex-wrap items-center gap-1 rounded-lg border border-border bg-card/80 px-1.5 py-1 shadow-lg backdrop-blur md:hidden">
-          <span className="px-1 text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">workspace</span>
+          <span className="px-1 text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">{i18n('agentsPage.graph.workspace')}</span>
           {poleChips.map((w) => (
             <button
               key={w.slug}
@@ -1803,15 +1803,13 @@ export function AgentsClient() {
             className="swatch"
             style={{ width: 8, height: 8, borderRadius: 2, background: 'hsl(var(--success))' }}
           />
-          <span className="t-name">_main</span>
+          <span className="t-name" />
         </div>
         <div className="status mt-1 flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">
           <span className="d size-1.5 rounded-full" style={{ background: 'hsl(var(--success))' }} />
-          <span className="t-status">idle</span>
+          <span className="t-status" />
         </div>
-        <div className="t-last mt-1.5 truncate text-[10.5px] text-muted-foreground">
-          awaiting input
-        </div>
+        <div className="t-last mt-1.5 truncate text-[10.5px] text-muted-foreground" />
       </div>
 
       {seatCandidates && !orgOpen && (
@@ -1837,7 +1835,7 @@ export function AgentsClient() {
         ref={readoutRef}
         className="pointer-events-none fixed bottom-[4.5rem] left-1/2 -translate-x-1/2 z-[4] rounded-md bg-card/70 px-2.5 py-1 tabular-nums text-[10.5px] text-muted-foreground backdrop-blur"
       >
-        node graph
+        {i18n('agentsPage.graph.readoutIdle')}
       </div>
 
       {/* Action bar — quick shortcuts above the event stream console.
@@ -1855,7 +1853,7 @@ export function AgentsClient() {
           onClick={() => setShowNewTask(true)}
         >
           <ListTodo className="size-3.5" />
-          New task
+          {i18n('agentsPage.graph.newTask')}
         </Button>
         <Button size="sm" variant="ghost" className="h-7 shrink-0 gap-1.5 px-2.5 text-[11.5px] font-medium" asChild>
           <Link
@@ -1866,7 +1864,7 @@ export function AgentsClient() {
             }}
           >
             <UserPlus className="size-3.5" />
-            New agent
+            {i18n('agentsPage.graph.newAgent')}
           </Link>
         </Button>
         {/* Controls of plugins (agent import, export): nothing painted when empty. */}
