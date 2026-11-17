@@ -35,7 +35,12 @@ function p256Pair() {
 }
 const spkiBase64 = (pem) => pem.replace(/-----[^-]+-----|\s/g, '');
 
-function setup(channels, { keyId = 'release-test', expiresAt, p256, alter } = {}) {
+/** The P-256 key every run pins and signs with, unless a case names its own. */
+const P256 = p256Pair();
+const P256_ENV = { TIMON_INSTALL_P256_KEY: spkiBase64(P256.publicKey), TIMON_INSTALL_P256_KEY_ID: P256.keyId };
+
+/** `p256: null` writes a manifest without the installers' signature. */
+function setup(channels, { keyId = 'release-test', expiresAt, p256 = P256, alter } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'timon-install-ps1-'));
   const now = new Date();
   const payload = {
@@ -66,6 +71,7 @@ function run(ctx, args, extraEnv = {}) {
       TIMON_INSTALL_TESTING: '1',
       TIMON_INSTALL_MANIFEST_URL: pathToFileURL(ctx.manifest).href,
       TIMON_INSTALL_KEY_ID: 'release-test',
+      ...P256_ENV,
       TMPDIR: ctx.dir,
       ...extraEnv,
     },
@@ -76,7 +82,10 @@ function run(ctx, args, extraEnv = {}) {
 }
 
 test('install.ps1 pins the manifest and the key the daemon trusts', () => {
-  assert.match(TEXT, /\$manifestUrl = 'https:\/\/timon-ai\.com\/\.well-known\/timon-releases\.json'/);
+  // No way back to the manifest without a P-256 signature, nor to an unchecked run.
+  for (const gone of ['timon-releases.json', '$manifestUrl', 'FALLBACK', 'checked by Timon once installed']) {
+    assert.ok(!TEXT.includes(gone), `install.ps1 no longer has ${gone}`);
+  }
   const keyring = readFileSync(join(dirname(SCRIPT), '..', 'orchestrator', 'src', 'plugins-bundled', 'updates', 'keyring.ts'), 'utf8');
   const keyId = /keyId: '([^']+)'/.exec(keyring)[1];
   assert.ok(TEXT.includes(`$releaseKeyId = '${keyId}'`), 'install.ps1 pins the keyId of keyring.ts');
@@ -84,7 +93,8 @@ test('install.ps1 pins the manifest and the key the daemon trusts', () => {
   assert.match(TEXT, /\$installManifestUrl = 'https:\/\/timon-ai\.com\/\.well-known\/timon-releases-install\.json'/);
   const p256 = /\$releaseP256PublicKey = '([^']*)'/.exec(TEXT)[1];
   const p256Id = /\$releaseP256KeyId = '([^']*)'/.exec(TEXT)[1];
-  if (p256) assert.equal(keyIdFor(`-----BEGIN PUBLIC KEY-----\n${p256}\n-----END PUBLIC KEY-----\n`), p256Id, 'the pinned P-256 keyId derives from the pinned key');
+  assert.ok(p256, 'install.ps1 pins a P-256 key: the installer refuses to run without one');
+  assert.equal(keyIdFor(`-----BEGIN PUBLIC KEY-----\n${p256}\n-----END PUBLIC KEY-----\n`), p256Id, 'the pinned P-256 keyId derives from the pinned key');
   assert.match(TEXT, new RegExp(`\\$signatureDomain = '${RELEASES_SIGNATURE_DOMAIN.slice(0, -1)}'`));
 });
 
@@ -159,14 +169,14 @@ test('the P-256 signature is checked, and an altered or unknown one refused', { 
     ['altered payload', { p256, alter: (e) => ({ ...e, payload: Buffer.from(Buffer.from(e.payload, 'base64').toString().replace('0.2.0', '0.2.1')).toString('base64') }) }, /signature is INVALID/],
     ['signed by another P-256 key', { p256: { ...other, keyId: p256.keyId } }, /signature is INVALID/],
     ['unknown P-256 key', { p256: other }, /unknown P-256 key/],
-    ['no P-256 signature', {}, /signature: checked by Timon once installed/],
+    ['no P-256 signature', { p256: null }, /has no P-256 signature: nothing was installed/],
   ];
   for (const [label, options, expected] of cases) {
     const ctx = setup(stable, options);
     try {
       const r = run(ctx, ['-DryRun'], env);
       assert.match(r.out + r.err, expected, label);
-      if (/INVALID|unknown/.test(String(expected))) {
+      if (/INVALID|unknown|no P-256/.test(String(expected))) {
         assert.notEqual(r.code, 0, label);
         assert.doesNotMatch(r.out, /package:/, label);
       } else {
@@ -178,15 +188,16 @@ test('the P-256 signature is checked, and an altered or unknown one refused', { 
   }
 });
 
-test('until the installers\' manifest is served, the release manifest is read', { skip: needsShell }, () => {
+test('the release manifest of the daemons is no fallback for the installers\' one', { skip: needsShell }, () => {
   const ctx = setup({ stable: channel('0.2.0', httpsArtifact('0.2.0')) });
   try {
     const r = run(ctx, ['-DryRun'], {
       TIMON_INSTALL_MANIFEST_URL: pathToFileURL(join(ctx.dir, 'missing.json')).href,
       TIMON_INSTALL_FALLBACK_MANIFEST_URL: pathToFileURL(ctx.manifest).href,
     });
-    assert.equal(r.code, 0, r.err);
-    assert.match(r.out, /Timon 0\.2\.0 \(stable channel\) for Windows/);
+    assert.notEqual(r.code, 0);
+    assert.match(r.err + r.out, /could not read the release manifest/);
+    assert.doesNotMatch(r.out, /Timon 0\.2\.0/);
   } finally {
     rmSync(ctx.dir, { recursive: true, force: true });
   }
