@@ -349,6 +349,11 @@
     "trigger_script_approve_by_agent": "An agent cannot approve a script: the user does it.",
     "trigger_unreadable": "This trigger as stored can no longer be read.",
     "trigger_runs_no_script": "This trigger runs no script.",
-    "trigger_test_invalid": "This test is not valid: {detail}"
+    "trigger_test_invalid": "This test is not valid: {detail}",
+    "routine_not_permitted": "A routine opens tasks, which needs the permission {permission}.",
+    "backup_enable_failed": "The backup could not be turned on: {detail}",
+    "routine_fields_required": "A routine needs a name, an agent, a prompt and a schedule.",
+    "routine_save_failed": "The routine could not be saved: {detail}",
+    "routine_enable_by_agent": "An agent cannot switch a routine on: the user does it from the Triggers page."
   }
 }

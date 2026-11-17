@@ -349,6 +349,11 @@
     "trigger_script_approve_by_agent": "Un agent ne peut pas approuver un script : c'est l'utilisateur qui le fait.",
     "trigger_unreadable": "Ce déclencheur tel qu'il est enregistré ne peut plus être lu.",
     "trigger_runs_no_script": "Ce déclencheur ne lance aucun script.",
-    "trigger_test_invalid": "Ce test n'est pas valide : {detail}"
+    "trigger_test_invalid": "Ce test n'est pas valide : {detail}",
+    "routine_not_permitted": "Une routine ouvre des tâches, ce qui demande la permission {permission}.",
+    "backup_enable_failed": "La sauvegarde n'a pas pu être activée : {detail}",
+    "routine_fields_required": "Une routine a besoin d'un nom, d'un agent, d'un prompt et d'une planification.",
+    "routine_save_failed": "La routine n'a pas pu être enregistrée : {detail}",
+    "routine_enable_by_agent": "Un agent ne peut pas activer une routine : l'utilisateur le fait depuis la page Déclencheurs."
   }
 }
