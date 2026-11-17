@@ -110,6 +110,13 @@ timon agent import --hermes default coder --yes
 
 It shows the preview, then asks before writing anything. `--yes` imports without asking (for a script), `--accept-cwd` takes the proposed working folders, `--prefix` replaces the source's name prefix, and `--json` prints the result as JSON. Without `--yes` and without a terminal to answer in, nothing is imported. `timon agent export` writes the archive another Timon imports, `timon agent export-skill` prints the export skill: see [Copy agents to another Timon](agents.md#copy-agents-to-another-timon) and the [CLI reference](cli-reference.md).
 
+Routines switched on at the source arrive **switched off** here too, and the preview counts them for each agent. To keep them on, say so: `--keep-routines` for every agent, or `--keep-routines-for` with the names the preview shows, separated by commas.
+
+```bash
+timon agent import agents.zip --keep-routines
+timon agent import --hermes --keep-routines-for default,coder
+```
+
 ## Who can import
 
 Importing needs an account that can create agents. Attaching skills, MCP servers and routines also needs the matching rights; without them the agent is created and the preview says what was left out.
