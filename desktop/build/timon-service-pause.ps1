@@ -19,8 +19,9 @@
 # itself (resume phase), which waits for the installer to exit and then enables
 # and starts the task again if it still exists: an uninstall deletes it.
 param(
+  # The installer's process: the resume waits for it, and its owner is the
+  # account whose Timon this is.
   [Parameter(Mandatory = $true)][int]$InstallerPid,
-  [Parameter(Mandatory = $true)][string]$User,
   [Parameter(Mandatory = $true)][string]$Exe,
   # The application directory: what remains of this installation is found by
   # the paths under it on a command line. Empty: only the daemon is ended.
@@ -76,50 +77,77 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 Disable-ScheduledTask -TaskName $task -TaskPath '\' | Out-Null
 Stop-ScheduledTask -TaskName $task -TaskPath '\'
-# Stop-ScheduledTask ends the launcher and leaves its daemon orphaned: end the
-# launcher's tree, then every daemon Timon.exe of this user it left behind, in
-# whatever session it runs (session 0 for S4U, the user's own for an
-# Interactive task). The daemon names its entry point on its command line; the
-# window (no boot.js) is left to the installer's own "close the application".
-$mine = { param($process) (Invoke-CimMethod -InputObject $process -MethodName GetOwner).User -eq $User }
+
+# Whose Timon this is: the owner of the installer's process, by SID. Never a
+# name. The installer passed `-User` built from the NSIS form that is replaced
+# when the installer is COMPILED, so every installer carried the account of the
+# build machine: on a tester's PC the comparison was always false, nothing was
+# ended, and the previous daemon outlived the update holding its port
+# (0.1.7 to 0.1.8). A SID also holds for a Microsoft Entra account, and for an
+# elevation granted by another account, where this script runs as the
+# administrator while the installer still belongs to the user.
+$sidOf = {
+  param($process)
+  try { (Invoke-CimMethod -InputObject $process -MethodName GetOwnerSid -ErrorAction Stop).Sid } catch { $null }
+}
+$account = $null
+$installer = Get-CimInstance Win32_Process -Filter "ProcessId=$InstallerPid"
+if ($installer) { $account = & $sidOf $installer }
+# The installer could not be read (it is elevated, this run is not): this
+# process then runs as the very account that started it.
+if (-not $account) { $account = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value }
+$mine = { param($process) $account -and ((& $sidOf $process) -eq $account) }
+
 # The daemon runs on the Node the package ships (resources\node\node.exe);
 # a package before it ran it on $Exe as Node. An update from one to the other
-# finds either, so both are ours — only with this user's Timon command line.
+# finds either, so both are ours.
 $runtimes = @($Exe, 'node.exe')
+$end = { param($process) & taskkill.exe /F /T /PID $process.ProcessId | Out-Null }
+
+# Stop-ScheduledTask ends the launcher and leaves its daemon orphaned: end the
+# launcher's tree, then every daemon of this account it left behind, in
+# whatever session it runs (session 0 for S4U, the user's own for an
+# Interactive task) and wherever it is installed. The daemon names its entry
+# point on its command line; the window (no boot.js) is left to the installer's
+# own "close the application".
 Get-CimInstance Win32_Process | Where-Object {
   $_.Name -eq 'cmd.exe' -and $_.CommandLine -and
   $_.CommandLine.ToLowerInvariant().Contains('\run\timon-service.cmd') -and (& $mine $_)
-} | ForEach-Object { & taskkill.exe /F /T /PID $_.ProcessId | Out-Null }
+} | ForEach-Object { & $end $_ }
 Get-CimInstance Win32_Process | Where-Object {
   $runtimes -contains $_.Name -and $_.CommandLine -and
   $_.CommandLine.ToLowerInvariant().Contains('\dist\boot.js') -and (& $mine $_)
-} | ForEach-Object { & taskkill.exe /F /T /PID $_.ProcessId | Out-Null }
+} | ForEach-Object { & $end $_ }
 
-# What no tree reaches once the daemon is gone: its web server
-# (resources\app\...\server.cjs), the browser helper of a mission
-# (bin\browser-mcp.mjs), the terminal host (detached on purpose). They kept
-# the installer looping on "Timon cannot be closed" after the user had quit
-# the app (0.1.5 update, 22/10/2026). Every $Exe of this user that runs a file
-# of THIS installation as Node is ended; the window and Electron's own helpers
-# (--type=) carry none of these paths. Two passes: a child whose parent went
-# first in a pass has no tree left to be ended with.
-if ($InstallDir) {
-  $root = $InstallDir.TrimEnd('\').ToLowerInvariant()
-  $needles = @("$root\resources\orchestrator\", "$root\resources\app\")
-  $leftovers = {
-    Get-CimInstance Win32_Process | Where-Object {
-      if ($runtimes -notcontains $_.Name -or -not $_.CommandLine -or $_.CommandLine.Contains('--type=')) { return $false }
-      $line = $_.CommandLine.ToLowerInvariant()
-      foreach ($needle in $needles) { if ($line.Contains($needle)) { return (& $mine $_) } }
-      $false
-    }
-  }
-  foreach ($pass in 1..2) {
-    $found = @(& $leftovers)
-    if ($found.Count -eq 0) { break }
-    $found | ForEach-Object { & taskkill.exe /F /T /PID $_.ProcessId | Out-Null }
-    Start-Sleep -Seconds 1
-  }
+# What runs from THIS installation is ended whoever owns it: the installer is
+# about to replace those very files, and the path alone says they are Timon's.
+# That is the Node the package ships, wherever its script lives, and $Exe or
+# node.exe running a file of the installation as Node: the daemon, its web
+# server (resources\app\...\server.cjs), the browser helper of a mission
+# (bin\browser-mcp.mjs), the terminal host (detached on purpose). No tree
+# reaches the last three once the daemon is gone, and they kept the installer
+# looping on "Timon cannot be closed" after the user had quit the app (0.1.5
+# update, 22/10/2026). The window and Electron's own helpers (--type=) carry
+# none of these paths. Two passes: a child whose parent went first in a pass
+# has no tree left to be ended with.
+$root = $InstallDir.TrimEnd('\').ToLowerInvariant()
+$shipped = "$root\resources\node\"
+$needles = @("$root\resources\orchestrator\", "$root\resources\app\")
+$fromInstallation = {
+  param($process)
+  if (-not $root -or $process.ProcessId -eq $PID) { return $false }
+  if ($process.ExecutablePath -and $process.ExecutablePath.ToLowerInvariant().StartsWith($shipped)) { return $true }
+  if ($runtimes -notcontains $process.Name -or -not $process.CommandLine -or $process.CommandLine.Contains('--type=')) { return $false }
+  $line = $process.CommandLine.ToLowerInvariant()
+  foreach ($needle in $needles) { if ($line.Contains($needle)) { return $true } }
+  $false
+}
+$ofInstallation = { Get-CimInstance Win32_Process | Where-Object { & $fromInstallation $_ } }
+foreach ($pass in 1..2) {
+  $found = @(& $ofInstallation)
+  if ($found.Count -eq 0) { break }
+  $found | ForEach-Object { & $end $_ }
+  Start-Sleep -Seconds 1
 }
 
 # The installer deletes its plugins directory on exit: the resume phase runs
@@ -128,7 +156,7 @@ $copy = Join-Path ([IO.Path]::GetTempPath()) ("timon-service-resume-{0}.ps1" -f 
 Copy-Item -LiteralPath $PSCommandPath -Destination $copy -Force
 $powershell = Join-Path $PSHOME 'powershell.exe'
 $arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$copy`" -Resume " +
-  "-InstallerPid $InstallerPid -User `"$User`" -Exe `"$Exe`""
+  "-InstallerPid $InstallerPid -Exe `"$Exe`""
 # An empty quoted value is dropped from a -File command line, and -Log would
 # then swallow nothing and fail the whole resume.
 if ($Log) { $arguments += " -Log `"$Log`"" }

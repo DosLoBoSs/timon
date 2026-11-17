@@ -209,7 +209,7 @@ test('the NSIS installer pauses the service with one elevation as it opens, over
   // (no boot.js) is left to the installer's own close step.
   assert.doesNotMatch(ps1, /SessionId -eq 0/, 'no session filter');
   assert.match(ps1, /Contains\('\\dist\\boot\.js'\)/);
-  assert.match(ps1, /GetOwner/, 'only this user\'s processes');
+  assert.match(ps1, /Contains\('\\dist\\boot\.js'\) -and \(& \$mine \$_\)/, 'elsewhere than this installation, only this account\'s daemon');
   // After Quit, the daemon's web server, a mission's browser helper and the
   // terminal host outlive it with no live parent for `/T` to follow, and the
   // installer looped on "Timon cannot be closed" (0.1.5 update, 22/10/2026).
@@ -220,6 +220,36 @@ test('the NSIS installer pauses the service with one elevation as it opens, over
   assert.match(ps1, /\\resources\\app\\/);
   assert.match(ps1, /Contains\('--type='\)/, 'Electron\'s helpers belong to the window, which the installer closes itself');
   assert.match(ps1, /1\.\.2/, 'a second pass for a child whose parent went first');
+});
+
+// 0.1.7 to 0.1.8 update: the installer passed `-User` in the NSIS form that is
+// replaced when the installer is compiled, so it carried the build machine's
+// account. On a tester's PC no process matched, and the previous daemon
+// (node.exe, session 0) outlived the update holding its port.
+test('the service pause knows its account by SID, and nothing of the build machine', () => {
+  const nsh = readFileSync(join(root, 'build', 'installer.nsh'), 'utf8');
+  assert.doesNotMatch(nsh, /\$%/, 'NSIS replaces $%NAME% at compile time, with the build machine\'s value');
+  assert.doesNotMatch(nsh, /-User\b/);
+  const ps1 = readFileSync(join(root, 'build', 'timon-service-pause.ps1'), 'utf8');
+  assert.doesNotMatch(ps1, /\$User\b/, 'no account name, from the installer or anywhere else');
+  assert.doesNotMatch(ps1, /MethodName GetOwner\b/, 'a name says nothing on an Entra account or under another account\'s elevation');
+  // The account is the owner of the installer's process; every candidate is compared to it by SID.
+  assert.match(ps1, /Get-CimInstance Win32_Process -Filter "ProcessId=\$InstallerPid"/);
+  assert.match(ps1, /\$account = & \$sidOf \$installer/);
+  assert.match(ps1, /\$sidOf = \{\s+param\(\$process\)\s+try \{ \(Invoke-CimMethod -InputObject \$process -MethodName GetOwnerSid -ErrorAction Stop\)\.Sid \}/);
+  assert.match(ps1, /\$mine = \{ param\(\$process\) \$account -and \(\(& \$sidOf \$process\) -eq \$account\) \}/);
+  // What runs from this installation is ended whoever owns it: the shipped
+  // Node, and a runtime whose command line names a file of the installation.
+  const own = ps1.match(/\$fromInstallation = \{\n([\s\S]*?)\n\}\n/)?.[1] ?? '';
+  assert.match(own, /\$process\.ExecutablePath\.ToLowerInvariant\(\)\.StartsWith\(\$shipped\)/);
+  assert.match(own, /foreach \(\$needle in \$needles\)/);
+  assert.match(own, /-not \$root/, 'without an installation directory, nothing is of the installation');
+  assert.doesNotMatch(own, /\$mine|\$account|sidOf/, 'no account filter under the installation');
+  assert.match(ps1, /\$shipped = "\$root\\resources\\node\\"/);
+  assert.match(ps1, /\$ofInstallation = \{ Get-CimInstance Win32_Process \| Where-Object \{ & \$fromInstallation \$_ \} \}/);
+  assert.match(ps1, /\$found = @\(& \$ofInstallation\)[\s\S]*?\$found \| ForEach-Object \{ & \$end \$_ \}/);
+  // The resume is this script again: it takes the same parameters.
+  assert.doesNotMatch(ps1, /-Resume[^\n]*\n[^\n]*-User/);
 });
 
 // VM, 06/11/2026: an installer killed from SSH left the task Disabled and the
