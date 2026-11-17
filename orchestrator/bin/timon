@@ -927,6 +927,8 @@ Workflows (graphs of nodes — agents, conditions, waits — run from a publishe
   timon workflow get <slug>                    one workflow, with its draft
   timon workflow create --file FILE            creates a workflow from a JSON definition
   timon workflow publish <slug>                publishes the draft as the next version
+  timon workflow approve-script <slug>         approves its script nodes' files as they are now; a run whose
+                                             files changed since the last approval is refused (never from a mission)
   timon workflow run <slug> [--input JSON]     starts a run of the published version
   timon workflow runs <slug>                   the runs of a workflow
   timon workflow status <run_id>               a run with its nodes, definition and spans
@@ -3042,13 +3044,22 @@ async function cmdWorkflow(argv) {
   if (sub === 'get') { if (!rest[0]) throw new Error('usage: timon workflow get <slug>'); const j = await http('GET', `/api/workflows/${encodeURIComponent(rest[0])}`); process.stdout.write(JSON.stringify(j.workflow, null, 2) + '\n'); return; }
   if (sub === 'create') { const file = takeFlag(rest, 'file'); if (!file) throw new Error('usage: timon workflow create --file FILE'); const fs = await import('node:fs/promises'); const body = JSON.parse(await fs.readFile(file, 'utf8')); const j = await http('POST', '/api/workflows', body); process.stdout.write(JSON.stringify(j.workflow, null, 2) + '\n'); return; }
   if (sub === 'publish') { if (!rest[0]) throw new Error('usage: timon workflow publish <slug>'); const j = await http('POST', `/api/workflows/${encodeURIComponent(rest[0])}/publish`); process.stdout.write(JSON.stringify(j, null, 2) + '\n'); return; }
+  if (sub === 'approve-script') {
+    if (!rest[0]) throw new Error('usage: timon workflow approve-script <slug>');
+    const j = await http('POST', `/api/workflows/${encodeURIComponent(rest[0])}/approve-script`);
+    process.stdout.write(`workflow ${j.workflow?.slug ?? rest[0]}: scripts approved as they are now\n`);
+    for (const pin of j.approved ?? []) {
+      process.stdout.write(`  ${pin.command} (${pin.cwd})${pin.files.length ? `: ${pin.files.join(', ')}` : ''}\n`);
+    }
+    return;
+  }
   if (sub === 'run') { const slug = rest[0]; const input = takeFlag(rest, 'input'); if (!slug) throw new Error('usage: timon workflow run <slug> [--input JSON]'); const j = await http('POST', `/api/workflows/${encodeURIComponent(slug)}/run`, { input: input ? JSON.parse(input) : {} }); process.stdout.write(JSON.stringify(j.run, null, 2) + '\n'); return; }
   if (sub === 'runs') { if (!rest[0]) throw new Error('usage: timon workflow runs <slug>'); const j = await http('GET', `/api/workflows/${encodeURIComponent(rest[0])}/runs`); process.stdout.write(JSON.stringify(j.runs, null, 2) + '\n'); return; }
   if (sub === 'status') { if (!rest[0]) throw new Error('usage: timon workflow status <runId>'); const j = await http('GET', `/api/workflows/runs/${encodeURIComponent(rest[0])}`); process.stdout.write(JSON.stringify(j, null, 2) + '\n'); return; }
   if (sub === 'cancel') { if (!rest[0]) throw new Error('usage: timon workflow cancel <runId>'); const j = await http('POST', `/api/workflows/runs/${encodeURIComponent(rest[0])}/cancel`); process.stdout.write(JSON.stringify(j, null, 2) + '\n'); return; }
   if (sub === 'import') { const kind = rest[0]; const id = rest[1]; if (!id || !['pipeline', 'agent', 'routine'].includes(kind)) throw new Error('usage: timon workflow import <pipeline|agent|routine> <id>'); const j = await http('POST', `/api/workflows/import/${kind}/${encodeURIComponent(id)}`); process.stdout.write(JSON.stringify(j.workflow, null, 2) + '\n'); return; }
   if (sub === 'node' && rest[0] === 'done') { const output = takeFlag(rest, 'output'); const route = takeFlag(rest, 'route'); const runId = process.env.TIMON_WORKFLOW_RUN_ID; const nodeId = process.env.TIMON_WORKFLOW_NODE_ID; if (!runId || !nodeId || !output) throw new Error('usage: timon workflow node done --output JSON [--route PORT]'); const j = await http('POST', `/api/workflows/runs/${encodeURIComponent(runId)}/nodes/${encodeURIComponent(nodeId)}/done`, { output: JSON.parse(output), ...(route ? { route } : {}) }); process.stdout.write(JSON.stringify(j, null, 2) + '\n'); return; }
-  throw new Error('usage: timon workflow <list|get|create|publish|run|runs|status|cancel|import|node done> …');
+  throw new Error('usage: timon workflow <list|get|create|publish|approve-script|run|runs|status|cancel|import|node done> …');
 }
 
 /* ─── project-todo (a project's idea notebook: nothing here is ever dispatched) ─── */
