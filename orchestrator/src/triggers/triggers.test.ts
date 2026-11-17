@@ -135,9 +135,12 @@ test('management routes: anonymous 401, no permission 403, secret shown once onl
   assert.equal(JSON.stringify(read.body).includes(String(created.body.secret)), false);
   const list = await api('GET', '/api/triggers');
   assert.equal(JSON.stringify(list.body).includes(String(created.body.secret)), false);
-  assert.equal((await api('POST', '/api/triggers', {
+  const duplicate = await api('POST', '/api/triggers', {
     source: 'webhook', name: 'dup', slug: 'gh-issues', config: { auth: 'github' }, actions: [ISSUE_TODO],
-  })).status, 409);
+  });
+  assert.equal(duplicate.status, 409);
+  // The English stays for the CLI; the code and its param are what the Triggers page translates.
+  assert.deepEqual(duplicate.body, { error: 'slug already used: gh-issues', code: 'trigger_slug_taken', params: { slug: 'gh-issues' } });
   assert.equal((await api('POST', '/api/triggers', {
     source: 'webhook', name: 'bad', slug: 'x', config: { auth: 'github' }, actions: [{ type: 'script', run: 'rm -rf /' }],
   })).status, 400);
