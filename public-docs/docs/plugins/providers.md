@@ -833,8 +833,10 @@ When the session opens, Timon switches it to the mapped mode with
 `session/set_mode`, or through the `mode` config option. Timon sends nothing in
 three cases: the agent announced no modes, the mapped id is not among the modes
 it announced, or the agent's permission mode is not in the table. The session
-then keeps the mode the agent opened it in. Every permission request the agent
-sends still reaches the card and the classifier.
+then keeps the mode the agent gave it: on a reopened session, that can be the
+mode Timon selected last time. Map every permission mode you can to keep it in
+step. Every permission request the agent sends still reaches the card and the
+classifier.
 
 An agent that decides its tool uses alone (`permissionsByAgent: true`) never
 asks Timon, so Timon cannot refuse anything to it. When Timon runs one of its
