@@ -1,26 +1,4 @@
 {
-  "mission": {
-    "title": "Nueva misión",
-    "description": "Inicia una conversación con el agente {agent} usando el LLM que elijas.",
-    "resumeDescription": "También puedes retomar la misión anterior: el nuevo LLM leerá un resumen y continuará desde ahí.",
-    "llm": "LLM",
-    "reasoningEffort": "Esfuerzo de razonamiento",
-    "default": "Predeterminado",
-    "continue": "Continuar desde la misión anterior",
-    "resumeWithSummary": "El nuevo LLM leerá un resumen del historial para retomarla.",
-    "resumeSameLlm": "Retoma el contexto de la misión anterior con el mismo LLM.",
-    "followup": "Mensaje de seguimiento",
-    "firstMessage": "Primer mensaje",
-    "followupPlaceholder": "Ej.: continúa con lo que estábamos haciendo, céntrate en X…",
-    "firstMessagePlaceholder": "Ej.: ayúdame con…",
-    "cancel": "Cancelar",
-    "continuing": "Continuando…",
-    "creating": "Creando…",
-    "start": "Iniciar",
-    "continuedToast": "Misión continuada en {backend} · {model}",
-    "createdToast": "Nueva misión en {backend} · {model}",
-    "failed": "Error: {message}"
-  },
   "llm": {
     "handoverTail": "El resumen falló: solo pasó el FINAL de la conversación",
     "confirmWhole": "Pasar completa",
@@ -107,7 +85,6 @@
     "dismiss": "Descartar",
     "center": "Centro de notificaciones",
     "sure": "¿Seguro?",
-    "close": "Cerrar",
     "empty": "Ninguna notificación",
     "clearAll": "Borrar todo",
     "clearAlerts": "Borrar alertas",
@@ -221,13 +198,6 @@
       "openWorkspace": "Abrir en el espacio de trabajo",
       "opened": "Cuadrícula abierta en el espacio de trabajo"
     }
-  },
-  "calendar": {
-    "today": "Hoy",
-    "tomorrow": "Mañana",
-    "upcoming": "Próximamente",
-    "overdue": "Vencida · {date}",
-    "noDueDate": "Sin fecha límite"
   },
   "delegations": {
     "title": "Pendientes de respuesta",

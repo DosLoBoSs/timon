@@ -1,26 +1,4 @@
 {
-  "mission": {
-    "title": "Nieuwe missie",
-    "description": "Een gesprek beginnen met de agent {agent} met het gekozen LLM.",
-    "resumeDescription": "Je kunt ook de vorige missie hervatten: het nieuwe LLM leest een samenvatting en gaat van daaruit verder.",
-    "llm": "LLM",
-    "reasoningEffort": "Redeneerinspanning",
-    "default": "Standaard",
-    "continue": "Verder vanaf de vorige missie",
-    "resumeWithSummary": "Het nieuwe LLM leest een samenvatting van de geschiedenis om te hervatten.",
-    "resumeSameLlm": "Hervat de context van de vorige missie op hetzelfde LLM.",
-    "followup": "Vervolgbericht",
-    "firstMessage": "Eerste bericht",
-    "followupPlaceholder": "Bijv.: ga verder waar we waren, focus op X…",
-    "firstMessagePlaceholder": "Bijv.: help me met…",
-    "cancel": "Annuleren",
-    "continuing": "Verdergaan…",
-    "creating": "Aanmaken…",
-    "start": "Starten",
-    "continuedToast": "Missie voortgezet op {backend} · {model}",
-    "createdToast": "Nieuwe missie op {backend} · {model}",
-    "failed": "Mislukt: {message}"
-  },
   "llm": {
     "handoverTail": "Samenvatting mislukt: alleen het EINDE van het gesprek is doorgekomen",
     "confirmWhole": "Volledig overdragen",
@@ -107,7 +85,6 @@
     "dismiss": "Sluiten",
     "center": "Meldingencentrum",
     "sure": "Zeker?",
-    "close": "Sluiten",
     "empty": "Geen melding",
     "clearAll": "Alles wissen",
     "clearAlerts": "Waarschuwingen wissen",
@@ -221,13 +198,6 @@
       "openWorkspace": "In de werkruimte openen",
       "opened": "Raster geopend in de werkruimte"
     }
-  },
-  "calendar": {
-    "today": "Vandaag",
-    "tomorrow": "Morgen",
-    "upcoming": "Binnenkort",
-    "overdue": "Te laat · {date}",
-    "noDueDate": "Geen einddatum"
   },
   "delegations": {
     "title": "Wacht op terugkoppeling",

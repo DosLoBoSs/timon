@@ -1,26 +1,4 @@
 {
-  "mission": {
-    "title": "Neue Mission",
-    "description": "Eine Unterhaltung mit dem Agenten {agent} und dem gewählten LLM beginnen.",
-    "resumeDescription": "Du kannst auch die vorherige Mission fortsetzen: Das neue LLM liest eine Zusammenfassung und macht dort weiter.",
-    "llm": "LLM",
-    "reasoningEffort": "Reasoning-Aufwand",
-    "default": "Standard",
-    "continue": "Vorherige Mission fortsetzen",
-    "resumeWithSummary": "Das neue LLM liest eine Zusammenfassung des Verlaufs, um fortzusetzen.",
-    "resumeSameLlm": "Setzt den Kontext der vorherigen Mission auf demselben LLM fort.",
-    "followup": "Folgenachricht",
-    "firstMessage": "Erste Nachricht",
-    "followupPlaceholder": "Z. B.: Mach da weiter, wo wir waren, konzentriere dich auf X…",
-    "firstMessagePlaceholder": "Z. B.: Hilf mir bei…",
-    "cancel": "Abbrechen",
-    "continuing": "Wird fortgesetzt…",
-    "creating": "Wird erstellt…",
-    "start": "Starten",
-    "continuedToast": "Mission auf {backend} · {model} fortgesetzt",
-    "createdToast": "Neue Mission auf {backend} · {model}",
-    "failed": "Fehlgeschlagen: {message}"
-  },
   "llm": {
     "handoverTail": "Zusammenfassung fehlgeschlagen: Nur das ENDE der Unterhaltung kam an",
     "confirmWhole": "Vollständig übergeben",
@@ -107,7 +85,6 @@
     "dismiss": "Verwerfen",
     "center": "Benachrichtigungscenter",
     "sure": "Sicher?",
-    "close": "Schließen",
     "empty": "Keine Benachrichtigung",
     "clearAll": "Alle löschen",
     "clearAlerts": "Warnungen löschen",
@@ -221,13 +198,6 @@
       "openWorkspace": "Im Arbeitsbereich öffnen",
       "opened": "Raster im Arbeitsbereich geöffnet"
     }
-  },
-  "calendar": {
-    "today": "Heute",
-    "tomorrow": "Morgen",
-    "upcoming": "Demnächst",
-    "overdue": "Überfällig · {date}",
-    "noDueDate": "Kein Fälligkeitsdatum"
   },
   "delegations": {
     "title": "Rückmeldung erwartet",
