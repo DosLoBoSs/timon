@@ -1,0 +1,19 @@
+{
+  "workflows": {
+    "builder": {
+      "variableName": "nom",
+      "onError": {
+        "fail": "échouer",
+        "continue": "continuer"
+      },
+      "overlap": {
+        "skip": "ignorer",
+        "queue": "mettre en file",
+        "parallel": "en parallèle"
+      },
+      "tokens": "{n} tok",
+      "undo": "Annuler (⌘Z)",
+      "redo": "Rétablir (⇧⌘Z)"
+    }
+  }
+}
