@@ -212,3 +212,61 @@ test('export-skill prints the skill, writes it with --out, and never replaces a 
   assert.equal((await cli(['agent', 'export-skill', '--out', 'SKILL.md', '--force'], owner, work)).code, 0);
   assert.equal(lf(readFileSync(join(work, 'SKILL.md'), 'utf8')), skill);
 });
+
+test('import keeps the routines on at the source switched off, unless --keep-routines or --keep-routines-for says otherwise', async () => {
+  const { insertTrigger, listTriggerRows } = await import('./triggers/store.js');
+  const { TimonConfigSchema } = await import('./config/schema.js');
+  const { setConfig, resetConfig } = await import('./config/load.js');
+  const scheduler = account('cli-routines', ['agents:read', 'agents:manage', 'triggers:manage', 'kanban:write']);
+  const tag = randomUUID().slice(0, 6);
+  const [kept, other] = [`cli-r-${tag}`, `cli-s-${tag}`];
+  for (const name of [kept, other]) {
+    upsertAgent({ name, system_prompt: `You are ${name}.`, config: { role: 'coder', backend: 'claude' } });
+    insertTrigger({
+      name: 'Morning', slug: null, source: 'schedule', enabled: true, config: { cron: '0 8 * * 1-5', tz: 'Europe/Paris' }, filter: null,
+      actions: [{ type: 'task', agent: name, prompt: `Brief for ${name}.`, raw: true } as never], secret: null, ownerUserId: scheduler,
+      createdBy: 'user', creatorAgent: null, actingAgent: null, grants: [], nextRunAt: null,
+    });
+  }
+  assert.equal((await cli(['agent', 'export', kept, other, '--out', `routines-${tag}.zip`], scheduler, work)).code, 0);
+  const archive = `routines-${tag}.zip`;
+  // A second import of the same archive updates the agents of the first: their routine is replaced, not doubled.
+  const states = (out: string) => [kept, other].map((name) => {
+    const agent = new RegExp(`(?:created|updated) +${name} → (\\S+)`).exec(out)?.[1];
+    assert.ok(agent, out);
+    return listTriggerRows({ source: 'schedule' }).filter((t) => t.name === `${agent}: Morning`).map((t) => t.enabled);
+  });
+
+  // The default, shown before anything is written.
+  const asked = await cli(['agent', 'import', archive], scheduler, work);
+  assert.equal(asked.code, 64, asked.err);
+  assert.equal(asked.out.match(/routines switched on at the source: 1, imported switched off \(--keep-routines/g)?.length, 2, asked.out);
+
+  const unknown = await cli(['agent', 'import', archive, '--keep-routines-for', 'nobody', '--yes'], scheduler, work);
+  assert.equal(unknown.code, 64);
+  assert.match(unknown.err, /no agent named nobody/);
+  for (const malformed of [['--keep-routines-for', ''], ['--keep-routines-for', `${kept},`]]) {
+    const r = await cli(['agent', 'import', archive, ...malformed], scheduler, work);
+    assert.equal(r.code, 64, malformed.join(' '));
+    assert.match(r.err, /usage: timon agent import/);
+  }
+
+  // The operator lets the plugin start tasks: an enabled trigger is accepted.
+  setConfig(TimonConfigSchema.parse({ pluginPolicy: { spawn: { approved: ['agent-import'] } } }));
+  try {
+    const none = await cli(['agent', 'import', archive, '--yes'], scheduler, work);
+    assert.equal(none.code, 0, none.err);
+    assert.deepEqual(states(none.out), [[0], [0]], 'without a flag, every routine is off');
+
+    const some = await cli(['agent', 'import', archive, '--yes', `--keep-routines-for=${kept}`], scheduler, work);
+    assert.equal(some.code, 0, some.err);
+    assert.match(some.out, /routines switched on at the source: 1, kept on/);
+    assert.match(some.out, /routines switched on at the source: 1, imported switched off/);
+    assert.deepEqual(states(some.out), [[1], [0]], 'only the agent named keeps its routine on');
+
+    const all = await cli(['agent', 'import', archive, '--yes', '--keep-routines'], scheduler, work);
+    assert.equal(all.code, 0, all.err);
+    assert.equal(all.out.match(/routines switched on at the source: 1, kept on/g)?.length, 2, all.out);
+    assert.deepEqual(states(all.out), [[1], [1]], '--keep-routines keeps every one on');
+  } finally { resetConfig(); }
+});

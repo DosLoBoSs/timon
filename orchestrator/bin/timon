@@ -804,6 +804,8 @@ Agents & missions:
   timon agent import <FILE> [--yes] [--accept-cwd] [--prefix P] [--json]
                                          shows what would be created, asks, then imports
                                          (--accept-cwd takes the proposed working directories)
+                                         routines on at the source arrive off: --keep-routines
+                                         keeps them on, --keep-routines-for NAME[,NAME…] for some
   timon agent import --hermes [PROFILE…] [--yes] [--accept-cwd] [--prefix P] [--json]
                                          the same, read from Hermes on the machine running
                                          Timon (all its profiles, or those named); no zip

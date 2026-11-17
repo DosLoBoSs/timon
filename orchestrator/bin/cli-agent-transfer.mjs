@@ -15,7 +15,7 @@ import { basename, resolve } from 'node:path';
 const ROUTES = '/api/plugins/agent-import';
 
 export const EXPORT_USAGE = 'usage: timon agent export <name…> | --all [--out FILE] [--force]\n';
-export const IMPORT_USAGE = 'usage: timon agent import <FILE> | --hermes [PROFILE…] [--yes] [--accept-cwd] [--prefix PREFIX] [--json]\n';
+export const IMPORT_USAGE = 'usage: timon agent import <FILE> | --hermes [PROFILE…] [--yes] [--accept-cwd] [--keep-routines | --keep-routines-for NAME[,NAME…]] [--prefix PREFIX] [--json]\n';
 export const EXPORT_SKILL_USAGE = 'usage: timon agent export-skill [--out FILE] [--force]\n';
 
 function stamp(date) {
@@ -124,8 +124,11 @@ export async function cmdAgentExportSkill(argv, io) {
   io.out('give it to the other agent as a skill, then ask it: Export my agents for Timon\n');
 }
 
-/** The preview, for a person reading a terminal. */
-export function formatPreview(preview) {
+/**
+ * The preview, for a person reading a terminal. `kept` holds the `sourceRef`
+ * of the agents whose routines switched on at the source stay on.
+ */
+export function formatPreview(preview, kept = new Set()) {
   const lines = [];
   const source = preview.source ? `${preview.source.app}${preview.source.exportedAt ? `, exported ${preview.source.exportedAt}` : ''}` : 'unknown source';
   lines.push(`Import from ${source}:`);
@@ -136,6 +139,12 @@ export function formatPreview(preview) {
     if (agent.cwd) lines.push(`         working directory: ${agent.cwd}`);
     if (agent.cwdSuggestion) lines.push(`         suggested working directory: ${agent.cwdSuggestion} (--accept-cwd to use it)`);
     if (agent.backend) lines.push(`         backend: ${agent.backend}${agent.model ? ` / ${agent.model}` : ''}`);
+    const active = agent.activeRoutines ?? 0;
+    // Routines the account may not create are left out whole: nothing to switch on.
+    if (active > 0 && agent.action !== 'skip' && agent.elements?.routines?.selected !== false) {
+      const fate = kept.has(agent.sourceRef) ? 'kept on' : 'imported switched off (--keep-routines to keep them on)';
+      lines.push(`         routines switched on at the source: ${active}, ${fate}`);
+    }
     for (const warning of agent.warnings ?? []) lines.push(`         ! ${warning}`);
   }
   for (const warning of preview.warnings ?? []) lines.push(`  ! ${warning}`);
@@ -148,9 +157,16 @@ export async function cmdAgentImport(argv, io) {
   const json = args.includes('--json');
   const acceptCwd = args.includes('--accept-cwd');
   const hermes = args.includes('--hermes');
+  // Off by default: an imported routine starts tasks with nobody in front, so only an explicit flag keeps one on.
+  const keepAll = args.includes('--keep-routines');
   const prefix = io.takeFlag(args, 'prefix');
-  const rest = args.filter((a) => !['--yes', '-y', '--json', '--accept-cwd', '--hermes'].includes(a));
-  const malformed = rest.some((a) => a.startsWith('--')) || prefix === '';
+  const keepFor = [];
+  for (let value = io.takeFlag(args, 'keep-routines-for'); value !== undefined; value = io.takeFlag(args, 'keep-routines-for')) {
+    keepFor.push(...value.split(','));
+  }
+  const rest = args.filter((a) => !['--yes', '-y', '--json', '--accept-cwd', '--hermes', '--keep-routines'].includes(a));
+  const malformed = rest.some((a) => a.startsWith('--')) || prefix === ''
+    || keepFor.some((name) => name.trim() === '' || name.startsWith('--'));
   if (malformed || (!hermes && rest.length !== 1)) {
     io.err(IMPORT_USAGE);
     return io.exit(64);
@@ -182,14 +198,31 @@ export async function cmdAgentImport(argv, io) {
   const discard = () => call(io, 'POST', 'discard', { json: { token } }).catch(() => undefined);
 
   const options = prefix ? { prefix } : {};
+  const kept = new Set();
   let previewed = await call(io, 'POST', 'preview', { json: { token, options } });
-  if (previewed.ok && acceptCwd) {
-    // A second look with the proposed directories chosen, so what is shown is what is applied.
-    const agents = parse(previewed.bytes).preview.agents
-      .filter((a) => a.cwdSuggestion)
-      .map((a) => ({ sourceRef: a.sourceRef, cwd: a.cwdSuggestion }));
-    if (agents.length > 0) {
-      options.agents = agents;
+  if (previewed.ok && (acceptCwd || keepAll || keepFor.length > 0)) {
+    const first = parse(previewed.bytes).preview.agents ?? [];
+    // An agent is named as the preview shows it: its source name, or the Timon name it gets.
+    const isNamed = (agent, name) => name === agent.displayName || name === agent.finalName || name === agent.sourceRef;
+    const unknown = keepFor.filter((name) => !first.some((agent) => isNamed(agent, name)));
+    if (unknown.length > 0) {
+      await discard();
+      io.err(`timon: no agent named ${unknown.join(', ')} in this import (--keep-routines-for takes the names the preview shows)\n`);
+      return io.exit(64);
+    }
+    const choices = [];
+    for (const agent of first) {
+      const choice = { sourceRef: agent.sourceRef };
+      if (acceptCwd && agent.cwdSuggestion) choice.cwd = agent.cwdSuggestion;
+      if ((agent.activeRoutines ?? 0) > 0 && (keepAll || keepFor.some((name) => isNamed(agent, name)))) {
+        choice.keepRoutinesActive = true;
+        kept.add(agent.sourceRef);
+      }
+      if (Object.keys(choice).length > 1) choices.push(choice);
+    }
+    if (choices.length > 0) {
+      // A second look with the choices made, so what is shown is what is applied.
+      options.agents = choices;
       previewed = await call(io, 'POST', 'preview', { json: { token, options } });
     }
   }
@@ -200,7 +233,7 @@ export async function cmdAgentImport(argv, io) {
   }
   const { preview } = parse(previewed.bytes);
   if (json) io.out(`${JSON.stringify(preview, null, 2)}\n`);
-  else io.out(formatPreview(preview));
+  else io.out(formatPreview(preview, kept));
 
   const writing = (preview.agents ?? []).filter((a) => a.action !== 'skip').length;
   if (writing === 0) {
