@@ -866,6 +866,8 @@ Tasks (Kanban backlog):
   timon task mark-merged <id> --sha SHA [--comment TEXT]
                                                branch merged outside Timon: records its merge commit
   timon task mark-as-failed [id] --reason TEXT closes it as BLOCKED
+  timon task attach <id> --series ID|current   attaches the task's chain (root, reviews, merge, doc)
+                                               to a series and its pilot; current = this mission
   timon task update <id> [--status ...] [--priority N] [--title ...] [--agent ...] [--type ...]
   timon task delete <id> [--chain]           --chain: also the verification chain it heads
 
@@ -2107,6 +2109,23 @@ async function cmdTaskMarkMerged(argv) {
   process.stdout.write(`task ${id} marked merged: ${sha}${j?.verified === false ? ' (commit not found locally: not verified)' : ''}\n`);
 }
 
+/**
+ * TODO #1013 — a chain created outside a mission (a `curl`, a board click) has
+ * no series: its returns reach no pilot. Attaches the whole chain the task
+ * belongs to; the daemon resolves the series and its current pilot.
+ */
+async function cmdTaskAttach(argv) {
+  const id = argv[0] && !argv[0].startsWith('--') ? argv.shift() : undefined;
+  const series = takeFlag(argv, 'series');
+  if (!id || !series) {
+    process.stderr.write('usage: timon task attach <id> --series ID|current\n');
+    process.exit(64);
+  }
+  const j = await http('POST', `/api/tasks/${encodeURIComponent(id)}/attach-series`, { series });
+  const count = Array.isArray(j?.attached) ? j.attached.length : 0;
+  process.stdout.write(`${count} task(s) attached to series ${j.series_id} (pilot ${j.pilot_mission_id})\n`);
+}
+
 /** Reads the closing comment: inline, from a file, or from redirected stdin.
  *  The last two avoid any shell-quoting truncation on a long comment. */
 async function readClosingComment(argv) {
@@ -2238,11 +2257,12 @@ async function cmdTask(argv) {
     case 'mark-as-done':   return cmdTaskMarkAsDone(rest);
     case 'mark-as-failed': return cmdTaskMarkAsFailed(rest);
     case 'mark-merged':    return cmdTaskMarkMerged(rest);
+    case 'attach':  return cmdTaskAttach(rest);
     case 'update':  return cmdTaskUpdate(rest);
     case 'delete':  return cmdTaskDelete(rest);
     case 'rm':      return cmdTaskDelete(rest);
     default:
-      process.stderr.write('usage: timon task <list|get|create|done|block|mark-as-done|mark-as-failed|mark-merged|update|delete> …\n');
+      process.stderr.write('usage: timon task <list|get|create|done|block|mark-as-done|mark-as-failed|mark-merged|attach|update|delete> …\n');
       process.exit(64);
   }
 }
