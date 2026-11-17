@@ -64,7 +64,7 @@ import {
 } from '@/lib/backends';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
 import { deleteAgentAfterConfirm } from '@/components/agent-editor/delete-agent';
-import { apiErrorMessage } from '@/lib/api-error';
+import { apiErrorMessage, responseErrorMessage } from '@/lib/api-error';
 import { RoleSvg } from '@/components/role-svg';
 
 type AgentSummary = {
@@ -696,7 +696,7 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
             body,
           },
         );
-        if (!r.ok) throw new Error('save failed: ' + r.status);
+        if (!r.ok) throw new Error(t('agentsPage.docSaveFailed', { file, error: await responseErrorMessage(r) }));
       } catch (e) {
         toast.error(String((e as Error).message || e));
       }
@@ -726,7 +726,7 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
           body: template,
         },
       );
-      if (!r.ok) throw new Error('create failed: ' + r.status);
+      if (!r.ok) throw new Error(t('agentsPage.docCreateFailed', { file: name, error: await responseErrorMessage(r) }));
       setExtraDocs((d) => ({ ...d, [name]: template }));
       return true;
     } catch (e) {
@@ -743,7 +743,7 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
         '/api/ui/agents/' + encodeURIComponent(selected.name) + '/docs/' + encodeURIComponent(name),
         { method: 'DELETE' },
       );
-      if (!r.ok) throw new Error('delete failed: ' + r.status);
+      if (!r.ok) throw new Error(t('agentsPage.docDeleteFailed', { file: name, error: await responseErrorMessage(r) }));
       setExtraDocs((d) => {
         const next = { ...d };
         delete next[name];
@@ -887,7 +887,7 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
         });
         if (!rr.ok) {
           const j = await rr.json().catch(() => ({}));
-          throw new Error('rename failed: ' + (apiErrorMessage(j, rr.statusText)));
+          throw new Error(t('agentsPage.renameFailed', { error: apiErrorMessage(j, rr.statusText || { status: rr.status }) }));
         }
         // Before the save below: the rename is done and stays done if that one fails.
         const followUps = renameFollowUps(await rr.json().catch(() => null));
@@ -906,7 +906,7 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await responseErrorMessage(r));
       await syncSkillAttachments(name, draft.skills);
       toast.success('Saved to ~/.timon/agents/' + name + '/');
       announceAgentsChanged();
@@ -923,7 +923,7 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
       }
       setDirty(false);
     } catch (e) {
-      toast.error('Save failed: ' + String((e as Error).message || e).slice(0, 80));
+      toast.error(t('agentsPage.saveFailed', { error: String((e as Error).message || e).slice(0, 80) }));
     } finally {
       setSaving(false);
     }

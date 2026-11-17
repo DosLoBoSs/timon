@@ -34,7 +34,7 @@ import { Slot, useSlotEntries } from '@/lib/plugin-host/render';
 import { PageTocLayout } from '@/components/page-toc/page-toc';
 import { MCP_FEATURED_SLOT, McpTabProvider } from '@/lib/mcp-tab-context';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
-import { apiErrorMessage } from '@/lib/api-error';
+import { apiErrorMessage, responseErrorMessage } from '@/lib/api-error';
 
 type Transport = 'stdio' | 'http' | 'external';
 
@@ -191,7 +191,7 @@ async function startOAuth(id: string): Promise<void> {
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.authorize_url) {
-    toast.error('oauth start failed: ' + (apiErrorMessage(j, r.statusText)).slice(0, 120));
+    toast.error(t('mcpPage.oauthStartFailed', { error: apiErrorMessage(j, r.statusText || { status: r.status }).slice(0, 120) }));
     return;
   }
   const w = window.open(j.authorize_url, '_blank', 'noopener,noreferrer');
@@ -247,7 +247,7 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
     }
     const o = url.searchParams.get('oauth');
     if (o === 'success') toast.success('MCP authorized');
-    else if (o === 'error') toast.error('oauth failed: ' + (url.searchParams.get('error') || ''));
+    else if (o === 'error') toast.error(t('mcpPage.oauthFailed', { error: url.searchParams.get('error') || t('apiErrors.unknown') }));
     if (o) {
       url.searchParams.delete('oauth');
       url.searchParams.delete('id');
@@ -351,12 +351,12 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await responseErrorMessage(r));
       toast.success('saved ' + id);
       setOpen(false);
       await refresh();
     } catch (e) {
-      toast.error('save failed: ' + String((e as Error).message || e).slice(0, 80));
+      toast.error(t('mcpPage.saveFailed', { error: String((e as Error).message || e).slice(0, 80) }));
     } finally {
       setSaving(false);
     }
@@ -373,7 +373,7 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
       setOpen(false);
       await refresh();
     } else {
-      toast.error('delete failed');
+      toast.error(t('mcpPage.deleteFailed', { error: await responseErrorMessage(r) }));
     }
   }
 

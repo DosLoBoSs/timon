@@ -48,6 +48,7 @@
     "deleting": "Deleting…", "dangerZone": "Danger zone", "dangerZoneHint": "Deleting a project is permanent."
   },
   "memoryPage": {
+    "saveError": "Could not save {title}: {error}",
     "title": "Memory", "dashboard": "Dashboard", "browse": "Browse", "loading": "Loading…",
     "curationRun": "Curation run", "decisionsRun": "{count} decision(s) · run {run}",
     "detailError": "Could not load details", "noAudit": "No record for this run.", "reverted": "reverted", "noCandidateText": "(no text — see the targeted rule)",

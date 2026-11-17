@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { mdToSafeHtml } from '@/lib/markdown';
 import { t } from '@/lib/i18n';
 import { formatDateTime, formatRelativeTime } from '@/lib/intl';
-import { apiErrorMessage } from '@/lib/api-error';
+import { apiErrorMessage, responseErrorMessage } from '@/lib/api-error';
 
 /* ───────── types ───────── */
 type Kind = 'decision' | 'pitfall' | 'preference';
@@ -594,12 +594,12 @@ function MarkdownEditor({ title, getUrl, putUrl, placeholder }: {
     timer.current = setTimeout(async () => {
       try {
         const r = await fetch(putUrl, { method: 'PUT', headers: { 'content-type': 'text/plain; charset=utf-8' }, body: content });
-        if (!r.ok) throw new Error('save failed: ' + r.status);
+        if (!r.ok) throw new Error(t('memoryPage.saveError', { title, error: await responseErrorMessage(r) }));
         setOriginal(content); setSaved('saved');
       } catch (e) { setSaved('error'); toast.error(String((e as Error).message || e)); }
     }, 1200);
     return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [content, original, putUrl]);
+  }, [content, original, putUrl, title]);
 
   return (
     <section>

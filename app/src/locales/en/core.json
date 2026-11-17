@@ -1652,6 +1652,13 @@
     }
   },
   "agentsPage": {
+    "docSaveFailed": "Could not save {file}: {error}",
+    "docCreateFailed": "Could not create {file}: {error}",
+    "docDeleteFailed": "Could not delete {file}: {error}",
+    "renameFailed": "Rename failed: {error}",
+    "saveFailed": "Save failed: {error}",
+    "deleteFailed": "Delete failed: {error}",
+    "deleted": "Agent {name} deleted",
     "renameTriggersToCheck": "{old} is now {name}. Check {count} trigger(s) whose filter matches the old name by pattern or substring: {names}",
     "renameOpenTriggers": "Open triggers",
     "invalidName": "Invalid name. Use letters and digits in any language, plus . _ -, with no spaces or emoji, starting with a letter or a digit (80 bytes at most, about 26 Chinese characters).",
@@ -3855,6 +3862,10 @@
     }
   },
   "mcpPage": {
+    "oauthStartFailed": "Could not start the sign-in: {error}",
+    "oauthFailed": "Sign-in failed: {error}",
+    "saveFailed": "Save failed: {error}",
+    "deleteFailed": "Delete failed: {error}",
     "external": {
       "claudeAi": {
         "badge": "claude.ai",
