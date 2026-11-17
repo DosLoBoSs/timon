@@ -325,7 +325,7 @@ export function setTaskTrigger(taskId: string, triggerId: string): void {
 
 // ── script approvals ─────────────────────────────────────────────────────────
 
-const scriptPinSchema = z.object({
+export const scriptPinSchema = z.object({
   /** The action it vouches for, as saved: another command, argv or folder is not approved. */
   command: z.string(),
   args: z.array(z.string()),

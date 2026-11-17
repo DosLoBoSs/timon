@@ -96,6 +96,9 @@ function inside(root: string, path: string): boolean {
 
 export type ScriptFingerprint = Pick<ScriptPin, 'root' | 'real_cwd' | 'state' | 'files'>;
 
+/** What decides which files run: the program, its argv and the folder, as saved. */
+export type ScriptRun = { command: string; args?: readonly string[]; cwd: string };
+
 /**
  * The local files the action runs, read the way a permission card reads a
  * shell command (`script-preview.ts`): the program when it is a path, the file
@@ -107,7 +110,7 @@ export type ScriptFingerprint = Pick<ScriptPin, 'root' | 'real_cwd' | 'state' | 
  * fingerprinted (outside the project, behind a link leading out, too large,
  * `$VAR` in a path) is an error: nobody can vouch for it.
  */
-export function fingerprintScript(action: ScriptAction, place: ScriptPlace): ScriptFingerprint | { error: string } {
+export function fingerprintScript(action: Pick<ScriptRun, 'command' | 'args'>, place: ScriptPlace): ScriptFingerprint | { error: string } {
   // A case-folded registration (Windows, macOS) may not contain `cwd` lexically: read from `cwd` alone then.
   const root = inside(place.root, place.cwd) ? place.root : place.cwd;
   const line = `cd ${quote(place.cwd)} && ${[action.command, ...(action.args ?? [])].map(quote).join(' ')}`;
@@ -126,12 +129,20 @@ export function fingerprintScript(action: ScriptAction, place: ScriptPlace): Scr
 }
 
 /** Same program, argv and folder: what decides which files run. */
-function sameRun(a: { command: string; args?: readonly string[]; cwd: string }, b: ScriptAction): boolean {
+function sameRun(a: ScriptRun, b: ScriptRun): boolean {
   return a.command === b.command && a.cwd === b.cwd && JSON.stringify(a.args ?? []) === JSON.stringify(b.args ?? []);
 }
 
-function pinFor(pins: readonly ScriptPin[], action: ScriptAction): ScriptPin | undefined {
-  return pins.find((pin) => sameRun(pin, action));
+/** The approval recorded for this program, argv and folder, if any. */
+export function pinFor(pins: readonly ScriptPin[], run: ScriptRun): ScriptPin | undefined {
+  return pins.find((pin) => sameRun(pin, run));
+}
+
+/** The approval of `run` as its files are now, or why it cannot be given. */
+export function pinScript(run: ScriptRun, place: ScriptPlace, now: number = Date.now()): ScriptPin | { error: string } {
+  const read = fingerprintScript(run, place);
+  if ('error' in read) return read;
+  return { command: run.command, args: [...(run.args ?? [])], cwd: run.cwd, ...read, approved_at: now };
 }
 
 /**
@@ -151,7 +162,7 @@ export function pinScripts(
   for (const action of actions) {
     if (action.type !== 'script') continue;
     const place = scriptCwd(action.cwd);
-    const read = 'error' in place ? place : fingerprintScript(action, place);
+    const read = 'error' in place ? place : pinScript(action, place, now);
     if ('error' in read) {
       if (stored.actions.some((old) => old.type === 'script' && sameRun(old, action))) {
         const old = pinFor(stored.pins, action);
@@ -160,7 +171,7 @@ export function pinScripts(
       }
       return { error: `script ${action.command}: ${read.error}` };
     }
-    pins.push({ command: action.command, args: [...(action.args ?? [])], cwd: action.cwd, ...read, approved_at: now });
+    pins.push(read);
   }
   return { pins };
 }
@@ -179,10 +190,17 @@ function changedFiles(before: ScriptPin['files'], after: ScriptPin['files']): st
  * now), its files changed since, or they can no longer be fingerprinted.
  */
 export function scriptApprovalProblem(triggerId: string, action: ScriptAction, place: ScriptPlace): string | null {
-  const pin = pinFor(getScriptPins(triggerId), action);
-  const hint = reapprove(triggerId);
+  return scriptPinProblem(getScriptPins(triggerId), action, place, reapprove(triggerId));
+}
+
+/**
+ * The check behind `scriptApprovalProblem`, on approvals kept elsewhere
+ * (a workflow's script nodes). `hint`: how a person approves it again.
+ */
+export function scriptPinProblem(pins: readonly ScriptPin[], run: ScriptRun, place: ScriptPlace, hint: string): string | null {
+  const pin = pinFor(pins, run);
   if (!pin) return `script not approved: ${hint}`;
-  const now = fingerprintScript(action, place);
+  const now = fingerprintScript(run, place);
   if ('error' in now) return `script cannot be checked since it was approved (${now.error}): ${hint}`;
   if (now.root !== pin.root || now.real_cwd !== pin.real_cwd) return `script folder moved since it was approved: ${hint}`;
   if (now.state !== pin.state) {
