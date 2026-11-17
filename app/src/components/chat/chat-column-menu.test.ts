@@ -39,7 +39,7 @@ const STORED = [
   { id: 'plugin:fixture:b', rail: TAB2, rang: 0, hauteur: 200 },
 ];
 
-async function mount(onglets: string[], withCommands = true) {
+async function mount(tabs: string[], withCommands = true) {
   const win = await (domReady ??= setupDom());
   const React = await import('react');
   Object.defineProperty(globalThis, 'React', { value: React, configurable: true, writable: true });
@@ -67,7 +67,7 @@ async function mount(onglets: string[], withCommands = true) {
           React.createElement(WidgetHost, null,
             React.createElement(ChatWidgetRail, {
               zone: COL,
-              onglets,
+              onglets: tabs,
               cote: 'right',
               label: 'Right',
               ...(withCommands ? {

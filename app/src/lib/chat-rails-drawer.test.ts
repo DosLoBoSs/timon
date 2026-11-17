@@ -49,10 +49,10 @@ test('narrow chat: each column is an island panel with its own tabs and cards', 
     return new Response(null, { status: 404 });
   });
 
-  let largeur = 390;
+  let width = 390;
   Object.defineProperty(dom.window.HTMLElement.prototype, 'getBoundingClientRect', {
     configurable: true,
-    value() { return { width: largeur, height: 800, top: 0, left: 0, right: largeur, bottom: 800, x: 0, y: 0 }; },
+    value() { return { width, height: 800, top: 0, left: 0, right: width, bottom: 800, x: 0, y: 0 }; },
   });
 
   const { declareSlot, register, resetSlotsForTests } = await import('./plugin-host/slots');
@@ -77,38 +77,38 @@ test('narrow chat: each column is an island panel with its own tabs and cards', 
     return null;
   }
   function Page() {
-    const { colonnes, choisirOnglet } = useChatColumns();
-    const rails = useChatRailsLayout(colonnes);
-    const [ouvert, setOuvert] = React.useState<string | null>(null);
+    const { colonnes: chatColumns, choisirOnglet: pickTab } = useChatColumns();
+    const rails = useChatRailsLayout(chatColumns);
+    const [openSide, setOpenSide] = React.useState<string | null>(null);
     seen.tiroir = rails.tiroir;
     seen.gouttieres = [rails.gauche.gouttiere, rails.droite.gouttiere];
-    seen.open = setOuvert;
+    seen.open = setOpenSide;
     return React.createElement('div', { ref: rails.mesurer },
-      ...[rails.gauche, rails.droite].flatMap((cote) => (cote.visible ? cote.rails : []).map((rail) =>
+      ...[rails.gauche, rails.droite].flatMap((side) => (side.visible ? side.rails : []).map((rail) =>
         React.createElement(ChatWidgetRail, {
           key: rail.zone,
           zone: rail.zone,
           slot: rail.slot,
           onglets: rail.onglets,
           actif: rail.actif,
-          cote: cote.cote,
-          label: cote.cote,
-          onSelectTab: (z: string) => choisirOnglet(cote.colonne, z),
+          cote: side.cote,
+          label: side.cote,
+          onSelectTab: (z: string) => pickTab(side.colonne, z),
           ...(rails.tiroir ? {
-            tiroir: { id: `panel-${cote.cote}`, ouvert: ouvert === cote.cote, onFermer: () => setOuvert(null), largeur: rail.largeur },
+            tiroir: { id: `panel-${side.cote}`, ouvert: openSide === side.cote, onFermer: () => setOpenSide(null), largeur: rail.largeur },
           } : {}),
         }))));
   }
 
   const root = createRoot(document.getElementById('root')!);
   const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);
-  const rendre = (cle: number) => React.createElement(PathnameContext.Provider, { value: '/chat' },
+  const view = (generation: number) => React.createElement(PathnameContext.Provider, { value: '/chat' },
     React.createElement(SearchParamsContext.Provider, { value: new URLSearchParams() },
       React.createElement(WorkspaceLayoutProvider, null,
         React.createElement(WidgetHost, null,
-          React.createElement(Page, { key: cle }),
+          React.createElement(Page, { key: generation }),
           React.createElement(Probe)))));
-  const panel = (cote: string) => document.getElementById(`panel-${cote}`);
+  const panel = (side: string) => document.getElementById(`panel-${side}`);
   const cardsIn = (n: Element | null) => Array.from(n?.querySelectorAll('[data-widget-id]') ?? []).map((c) => c.getAttribute('data-widget-id'));
   const pointer = (type: string, x: number, y: number, pointerType = 'touch') => {
     const e = new dom.window.MouseEvent(type, { bubbles: true, clientX: x, clientY: y });
@@ -118,7 +118,7 @@ test('narrow chat: each column is an island panel with its own tabs and cards', 
   };
 
   try {
-    await React.act(async () => { root.render(rendre(1)); });
+    await React.act(async () => { root.render(view(1)); });
     await until(() => cardsIn(panel('right')).length === 1 && cardsIn(panel('left')).length === 1, 'both panels to show their card');
 
     assert.equal(seen.tiroir, true);
@@ -160,8 +160,8 @@ test('narrow chat: each column is an island panel with its own tabs and cards', 
     assert.equal(left.getAttribute('aria-hidden'), 'true', 'swiped out by its edge');
 
     // Wide again: floating columns, the collapsed one stays collapsed.
-    largeur = 1400;
-    await React.act(async () => { root.render(rendre(2)); });
+    width = 1400;
+    await React.act(async () => { root.render(view(2)); });
     await until(() => document.querySelectorAll('.chat-widget-rail').length === 2, 'the floating columns to come back');
     assert.equal(seen.tiroir, false);
     assert.equal(panel('left'), null);

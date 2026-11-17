@@ -31,207 +31,207 @@ import {
   type ChatColumns,
 } from '../components/chat/chat-columns';
 
-const GAUCHE = 'chat.left.widget';
-const DROITE = 'chat.right.widget';
-const CONNUES = [GAUCHE, DROITE] as const;
+const LEFT = 'chat.left.widget';
+const RIGHT = 'chat.right.widget';
+const KNOWN = [LEFT, RIGHT] as const;
 
 test('rien de stocké : les colonnes sont dans leur ordre déclaré', () => {
-  const c = lireColonnes(null, CONNUES);
-  assert.deepEqual(c, { ordre: [GAUCHE, DROITE], masquees: [] });
-  assert.deepEqual(c, colonnesDefaut(CONNUES));
+  const c = lireColonnes(null, KNOWN);
+  assert.deepEqual(c, { ordre: [LEFT, RIGHT], masquees: [] });
+  assert.deepEqual(c, colonnesDefaut(KNOWN));
 });
 
 test('inverser change le côté des deux colonnes', () => {
-  const c = inverserColonnes(colonnesDefaut(CONNUES));
-  assert.equal(coteDe(c, GAUCHE), 'right');
-  assert.equal(coteDe(c, DROITE), 'left');
-  assert.equal(zoneDuCote(c, 'left'), DROITE);
-  assert.equal(zoneDuCote(c, 'right'), GAUCHE);
+  const c = inverserColonnes(colonnesDefaut(KNOWN));
+  assert.equal(coteDe(c, LEFT), 'right');
+  assert.equal(coteDe(c, RIGHT), 'left');
+  assert.equal(zoneDuCote(c, 'left'), RIGHT);
+  assert.equal(zoneDuCote(c, 'right'), LEFT);
 });
 
 test('inverser deux fois revient à l’ordre d’origine', () => {
-  const c = colonnesDefaut(CONNUES);
+  const c = colonnesDefaut(KNOWN);
   assert.deepEqual(inverserColonnes(inverserColonnes(c)), c);
 });
 
 test('le repli suit la zone, pas le côté : inverser ne déplie rien', () => {
-  const replie = basculerMasquee(colonnesDefaut(CONNUES), GAUCHE);
-  const inverse = inverserColonnes(replie);
-  assert.equal(estMasquee(inverse, GAUCHE), true);
-  assert.equal(estMasquee(inverse, DROITE), false);
+  const folded = basculerMasquee(colonnesDefaut(KNOWN), LEFT);
+  const inverse = inverserColonnes(folded);
+  assert.equal(estMasquee(inverse, LEFT), true);
+  assert.equal(estMasquee(inverse, RIGHT), false);
   // La colonne repliée est maintenant celle de droite.
-  assert.equal(coteDe(inverse, GAUCHE), 'right');
+  assert.equal(coteDe(inverse, LEFT), 'right');
 });
 
 test('masquer puis démasquer rend l’état d’origine', () => {
-  const c = colonnesDefaut(CONNUES);
-  assert.deepEqual(basculerMasquee(basculerMasquee(c, DROITE), DROITE), c);
+  const c = colonnesDefaut(KNOWN);
+  assert.deepEqual(basculerMasquee(basculerMasquee(c, RIGHT), RIGHT), c);
 });
 
 test('une colonne repliée garde sa place dans l’ordre', () => {
-  const c = basculerMasquee(colonnesDefaut(CONNUES), GAUCHE);
-  assert.deepEqual(c.ordre, [GAUCHE, DROITE]);
+  const c = basculerMasquee(colonnesDefaut(KNOWN), LEFT);
+  assert.deepEqual(c.ordre, [LEFT, RIGHT]);
 });
 
 test('un ordre inversé se relit tel quel', () => {
-  const stocke = inverserColonnes(basculerMasquee(colonnesDefaut(CONNUES), DROITE));
-  const relu = lireColonnes(JSON.parse(JSON.stringify(stocke)), CONNUES);
-  assert.deepEqual(relu, stocke);
+  const stored = inverserColonnes(basculerMasquee(colonnesDefaut(KNOWN), RIGHT));
+  const reread = lireColonnes(JSON.parse(JSON.stringify(stored)), KNOWN);
+  assert.deepEqual(reread, stored);
 });
 
 test('une zone inconnue du stockage est ignorée', () => {
-  const c = lireColonnes({ ordre: ['chat.disparue', DROITE], masquees: ['chat.disparue'] }, CONNUES);
-  assert.deepEqual(c.ordre, [DROITE, GAUCHE]);
+  const c = lireColonnes({ ordre: ['chat.disparue', RIGHT], masquees: ['chat.disparue'] }, KNOWN);
+  assert.deepEqual(c.ordre, [RIGHT, LEFT]);
   assert.deepEqual(c.masquees, []);
 });
 
 test('une zone connue absente du stockage revient à sa place déclarée', () => {
-  const c = lireColonnes({ ordre: [DROITE] }, CONNUES);
-  assert.deepEqual(c.ordre, [DROITE, GAUCHE]);
+  const c = lireColonnes({ ordre: [RIGHT] }, KNOWN);
+  assert.deepEqual(c.ordre, [RIGHT, LEFT]);
 });
 
 test('un doublon de stockage ne compte qu’une fois', () => {
-  const c = lireColonnes({ ordre: [DROITE, DROITE, GAUCHE], masquees: [GAUCHE, GAUCHE] }, CONNUES);
-  assert.deepEqual(c.ordre, [DROITE, GAUCHE]);
-  assert.deepEqual(c.masquees, [GAUCHE]);
+  const c = lireColonnes({ ordre: [RIGHT, RIGHT, LEFT], masquees: [LEFT, LEFT] }, KNOWN);
+  assert.deepEqual(c.ordre, [RIGHT, LEFT]);
+  assert.deepEqual(c.masquees, [LEFT]);
 });
 
 test('une valeur illisible retombe sur les défauts au lieu de casser', () => {
-  for (const brut of [undefined, 42, 'nope', [], { ordre: 'gauche', masquees: 7 }]) {
-    assert.deepEqual(lireColonnes(brut, CONNUES), colonnesDefaut(CONNUES));
+  for (const raw of [undefined, 42, 'nope', [], { ordre: 'gauche', masquees: 7 }]) {
+    assert.deepEqual(lireColonnes(raw, KNOWN), colonnesDefaut(KNOWN));
   }
 });
 
 test('une zone hors colonnes n’a pas de côté : le chrome ne réserve rien', () => {
-  assert.equal(coteDe(colonnesDefaut(CONNUES), 'cockpit.widget'), null);
+  assert.equal(coteDe(colonnesDefaut(KNOWN), 'cockpit.widget'), null);
 });
 
 test('les mutations ne modifient pas la valeur reçue', () => {
-  const c: ChatColumns = colonnesDefaut(CONNUES);
-  const copie = JSON.parse(JSON.stringify(c)) as ChatColumns;
+  const c: ChatColumns = colonnesDefaut(KNOWN);
+  const copy = JSON.parse(JSON.stringify(c)) as ChatColumns;
   inverserColonnes(c);
-  basculerMasquee(c, GAUCHE);
-  assert.deepEqual(c, copie);
+  basculerMasquee(c, LEFT);
+  assert.deepEqual(c, copy);
 });
 
 test('une seule colonne déclarée : elle est à gauche, rien à droite', () => {
-  const c = colonnesDefaut([GAUCHE]);
-  assert.equal(coteDe(c, GAUCHE), 'left');
+  const c = colonnesDefaut([LEFT]);
+  assert.equal(coteDe(c, LEFT), 'left');
   assert.equal(zoneDuCote(c, 'right'), null);
 });
 
 // ── Onglets : une colonne alterne entre plusieurs zones de widgets.
 
 test('sans onglet, une colonne affiche sa propre zone', () => {
-  const c = colonnesDefaut(CONNUES);
-  assert.deepEqual(ongletsDe(c, DROITE), [DROITE]);
-  assert.equal(ongletActif(c, DROITE), DROITE);
+  const c = colonnesDefaut(KNOWN);
+  assert.deepEqual(ongletsDe(c, RIGHT), [RIGHT]);
+  assert.equal(ongletActif(c, RIGHT), RIGHT);
 });
 
 test('ouvrir un onglet l’affiche, sous la colonne qui l’a ouvert', () => {
-  const c = ajouterOnglet(colonnesDefaut(CONNUES), DROITE, 'a');
-  assert.deepEqual(ongletsDe(c, DROITE), [DROITE, `${DROITE}#a`]);
-  assert.equal(ongletActif(c, DROITE), `${DROITE}#a`);
-  assert.deepEqual(ongletsDe(c, GAUCHE), [GAUCHE]);
-  assert.equal(zoneDeColonne(`${DROITE}#a`), DROITE);
-  assert.equal(zoneDeColonne(DROITE), DROITE);
+  const c = ajouterOnglet(colonnesDefaut(KNOWN), RIGHT, 'a');
+  assert.deepEqual(ongletsDe(c, RIGHT), [RIGHT, `${RIGHT}#a`]);
+  assert.equal(ongletActif(c, RIGHT), `${RIGHT}#a`);
+  assert.deepEqual(ongletsDe(c, LEFT), [LEFT]);
+  assert.equal(zoneDeColonne(`${RIGHT}#a`), RIGHT);
+  assert.equal(zoneDeColonne(RIGHT), RIGHT);
 });
 
 test('un suffixe déjà pris, vide ou une colonne inconnue ne créent rien', () => {
-  const c = ajouterOnglet(colonnesDefaut(CONNUES), DROITE, 'a');
-  assert.deepEqual(ajouterOnglet(c, DROITE, 'a'), c);
-  assert.deepEqual(ajouterOnglet(c, DROITE, ''), c);
+  const c = ajouterOnglet(colonnesDefaut(KNOWN), RIGHT, 'a');
+  assert.deepEqual(ajouterOnglet(c, RIGHT, 'a'), c);
+  assert.deepEqual(ajouterOnglet(c, RIGHT, ''), c);
   assert.deepEqual(ajouterOnglet(c, 'chat.ailleurs', 'b'), c);
 });
 
 test('choisir un onglet le montre, revenir au premier efface le choix', () => {
-  const ouvert = ajouterOnglet(colonnesDefaut(CONNUES), DROITE, 'a');
-  const premier = choisirOnglet(ouvert, DROITE, DROITE);
-  assert.equal(ongletActif(premier, DROITE), DROITE);
-  assert.equal(premier.actifs, undefined);
-  assert.equal(ongletActif(choisirOnglet(premier, DROITE, `${DROITE}#a`), DROITE), `${DROITE}#a`);
+  const opened = ajouterOnglet(colonnesDefaut(KNOWN), RIGHT, 'a');
+  const first = choisirOnglet(opened, RIGHT, RIGHT);
+  assert.equal(ongletActif(first, RIGHT), RIGHT);
+  assert.equal(first.actifs, undefined);
+  assert.equal(ongletActif(choisirOnglet(first, RIGHT, `${RIGHT}#a`), RIGHT), `${RIGHT}#a`);
   // L'onglet d'une autre colonne n'est pas un choix possible ici.
-  assert.equal(ongletActif(choisirOnglet(premier, DROITE, `${GAUCHE}#a`), DROITE), DROITE);
+  assert.equal(ongletActif(choisirOnglet(first, RIGHT, `${LEFT}#a`), RIGHT), RIGHT);
 });
 
 test('fermer l’onglet affiché montre celui qui le précédait', () => {
-  let c = ajouterOnglet(colonnesDefaut(CONNUES), DROITE, 'a');
-  c = ajouterOnglet(c, DROITE, 'b');
-  c = retirerOnglet(c, DROITE, `${DROITE}#b`);
-  assert.equal(ongletActif(c, DROITE), `${DROITE}#a`);
-  c = retirerOnglet(c, DROITE, `${DROITE}#a`);
-  assert.equal(ongletActif(c, DROITE), DROITE);
+  let c = ajouterOnglet(colonnesDefaut(KNOWN), RIGHT, 'a');
+  c = ajouterOnglet(c, RIGHT, 'b');
+  c = retirerOnglet(c, RIGHT, `${RIGHT}#b`);
+  assert.equal(ongletActif(c, RIGHT), `${RIGHT}#a`);
+  c = retirerOnglet(c, RIGHT, `${RIGHT}#a`);
+  assert.equal(ongletActif(c, RIGHT), RIGHT);
   // Revenue à un seul onglet, la colonne retrouve sa forme d'avant les onglets.
-  assert.deepEqual(c, colonnesDefaut(CONNUES));
+  assert.deepEqual(c, colonnesDefaut(KNOWN));
 });
 
 test('le premier onglet ne se ferme pas : il est la colonne', () => {
-  const c = ajouterOnglet(colonnesDefaut(CONNUES), DROITE, 'a');
-  assert.deepEqual(retirerOnglet(c, DROITE, DROITE), c);
+  const c = ajouterOnglet(colonnesDefaut(KNOWN), RIGHT, 'a');
+  assert.deepEqual(retirerOnglet(c, RIGHT, RIGHT), c);
 });
 
 test('inverser et replier gardent les onglets de chaque colonne', () => {
-  let c = ajouterOnglet(colonnesDefaut(CONNUES), DROITE, 'a');
-  c = ajouterOnglet(c, GAUCHE, 'b');
-  c = choisirOnglet(c, GAUCHE, GAUCHE);
-  const apres = basculerMasquee(inverserColonnes(c), DROITE);
-  assert.deepEqual(apres.onglets, c.onglets);
-  assert.deepEqual(apres.actifs, c.actifs);
-  assert.equal(ongletActif(apres, DROITE), `${DROITE}#a`);
+  let c = ajouterOnglet(colonnesDefaut(KNOWN), RIGHT, 'a');
+  c = ajouterOnglet(c, LEFT, 'b');
+  c = choisirOnglet(c, LEFT, LEFT);
+  const after = basculerMasquee(inverserColonnes(c), RIGHT);
+  assert.deepEqual(after.onglets, c.onglets);
+  assert.deepEqual(after.actifs, c.actifs);
+  assert.equal(ongletActif(after, RIGHT), `${RIGHT}#a`);
 });
 
 test('des onglets se relisent tels quels', () => {
-  let c = ajouterOnglet(colonnesDefaut(CONNUES), DROITE, 'a');
-  c = ajouterOnglet(c, DROITE, 'b');
-  c = choisirOnglet(c, DROITE, `${DROITE}#a`);
-  assert.deepEqual(lireColonnes(JSON.parse(JSON.stringify(c)), CONNUES), c);
+  let c = ajouterOnglet(colonnesDefaut(KNOWN), RIGHT, 'a');
+  c = ajouterOnglet(c, RIGHT, 'b');
+  c = choisirOnglet(c, RIGHT, `${RIGHT}#a`);
+  assert.deepEqual(lireColonnes(JSON.parse(JSON.stringify(c)), KNOWN), c);
 });
 
 test('un onglet stocké sous la mauvaise colonne ou illisible est ignoré', () => {
   const c = lireColonnes({
-    ordre: [GAUCHE, DROITE],
-    onglets: { [DROITE]: [`${GAUCHE}#x`, `${DROITE}#`, 7, `${DROITE}#ok`, `${DROITE}#ok`], 'chat.disparue': ['chat.disparue#a'] },
-    actifs: { [DROITE]: `${DROITE}#inconnu`, [GAUCHE]: 3 },
-  }, CONNUES);
-  assert.deepEqual(ongletsDe(c, DROITE), [DROITE, `${DROITE}#ok`]);
-  assert.equal(ongletActif(c, DROITE), DROITE);
+    ordre: [LEFT, RIGHT],
+    onglets: { [RIGHT]: [`${LEFT}#x`, `${RIGHT}#`, 7, `${RIGHT}#ok`, `${RIGHT}#ok`], 'chat.disparue': ['chat.disparue#a'] },
+    actifs: { [RIGHT]: `${RIGHT}#inconnu`, [LEFT]: 3 },
+  }, KNOWN);
+  assert.deepEqual(ongletsDe(c, RIGHT), [RIGHT, `${RIGHT}#ok`]);
+  assert.equal(ongletActif(c, RIGHT), RIGHT);
   assert.equal(c.actifs, undefined);
-  assert.deepEqual(Object.keys(c.onglets ?? {}), [DROITE]);
+  assert.deepEqual(Object.keys(c.onglets ?? {}), [RIGHT]);
 });
 
 // ── Persistance : les colonnes voyagent par `ui_layout`, sur leur propre scope.
 
 /** Un daemon en mémoire, une valeur par scope. */
-function fauxDaemon() {
-  const stocke = new Map<string, unknown>();
+function fakeDaemon() {
+  const store = new Map<string, unknown>();
   const fetchImpl = async (url: string, init?: RequestInit): Promise<Response> => {
     const scope = new URL(url, 'http://x').searchParams.get('scope') ?? 'cockpit';
     if ((init?.method ?? 'GET') === 'GET') {
-      return new Response(JSON.stringify({ scope, layout: stocke.get(scope) ?? null }), {
+      return new Response(JSON.stringify({ scope, layout: store.get(scope) ?? null }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
     }
-    stocke.set(scope, JSON.parse(String(init?.body)).layout);
+    store.set(scope, JSON.parse(String(init?.body)).layout);
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   };
-  return { fetchImpl, stocke };
+  return { fetchImpl, store };
 }
 
 test('un ordre inversé survit à l’aller-retour par le daemon', async () => {
-  const daemon = fauxDaemon();
-  const inverse = inverserColonnes(colonnesDefaut(CONNUES));
+  const daemon = fakeDaemon();
+  const inverse = inverserColonnes(colonnesDefaut(KNOWN));
 
   assert.equal(await saveLayout(inverse, ioColonnes({ fetchImpl: daemon.fetchImpl })), true);
   const out = await loadLayout(ioColonnes({ fetchImpl: daemon.fetchImpl }));
 
   assert.equal(out.ok, true);
-  assert.deepEqual(lireColonnes(out.raw, CONNUES), inverse);
-  assert.deepEqual([...daemon.stocke.keys()], [CHAT_COLUMNS_SCOPE], 'le cockpit n’est pas touché');
+  assert.deepEqual(lireColonnes(out.raw, KNOWN), inverse);
+  assert.deepEqual([...daemon.store.keys()], [CHAT_COLUMNS_SCOPE], 'le cockpit n’est pas touché');
 });
 
 test('le layout laissé au navigateur n’est jamais repris comme ordre de colonnes', async () => {
-  const daemon = fauxDaemon();
+  const daemon = fakeDaemon();
   const cockpit = [{ id: 'agenda', rail: 'gauche', rang: 0, hauteur: 200 }];
   const storage = {
     getItem: (k: string) => (k === LEGACY_LAYOUT_KEY ? JSON.stringify(cockpit) : null),
@@ -241,7 +241,7 @@ test('le layout laissé au navigateur n’est jamais repris comme ordre de colon
   const out = await loadLayout(ioColonnes({ fetchImpl: daemon.fetchImpl, storage }));
 
   assert.deepEqual(out, { raw: null, ok: true, migrated: false });
-  assert.equal(daemon.stocke.size, 0, 'rien n’a été écrit sur le scope des colonnes');
+  assert.equal(daemon.store.size, 0, 'rien n’a été écrit sur le scope des colonnes');
 });
 
 test('daemon injoignable : la lecture le dit, et rien n’est écrit', async () => {
@@ -250,54 +250,54 @@ test('daemon injoignable : la lecture le dit, et rien n’est écrit', async () 
   assert.deepEqual(out, { raw: null, ok: false, migrated: false });
   // C’est ce `ok: false` que le hook garde : sans lui, les défauts seraient
   // sauvés par-dessus un ordre qu’on a seulement échoué à lire.
-  assert.deepEqual(lireColonnes(out.raw, CONNUES), colonnesDefaut(CONNUES));
+  assert.deepEqual(lireColonnes(out.raw, KNOWN), colonnesDefaut(KNOWN));
 });
 
 test('largeur : absente = défaut, posée = bornée, null = retour au défaut', () => {
-  const c = lireColonnes(null, CONNUES);
-  assert.equal(largeurDe(c, DROITE, 300), 300);
-  const large = poserLargeur(c, DROITE, 455.4);
-  assert.equal(largeurDe(large, DROITE, 300), 455);
-  assert.equal(largeurDe(poserLargeur(c, DROITE, 10), DROITE, 300), LARGEUR_MIN);
-  assert.equal(largeurDe(poserLargeur(c, DROITE, 99999), DROITE, 300), LARGEUR_MAX);
-  const defaut = poserLargeur(large, DROITE, null);
-  assert.equal(defaut.largeurs, undefined, 'back to the default, the stored value regains its old shape');
+  const c = lireColonnes(null, KNOWN);
+  assert.equal(largeurDe(c, RIGHT, 300), 300);
+  const large = poserLargeur(c, RIGHT, 455.4);
+  assert.equal(largeurDe(large, RIGHT, 300), 455);
+  assert.equal(largeurDe(poserLargeur(c, RIGHT, 10), RIGHT, 300), LARGEUR_MIN);
+  assert.equal(largeurDe(poserLargeur(c, RIGHT, 99999), RIGHT, 300), LARGEUR_MAX);
+  const reset = poserLargeur(large, RIGHT, null);
+  assert.equal(reset.largeurs, undefined, 'back to the default, the stored value regains its old shape');
 });
 
 test('largeur : une valeur stockée illisible ou hors colonnes est ignorée', () => {
-  const c = lireColonnes({ largeurs: { [DROITE]: 'large', [GAUCHE]: 5000, 'chat.disparue': 400 } }, CONNUES);
-  assert.deepEqual(c.largeurs, { [GAUCHE]: LARGEUR_MAX });
+  const c = lireColonnes({ largeurs: { [RIGHT]: 'large', [LEFT]: 5000, 'chat.disparue': 400 } }, KNOWN);
+  assert.deepEqual(c.largeurs, { [LEFT]: LARGEUR_MAX });
 });
 
 test('deuxième colonne : un onglet montré à côté, sans changer l’onglet affiché', () => {
-  const c = choisirOnglet(ajouterOnglet(lireColonnes(null, CONNUES), DROITE, 'a'), DROITE, DROITE);
-  const s = ajouterSeconde(c, DROITE, 'b');
-  assert.equal(secondeDe(s, DROITE), `${DROITE}#b`);
-  assert.deepEqual(ongletsDe(s, DROITE), [DROITE, `${DROITE}#a`, `${DROITE}#b`], 'une entrée d’onglet par colonne');
-  assert.equal(ongletActif(s, DROITE), DROITE);
-  assert.equal(secondeDe(s, GAUCHE), null);
-  assert.deepEqual(ajouterSeconde(s, DROITE, 'c'), s, 'une seule deuxième colonne par côté');
+  const c = choisirOnglet(ajouterOnglet(lireColonnes(null, KNOWN), RIGHT, 'a'), RIGHT, RIGHT);
+  const s = ajouterSeconde(c, RIGHT, 'b');
+  assert.equal(secondeDe(s, RIGHT), `${RIGHT}#b`);
+  assert.deepEqual(ongletsDe(s, RIGHT), [RIGHT, `${RIGHT}#a`, `${RIGHT}#b`], 'une entrée d’onglet par colonne');
+  assert.equal(ongletActif(s, RIGHT), RIGHT);
+  assert.equal(secondeDe(s, LEFT), null);
+  assert.deepEqual(ajouterSeconde(s, RIGHT, 'c'), s, 'une seule deuxième colonne par côté');
 });
 
 test('deuxième colonne : la détacher la laisse en onglet, la fermer l’oublie avec sa largeur', () => {
-  const s = poserLargeur(ajouterSeconde(lireColonnes(null, CONNUES), GAUCHE, 'b'), `${GAUCHE}#b`, 400);
-  const detachee = detacherSeconde(s, GAUCHE);
-  assert.equal(secondeDe(detachee, GAUCHE), null);
-  assert.deepEqual(ongletsDe(detachee, GAUCHE), [GAUCHE, `${GAUCHE}#b`]);
-  const fermee = retirerOnglet(s, GAUCHE, `${GAUCHE}#b`);
-  assert.equal(fermee.secondes, undefined);
-  assert.equal(fermee.largeurs, undefined);
+  const s = poserLargeur(ajouterSeconde(lireColonnes(null, KNOWN), LEFT, 'b'), `${LEFT}#b`, 400);
+  const detached = detacherSeconde(s, LEFT);
+  assert.equal(secondeDe(detached, LEFT), null);
+  assert.deepEqual(ongletsDe(detached, LEFT), [LEFT, `${LEFT}#b`]);
+  const closed = retirerOnglet(s, LEFT, `${LEFT}#b`);
+  assert.equal(closed.secondes, undefined);
+  assert.equal(closed.largeurs, undefined);
 });
 
 test('deuxième colonne : relue telle quelle, ignorée si elle ne nomme pas un onglet', () => {
-  const s = ajouterSeconde(lireColonnes(null, CONNUES), DROITE, 'b');
-  assert.deepEqual(lireColonnes(JSON.parse(JSON.stringify(s)), CONNUES), s);
-  const faux = lireColonnes({ ...s, secondes: { [DROITE]: `${GAUCHE}#b`, [GAUCHE]: 4 } }, CONNUES);
-  assert.equal(faux.secondes, undefined);
+  const s = ajouterSeconde(lireColonnes(null, KNOWN), RIGHT, 'b');
+  assert.deepEqual(lireColonnes(JSON.parse(JSON.stringify(s)), KNOWN), s);
+  const forged = lireColonnes({ ...s, secondes: { [RIGHT]: `${LEFT}#b`, [LEFT]: 4 } }, KNOWN);
+  assert.equal(forged.secondes, undefined);
 });
 
 test('inverser garde la deuxième colonne et les largeurs de chaque zone', () => {
-  const s = poserLargeur(ajouterSeconde(lireColonnes(null, CONNUES), DROITE, 'b'), DROITE, 500);
+  const s = poserLargeur(ajouterSeconde(lireColonnes(null, KNOWN), RIGHT, 'b'), RIGHT, 500);
   const inv = inverserColonnes(s);
   assert.deepEqual(inv.secondes, s.secondes);
   assert.deepEqual(inv.largeurs, s.largeurs);
@@ -329,13 +329,13 @@ test('plan : trop étroit, la deuxième colonne du côté le plus large se repli
 });
 
 test('plan : une deuxième colonne seule (la colonne vide) prend le bord, et se replie dans la colonne', () => {
-  const seule = planifierRails(3000, null, { largeur: 300, premiere: false, seconde: 350 });
-  assert.equal(seule.droite?.premiere, null);
-  assert.equal(seule.droite?.decalageSeconde, 0);
-  assert.equal(seule.droite?.gouttiere, 378);
-  const repliee = planifierRails(FIL_MIN + 330, null, { largeur: 300, premiere: false, seconde: 350 });
-  assert.equal(repliee.droite?.premiere, 300, 'its tab folds back into the column, which shows again');
-  assert.equal(repliee.droite?.seconde, null);
+  const alone = planifierRails(3000, null, { largeur: 300, premiere: false, seconde: 350 });
+  assert.equal(alone.droite?.premiere, null);
+  assert.equal(alone.droite?.decalageSeconde, 0);
+  assert.equal(alone.droite?.gouttiere, 378);
+  const foldedBack = planifierRails(FIL_MIN + 330, null, { largeur: 300, premiere: false, seconde: 350 });
+  assert.equal(foldedBack.droite?.premiere, 300, 'its tab folds back into the column, which shows again');
+  assert.equal(foldedBack.droite?.seconde, null);
 });
 
 test('plan : plus étroit encore, les largeurs rétrécissent sans passer sous le minimum', () => {
@@ -371,11 +371,11 @@ test('a tab name survives every mutation, leaves with its tab, and is bounded', 
 
 // TODO #647 : un clic rejoué sur l’écriture d’une autre fenêtre garde son sens.
 test('replier une colonne déjà repliée ailleurs la laisse repliée', () => {
-  const c = colonnesDefaut(CONNUES);
-  const replie = poserMasquee(c, GAUCHE, true);
-  assert.equal(estMasquee(replie, GAUCHE), true);
-  assert.equal(poserMasquee(replie, GAUCHE, true), replie);
-  assert.deepEqual(poserMasquee(replie, GAUCHE, false), c);
+  const c = colonnesDefaut(KNOWN);
+  const folded = poserMasquee(c, LEFT, true);
+  assert.equal(estMasquee(folded, LEFT), true);
+  assert.equal(poserMasquee(folded, LEFT, true), folded);
+  assert.deepEqual(poserMasquee(folded, LEFT, false), c);
 });
 
 test('a column resized with its mirror: both move by the same amount, held by the first bound', async () => {

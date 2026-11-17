@@ -41,77 +41,77 @@ test('column width handle: keyboard, double-click and drag, on both sides', asyn
   const { WidgetHost } = await import('../components/widget-host/widget-host');
   const { ChatWidgetRail } = await import('../components/chat/chat-rails');
 
-  const appels: Array<[number, boolean] | 'reset'> = [];
-  let cote: 'left' | 'right' = 'left';
-  let ecartee = false;
-  const rendre = () => React.createElement(PathnameContext.Provider, { value: '/chat' },
+  const calls: Array<[number, boolean] | 'reset'> = [];
+  let side: 'left' | 'right' = 'left';
+  let apart = false;
+  const view = () => React.createElement(PathnameContext.Provider, { value: '/chat' },
     React.createElement(SearchParamsContext.Provider, { value: new URLSearchParams() },
       React.createElement(WorkspaceLayoutProvider, null,
         React.createElement(WidgetHost, null,
           React.createElement(ChatWidgetRail, {
             zone: COL,
-            cote,
+            cote: side,
             label: 'Left',
-            ecartee,
+            ecartee: apart,
             redimension: {
               largeur: 300,
               max: 500,
-              onChange: (l: number, p: boolean) => { appels.push([l, p]); },
-              onReset: () => { appels.push('reset'); },
+              onChange: (l: number, p: boolean) => { calls.push([l, p]); },
+              onReset: () => { calls.push('reset'); },
             },
           })))));
 
   const root = createRoot(document.getElementById('root')!);
   const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);
-  await React.act(async () => { root.render(rendre()); });
+  await React.act(async () => { root.render(view()); });
 
-  const poignee = () => document.querySelector<HTMLElement>('[role="separator"][aria-orientation="vertical"]');
-  const touche = async (key: string, shiftKey = false) => {
-    await React.act(async () => { poignee()!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, shiftKey, bubbles: true })); });
+  const handle = () => document.querySelector<HTMLElement>('[role="separator"][aria-orientation="vertical"]');
+  const press = async (key: string, shiftKey = false) => {
+    await React.act(async () => { handle()!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, shiftKey, bubbles: true })); });
   };
-  const pointeur = async (type: string, clientX: number) => {
-    await React.act(async () => { poignee()!.dispatchEvent(new dom.window.MouseEvent(type, { clientX, button: 0, bubbles: true })); });
+  const pointer = async (type: string, clientX: number) => {
+    await React.act(async () => { handle()!.dispatchEvent(new dom.window.MouseEvent(type, { clientX, button: 0, bubbles: true })); });
   };
-  await until(() => poignee() !== null, 'the column to paint its width handle');
+  await until(() => handle() !== null, 'the column to paint its width handle');
 
   try {
-    const p = poignee();
+    const p = handle();
     assert.ok(p, 'the column has a width handle');
     assert.equal(p.getAttribute('aria-valuenow'), '300');
     assert.equal(p.getAttribute('aria-valuemin'), '240');
     assert.equal(p.getAttribute('aria-valuemax'), '500');
     assert.equal(p.tabIndex, 0, 'reachable from the keyboard');
 
-    await touche('ArrowRight');
-    await touche('ArrowLeft', true);
-    await touche('Home');
-    await touche('End');
-    assert.deepEqual(appels.splice(0), [[316, true], [240, true], [240, true], [500, true]],
+    await press('ArrowRight');
+    await press('ArrowLeft', true);
+    await press('Home');
+    await press('End');
+    assert.deepEqual(calls.splice(0), [[316, true], [240, true], [240, true], [500, true]],
       'on the left, the right arrow widens; bounds hold');
 
-    await pointeur('pointerdown', 100);
-    await pointeur('pointerup', 100);
-    await React.act(async () => { poignee()!.dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true })); });
-    assert.deepEqual(appels.splice(0), ['reset'], 'a click writes nothing, a double-click resets');
+    await pointer('pointerdown', 100);
+    await pointer('pointerup', 100);
+    await React.act(async () => { handle()!.dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true })); });
+    assert.deepEqual(calls.splice(0), ['reset'], 'a click writes nothing, a double-click resets');
 
-    await pointeur('pointerdown', 100);
-    await pointeur('pointermove', 180);
-    await until(() => appels.length > 0, 'the drag to show its width');
-    await pointeur('pointerup', 180);
-    assert.deepEqual(appels.splice(0), [[380, false], [380, true]], 'shown while dragging, written on release');
+    await pointer('pointerdown', 100);
+    await pointer('pointermove', 180);
+    await until(() => calls.length > 0, 'the drag to show its width');
+    await pointer('pointerup', 180);
+    assert.deepEqual(calls.splice(0), [[380, false], [380, true]], 'shown while dragging, written on release');
 
-    cote = 'right';
-    await React.act(async () => { root.render(rendre()); });
-    await touche('ArrowRight');
-    await pointeur('pointerdown', 100);
-    await pointeur('pointermove', 60);
-    await until(() => appels.length > 1, 'the drag to show its width');
-    await pointeur('pointerup', 60);
-    assert.deepEqual(appels.splice(0), [[284, true], [340, false], [340, true]], 'on the right, the column grows leftwards');
+    side = 'right';
+    await React.act(async () => { root.render(view()); });
+    await press('ArrowRight');
+    await pointer('pointerdown', 100);
+    await pointer('pointermove', 60);
+    await until(() => calls.length > 1, 'the drag to show its width');
+    await pointer('pointerup', 60);
+    assert.deepEqual(calls.splice(0), [[284, true], [340, false], [340, true]], 'on the right, the column grows leftwards');
 
-    ecartee = true;
-    await React.act(async () => { root.render(rendre()); });
-    assert.equal(poignee(), null, 'a column slid out by focus mode has no handle');
+    apart = true;
+    await React.act(async () => { root.render(view()); });
+    assert.equal(handle(), null, 'a column slid out by focus mode has no handle');
   } finally {
     await React.act(async () => { root.unmount(); });
     resetSlotsForTests();
