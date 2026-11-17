@@ -97,6 +97,7 @@ import { cooldownReason, redirectIfStillDry } from './backend-fallback.js';
 import { agentDir } from './paths.js';
 import { canonicalAgentName } from './agent-config.js';
 import { BackendAccountError } from './backends/account-launch.js';
+import { daemonMessage } from './daemon-message.js';
 import { notifyUser } from './notify.js';
 import { sandboxCascadeNotice } from './sandbox-cascade.js';
 import { mainAgentName, mainAgentNameOrSeed } from './main-agent.js';
@@ -854,17 +855,27 @@ async function flushWakeInner(agent: string, st: WakeState): Promise<void> {
     console.log(`[wake] wake ${agent} deferred (${st.backpressureRetries}×): ${adm.reason}`);
     if (st.backpressureRetries >= MAX_BACKPRESSURE_RETRIES && !st.backpressureEscalated) {
       st.backpressureEscalated = true;
+      const minutes = Math.round((st.backpressureRetries * BACKPRESSURE_RETRY_MS) / 60_000);
       notifyUser(
         `Wake loop blocked by back-pressure: ${agent}`,
         [
           `Wake for agent \`${agent}\` has been deferred for ${st.backpressureRetries}`,
-          `attempt(s) (~${Math.round((st.backpressureRetries * BACKPRESSURE_RETRY_MS) / 60_000)} min).`,
+          `attempt(s) (~${minutes} min).`,
           `Reason: ${adm.reason}.`,
           ``,
           `${deliverable.length} message(s) are waiting in its inbox and cannot be processed.`,
           `Likely cause: global mission cap reached (paused/zombie mission?) or`,
           `high machine load. Check the state of live missions.`,
         ].join('\n'),
+        {
+          message: daemonMessage('wake_backpressure_stalled', {
+            agent,
+            attempts: st.backpressureRetries,
+            minutes,
+            reason: adm.reason ?? '',
+            waiting: deliverable.length,
+          }),
+        },
       );
     }
     if (!st.timer) {
@@ -1017,6 +1028,7 @@ function recordSpawnFailure(agent: string, st: WakeState, batch: AgentMessageRow
       ``,
       `Last error: ${reason}`,
     ].join('\n'),
+    { message: daemonMessage('wake_abandoned', { agent, ceiling, expired: n, error: reason }) },
   );
 }
 
@@ -1099,7 +1111,17 @@ export function handleTaskBlocked(taskId: string, reason: string | null, opts: {
         ``,
         `Unblock it manually after review (UI Kanban → task ${taskId}).`,
       ].join('\n'),
-      { taskId, fromMission: task.mission_id },
+      {
+        taskId,
+        fromMission: task.mission_id,
+        message: daemonMessage('blocking_loop_detected', {
+          title: task.title,
+          taskId,
+          group: task.group_id ?? 'none',
+          wakes,
+          reason: reason ?? task.blocked_reason ?? 'none',
+        }),
+      },
     );
     // The user holds it now: a restart must not hand it back to the pilot.
     dbApi.markTaskReturnNotified(taskId);
