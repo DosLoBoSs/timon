@@ -48,35 +48,42 @@ export class IntegrationStore {
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
     this.db = new Database(path);
-    chmodSync(path, 0o600);
-    this.db.pragma('busy_timeout = 5000');
-    this.db.pragma('journal_mode = WAL');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS connections (
-        id TEXT PRIMARY KEY, plugin_id TEXT NOT NULL, owner_user_id TEXT NOT NULL,
-        enabled INTEGER NOT NULL, definition TEXT NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS connection_owners ON connections(plugin_id, owner_user_id);
-      CREATE TABLE IF NOT EXISTS receipts (
-        id TEXT PRIMARY KEY, connection_id TEXT NOT NULL REFERENCES connections(id),
-        external_id TEXT NOT NULL, connection TEXT NOT NULL, message TEXT NOT NULL,
-        stage TEXT NOT NULL DEFAULT 'inbox', mission_id TEXT, reply_text TEXT,
-        checkpoint TEXT NOT NULL DEFAULT 'null', attempts INTEGER NOT NULL DEFAULT 0,
-        next_at INTEGER NOT NULL DEFAULT 0, lease TEXT, lease_until INTEGER NOT NULL DEFAULT 0,
-        created_at INTEGER NOT NULL, failed_at INTEGER NOT NULL DEFAULT 0, last_error TEXT,
-        UNIQUE(connection_id, external_id)
-      );
-      CREATE INDEX IF NOT EXISTS receipt_due ON receipts(stage,next_at,lease_until);
-      CREATE INDEX IF NOT EXISTS receipt_rate ON receipts(connection_id,created_at);
-    `);
-    const columns = (this.db.pragma('table_info(receipts)') as { name: string }[]).map((column) => column.name);
-    if (!columns.includes('failed_at')) this.db.exec('ALTER TABLE receipts ADD COLUMN failed_at INTEGER NOT NULL DEFAULT 0');
-    if (!columns.includes('last_error')) this.db.exec('ALTER TABLE receipts ADD COLUMN last_error TEXT');
-    this.db.exec(`
-      CREATE INDEX IF NOT EXISTS receipt_failed ON receipts(connection_id,failed_at) WHERE failed_at>0;
-      CREATE INDEX IF NOT EXISTS receipt_open ON receipts(connection_id,created_at) WHERE stage!='delivered';
-    `);
-    this.db.pragma('foreign_keys = ON');
+    // A file that is not a database fails on the first pragma, after the open: close it,
+    // or the handle outlives the error and Windows refuses to rename or delete the file.
+    try {
+      chmodSync(path, 0o600);
+      this.db.pragma('busy_timeout = 5000');
+      this.db.pragma('journal_mode = WAL');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS connections (
+          id TEXT PRIMARY KEY, plugin_id TEXT NOT NULL, owner_user_id TEXT NOT NULL,
+          enabled INTEGER NOT NULL, definition TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS connection_owners ON connections(plugin_id, owner_user_id);
+        CREATE TABLE IF NOT EXISTS receipts (
+          id TEXT PRIMARY KEY, connection_id TEXT NOT NULL REFERENCES connections(id),
+          external_id TEXT NOT NULL, connection TEXT NOT NULL, message TEXT NOT NULL,
+          stage TEXT NOT NULL DEFAULT 'inbox', mission_id TEXT, reply_text TEXT,
+          checkpoint TEXT NOT NULL DEFAULT 'null', attempts INTEGER NOT NULL DEFAULT 0,
+          next_at INTEGER NOT NULL DEFAULT 0, lease TEXT, lease_until INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL, failed_at INTEGER NOT NULL DEFAULT 0, last_error TEXT,
+          UNIQUE(connection_id, external_id)
+        );
+        CREATE INDEX IF NOT EXISTS receipt_due ON receipts(stage,next_at,lease_until);
+        CREATE INDEX IF NOT EXISTS receipt_rate ON receipts(connection_id,created_at);
+      `);
+      const columns = (this.db.pragma('table_info(receipts)') as { name: string }[]).map((column) => column.name);
+      if (!columns.includes('failed_at')) this.db.exec('ALTER TABLE receipts ADD COLUMN failed_at INTEGER NOT NULL DEFAULT 0');
+      if (!columns.includes('last_error')) this.db.exec('ALTER TABLE receipts ADD COLUMN last_error TEXT');
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS receipt_failed ON receipts(connection_id,failed_at) WHERE failed_at>0;
+        CREATE INDEX IF NOT EXISTS receipt_open ON receipts(connection_id,created_at) WHERE stage!='delivered';
+      `);
+      this.db.pragma('foreign_keys = ON');
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
   }
 
   getConnection(id: string): PluginMessagingConnection | undefined {
