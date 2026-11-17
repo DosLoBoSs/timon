@@ -8,7 +8,6 @@
     },
     "pendingCount": "{count, plural, other {# 个待处理请求}}",
     "elapsed": "已用时：{duration}",
-    "today": "今天",
     "newConversationEmpty": "新对话。输入消息即可开始。",
     "missionEmpty": "此任务会话中还没有消息，开始与 {agent} 对话吧。",
     "patternInPath": "{pattern}，在 {path} 中",
