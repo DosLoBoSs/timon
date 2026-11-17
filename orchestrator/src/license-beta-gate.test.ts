@@ -253,7 +253,7 @@ test('the data export answers on a locked build, without anything to write but i
     for (const out of ['license.state.json', 'timon.db', 'timon-export-x.tar.gz']) {
       const refused = await call('POST', '/api/admin/export', 'session', { out });
       assert.equal(refused.status, 400, out);
-      assert.deepEqual(refused.body, { error: 'out_not_allowed' });
+      assert.deepEqual(refused.body, { error: 'out_not_allowed', code: 'export_out_not_allowed' });
     }
     assert.deepEqual(archives(), []);
     const { status, body } = await call('POST', '/api/admin/export', 'session', {});

@@ -87,7 +87,7 @@ function refuseStaleLayout(res: Response, owner: string, scope: string, expected
   // read the machine template and writes its own row first is not stale.
   const updatedAt = dbApi.uiLayoutGet(owner, scope)?.updated_at ?? null;
   if (updatedAt === expected) return false;
-  res.status(409).json({ error: 'conflict', scope, updatedAt });
+  res.status(409).json({ ...apiError('layout_conflict', 'conflict'), scope, updatedAt });
   return true;
 }
 
@@ -118,7 +118,7 @@ export function registerRoutes(app: Router): void {
     const owner = isPersonAuth(req.auth) ? req.auth.user?.id : null;
     if (!owner) { res.status(401).json({ error: 'unauthorized' }); return; }
     try { res.json(saveBackgroundImage(owner, req.body ?? {})); }
-    catch (err) { res.status(400).json({ error: (err as Error).message }); }
+    catch (err) { res.status(400).json(apiError('background_image_invalid', (err as Error).message, { detail: (err as Error).message })); }
   });
   app.get('/api/appearance/background-image/:file', (req, res) => {
     const owner = isPersonAuth(req.auth) ? req.auth.user?.id : null;
@@ -135,7 +135,7 @@ export function registerRoutes(app: Router): void {
     const owner = isPersonAuth(req.auth) ? req.auth.user?.id : null;
     if (!owner) { res.status(401).json({ error: 'unauthorized' }); return; }
     try { deleteBackgroundImage(owner, req.params.file); res.json({ ok: true }); }
-    catch { res.status(400).json({ error: 'invalid file' }); }
+    catch { res.status(400).json(apiError('invalid_file', 'invalid file')); }
   });
   app.get('/api/settings', (req, res) => {
     if (rejectIfDenied(req, res, 'page:/settings')) return;
@@ -165,7 +165,7 @@ export function registerRoutes(app: Router): void {
   app.post('/api/settings/resource-memory-preset', (req, res) => {
     if (!requireAuth(req, res) || rejectIfDenied(req, res, 'settings:write')) return;
     const parsed = memoryPresetSchema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: 'ramGb must be 8, 16, 32 or 64' }); return; }
+    if (!parsed.success) { res.status(400).json(apiError('memory_preset_invalid', 'ramGb must be 8, 16, 32 or 64')); return; }
     db.transaction(() => {
       for (const [key, value] of Object.entries(memoryPresetSettings(parsed.data.ramGb))) {
         setSetting(key, String(value));
@@ -179,7 +179,7 @@ export function registerRoutes(app: Router): void {
     const raw = req.body?.value;
     const value = raw === null || raw === undefined ? null : String(raw);
     const out = setSetting(req.params.key, value);
-    if (!out.ok) { res.status(400).json({ error: out.error }); return; }
+    if (!out.ok) { res.status(400).json(apiError('setting_invalid', out.error, { detail: out.error })); return; }
     res.json({ ok: true, setting: resolve(req.params.key) });
   });
 
@@ -196,14 +196,14 @@ export function registerRoutes(app: Router): void {
     // or `timon.db` and have the tarball overwrite it, so a locked build only
     // writes the default archive name.
     if (isBetaBuild() && licenseState().status !== 'valid' && body.out !== undefined) {
-      res.status(400).json({ error: 'out_not_allowed' });
+      res.status(400).json(apiError('export_out_not_allowed', 'out_not_allowed'));
       return;
     }
     const out = typeof body.out === 'string' && body.out.trim()
       ? resolvePath(TIMON_HOME, body.out.trim())
       : join(TIMON_HOME, `timon-export-${new Date().toISOString().slice(0, 10)}.tar.gz`);
     if (!out.startsWith(resolvePath(TIMON_HOME) + sep)) {
-      res.status(400).json({ error: 'out must be a path under TIMON_HOME' });
+      res.status(400).json(apiError('export_out_outside_home', 'out must be a path under TIMON_HOME'));
       return;
     }
     try {
@@ -215,7 +215,7 @@ export function registerRoutes(app: Router): void {
       });
       res.json({ ok: true, ...result });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      res.status(500).json(apiError('export_failed', (e as Error).message, { detail: (e as Error).message }));
     }
   });
 
@@ -230,7 +230,7 @@ export function registerRoutes(app: Router): void {
     try {
       res.json(systemInfo());
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      res.status(500).json(apiError('system_info_failed', (e as Error).message, { detail: (e as Error).message }));
     }
   });
 
@@ -245,13 +245,13 @@ export function registerRoutes(app: Router): void {
     if (!requireSuperadmin(req, res)) return;
     const query = diagnosticQuery.safeParse(req.query);
     if (!query.success) {
-      res.status(400).json({ error: 'invalid app version' });
+      res.status(400).json(apiError('app_version_invalid', 'invalid app version'));
       return;
     }
     try {
       res.json(await daemonDiagnosticReport(query.data.app ?? null));
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      res.status(500).json(apiError('diagnostic_failed', (e as Error).message, { detail: (e as Error).message }));
     }
   });
 
@@ -272,17 +272,17 @@ export function registerRoutes(app: Router): void {
     // and agents: it raises an administrator prompt, and the CLI already has
     // `timon service install`.
     if (!isPersonAuth(auth)) {
-      res.status(403).json({ error: 'This operation requires a signed-in user.' });
+      res.status(403).json(apiError('person_required', 'This operation requires a signed-in user.'));
       return;
     }
     try {
       const { service } = systemInfo();
       if (service.action === null) {
-        res.status(409).json({ error: 'nothing_to_do', command: null });
+        res.status(409).json({ ...apiError('service_nothing_to_do', 'nothing_to_do'), command: null });
         return;
       }
       if (!service.actionHere) {
-        res.status(409).json({ error: 'run_from_terminal', command: service.command });
+        res.status(409).json({ ...apiError('service_run_from_terminal', 'run_from_terminal'), command: service.command });
         return;
       }
       const answer = await runOnboardingAction({ action: 'install-service' });
@@ -290,7 +290,7 @@ export function registerRoutes(app: Router): void {
       const status = await runOnboardingAction({ action: 'service-status' });
       res.json({ ...answer, installed: status.installed === true, running: status.ok });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      res.status(500).json(apiError('service_action_failed', (e as Error).message, { detail: (e as Error).message }));
     }
   });
 
@@ -304,25 +304,25 @@ export function registerRoutes(app: Router): void {
     const auth = requireSuperadmin(req, res);
     if (!auth) return;
     if (!isPersonAuth(auth)) {
-      res.status(403).json({ error: 'This operation requires a signed-in user.' });
+      res.status(403).json(apiError('person_required', 'This operation requires a signed-in user.'));
       return;
     }
     const body = sessionModeSchema.safeParse(req.body);
     if (!body.success) {
-      res.status(400).json({ error: 'mode must be "session" or "always"' });
+      res.status(400).json(apiError('session_mode_invalid', 'mode must be "session" or "always"'));
       return;
     }
     try {
       const { service, daemon } = systemInfo();
       if (!service.sessionModeSupported) {
-        res.status(409).json({ error: 'not_supported', command: null });
+        res.status(409).json({ ...apiError('session_mode_unsupported', 'not_supported'), command: null });
         return;
       }
       const answer = await changeServiceSessionMode(body.data.mode, daemon.mode === 'service');
       const status = await runOnboardingAction({ action: 'service-status' });
       res.status(answer.ok ? 200 : 500).json({ ...answer, offSession: status.offSession ?? null, sessionMode: status.sessionMode ?? null });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      res.status(500).json(apiError('service_action_failed', (e as Error).message, { detail: (e as Error).message }));
     }
   });
 
@@ -338,7 +338,7 @@ export function registerRoutes(app: Router): void {
     // which ones a plugin happens to have opened.
     if (req.query.prefix !== undefined) {
       const prefix = layoutPrefix(req.query.prefix);
-      if (prefix === null) { res.status(400).json({ error: 'invalid prefix' }); return; }
+      if (prefix === null) { res.status(400).json(apiError('invalid_scope', 'invalid prefix')); return; }
       const layouts = dbApi.uiLayoutList(layoutOwner(req), prefix).map((row) => ({
         scope: row.scope, layout: JSON.parse(row.value), updatedAt: row.updated_at,
       }));
@@ -358,14 +358,14 @@ export function registerRoutes(app: Router): void {
     if (scope === null) { res.status(400).json(apiError('invalid_scope', 'invalid scope')); return; }
     const layout = req.body?.layout;
     if (layout === undefined || layout === null) {
-      res.status(400).json({ error: 'layout is required' });
+      res.status(400).json(apiError('layout_required', 'layout is required'));
       return;
     }
     const expected = layoutExpected(req.query.expected);
-    if (!expected.ok) { res.status(400).json({ error: 'invalid expected' }); return; }
+    if (!expected.ok) { res.status(400).json(apiError('layout_version_invalid', 'invalid expected')); return; }
     const value = JSON.stringify(layout);
     if (Buffer.byteLength(value) > LAYOUT_MAX_BYTES) {
-      res.status(400).json({ error: `layout exceeds ${LAYOUT_MAX_BYTES} bytes` });
+      res.status(400).json(apiError('layout_too_large', `layout exceeds ${LAYOUT_MAX_BYTES} bytes`, { max: LAYOUT_MAX_BYTES }));
       return;
     }
     // Check and write in the same synchronous turn: no other request can
@@ -384,7 +384,7 @@ export function registerRoutes(app: Router): void {
     const scope = layoutScope(req.query.scope);
     if (scope === null) { res.status(400).json(apiError('invalid_scope', 'invalid scope')); return; }
     const expected = layoutExpected(req.query.expected);
-    if (!expected.ok) { res.status(400).json({ error: 'invalid expected' }); return; }
+    if (!expected.ok) { res.status(400).json(apiError('layout_version_invalid', 'invalid expected')); return; }
     const owner = layoutOwner(req);
     if (refuseStaleLayout(res, owner, scope, expected.value)) return;
     dbApi.uiLayoutDelete(owner, scope);
