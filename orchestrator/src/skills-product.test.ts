@@ -72,7 +72,10 @@ test('the closing protocol is there: done with a comment, block, verdict, full s
   assert.match(worktree, /verdict: pass/);
   assert.match(worktree, /verdict: changes_requested/);
   assert.match(worktree, /Do not create the review task/);
-  assert.match(worktree, /merge --ff-only/);
+  // The base moves by reference: a fast-forward run in the main repository
+  // moves whatever HEAD stands on, the user's own when it is detached.
+  assert.match(worktree, /push \. <your-branch>:<base>/);
+  assert.doesNotMatch(worktree, /git -C <main-repository> merge --ff-only/);
   assert.doesNotMatch(worktree, /git checkout <base>/, 'a merger never checks out in the shared repository');
 });
 

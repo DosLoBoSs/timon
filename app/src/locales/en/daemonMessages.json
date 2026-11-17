@@ -14,6 +14,10 @@
     "merge_held_no_verdict": "Merge held: review {reviewId} is DONE but its done_comment carries NO usable verdict (expected a first line `verdict: pass` or `verdict: changes_requested`). Without an explicit verdict there is no merge. Have the review closed again with a verdict, or unblock it by hand after reading the diff.",
     "repair_wait_stalled": "Review {reviewId} of code {codeId} requested changes, waiting for the repair iteration — no iteration has appeared in {waited} min (limit {limit} min). The verification loop did not create one (iteration cap reached, chain root gone, or a lost event). Create the repair iteration by hand, or re-run the review, then unblock this task.",
     "git_missing_for_task": "git not found on this host: code, review and merge tasks of a git project need git. Install git, then restart Timon.",
+    "integration_branch_unset": "Integration mode \"{mode}\" needs an integration branch and the remote ref to cut it from (base \"{branch}\", remote ref \"{baseRef}\"). The task was not started: set both on the task, then retry it.",
+    "integration_branch_unavailable": "Integration branch {branch} is unavailable: {detail}. The task was not started, and the branch is never cut from the local base instead of {baseRef}. Fix the remote or the branch name, then retry the task.",
+    "task_base_missing": "Base {base} does not exist in the repository. The task was not started: a {type} task never runs without its base. Create the branch or change the task's base, then retry it.",
+    "task_worktree_unavailable": "No worktree for this {type} task ({cause}). It was not started: in the agent's own folder it would write to the checkout every agent shares. Fix the cause, then retry the task.",
     "review_verdict_unusable": {
       "title": "Review with no usable verdict: {title}",
       "body": "Review {taskId} closed without a parsable JSON verdict, so the code→review→merge chain cannot continue.\n\nThe reviewer wrote: {excerpt, select, none {(empty)} other {{excerpt}}}\n\nRe-trigger the review or decide manually (merge / new code iteration)."

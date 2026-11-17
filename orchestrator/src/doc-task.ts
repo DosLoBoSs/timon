@@ -182,6 +182,8 @@ export async function maybeCreateDocTask(task: TaskRow): Promise<void> {
     extraSkills: ['timon-task'],
     project: task.project,
     baseBranch: task.base_branch,
+    integrationMode: task.integration_mode ?? null,
+    baseRef: task.base_ref ?? null,
     // The doc belongs to the same work as the task it documents: without this
     // attachment, it escapes the series' fallback plan and its return
     // has no pilot to come back to.

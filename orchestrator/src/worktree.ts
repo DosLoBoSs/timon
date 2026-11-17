@@ -154,8 +154,8 @@ export async function currentBranch(cwd: string): Promise<string | null> {
   }
 }
 
-/** Does the branch exist in this repo? */
-async function branchExists(cwd: string, branch: string): Promise<boolean> {
+/** Does the ref (a branch, or any revision) resolve in this repo? */
+export async function branchExists(cwd: string, branch: string): Promise<boolean> {
   try {
     await exec('git', ['-C', cwd, 'rev-parse', '--verify', branch], { timeout: 5000 });
     return true;
