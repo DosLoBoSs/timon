@@ -208,7 +208,7 @@ export function WidgetZone({
     if (cadres.some((c) => !c)) return null;
     const hauteurs = depart ?? cadres.map((c) => c!.getBoundingClientRect().height);
     if (delta === 0 && depart === null && !persist) return hauteurs;
-    const minimums = partages.map((members) => Math.max(...members.map((m) => widget(m.id)?.hauteurMin ?? 0)) + (members.length > 1 ? 46 : 0));
+    const minimums = partages.map((members) => Math.max(...members.map((m) => widget(m.id)?.minHeight ?? 0)) + (members.length > 1 ? 46 : 0));
     const suivantes = deplacerBord(hauteurs, minimums, index, delta, !libre);
     const parts = partsDepuisHauteurs(suivantes);
     onShares(partages.map((members, i) => ({ id: tete(members).id, percent: parts[i]! })), persist);
@@ -260,7 +260,7 @@ export function WidgetZone({
               {!mobile && rang >= 0 && rang < partages.length - 1 && (
                 <BordHauteur
                   index={rang}
-                  label={t('widgets.resizeEdge', { above: widget(tete(members).id)?.titre ?? '', below: widget(tete(partages[rang + 1]!).id)?.titre ?? '' })}
+                  label={t('widgets.resizeEdge', { above: widget(tete(members).id)?.title ?? '', below: widget(tete(partages[rang + 1]!).id)?.title ?? '' })}
                   deplacer={deplacer}
                 />
               )}

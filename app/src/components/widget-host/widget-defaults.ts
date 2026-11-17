@@ -1,6 +1,6 @@
 import { MAIN_AGENT_WIDGET_ID } from '@/lib/main-agent-card';
 import { ADD_WIDGET_IDS } from './add-widget';
-import { fusionnerLayout, placementHerite, type ContraintesWidget, type WidgetLayout } from './widget-layout';
+import { fusionnerLayout, placementHerite, type WidgetConstraints, type WidgetLayout } from './widget-layout';
 
 /**
  * What a view looks like before anyone has touched it.
@@ -61,7 +61,7 @@ const STARTERS: Record<string, Record<string, Starter>> = {
 export function workspaceWidgets(
   raw: unknown,
   known: boolean,
-  constraints: readonly ContraintesWidget[],
+  constraints: readonly WidgetConstraints[],
   view: string,
   chatZonesMounted = false,
 ): WidgetLayout[] {
@@ -111,7 +111,7 @@ function reseedFromChat(item: unknown, chatStarters: Record<string, Starter>): u
  */
 export function mergeWorkspaceWidgets(
   raw: unknown,
-  constraints: readonly ContraintesWidget[],
+  constraints: readonly WidgetConstraints[],
   view: string,
   chatZonesMounted = false,
 ): WidgetLayout[] {
@@ -127,7 +127,7 @@ export function mergeWorkspaceWidgets(
     if (inherited) return inherited;
     const initial = (!existing ? starters[widget.id] : undefined) ?? chatStarters[widget.id];
     if (!initial) return constraint?.placedByDefault ? widget : { ...widget, removed: true };
-    return { ...widget, ...initial, hauteur: Math.max(initial.hauteur, constraints.find(c => c.id === widget.id)?.hauteurMin ?? 0) };
+    return { ...widget, ...initial, hauteur: Math.max(initial.hauteur, constraints.find(c => c.id === widget.id)?.minHeight ?? 0) };
   });
   return fusionnerLayout(existing ? [...(raw as unknown[]), ...additions] : additions, constraints);
 }

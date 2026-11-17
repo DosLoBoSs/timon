@@ -7,7 +7,7 @@
  * has to say which of the two (see `widget-dnd.ts`).
  *
  * This exception belongs to the cockpit, not to the model: it is injected into
- * `catalogueWidgets`, as `estAffichable` is into `widgetsAdmisParConfig`.
+ * `buildWidgetCatalog`, as `estAffichable` is into `widgetsAdmisParConfig`.
  */
 import type { ZoneId } from '@/components/widget-host/widget-layout';
 

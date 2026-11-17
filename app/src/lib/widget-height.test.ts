@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   deplacerWidget, dockWidget, fusionnerLayout, orphelins, selectWidgetTab,
-  setWidgetHeightMode, type ContraintesWidget,
+  setWidgetHeightMode, type WidgetConstraints,
 } from '../components/widget-host/widget-layout';
-import { catalogueWidgets } from '../components/widget-host/widget-catalog';
+import { buildWidgetCatalog } from '../components/widget-host/widget-catalog';
 
-const constraints: ContraintesWidget[] = [
-  { id: 'chat', railDefaut: 'centre', rangDefaut: 0, hauteurDefaut: 520, hauteurMin: 280, heightMode: 'fill' },
-  { id: 'clock', railDefaut: 'left', rangDefaut: 0, hauteurDefaut: 140, hauteurMin: 110 },
-  { id: 'tasks', railDefaut: 'right', rangDefaut: 0, hauteurDefaut: 400, hauteurMin: 180 },
+const constraints: WidgetConstraints[] = [
+  { id: 'chat', defaultZone: 'centre', defaultRank: 0, defaultHeight: 520, minHeight: 280, heightMode: 'fill' },
+  { id: 'clock', defaultZone: 'left', defaultRank: 0, defaultHeight: 140, minHeight: 110 },
+  { id: 'tasks', defaultZone: 'right', defaultRank: 0, defaultHeight: 400, minHeight: 180 },
 ];
 const base = () => fusionnerLayout(null, constraints);
 
@@ -55,7 +55,7 @@ test('temporarily missing plugins retain sizing and malformed values are ignored
 });
 
 test('third-party widget sizing preferences reach the placement defaults', () => {
-  const catalogue = catalogueWidgets([], [{
+  const catalogue = buildWidgetCatalog([], [{
     registrationId: 'test:1', pluginId: 'test', slot: 'cockpit.widget',
     options: { heightMode: 'fill', height: 500, minHeight: 200 },
   }]);

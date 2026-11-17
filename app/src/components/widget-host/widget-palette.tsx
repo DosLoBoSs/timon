@@ -11,7 +11,7 @@ import { Picto } from '@/components/picto';
 import { HUD_SURFACE } from '@/components/cockpit/hud-surface';
 import { t } from '@/lib/i18n';
 import { useWidgetHost } from './widget-host';
-import { origineWidget, pageDuWidget, PAGES_WIDGET, type PageWidget } from './widget-catalog';
+import { widgetOrigin, widgetPage, WIDGET_PAGES, type WidgetPage } from './widget-catalog';
 import type { WidgetLayout } from './widget-layout';
 
 /**
@@ -35,7 +35,7 @@ type Position = { x: number; y: number };
 export function WidgetPalette() {
   const { palette, paletteOpen, setPaletteOpen, dragging, widget: catalogue } = useWidgetHost();
   const [recherche, setRecherche] = useState('');
-  const [page, setPage] = useState<PageWidget | 'all'>('all');
+  const [page, setPage] = useState<WidgetPage | 'all'>('all');
   const [position, setPosition] = useState<Position | null>(null);
   const panneau = useRef<HTMLDivElement>(null);
   const champ = useRef<HTMLInputElement>(null);
@@ -60,7 +60,7 @@ export function WidgetPalette() {
   // unfiltered list what `PaletteItem` already declines to render.
   // The search reads what the card shows: its name and its sentence.
   const pagesPresentes = useMemo(
-    () => PAGES_WIDGET.filter((p) => palette.some((entree) => { const w = !isAddWidgetPlaceholder(entree.id) && catalogue(entree.id); return w && pageDuWidget(w) === p; })),
+    () => WIDGET_PAGES.filter((p) => palette.some((entree) => { const w = !isAddWidgetPlaceholder(entree.id) && catalogue(entree.id); return w && widgetPage(w) === p; })),
     [palette, catalogue],
   );
   // A tab whose widgets have all been placed disappears: fall back to All.
@@ -70,9 +70,9 @@ export function WidgetPalette() {
     return palette.filter((entree) => {
       if (isAddWidgetPlaceholder(entree.id)) return false;
       const widget = catalogue(entree.id);
-      if (pageActive !== 'all' && (!widget || pageDuWidget(widget) !== pageActive)) return false;
+      if (pageActive !== 'all' && (!widget || widgetPage(widget) !== pageActive)) return false;
       if (!aiguille) return true;
-      return `${widget?.titreCatalogue ?? widget?.titre ?? ''} ${widget?.description ?? ''}`.toLowerCase().includes(aiguille);
+      return `${widget?.catalogTitle ?? widget?.title ?? ''} ${widget?.description ?? ''}`.toLowerCase().includes(aiguille);
     });
   }, [palette, recherche, pageActive, catalogue]);
 
@@ -196,11 +196,11 @@ export function WidgetPalette() {
 /** The place a widget's thumbnail will take. Until widgets ship one, a sketch
  *  of the form it takes: a line of icons for a widget with a flat form, a card
  *  with a header and rows otherwise. */
-function ApercuSchematique({ bar, icone }: { bar: boolean; icone?: string }) {
-  if (icone) {
+function ApercuSchematique({ bar, icon }: { bar: boolean; icon?: string }) {
+  if (icon) {
     return (
       <div aria-hidden className="flex h-20 w-full items-center justify-center rounded-md bg-muted/60">
-        <Picto icon={icone} className="size-8 text-foreground/70" />
+        <Picto icon={icon} className="size-8 text-foreground/70" />
       </div>
     );
   }
@@ -240,15 +240,15 @@ function PaletteItem({ entree }: { entree: WidgetLayout }) {
   // does not tell them apart: the surface of origin does. It is read from the
   // declared slot, never from the mounted zones: an entry is in the palette
   // precisely because its zone is not mounted.
-  const origine = origineWidget(widget);
-  const surface = origine.cleSurface ? t(origine.cleSurface) : origine.surface;
+  const origine = widgetOrigin(widget);
+  const surface = origine.surfaceKey ? t(origine.surfaceKey) : origine.surface;
   const contexte = origine.plugin
     ? t('widgets.palette.origin', { surface, plugin: origine.plugin })
     : surface;
   // The subtitle is only read by the eye: the assistive labels carry the same
   // disambiguation, otherwise the palette announces "Add Missions" three times,
   // and only one of those three acts.
-  const designation = `${widget.titreCatalogue ?? widget.titre} (${contexte})`;
+  const designation = `${widget.catalogTitle ?? widget.title} (${contexte})`;
 
   return (
     // A card laid on a card goes one step up the surface scale (--surface-2 on
@@ -268,9 +268,9 @@ function PaletteItem({ entree }: { entree: WidgetLayout }) {
         {...attributes}
         {...listeners}
       >
-        <ApercuSchematique bar={widget.bar === true} icone={widget.icone} />
+        <ApercuSchematique bar={widget.bar === true} icon={widget.icon} />
         <span className="flex w-full min-w-0 flex-col px-1">
-          <span className="truncate font-medium text-foreground">{widget.titreCatalogue ?? widget.titre}</span>
+          <span className="truncate font-medium text-foreground">{widget.catalogTitle ?? widget.title}</span>
           {widget.description && <span className="line-clamp-3 text-[10.5px] leading-snug text-muted-foreground">{widget.description}</span>}
           <span className="truncate text-[9.5px] leading-tight text-muted-foreground/60">{contexte}</span>
         </span>

@@ -63,8 +63,8 @@ export function LayoutProposalCard({
   const kind = PROPOSAL_KINDS[shown.kind];
   const workspace = useWorkspaceLayout();
   const owner = ownerOverride ?? workspace.owner;
-  const catalogue = useWidgetCatalog();
-  const titleOf = useCallback((id: string) => catalogue.parId.get(id)?.titre ?? id, [catalogue]);
+  const catalog = useWidgetCatalog();
+  const titleOf = useCallback((id: string) => catalog.byId.get(id)?.title ?? id, [catalog]);
 
   const reload = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -98,7 +98,7 @@ export function LayoutProposalCard({
     if (busy || !pending || (decision === 'applied' && (!kind || !owner))) return;
     setBusy(true);
     try {
-      const context = { owner, constraints: catalogue.entrees, titleOf };
+      const context = { owner, constraints: catalog.entries, titleOf };
       const reason = decision === 'applied' && kind?.check ? await kind.check(shown.payload, context) : null;
       if (reason) { toast.error(t('layoutProposal.cannotApply', { reason })); return; }
       const releases = decision === 'applied' && kind?.prepare ? await kind.prepare(shown.payload, context) : undefined;
@@ -111,7 +111,7 @@ export function LayoutProposalCard({
     } finally {
       setBusy(false);
     }
-  }, [busy, pending, kind, settled, shown, owner, catalogue, titleOf]);
+  }, [busy, pending, kind, settled, shown, owner, catalog, titleOf]);
 
   // "Follow and let it guide me": the tour is started by THIS click, in this session,
   // for the mission whose card it is — never by the agent. The toast is the visible

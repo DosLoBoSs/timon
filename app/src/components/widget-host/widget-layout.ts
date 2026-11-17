@@ -57,13 +57,13 @@ export type WidgetLayout = {
 };
 
 /** A widget's constraints, extracted from the registry to keep this module pure. */
-export type ContraintesWidget = {
+export type WidgetConstraints = {
   id: string;
-  hauteurDefaut: number;
-  hauteurMin: number;
+  defaultHeight: number;
+  minHeight: number;
   heightMode?: WidgetHeightMode;
-  railDefaut: ZoneId;
-  rangDefaut: number;
+  defaultZone: ZoneId;
+  defaultRank: number;
   /** See `WidgetOptions.placedByDefault`. */
   placedByDefault?: boolean;
   /** Placement ids this widget used to be stored under (`WidgetOptions.formerKeys`). */
@@ -187,7 +187,7 @@ function nouveauGroupe(layout: WidgetLayout[], targetId: string): string {
  */
 export function fusionnerLayout(
   brut: unknown,
-  contraintes: readonly ContraintesWidget[],
+  contraintes: readonly WidgetConstraints[],
 ): WidgetLayout[] {
   const parId = new Map(contraintes.map((c) => [c.id, c]));
   const vus = new Set<string>();
@@ -201,7 +201,7 @@ export function fusionnerLayout(
       if (!c) continue; // widget gone from the registry → ignored
       if (vus.has(e.id)) continue; // doublon de storage corrompu
       vus.add(e.id);
-      depuisStorage.push({ ...e, ...(c.heightMode && !e.heightMode ? { heightMode: c.heightMode } : {}), hauteur: Math.max(c.hauteurMin, e.hauteur) });
+      depuisStorage.push({ ...e, ...(c.heightMode && !e.heightMode ? { heightMode: c.heightMode } : {}), hauteur: Math.max(c.minHeight, e.hauteur) });
     }
   }
 
@@ -209,9 +209,9 @@ export function fusionnerLayout(
     .filter((c) => !vus.has(c.id))
     .map<WidgetLayout>((c) => ({
       id: c.id,
-      rail: c.railDefaut,
-      rang: c.rangDefaut,
-      hauteur: c.hauteurDefaut,
+      rail: c.defaultZone,
+      rang: c.defaultRank,
+      hauteur: c.defaultHeight,
       ...(c.heightMode ? { heightMode: c.heightMode } : {}),
     }));
 
@@ -248,7 +248,7 @@ export function fusionnerLayout(
  */
 export function orphelins(
   brut: unknown,
-  contraintes: readonly ContraintesWidget[],
+  contraintes: readonly WidgetConstraints[],
 ): WidgetLayout[] {
   if (!Array.isArray(brut)) return [];
   const connus = new Set(contraintes.map((c) => c.id));
@@ -450,12 +450,12 @@ export function redimensionner(
   layout: WidgetLayout[],
   id: string,
   hauteur: number,
-  hauteurMin: number,
+  minHeight: number,
 ): WidgetLayout[] {
   const source = layout.find((w) => w.id === id);
   return layout.map((w) =>
     w.id === id || (source?.group && w.group === source.group && w.rail === source.rail)
-      ? { ...w, hauteur: Math.max(hauteurMin, Math.round(hauteur)) } : w,
+      ? { ...w, hauteur: Math.max(minHeight, Math.round(hauteur)) } : w,
   );
 }
 

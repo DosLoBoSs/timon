@@ -56,7 +56,7 @@ import {
   DEFAULT_WIDGET_SLOTS,
   type WidgetZoneDef,
 } from './widget-dnd';
-import { useWidgetCatalog, type EntreeAffichable } from './use-widget-catalog';
+import { useWidgetCatalog, type RenderableEntry } from './use-widget-catalog';
 import { usePublishWidgetSnapshot } from './use-widget-snapshot';
 
 // Fetched when the palette first opens (docs/BUNDLE-SIZE.md).
@@ -126,8 +126,8 @@ type WidgetHostValue = {
   accepts: (zone: WidgetZoneDef) => boolean;
   /** Widgets taken out of the interface, i.e. the inventory to drag back from. */
   palette: WidgetLayout[];
-  /** Catalogue entry behind a placement: its title, its constraints, its body. */
-  widget: (id: string) => EntreeAffichable | undefined;
+  /** Catalog entry behind a placement: its title, its constraints, its body. */
+  widget: (id: string) => RenderableEntry | undefined;
   /** Takes a widget out of the interface. */
   onRemove: (id: string) => void;
   onReplace: (id: string, replacement: string) => void;
@@ -229,10 +229,10 @@ function ApercuVivant({ apercu, id }: { apercu: Apercu; id: string }) {
   return <div ref={ref} aria-hidden className={cn(APERCU_CLASSES, 'bg-background')} style={apercuStyle(apercu)}>
     {vide ? (
       <div className="flex h-full flex-col gap-2 p-3">
-        <span className="text-xs font-semibold text-foreground">{entree.titreCatalogue ?? entree.titre}</span>
+        <span className="text-xs font-semibold text-foreground">{entree.catalogTitle ?? entree.title}</span>
         {[0, 1, 2, 3].map((n) => <span key={n} className="h-2 rounded-full bg-muted-foreground/15" style={{ width: `${90 - n * 12}%` }} />)}
       </div>
-    ) : entree.rendu({ editing: false, poignee: null, className: 'h-full', orientation: 'vertical', compact: false })}
+    ) : entree.render({ editing: false, poignee: null, className: 'h-full', orientation: 'vertical', compact: false })}
   </div>;
 }
 
@@ -251,12 +251,12 @@ function apercuDepuisFenetre(e: DragStartEvent, hauteur: number): Apercu {
 }
 
 export function WidgetHost({ children }: { children: React.ReactNode }) {
-  const catalogue = useWidgetCatalog();
+  const catalog = useWidgetCatalog();
 
-  // The STORED value, never merged: the catalogue is live (a plugin registers
-  // after the page loads), and checking it against the catalogue of the moment
+  // The STORED value, never merged: the catalog is live (a plugin registers
+  // after the page loads), and checking it against the catalog of the moment
   // would drop the placements of plugins not there yet. The merge happens at
-  // render, with the current catalogue.
+  // render, with the current catalog.
   //
   // First render on what the scope has already answered: the server seed, a
   // value already read in this document, or nothing. Until it has answered
@@ -280,26 +280,26 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   const [inscrites, setInscrites] = useState<ReadonlyArray<{ jeton: number; zone: WidgetZoneDef }>>([]);
   const prochainJeton = useRef(0);
   const zones = useMemo<readonly WidgetZoneDef[]>(() => {
-    const parId = new Map<ZoneId, WidgetZoneDef>();
+    const byId = new Map<ZoneId, WidgetZoneDef>();
     for (const { zone } of inscrites) {
-      const deja = parId.get(zone.id);
+      const deja = byId.get(zone.id);
       // The zone on screen wins over its hidden declaration.
-      if (!deja || (deja.hidden && !zone.hidden)) parId.set(zone.id, zone);
+      if (!deja || (deja.hidden && !zone.hidden)) byId.set(zone.id, zone);
     }
-    return [...parId.values()];
+    return [...byId.values()];
   }, [inscrites]);
 
   // A chat open on a view that is not `/chat` starts from `/chat`'s places (Q14).
   const chatZonesMounted = useMemo(() => zones.some((z) => isChatZone(z.id)), [zones]);
   const layout = useMemo(
-    () => workspaceWidgets(stocke, known, catalogue.entrees, workspace.view, chatZonesMounted),
-    [stocke, known, catalogue, workspace.view, chatZonesMounted],
+    () => workspaceWidgets(stocke, known, catalog.entries, workspace.view, chatZonesMounted),
+    [stocke, known, catalog, workspace.view, chatZonesMounted],
   );
 
   /**
    * The only write path of the placement. `op` receives the merged layout,
    * never the raw stored value, which still holds the entries of a plugin
-   * missing from the catalogue. These orphans are put back at the end of what
+   * missing from the catalog. These orphans are put back at the end of what
    * is written: losing them would erase for good the place of a plugin still
    * loading, or of a plugin just turned off.
    */
@@ -307,38 +307,38 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
     (op: (l: WidgetLayout[]) => WidgetLayout[], ecrire: boolean) => {
       updateLayout((brut: unknown) => {
         const suivant = [
-          ...op(mergeWorkspaceWidgets(brut, catalogue.entrees, workspace.view, chatZonesMounted)),
-          ...orphelins(brut, catalogue.entrees),
+          ...op(mergeWorkspaceWidgets(brut, catalog.entries, workspace.view, chatZonesMounted)),
+          ...orphelins(brut, catalog.entries),
         ];
         return suivant;
       }, ecrire);
     },
-    [catalogue, updateLayout, workspace.view, chatZonesMounted],
+    [catalog, updateLayout, workspace.view, chatZonesMounted],
   );
 
   /** Slots a widget declares, i.e. where admission will let it land. */
   const declaredSlotsOf = useCallback(
     (widgetId: string): readonly string[] =>
-      catalogue.parId.get(widgetId)?.slots ?? DEFAULT_WIDGET_SLOTS,
-    [catalogue],
+      catalog.byId.get(widgetId)?.slots ?? DEFAULT_WIDGET_SLOTS,
+    [catalog],
   );
 
   /** Admission of one widget into one zone: its slots, and its flat form. */
   const admissible = useCallback(
     (widgetId: string, zone: WidgetZoneDef): boolean =>
-      zoneAcceptsWidget(declaredSlotsOf(widgetId), zone, catalogue.parId.get(widgetId)?.bar === true),
-    [declaredSlotsOf, catalogue],
+      zoneAcceptsWidget(declaredSlotsOf(widgetId), zone, catalog.byId.get(widgetId)?.bar === true),
+    [declaredSlotsOf, catalog],
   );
 
   const titreDe = useCallback(
     (widgetId: string | null): string =>
-      (widgetId && catalogue.parId.get(widgetId)?.titre) || '',
-    [catalogue],
+      (widgetId && catalog.byId.get(widgetId)?.title) || '',
+    [catalog],
   );
 
   const widget = useCallback(
-    (id: string) => catalogue.parId.get(id),
-    [catalogue],
+    (id: string) => catalog.byId.get(id),
+    [catalog],
   );
 
   const registerZone = useCallback((zone: WidgetZoneDef) => {
@@ -376,7 +376,7 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
     [zones],
   );
   usePublishWidgetSnapshot({
-    owner: workspace.owner, entries: catalogue.entrees, visible: affichable, view: workspace.view, zones: zonesPubliees,
+    owner: workspace.owner, entries: catalog.entries, visible: affichable, view: workspace.view, zones: zonesPubliees,
   });
 
   const widgetsOf = useCallback(
@@ -401,16 +401,16 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   stockeRef.current = stocke;
   const onRemove = useCallback(
     (id: string) => {
-      const avant = mergeWorkspaceWidgets(stockeRef.current, catalogue.entrees, workspace.view, chatZonesMounted);
+      const avant = mergeWorkspaceWidgets(stockeRef.current, catalog.entries, workspace.view, chatZonesMounted);
       muter((l) => retirerWidget(l, id), true);
-      toast(t('widgets.removed', { title: catalogue.parId.get(id)?.titre ?? id }), {
+      toast(t('widgets.removed', { title: catalog.byId.get(id)?.title ?? id }), {
         action: {
           label: t('widgets.undo'),
           onClick: () => { if (!retiresRef.current.has(id)) return; muter((l) => remettreWidget(l, avant, id), true); },
         },
       });
     },
-    [muter, catalogue, workspace.view, chatZonesMounted],
+    [muter, catalog, workspace.view, chatZonesMounted],
   );
   const onReplace = useCallback(
     (id: string, replacement: string) => muter((l) => remplacerWidget(l, id, replacement), true),
@@ -442,14 +442,14 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   const restoreTargetOf = useCallback(
     (id: string): ZoneId | null => {
       const admises = zones.filter((z) => admissible(id, z));
-      const prefere = catalogue.parId.get(id)?.railDefaut;
+      const prefere = catalog.byId.get(id)?.defaultZone;
       // A click putting the card into a hidden tab would make it vanish
       // before the eyes of whoever just asked for it.
       return (admises.find((z) => z.id === prefere && !z.hidden)
         ?? admises.find((z) => !z.hidden)
         ?? admises[0])?.id ?? null;
     },
-    [zones, admissible, catalogue],
+    [zones, admissible, catalog],
   );
 
   // The pointer-free path: put the widget back in a zone that is REALLY
@@ -476,8 +476,8 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
     if (!ready) return;
     setEnCours(widgetIdOfDrag(String(e.active.id)));
     const id = widgetIdOfDrag(String(e.active.id));
-    setApercu(captureApercu(String(e.active.id), e) ?? apercuDepuisFenetre(e, catalogue.parId.get(id)?.hauteurDefaut ?? 260));
-  }, [ready, catalogue]);
+    setApercu(captureApercu(String(e.active.id), e) ?? apercuDepuisFenetre(e, catalog.byId.get(id)?.defaultHeight ?? 260));
+  }, [ready, catalog]);
 
   useEffect(() => { setPaletteOpen(false); }, [workspace.owner]);
 
@@ -522,12 +522,12 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
       if (docking && target) {
         const grouped = dockWidget(l, id, target.id);
         const group = grouped.find((w) => w.id === id)?.group;
-        const minimum = Math.max(...grouped.filter((w) => w.group === group && w.rail === zone).map((w) => catalogue.parId.get(w.id)?.hauteurMin ?? 0)) + 36;
+        const minimum = Math.max(...grouped.filter((w) => w.group === group && w.rail === zone).map((w) => catalog.byId.get(w.id)?.minHeight ?? 0)) + 36;
         return redimensionner(grouped, id, Math.max(target.hauteur, minimum), minimum);
       }
       return deplacerWidget(l, id, zone, target?.id ?? null);
     }, true);
-  }, [muter, admis, enCours, catalogue]);
+  }, [muter, admis, enCours, catalog]);
 
   const onShares = useCallback((shares: ReadonlyArray<{ id: string; percent: number }>, persist: boolean) =>
     muter((l) => repartirHauteurs(l, shares), persist), [muter]);

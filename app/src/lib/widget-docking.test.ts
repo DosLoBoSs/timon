@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   coteInsertion, deplacerOnglet, deplacerWidget, dockWidget, fusionnerLayout, placerEnFinDePile, remettreWidget, retirerWidget, remplacerWidget, selectWidgetTab,
-  widgetStacks, widgetsDuRail, type ContraintesWidget, type WidgetLayout,
+  widgetStacks, widgetsDuRail, type WidgetConstraints, type WidgetLayout,
 } from '../components/widget-host/widget-layout';
 
-const constraints: ContraintesWidget[] = ['a', 'b', 'c', 'd', 'e'].map((id, rangDefaut) => ({
-  id, railDefaut: 'left', rangDefaut, hauteurDefaut: 200, hauteurMin: 100,
+const constraints: WidgetConstraints[] = ['a', 'b', 'c', 'd', 'e'].map((id, defaultRank) => ({
+  id, defaultZone: 'left', defaultRank, defaultHeight: 200, minHeight: 100,
 }));
 const base = () => fusionnerLayout(null, constraints);
 const stacks = (layout: WidgetLayout[], zone = 'left') =>

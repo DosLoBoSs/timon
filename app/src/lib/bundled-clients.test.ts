@@ -6,7 +6,7 @@ import { UI_LAYOUT_CHILD_SLOTS } from './plugin-host/ui-layout';
 import { registerProductLayout } from './plugin-host/slot-root';
 import { mountBundledClients } from '@/plugins-client/mount';
 import { UI_LAYOUT_MODULE } from '@/plugins-client/ui-layout';
-import { catalogueWidgets, type EntreeSlotWidget } from '../components/widget-host/widget-catalog';
+import { buildWidgetCatalog, type WidgetSlotEntry } from '../components/widget-host/widget-catalog';
 import { fusionnerLayout, orphelins, widgetsDuRail, type WidgetLayout } from '../components/widget-host/widget-layout';
 import { defaultZoneForSlot } from '../components/cockpit/cockpit-zones';
 import { mergeWorkspaceWidgets } from '../components/widget-host/widget-defaults';
@@ -114,14 +114,14 @@ test('a third-party nav entry lands after every product entry', () => {
 
 /** Le catalogue de l'hôte, calculé sur les inscriptions réellement montées. */
 function catalogueDesTuiles() {
-  const entrees: EntreeSlotWidget[] = slotEntries('cockpit.widget').map((e) => ({
+  const entrees: WidgetSlotEntry[] = slotEntries('cockpit.widget').map((e) => ({
     registrationId: e.id,
     pluginId: e.pluginId,
     key: e.key,
     slot: 'cockpit.widget',
     options: e.widget,
   }));
-  return catalogueWidgets([], entrees, defaultZoneForSlot);
+  return buildWidgetCatalog([], entrees, defaultZoneForSlot);
 }
 
 test('the cockpit cards keep their placement id, title, rail and heights', () => {
@@ -131,7 +131,7 @@ test('the cockpit cards keep their placement id, title, rail and heights', () =>
   mountLayout();
   mountBundledClients(null);
   assert.deepEqual(
-    catalogueDesTuiles().map((e) => [e.id, e.titre, e.railDefaut, e.hauteurDefaut, e.hauteurMin]),
+    catalogueDesTuiles().map((e) => [e.id, e.title, e.defaultZone, e.defaultHeight, e.minHeight]),
     [
       ['plugin:@timon/ui-layout:clock', 'Clock', 'gauche', 140, 110],
       // « Your widget here », placed by the fresh-install arrangements only.
@@ -587,7 +587,7 @@ test('the seeded card opens in the cockpit centre, and removing it takes the car
   const inscrite = slotEntries('cockpit.widget').find((e) => e.key === graine.id);
   assert.equal(inscrite?.widget?.zone, 'centre');
   const placee = catalogueDesTuiles().find((e) => e.id === `plugin:@timon/agent-chat:${graine.id}`);
-  assert.equal(placee?.railDefaut, 'centre');
+  assert.equal(placee?.defaultZone, 'centre');
   await supprimerInstance(graine.id);
   assert.equal(slotEntries('cockpit.widget').some((e) => e.key === graine.id), false);
 });

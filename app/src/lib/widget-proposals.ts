@@ -21,10 +21,10 @@ import {
   retirerWidget,
   verserZone,
   widgetsDuRail,
-  type ContraintesWidget,
+  type WidgetConstraints,
   type WidgetLayout,
 } from '@/components/widget-host/widget-layout';
-import type { EntreeCatalogue } from '@/components/widget-host/widget-catalog';
+import type { CatalogEntry } from '@/components/widget-host/widget-catalog';
 import { lireColonnes, type ChatColumns } from '@/components/chat/chat-columns';
 
 /** The chat's two columns (`COLONNES` in `chat-rails.tsx`). */
@@ -125,7 +125,7 @@ export function applyWidgetsProposal(input: {
   proposal: WidgetsProposal;
   widgetsRaw: unknown;
   columnsRaw: unknown;
-  constraints: readonly ContraintesWidget[];
+  constraints: readonly WidgetConstraints[];
   /** Suffix of the n-th new tab: `Date.now().toString(36)` + n, never reused. */
   suffix: (n: number) => string;
 }): AppliedWidgets {
@@ -220,7 +220,7 @@ const clip = (s: string, max: number) => s.replace(/[\u0000-\u001f\u007f-\u009f\
  * at every load and could never be proposed.
  */
 export function buildWidgetSnapshot(input: {
-  entries: readonly EntreeCatalogue[];
+  entries: readonly CatalogEntry[];
   visible: (id: string) => boolean;
   view: string | null;
   zones: readonly SnapshotZone[];
@@ -249,12 +249,12 @@ export function buildWidgetSnapshot(input: {
   return {
     catalog: entries.map((e) => ({
       id: e.id.slice(0, 200),
-      title: clip(e.titre, 120),
+      title: clip(e.title, 120),
       ...(e.pluginId ? { pluginId: e.pluginId } : {}),
       slots: e.slots.slice(0, 8).map((s) => s.slice(0, 96)),
       ...(e.bar ? { bar: true } : {}),
       ...(e.description ? { description: clip(e.description, 300) } : {}),
-      ...(e.placedByDefault && zoneId.test(e.railDefaut) ? { placedByDefault: true as const, zone: e.railDefaut } : {}),
+      ...(e.placedByDefault && zoneId.test(e.defaultZone) ? { placedByDefault: true as const, zone: e.defaultZone } : {}),
     })),
     defaults,
     ...(view ? { view } : {}),

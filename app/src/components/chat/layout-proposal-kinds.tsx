@@ -23,7 +23,7 @@ import {
   parseWidgetsProposal,
   type WidgetsProposal,
 } from '@/lib/widget-proposals';
-import type { ContraintesWidget } from '@/components/widget-host/widget-layout';
+import type { WidgetConstraints } from '@/components/widget-host/widget-layout';
 import { ISLANDS_PROPOSAL_KIND, proposalScopes } from '@/lib/island-proposals';
 import { navigateHref, NAVIGATE_PROPOSAL_KIND, parseNavigateProposal } from '@/lib/navigate-proposals';
 import { applyIslands, checkIslands, IslandsClosingsElsewhere, IslandsPreview, prepareIslands } from './island-proposal-kind';
@@ -33,7 +33,7 @@ import { ISLAND_ARRANGEMENT_PROPOSAL_KIND, ISLAND_ARRANGEMENT_PROPOSAL_RENDERER 
 /** What applying needs from the page: whose rows, and what this browser can place. */
 export type ApplyContext = {
   owner: string | null;
-  constraints: readonly ContraintesWidget[];
+  constraints: readonly WidgetConstraints[];
   /** Title of a widget id, for the messages; the id itself when unknown. */
   titleOf: (id: string) => string;
   /** Pushes an address of the app (the card has the router). */

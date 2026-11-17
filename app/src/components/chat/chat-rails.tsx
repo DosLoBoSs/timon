@@ -27,7 +27,7 @@ import { useAfterConversation } from '@/lib/load-priority';
 import { useWidgetHost } from '@/components/widget-host/widget-host';
 import { declareSlot, register, slotKind, type WidgetOptions } from '@/lib/plugin-host/slots';
 import { zoneDropId } from '@/components/widget-host/widget-dnd';
-import { idPlacementPlugin } from '@/components/widget-host/widget-catalog';
+import { pluginPlacementId } from '@/components/widget-host/widget-catalog';
 import {
   ajouterOnglet,
   ajouterSeconde,
@@ -336,8 +336,8 @@ function carte(cle: string, options: WidgetOptions = {}): WidgetOptions {
 }
 
 /**
- * Visual order, not writing order: `rangDefaut` follows the order of this
- * array (see `catalogueWidgets`), so a card added here lands where the block
+ * Visual order, not writing order: `defaultRank` follows the order of this
+ * array (see `buildWidgetCatalog`), so a card added here lands where the block
  * it replaces stood in the mission sheet.
  */
 const INSCRIPTIONS: Inscription[] = [
@@ -454,7 +454,7 @@ export function inscriptionsVisibles(caps: Capabilities | null): Inscription[] {
 }
 
 /** The missions card's placement id: the narrow chat checks it is in a column. */
-export const MISSIONS_WIDGET_ID = idPlacementPlugin('@timon/missions', 'Missions');
+export const MISSIONS_WIDGET_ID = pluginPlacementId('@timon/missions', 'Missions');
 
 /** Exported for its test: the narrow chat's way back obeys the same grant as the card. */
 export function chatMissionsAllowed(caps: Capabilities | null): boolean {
@@ -1244,7 +1244,7 @@ export function ChatWidgetRail({
               nom={noms?.[z]}
               actif={z === affiche}
               fine={fines}
-              titres={widgetsOf(z).map((w) => widget(w.id)?.titre ?? w.id)}
+              titres={widgetsOf(z).map((w) => widget(w.id)?.title ?? w.id)}
               onSelect={() => onSelectTab?.(z)}
               onMenu={ouvrirSur(z)}
             />

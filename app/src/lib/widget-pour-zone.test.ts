@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   dockWidget, fusionnerLayout, retirerWidget, setWidgetHeightMode, verserZone,
-  widgetStacks, widgetsDuRail, type ContraintesWidget, type WidgetLayout,
+  widgetStacks, widgetsDuRail, type WidgetConstraints, type WidgetLayout,
 } from '../components/widget-host/widget-layout';
 
 // Closing a chat column tab pours its cards into the first tab: stacks and
 // height shares the user composed there must survive the trip.
 
-const constraints: ContraintesWidget[] = ['a', 'b', 'c', 'd', 'e'].map((id, rangDefaut) => ({
-  id, railDefaut: 'col', rangDefaut, hauteurDefaut: 200, hauteurMin: 100,
+const constraints: WidgetConstraints[] = ['a', 'b', 'c', 'd', 'e'].map((id, defaultRank) => ({
+  id, defaultZone: 'col', defaultRank, defaultHeight: 200, minHeight: 100,
 }));
 const entry = (layout: WidgetLayout[], id: string) => layout.find((w) => w.id === id)!;
 const ids = (layout: WidgetLayout[], zone: string) =>

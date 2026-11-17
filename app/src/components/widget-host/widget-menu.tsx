@@ -45,7 +45,7 @@ export function WidgetMenuContent({ entree, grouped, bare, onClose }: { entree: 
       {ownStyle && <Dropdown.Item onSelect={() => host.onStyle(entree.id, { borderless: undefined, transparent: undefined })} className={ITEM}><span className="w-3" />{t('widgets.followSiteStyle')}</Dropdown.Item>}
       {grouped && <Dropdown.Item onSelect={() => host.onDetach(entree.id)} className={ITEM}><Ungroup className="size-3" />{t('widgets.detach')}</Dropdown.Item>}
     </>}
-    <Dropdown.Item onSelect={() => host.onRemove(entree.id)} aria-label={t('widgets.remove', { title: widget?.titre ?? '' })}
+    <Dropdown.Item onSelect={() => host.onRemove(entree.id)} aria-label={t('widgets.remove', { title: widget?.title ?? '' })}
       className={cn(ITEM, 'text-destructive focus:bg-destructive/10 focus:text-destructive', !bare && 'mt-2')}>
       <Trash2 className="size-3.5" />{t('widgets.delete')}
     </Dropdown.Item>
@@ -55,7 +55,7 @@ export function WidgetMenuContent({ entree, grouped, bare, onClose }: { entree: 
 /** The gear: the widget's settings, at the right of its header or tab strip. */
 export function WidgetGear({ entree, grouped, bare }: { entree: WidgetLayout; grouped: boolean; bare: boolean }) {
   const host = useWidgetHost();
-  const title = host.widget(entree.id)?.titre ?? '';
+  const title = host.widget(entree.id)?.title ?? '';
   return <Dropdown.Root>
     <Dropdown.Trigger asChild><button type="button" aria-label={t('widgets.settingsFor', { title })} title={t('widgets.settings')} className={CONTROL}><Settings className="size-3.5" /></button></Dropdown.Trigger>
     <WidgetMenuContent entree={entree} grouped={grouped} bare={bare} />

@@ -22,18 +22,18 @@ import {
   widgetsDisponibles,
   orphelins,
   placementHerite,
-  type ContraintesWidget,
+  type WidgetConstraints,
   type ZoneId,
   type WidgetLayout,
 } from '../components/widget-host/widget-layout';
 import {
-  catalogueWidgets,
-  idCourant,
-  origineWidget,
-  HAUTEUR_DEFAUT_PLUGIN,
-  HAUTEUR_MIN_PLUGIN,
-  type EntreeCatalogue,
-  type EntreeSlotWidget,
+  buildWidgetCatalog,
+  currentWidgetId,
+  widgetOrigin,
+  PLUGIN_DEFAULT_HEIGHT,
+  PLUGIN_MIN_HEIGHT,
+  type CatalogEntry,
+  type WidgetSlotEntry,
 } from '../components/widget-host/widget-catalog';
 import { defaultZoneForSlot } from '../components/cockpit/cockpit-zones';
 import { loadLayout, saveLayout } from './ui-layout-store';
@@ -41,11 +41,11 @@ import { isZoneVisible, type Capabilities } from './capabilities';
 
 const ZONES: readonly ZoneId[] = ['gauche', 'droite'];
 
-const CONTRAINTES: ContraintesWidget[] = [
-  { id: 'a', hauteurDefaut: 200, hauteurMin: 100, railDefaut: 'gauche', rangDefaut: 0 },
-  { id: 'b', hauteurDefaut: 200, hauteurMin: 100, railDefaut: 'gauche', rangDefaut: 1 },
-  { id: 'c', hauteurDefaut: 200, hauteurMin: 100, railDefaut: 'gauche', rangDefaut: 2 },
-  { id: 'd', hauteurDefaut: 200, hauteurMin: 100, railDefaut: 'droite', rangDefaut: 0 },
+const CONTRAINTES: WidgetConstraints[] = [
+  { id: 'a', defaultHeight: 200, minHeight: 100, defaultZone: 'gauche', defaultRank: 0 },
+  { id: 'b', defaultHeight: 200, minHeight: 100, defaultZone: 'gauche', defaultRank: 1 },
+  { id: 'c', defaultHeight: 200, minHeight: 100, defaultZone: 'gauche', defaultRank: 2 },
+  { id: 'd', defaultHeight: 200, minHeight: 100, defaultZone: 'droite', defaultRank: 0 },
 ];
 
 function base(): WidgetLayout[] {
@@ -358,9 +358,9 @@ function affichables(layout: WidgetLayout[], c: Capabilities | null): WidgetLayo
 // `dreams` est porté par le module `dreams` (`ZONE_MODULE`), `vault-graph` par
 // `vault` : deux widgets réels, pour exercer la vraie table et non des ids
 // inventés qui n'y figurent pas.
-const CONTRAINTES_REELLES: ContraintesWidget[] = [
-  { id: 'dreams', hauteurDefaut: 220, hauteurMin: 120, railDefaut: 'gauche', rangDefaut: 0 },
-  { id: 'vault-graph', hauteurDefaut: 300, hauteurMin: 140, railDefaut: 'gauche', rangDefaut: 1 },
+const CONTRAINTES_REELLES: WidgetConstraints[] = [
+  { id: 'dreams', defaultHeight: 220, minHeight: 120, defaultZone: 'gauche', defaultRank: 0 },
+  { id: 'vault-graph', defaultHeight: 300, minHeight: 140, defaultZone: 'gauche', defaultRank: 1 },
 ];
 
 test('a widget masked by ui.hidden shows up neither in its zone nor in the palette', () => {
@@ -395,9 +395,9 @@ test('capabilities not loaded yet: everything shows, palette included', () => {
 
 // ── Catalogue : natifs + entrées de slot, une seule source de placement ─────
 
-const NATIFS: EntreeCatalogue[] = CONTRAINTES.map((c) => ({
+const NATIFS: CatalogEntry[] = CONTRAINTES.map((c) => ({
   ...c,
-  titre: c.id.toUpperCase(),
+  title: c.id.toUpperCase(),
   slots: DEFAULT_WIDGET_SLOTS,
   registrationId: null,
 }));
@@ -407,74 +407,74 @@ function inscription(
   slot = 'cockpit.widget',
   key?: string,
   n = 1,
-): EntreeSlotWidget {
+): WidgetSlotEntry {
   return { registrationId: `${pluginId}:${n}`, pluginId, key, slot };
 }
 
 test('a slot entry becomes a catalogue entry, placed after the native ones', () => {
-  const catalogue = catalogueWidgets(NATIFS, [inscription('example-widget')], defaultZoneForSlot);
+  const catalogue = buildWidgetCatalog(NATIFS, [inscription('example-widget')], defaultZoneForSlot);
   const ajoute = catalogue.at(-1);
 
   assert.equal(catalogue.length, NATIFS.length + 1);
   assert.deepEqual(ajoute, {
     id: 'plugin:example-widget',
-    titre: 'example-widget',
+    title: 'example-widget',
     pluginId: 'example-widget',
     slots: ['cockpit.widget'],
     registrationId: 'example-widget:1',
-    hauteurDefaut: HAUTEUR_DEFAUT_PLUGIN,
-    hauteurMin: HAUTEUR_MIN_PLUGIN,
+    defaultHeight: PLUGIN_DEFAULT_HEIGHT,
+    minHeight: PLUGIN_MIN_HEIGHT,
     // Les deux rails du cockpit partagent un slot : c'est la seule zone dont le
     // nom ne se déduit pas du slot.
-    railDefaut: 'gauche',
-    rangDefaut: NATIFS.length,
+    defaultZone: 'gauche',
+    defaultRank: NATIFS.length,
   });
 });
 
 test('the palette can tell two homonymous widgets apart by their surface', () => {
   // Les deux « Missions » du produit : même titre, même plugin, deux surfaces.
-  const [cockpit, chat] = catalogueWidgets([], [
+  const [cockpit, chat] = buildWidgetCatalog([], [
     { ...inscription('@timon/missions', 'cockpit.widget', 'recent'), options: { title: 'Missions' } },
     { ...inscription('@timon/missions', 'chat.left.widget', 'Missions', 2), options: { title: 'Missions' } },
   ], defaultZoneForSlot);
 
   assert.ok(cockpit && chat);
-  assert.equal(cockpit.titre, chat.titre);
-  assert.deepEqual(origineWidget(cockpit), {
-    cleSurface: 'widgets.surface.cockpit',
+  assert.equal(cockpit.title, chat.title);
+  assert.deepEqual(widgetOrigin(cockpit), {
+    surfaceKey: 'widgets.surface.cockpit',
     surface: 'cockpit.widget',
     plugin: 'missions',
   });
-  assert.deepEqual(origineWidget(chat), {
-    cleSurface: 'widgets.surface.chatLeft',
+  assert.deepEqual(widgetOrigin(chat), {
+    surfaceKey: 'widgets.surface.chatLeft',
     surface: 'chat.left.widget',
     plugin: 'missions',
   });
 });
 
 test('an unknown slot shows itself, a native widget shows no plugin', () => {
-  const [tiers] = catalogueWidgets([], [inscription('acme', 'acme.board.widget')]);
+  const [tiers] = buildWidgetCatalog([], [inscription('acme', 'acme.board.widget')]);
   assert.ok(tiers);
-  assert.deepEqual(origineWidget(tiers), {
-    cleSurface: null,
+  assert.deepEqual(widgetOrigin(tiers), {
+    surfaceKey: null,
     surface: 'acme.board.widget',
     plugin: 'acme',
   });
-  assert.equal(origineWidget(NATIFS[0]!).plugin, null);
+  assert.equal(widgetOrigin(NATIFS[0]!).plugin, null);
 });
 
 test('a widget slot other than the cockpit names its own zone', () => {
-  const [entree] = catalogueWidgets([], [inscription('p', 'sidebar.right.widget')], defaultZoneForSlot);
-  assert.equal(entree?.railDefaut, 'sidebar.right.widget');
+  const [entree] = buildWidgetCatalog([], [inscription('p', 'sidebar.right.widget')], defaultZoneForSlot);
+  assert.equal(entree?.defaultZone, 'sidebar.right.widget');
 });
 
 test('the placement id is stable across reloads, and a key separates two widgets', () => {
-  const premier = catalogueWidgets([], [inscription('acme', 'cockpit.widget', undefined, 1)]);
+  const premier = buildWidgetCatalog([], [inscription('acme', 'cockpit.widget', undefined, 1)]);
   // Même plugin, autre session : le compteur d'inscription a changé, pas l'id.
-  const second = catalogueWidgets([], [inscription('acme', 'cockpit.widget', undefined, 7)]);
+  const second = buildWidgetCatalog([], [inscription('acme', 'cockpit.widget', undefined, 7)]);
   assert.equal(premier[0]?.id, second[0]?.id);
 
-  const deux = catalogueWidgets([], [
+  const deux = buildWidgetCatalog([], [
     inscription('acme', 'cockpit.widget', 'gauche'),
     inscription('acme', 'cockpit.widget', 'droite', 2),
   ]);
@@ -482,7 +482,7 @@ test('the placement id is stable across reloads, and a key separates two widgets
 });
 
 test('two keyless registrations of one plugin: the second falls back on its registration id', () => {
-  const deux = catalogueWidgets([], [
+  const deux = buildWidgetCatalog([], [
     inscription('acme', 'cockpit.widget', undefined, 1),
     inscription('acme', 'cockpit.widget', undefined, 2),
   ]);
@@ -490,7 +490,7 @@ test('two keyless registrations of one plugin: the second falls back on its regi
 });
 
 test('a plugin widget is admitted into every widget zone, and refused elsewhere', () => {
-  const [entree] = catalogueWidgets([], [inscription('acme', 'cockpit.widget')]);
+  const [entree] = buildWidgetCatalog([], [inscription('acme', 'cockpit.widget')]);
   assert.ok(entree);
   assert.equal(zoneAcceptsWidget(entree.slots, SIDEBAR), true);
   assert.equal(zoneAcceptsWidget(entree.slots, COCKPIT_GAUCHE), true);
@@ -501,19 +501,19 @@ test('a registration declares its title, its heights and its first zone', () => 
   // Sans ces quatre champs, toute carte de plugin s'appelle du nom de son
   // plugin, fait 260 px et se pose dans le rail gauche : les tuiles du produit
   // ne pourraient pas devenir des plugins sans y perdre leur mise en page.
-  const [entree] = catalogueWidgets([], [{
+  const [entree] = buildWidgetCatalog([], [{
     ...inscription('vault', 'cockpit.widget', 'vault-graph'),
     options: { title: 'Vault', zone: 'droite', height: 420, minHeight: 200 },
   }], defaultZoneForSlot);
 
-  assert.equal(entree?.titre, 'Vault');
-  assert.equal(entree?.railDefaut, 'droite');
-  assert.equal(entree?.hauteurDefaut, 420);
-  assert.equal(entree?.hauteurMin, 200);
+  assert.equal(entree?.title, 'Vault');
+  assert.equal(entree?.defaultZone, 'droite');
+  assert.equal(entree?.defaultHeight, 420);
+  assert.equal(entree?.minHeight, 200);
 });
 
 test('a plugin widget places, moves and is taken out like a native one', () => {
-  const catalogue = catalogueWidgets(NATIFS, [inscription('acme')], defaultZoneForSlot);
+  const catalogue = buildWidgetCatalog(NATIFS, [inscription('acme')], defaultZoneForSlot);
   const id = 'plugin:acme';
   const pose = fusionnerLayout(null, catalogue);
   assert.deepEqual(placement(pose), ['gauche:a', 'gauche:b', 'gauche:c', `gauche:${id}`, 'droite:d']);
@@ -536,7 +536,7 @@ test('a stored placement waits for a plugin that has not registered yet', () => 
     { id: 'a', rail: 'droite', rang: 0, hauteur: 200 },
     { id: 'plugin:acme', rail: 'droite', rang: 1, hauteur: 300 },
   ];
-  const sansPlugin = catalogueWidgets(NATIFS, [], defaultZoneForSlot);
+  const sansPlugin = buildWidgetCatalog(NATIFS, [], defaultZoneForSlot);
 
   assert.equal(fusionnerLayout(stocke, sansPlugin).some((w) => w.id === 'plugin:acme'), false);
   assert.deepEqual(orphelins(stocke, sansPlugin).map((w) => w.id), ['plugin:acme']);
@@ -548,7 +548,7 @@ test('a stored placement waits for a plugin that has not registered yet', () => 
   ];
 
   // Le plugin s'enregistre enfin : sa place et sa hauteur sont intactes.
-  const avecPlugin = catalogueWidgets(NATIFS, [inscription('acme')], defaultZoneForSlot);
+  const avecPlugin = buildWidgetCatalog(NATIFS, [inscription('acme')], defaultZoneForSlot);
   const revenu = fusionnerLayout(ecrit, avecPlugin).find((w) => w.id === 'plugin:acme');
   assert.equal(revenu?.rail, 'droite');
   assert.equal(revenu?.hauteur, 300);
@@ -556,7 +556,7 @@ test('a stored placement waits for a plugin that has not registered yet', () => 
 });
 
 test('an entry the catalogue claims is never an orphan, and a corrupt one is dropped', () => {
-  const catalogue = catalogueWidgets(NATIFS, [], defaultZoneForSlot);
+  const catalogue = buildWidgetCatalog(NATIFS, [], defaultZoneForSlot);
   const stocke = [
     { id: 'a', rail: 'gauche', rang: 0, hauteur: 200 },
     { id: 'plugin:x', rail: 'gauche', rang: 1 },
@@ -589,35 +589,35 @@ test('a horizontal zone only admits widgets that have a flat form', () => {
 });
 
 test('the catalogue carries the flat form, the default placement and the former ids', () => {
-  const [entree] = catalogueWidgets([], [{
+  const [entree] = buildWidgetCatalog([], [{
     registrationId: 'n:0', pluginId: '@timon/notifications', key: 'bell', slot: 'cockpit.widget',
     options: { zone: 'topbar.widget', bar: true, placedByDefault: true, formerKeys: ['inbox'] },
   }]);
   assert.equal(entree?.bar, true);
   assert.equal(entree?.placedByDefault, true);
   assert.deepEqual(entree?.formerIds, ['plugin:@timon/notifications:inbox']);
-  assert.equal(entree?.railDefaut, 'topbar.widget');
-  assert.equal(origineWidget(entree!).cleSurface, 'widgets.surface.topbar');
+  assert.equal(entree?.defaultZone, 'topbar.widget');
+  assert.equal(widgetOrigin(entree!).surfaceKey, 'widgets.surface.topbar');
   // `''` names the keyless registration a plugin had before giving it a key.
-  const [renamed] = catalogueWidgets([], [{
+  const [renamed] = buildWidgetCatalog([], [{
     registrationId: 'q:0', pluginId: 'quota-monitor', key: 'quota', slot: 'cockpit.widget', options: { formerKeys: [''] },
   }]);
   assert.deepEqual(renamed?.formerIds, ['plugin:quota-monitor']);
 });
 
 test('a former id leads to the widget that carries it now; a current id always wins (TODO #540)', () => {
-  const entrees = catalogueWidgets([], [
+  const entrees = buildWidgetCatalog([], [
     { registrationId: 'g:0', pluginId: '@timon/git', key: 'repository', slot: 'chat.right.widget', options: { formerIds: ['plugin:@timon/git:Git', 'plugin:@timon/kanban-code:Git'] } },
     { registrationId: 'o:0', pluginId: '@timon/other', key: 'x', slot: 'chat.right.widget', options: { formerIds: ['plugin:@timon/git:Git', 'plugin:@timon/git:repository'] } },
   ]);
-  assert.equal(idCourant(entrees, 'plugin:@timon/kanban-code:Git'), 'plugin:@timon/git:repository');
-  assert.equal(idCourant(entrees, 'plugin:@timon/git:Git'), 'plugin:@timon/git:repository', 'the first claimant keeps it');
-  assert.equal(idCourant(entrees, 'plugin:@timon/git:repository'), 'plugin:@timon/git:repository', 'a live id is never redirected');
-  assert.equal(idCourant(entrees, 'plugin:@timon/git:gone'), null);
+  assert.equal(currentWidgetId(entrees, 'plugin:@timon/kanban-code:Git'), 'plugin:@timon/git:repository');
+  assert.equal(currentWidgetId(entrees, 'plugin:@timon/git:Git'), 'plugin:@timon/git:repository', 'the first claimant keeps it');
+  assert.equal(currentWidgetId(entrees, 'plugin:@timon/git:repository'), 'plugin:@timon/git:repository', 'a live id is never redirected');
+  assert.equal(currentWidgetId(entrees, 'plugin:@timon/git:gone'), null);
 });
 
 test('a product card moved to another module keeps its place; a third party cannot claim one', () => {
-  const [moved] = catalogueWidgets([], [{
+  const [moved] = buildWidgetCatalog([], [{
     registrationId: 'g:0', pluginId: '@timon/git', key: 'Git', slot: 'chat.left.widget',
     options: { formerIds: ['plugin:@timon/kanban-code:Git'] },
   }]);
@@ -625,7 +625,7 @@ test('a product card moved to another module keeps its place; a third party cann
   const stored = [{ id: 'plugin:@timon/kanban-code:Git', rail: 'chat.right.widget', rang: 4, hauteur: 260 }];
   assert.deepEqual(placementHerite(stored, moved!.formerIds!, moved!.id), { ...stored[0], id: 'plugin:@timon/git:Git' });
 
-  const [thief] = catalogueWidgets([], [{
+  const [thief] = buildWidgetCatalog([], [{
     registrationId: 't:0', pluginId: 'acme-git', key: 'Git', slot: 'chat.left.widget',
     options: { formerIds: ['plugin:@timon/kanban-code:Git'] },
   }]);

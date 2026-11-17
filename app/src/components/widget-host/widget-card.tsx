@@ -41,7 +41,7 @@ function WidgetTab({ entry, selected, onSelect, panelId, cote }: { entry: Widget
         side the tab will fall. The side is the one `coteInsertion` will decide
         on drop; same function, so the line cannot lie. */}
     {curseur && <span aria-hidden data-cursor={curseur} className={cn('pointer-events-none absolute inset-y-0.5 z-10 w-[3px] rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.7)]', curseur === 'avant' ? '-left-[2px]' : '-right-[2px]')} />}
-    <span className="max-w-40 truncate">{host.widget(entry.id)?.titre}</span>
+    <span className="max-w-40 truncate">{host.widget(entry.id)?.title}</span>
   </button>;
 }
 
@@ -187,13 +187,13 @@ export function WidgetCard({ entree, members = [entree], part, orientation = 've
     else if (right > el.scrollLeft + el.clientWidth) el.scrollLeft = right - el.clientWidth;
   }, [entree.id, memberKey]);
   if (!widget) return null;
-  const minimum = Math.max(...members.map((member) => host.widget(member.id)?.hauteurMin ?? 0)) + (tabbed ? 46 : 0);
+  const minimum = Math.max(...members.map((member) => host.widget(member.id)?.minHeight ?? 0)) + (tabbed ? 46 : 0);
   const panelId = `panel-${entree.id}`;
   const forme = { bare, tabbed };
   const surTitre = (e: { target: EventTarget | null; clientY: number }, ongletsCompris = false) =>
     !!frame.current && e.target instanceof Element && surPoigneeTitre(frame.current, e.target, e.clientY, forme, ongletsCompris);
   // Keyboard drag goes through the grip (a real button), shown in the pill.
-  const grip = <button type="button" ref={setActivatorNodeRef} aria-label={t('cockpit.board.move', { title: widget.titre })} className={cn(CONTROL, 'cursor-grab touch-none active:cursor-grabbing')} {...attributes} {...listeners}>{bare ? <GripVertical className="size-3.5" /> : <GripHorizontal className="size-3.5" />}</button>;
+  const grip = <button type="button" ref={setActivatorNodeRef} aria-label={t('cockpit.board.move', { title: widget.title })} className={cn(CONTROL, 'cursor-grab touch-none active:cursor-grabbing')} {...attributes} {...listeners}>{bare ? <GripVertical className="size-3.5" /> : <GripHorizontal className="size-3.5" />}</button>;
   const gear = <WidgetGear entree={entree} grouped={grouped} bare={bare} />;
   // A bare form has no title bar to float a pill over: the grip leads, the
   // gear follows it, in a box as tall as the line — once hinted.
@@ -258,7 +258,7 @@ export function WidgetCard({ entree, members = [entree], part, orientation = 've
       montrerOutils ? 'opacity-100' : 'pointer-events-none opacity-0 focus-within:pointer-events-auto focus-within:opacity-100')}>{grip}{gear}</div>}
     {leadingGrip}
     <div id={panelId} role={tabbed ? 'tabpanel' : undefined} aria-labelledby={tabbed ? `tab-${entree.id}` : undefined} className={cn('widget-content flex', horizontal ? 'h-full items-center gap-0.5' : bare ? 'min-w-0 flex-col items-start' : 'min-h-0 min-w-0 flex-1 flex-col', tabbed && 'overflow-hidden', host.dragging && !bare && '[&_*]:!pointer-events-none pointer-events-none')}>
-      {widget.rendu({ editing: host.editing || pret, className: mobile || bare ? undefined : 'h-full', poignee: inline ?? undefined, onReplace: (id) => host.onReplace(entree.id, id), orientation, compact: bare })}
+      {widget.render({ editing: host.editing || pret, className: mobile || bare ? undefined : 'h-full', poignee: inline ?? undefined, onReplace: (id) => host.onReplace(entree.id, id), orientation, compact: bare })}
     </div>
     {grouped && members.filter((entry) => entry.id !== entree.id).map((entry) => (
       <div key={entry.id} id={`panel-${entry.id}`} role="tabpanel" aria-labelledby={`tab-${entry.id}`} hidden />
