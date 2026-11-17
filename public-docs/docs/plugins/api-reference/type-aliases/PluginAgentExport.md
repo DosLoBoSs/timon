@@ -45,6 +45,12 @@
 
 ***
 
+### id
+
+> **id**: `string`
+
+***
+
 ### main
 
 > **main**: `boolean`

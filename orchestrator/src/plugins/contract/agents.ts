@@ -183,6 +183,11 @@ export type PluginAgentExportRoutine = {
  * or tool permission.
  */
 export type PluginAgentExport = {
+  /**
+   * Stable id of the agent on this Timon: unchanged by a rename, never the
+   * same for two agents. The key of a re-import on the other side.
+   */
+  id: string;
   name: string;
   /** It is the main agent here (`mainAgentName()`), whatever its name. */
   main: boolean;

@@ -120,3 +120,28 @@ test('the main agent is told by mainAgentName(), whatever its name', async () =>
     await dispose();
   }
 });
+
+test('the id is stable: kept across a rename and an editor save, never taken from a request', async () => {
+  const { renameAgent, patchAgentConfig } = await import('../agent.js');
+  const { loadConfig } = await import('../agent-config.js');
+  const name = agentNamed('stable');
+  const { plugin, dispose } = await pluginWith(['agents:export'], 'export-stable');
+  try {
+    const first = (await as(reader, () => plugin.agents.export(name))).id;
+    assert.match(first, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    assert.equal((await as(reader, () => plugin.agents.export(name))).id, first, 'minted once');
+
+    // The agent editor rewrites the whole config, a PATCH merges a part: neither drops it, neither sets it.
+    upsertAgent({ name, system_prompt: 'Edited.', config: { role: 'coder', uid: '00000000-0000-4000-8000-000000000000' } });
+    patchAgentConfig(name, { model: 'sonnet', uid: '00000000-0000-4000-8000-000000000001' });
+    assert.equal(loadConfig(name).uid, first);
+
+    const renamed = `${name}-renamed`;
+    assert.equal(renameAgent(name, renamed).ok, true);
+    assert.equal((await as(reader, () => plugin.agents.export(renamed))).id, first, 'a rename keeps it');
+
+    // A new agent is never handed another agent's id, even when its config asks for one.
+    upsertAgent({ name: `${name}-twin`, system_prompt: 'Twin.', config: { role: 'coder', uid: first } });
+    assert.notEqual((await as(reader, () => plugin.agents.export(`${name}-twin`))).id, first);
+  } finally { await dispose(); }
+});

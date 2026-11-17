@@ -4917,7 +4917,7 @@ export function upsertAgent(input: {
     // them would take the delegation rights away without anyone asking.
     // The mascot look and the avatar mode are picked elsewhere too
     // (onboarding, the Avatar tab, `agent_update look`, `agent_set_look`).
-    for (const key of ['reports_to', 'team', 'orchestrator', 'orchestrates', 'directives', 'created_by', 'look', 'avatar'] as const) {
+    for (const key of ['reports_to', 'team', 'orchestrator', 'orchestrates', 'directives', 'created_by', 'uid', 'look', 'avatar'] as const) {
       if (!(key in config) && current[key] !== undefined) (config as Record<string, unknown>)[key] = current[key];
     }
   }

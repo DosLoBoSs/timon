@@ -171,6 +171,13 @@ export type AgentConfig = {
    * made, and only those, and its uninstall can name them.
    */
   created_by?: string;
+  /**
+   * Stable identity of the agent, kept across renames: the folder (and this
+   * file) moves with the name, the id does not change. Minted on first need
+   * (`ensureAgentUid`, the agent export), never taken from a request, so a
+   * copy made through the API never inherits another agent's id.
+   */
+  uid?: string;
 };
 
 /**
@@ -183,7 +190,7 @@ export type AgentConfig = {
  * Set internally by `createEphemeralAgent` (ephemeral) or by manual
  * editing of the config.json on disk (orchestrator for a custom agent).
  */
-const PROTECTED_CONFIG_KEYS = ['ephemeral', 'orchestrator', 'orchestrates', 'created_by'] as const;
+const PROTECTED_CONFIG_KEYS = ['ephemeral', 'orchestrator', 'orchestrates', 'created_by', 'uid'] as const;
 
 
 export function stripProtectedKeys(cfg: AgentConfig): AgentConfig {
