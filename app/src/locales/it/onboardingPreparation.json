@@ -1,7 +1,31 @@
 {
   "onboarding": {
     "preparation": {
-      "title": "Preparazione di Timon"
+      "title": "Preparazione di Timon",
+      "ready": "Timon è pronto",
+      "needsYou": "Timon ha bisogno di te",
+      "items": {
+        "service": "Servizio in background",
+        "servicePortable": "Modalità portatile: Timon gira finché l’app è aperta",
+        "serviceAccount": "Servizio in background, dopo il tuo account",
+        "database": "Database locale",
+        "browser": "Browser integrato",
+        "browserAbsent": "Browser integrato: non presente in questa installazione",
+        "providers": "Ricerca delle tue IA"
+      },
+      "doctorFailed": "Timon non è riuscito a leggere questa macchina. Riprova tra un attimo.",
+      "retry": "Riprova",
+      "retrying": "Nuovo tentativo…",
+      "repair": "Apri la schermata di riparazione",
+      "gate": {
+        "waitTitle": "Timon sta completando l’installazione",
+        "waitBody": "Il tuo agente gira sul servizio in background, quindi continua a lavorare quando questa finestra è chiusa. Questo passo si apre non appena il servizio risponde.",
+        "waitAccount": "Il servizio in background si avvia dopo l’accesso al tuo account.",
+        "blockedTitle": "Non è stato possibile installare il servizio in background",
+        "blockedBody": "Il tuo agente ne ha bisogno per continuare a lavorare quando questa finestra è chiusa. Risolvi il problema qui sotto, poi riprova.",
+        "configuring": "Salvataggio della tua configurazione…",
+        "configureFailed": "Non è stato possibile salvare la tua configurazione"
+      }
     }
   }
 }

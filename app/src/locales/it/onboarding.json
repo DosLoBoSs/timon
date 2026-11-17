@@ -2,39 +2,298 @@
   "onboarding": {
     "back": "Indietro",
     "continue": "Continua",
-    "language": {
-      "title": "Scegli la tua lingua"
+    "progress": "Passo {current} di {total}",
+    "scheme": {
+      "label": "Modalità chiara o scura",
+      "light": "Chiaro",
+      "dark": "Scuro"
     },
     "splash": {
       "title": "Il tuo team di IA,\na casa tua.",
       "subtitle": "Agenti che lavorano sulla tua macchina, con gli abbonamenti IA che paghi già.",
       "hint": "Psst, puoi afferrarli."
     },
+    "language": {
+      "title": "Scegli la tua lingua",
+      "previous": "Lingua precedente",
+      "next": "Lingua successiva"
+    },
+    "background": {
+      "title": "Quando esci dalla sessione, Timon deve continuare a lavorare?",
+      "subtitle": "Timon gira come servizio in background su questo computer. Scegli se si ferma con la tua sessione o se continua.",
+      "recommended": "Consigliato",
+      "session": {
+        "title": "Solo mentre sono connesso",
+        "description": "Timon si ferma quando esci dalla sessione e riparte quando rientri. Bloccare lo schermo non lo ferma.",
+        "lingerNote": "Il lingering è già attivo per il tuo account: questa scelta lo disattiva, quindi anche gli altri tuoi servizi utente si fermeranno quando esci."
+      },
+      "always": {
+        "title": "Anche quando sono disconnesso",
+        "description": "Routine, task notturni e webhook continuano a girare anche senza nessuno davanti allo schermo, finché il computer è acceso. Su un Mac ti verrà chiesta la password di amministratore."
+      },
+      "later": "Puoi cambiarlo in qualsiasi momento in {settingsPath}."
+    },
     "account": {
       "title": "Crea il tuo account locale",
       "subtitle": "Lo usi per accedere a Timon. Ne sei l’amministratore.",
+      "name": "Nome",
+      "nameHint": "Così i tuoi agenti ti chiamano per nome.",
+      "email": "Email",
+      "emailHint": "Serve per accedere. Ti inviamo un codice per confermarla.",
+      "emailPlaceholder": "tu@esempio.it",
+      "password": "Password",
+      "confirm": "Conferma la password",
+      "mismatch": "Le due password non coincidono.",
+      "tooShort": "Almeno {min} caratteri.",
+      "create": "Crea il mio account",
       "privacy": "Il tuo account e la tua password restano su questo computer. Il tuo indirizzo email e i suoi codici passano dal nostro server, che te li invia. Le statistiche d’uso anonime sono condivise per impostazione predefinita; puoi disattivarle nelle Impostazioni."
+    },
+    "legacy": {
+      "opening": "Apertura della schermata successiva…"
     },
     "llm": {
       "title": "Scegli\nil tuo LLM.",
-      "subtitle": "Timon funziona con gli abbonamenti IA che hai già. Mai una fattura a token."
+      "subtitle": "Timon funziona con gli abbonamenti IA che hai già. Mai una fattura a token.",
+      "plan": {
+        "title": "Usa il mio abbonamento IA",
+        "detailAny": "Gli strumenti IA che paghi già",
+        "hint": "Timon ha cercato gli strumenti IA già presenti su questa macchina.",
+        "ready": "Pronto con {names}.",
+        "none": "Collega almeno un’IA per continuare.",
+        "anyway": "Continua comunque"
+      },
+      "local": {
+        "title": "Usa modelli locali",
+        "detail": "Ollama, nessun abbonamento, nulla lascia la tua macchina",
+        "hint": "I tuoi agenti girano sui modelli di questo computer.",
+        "ollama": "Esegue modelli aperti (Llama, Qwen, Mistral…) in locale.",
+        "connect": "Quando Ollama è in esecuzione, aggiungilo come provider in {settingsPath}."
+      },
+      "legal": "Continuando, accetti i {terms} e prendi atto dell’{privacy}.",
+      "terms": "Termini di utilizzo",
+      "privacy": "Informativa sulla privacy"
     },
     "profile": {
       "title": "Cosa ti porta qui?",
-      "subtitle": "Timon adatta le sue impostazioni e la sua visita guidata alla tua risposta."
+      "subtitle": "Timon adatta le sue impostazioni e la sua visita guidata alla tua risposta.",
+      "developer": {
+        "title": "Scrivo codice",
+        "description": "Agenti che programmano, revisionano e fanno merge nei miei repository."
+      },
+      "automation": {
+        "title": "Automatizzo",
+        "description": "Email, calendario, monitoraggio, routine: lavoro che va avanti da solo."
+      },
+      "beginner": {
+        "title": "Sto scoprendo",
+        "description": "Voglio capire gli agenti IA, passo dopo passo."
+      },
+      "failed": "Non è stato possibile salvare la tua scelta. Riprova."
     },
     "agent": {
+      "names": "Nova, Pixel, Ziggy, Misty, Oslo, Kiwi, Lumen, Sasha, Tempo, Pico",
+      "random": "Casuale",
+      "customise": "Personalizza",
+      "nameLabel": "Il suo nome",
+      "namePlaceholder": "Dagli un nome",
+      "nameRoll": "Nome casuale",
+      "create": "Dai vita a {name}",
+      "createNoName": "Dai vita al tuo agente",
+      "creating": "{name} prende vita…",
+      "configFailed": "{name} ha un nome, ma non è stato possibile salvare le sue impostazioni. Riprova.",
+      "will": "Potrà",
+      "loading": "Caricamento del tuo profilo…",
+      "profileError": "Non è stato possibile leggere il tuo profilo, quindi ecco la vista più semplice.",
+      "retry": "Riprova",
+      "cap": {
+        "base": "Chattare con te in Timon",
+        "mail": "Leggere e smistare la tua email",
+        "agenda": "Consultare e riempire il tuo calendario",
+        "code": "Lavorare nei tuoi repository Git",
+        "watch": "Fare un monitoraggio delle notizie ogni mattina",
+        "write": "Scrivere documenti e messaggi",
+        "research": "Cercare e confrontare sul web"
+      },
+      "mission": {
+        "mail": "Email",
+        "agenda": "Calendario",
+        "code": "Codice",
+        "watch": "Monitoraggio notizie",
+        "write": "Scrittura",
+        "research": "Ricerca"
+      },
+      "views": {
+        "label": "Vista",
+        "recommended": "Consigliata per il tuo profilo",
+        "templates": "Principiante · Modelli",
+        "interview": "Automazione · Intervista",
+        "sheet": "Sviluppatore · Scheda"
+      },
       "templates": {
         "title": "Scegli il suo profilo",
-        "subtitle": "Un punto di partenza pronto all’uso. Potrai cambiare tutto in seguito."
+        "subtitle": "Un punto di partenza pronto all’uso. Potrai cambiare tutto in seguito.",
+        "none": "Ancora nessun profilo",
+        "empty": "Scegli un profilo a destra: la sua scheda compare qui.",
+        "hint": "Prima scegli un profilo.",
+        "assist": {
+          "title": "Assistente personale",
+          "description": "Email, calendario, promemoria."
+        },
+        "dev": {
+          "title": "Compagno di codice",
+          "description": "Corregge, revisiona e rilascia nei tuoi repository."
+        },
+        "watch": {
+          "title": "Esploratore",
+          "description": "Una rassegna di notizie ogni mattina."
+        },
+        "write": {
+          "title": "Scrittore",
+          "description": "Articoli, post e risposte."
+        },
+        "research": {
+          "title": "Investigatore",
+          "description": "Cerca, confronta e riassume."
+        },
+        "blank": {
+          "title": "Parti da zero",
+          "description": "Un generalista che plasmi strada facendo."
+        }
       },
       "interview": {
         "title": "Configuriamo la tua automazione",
-        "subtitle": "Cinque domande, e il tuo agente sa cosa fare, con cosa e quando."
+        "subtitle": "Cinque domande, e il tuo agente sa cosa fare, con cosa e quando.",
+        "role": "Automatizzatore",
+        "count": "{current}/{total}",
+        "edit": "Modifica",
+        "finish": "Fine",
+        "hint": "Rispondi alle domande ({current}/{total}).",
+        "q1": "Che cosa automatizzo per te?",
+        "q2": "Quali strumenti posso usare?",
+        "q3": "Quando comincio?",
+        "q4": "Prima di un’azione importante, che cosa faccio?",
+        "q5": "Dove ti avviso?",
+        "other": "Altro? Descrivilo…",
+        "toolsHint": "Quelli non ancora collegati ti verranno proposti subito dopo.",
+        "always": "sempre",
+        "dailyAt": "Ogni giorno alle",
+        "urlProvided": "URL fornito",
+        "tool": {
+          "gmail": "Gmail",
+          "gcal": "Google Calendar",
+          "gdrive": "Google Drive",
+          "slack": "Slack",
+          "notion": "Notion",
+          "telegram": "Telegram",
+          "github": "GitHub",
+          "browser": "Browser integrato",
+          "files": "File locali",
+          "webhook": "Webhook"
+        },
+        "trigger": {
+          "chat": "Quando mi parli",
+          "daily": "Ogni giorno alle {at}",
+          "mail": "A ogni nuova email",
+          "hook": "A un evento (webhook)"
+        },
+        "autonomy": {
+          "ask": {
+            "title": "Chiedimi prima",
+            "description": "Consigliato per iniziare: approvi ogni invio o modifica."
+          },
+          "report": {
+            "title": "Agisci, dimmelo dopo",
+            "description": "Per il lavoro di routine: agisce e poi ti fa sapere."
+          },
+          "silent": {
+            "title": "Agisci in silenzio",
+            "description": "Solo per routine sicure e ben collaudate."
+          }
+        },
+        "notify": {
+          "timon": "In Timon",
+          "telegram": "Telegram",
+          "email": "Via email"
+        },
+        "sum": {
+          "tools": "Strumenti",
+          "starts": "Avvio",
+          "autonomy": "Autonomia",
+          "notifies": "Avvisa"
+        }
       },
       "sheet": {
         "title": "Configura il tuo agente",
-        "subtitle": "Ogni impostazione resta modificabile nella sua scheda."
+        "subtitle": "Ogni impostazione resta modificabile nella sua scheda.",
+        "tab": {
+          "base": "Ruolo e progetto",
+          "engine": "Motore",
+          "perms": "Permessi",
+          "tools": "Strumenti"
+        },
+        "roleTitle": "Ambito di lavoro principale",
+        "roleHint": "Resta il tuo agente principale, il pilota: questo definisce solo su cosa si concentra.",
+        "role": {
+          "orchestrator": {
+            "title": "Orchestratore / pilota",
+            "description": "Suddivide il lavoro in task e delega."
+          },
+          "code": {
+            "title": "Sviluppatore",
+            "description": "Scrive e modifica il codice del tuo progetto."
+          },
+          "review": {
+            "title": "Revisore",
+            "description": "Revisiona le modifiche prima del rilascio."
+          },
+          "research": {
+            "title": "Ricercatore",
+            "description": "Esplora, legge la documentazione, confronta gli approcci."
+          },
+          "chore": {
+            "title": "Operazioni",
+            "description": "Build, deploy, manutenzione."
+          }
+        },
+        "project": "Progetto",
+        "noFolder": "Nessuna cartella scelta",
+        "choose": "Scegli…",
+        "worktree": "Un worktree git isolato per ogni task di codice",
+        "worktreeDetail": "Lavora accanto al tuo branch, mai al suo interno.",
+        "engine": "Motore",
+        "permissions": "Permessi",
+        "perm": {
+          "default": "Chiedere per ogni strumento sensibile",
+          "acceptEdits": "Accettare le modifiche ai file, chiedere per il resto",
+          "plan": "Sola lettura: pianifica, non modifica nulla",
+          "auto": "Auto: decide il classificatore di Timon, una scheda solo in caso di dubbio",
+          "bypassPermissions": "Permettere tutto, senza alcun controllo"
+        },
+        "bypassWarning": "Nessuna scheda di approvazione: può fare qualsiasi cosa su questa macchina.",
+        "skills": "Skill",
+        "noSkills": "Ancora nessuna skill installata.",
+        "mcp": "Server MCP",
+        "noMcp": "Ancora nessun server MCP dichiarato.",
+        "rules": "Istruzioni",
+        "rulesPlaceholder": "Es. rispondi in italiano, non fare mai push senza chiedere.",
+        "sum": {
+          "project": "Progetto",
+          "toChoose": "da scegliere",
+          "permissions": "Permessi",
+          "skills": "Skill",
+          "mcp": "MCP"
+        }
+      },
+      "style": {
+        "title": "L’aspetto di {name}",
+        "skull": "Cranio",
+        "fur": "Pelliccia",
+        "eyes": "Occhi",
+        "accessory": "Accessorio",
+        "try": "Prova uno stato",
+        "random": "Sorprendimi",
+        "done": "Fatto",
+        "close": "Chiudi"
       }
     },
     "signin": {
@@ -43,12 +302,11 @@
     },
     "mascot": {
       "title": "Ecco la mascotte di {name}",
-      "subtitle": "Novità di questa versione: ogni agente ha una mascotte che mostra cosa sta facendo — pensa, lavora, ti aspetta. Vesti {name} come preferisci."
-    },
-    "scheme": {
-      "label": "Modalità chiara o scura",
-      "light": "Chiaro",
-      "dark": "Scuro"
+      "subtitle": "Novità di questa versione: ogni agente ha una mascotte che mostra cosa sta facendo — pensa, lavora, ti aspetta. Vesti {name} come preferisci.",
+      "keep": "Tieni questo aspetto",
+      "skip": "Non ora",
+      "later": "Puoi cambiarlo in qualsiasi momento nella scheda Avatar dell’agente.",
+      "failed": "Non è stato possibile salvare l’aspetto. Riprova oppure scegli «Non ora»."
     },
     "discover": {
       "label": "Scopri Timon",
@@ -103,6 +361,39 @@
         "workflows": "Workflow",
         "plugins": "Plugin"
       }
+    },
+    "usage": {
+      "title": "Per chi usi Timon?",
+      "optional": "Facoltativo",
+      "solo": {
+        "title": "Per me",
+        "description": "I miei progetti e il mio lavoro quotidiano."
+      },
+      "team": {
+        "title": "Per il mio team o la mia azienda",
+        "description": "Più persone, agenti e progetti condivisi."
+      },
+      "agency": {
+        "title": "Per la mia agenzia o i miei clienti",
+        "description": "Creo e gestisco agenti per i clienti.",
+        "badge": "Programma partner"
+      },
+      "offer": {
+        "title": "Pensato per le agenzie",
+        "early": "Accesso anticipato a Timon Pro e una linea diretta con il team",
+        "partners": "Un posto nel programma partner",
+        "discount": "Le prime 10 agenzie selezionate ottengono il 50% di sconto su Timon Pro, a vita.",
+        "consent": "Inviatemi l’offerta per le agenzie a",
+        "emailLabel": "Indirizzo email per l’offerta per le agenzie",
+        "notice": "Solo questa offerta, inviata da Timon a questo indirizzo. Puoi revocare il consenso in qualsiasi momento in {settingsPath}.",
+        "invalidEmail": "Inserisci un indirizzo email valido oppure deseleziona la casella.",
+        "failed": "Non è stato possibile registrare la richiesta dell’offerta. Riprova oppure deseleziona la casella.",
+        "refused": "Questo indirizzo è stato rifiutato. Controllalo oppure deseleziona la casella."
+      },
+      "failed": "Non è stato possibile salvare la tua risposta. Riprova.",
+      "continue": "Continua",
+      "sending": "Invio in corso…",
+      "pickProfile": "Scegli che cosa ti porta qui per continuare."
     }
   }
 }
