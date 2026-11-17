@@ -297,6 +297,10 @@ A packaged daemon verifies its installation, loads its plugins and checks each p
 
 If the window stays empty after that: run the support diagnostic (tray icon). Its **Daemon** block says whether nothing listens on the port (the daemon is down: read the end of `daemon.log`), or whether a Timon process holds the port without replying (it is still starting, or busy: wait, then open the window again from the tray). Adding the Timon folders to the antivirus exclusions shortens the start: see [Slow start behind an antivirus](#slow-start-behind-an-antivirus).
 
+## "The background service is not running" (TIM-0154)
+
+The window waited two minutes for the interface and nothing listens on the daemon's port. Timon has already tried to start the daemon once more (the background service, or its built-in daemon) before showing this message. The message gives the folder of the logs, usually `.timon/tmp` in your user folder: send its `desktop-*.log` and `daemon.log` with the diagnostic (tray icon). On Windows, also check that the `TimonOrchestrator` task exists and is enabled in Task Scheduler.
+
 ## Slow start behind an antivirus
 
 At every launch, the desktop app checks that the files of its installation are intact before it starts anything, and the background service does the same when it starts. Each file is read in full: an antivirus that scans every read can stretch this to a minute on a managed work PC. Since the version that follows 0.1.5, a small **Checking the installation…** window shows while it runs, instead of an app that seems frozen.

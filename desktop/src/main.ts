@@ -54,7 +54,7 @@ import { isTransientLoadError, giveUpMessage } from './window-load.js';
 import { waitingUrl } from './waiting-page.js';
 import { FIRST_RUN_THEME } from './first-run-theme.js';
 import { StartupView, probeUi } from './startup-view.js';
-import { requestAppRearm } from './app-rearm.js';
+import { DaemonRevival, giveUpBox, recordingExec, requestAppRearm, serviceProgram, type GiveUpVerdict, type RelaunchOutcome } from './app-rearm.js';
 import { reportDesktopOpened } from './telemetry-ping.js';
 import { reloadShortcut } from './reload-shortcuts.js';
 import { externalUrl, navigationAction } from './external-links.js';
@@ -132,6 +132,8 @@ const EMBEDDED_BOOT_BUDGET_MS = 90_000;
 const SERVICE_BOOT_BUDGET_MS = 180_000;
 /** The service replacing the embedded daemon at the end of a first setup: its database is already migrated. */
 const HANDOVER_BUDGET_MS = 90_000;
+/** The one relaunch after the interface gave up (TIM-0154): a daemon that ran before, its database already migrated. */
+const REVIVE_BUDGET_MS = 90_000;
 
 let updateWindow: UpdateWindow | null = null;
 let updateApproved = false;
@@ -183,6 +185,10 @@ let speech: DesktopSpeech | null = null;
 const microphone = microphoneAccess(process.platform, systemPreferences);
 let tray: Tray | null = null;
 let daemonUp = false;
+/** The configuration `main` settled on: what a page that gave up probes and relaunches. */
+let startupCfg: DesktopConfig | null = null;
+/** At most one daemon relaunch per shell session, shared by every page that gives up. */
+const daemonRevival = new DaemonRevival();
 let stopEmbedded: (() => Promise<void>) | null = null;
 /** Where the embedded daemon listens, while it runs: the service taking its place must answer there. */
 let embeddedDaemonOrigin: string | null = null;
@@ -460,6 +466,65 @@ function closePage(page: Page): Promise<'closed' | 'kept'> {
 }
 
 /**
+ * How this shell can start the daemon again, mirroring `main`'s branches: the
+ * installed service through the host adapter (`/Run` on Windows, never the
+ * elevated restart), else the embedded daemon. Null when it runs neither.
+ */
+function daemonRelaunch(cfg: DesktopConfig): (() => Promise<RelaunchOutcome>) | null {
+  if (stopEmbedded === null && hasDesktopService(cfg.home)) {
+    return async () => {
+      const calls: string[] = [];
+      const started = await startDesktopService(cfg.home, false, recordingExec(serviceProgram(process.platform), calls));
+      if (started === 'never-ran') recordServiceRefused(cfg.home);
+      return { line: `start the service → ${started}${calls.length > 0 ? ` (${calls.join('; ')})` : ''}`, selfReported: false, waited: false };
+    };
+  }
+  if (stopEmbedded !== null || cfg.daemon.supervisor === 'none' || app.isPackaged) {
+    return async () => {
+      const stop = stopEmbedded;
+      stopEmbedded = null;
+      if (stop) await stop().catch((error: unknown) => console.warn(`[desktop] the previous embedded daemon did not stop: ${(error as Error).message}`));
+      // Says itself why it failed (crash loop, silence, port taken): no second dialog.
+      await startEmbeddedDaemon(cfg, originOf(cfg.app.listen));
+      return { line: `embedded daemon started again (${daemonUp ? 'answers' : 'silent'})`, selfReported: !daemonUp, waited: true };
+    };
+  }
+  return null;
+}
+
+/**
+ * A page stopped waiting for the interface. When nothing listens on the
+ * daemon's port, the daemon is started again once (`DaemonRevival`) and the
+ * dialog says the daemon is down rather than blaming the web app (TIM-0154).
+ */
+async function settleGiveUp(startup: StartupView, url: string): Promise<void> {
+  const cfg = startupCfg;
+  const verdict: GiveUpVerdict = cfg === null ? { kind: 'ui-missing' } : await daemonRevival.settle({
+    probe: () => probeHealth(originOf(cfg.daemon.listen)),
+    relaunch: daemonRelaunch(cfg),
+    wait: () => waitForHealth(originOf(cfg.daemon.listen), REVIVE_BUDGET_MS),
+    home: cfg.home,
+    // The page says Timon is starting while the relaunch runs.
+    relaunching: () => startup.start(),
+    log: (line) => console.log(line),
+  });
+  if (cfg !== null && verdict.kind !== 'ui-missing') {
+    daemonUp = verdict.kind === 'revived';
+    refreshTray(cfg, originOf(cfg.app.listen));
+  }
+  if (verdict.kind === 'revived') { void startup.begin(); return; }
+  // Back from the starting step after a relaunch; a no-op when the page already failed.
+  startup.fail();
+  const locale = uiLocale();
+  const box = giveUpBox(verdict, startupText(locale), {
+    giveUp: giveUpMessage(url, locale),
+    origin: cfg === null ? '' : originOf(cfg.daemon.listen),
+    logs: cfg === null ? '' : logDir(cfg.home),
+  });
+  if (box) void reportProblem({ type: 'warning', ...box });
+}
+
+/**
  * Builds the page of `machineId` in `record`, hidden, under everything else
  * the window shows (the native browser panel and its bubble stay on top).
  * Every guard of the interface is set on it: no page of a window goes without
@@ -492,13 +557,7 @@ function createPage(record: AppWindow, machineId: string | null, url: string): P
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
     now: Date.now,
     onGiveUp: () => {
-      const locale = uiLocale();
-      const t = startupText(locale);
-      void reportProblem({
-        type: 'warning',
-        message: t('startup.uiMissing'),
-        detail: t('startup.uiMissingDetail', { giveUp: giveUpMessage(url, locale) }),
-      });
+      void settleGiveUp(startup, url).catch((error: unknown) => console.error('[desktop] startup give-up failed', error));
     },
   });
   const page: Page = { contentsId: id, machineId, view: { view, startup, closed: null, settle: null, route: routeOfUrl(url, record.origin) } };
@@ -1524,6 +1583,7 @@ async function main(): Promise<void> {
   }
   const uiUrl = originOf(cfg.app.listen);
   interfaceUrl = uiUrl;
+  startupCfg = cfg;
   daemonUp = isTimon(health, cfg.home);
   noteDesktopOpened(cfg);
   console.log(`[desktop] health of ${daemonOrigin}: ${describeHealth(health, cfg.home)}`);
