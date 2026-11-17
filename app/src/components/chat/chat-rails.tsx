@@ -68,7 +68,7 @@ import type { BackendName } from '@/lib/backends';
 import type { NewMissionOptions } from './new-mission-menu';
 import { widgetPicto } from '@/plugins-client/widget-pictos';
 import { FileContextMenu } from './file-context-menu';
-import { itemsColonne, useAppuiMenu, type CommandesColonne } from './chat-column-menu';
+import { columnMenuItems, useMenuPress, type ColumnCommands } from './chat-column-menu';
 
 // The rail cards come after the conversation (`useAfterConversation`): their
 // code too, fetched when a card first paints (docs/BUNDLE-SIZE.md).
@@ -1210,9 +1210,9 @@ export function ChatWidgetRail({
   if (!occupied && dragging === null && !editing) return null;
 
   const multiple = tabs.length > 1;
-  const commands: CommandesColonne = { cote: side, zone, onAddTab, onCloseTab, onAddColumn, onRemoveColumn, onSwap, onCollapse };
+  const commands: ColumnCommands = { side, zone, onAddTab, onCloseTab, onAddColumn, onRemoveColumn, onSwap, onCollapse };
   const hasCommands = !!(onAddTab || onCollapse || onSwap || onAddColumn || onRemoveColumn);
-  const openAt = (z: string) => (itemsColonne(commands, z).length > 0
+  const openAt = (z: string) => (columnMenuItems(commands, z).length > 0
     ? (x: number, y: number) => setMenu({ zone: z, x, y })
     : undefined);
   // Unnamed tabs are thin pills: they say there are tabs, not what they hold
@@ -1258,7 +1258,7 @@ export function ChatWidgetRail({
           x={menu.x}
           y={menu.y}
           label={i18n('chatPage.columnMenu', { column: label })}
-          items={itemsColonne(commands, menu.zone)}
+          items={columnMenuItems(commands, menu.zone)}
           onClose={() => setMenu(null)}
         />
       )}
@@ -1425,7 +1425,7 @@ function TabButton({
   hovered?: boolean;
   targetRef?: (node: HTMLElement | null) => void;
 }) {
-  const menuPress = useAppuiMenu(onMenu);
+  const menuPress = useMenuPress(onMenu);
   const n = name ?? String(rank);
   const description = titles.length > 0
     ? i18n('chatPage.columnTabCards', { n, titles: titles.join(', ') })
@@ -1471,7 +1471,7 @@ function TabButton({
  * since it has nothing else to do). Firmer while the layout is being edited.
  */
 function SingleTab({ label, accent, onMenu }: { label: string; accent: boolean; onMenu?: OpenMenu }) {
-  const menuPress = useAppuiMenu(onMenu);
+  const menuPress = useMenuPress(onMenu);
   if (!onMenu) return null;
   return (
     <button
