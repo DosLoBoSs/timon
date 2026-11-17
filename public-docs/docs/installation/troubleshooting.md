@@ -17,7 +17,7 @@ sidebar_position: 10
 | Scheduled task did not run overnight | Whether the computer slept, and `timon service status` | Turn off automatic sleep; see [Running in the background](background.md) |
 | Timon takes a minute to open on a work PC, or shows "Checking the installation…" | Antivirus scanning every file Timon reads | Exclude the Timon folders from real-time scanning; see [Slow start behind an antivirus](#slow-start-behind-an-antivirus) |
 | Windows installer says Timon cannot be closed | Whether you allowed the permission prompt when the installer opened | Choose **Quit and stop the background service** in the tray icon menu before installing; or, in an administrator PowerShell, run `schtasks /End /TN TimonOrchestrator; Stop-Process -Name Timon -Force`, then choose Retry |
-| Windows installer says Timon is still running in the background, or Timon says the running daemon is not the installed version | Whether you allowed the permission prompt | Choose **Retry** and allow the prompt, or restart the computer and install again; see [Updating while the background service runs](#windows-updating-while-the-background-service-runs) |
+| Windows installer says Timon is still running in the background or that its check did not run, or Timon says the running daemon is not the installed version | Whether you allowed the permission prompt | Choose **Retry** and allow the prompt, or restart the computer and install again; see [Updating while the background service runs](#windows-updating-while-the-background-service-runs) |
 | Quota state unavailable | Whether the backend has a working usage probe | Treat unknown as unknown, not as zero usage |
 | Anything else, or you need help | The diagnostic report | **Copy diagnostic** and paste it in your support request; see below |
 
@@ -324,11 +324,13 @@ Before it replaces anything, the installer checks that nothing of Timon still ru
 - **With its window**, it says "Timon is still running in the background and could not be stopped". Choose **Retry** and allow the Windows permission prompt; without that permission, a background service that keeps running when you are logged out cannot be ended. **Cancel** leaves the installed version as it is. Restarting the computer and running the installer again also works.
 - **From Timon's update window** (no installer window), Timon opens again on the current version and tells you the update was not installed. Install it again and allow the permission prompt.
 
+The installer stops the same way when it could not make that check at all: "The check that Timon is stopped in the background did not run: Windows PowerShell failed". It uses Windows PowerShell for it, and installs nothing over a Timon it could not look at. Choose **Retry**, or restart the computer and run the installer again. If the message comes back every time, Windows PowerShell (`powershell.exe`) or its scripts are blocked on this computer, usually by your organisation's policy: ask its administrator to allow the Timon installer, and send the diagnostic report.
+
 What the installer found and ended is written to `%USERPROFILE%\.timon\tmp\timon-service-pause.log`, and the diagnostic report includes it.
 
 ### "The running daemon is not the installed version"
 
-After an update, the background service was still running the previous version (0.1.8 and earlier could leave it so: the installer did not end it). Timon now restarts the service itself, once, with one Windows permission prompt, then goes on with the update. If you refuse the prompt, or the service does not come back, the message names both versions: quit Timon, restart the computer, then open Timon again. Your data are not changed by any of this.
+After an update, the background service was still running the previous version (0.1.8 and earlier could leave it so: the installer did not end it). Timon now restarts the service itself, once, with one Windows permission prompt, then goes on with the update. If you refuse the prompt, or the service does not come back, the message names both versions: quit Timon, restart the computer, then open Timon again. Timon does not start the service again over a previous daemon it could not end: the message then says that a Timon program is still running; end `node.exe` and `Timon.exe` from Task Manager, or restart the computer, then open Timon again. Your data are not changed by any of this.
 
 On 0.1.8 or earlier, restart the computer, then open Timon; or quit Timon and, in an administrator PowerShell, end the daemon and start the task again:
 
