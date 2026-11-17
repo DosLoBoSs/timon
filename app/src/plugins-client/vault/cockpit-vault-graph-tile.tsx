@@ -79,7 +79,7 @@ export function CockpitVaultGraphTile({ poignee, className }: WidgetProps) {
     <section className={cn('flex min-h-0 flex-col overflow-hidden rounded-2xl border', HUD_SURFACE, className)}>
       <header className="flex items-center gap-2.5 px-4 pt-3 pb-2.5">
         <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          Vault
+          {t('vault.heading')}
         </span>
         <span className="text-[11px] text-muted-foreground/50">{t('vault.graph3d')}</span>
         <div className="ml-auto flex items-center gap-1.5">
@@ -107,7 +107,7 @@ export function CockpitVaultGraphTile({ poignee, className }: WidgetProps) {
           <NativeViewCover />
           <header className="flex shrink-0 items-center gap-2.5 pb-3">
             <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Vault
+              {t('vault.heading')}
             </span>
             <span className="text-[11px] text-muted-foreground/50">{t('vault.graph3d')}</span>
             <div className="ml-auto flex items-center gap-1.5">{buttons}</div>

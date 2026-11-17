@@ -162,7 +162,7 @@ export function DreamsClient() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
       <div className="flex items-center gap-2 bg-background px-4 py-2.5">
-        <h1 className="mr-2 text-sm font-semibold">🌙 Dreams</h1>
+        <h1 className="mr-2 text-sm font-semibold">🌙 {i18n('dreamsPage.heading')}</h1>
         <div className="inline-flex gap-0.5 rounded-md border border-border bg-muted/30 p-0.5">
           {(['active', 'accepted', 'snoozed', 'rejected'] as const).map((t) => (
             <button

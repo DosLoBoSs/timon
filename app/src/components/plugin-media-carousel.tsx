@@ -40,7 +40,7 @@ export function PluginMediaCarousel({ slides, iconUrl = null }: { slides: readon
       }}
       tabIndex={count > 1 ? 0 : undefined}
       role="region"
-      aria-roledescription="carousel"
+      aria-roledescription={t('pluginsPage.galleryRole')}
       aria-label={t('pluginsPage.gallery')}
     >
       {count === 0 && iconUrl ? (

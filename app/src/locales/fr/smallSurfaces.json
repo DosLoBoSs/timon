@@ -24,5 +24,25 @@
   "projectsForm": {
     "workspacePlaceholder": "perso / clients / projets annexes…",
     "speechPlaceholder": "Courte description du projet, contexte, objectif…"
+  },
+  "licensePage": {
+    "keyPlaceholder": "{key} ou {token}"
+  },
+  "browserPanel": {
+    "native": {
+      "backspace": "Retour arrière"
+    }
+  },
+  "pluginsPage": {
+    "galleryRole": "carrousel"
+  },
+  "dreamsPage": {
+    "heading": "Rêves"
+  },
+  "vault": {
+    "heading": "Vault"
+  },
+  "memoryPage": {
+    "scopeOf": "portée {scope}"
   }
 }

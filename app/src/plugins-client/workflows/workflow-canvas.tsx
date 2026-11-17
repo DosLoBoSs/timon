@@ -128,7 +128,7 @@ function CanvasNode({ data, selected }: NodeProps<CanvasFlowNode>) {
         {run && (duration || tokens > 0 || run.error) && (
           <div className="mt-2 flex items-center gap-2 text-[10px] tabular-nums text-muted-foreground">
             {duration && <span className="inline-flex items-center gap-1"><Clock3 className="size-3" />{duration}</span>}
-            {tokens > 0 && <span>{formatTokens(tokens)} tok</span>}
+            {tokens > 0 && <span>{t('workflows.builder.tokens', { n: formatTokens(tokens) })}</span>}
             {run.attempt > 1 && <span>#{run.attempt}</span>}
           </div>
         )}

@@ -24,5 +24,25 @@
   "projectsForm": {
     "workspacePlaceholder": "personal / clients / side projects…",
     "speechPlaceholder": "Short project description, context, goal…"
+  },
+  "licensePage": {
+    "keyPlaceholder": "{key} or {token}"
+  },
+  "browserPanel": {
+    "native": {
+      "backspace": "Backspace"
+    }
+  },
+  "pluginsPage": {
+    "galleryRole": "carousel"
+  },
+  "dreamsPage": {
+    "heading": "Dreams"
+  },
+  "vault": {
+    "heading": "Vault"
+  },
+  "memoryPage": {
+    "scopeOf": "scope {scope}"
   }
 }

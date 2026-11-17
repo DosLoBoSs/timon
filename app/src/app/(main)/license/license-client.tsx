@@ -245,7 +245,7 @@ export function LicenseClient(): ReactElement {
               /* code-font: pasted license token */ className="min-h-32 w-full rounded-md border border-border bg-background p-3 font-mono text-xs"
               value={token}
               onChange={(event) => { setToken(event.target.value); }}
-              placeholder="TMN-XXXX-XXXX-XXXX-XXXX or eyJhbGciOiJFZERTQSIs…"
+              placeholder={t('licensePage.keyPlaceholder', { key: 'TMN-XXXX-XXXX-XXXX-XXXX', token: 'eyJhbGciOiJFZERTQSIs…' })}
               required
             />
             <Button type="submit" size="sm" disabled={busy || !token.trim()}>

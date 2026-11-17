@@ -123,7 +123,7 @@ function CurationRunDialog({ runId, onClose }: { runId: string; onClose: () => v
                       {meta.label}
                     </span>
                     <span className="text-[10px] text-muted-foreground/70">
-                      scope {r.scope}
+                      {t('memoryPage.scopeOf', { scope: r.scope })}
                       {r.agent ? ` · ${r.agent}` : ''}
                       {r.rule_id ? ` · #${r.rule_id}` : ''}
                       {r.target_rule_id ? ` → #${r.target_rule_id}` : ''}
