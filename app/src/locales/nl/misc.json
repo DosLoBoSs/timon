@@ -210,7 +210,7 @@
       "label": "Agents zoeken op naam, project, pool of team",
       "clear": "Zoekopdracht wissen",
       "ratio": "{count}/{total}",
-      "count": "{count} gevonden agents",
+      "count": "{count, plural, one {# gevonden agent} other {# gevonden agents}}",
       "none": "Geen agent komt overeen met ‘{query}’."
     },
     "grid": {
@@ -235,7 +235,7 @@
     "idle": "Wacht op zijn volgende beurt",
     "open": "Deze missie openen",
     "none": "Niets verwacht",
-    "inline": "{count} gedelegeerde missie(s) bezig"
+    "inline": "{count, plural, one {# gedelegeerde missie} other {# gedelegeerde missies}} bezig"
   },
   "missionEgress": {
     "loading": "Netwerklogboek lezen…",
@@ -293,8 +293,8 @@
       "crash": "onverwachte stop",
       "unknown": "onbekende oorzaak"
     },
-    "pendingMessages": "{count} bericht(en) wachten in de inbox",
-    "openDeliveries": "{count} verzoek(en) nog niet beantwoord"
+    "pendingMessages": "{count, plural, one {# bericht wacht} other {# berichten wachten}} in de inbox",
+    "openDeliveries": "{count, plural, one {# verzoek} other {# verzoeken}} nog niet beantwoord"
   },
   "permissionRefusal": {
     "accountLacks": "Je account heeft {permission} niet. Vraag een beheerder het aan je rol toe te voegen.",

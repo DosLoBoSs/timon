@@ -210,7 +210,7 @@
       "label": "Agenten nach Name, Projekt, Pol oder Team suchen",
       "clear": "Suche löschen",
       "ratio": "{count}/{total}",
-      "count": "{count} passende Agenten",
+      "count": "{count, plural, one {# passender Agent} other {# passende Agenten}}",
       "none": "Kein Agent passt zu „{query}“."
     },
     "grid": {
@@ -235,7 +235,7 @@
     "idle": "Wartet auf seinen nächsten Turn",
     "open": "Diese Mission öffnen",
     "none": "Nichts erwartet",
-    "inline": "{count} delegierte Mission(en) laufen"
+    "inline": "{count, plural, one {# delegierte Mission läuft} other {# delegierte Missionen laufen}}"
   },
   "missionEgress": {
     "loading": "Netzwerkprotokoll wird gelesen…",
@@ -293,8 +293,8 @@
       "crash": "unerwarteter Stopp",
       "unknown": "unbekannte Ursache"
     },
-    "pendingMessages": "{count} Nachricht(en) warten im Posteingang",
-    "openDeliveries": "{count} Anfrage(n) noch nicht beantwortet"
+    "pendingMessages": "{count, plural, one {# Nachricht wartet} other {# Nachrichten warten}} im Posteingang",
+    "openDeliveries": "{count, plural, one {# Anfrage} other {# Anfragen}} noch nicht beantwortet"
   },
   "permissionRefusal": {
     "accountLacks": "Deinem Konto fehlt {permission}. Bitte einen Administrator, es deiner Rolle hinzuzufügen.",

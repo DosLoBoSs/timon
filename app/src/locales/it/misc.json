@@ -210,7 +210,7 @@
       "label": "Cerca agenti per nome, progetto, polo o team",
       "clear": "Cancella la ricerca",
       "ratio": "{count}/{total}",
-      "count": "{count} agenti corrispondenti",
+      "count": "{count, plural, one {# agente corrispondente} other {# agenti corrispondenti}}",
       "none": "Nessun agente corrisponde a “{query}”."
     },
     "grid": {
@@ -235,7 +235,7 @@
     "idle": "In attesa del prossimo turno",
     "open": "Apri questa missione",
     "none": "Nulla in attesa",
-    "inline": "{count} missione/i delegata/e in corso"
+    "inline": "{count, plural, one {# missione delegata} other {# missioni delegate}} in corso"
   },
   "missionEgress": {
     "loading": "Lettura del journal di rete…",
@@ -247,7 +247,7 @@
     "newHost": "nuovo",
     "newHostHint": "Raggiunto per la prima volta nel suo progetto da questa missione: l’avviso lo nominava.",
     "connectionsCount": "{count} conn.",
-    "failures": "{count} non riuscite",
+    "failures": "{count} {count, plural, one {non riuscita} other {non riuscite}}",
     "sent": "Inviato",
     "received": "Ricevuto",
     "status": "Stato HTTP restituito al programma",
@@ -293,8 +293,8 @@
       "crash": "arresto imprevisto",
       "unknown": "causa sconosciuta"
     },
-    "pendingMessages": "{count} messaggio/i in attesa nella posta in arrivo",
-    "openDeliveries": "{count} richiesta/e senza ancora risposta"
+    "pendingMessages": "{count, plural, one {# messaggio} other {# messaggi}} in attesa nella posta in arrivo",
+    "openDeliveries": "{count, plural, one {# richiesta} other {# richieste}} senza ancora risposta"
   },
   "permissionRefusal": {
     "accountLacks": "Il tuo account non ha {permission}. Chiedi a un amministratore di aggiungerlo al tuo ruolo.",

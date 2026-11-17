@@ -210,7 +210,7 @@
       "label": "Buscar agentes por nombre, proyecto, polo o equipo",
       "clear": "Borrar la búsqueda",
       "ratio": "{count}/{total}",
-      "count": "{count} agentes coinciden",
+      "count": "{count, plural, one {# agente coincide} other {# agentes coinciden}}",
       "none": "Ningún agente coincide con “{query}”."
     },
     "grid": {
@@ -235,7 +235,7 @@
     "idle": "Esperando su próximo turno",
     "open": "Abrir esta misión",
     "none": "Nada pendiente",
-    "inline": "{count} misión(es) delegada(s) en curso"
+    "inline": "{count, plural, one {# misión delegada} other {# misiones delegadas}} en curso"
   },
   "missionEgress": {
     "loading": "Leyendo el registro de red…",
@@ -247,7 +247,7 @@
     "newHost": "nuevo",
     "newHostHint": "Primer acceso de esta misión en su proyecto: la alerta lo nombró.",
     "connectionsCount": "{count} con.",
-    "failures": "{count} fallidas",
+    "failures": "{count} {count, plural, one {fallida} other {fallidas}}",
     "sent": "Enviado",
     "received": "Recibido",
     "status": "Estado HTTP devuelto al programa",
@@ -293,8 +293,8 @@
       "crash": "parada inesperada",
       "unknown": "causa desconocida"
     },
-    "pendingMessages": "{count} mensaje(s) esperando en la bandeja de entrada",
-    "openDeliveries": "{count} solicitud(es) aún sin responder"
+    "pendingMessages": "{count, plural, one {# mensaje} other {# mensajes}} esperando en la bandeja de entrada",
+    "openDeliveries": "{count, plural, one {# solicitud} other {# solicitudes}} aún sin responder"
   },
   "permissionRefusal": {
     "accountLacks": "Tu cuenta no tiene {permission}. Pide a un administrador que lo añada a tu rol.",
