@@ -53,8 +53,8 @@ async function readArrangement(owner: string, id: string): Promise<IslandArrange
 
 function ArrangementPreview({ payload }: { payload: unknown; titleOf: (id: string) => string }): ReactElement {
   const proposal = useMemo(() => parseArrangementProposal(payload), [payload]);
-  const { owner } = useWorkspaceLayout();
-  const { ready, arrangements } = useArrangements(owner);
+  const { owner, previousOwner } = useWorkspaceLayout();
+  const { ready, arrangements } = useArrangements(owner, previousOwner);
   const registered = useIslandContentTypes();
   const known = useMemo(() => knownTypes(registered), [registered]);
   const [current, setCurrent] = useState<IslandTree | null>(null);
