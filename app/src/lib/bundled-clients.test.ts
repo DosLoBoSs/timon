@@ -27,7 +27,7 @@ import {
   type AgentChatInstance,
 } from '@/plugins-client/agent-chat/instances';
 
-const uneInstance = (over: Partial<AgentChatInstance> & Pick<AgentChatInstance, 'id' | 'agent'>): AgentChatInstance => ({
+const instance = (over: Partial<AgentChatInstance> & Pick<AgentChatInstance, 'id' | 'agent'>): AgentChatInstance => ({
   title: '',
   avatar: '',
   zone: '',
@@ -113,15 +113,15 @@ test('a third-party nav entry lands after every product entry', () => {
 // ── Les tuiles du cockpit, montées comme le navigateur les monte ────────────
 
 /** Le catalogue de l'hôte, calculé sur les inscriptions réellement montées. */
-function catalogueDesTuiles() {
-  const entrees: WidgetSlotEntry[] = slotEntries('cockpit.widget').map((e) => ({
+function tileCatalog() {
+  const entries: WidgetSlotEntry[] = slotEntries('cockpit.widget').map((e) => ({
     registrationId: e.id,
     pluginId: e.pluginId,
     key: e.key,
     slot: 'cockpit.widget',
     options: e.widget,
   }));
-  return buildWidgetCatalog([], entrees, defaultZoneForSlot);
+  return buildWidgetCatalog([], entries, defaultZoneForSlot);
 }
 
 test('the cockpit cards keep their placement id, title, rail and heights', () => {
@@ -131,7 +131,7 @@ test('the cockpit cards keep their placement id, title, rail and heights', () =>
   mountLayout();
   mountBundledClients(null);
   assert.deepEqual(
-    catalogueDesTuiles().map((e) => [e.id, e.title, e.defaultZone, e.defaultHeight, e.minHeight]),
+    tileCatalog().map((e) => [e.id, e.title, e.defaultZone, e.defaultHeight, e.minHeight]),
     [
       ['plugin:@timon/ui-layout:clock', 'Clock', 'gauche', 140, 110],
       // « Your widget here », placed by the fresh-install arrangements only.
@@ -177,8 +177,8 @@ test('the cockpit cards keep their placement id, title, rail and heights', () =>
 test('the Working agents widget is placed by default and inherits nothing from the list card', () => {
   mountLayout();
   mountBundledClients(null);
-  const entrees = catalogueDesTuiles();
-  const working = entrees.find((e) => e.id === 'plugin:@timon/agents:working');
+  const entries = tileCatalog();
+  const working = entries.find((e) => e.id === 'plugin:@timon/agents:working');
   assert.equal(working?.placedByDefault, true);
   assert.equal(working?.bar, true);
   assert.equal(working?.formerIds, undefined);
@@ -190,7 +190,7 @@ test('the Working agents widget is placed by default and inherits nothing from t
     [],
   ];
   for (const stored of views) {
-    const placed: WidgetLayout | undefined = mergeWorkspaceWidgets(stored, entrees, '/chat').find((w) => w.id === working?.id);
+    const placed: WidgetLayout | undefined = mergeWorkspaceWidgets(stored, entries, '/chat').find((w) => w.id === working?.id);
     assert.equal(placed?.rail, 'topbar.center.widget', JSON.stringify(stored));
     assert.equal(placed?.removed, undefined);
   }
@@ -522,8 +522,8 @@ test('the agent-chat half offers its creation card even with no instance', () =>
   reinitialiserInstancesPourTests();
   mountLayout();
   mountBundledClients(null);
-  const cartes = slotEntries('cockpit.widget').filter((e) => e.pluginId === '@timon/agent-chat');
-  assert.deepEqual(cartes.map((e) => e.key), ['new']);
+  const cards = slotEntries('cockpit.widget').filter((e) => e.pluginId === '@timon/agent-chat');
+  assert.deepEqual(cards.map((e) => e.key), ['new']);
 });
 
 test('each instance gets its own registration, keyed by its id', async () => {
@@ -531,21 +531,21 @@ test('each instance gets its own registration, keyed by its id', async () => {
   mountLayout();
   mountBundledClients(null);
 
-  await enregistrerInstance(uneInstance({
+  await enregistrerInstance(instance({
     id: 'alice', agent: 'alice.main', title: 'Alice',
     subAgents: [{ agent: 'Alice.helper' }],
   }));
-  await enregistrerInstance(uneInstance({ id: 'coder', agent: 'initech.coder' }));
+  await enregistrerInstance(instance({ id: 'coder', agent: 'initech.coder' }));
 
-  const cartes = slotEntries('cockpit.widget').filter((e) => e.pluginId === '@timon/agent-chat');
-  assert.deepEqual(cartes.map((e) => e.key), ['new', 'alice', 'coder']);
+  const cards = slotEntries('cockpit.widget').filter((e) => e.pluginId === '@timon/agent-chat');
+  assert.deepEqual(cards.map((e) => e.key), ['new', 'alice', 'coder']);
   // Placement is the couple (plugin, key): two cards of the same widget must
   // not share a spot, or the second would sit on the first at every reload.
-  const catalogue = catalogueDesTuiles().map((e) => e.id);
-  assert.ok(catalogue.includes('plugin:@timon/agent-chat:alice'));
-  assert.ok(catalogue.includes('plugin:@timon/agent-chat:coder'));
+  const catalog = tileCatalog().map((e) => e.id);
+  assert.ok(catalog.includes('plugin:@timon/agent-chat:alice'));
+  assert.ok(catalog.includes('plugin:@timon/agent-chat:coder'));
   // An untitled card is named after its agent, in the header AND the palette.
-  assert.equal(cartes.find((e) => e.key === 'coder')?.widget?.title, 'initech.coder');
+  assert.equal(cards.find((e) => e.key === 'coder')?.widget?.title, 'initech.coder');
 });
 
 test('renaming a card keeps its placement; removing it takes the card away', async () => {
@@ -553,11 +553,11 @@ test('renaming a card keeps its placement; removing it takes the card away', asy
   mountLayout();
   mountBundledClients(null);
 
-  await enregistrerInstance(uneInstance({ id: 'alice', agent: 'alice.main', title: 'Alice' }));
-  await enregistrerInstance(uneInstance({ id: 'alice', agent: 'alice.main', title: 'Pilote' }));
+  await enregistrerInstance(instance({ id: 'alice', agent: 'alice.main', title: 'Alice' }));
+  await enregistrerInstance(instance({ id: 'alice', agent: 'alice.main', title: 'Pilote' }));
 
-  const carte = slotEntries('cockpit.widget').find((e) => e.key === 'alice');
-  assert.equal(carte?.widget?.title, 'Pilote');
+  const card = slotEntries('cockpit.widget').find((e) => e.key === 'alice');
+  assert.equal(card?.widget?.title, 'Pilote');
   assert.equal(
     slotEntries('cockpit.widget').filter((e) => e.key === 'alice').length,
     1,
@@ -572,9 +572,9 @@ test('unmounting the halves stops the instance store from putting cards back', a
   reinitialiserInstancesPourTests();
   mountLayout();
   const unmount = mountBundledClients(null);
-  await enregistrerInstance(uneInstance({ id: 'alice', agent: 'alice.main' }));
+  await enregistrerInstance(instance({ id: 'alice', agent: 'alice.main' }));
   unmount();
-  await enregistrerInstance(uneInstance({ id: 'autre', agent: 'other.main' }));
+  await enregistrerInstance(instance({ id: 'autre', agent: 'other.main' }));
   assert.deepEqual(slotEntries('cockpit.widget'), []);
 });
 
@@ -582,14 +582,14 @@ test('the seeded card opens in the cockpit centre, and removing it takes the car
   reinitialiserInstancesPourTests();
   mountLayout();
   mountBundledClients(null);
-  const graine = grainePourAgent('Nova');
-  await enregistrerInstance(graine);
-  const inscrite = slotEntries('cockpit.widget').find((e) => e.key === graine.id);
-  assert.equal(inscrite?.widget?.zone, 'centre');
-  const placee = catalogueDesTuiles().find((e) => e.id === `plugin:@timon/agent-chat:${graine.id}`);
-  assert.equal(placee?.defaultZone, 'centre');
-  await supprimerInstance(graine.id);
-  assert.equal(slotEntries('cockpit.widget').some((e) => e.key === graine.id), false);
+  const seed = grainePourAgent('Nova');
+  await enregistrerInstance(seed);
+  const registered = slotEntries('cockpit.widget').find((e) => e.key === seed.id);
+  assert.equal(registered?.widget?.zone, 'centre');
+  const placedEntry = tileCatalog().find((e) => e.id === `plugin:@timon/agent-chat:${seed.id}`);
+  assert.equal(placedEntry?.defaultZone, 'centre');
+  await supprimerInstance(seed.id);
+  assert.equal(slotEntries('cockpit.widget').some((e) => e.key === seed.id), false);
 });
 
 
@@ -602,16 +602,16 @@ test('the retired mail placement is ignored without a gap or a transfer to the t
     retired,
     { id: 'plugin:@timon/vault:vault-graph', rail: 'gauche', rang: 2, hauteur: 300 },
   ];
-  const catalogue = catalogueDesTuiles();
-  const layout = mergeLayout(saved, catalogue);
+  const catalog = tileCatalog();
+  const layout = mergeLayout(saved, catalog);
   assert.equal(layout.some((entry) => entry.id === retired.id), false);
-  assert.deepEqual(orphanPlacements(saved, catalogue), [retired]);
+  assert.deepEqual(orphanPlacements(saved, catalog), [retired]);
   const rail = widgetsOfZone(layout, 'gauche');
   assert.deepEqual(rail.map((entry) => entry.rang), rail.map((_, index) => index));
-  assert.equal(catalogue.some((entry) => entry.pluginId === 'old-mail'), false);
+  assert.equal(catalog.some((entry) => entry.pluginId === 'old-mail'), false);
 
   register({ slot: 'cockpit.widget', pluginId: 'old-mail', key: 'old-mail' }, Empty);
-  const installed = mergeLayout(saved, catalogueDesTuiles());
+  const installed = mergeLayout(saved, tileCatalog());
   const widget = installed.find((entry) => entry.id === 'plugin:old-mail:old-mail');
   assert.ok(widget);
   assert.notEqual(widget.hauteur, retired.hauteur, 'the new widget uses its own defaults');
