@@ -1541,6 +1541,10 @@
   },
   "settingsDialog": {
     "backToSettings": "設定に戻る",
+    "navGroup": {
+      "agents": "エージェント",
+      "machine": "このコンピューター"
+    },
     "close": "閉じる",
     "unsavedKept": "最後の変更はまだ保存されていません。保存するか、× または Escape で閉じて破棄してください。",
     "category": {
