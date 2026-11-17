@@ -46,6 +46,16 @@ export function supervisorLogFile(home: string): string {
   return join(logDir(home), 'daemon.log');
 }
 
+/**
+ * Windows: the journal of the installer's service pause
+ * (`desktop/build/timon-service-pause.ps1`, which writes this very path): what
+ * it found running, what it ended and what was left when an update replaced
+ * the application.
+ */
+export function servicePauseLogFile(home: string): string {
+  return join(logDir(home), 'timon-service-pause.log');
+}
+
 const pad = (value: number, width = 2): string => String(value).padStart(width, '0');
 
 /** `2026-10-13`, in the machine's time zone. */

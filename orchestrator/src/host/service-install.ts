@@ -1152,16 +1152,50 @@ function removeWindowsDefinition(opts: ServiceOpts, lines: string[]): ServiceRes
  * elevated cannot kill it, and without that the `/Run` is dropped by
  * `IgnoreNew` while the old daemon still lives. The task is not deleted or
  * rewritten, so nothing here depends on the revision.
+ *
+ * The launcher's tree is not the whole of it: a daemon whose launcher is
+ * already gone has no tree to be ended with. An update that replaced the
+ * application under a running daemon left exactly that — the task had been
+ * stopped, its daemon lived on with the previous version, and the restart
+ * started a launcher whose daemon found the port and the data directory taken
+ * (0.1.7 to 0.1.8). So the daemon of this installation that holds the port is
+ * ended too, then every background program of the installation, as a stop
+ * does; a foreign program on the port is left alone.
+ *
+ * The sweep guards `/Run`: it is the only step that looks again once
+ * everything was ended. A task run over a daemon that outlived it starts a
+ * second one that finds the port and the data directory taken, while the
+ * restart reads as done and the previous version goes on answering.
  */
-export function windowsRestartSteps(timonHome: string): ElevatedStep[] {
-  return [stopLauncherStep(timonHome), { label: 'run', args: ['/Run', '/TN', WINDOWS_TASK] }];
+export function windowsRestartSteps(opts: Pick<ServiceOpts, 'timonHome' | 'installDir' | 'port' | 'nodePath'>): ElevatedStep[] {
+  return [
+    stopLauncherStep(opts.timonHome),
+    stopPortOwnerStep(opts),
+    { ...stopInstallationProcessesStep(opts), stopOnFailure: true },
+    { label: 'run', args: ['/Run', '/TN', WINDOWS_TASK] },
+  ];
+}
+
+/** Why a restart did not run the task again: the sweep's own answer, in words the person can act on. */
+function restartSweepRefusal(swept: number | undefined): string {
+  const next = 'end the Timon programs that still run (node.exe, Timon.exe) from Task Manager or restart the computer, then open Timon again';
+  if (swept === PROCESSES_REMAIN) {
+    return `a Timon program of this installation is still running and could not be ended, so the service was not started again: ${next}`;
+  }
+  // Neither verdict: PowerShell did not run the check, or the batch stopped before it.
+  return `Timon could not check that its previous daemon had ended (exit ${swept ?? 'unknown'}), so the service was not started again: ${next}`;
 }
 
 export function restartWindowsService(opts: ServiceOpts): ServiceResult {
   const lines: string[] = [];
   if (opts.platform !== 'win32') return { ok: false, code: 1, lines, reason: `no Windows task to restart on ${opts.platform}` };
-  const { codes, output, cancelled } = runElevated(opts, lines, windowsRestartSteps(opts.timonHome));
+  const { codes, output, cancelled } = runElevated(opts, lines, windowsRestartSteps(opts));
   if (cancelled) return { ok: false, code: 1, lines, reason: 'elevation refused' };
+  // Only a sweep that found nothing left lets the restart be called one: the
+  // batch did not reach `/Run` otherwise, and a transcript that says it did is
+  // not believed over it.
+  const swept = codes.get('sweep');
+  if (swept !== 0) return { ok: false, code: 1, lines, reason: restartSweepRefusal(swept) };
   const started = codes.get('run');
   if (started !== 0) {
     return { ok: false, code: 1, lines, reason: output.trim() || `the scheduled task ${WINDOWS_TASK} could not be started (exit ${started ?? 'unknown'})` };
@@ -2318,6 +2352,21 @@ export function startService(opts: ServiceOpts): ServiceResult {
   if (opts.platform === 'darwin') return startDarwin(opts, lines);
   if (opts.platform === 'linux') return startLinux(opts, lines);
   return { ok: false, code: 1, lines, reason: `no service to start on ${opts.platform}` };
+}
+
+/**
+ * Replaces the daemon the service runs, for the desktop: after an update, the
+ * daemon that answers may still be the previous version's. Windows ends it
+ * and what the installation left running, then runs the task again, under one
+ * elevation. launchd and systemd restart their own job: a stop, then a start.
+ * The service stays registered and `TIMON_HOME` is never touched.
+ */
+export function restartService(opts: ServiceOpts): ServiceResult {
+  if (opts.platform === 'win32') return restartWindowsService(opts);
+  const stopped = stopService(opts);
+  if (!stopped.ok) return stopped;
+  const started = startService(opts);
+  return { ...started, lines: [...stopped.lines, ...started.lines] };
 }
 
 /** `LastTaskResult` of a scheduled task that was registered and never started. */

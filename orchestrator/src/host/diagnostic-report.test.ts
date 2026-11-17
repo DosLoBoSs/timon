@@ -183,6 +183,7 @@ test('a full report: findings, newest log lines first, secrets masked, no databa
     assert.ok(daemonLog.indexOf('\nlatest uses ***') < daemonLog.indexOf('\nfirst\n'), 'newest first');
     assert.ok(daemonLog.indexOf('\nfirst\n') < daemonLog.indexOf('\nold line'));
     assert.match(text, /\[desktop\] window shown/);
+    assert.ok(!text.includes('Installer service pause'), 'a Windows installer journal, on Windows only');
     assert.ok(!text.includes('secret-daemon-token-value'));
   } finally {
     server.close();
@@ -202,6 +203,9 @@ test('a Windows report reads the refused marker the host left (#342)', { timeout
   try {
     mkdirSync(join(home, 'run'), { recursive: true });
     writeFileSync(join(home, 'run', 'service-refused'), '2026-10-13T22:00:00.000Z\n');
+    mkdirSync(join(home, 'tmp'), { recursive: true });
+    // Written by the installer's pause script, with the BOM Windows PowerShell puts first.
+    writeFileSync(join(home, 'tmp', 'timon-service-pause.log'), '\uFEFF2026-11-17T10:00:00 pause: start, elevated: True\r\n2026-11-17T10:00:09 pause: exit 5, 1 process(es) of Timon still run: the installer must not go on\r\n');
     const cfg = TimonConfigSchema.parse({ daemon: { listen: { host: '127.0.0.1', port: address.port } } });
     const exec = () => ({ code: 1, stdout: '', stderr: '' });
     const serviceOpts: ServiceOpts = {
@@ -214,6 +218,9 @@ test('a Windows report reads the refused marker the host left (#342)', { timeout
     });
     assert.deepEqual(findings.map((finding) => finding.id), ['windows-service-refused']);
     assert.match(text, /refused {3}Windows never started the task for this account \(recorded 2026-10-13T22:00:00\.000Z\)/);
+    // The journal of the installer's service pause: what an update found running and left behind.
+    const pause = text.split('== Installer service pause timon-service-pause.log (newest first) ==')[1]!;
+    assert.ok(pause.indexOf('pause: exit 5') < pause.indexOf('pause: start'), 'newest first');
   } finally {
     server.close();
     rmSync(home, { recursive: true, force: true });

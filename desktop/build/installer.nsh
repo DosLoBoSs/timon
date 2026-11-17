@@ -47,10 +47,44 @@
 ; nothing. So no detection any more: whenever Timon is already installed or a
 ; service launcher exists, the installer asks for elevation as it opens, and
 ; timon-service-pause.ps1 pauses the service until the installer exits.
+;
+; Nothing here may be written in the NSIS form that reads an environment
+; variable between percent signs: NSIS replaces it when the installer is
+; COMPILED, with the value of the build machine. The script was told the build
+; account that way and ended nothing on anyone else's PC (0.1.7 to 0.1.8
+; update). It now reads the account from the installer's own process; a value
+; of the user's machine is read while the installer runs, with ReadEnvStr.
+;
+; The script answers with its exit code, and only its 0 lets the installer go
+; on: nothing of Timon runs any more. TIMON_SERVICE_STILL_RUNNING means that
+; something still does (a refused elevation leaves a session-0 daemon out of
+; reach). Windows renames a running executable without complaint, so the files
+; would be replaced under a daemon that keeps serving the old version from
+; memory and holds the port, and the new one could not start.
+;
+; A script that did not run, or that ended with any other code, has checked
+; nothing: TIMON_SERVICE_PAUSE_FAILED. It is the same stop. It used to let the
+; installer through, on the grounds that a PC that forbids PowerShell must
+; still be able to install Timon: that PC is exactly where nothing has looked
+; at the port or the processes, so the daemon may well be alive.
+;
+; Either way, with a window the person tries again or cancels; without one
+; (/S), the installer exits with that code, which the app reports as a failed
+; update (update-installer.ts).
+!ifndef TIMON_SERVICE_STILL_RUNNING
+  !define TIMON_SERVICE_STILL_RUNNING 5
+!endif
+!ifndef TIMON_SERVICE_PAUSE_FAILED
+  !define TIMON_SERVICE_PAUSE_FAILED 6
+!endif
+
 !macro timonPauseService
   Push $0
   Push $1
   Push $2
+  Push $3
+  Push $4
+  Push $5
   ; An update's uninstaller runs after the installer already paused it; under
   ; /S nothing may prompt. One exception: the update Timon starts from its own
   ; window (/S --updated --force-run --timon-app-update, update-installer.ts).
@@ -85,22 +119,72 @@
     ${OrIf} ${FileExists} "$PROFILE\.timon\run\timon-service.vbs"
       InitPluginsDir
       File /oname=$PLUGINSDIR\timon-service-pause.ps1 "${PROJECT_DIR}\build\timon-service-pause.ps1"
-      System::Call 'kernel32::GetCurrentProcessId() i .r0'
-      ${StdUtils.ExecShellWaitEx} $1 $2 "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" "runas" '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\timon-service-pause.ps1" -InstallerPid $0 -User "$%USERNAME%" -Exe "${APP_EXECUTABLE_FILENAME}" -InstallDir "$INSTDIR"'
-      ${If} $1 == "ok"
-        ${StdUtils.WaitForProcEx} $0 $2
-      ${Else}
-        ; Refused elevation (a standard account on a managed PC, 21/10/2026):
-        ; the same script, unelevated, still pauses the user's own Interactive
-        ; task and ends the daemon in the user's session. A session-0 S4U
-        ; service is out of its reach: the stock check reports it later.
-        ${StdUtils.ExecShellWaitEx} $1 $2 "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" "open" '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\timon-service-pause.ps1" -InstallerPid $0 -User "$%USERNAME%" -Exe "${APP_EXECUTABLE_FILENAME}" -InstallDir "$INSTDIR"'
+      ; The data directory, read on this machine while the installer runs.
+      ReadEnvStr $3 TIMON_HOME
+      ${If} $3 == ""
+        StrCpy $3 "$PROFILE\.timon"
+      ${EndIf}
+      ${Do}
+        System::Call 'kernel32::GetCurrentProcessId() i .r0'
+        ${StdUtils.ExecShellWaitEx} $1 $2 "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" "runas" '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\timon-service-pause.ps1" -InstallerPid $0 -Exe "${APP_EXECUTABLE_FILENAME}" -InstallDir "$INSTDIR" -TimonHome "$3"'
         ${If} $1 == "ok"
           ${StdUtils.WaitForProcEx} $0 $2
+        ${Else}
+          ; Refused elevation (a standard account on a managed PC, 21/10/2026):
+          ; the same script, unelevated, still pauses the user's own Interactive
+          ; task and ends the daemon in the user's session. A session-0 S4U
+          ; service is out of its reach, and the script says so.
+          ${StdUtils.ExecShellWaitEx} $1 $2 "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" "open" '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\timon-service-pause.ps1" -InstallerPid $0 -Exe "${APP_EXECUTABLE_FILENAME}" -InstallDir "$INSTDIR" -TimonHome "$3"'
+          ${If} $1 == "ok"
+            ${StdUtils.WaitForProcEx} $0 $2
+          ${EndIf}
         ${EndIf}
-      ${EndIf}
+        ; Only the script's own "nothing of Timon runs any more" goes on.
+        ${If} $1 == "ok"
+        ${AndIf} $0 == 0
+          ${ExitDo}
+        ${EndIf}
+        StrCpy $4 ${TIMON_SERVICE_PAUSE_FAILED}
+        ${If} $1 != "ok"
+          ; Still the installer's own process id: the script never ran.
+          StrCpy $0 "not run"
+        ${ElseIf} $0 == ${TIMON_SERVICE_STILL_RUNNING}
+          StrCpy $4 ${TIMON_SERVICE_STILL_RUNNING}
+        ${EndIf}
+        ${If} $4 == ${TIMON_SERVICE_PAUSE_FAILED}
+          ; The script wrote nothing, or not to its end: its journal says so
+          ; from here, for the diagnostic report.
+          CreateDirectory "$3\tmp"
+          ClearErrors
+          FileOpen $5 "$3\tmp\timon-service-pause.log" a
+          ${IfNot} ${Errors}
+            FileSeek $5 0 END
+            FileWrite $5 "installer: the service pause did not complete (PowerShell: $1, result: $0), nothing is installed$\r$\n"
+            FileClose $5
+          ${EndIf}
+          ClearErrors
+        ${EndIf}
+        ${If} ${Silent}
+          SetErrorLevel $4
+          Quit
+        ${EndIf}
+        ${If} $4 == ${TIMON_SERVICE_STILL_RUNNING}
+          ${If} ${Cmd} `MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Timon is still running in the background and could not be stopped.$\r$\n$\r$\nChoose Retry and accept the Windows permission prompt, or restart the computer and run this again. No file has been changed.$\r$\n$\r$\nDetails: $3\tmp\timon-service-pause.log" IDCANCEL`
+            SetErrorLevel $4
+            Quit
+          ${EndIf}
+        ${Else}
+          ${If} ${Cmd} `MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "The check that Timon is stopped in the background did not run: Windows PowerShell failed (PowerShell: $1, result: $0).$\r$\n$\r$\nChoose Retry, or restart the computer and run this again. If it keeps failing, Windows PowerShell may be blocked on this computer. No file has been changed.$\r$\n$\r$\nDetails: $3\tmp\timon-service-pause.log" IDCANCEL`
+            SetErrorLevel $4
+            Quit
+          ${EndIf}
+        ${EndIf}
+      ${Loop}
     ${EndIf}
   ${EndIf}
+  Pop $5
+  Pop $4
+  Pop $3
   Pop $2
   Pop $1
   Pop $0

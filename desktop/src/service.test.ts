@@ -406,6 +406,11 @@ test('quit and stop: stop and start go through the host adapter runner, and the 
   assert.deepEqual(calls, [[desktopServiceRunner(seams.resourcesPath), 'stop'], [desktopServiceRunner(seams.resourcesPath), 'start']]);
   assert.ok(calls[0]![0]!.endsWith(join('dist', 'host', 'desktop-service-runner.js')), 'no Windows command is spelled out here');
   await assert.rejects(controlDesktopService('stop', seams, async () => { throw new Error('elevation refused'); }), /elevation refused/);
+  // The update that finds the previous version's daemon still running asks the same runner to replace it.
+  calls.length = 0;
+  assert.equal(await controlDesktopService('restart', seams, async (args) => { calls.push(args); return { stdout: 'service restarted (scheduled task TimonOrchestrator)\r\n' }; }),
+    'service restarted (scheduled task TimonOrchestrator)');
+  assert.deepEqual(calls, [[desktopServiceRunner(seams.resourcesPath), 'restart']]);
 
   assert.equal(serviceStoppedByUser(home), false);
   mkdirSync(join(home, 'run'), { recursive: true });
