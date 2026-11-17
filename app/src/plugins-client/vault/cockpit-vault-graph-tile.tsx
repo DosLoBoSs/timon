@@ -21,43 +21,43 @@ import { NativeViewCover } from '@/lib/native-view-cover';
 export function CockpitVaultGraphTile({ poignee, className }: WidgetProps) {
   // The magnifier and the expand button live in the header, the only place with
   // room; what they open lives elsewhere. Hence the state held here.
-  const [rechercheOuverte, setRechercheOuverte] = useState(false);
-  const [pleinEcran, setPleinEcran] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
   // Escape closes the full screen. Search comes first: a first Escape closes
   // the field, only a second one leaves the full screen.
   useEffect(() => {
-    if (!pleinEcran) return;
+    if (!fullscreen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (rechercheOuverte) setRechercheOuverte(false);
-      else setPleinEcran(false);
+      if (searchOpen) setSearchOpen(false);
+      else setFullscreen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [pleinEcran, rechercheOuverte]);
+  }, [fullscreen, searchOpen]);
 
   // ONE single copy of the graph is mounted at a time: two instances would
   // mean two WebGL contexts and two simulations. Moving it from one parent to
   // the other remounts it, but the scene finds its layout intact — the nodes
   // are memoised in VaultGraph3D and already carry their coordinates.
-  const graphe = (
+  const graph = (
     <VaultGraph3D
-      searchOpen={rechercheOuverte}
-      onCloseSearch={() => setRechercheOuverte(false)}
+      searchOpen={searchOpen}
+      onCloseSearch={() => setSearchOpen(false)}
     />
   );
 
-  const boutons = (
+  const buttons = (
     <>
       <button
         type="button"
-        onClick={() => setRechercheOuverte((v) => !v)}
+        onClick={() => setSearchOpen((v) => !v)}
         aria-label={t('vault.filterNotes')}
-        aria-pressed={rechercheOuverte}
+        aria-pressed={searchOpen}
         className={cn(
           'grid size-6 place-items-center rounded transition-colors',
-          rechercheOuverte
+          searchOpen
             ? 'bg-muted text-foreground'
             : 'text-muted-foreground/70 hover:bg-muted hover:text-foreground',
         )}
@@ -66,11 +66,11 @@ export function CockpitVaultGraphTile({ poignee, className }: WidgetProps) {
       </button>
       <button
         type="button"
-        onClick={() => setPleinEcran((v) => !v)}
-        aria-label={pleinEcran ? t('vault.exitFullscreen') : t('vault.enterFullscreen')}
+        onClick={() => setFullscreen((v) => !v)}
+        aria-label={fullscreen ? t('vault.exitFullscreen') : t('vault.enterFullscreen')}
         className="grid size-6 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
       >
-        {pleinEcran ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+        {fullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
       </button>
     </>
   );
@@ -83,18 +83,18 @@ export function CockpitVaultGraphTile({ poignee, className }: WidgetProps) {
         </span>
         <span className="text-[11px] text-muted-foreground/50">{t('vault.graph3d')}</span>
         <div className="ml-auto flex items-center gap-1.5">
-          {boutons}
+          {buttons}
           {poignee}
         </div>
       </header>
 
       <div className="min-h-0 flex-1">
-        {pleinEcran ? (
+        {fullscreen ? (
           <div className="grid h-full w-full place-items-center px-4 text-center text-[11px] text-muted-foreground/60">
             {t('vault.openFullscreen')}
           </div>
         ) : (
-          graphe
+          graph
         )}
       </div>
 
@@ -102,7 +102,7 @@ export function CockpitVaultGraphTile({ poignee, className }: WidgetProps) {
           the tile the containing block of its `position: fixed` descendants. A
           full screen placed inside would therefore be contained in the tile, and
           clipped by its `overflow-hidden`. */}
-      {pleinEcran && createPortal(
+      {fullscreen && createPortal(
         <div className="fixed inset-0 z-50 flex flex-col bg-background/95 p-4 backdrop-blur-sm">
           <NativeViewCover />
           <header className="flex shrink-0 items-center gap-2.5 pb-3">
@@ -110,10 +110,10 @@ export function CockpitVaultGraphTile({ poignee, className }: WidgetProps) {
               Vault
             </span>
             <span className="text-[11px] text-muted-foreground/50">{t('vault.graph3d')}</span>
-            <div className="ml-auto flex items-center gap-1.5">{boutons}</div>
+            <div className="ml-auto flex items-center gap-1.5">{buttons}</div>
           </header>
           <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border">
-            {graphe}
+            {graph}
           </div>
         </div>,
         document.body,
