@@ -119,7 +119,7 @@ export function OrchestratorSelfPanel({ slug }: { slug: string | null }) {
           <>
             <span className="text-muted-foreground">{t('orchestratorSelf.mem')}</span>
             <span className="tabular-nums text-[11px]">
-              {Math.round(s.memoryCurrentBytes / 1024 / 1024)} MB
+              {Math.round(s.memoryCurrentBytes / 1024 / 1024)} MB{/* i18n-exempt: unit symbol */}
             </span>
           </>
         )}

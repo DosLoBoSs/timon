@@ -149,6 +149,7 @@ export function ModelImport({ models }: { models: readonly ModelListing[] | null
             <input
               value={languages}
               onChange={(event) => { setLanguages(event.target.value); setInvalidLanguages(false); }}
+              // i18n-exempt: language codes
               placeholder="fr, en"
               aria-invalid={invalidLanguages}
               className="h-8 w-full max-w-xs rounded-md bg-muted/60 px-2.5 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring"

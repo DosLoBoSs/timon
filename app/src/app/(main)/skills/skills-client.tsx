@@ -278,6 +278,7 @@ function NewSkillDialog({ open, onOpenChange, taken, onCreated }: {
               aria-describedby={error ? 'new-skill-error' : undefined}
               value={id}
               onChange={(e) => setId(e.target.value)}
+              // i18n-exempt: identifier format
               placeholder="skill-id"
               autoComplete="off"
               spellCheck={false}

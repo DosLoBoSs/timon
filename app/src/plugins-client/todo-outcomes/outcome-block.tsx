@@ -149,6 +149,7 @@ export function OutcomeBlock() {
           <Input
             value={duplicateOf}
             onChange={(e) => setDuplicateOf(e.target.value)}
+            // i18n-exempt: identifier format
             placeholder="TIM-0001"
             aria-invalid={duplicateInvalid}
             className={cn('h-8 w-40 text-[12px]', duplicateInvalid && 'border-destructive')}

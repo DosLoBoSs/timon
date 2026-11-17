@@ -117,7 +117,7 @@ export function GitPanel({ agentId, slug }: { agentId: string; slug: string | nu
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={WIDGET_TOOLBAR}>
-        <div className="flex min-w-0 flex-1 items-center gap-0.5" role="tablist" aria-label="Git">
+        <div className="flex min-w-0 flex-1 items-center gap-0.5" role="tablist" aria-label="Git" /* i18n-exempt: product name */>
           {TABS.filter((x) => x.id !== 'publish' || publishOn).map(({ id, icon: Icon }) => (
             <button
               key={id}

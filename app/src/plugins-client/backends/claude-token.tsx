@@ -103,6 +103,7 @@ export function ClaudeTokenPanel(): ReactElement | null {
         title={t('backendsSettings.claudeToken.title')}
         description={t('backendsSettings.claudeToken.hint', { settingsPath: settingsPath('system', 'installation') })}
         label={t('providerPage.claudeToken.field')}
+        // i18n-exempt: token format
         placeholder="sk-ant-oat01-…"
         submitLabel={t('backendsSettings.save')}
         onSubmit={(token) => send('PUT', token)}

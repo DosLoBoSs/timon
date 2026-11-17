@@ -438,7 +438,7 @@ export function MessagesClient({ initialAgent }: { initialAgent?: string }) {
           </Select>
         </div>
         <div className="relative flex min-w-[200px] flex-1 flex-col gap-1">
-          <label className="text-xs text-muted-foreground">&nbsp;</label>
+          <label className="text-xs text-muted-foreground">{/* i18n-exempt: spacer aligning the search box */}&nbsp;</label>
           <Search className="pointer-events-none absolute bottom-2.5 left-2.5 size-3 text-muted-foreground" />
           <Input
             value={query}

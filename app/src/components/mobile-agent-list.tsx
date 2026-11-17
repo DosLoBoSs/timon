@@ -188,7 +188,7 @@ export function MobileAgentList() {
 
             <div className="flex items-center justify-between px-4 py-2">
               <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-foreground">
-                {t('mobileAgentList.title')} <span className="text-muted-foreground">.main</span>
+                {t('mobileAgentList.title')} <span className="text-muted-foreground">{/* i18n-exempt: decorative suffix */}.main</span>
               </span>
               <button
                 type="button"

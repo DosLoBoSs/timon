@@ -267,7 +267,7 @@ function AgentIdentity({ config, onChange }: { config: Record<string, unknown>; 
         <ChipSelect options={catalogues.mcp.map((server) => ({ id: server.id, label: server.name }))} value={strList(config.mcpServers)} onChange={(mcpServers) => set({ mcpServers })} empty={t('workflows.noCatalogue')} />
       </Field>
       <Field label={t('workflows.allowedTools')} hint={t('workflows.allowedToolsHint')}>
-        {/* code-font: tool patterns such as mcp__notes__*, read by the CLI as typed */}
+        {/* code-font: tool patterns such as mcp__notes__*, read by the CLI as typed; i18n-exempt: sample tool names */}
         <Input value={strList(config.allowedTools).join(', ')} placeholder="Read, Bash, mcp__notes__*" onChange={(event) => set({ allowedTools: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} className={cn(INPUT, 'font-mono')} />
       </Field>
     </div>

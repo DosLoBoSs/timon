@@ -190,6 +190,7 @@ function RoutineDialog({
                 value={project}
                 onChange={(e) => setProject(e.target.value)}
                 className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                // i18n-exempt: sample project slug
                 placeholder="timon"
               />
             </div>
