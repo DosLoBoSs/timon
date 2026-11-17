@@ -1,7 +1,31 @@
 {
   "onboarding": {
     "preparation": {
-      "title": "Preparando o Timon"
+      "title": "Preparando o Timon",
+      "ready": "O Timon está pronto",
+      "needsYou": "O Timon precisa de você",
+      "items": {
+        "service": "Serviço em segundo plano",
+        "servicePortable": "Modo portátil: o Timon roda enquanto o app está aberto",
+        "serviceAccount": "Serviço em segundo plano, depois da sua conta",
+        "database": "Banco de dados local",
+        "browser": "Navegador integrado",
+        "browserAbsent": "Navegador integrado: não incluído nesta instalação",
+        "providers": "Procurando suas IAs"
+      },
+      "doctorFailed": "O Timon não conseguiu ler esta máquina. Tente novamente daqui a pouco.",
+      "retry": "Tentar novamente",
+      "retrying": "Tentando novamente…",
+      "repair": "Abrir a tela de reparo",
+      "gate": {
+        "waitTitle": "O Timon está terminando a instalação",
+        "waitBody": "Seu agente roda no serviço em segundo plano, então continua trabalhando quando esta janela está fechada. Esta etapa abre assim que o serviço responder.",
+        "waitAccount": "O serviço em segundo plano inicia assim que você entrar na sua conta.",
+        "blockedTitle": "Não foi possível instalar o serviço em segundo plano",
+        "blockedBody": "Seu agente precisa dele para continuar trabalhando quando esta janela está fechada. Corrija o problema abaixo e tente novamente.",
+        "configuring": "Salvando sua configuração…",
+        "configureFailed": "Não foi possível salvar sua configuração"
+      }
     }
   }
 }
