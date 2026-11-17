@@ -204,6 +204,8 @@ Workflows (graphs of nodes — agents, conditions, waits — run from a publishe
   timon workflow get <slug>                    one workflow, with its draft
   timon workflow create --file FILE            creates a workflow from a JSON definition
   timon workflow publish <slug>                publishes the draft as the next version
+  timon workflow approve-script <slug>         approves its script nodes' files as they are now; a run whose
+                                             files changed since the last approval is refused (never from a mission)
   timon workflow run <slug> [--input JSON]     starts a run of the published version
   timon workflow runs <slug>                   the runs of a workflow
   timon workflow status <run_id>               a run with its nodes, definition and spans
@@ -228,6 +230,8 @@ Triggers (source → filter → actions, run unattended):
   timon trigger proposals [--status pending|applied|dismissed]
                                              scripts agents asked for, waiting for you
   timon trigger approve|reject <proposal-id> creates the trigger as yours, or drops it (never from a mission)
+  timon trigger approve-script <id|slug>     approves its scripts' files as they are now; a run whose files
+                                             changed since the last approval is refused (never from a mission)
   timon trigger test <id|slug> [--payload JSON] [--header Name:Value ...] [--execute]
                                              dry run unless --execute
   timon trigger remove <id|slug>
@@ -933,16 +937,22 @@ usage: timon routine <list|create|update|delete> …
 usage: timon trigger test <id|slug> [--payload JSON] [--header Name:Value ...] [--execute]
 ```
 
+### timon trigger approve-script id|slug
+
+```text
+usage: timon trigger approve-script <id|slug>
+```
+
 ### timon trigger remove id|slug
 
 ```text
 usage: timon trigger remove <id|slug>
 ```
 
-### timon trigger list|create|test|remove|proposals|approve|reject …
+### timon trigger list|create|test|remove|proposals|approve|reject|approve-script …
 
 ```text
-usage: timon trigger <list|create|test|remove|proposals|approve|reject> …
+usage: timon trigger <list|create|test|remove|proposals|approve|reject|approve-script> …
 ```
 
 ### timon project-todo add text... [--project SLUG] [--notes TEXT]
