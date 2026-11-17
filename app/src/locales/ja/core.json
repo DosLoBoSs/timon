@@ -2041,7 +2041,6 @@
     "providerRetrying": "{provider} のサーバーに接続できません — 再試行中 ({attempt}/{max})…",
     "providerRetryingNoCount": "{provider} のサーバーに接続できません — 再試行中…",
     "providerRecovered": "{count} 回の再試行後に再接続しました",
-    "providerRecoveredOne": "1 回の再試行後に再接続しました",
     "providerExhausted": "{count} 回再試行しましたが {provider} のサーバーに接続できません",
     "providerExhaustedWithTimon": "プロバイダーで {count} 回、Timon で {timon} 回再試行しましたが {provider} のサーバーに接続できません",
     "timonRetryIn": "Timon の再試行 {attempt}/{max}、{seconds} 秒後…",

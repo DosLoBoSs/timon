@@ -2041,7 +2041,6 @@
     "providerRetrying": "Brak połączenia z serwerami {provider} — ponawianie ({attempt}/{max})…",
     "providerRetryingNoCount": "Brak połączenia z serwerami {provider} — ponawianie…",
     "providerRecovered": "Połączono ponownie po {count} {count, plural, one {próbie} few {próbach} many {próbach} other {próbach}}",
-    "providerRecoveredOne": "Połączono ponownie po 1 próbie",
     "providerExhausted": "Serwery {provider} nieosiągalne po {count} {count, plural, one {próbie} few {próbach} many {próbach} other {próbach}}",
     "providerExhaustedWithTimon": "Serwery {provider} nieosiągalne po próbach dostawcy: {count} i próbach Timon: {timon}",
     "timonRetryIn": "Ponowienie Timon {attempt}/{max} za {seconds} s…",

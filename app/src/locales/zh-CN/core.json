@@ -2071,7 +2071,6 @@
     "providerRetrying": "无法连接 {provider} 的服务器，正在重试（{attempt}/{max}）…",
     "providerRetryingNoCount": "无法连接 {provider} 的服务器，正在重试…",
     "providerRecovered": "重试 {count} 次后已重新连接",
-    "providerRecoveredOne": "重试 1 次后已重新连接",
     "providerExhausted": "重试 {count} 次后仍无法连接 {provider} 的服务器",
     "providerExhaustedWithTimon": "提供商重试 {count} 次、Timon 重试 {timon} 次后，仍无法连接 {provider} 的服务器",
     "timonRetryIn": "Timon 将在 {seconds} 秒后重试（{attempt}/{max}）…",

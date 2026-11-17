@@ -152,7 +152,7 @@ export function retryLineText(line: RetryLine): { title: string; detail: string 
     }
     case 'recovered': {
       const n = line.providerRetries + (line.timon?.attempt ?? 0);
-      return { title: n === 1 ? i18n('chatPage.providerRecoveredOne') : i18n('chatPage.providerRecovered', { count: n }), detail: '' };
+      return { title: i18n('chatPage.providerRecovered', { count: n }), detail: '' };
     }
     case 'exhausted': {
       const timon = line.timonRetries ?? 0;

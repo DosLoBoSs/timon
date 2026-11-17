@@ -2041,7 +2041,6 @@
     "providerRetrying": "{provider} 서버에 연결할 수 없음 — 재시도 중 ({attempt}/{max})…",
     "providerRetryingNoCount": "{provider} 서버에 연결할 수 없음 — 재시도 중…",
     "providerRecovered": "{count}회 재시도 후 다시 연결됨",
-    "providerRecoveredOne": "1회 재시도 후 다시 연결됨",
     "providerExhausted": "{count}회 재시도 후에도 {provider} 서버에 연결할 수 없음",
     "providerExhaustedWithTimon": "공급자 재시도 {count}회와 Timon 재시도 {timon}회 후에도 {provider} 서버에 연결할 수 없음",
     "timonRetryIn": "Timon 재시도 {attempt}/{max}, {seconds}초 후…",
