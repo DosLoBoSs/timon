@@ -69,8 +69,8 @@ test('narrow chat: each column is an island panel with its own tabs and cards', 
   const { WidgetHost, useWidgetHost } = await import('../components/widget-host/widget-host');
   const { ChatWidgetRail, useChatColumns, useChatRailsLayout } = await import('../components/chat/chat-rails');
 
-  const seen: { palette: string[]; tiroir: boolean; gouttieres: number[]; open: (c: string | null) => void } = {
-    palette: [], tiroir: false, gouttieres: [], open: () => {},
+  const seen: { palette: string[]; drawer: boolean; gutters: number[]; open: (c: string | null) => void } = {
+    palette: [], drawer: false, gutters: [], open: () => {},
   };
   function Probe() {
     seen.palette = useWidgetHost().palette.map((w) => w.id);
@@ -80,8 +80,8 @@ test('narrow chat: each column is an island panel with its own tabs and cards', 
     const { colonnes: chatColumns, choisirOnglet: pickTab } = useChatColumns();
     const rails = useChatRailsLayout(chatColumns);
     const [openSide, setOpenSide] = React.useState<string | null>(null);
-    seen.tiroir = rails.tiroir;
-    seen.gouttieres = [rails.gauche.gouttiere, rails.droite.gouttiere];
+    seen.drawer = rails.tiroir;
+    seen.gutters = [rails.gauche.gouttiere, rails.droite.gouttiere];
     seen.open = setOpenSide;
     return React.createElement('div', { ref: rails.mesurer },
       ...[rails.gauche, rails.droite].flatMap((side) => (side.visible ? side.rails : []).map((rail) =>
@@ -121,8 +121,8 @@ test('narrow chat: each column is an island panel with its own tabs and cards', 
     await React.act(async () => { root.render(view(1)); });
     await until(() => cardsIn(panel('right')).length === 1 && cardsIn(panel('left')).length === 1, 'both panels to show their card');
 
-    assert.equal(seen.tiroir, true);
-    assert.deepEqual(seen.gouttieres, [0, 0], 'the thread reserves nothing');
+    assert.equal(seen.drawer, true);
+    assert.deepEqual(seen.gutters, [0, 0], 'the thread reserves nothing');
     assert.ok(panel('left'), 'a column collapsed on the wide screen is still a panel here');
     assert.equal(panel('right')?.getAttribute('aria-hidden'), 'true', 'mounted closed');
     assert.equal(panel('right')?.querySelectorAll('[role="tab"]').length, 2, 'its real tabs, second column folded in');
@@ -163,7 +163,7 @@ test('narrow chat: each column is an island panel with its own tabs and cards', 
     width = 1400;
     await React.act(async () => { root.render(view(2)); });
     await until(() => document.querySelectorAll('.chat-widget-rail').length === 2, 'the floating columns to come back');
-    assert.equal(seen.tiroir, false);
+    assert.equal(seen.drawer, false);
     assert.equal(panel('left'), null);
     assert.equal(document.querySelectorAll('.chat-widget-drawer').length, 0);
     assert.equal(document.querySelectorAll('.chat-widget-rail').length, 2, 'the right column and its second column');
