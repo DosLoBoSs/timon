@@ -7,10 +7,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ONBOARDING_RECIPES, RECIPE_PLACEHOLDERS, fillRecipe, recipesFor, renderRecipes } from './onboarding-recipes.js';
+import { ESSENTIAL_NAV_PAGES, ONBOARDING_RECIPES, RECIPE_PLACEHOLDERS, fillRecipe, recipesFor, renderRecipes } from './onboarding-recipes.js';
 import { IslandsProposal, readStoredTree, validateIslandsProposal, type StoredIslandSnapshot } from './plugins-bundled/settings/island-model.js';
 import { mergeSnapshot, validateWidgetsProposal, WidgetsProposal, type SnapshotBody } from './plugins-bundled/settings/widget-model.js';
-import { NavProposal, validateNavProposal } from './plugins-bundled/settings/nav-model.js';
+import { NAV_PAGES, NavProposal, validateNavProposal } from './plugins-bundled/settings/nav-model.js';
+import { CORE_ROUTES } from './plugins-bundled/settings/navigate-model.js';
 
 const VALUES: Record<string, string> = {
   '<project>': 'timon-demo',
@@ -95,6 +96,38 @@ for (const recipe of ONBOARDING_RECIPES) {
     }
   });
 }
+
+test('no menu recipe hides an essential page, and each names only real menu entries', () => {
+  // `NAV_PAGES` is the app's registry as the daemon mirrors it; the app's own
+  // test (`app/src/lib/onboarding-recipes.test.ts`) holds the mirror to the
+  // `registerNavItem` calls.
+  const menu = new Set(NAV_PAGES.map((p) => p.path));
+  for (const page of ESSENTIAL_NAV_PAGES) {
+    assert.ok(menu.has(page) || CORE_ROUTES.some((r) => r.path === page), `${page} is not a page of the product`);
+  }
+  const navRecipes = ONBOARDING_RECIPES.filter((r) => r.tool === 'nav_propose');
+  for (const profile of ['developer', 'automation', 'beginner'] as const) {
+    assert.ok(navRecipes.some((r) => r.profile === profile), `${profile} has a menu recipe`);
+  }
+  for (const recipe of navRecipes) {
+    const { hidden = [], order = [], footer = [] } = recipe.payload as { hidden?: string[]; order?: string[]; footer?: string[] };
+    for (const page of hidden) {
+      assert.ok(!ESSENTIAL_NAV_PAGES.includes(page), `${recipe.id} hides ${page}`);
+      assert.ok(menu.has(page), `${recipe.id} hides ${page}, which is not an entry of the product's menu`);
+    }
+    for (const page of [...order, ...footer]) assert.ok(page === '---' || menu.has(page), `${recipe.id} places ${page}`);
+  }
+});
+
+test('the beginner menu keeps the essentials and hides only advanced pages', () => {
+  const beginner = ONBOARDING_RECIPES.find((r) => r.id === 'beginner.nav');
+  assert.ok(beginner);
+  const hidden = beginner.payload.hidden as string[];
+  assert.ok(hidden.length > 0, 'the simpler screen does hide something');
+  const kept = NAV_PAGES.map((p) => p.path).filter((p) => !hidden.includes(p));
+  for (const page of ['/', '/agents', '/bots', '/projects', '/kanban', '/brain']) assert.ok(kept.includes(page), page);
+  for (const page of ['/terminal', '/workflows', '/triggers', '/plugins']) assert.ok(hidden.includes(page), page);
+});
 
 test('ids are unique, every profile has its list, every placeholder is documented', () => {
   assert.equal(new Set(ONBOARDING_RECIPES.map((r) => r.id)).size, ONBOARDING_RECIPES.length);

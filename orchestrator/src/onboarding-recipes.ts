@@ -38,11 +38,21 @@ const ROUTE = { type: 'host:route' };
 const TERMINAL = { type: '@timon/terminal-web:session', params: { scope: 'project:<project>', fresh: true } };
 const BROWSER = { type: '@timon/browser-embedded:view', params: { agent: '<chat-agent>', display: 'auto' } };
 
-/** Every product page except the cockpit and the agents. */
-const ALL_BUT_HOME_AND_AGENTS = [
-  '/brain', '/bots', '/projects', '/multichat', '/kanban', '/triggers', '/workflows',
-  '/dreams', '/activity', '/terminal', '/capabilities', '/plugins',
-];
+/**
+ * Pages no tour hides: the chat (reached from Agents), the TIMs, the projects
+ * with their Kanban, the Brain, and Settings. A menu that keeps only Cockpit
+ * and Agents left a newcomer without the pages the product is built around
+ * (TODO #904).
+ */
+export const ESSENTIAL_NAV_PAGES: readonly string[] = ['/', '/agents', '/bots', '/projects', '/kanban', '/brain', '/settings'];
+
+/**
+ * The advanced pages a newcomer can do without at first. Only the product's
+ * own entries (`NAV_PAGES`, which the app's test holds to its registry): a
+ * plugin's page, like the Users page of multi-user installs, exists on some
+ * installs only, and the card would show its bare path to everyone else.
+ */
+const ADVANCED_NAV_PAGES = ['/multichat', '/triggers', '/workflows', '/dreams', '/activity', '/terminal', '/capabilities', '/plugins'];
 
 /** A chat with nothing around it: both side columns emptied and folded. */
 const BARE_CHAT = {
@@ -59,8 +69,8 @@ export const ONBOARDING_RECIPES: readonly OnboardingRecipe[] = [
     profile: 'automation',
     tool: 'nav_propose',
     when: 'First step: a calmer side menu.',
-    sees: 'The side menu keeps Cockpit, Agents, Triggers, Workflows and Activity; the other pages are hidden, not removed.',
-    payload: { hidden: ['/brain', '/bots', '/projects', '/multichat', '/kanban', '/dreams', '/terminal', '/capabilities', '/plugins'] },
+    sees: 'The side menu keeps Cockpit, Brain, Agents, TIMs, Projects, Kanban, Triggers, Workflows, Activity and Capabilities; Multichat, Dreams, Terminal and Plugins are hidden, not removed.',
+    payload: { hidden: ['/multichat', '/dreams', '/terminal', '/plugins'] },
   },
   {
     id: 'automation.agent-view',
@@ -115,8 +125,8 @@ export const ONBOARDING_RECIPES: readonly OnboardingRecipe[] = [
     profile: 'beginner',
     tool: 'nav_propose',
     when: 'Only after they said yes to a simpler screen.',
-    sees: 'The side menu keeps only the Cockpit and the Agents.',
-    payload: { hidden: ALL_BUT_HOME_AND_AGENTS },
+    sees: 'The side menu keeps Cockpit, Brain, Agents, TIMs, Projects and Kanban; the advanced pages (Multichat, Triggers, Workflows, Dreams, Activity, Terminal, Capabilities, Plugins) are hidden, not removed.',
+    payload: { hidden: ADVANCED_NAV_PAGES },
   },
   {
     id: 'beginner.chat',
