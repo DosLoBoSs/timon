@@ -2,9 +2,7 @@
   "apps": {
     "title": "Conectores oficiais",
     "subtitle": "Os servidores MCP dos serviços com os quais seus agentes trabalham, conectados com um clique.",
-    "count": "{connected} conectados · {total} conectores",
     "loadFailed": "Não foi possível carregar os conectores. Verifique se o Timon está em execução e recarregue a página.",
-    "noMatch": "Nenhum conector corresponde a esta busca.",
     "footer": "Cada conector é um servidor MCP remoto hospedado pelo seu editor, que recebe o que seus agentes enviam a ele. Conectá-lo ainda não o entrega a um agente: adicione-o pelos servidores MCP do agente. Agentes em um backend que só carrega servidores MCP locais ignoram os conectores remotos.",
     "category": {
       "code": "Código",
@@ -20,8 +18,7 @@
     "action": {
       "connect": "Conectar",
       "finishSignIn": "Concluir a entrada",
-      "disconnect": "Desconectar",
-      "close": "Fechar"
+      "disconnect": "Desconectar"
     },
     "card": {
       "open": "Abrir {name}"
@@ -62,8 +59,6 @@
     "toast": {
       "connected": "{name} conectado",
       "consentOpened": "{name}: conclua a entrada na página que foi aberta.",
-      "authorized": "Conector autorizado",
-      "oauthFailed": "Falha na entrada: {error}",
       "connectFailed": "Não foi possível conectar {name}: {error}",
       "disconnected": "{name} desconectado",
       "disconnectFailed": "Não foi possível desconectar {name}: {error}"
@@ -261,14 +256,10 @@
     "search": "Buscar",
     "clearSearch": "Limpar a busca",
     "noTeam": "Sem equipe",
-    "noTeamHint": "Este TIM não pertence a nenhuma equipe.",
-    "memberOf": "Equipe: {team}",
-    "teams": "Equipes",
     "newTeam": "Nova equipe",
     "renameTeam": "Renomear a equipe",
     "deleteTeam": "Excluir a equipe",
     "teamName": "Nome",
-    "teamColor": "Cor",
     "create": "Criar",
     "save": "Salvar",
     "teamCreated": "Equipe criada",
@@ -285,7 +276,6 @@
     "talksWithTeam": "{bot} está na equipe {team}: ele só conversa com TIMs dessa equipe.",
     "talksWithAll": "{bot} não está em nenhuma equipe: ele pode conversar com todos os TIMs.",
     "crossTeamRefused": "Recusado: {from} e {to} não estão na mesma equipe.",
-    "openRail": "TIMs",
     "emptyTitle": "Escolha um TIM à esquerda para conversar com ele.",
     "showRail": "Mostrar a lista de TIMs"
   },
@@ -392,7 +382,6 @@
     "createError": "Não foi possível criar o workflow.",
     "notFound": "Este workflow não existe.",
     "backToList": "Voltar aos workflows",
-    "version": "v{n}",
     "emptyTitle": "Nenhum workflow ainda",
     "emptyHint": "Um workflow é um grafo de gatilhos, agentes e condições. Desenhe um, publique-o e cada execução mostra o que cada agente fez.",
     "neverRun": "Nunca executado",
@@ -402,10 +391,8 @@
     "disabled": "Desativado",
     "add": "Adicionar",
     "nodeCount": "{n, plural, one {# nó} other {# nós}}",
-    "nodeSettings": "Configurações do nó",
     "label": "Rótulo",
     "deleteNode": "Excluir o nó",
-    "identity": "Identidade",
     "identityRef": "Agente existente",
     "identityInline": "Identidade embutida",
     "agentRef": "Agente",
@@ -425,11 +412,6 @@
     "allowedToolsHint": "Nomes ou padrões de ferramentas separados por vírgula, mesclados com a lista do próprio agente.",
     "noCatalogue": "Nada no catálogo ainda.",
     "filter": "Filtrar…",
-    "memory": "Memória",
-    "timeoutMs": "Tempo limite (ms)",
-    "retries": "Novas tentativas",
-    "completion": "Conclusão",
-    "routes": "Rotas de saída",
     "execution": "Execução",
     "inputHint": "Briefing enviado ao agente. Modelos: '{{input.x}}', '{{vars.x}}', '{{nodes.<id>.output}}'.",
     "routesHint": "Portas de saída extras que o agente pode escolher com um bloco ```json timon:output ('{ \"route\": \"…\" }').",
@@ -490,8 +472,6 @@
     "openChat": "Abrir o chat",
     "openTrace": "Abrir o trace",
     "openRun": "Abrir a execução",
-    "running": "Em execução",
-    "completed": "Concluído",
     "wholeRun": "Execução inteira",
     "loadOlder": "Carregar spans mais antigos (mais {count})",
     "spansTruncated": "Exibindo os {shown} mais recentes de {total} spans. Selecione uma missão para ver todos os spans dela.",
@@ -600,7 +580,6 @@
     "resizeChat": "Redimensionar o chat do workflow",
     "chatAgentError": "Não foi possível carregar o agente do workflow.",
     "retryChatAgent": "Tentar novamente",
-    "buildWithAiHint": "Peça ao seu orquestrador que projete o grafo. Ele propõe; você revisa o diff antes que qualquer coisa mude.",
     "architectError": "Não foi possível alcançar o arquiteto.",
     "proposal": "Proposta",
     "accept": "Aceitar",
@@ -778,8 +757,7 @@
         "desc": "Encerra a execução com uma saída baseada em modelo."
       }
     },
-    "noMission": "Nenhuma missão aberta.",
-    "chatAgent": "Agente"
+    "noMission": "Nenhuma missão aberta."
   },
   "session": {
     "logout": "Sair",
@@ -1002,16 +980,9 @@
       }
     }
   },
-  "agents": {
-    "viewToggle": {
-      "groupLabel": "Layout da página de agentes",
-      "title": "Visualização {label}"
-    }
-  },
   "settings": {
     "title": "Configurações",
-    "description": "Configurações do orquestrador. Ordem de prioridade: variável de ambiente, depois o valor salvo aqui, depois o padrão do código.",
-    "pushNotifications": "Notificações push"
+    "description": "Configurações do orquestrador. Ordem de prioridade: variável de ambiente, depois o valor salvo aqui, depois o padrão do código."
   },
   "appearance": {
     "title": "Aparência",
@@ -1236,11 +1207,7 @@
       }
     }
   },
-  "plugins": {
-    "unsignedAllowed": "Modo desenvolvedor — plugins sem assinatura permitidos"
-  },
   "orchestratorSelf": {
-    "title": "Orquestrador",
     "state": "estado",
     "rebuilding": "recompilando…",
     "since": "desde",
@@ -1322,15 +1289,10 @@
     "error": "Não foi possível aplicar ou recarregar a predefinição. Verifique as configurações e tente novamente."
   },
   "settingsPage": {
-    "forbiddenTitle": "Configurações",
-    "forbidden": "Esta página é reservada ao superadmin.",
     "loadError": "Não foi possível carregar as configurações",
     "saveError": "Não foi possível salvar",
     "resetToDefault": "Restaurar o padrão",
     "saved": "Salvo",
-    "count": "{count} configurações",
-    "overriddenCount": "{count} substituídas",
-    "forcedCount": "{count} forçadas (env / config)",
     "notificationsDescription": "Este dispositivo. A assinatura fica neste navegador, não em uma configuração global.",
     "categories": "Categorias",
     "selectCategory": "Categoria",
@@ -1823,10 +1785,7 @@
       "reasonOtherRole": "{named} tem outro papel",
       "reasonUnknown": "o dispatcher escolheu o agente que tem o papel"
     },
-    "depsBadge": "depende de {count}",
     "depsTitle": "Depende de:",
-    "dependentsBadge": "necessária para {count}",
-    "chainBadge": "cadeia de {count}",
     "dependentsTitle": "Tarefas que dependem desta (elas impedem a exclusão):",
     "chainLink": "cadeia de verificação",
     "notOnBoard": "fora do quadro",
@@ -1885,7 +1844,6 @@
     "autoFitView": "Ajustar a visualização",
     "poleProjects": "{count, plural, one {# projeto} other {# projetos}}",
     "newPole": "Novo polo",
-    "editPole": "Editar polo",
     "editPoleNamed": "Editar o polo {name}",
     "poleName": "Nome",
     "poleColor": "Cor",
@@ -2102,7 +2060,6 @@
     "backendModelOfConv": "Backend + modelo desta conversa",
     "currentlyRunning": "atual: {model}",
     "perMissionOverride": "Substituição por missão; não afeta a configuração do agente",
-    "currentLlm": "LLM atual",
     "thinkingLevelIcon": "Nível de raciocínio",
     "composerProject": "Projeto {name}",
     "copyMarkdown": "Copiar como Markdown",
@@ -2144,8 +2101,6 @@
       }
     },
     "reasoningLevelTitle": "Nível de raciocínio: quanto maior, mais computação o modelo gasta na resposta",
-    "default": "padrão",
-    "modelDefault": "Padrão do modelo",
     "contextWindowUsed": "janela de contexto usada pelo último turno ({used} de {limit} tokens, {pct}%)",
     "contextWindowUsedUnknown": "janela de contexto usada pelo último turno ({used} tokens — janela do modelo desconhecida)",
     "leftRail": "Coluna esquerda do chat",
@@ -2186,7 +2141,6 @@
     "cannotOpen": "não foi possível abrir {path}",
     "dirtyWorkingTreeConfirm": "Árvore de trabalho com alterações ({count, plural, one {# arquivo} other {# arquivos}}). Trocar para “{branch}” mesmo assim?",
     "checkoutFailed": "checkout falhou",
-    "noProjectForAgent": "Nenhum projeto associado a este agente",
     "refresh": "Atualizar",
     "clean": "Limpa",
     "occupiedByWorktree": "ocupada por um worktree",
@@ -2336,7 +2290,6 @@
     "revokeFailed": "Não foi possível revogar a aprovação."
   },
   "orchestration": {
-    "tab": "Orquestração",
     "intro": "Para quem este agente pode delegar trabalho: missões que ele inicia e tarefas do Kanban que ele atribui. As mensagens não são afetadas.",
     "saveFirst": "Salve o agente primeiro e depois escolha quem ele orquestra.",
     "unavailable": "A lista de delegação não está disponível para a sua conta.",
@@ -2364,7 +2317,6 @@
     "nobodyYet": "Ninguém ainda. Pesquise um agente acima para adicioná-lo.",
     "everyoneNote": "Todos os agentes, inclusive os criados depois. Escolha Nenhum para escolher um por um.",
     "remove": "Remover {name}",
-    "filter": "Filtrar agentes",
     "count": "{count} de {total, plural, one {# agente} other {# agentes}}",
     "empty": "Não há outro agente.",
     "noMatch": "Nenhum agente corresponde.",
@@ -2389,7 +2341,6 @@
     "switch": "Trocar mesmo assim",
     "convert": "Converter",
     "renew": "Renovar",
-    "rebuild": "Recriar",
     "detach": "Desanexar",
     "cut": "Interromper mesmo assim",
     "discardChanges": "Descartar as alterações não salvas?",
@@ -2397,8 +2348,7 @@
     "deleteDoc": "Excluir {name}?",
     "deleteFile": "Excluir “{path}”?",
     "moveFile": "Mover “{from}” para “{to}”?",
-    "moveFileToRoot": "Mover “{from}” para a pasta raiz?",
-    "rebuildGrepai": "Excluir todo o índice do grepai e recriá-lo do zero?"
+    "moveFileToRoot": "Mover “{from}” para a pasta raiz?"
   },
   "directoryBrowser": {
     "title": "Escolher uma pasta",
@@ -2447,11 +2397,8 @@
     "directoryPickerUnavailable": "Para navegar pelas pastas, use um aplicativo para desktop do Timon atualizado. Você também pode digitar o caminho diretamente.",
     "directoryPickerFailed": "Não foi possível abrir o seletor de pastas. Você pode digitar o caminho diretamente.",
     "imageInvalid": "era esperado um arquivo de imagem (png, jpg, webp, gif)",
-    "imageTooLarge": "imagem grande demais (máx. 8 MB)",
-    "uploadInvalidResponse": "resposta de upload inválida",
     "avatarUploaded": "avatar enviado — Salve para aplicar",
     "changeAvatar": "Alterar avatar",
-    "removeAvatar": "Remover avatar (volta ao logotipo do projeto / ícone do papel)",
     "colorHint": "borda do nó no canvas; automática a partir do nome se vazia",
     "colorTitle": "Cor do agente",
     "colorAutoTitle": "Cor automática (derivada do nome)",
@@ -2661,13 +2608,10 @@
     "remove": "Remover {title} da interface",
     "palette": {
       "title": "Widgets disponíveis",
-      "open": "Adicionar widgets ({count})",
       "close": "Fechar o catálogo de widgets",
       "hint": "Arraste um widget para uma zona.",
       "move": "Arraste para mover o catálogo",
       "drag": "Arraste {title} para uma zona",
-      "restore": "Adicionar {title}",
-      "noZone": "Nenhuma zona desta página pode conter {title}",
       "search": "Pesquisar um widget…",
       "noMatch": "Nenhum widget corresponde.",
       "empty": "Todos os widgets já estão na tela.",
@@ -2698,7 +2642,6 @@
       "cancelled": "A movimentação de {title} foi cancelada."
     },
     "style": "Aparência do widget",
-    "styleFor": "Aparência de {title}",
     "followSiteStyle": "Seguir o estilo do site",
     "settings": "Configurações do widget",
     "settingsFor": "Configurações de {title}",
@@ -2720,8 +2663,7 @@
     "saveError": "Não foi possível salvar o layout. Tente novamente.",
     "resizeEdge": "Redimensionar {above} e {below} (arraste; Shift para ignorar os pontos de encaixe)",
     "changedElsewhere": "Este layout foi alterado em outra janela. Ele foi recarregado; sua última alteração não foi salva.",
-    "replayedElsewhere": "Este layout foi alterado em outra janela. Sua alteração foi aplicada por cima dela.",
-    "clock": "Relógio"
+    "replayedElsewhere": "Este layout foi alterado em outra janela. Sua alteração foi aplicada por cima dela."
   },
   "seriesGraph": {
     "title": "Grafo da série",
@@ -2731,7 +2673,6 @@
     "origin": "início",
     "iteration": "iter {n}",
     "openGraph": "Grafo da série",
-    "openGraphOf": "Grafo da série {series}",
     "cycleWarning": "Ciclo de dependências: {count} tarefas não puderam ser ordenadas e estão agrupadas na última coluna.",
     "ignoredDeps": "{count, plural, one {# dependência que aponta para fora da série foi ignorada} other {# dependências que apontam para fora da série foram ignoradas}}.",
     "legendHeld": "retida por uma tarefa bloqueada",
@@ -2859,16 +2800,12 @@
     "eyebrow": "Galeria local",
     "title": "Plugins instalados neste computador",
     "subtitle": "Tudo o que está instalado aqui, conectado ou não. Desativar um plugin o mantém no disco com suas configurações.",
-    "empty": "Nenhum plugin instalado ainda. Adicione um com `timon plugin add <package>`.",
     "inserts": "Conecta-se a",
     "insertsNone": "nada (somente a parte do host)",
     "modifies": "Altera",
     "contains": "Instala",
     "enable": "Ativar {name}",
     "disable": "Desativar {name}",
-    "bundled": "Incluídos no Timon",
-    "bundledSubtitle": "Módulos do produto. Desativar um o mantém instalado e tem efeito imediato.",
-    "thirdParty": "Instalados aqui",
     "notInLicence": "Não incluído na sua licença",
     "coreLocked": "Módulo central: o daemon não funciona sem ele.",
     "themeLocked": "Carrega todos os tokens de cor: desativá-lo deixaria o aplicativo sem paleta. Mude o tema em Aparência.",
@@ -2882,7 +2819,6 @@
     "toggleSyncFailed": "Esta aba não conseguiu atualizar: recarregue a página para ver o resultado."
   },
   "inboxPage": {
-    "title": "Caixa de entrada",
     "inboxOf": "Caixa de entrada de",
     "allAgents": "Todos os agentes",
     "pickAgent": "Escolha um agente",
@@ -2910,7 +2846,6 @@
     "parentMissing": "Mensagem original indisponível.",
     "openMission": "Abrir a missão remetente",
     "toMission": "Endereçada à missão {id}",
-    "kind": "Tipo",
     "kindMsg": "mensagem",
     "kindRequest": "solicitação",
     "kindResponse": "resposta",
@@ -2951,7 +2886,6 @@
     "byOrigin": "Tokens por origem",
     "dialogDescription": "O texto desta injeção e de onde ela vem.",
     "copyPath": "Copiar o caminho",
-    "tab": "Injeções",
     "notCreated": "Salve o agente primeiro: suas injeções passam a existir depois que ele é criado.",
     "timelineLabel": "Etapas de injeção, na ordem em que são enviadas",
     "pickStep": "Escolha uma etapa para lê-la.",
@@ -2968,7 +2902,6 @@
       "skills": "skills",
       "project": "projeto"
     },
-    "chars": "{n} caracteres",
     "edit": "Editar",
     "save": "Salvar",
     "cancel": "Cancelar",
@@ -3019,7 +2952,6 @@
     "tasks": "Tarefas",
     "leftRail": "Barra lateral esquerda dos agentes",
     "rightRail": "Barra lateral direita dos agentes",
-    "companyUnavailable": "Ative o plugin Company para organizar seus agentes em um organograma.",
     "managePlugins": "Gerenciar plugins",
     "runningCount": "{count, plural, other {em andamento · #}}",
     "queuedCount": "{count, plural, other {na fila · #}}",
@@ -3465,7 +3397,6 @@
     "hint": "O idioma do sistema segue o idioma do seu navegador ou computador. Alterá-lo recarrega a página."
   },
   "voiceSettings": {
-    "category": "Voz",
     "title": "Ditado por voz",
     "graceHint": "O ditado continua aberto durante uma hesitação: ele termina sozinho após {seconds} segundos de silêncio, ou assim que você o interrompe.",
     "pushToTalk": "Segurar uma tecla para falar",
@@ -4429,28 +4360,6 @@
     "loadFailed": "Não foi possível ler esta configuração.",
     "saveFailed": "Não foi possível salvar esta configuração.",
     "forbidden": "Somente um administrador deste Timon pode alterar esta configuração."
-  },
-  "grepaiPanel": {
-    "project": "projeto",
-    "index": "índice",
-    "missing": "ausente",
-    "noIndex": "Nenhum índice semântico neste projeto — o agente pesquisará em texto simples. Inicializar também inicia o watcher: a primeira varredura pode levar vários minutos.",
-    "initialize": "Inicializar",
-    "initializing": "Inicializando…",
-    "watcher": "watcher",
-    "running": "em execução",
-    "stopped": "parado",
-    "neverIndexed": "nunca indexado",
-    "pid": "pid",
-    "indexed": "indexado",
-    "age": "idade",
-    "stale": "desatualizado",
-    "size": "tamanho",
-    "frozen": "Índice congelado — o agente pode estar lendo código que não existe mais.",
-    "start": "Iniciar",
-    "stop": "Parar",
-    "rebuild": "Reconstruir",
-    "rebuildTitle": "Excluir o índice e reconstruí-lo do zero"
   },
   "dockerPanel": {
     "unreachable": "Daemon do Docker inacessível — não é possível ler o estado dos contêineres.",

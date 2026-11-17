@@ -2,9 +2,7 @@
   "apps": {
     "title": "公式コネクタ",
     "subtitle": "エージェントが使うサービスの MCP サーバーを、ワンクリックで接続します。",
-    "count": "接続済み {connected} · コネクタ {total} 個",
     "loadFailed": "コネクタを読み込めませんでした。Timon が実行中か確認してから、ページを再読み込みしてください。",
-    "noMatch": "この検索に一致するコネクタはありません。",
     "footer": "各コネクタは提供元がホストするリモート MCP サーバーで、エージェントが送信した内容を受け取ります。接続しただけではエージェントには渡されません。エージェントの MCP サーバーから追加してください。ローカル MCP サーバーしか読み込まないバックエンドのエージェントは、リモートコネクタを使用しません。",
     "category": {
       "code": "コード",
@@ -20,8 +18,7 @@
     "action": {
       "connect": "接続",
       "finishSignIn": "サインインを完了",
-      "disconnect": "切断",
-      "close": "閉じる"
+      "disconnect": "切断"
     },
     "card": {
       "open": "{name} を開く"
@@ -62,8 +59,6 @@
     "toast": {
       "connected": "{name} を接続しました",
       "consentOpened": "{name}: 開いたページでサインインを完了してください。",
-      "authorized": "コネクタを承認しました",
-      "oauthFailed": "サインインに失敗しました: {error}",
       "connectFailed": "{name} を接続できませんでした: {error}",
       "disconnected": "{name} を切断しました",
       "disconnectFailed": "{name} を切断できませんでした: {error}"
@@ -261,14 +256,10 @@
     "search": "検索",
     "clearSearch": "検索をクリア",
     "noTeam": "チームなし",
-    "noTeamHint": "このTIMはどのチームにも属していません。",
-    "memberOf": "チーム: {team}",
-    "teams": "チーム",
     "newTeam": "新しいチーム",
     "renameTeam": "チーム名を変更",
     "deleteTeam": "チームを削除",
     "teamName": "名前",
-    "teamColor": "色",
     "create": "作成",
     "save": "保存",
     "teamCreated": "チームを作成しました",
@@ -285,7 +276,6 @@
     "talksWithTeam": "{bot} はチーム {team} に属しています。そのチームのTIMとだけ会話します。",
     "talksWithAll": "{bot} はどのチームにも属していません。すべてのTIMと会話できます。",
     "crossTeamRefused": "拒否: {from} と {to} は同じチームではありません。",
-    "openRail": "TIMs",
     "emptyTitle": "会話するTIMを左から選んでください。",
     "showRail": "TIM一覧を表示"
   },
@@ -392,7 +382,6 @@
     "createError": "ワークフローを作成できませんでした。",
     "notFound": "このワークフローは存在しません。",
     "backToList": "ワークフロー一覧に戻る",
-    "version": "v{n}",
     "emptyTitle": "ワークフローはまだありません",
     "emptyHint": "ワークフローは、トリガー、エージェント、条件からなるグラフです。描いて公開すれば、実行ごとに各エージェントが何をしたかが表示されます。",
     "neverRun": "未実行",
@@ -402,10 +391,8 @@
     "disabled": "無効",
     "add": "追加",
     "nodeCount": "ノード {n} 個",
-    "nodeSettings": "ノードの設定",
     "label": "ラベル",
     "deleteNode": "ノードを削除",
-    "identity": "アイデンティティ",
     "identityRef": "既存のエージェント",
     "identityInline": "インラインのアイデンティティ",
     "agentRef": "エージェント",
@@ -425,11 +412,6 @@
     "allowedToolsHint": "ツール名またはパターンをカンマ区切りで指定します。エージェント自身のリストと統合されます。",
     "noCatalogue": "カタログにはまだ何もありません。",
     "filter": "絞り込み…",
-    "memory": "メモリ",
-    "timeoutMs": "タイムアウト (ms)",
-    "retries": "再試行",
-    "completion": "完了条件",
-    "routes": "出力ルート",
     "execution": "実行",
     "inputHint": "エージェントに送る指示。テンプレート: '{{input.x}}'、'{{vars.x}}'、'{{nodes.<id>.output}}'。",
     "routesHint": "エージェントが ```json timon:output ブロック ('{ \"route\": \"…\" }') で選べる追加の出力ポート。",
@@ -490,8 +472,6 @@
     "openChat": "チャットを開く",
     "openTrace": "トレースを開く",
     "openRun": "実行を開く",
-    "running": "実行中",
-    "completed": "完了",
     "wholeRun": "実行全体",
     "loadOlder": "古いスパンを読み込む (残り {count})",
     "spansTruncated": "{total} 個のスパンのうち最新の {shown} 個を表示しています。ミッションを選ぶと、そのすべてのスパンを閲覧できます。",
@@ -600,7 +580,6 @@
     "resizeChat": "ワークフローチャットのサイズを変更",
     "chatAgentError": "ワークフローエージェントを読み込めませんでした。",
     "retryChatAgent": "再試行",
-    "buildWithAiHint": "オーケストレーターにグラフの設計を依頼しましょう。オーケストレーターが提案し、変更前にあなたが差分を確認します。",
     "architectError": "アーキテクトに接続できませんでした。",
     "proposal": "提案",
     "accept": "承認",
@@ -778,8 +757,7 @@
         "desc": "テンプレート化した出力で実行を終了します。"
       }
     },
-    "noMission": "開いているミッションはありません。",
-    "chatAgent": "エージェント"
+    "noMission": "開いているミッションはありません。"
   },
   "session": {
     "logout": "サインアウト",
@@ -1002,16 +980,9 @@
       }
     }
   },
-  "agents": {
-    "viewToggle": {
-      "groupLabel": "エージェントページのレイアウト",
-      "title": "{label} 表示"
-    }
-  },
   "settings": {
     "title": "設定",
-    "description": "オーケストレーターの設定。優先順位: 環境変数、ここで保存した値、コードの既定値の順。",
-    "pushNotifications": "プッシュ通知"
+    "description": "オーケストレーターの設定。優先順位: 環境変数、ここで保存した値、コードの既定値の順。"
   },
   "appearance": {
     "title": "外観",
@@ -1236,11 +1207,7 @@
       }
     }
   },
-  "plugins": {
-    "unsignedAllowed": "開発者モード — 未署名のプラグインを許可"
-  },
   "orchestratorSelf": {
-    "title": "オーケストレーター",
     "state": "状態",
     "rebuilding": "再ビルド…",
     "since": "起動",
@@ -1322,15 +1289,10 @@
     "error": "プリセットを適用または再読み込みできませんでした。設定を確認して、もう一度お試しください。"
   },
   "settingsPage": {
-    "forbiddenTitle": "設定",
-    "forbidden": "このページはスーパー管理者専用です。",
     "loadError": "設定を読み込めませんでした",
     "saveError": "保存できませんでした",
     "resetToDefault": "既定値に戻す",
     "saved": "保存しました",
-    "count": "設定 {count} 件",
-    "overriddenCount": "上書き {count} 件",
-    "forcedCount": "強制 {count} 件 (環境変数 / 設定ファイル)",
     "notificationsDescription": "このデバイス。サブスクリプションはグローバル設定ではなく、このブラウザーに保存されます。",
     "categories": "カテゴリー",
     "selectCategory": "カテゴリー",
@@ -1823,10 +1785,7 @@
       "reasonOtherRole": "{named} は別のロールを担当しています",
       "reasonUnknown": "ディスパッチャーがそのロールのエージェントを選びました"
     },
-    "depsBadge": "依存 {count}",
     "depsTitle": "依存先:",
-    "dependentsBadge": "被依存 {count}",
-    "chainBadge": "チェーン {count}",
     "dependentsTitle": "このタスクに依存するタスク (削除をブロックします):",
     "chainLink": "検証チェーン",
     "notOnBoard": "ボードにありません",
@@ -1885,7 +1844,6 @@
     "autoFitView": "表示を自動調整",
     "poleProjects": "プロジェクト {count} 件",
     "newPole": "新しいポール",
-    "editPole": "ポールを編集",
     "editPoleNamed": "ポール {name} を編集",
     "poleName": "名前",
     "poleColor": "色",
@@ -2102,7 +2060,6 @@
     "backendModelOfConv": "この会話のバックエンドとモデル",
     "currentlyRunning": "現在: {model}",
     "perMissionOverride": "ミッション単位の上書きです。エージェントの設定には影響しません",
-    "currentLlm": "現在の LLM",
     "thinkingLevelIcon": "推論レベル",
     "composerProject": "プロジェクト {name}",
     "copyMarkdown": "Markdown としてコピー",
@@ -2144,8 +2101,6 @@
       }
     },
     "reasoningLevelTitle": "推論レベル: 高いほど、モデルは回答により多くの計算を費やします",
-    "default": "既定",
-    "modelDefault": "モデルの既定値",
     "contextWindowUsed": "直前のターンで使用したコンテキストウィンドウ ({limit} トークン中 {used}、{pct}%)",
     "contextWindowUsedUnknown": "直前のターンで使用したコンテキストウィンドウ ({used} トークン — モデルのウィンドウは不明)",
     "leftRail": "チャットの左列",
@@ -2186,7 +2141,6 @@
     "cannotOpen": "{path} を開けませんでした",
     "dirtyWorkingTreeConfirm": "作業ツリーに未コミットの変更があります (ファイル {count} 件)。それでも「{branch}」に切り替えますか？",
     "checkoutFailed": "チェックアウトに失敗しました",
-    "noProjectForAgent": "このエージェントに関連付けられたプロジェクトはありません",
     "refresh": "更新",
     "clean": "クリーン",
     "occupiedByWorktree": "ワークツリーで使用中",
@@ -2336,7 +2290,6 @@
     "revokeFailed": "承認を取り消せませんでした。"
   },
   "orchestration": {
-    "tab": "オーケストレーション",
     "intro": "このエージェントが作業を任せられる相手: 起動するミッションと割り当てる Kanban タスク。メッセージには影響しません。",
     "saveFirst": "先にエージェントを保存してから、オーケストレーションする相手を選んでください。",
     "unavailable": "委任リストはあなたのアカウントでは利用できません。",
@@ -2364,7 +2317,6 @@
     "nobodyYet": "まだ誰もいません。上でエージェントを検索して追加してください。",
     "everyoneNote": "後から作成されるものも含め、すべてのエージェント。個別に選ぶには「なし」を選んでください。",
     "remove": "{name} を削除",
-    "filter": "エージェントを絞り込む",
     "count": "{total} 体中 {count} 体のエージェント",
     "empty": "他のエージェントはいません。",
     "noMatch": "一致するエージェントはありません。",
@@ -2389,7 +2341,6 @@
     "switch": "それでも切り替える",
     "convert": "変換",
     "renew": "更新",
-    "rebuild": "再ビルド",
     "detach": "切り離す",
     "cut": "それでも中断",
     "discardChanges": "保存されていない変更を破棄しますか？",
@@ -2397,8 +2348,7 @@
     "deleteDoc": "{name} を削除しますか？",
     "deleteFile": "「{path}」を削除しますか？",
     "moveFile": "「{from}」を「{to}」に移動しますか？",
-    "moveFileToRoot": "「{from}」をルートフォルダーに移動しますか？",
-    "rebuildGrepai": "grepai インデックス全体を削除して、最初から再構築しますか？"
+    "moveFileToRoot": "「{from}」をルートフォルダーに移動しますか？"
   },
   "directoryBrowser": {
     "title": "フォルダーを選択",
@@ -2447,11 +2397,8 @@
     "directoryPickerUnavailable": "フォルダーを参照するには、最新の Timon デスクトップアプリを使用してください。パスを直接入力することもできます。",
     "directoryPickerFailed": "フォルダーの選択画面を開けませんでした。パスを直接入力できます。",
     "imageInvalid": "画像ファイル (png、jpg、webp、gif) が必要です",
-    "imageTooLarge": "画像が大きすぎます (最大 8 MB)",
-    "uploadInvalidResponse": "アップロードの応答が無効です",
     "avatarUploaded": "アバターをアップロードしました — 適用するには保存してください",
     "changeAvatar": "アバターを変更",
-    "removeAvatar": "アバターを削除 (プロジェクトのロゴ / ロールのアイコンに戻す)",
     "colorHint": "キャンバス上のノードの枠線。空欄の場合は名前から自動設定",
     "colorTitle": "エージェントの色",
     "colorAutoTitle": "自動の色 (名前から生成)",
@@ -2661,13 +2608,10 @@
     "remove": "{title} をインターフェースから削除",
     "palette": {
       "title": "利用可能なウィジェット",
-      "open": "ウィジェットを追加 ({count})",
       "close": "ウィジェットカタログを閉じる",
       "hint": "ウィジェットをゾーンにドラッグしてください。",
       "move": "ドラッグしてカタログを移動",
       "drag": "{title} をゾーンにドラッグ",
-      "restore": "{title} を追加",
-      "noZone": "このページには {title} を配置できるゾーンがありません",
       "search": "ウィジェットを検索…",
       "noMatch": "一致するウィジェットはありません。",
       "empty": "すべてのウィジェットがすでに画面上にあります。",
@@ -2698,7 +2642,6 @@
       "cancelled": "{title} の移動をキャンセルしました。"
     },
     "style": "ウィジェットの外観",
-    "styleFor": "{title} の外観",
     "followSiteStyle": "サイトのスタイルに従う",
     "settings": "ウィジェットの設定",
     "settingsFor": "{title} の設定",
@@ -2720,8 +2663,7 @@
     "saveError": "レイアウトを保存できませんでした。もう一度お試しください。",
     "resizeEdge": "{above} と {below} のサイズを変更 (ドラッグ。Shift でスナップを無視)",
     "changedElsewhere": "このレイアウトは別のウィンドウで変更されました。再読み込みしたため、直前の変更は保存されていません。",
-    "replayedElsewhere": "このレイアウトは別のウィンドウで変更されました。あなたの変更はその上に適用されました。",
-    "clock": "時計"
+    "replayedElsewhere": "このレイアウトは別のウィンドウで変更されました。あなたの変更はその上に適用されました。"
   },
   "seriesGraph": {
     "title": "シリーズのグラフ",
@@ -2731,7 +2673,6 @@
     "origin": "開始",
     "iteration": "反復 {n}",
     "openGraph": "シリーズのグラフ",
-    "openGraphOf": "シリーズ {series} のグラフ",
     "cycleWarning": "依存関係の循環: {count} 件のタスクを順序付けできなかったため、最後の列にまとめています。",
     "ignoredDeps": "シリーズ外を指す {count} 件の依存関係は無視されました。",
     "legendHeld": "ブロックされたタスクで停止中",
@@ -2859,16 +2800,12 @@
     "eyebrow": "ローカルギャラリー",
     "title": "このマシンにインストールされたプラグイン",
     "subtitle": "ここにインストールされたすべてのもの (接続の有無を問わず)。オフにしても、設定とともにディスクに残ります。",
-    "empty": "インストールされたプラグインはまだありません。`timon plugin add <package>` で追加してください。",
     "inserts": "接続先",
     "insertsNone": "なし (ホスト側のみ)",
     "modifies": "変更内容",
     "contains": "インストール内容",
     "enable": "{name} を有効にする",
     "disable": "{name} を無効にする",
-    "bundled": "Timon に同梱",
-    "bundledSubtitle": "製品のモジュール。オフにしてもインストールされたままで、すぐに反映されます。",
-    "thirdParty": "ここにインストール",
     "notInLicence": "ライセンスに含まれていません",
     "coreLocked": "コアモジュール — これがないとデーモンは動作しません。",
     "themeLocked": "すべての色トークンを持っています — オフにするとアプリにパレットがなくなります。テーマは「外観」で変更してください。",
@@ -2882,7 +2819,6 @@
     "toggleSyncFailed": "このタブを更新できませんでした — 結果を見るにはページを再読み込みしてください。"
   },
   "inboxPage": {
-    "title": "受信箱",
     "inboxOf": "受信箱:",
     "allAgents": "すべてのエージェント",
     "pickAgent": "エージェントを選択",
@@ -2910,7 +2846,6 @@
     "parentMissing": "元のメッセージは利用できません。",
     "openMission": "送信元のミッションを開く",
     "toMission": "ミッション {id} 宛て",
-    "kind": "種類",
     "kindMsg": "メッセージ",
     "kindRequest": "リクエスト",
     "kindResponse": "応答",
@@ -2951,7 +2886,6 @@
     "byOrigin": "出所別のトークン",
     "dialogDescription": "この注入のテキストと、その出所。",
     "copyPath": "パスをコピー",
-    "tab": "注入",
     "notCreated": "先にエージェントを保存してください: 注入内容は作成後に存在します。",
     "timelineLabel": "送信される順の注入ステップ",
     "pickStep": "読むステップを選んでください。",
@@ -2968,7 +2902,6 @@
       "skills": "スキル",
       "project": "プロジェクト"
     },
-    "chars": "{n} 文字",
     "edit": "編集",
     "save": "保存",
     "cancel": "キャンセル",
@@ -3019,7 +2952,6 @@
     "tasks": "タスク",
     "leftRail": "エージェントの左サイドバー",
     "rightRail": "エージェントの右サイドバー",
-    "companyUnavailable": "エージェントを組織図に整理するには、Company プラグインを有効にしてください。",
     "managePlugins": "プラグインを管理",
     "runningCount": "{count, plural, other {実行中 · #}}",
     "queuedCount": "{count, plural, other {待機中 · #}}",
@@ -3465,7 +3397,6 @@
     "hint": "「システムの言語」は、ブラウザーまたはコンピューターの言語に従います。変更するとページが再読み込みされます。"
   },
   "voiceSettings": {
-    "category": "音声",
     "title": "音声入力",
     "graceHint": "言いよどんでも音声入力は続きます: {seconds} 秒間無音が続くか、停止するとすぐに終了します。",
     "pushToTalk": "キーを押している間だけ話す",
@@ -4429,28 +4360,6 @@
     "loadFailed": "この設定を読み取れませんでした。",
     "saveFailed": "この設定を保存できませんでした。",
     "forbidden": "この設定を変更できるのは、この Timon の管理者だけです。"
-  },
-  "grepaiPanel": {
-    "project": "プロジェクト",
-    "index": "インデックス",
-    "missing": "なし",
-    "noIndex": "このプロジェクトにはセマンティックインデックスがありません — エージェントはプレーンテキストで検索します。初期化するとウォッチャーも開始されます: 最初のスキャンには数分かかることがあります。",
-    "initialize": "初期化",
-    "initializing": "初期化中…",
-    "watcher": "ウォッチャー",
-    "running": "実行中",
-    "stopped": "停止中",
-    "neverIndexed": "未インデックス",
-    "pid": "pid",
-    "indexed": "インデックス済み",
-    "age": "経過",
-    "stale": "古い",
-    "size": "サイズ",
-    "frozen": "インデックスが停止しています — エージェントはもう存在しないコードを読んでいる可能性があります。",
-    "start": "開始",
-    "stop": "停止",
-    "rebuild": "再構築",
-    "rebuildTitle": "インデックスを削除して最初から再構築"
   },
   "dockerPanel": {
     "unreachable": "Docker デーモンに接続できません — コンテナの状態を読み取れません。",

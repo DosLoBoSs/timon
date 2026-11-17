@@ -1,6 +1,6 @@
 {
   "brandLogo": {"menu": "Logo", "productLogo": "Show the product logo (screenshots)", "devLogo": "Show the development logo"},
-  "apps": {"title": "Official connectors", "subtitle": "The MCP servers of the services your agents work with, connected in one click.", "count": "{connected} connected · {total} connectors", "loadFailed": "The connectors could not be loaded. Check that Timon is running, then reload the page.", "noMatch": "No connector matches this search.", "footer": "Each connector is a remote MCP server hosted by its publisher, which receives what your agents send it. Connecting it does not give it to an agent yet: add it from the agent's MCP servers. Agents on a backend that only loads local MCP servers skip remote connectors.", "category": {"code": "Code", "data": "Data", "design": "Design", "productivity": "Productivity", "business": "Payments"}, "status": {"connected": "Connected", "blocked": "Name taken"}, "action": {"connect": "Connect", "finishSignIn": "Finish sign-in", "disconnect": "Disconnect", "close": "Close"}, "card": {"open": "Open {name}"}, "details": {"status": {"available": "Not connected", "connecting": "Connecting…", "consent": "Waiting for your sign-in", "connected": "Connected", "blocked": "An MCP server with the same name exists"}, "examples": "What you can ask", "keyKept": "The key is kept in Timon's secrets vault and only sent to this connector.", "vaultOff": "The secrets vault is switched off: this connector cannot be connected.", "getKey": "Get a key", "consentPending": "Sign in on the page that opened, then come back here.", "openConsent": "Open the sign-in page again", "attachHint": "Connected as the MCP server {id}: add it to an agent from its MCP servers.", "blockedHint": "An MCP server named {id} was added by hand. Rename or delete it in Your MCP servers to use this connector.", "remoteOnly": "Agents on a backend that only loads local MCP servers do not receive this connector.", "website": "Website", "privacy": "Privacy policy", "terms": "Terms of use", "endpoint": "MCP endpoint:", "connection": "Connection", "info": "Information", "developer": "Developer", "category": "Category", "signInWith": "Sign in with your {name} account in the browser.", "noAccount": "No account needed.", "read": "Read"}, "confirm": {"disconnect": "Disconnect {name}?", "disconnectDetail": "Its MCP server is removed, with its key if it has one. Agents that used it lose its tools at their next start."}, "toast": {"connected": "{name} connected", "consentOpened": "{name}: finish signing in on the page that opened.", "authorized": "Connector authorized", "oauthFailed": "Sign-in failed: {error}", "connectFailed": "Could not connect {name}: {error}", "disconnected": "{name} disconnected", "disconnectFailed": "Could not disconnect {name}: {error}"}},
+  "apps": {"title": "Official connectors", "subtitle": "The MCP servers of the services your agents work with, connected in one click.", "loadFailed": "The connectors could not be loaded. Check that Timon is running, then reload the page.", "footer": "Each connector is a remote MCP server hosted by its publisher, which receives what your agents send it. Connecting it does not give it to an agent yet: add it from the agent's MCP servers. Agents on a backend that only loads local MCP servers skip remote connectors.", "category": {"code": "Code", "data": "Data", "design": "Design", "productivity": "Productivity", "business": "Payments"}, "status": {"connected": "Connected", "blocked": "Name taken"}, "action": {"connect": "Connect", "finishSignIn": "Finish sign-in", "disconnect": "Disconnect"}, "card": {"open": "Open {name}"}, "details": {"status": {"available": "Not connected", "connecting": "Connecting…", "consent": "Waiting for your sign-in", "connected": "Connected", "blocked": "An MCP server with the same name exists"}, "examples": "What you can ask", "keyKept": "The key is kept in Timon's secrets vault and only sent to this connector.", "vaultOff": "The secrets vault is switched off: this connector cannot be connected.", "getKey": "Get a key", "consentPending": "Sign in on the page that opened, then come back here.", "openConsent": "Open the sign-in page again", "attachHint": "Connected as the MCP server {id}: add it to an agent from its MCP servers.", "blockedHint": "An MCP server named {id} was added by hand. Rename or delete it in Your MCP servers to use this connector.", "remoteOnly": "Agents on a backend that only loads local MCP servers do not receive this connector.", "website": "Website", "privacy": "Privacy policy", "terms": "Terms of use", "endpoint": "MCP endpoint:", "connection": "Connection", "info": "Information", "developer": "Developer", "category": "Category", "signInWith": "Sign in with your {name} account in the browser.", "noAccount": "No account needed.", "read": "Read"}, "confirm": {"disconnect": "Disconnect {name}?", "disconnectDetail": "Its MCP server is removed, with its key if it has one. Agents that used it lose its tools at their next start."}, "toast": {"connected": "{name} connected", "consentOpened": "{name}: finish signing in on the page that opened.", "connectFailed": "Could not connect {name}: {error}", "disconnected": "{name} disconnected", "disconnectFailed": "Could not disconnect {name}: {error}"}},
   "pageToc": {"title": "On this page", "label": "Sections of this page"},
   "mcpTab": {"yourServers": "Your MCP servers"},
   "mcpTab": {"yourServers": "Your MCP servers"},
@@ -45,14 +45,10 @@
     "search": "Search",
     "clearSearch": "Clear the search",
     "noTeam": "No team",
-    "noTeamHint": "This TIM belongs to no team.",
-    "memberOf": "Team: {team}",
-    "teams": "Teams",
     "newTeam": "New team",
     "renameTeam": "Rename team",
     "deleteTeam": "Delete team",
     "teamName": "Name",
-    "teamColor": "Colour",
     "create": "Create",
     "save": "Save",
     "teamCreated": "Team created",
@@ -71,7 +67,6 @@
     "talksWithTeam": "{bot} is in team {team}: it only talks with TIMs of that team.",
     "talksWithAll": "{bot} is in no team: it can talk with every TIM.",
     "crossTeamRefused": "Refused: {from} and {to} are not in the same team.",
-    "openRail": "TIMs",
     "emptyTitle": "Pick a TIM on the left to talk to it.",
     "showRail": "Show the TIMs list"
   },
@@ -166,7 +161,6 @@
     "createError": "Could not create the workflow.",
     "notFound": "This workflow does not exist.",
     "backToList": "Back to workflows",
-    "version": "v{n}",
     "emptyTitle": "No workflow yet",
     "emptyHint": "A workflow is a graph of triggers, agents and conditions. Draw one, publish it, and every run shows what each agent did.",
     "neverRun": "Never run",
@@ -176,10 +170,8 @@
     "disabled": "Disabled",
     "add": "Add",
     "nodeCount": "{n, plural, one {# node} other {# nodes}}",
-    "nodeSettings": "Node settings",
     "label": "Label",
     "deleteNode": "Delete node",
-    "identity": "Identity",
     "identityRef": "Existing agent",
     "identityInline": "Inline identity",
     "agentRef": "Agent",
@@ -199,11 +191,6 @@
     "allowedToolsHint": "Comma-separated tool names or patterns, merged with the agent's own list.",
     "noCatalogue": "Nothing in the catalogue yet.",
     "filter": "Filter…",
-    "memory": "Memory",
-    "timeoutMs": "Timeout (ms)",
-    "retries": "Retries",
-    "completion": "Completion",
-    "routes": "Output routes",
     "execution": "Execution",
     "inputHint": "Brief sent to the agent. Templates: '{{input.x}}', '{{vars.x}}', '{{nodes.<id>.output}}'.",
     "routesHint": "Extra output ports the agent may pick with a ```json timon:output block ('{ \"route\": \"…\" }').",
@@ -265,8 +252,6 @@
     "openChat": "Open chat",
     "openTrace": "Open trace",
     "openRun": "Open run",
-    "running": "Running",
-    "completed": "Completed",
     "wholeRun": "Whole run",
     "loadOlder": "Load older spans ({count} more)",
     "spansTruncated": "Showing the latest {shown} of {total} spans. Select a mission to browse all of its spans.",
@@ -375,7 +360,6 @@
     "resizeChat": "Resize workflow chat",
     "chatAgentError": "The workflow agent could not be loaded.",
     "retryChatAgent": "Retry",
-    "buildWithAiHint": "Ask your orchestrator to design the graph. It proposes; you review the diff before anything changes.",
     "architectError": "Could not reach the architect.",
     "proposal": "Proposal",
     "accept": "Accept",
@@ -551,8 +535,7 @@
         "desc": "End the run with a templated output."
       }
     },
-    "noMission": "No mission open.",
-    "chatAgent": "Agent"
+    "noMission": "No mission open."
   },
   "session": {
     "logout": "Sign out",
@@ -768,16 +751,9 @@
       }
     }
   },
-  "agents": {
-    "viewToggle": {
-      "groupLabel": "Agents page layout",
-      "title": "{label} view"
-    }
-  },
   "settings": {
     "title": "Settings",
-    "description": "Orchestrator settings. Resolution priority: environment variable, then value saved here, then code default.",
-    "pushNotifications": "Push notifications"
+    "description": "Orchestrator settings. Resolution priority: environment variable, then value saved here, then code default."
   },
   "appearance": {
     "title": "Appearance",
@@ -1002,11 +978,7 @@
       }
     }
   },
-  "plugins": {
-    "unsignedAllowed": "Developer mode — unsigned plugins allowed"
-  },
   "orchestratorSelf": {
-    "title": "Orchestrator",
     "state": "state",
     "rebuilding": "rebuild…",
     "since": "since",
@@ -1088,15 +1060,10 @@
     "error": "Could not apply or reload the preset. Check the settings and try again."
   },
   "settingsPage": {
-    "forbiddenTitle": "Settings",
-    "forbidden": "This page is reserved for the superadmin.",
     "loadError": "Could not load settings",
     "saveError": "Could not save",
     "resetToDefault": "Reset to default",
     "saved": "Saved",
-    "count": "{count} settings",
-    "overriddenCount": "{count} overridden",
-    "forcedCount": "{count} forced (env / config)",
     "notificationsDescription": "This device. The subscription lives in this browser, not as a global setting.",
     "categories": "Categories",
     "selectCategory": "Category",
@@ -1593,10 +1560,7 @@
       "reasonOtherRole": "{named} holds another role",
       "reasonUnknown": "the dispatcher chose the agent holding the role"
     },
-    "depsBadge": "depends on {count}",
     "depsTitle": "Depends on:",
-    "dependentsBadge": "needed by {count}",
-    "chainBadge": "chain of {count}",
     "dependentsTitle": "Tasks that depend on this one (they block its deletion):",
     "chainLink": "verification chain",
     "notOnBoard": "not on the board",
@@ -1662,7 +1626,6 @@
     "autoFitView": "Auto-fit view",
     "poleProjects": "{count, plural, one {# project} other {# projects}}",
     "newPole": "New pole",
-    "editPole": "Edit pole",
     "editPoleNamed": "Edit pole {name}",
     "poleName": "Name",
     "poleColor": "Colour",
@@ -1879,7 +1842,6 @@
     "backendModelOfConv": "Backend + model of this conversation",
     "currentlyRunning": "currently: {model}",
     "perMissionOverride": "Per-mission override; does not affect the agent's config",
-    "currentLlm": "Current LLM",
     "thinkingLevelIcon": "Reasoning level",
     "composerProject": "Project {name}",
     "copyMarkdown": "Copy as Markdown",
@@ -1921,8 +1883,6 @@
       }
     },
     "reasoningLevelTitle": "Reasoning level: the higher it is, the more compute the model spends on its answer",
-    "default": "default",
-    "modelDefault": "Model default",
     "contextWindowUsed": "context window used by the last turn ({used} of {limit} tokens, {pct}%)",
     "contextWindowUsedUnknown": "context window used by the last turn ({used} tokens — unknown model window)",
     "leftRail": "Chat left column",
@@ -1963,7 +1923,6 @@
     "cannotOpen": "could not open {path}",
     "dirtyWorkingTreeConfirm": "Dirty working tree ({count, plural, one {# file} other {# files}}). Switch to \"{branch}\" anyway?",
     "checkoutFailed": "checkout failed",
-    "noProjectForAgent": "No project associated with this agent",
     "refresh": "Refresh",
     "clean": "Clean",
     "occupiedByWorktree": "occupied by a worktree",
@@ -2113,7 +2072,6 @@
     "revokeFailed": "Could not revoke the approval."
   },
   "orchestration": {
-    "tab": "Orchestration",
     "intro": "Who this agent may hand work to: missions it spawns and Kanban tasks it assigns. Messages are not affected.",
     "saveFirst": "Save the agent first, then choose who it orchestrates.",
     "unavailable": "The delegation list is not available to your account.",
@@ -2141,7 +2099,6 @@
     "nobodyYet": "Nobody yet. Search an agent above to add one.",
     "everyoneNote": "Every agent, including the ones created later. Pick None to choose one by one.",
     "remove": "Remove {name}",
-    "filter": "Filter agents",
     "count": "{count} of {total, plural, one {# agent} other {# agents}}",
     "empty": "There is no other agent.",
     "noMatch": "No agent matches.",
@@ -2166,7 +2123,6 @@
     "switch": "Switch anyway",
     "convert": "Convert",
     "renew": "Renew",
-    "rebuild": "Rebuild",
     "detach": "Detach",
     "cut": "Cut anyway",
     "discardChanges": "Discard unsaved changes?",
@@ -2174,8 +2130,7 @@
     "deleteDoc": "Delete {name}?",
     "deleteFile": "Delete \"{path}\"?",
     "moveFile": "Move \"{from}\" to \"{to}\"?",
-    "moveFileToRoot": "Move \"{from}\" to the root folder?",
-    "rebuildGrepai": "Delete the whole grepai index and rebuild it from scratch?"
+    "moveFileToRoot": "Move \"{from}\" to the root folder?"
   },
   "directoryBrowser": {
     "title": "Choose a folder",
@@ -2256,11 +2211,8 @@
     "directoryPickerUnavailable": "To browse folders, use an up-to-date Timon desktop app. You can also type the path directly.",
     "directoryPickerFailed": "Could not open the folder picker. You can type the path directly.",
     "imageInvalid": "expected an image file (png, jpg, webp, gif)",
-    "imageTooLarge": "image too large (max 8 MB)",
-    "uploadInvalidResponse": "invalid upload response",
     "avatarUploaded": "avatar uploaded — Save to apply",
     "changeAvatar": "Change avatar",
-    "removeAvatar": "Remove avatar (revert to project logo / role icon)",
     "colorHint": "node border in the canvas; auto from the name if empty",
     "colorTitle": "Agent color",
     "colorAutoTitle": "Auto color (derived from the name)",
@@ -2471,13 +2423,10 @@
     "remove": "Remove {title} from the interface",
     "palette": {
       "title": "Available widgets",
-      "open": "Add widgets ({count})",
       "close": "Close the widget catalog",
       "hint": "Drag a widget into a zone.",
       "move": "Drag to move the catalog",
       "drag": "Drag {title} into a zone",
-      "restore": "Add {title}",
-      "noZone": "No zone on this page can hold {title}",
       "search": "Search a widget…",
       "noMatch": "No widget matches.",
       "empty": "Every widget is already on screen.",
@@ -2501,7 +2450,6 @@
       "cancelled": "Moving {title} was cancelled."
     },
     "style": "Widget appearance",
-    "styleFor": "Appearance of {title}",
     "followSiteStyle": "Follow the site style",
     "settings": "Widget settings",
     "settingsFor": "Settings of {title}",
@@ -2523,8 +2471,7 @@
     "saveError": "Could not save the layout. Please try again.",
     "resizeEdge": "Resize {above} and {below} (drag; Shift to skip the snap points)",
     "changedElsewhere": "This layout was changed in another window. It has been reloaded; your last change was not saved.",
-    "replayedElsewhere": "This layout was changed in another window. Your change was applied on top of it.",
-    "clock": "Clock"
+    "replayedElsewhere": "This layout was changed in another window. Your change was applied on top of it."
   },
   "seriesGraph": {
     "title": "Series graph",
@@ -2534,7 +2481,6 @@
     "origin": "start",
     "iteration": "iter {n}",
     "openGraph": "Series graph",
-    "openGraphOf": "Graph of series {series}",
     "cycleWarning": "Dependency cycle: {count} tasks could not be ordered and are grouped in the last column.",
     "ignoredDeps": "{count, plural, one {# dependency} other {# dependencies}} pointing outside the series {count, plural, one {was} other {were}} ignored.",
     "legendHeld": "held by a blocked task",
@@ -2662,16 +2608,12 @@
     "eyebrow": "Local gallery",
     "title": "Plugins installed on this machine",
     "subtitle": "Everything installed here, plugged in or not. Turning one off keeps it on disk with its settings.",
-    "empty": "No plugin installed yet. Add one with `timon plugin add <package>`.",
     "inserts": "Plugs into",
     "insertsNone": "nothing (host half only)",
     "modifies": "Changes",
     "contains": "Installs",
     "enable": "Enable {name}",
     "disable": "Disable {name}",
-    "bundled": "Included with Timon",
-    "bundledSubtitle": "Modules of the product. Turning one off keeps it installed, and takes effect immediately.",
-    "thirdParty": "Installed here",
     "notInLicence": "Not included in your licence",
     "coreLocked": "Core module — the daemon does not run without it.",
     "themeLocked": "Carries every colour token — switching it off would leave the app with no palette. Change theme in Appearance.",
@@ -2685,7 +2627,6 @@
     "toggleSyncFailed": "This tab could not refresh — reload the page to see the result."
   },
   "inboxPage": {
-    "title": "Inbox",
     "inboxOf": "Inbox of",
     "allAgents": "All agents",
     "pickAgent": "Pick an agent",
@@ -2713,7 +2654,6 @@
     "parentMissing": "Original message not available.",
     "openMission": "Open the sending mission",
     "toMission": "Addressed to mission {id}",
-    "kind": "Kind",
     "kindMsg": "message",
     "kindRequest": "request",
     "kindResponse": "response",
@@ -2754,7 +2694,6 @@
     "byOrigin": "Tokens by origin",
     "dialogDescription": "The text of this injection, and where it comes from.",
     "copyPath": "Copy the path",
-    "tab": "Injections",
     "notCreated": "Save the agent first: its injections exist once it has been created.",
     "timelineLabel": "Injection steps, in the order they are sent",
     "pickStep": "Pick a step to read it.",
@@ -2768,7 +2707,6 @@
       "skills": "skills",
       "project": "project"
     },
-    "chars": "{n} chars",
     "edit": "Edit",
     "save": "Save",
     "cancel": "Cancel",
@@ -2816,7 +2754,6 @@
     "tasks": "Tasks",
     "leftRail": "Agents left sidebar",
     "rightRail": "Agents right sidebar",
-    "companyUnavailable": "Enable the Company plugin to organize your agents in an organization chart.",
     "managePlugins": "Manage plugins",
     "runningCount": "{count, plural, other {in progress · #}}",
     "queuedCount": "{count, plural, other {queued · #}}",
@@ -3279,7 +3216,6 @@
     "hint": "System language follows the language of your browser or computer. Changing it reloads the page."
   },
   "voiceSettings": {
-    "category": "Voice",
     "title": "Voice dictation",
     "graceHint": "Dictation stays open through a hesitation: it ends on its own after {seconds} seconds of silence, or as soon as you stop it.",
     "pushToTalk": "Hold a key to talk",
@@ -4249,28 +4185,6 @@
     "saveFailed": "Could not save this setting.",
     "forbidden": "Only an administrator of this Timon can change this setting."
   },
-  "grepaiPanel": {
-    "project": "project",
-    "index": "index",
-    "missing": "missing",
-    "noIndex": "No semantic index on this project — the agent will search plain text. Initializing also starts the watcher: the first scan can take several minutes.",
-    "initialize": "Initialize",
-    "initializing": "Initializing…",
-    "watcher": "watcher",
-    "running": "running",
-    "stopped": "stopped",
-    "neverIndexed": "never indexed",
-    "pid": "pid",
-    "indexed": "indexed",
-    "age": "age",
-    "stale": "stale",
-    "size": "size",
-    "frozen": "Frozen index — the agent may be reading code that no longer exists.",
-    "start": "Start",
-    "stop": "Stop",
-    "rebuild": "Rebuild",
-    "rebuildTitle": "Delete the index and rebuild it from scratch"
-  },
   "dockerPanel": {
     "unreachable": "Docker daemon unreachable — the containers' state cannot be read.",
     "stack": "stack",
@@ -4318,7 +4232,6 @@
       "cancel": "Cancel",
       "verifying": "Verifying the installer…",
       "ready": "{name} is downloaded and verified.",
-      "openInstaller": "Open the installer",
       "openFolder": "Show in folder",
       "openFailed": "The system could not open it. Use Show in folder.",
       "retry": "Try again",
