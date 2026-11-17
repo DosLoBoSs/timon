@@ -148,6 +148,28 @@ test('@timon/git survives the Kanban switched off; kanban-code follows git', () 
 });
 
 /**
+ * TIM-0147: workflows never touch a Kanban task. They inject only core
+ * services, spawn their own missions and plug into `triggers` through an
+ * optional sub-fiber, so a board switched off, or one the reconciler is still
+ * retrying after a reboot, must leave every workflow running.
+ */
+test('@timon/workflows survives the Kanban switched off', () => {
+  const entry = CATALOG.find((m) => m.id === '@timon/workflows');
+  assert.ok(entry, '@timon/workflows is in the catalogue');
+  for (const id of ['@timon/kanban', '@timon/triggers', '@timon/routines']) {
+    assert.ok(!(entry.dependsOn ?? []).includes(id), `a dependsOn on ${id} would switch every workflow off with it`);
+  }
+  const base = config();
+  const byId = (modules: Record<string, boolean>) => new Map(
+    planEntries(CATALOG, { config: { ...base, modules: { ...base.modules, ...modules } }, capabilities: [] })
+      .map((d) => [d.id, d]),
+  );
+  const kanbanOff = byId({ '@timon/kanban': false });
+  assert.equal(kanbanOff.get('@timon/triggers')?.disabled, true, 'triggers follow the board');
+  assert.equal(kanbanOff.get('@timon/workflows')?.disabled, false, 'workflows do not');
+});
+
+/**
  * TODO #356: the Files card reads `/api/agents/:name/files`, served by the
  * core agents module. Its dependency is declared, so the card can never be
  * on while the route it reads is off; switching it off touches nothing else.
