@@ -2,6 +2,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileS
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { config, setConfig } from '../../src/config/load.js';
+import { canonicalPath } from '../../src/plugins/policy.js';
 
 /**
  * What the operator does for a third party's program: an entry of `pluginPolicy.exec.allow`. A third
@@ -20,7 +21,10 @@ export function authorizeProgram(entry: string): void {
  * its own binary, and so does the witness. Never a symbolic link to node: a
  * third party's launch is judged by the file a link leads to, and a link to
  * node IS node. On POSIX a two-line script that execs node; on Windows, where a
- * script is no executable, a copy. Authorized, as the operator would.
+ * script is no executable, a copy. Authorized, as the operator would: by the
+ * canonical path, which is what `exec-grants.ts` writes and what the launch is
+ * compared with. The temporary folder is not canonical everywhere (`/var` leads
+ * to `/private/var` on macOS, a runner's `RUNNER~1` is a short 8.3 name on Windows).
  */
 export function witnessCli(dir: string, name = 'witness-cli'): string {
   mkdirSync(dir, { recursive: true });
@@ -33,7 +37,7 @@ export function witnessCli(dir: string, name = 'witness-cli'): string {
     writeFileSync(path, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} "$@"\n`);
     chmodSync(path, 0o755);
   }
-  authorizeProgram(path);
+  authorizeProgram(canonicalPath(path));
   return path;
 }
 
