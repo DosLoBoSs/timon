@@ -1221,7 +1221,12 @@ export function blockOnUnusableCwd(task: TaskRow, err: CwdUnusableError): void {
   console.warn(`[dispatcher] task ${task.id} → BLOCKED: ${reason}`);
   dbApi.updateTaskStatus(task.id, 'BLOCKED', {
     blockedReason: reason,
-    blockedReasonCode: daemonMessage('task_cwd_unusable', { cause: err.error, path: err.path, errno: err.code }),
+    blockedReasonCode: daemonMessage('task_cwd_unusable', {
+      // snake_case: an ICU select key cannot hold a hyphen.
+      cause: err.error.replaceAll('-', '_'),
+      path: err.path,
+      errno: err.code,
+    }),
   });
 }
 
