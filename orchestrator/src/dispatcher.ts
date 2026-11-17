@@ -23,7 +23,7 @@ import {
 import { whenProvidersLoaded } from './backends/registry.js';
 import {
   createWorktree, isGitRepo, currentBranch, refreshWorktreeBase, prepareWorktreeDependencies,
-  refreshMergeMessage, integrateMergeMessage,
+  refreshMergeMessage, integrateMergeMessage, branchExists,
   type WorktreeInfo, type RefreshOutcome,
 } from './worktree.js';
 import { agentDir } from './paths.js';
@@ -46,6 +46,7 @@ import {
 import { MissionFenceRefusedError, profileLimits } from './resources.js';
 import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal } from './code-gate.js';
 import { GIT_MISSING_MESSAGE, GIT_MISSING_REASON, gitTaskRefusal } from './task-git.js';
+import { ensureIntegrationBranch, usesIntegrationBranch } from './git-integration.js';
 import { spawnWideningRefusal } from './users/privileged-overrides.js';
 import { isMirrorTask } from './task-mirror.js';
 import {
@@ -500,6 +501,14 @@ export function inheritedBase(task: TaskRow): string | null {
   return null;
 }
 
+/** Why the last worktree creation of a task failed, for its blocked reason. */
+const worktreeFailures = new Map<string, string>();
+
+function worktreeFailure(err: unknown): string {
+  const e = err as Error & { stderr?: string };
+  return ((e.stderr ?? '').trim() || e.message || 'git worktree add failed').slice(-300);
+}
+
 export async function resolveWorktree(task: TaskRow): Promise<WorktreeInfo | null> {
   // Reviews always resolve through their parent below, including on retries.
   // If everything is already in DB (re-spawn), rebuild the info without
@@ -548,6 +557,7 @@ export async function resolveWorktree(task: TaskRow): Promise<WorktreeInfo | nul
       return info;
     } catch (err) {
       console.warn(`[dispatcher] worktree create failed for ${task.id}: ${(err as Error).message}`);
+      worktreeFailures.set(task.id, worktreeFailure(err));
       return null;
     }
   }
@@ -579,6 +589,7 @@ export async function resolveWorktree(task: TaskRow): Promise<WorktreeInfo | nul
       return info;
     } catch (err) {
       console.warn(`[dispatcher] worktree merge failed for ${task.id}: ${(err as Error).message}`);
+      worktreeFailures.set(task.id, worktreeFailure(err));
       return null;
     }
   }
@@ -819,6 +830,148 @@ export function blockIfGitMissing(task: TaskRow, capabilities?: readonly string[
     blockedReason: reason,
     blockedReasonCode: reason === GIT_MISSING_REASON ? GIT_MISSING_MESSAGE : null,
   });
+  return true;
+}
+
+function agentCwd(agentName: string): string | null {
+  try { return loadConfig(agentName).cwd ?? null; } catch { return null; }
+}
+
+function blockTask(task: TaskRow, reason: string, message: DaemonMessage): void {
+  console.warn(`[dispatcher] task ${task.id} → BLOCKED: ${reason}`);
+  dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason: reason, blockedReasonCode: message });
+}
+
+/**
+ * How the chain lands, read up the `deps` like `inheritedBase`: the first task
+ * that carries an `integration_mode` or a `base_ref`. A `code-group` final merge
+ * finds it on its volets, a review or a merge on the code task of its chain.
+ */
+export function inheritedIntegration(task: TaskRow): { mode: string | null; baseRef: string | null } | null {
+  const seen = new Set<string>([task.id]);
+  let level: TaskRow[] = [task];
+  for (let depth = 0; depth < 6 && level.length > 0; depth++) {
+    const next: TaskRow[] = [];
+    for (const t of level) {
+      let ids: unknown;
+      try { ids = JSON.parse(t.deps); } catch { continue; }
+      if (!Array.isArray(ids)) continue;
+      for (const id of ids) {
+        if (typeof id !== 'string' || seen.has(id)) continue;
+        seen.add(id);
+        const dep = dbApi.getTask(id);
+        if (!dep) continue;
+        if (dep.integration_mode || dep.base_ref) {
+          return { mode: dep.integration_mode ?? null, baseRef: dep.base_ref ?? null };
+        }
+        next.push(dep);
+      }
+    }
+    level = next;
+  }
+  return null;
+}
+
+/**
+ * Makes sure the base a `code` or `merge` task starts from exists, and BLOCKS
+ * the task when it cannot (true = blocked). Before this, a missing base made
+ * `createWorktree` fail, `resolveWorktree` return null, and the mission start
+ * in the shared checkout (`docs/KANBAN-PR-PIPELINE.md` §3.4).
+ *
+ * - The chain's `integration_mode` / `base_ref` are frozen on the task first,
+ *   from the task itself or the chain it belongs to. A later step reads the
+ *   project's setting here for a root task that carries neither.
+ * - An integration branch (`branch`, `pr`) is created from the remote ref,
+ *   without a checkout; no remote, an unreachable one or a missing target
+ *   blocks the task with the reason — never a fallback on the local base.
+ * - Any other named base must resolve in the repository.
+ *
+ * What it freezes is written to the row and to `task`, which the caller goes on
+ * using for the worktree.
+ */
+export async function blockIfBaseUnavailable(task: TaskRow): Promise<boolean> {
+  if (task.type !== 'code' && task.type !== 'merge') return false;
+  const cwd = agentCwd(task.agent_name);
+  if (!cwd || !(await isGitRepo(cwd))) return false;
+  if (!task.integration_mode && !task.base_ref) {
+    const inherited = inheritedIntegration(task);
+    if (inherited) {
+      dbApi.setTaskIntegration(task.id, inherited.mode, inherited.baseRef);
+      task.integration_mode = inherited.mode;
+      task.base_ref = inherited.baseRef;
+    }
+  }
+  const base = task.base_branch ?? inheritedBase(task);
+  if (usesIntegrationBranch(task.integration_mode)) {
+    const baseRef = task.base_ref ?? null;
+    if (!base || !baseRef) {
+      const reason =
+        `Integration mode "${task.integration_mode}" needs an integration branch and the remote ref to ` +
+        `cut it from (base "${base ?? 'none'}", remote ref "${baseRef ?? 'none'}"). The task was not ` +
+        `started: set both on the task, then retry it.`;
+      blockTask(task, reason, daemonMessage('integration_branch_unset', {
+        mode: task.integration_mode ?? '', branch: base ?? 'none', baseRef: baseRef ?? 'none',
+      }));
+      return true;
+    }
+    const out = await ensureIntegrationBranch(cwd, { branch: base, baseRef });
+    if (!out.ok) {
+      const reason =
+        `Integration branch ${base} is unavailable: ${out.reason}. The task was not started, and the ` +
+        `branch is never cut from the local base instead of ${baseRef}. Fix the remote or the branch ` +
+        `name, then retry the task.`;
+      blockTask(task, reason, daemonMessage('integration_branch_unavailable', {
+        branch: base, baseRef, detail: out.reason,
+      }));
+      return true;
+    }
+    dbApi.recordIntegration({
+      repo: cwd,
+      branch: base,
+      remote: out.remote,
+      target: out.target,
+      mode: task.integration_mode ?? 'branch',
+      project: task.project,
+      seriesId: task.series_id,
+      baseSha: out.created ? out.sha : null,
+    });
+    if (out.created) console.log(`[dispatcher] integration branch ${base} created from ${baseRef} for task ${task.id}`);
+    if (!task.base_branch) {
+      dbApi.setTaskBaseBranch(task.id, base);
+      task.base_branch = base;
+    }
+    return false;
+  }
+  if (!base || (await branchExists(cwd, base))) return false;
+  const reason =
+    `Base ${base} does not exist in the repository. The task was not started: a ${task.type} task ` +
+    `never runs without its base. Create the branch or change the task's base, then retry it.`;
+  blockTask(task, reason, daemonMessage('task_base_missing', { base, type: task.type }));
+  return true;
+}
+
+/**
+ * A `code` or `merge` task of a git repository that got no worktree is BLOCKED
+ * (true), never spawned: without `cwdOverride` its mission would run in the
+ * agent's folder, the checkout every other agent shares. Both the assigned
+ * agent's folder and the one of the agent that will really run it count.
+ */
+export async function blockIfSharedCheckout(
+  task: TaskRow,
+  wt: WorktreeInfo | null,
+  runningAgent: string,
+): Promise<boolean> {
+  if (wt || (task.type !== 'code' && task.type !== 'merge')) return false;
+  const cwds = [...new Set([agentCwd(task.agent_name), agentCwd(runningAgent)])];
+  let inRepository = false;
+  for (const cwd of cwds) if (cwd && (await isGitRepo(cwd))) inRepository = true;
+  if (!inRepository) return false;
+  const cause = worktreeFailures.get(task.id) ?? 'no worktree could be prepared';
+  worktreeFailures.delete(task.id);
+  const reason =
+    `No worktree for this ${task.type} task (${cause}). It was not started: in the agent's own ` +
+    `folder it would write to the checkout every agent shares. Fix the cause, then retry the task.`;
+  blockTask(task, reason, daemonMessage('task_worktree_unavailable', { type: task.type, cause }));
   return true;
 }
 
@@ -1118,12 +1271,19 @@ async function dispatch(): Promise<void> {
       // Same moment, same reason: without git, `resolveWorktree` finds no
       // repository and the mission would start in the shared checkout.
       if (blockIfGitMissing(task)) continue;
+      // The base a code or merge task starts from must exist before its
+      // worktree does: an integration branch is created from the remote here,
+      // fail closed, and a missing base is a refusal, not the shared checkout.
+      if (await blockIfBaseUnavailable(task)) continue;
 
       // Worktree handling: before the spawn, for code/review/merge
       // types, we resolve the worktree to use. If the agent runs in a
       // worktree, we also inject the timon-worktree skill so it knows
       // where it is and how to commit/cleanup properly.
       const wt = await resolveWorktree(task);
+      // A git task the dispatcher could not give a worktree would start in the
+      // agent's own folder: the shared checkout every other agent writes to.
+      if (await blockIfSharedCheckout(task, wt, effectiveAgentName)) continue;
       // Only the tasks that move a base read it: a detached HEAD reads as null.
       const activeBranch = wt && (task.type === 'merge' || (task.type === 'code' && task.pipeline === 'code-self'))
         ? await currentBranch(wt.sourceRepo)
