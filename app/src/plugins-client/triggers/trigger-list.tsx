@@ -10,7 +10,7 @@ import { isModuleOn, useCapabilities } from '@/lib/capabilities';
 import { fmtDate } from '../routines/routines-page';
 import { requestJson, triggerApi, TRIGGERS_API } from './api';
 import {
-  hookUrl, type AuthScheme, type EventConfig, type ScheduleConfig, type TriggerPublic, type TriggerSource, type WebhookConfig,
+  hookUrl, needsScriptApproval, type AuthScheme, type EventConfig, type ScheduleConfig, type TriggerPublic, type TriggerSource, type WebhookConfig,
 } from './model';
 import { copyWithToast } from './modal';
 import { SecretDialog } from './secret-dialog';
@@ -129,6 +129,16 @@ export function TriggerList({ source, excludeRoutines = false }: { source: Trigg
     setQueue([{ secret: res.data.secret, scheme, url: hookUrl(trigger, window.location.origin) }]);
   }
 
+  // A person vouches for the files as they are now: the daemon refuses any caller but a session.
+  async function reapprove(trigger: TriggerPublic) {
+    if (!(await confirmAction({
+      title: t('triggersPage.scriptApproval.confirm', { name: trigger.name }),
+      confirmLabel: t('triggersPage.scriptApproval.reapprove'),
+    }))) return;
+    const res = await requestJson('POST', triggerApi(trigger.id, 'approve-script'));
+    if (res.ok) { toast.success(t('triggersPage.scriptApproval.done')); void reload(); } else toast.error(res.error);
+  }
+
   async function toggle(trigger: TriggerPublic) {
     const res = await requestJson('PATCH', triggerApi(trigger.id), { enabled: !trigger.enabled });
     if (res.ok) void reload(); else toast.error(res.error);
@@ -201,7 +211,17 @@ export function TriggerList({ source, excludeRoutines = false }: { source: Trigg
                 </Button>
               </div>
             )}
+            {needsScriptApproval(trigger) && (
+              <p className="mt-0.5 text-[11px] text-[hsl(var(--warning))]" data-testid="trigger-script-approval">
+                {t(`triggersPage.scriptApproval.${trigger.script_approval}`)}
+              </p>
+            )}
           </div>
+          {needsScriptApproval(trigger) && (
+            <Button type="button" size="sm" onClick={() => reapprove(trigger)} className="h-7 px-3 text-[12px]">
+              {t('triggersPage.scriptApproval.reapprove')}
+            </Button>
+          )}
           <span className={CHIP}>{sourceChip(trigger)}</span>
           {(trigger.actions ?? []).map((action, index) => (
             <span key={index} className={CHIP}>{t(`triggersPage.actions.${action.type}`)}</span>

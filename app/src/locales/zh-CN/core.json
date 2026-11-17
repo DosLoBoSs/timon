@@ -3764,6 +3764,13 @@
     "rotateFailed": "守护进程未返回密钥",
     "rotateOutbound": "更换签名密钥",
     "rotateOutboundConfirm": "要为「{name}」更换签名密钥吗？接收方在配置新密钥前会拒绝它的请求。",
+    "scriptApproval": {
+      "unapproved": "脚本未批准",
+      "changed": "脚本在批准后已更改",
+      "reapprove": "重新批准",
+      "confirm": "按当前状态批准“{name}”的脚本？之后的运行将使用这些文件。",
+      "done": "脚本已批准"
+    },
     "secret": {
       "title": "Webhook 密钥",
       "outboundTitle": "出站请求签名密钥",

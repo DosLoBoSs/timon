@@ -3517,6 +3517,13 @@
     "rotateFailed": "Le daemon n'a pas renvoyé de secret",
     "rotateOutbound": "nouveau secret de signature",
     "rotateOutboundConfirm": "Donner un nouveau secret de signature à « {name} » ? Le destinataire refuse ses appels tant qu'il n'a pas le nouveau.",
+    "scriptApproval": {
+      "unapproved": "Script non approuvé",
+      "changed": "Script modifié depuis son approbation",
+      "reapprove": "Ré-approuver",
+      "confirm": "Approuver le script de « {name} » tel qu'il est maintenant ? Ses prochaines exécutions utiliseront ces fichiers.",
+      "done": "Script approuvé"
+    },
     "secret": {
       "title": "Secret du webhook",
       "outboundTitle": "Secret de signature des appels envoyés",

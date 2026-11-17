@@ -3697,6 +3697,13 @@
     "rotateFailed": "Der Daemon hat kein Geheimnis zurückgegeben",
     "rotateOutbound": "neues Signaturgeheimnis",
     "rotateOutboundConfirm": "„{name}“ ein neues Signaturgeheimnis geben? Der Empfänger lehnt seine Aufrufe ab, bis er das neue hat.",
+    "scriptApproval": {
+      "unapproved": "Skript nicht genehmigt",
+      "changed": "Skript seit der Genehmigung geändert",
+      "reapprove": "Erneut genehmigen",
+      "confirm": "Das Skript von „{name}“ im jetzigen Zustand genehmigen? Die nächsten Ausführungen verwenden diese Dateien.",
+      "done": "Skript genehmigt"
+    },
     "secret": {
       "title": "Webhook-Geheimnis",
       "outboundTitle": "Signaturgeheimnis der gesendeten Aufrufe",

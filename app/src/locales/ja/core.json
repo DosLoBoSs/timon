@@ -3697,6 +3697,13 @@
     "rotateFailed": "デーモンがシークレットを返しませんでした",
     "rotateOutbound": "新しい署名シークレット",
     "rotateOutboundConfirm": "「{name}」に新しい署名シークレットを設定しますか？受信側は新しいものを受け取るまで呼び出しを拒否します。",
+    "scriptApproval": {
+      "unapproved": "スクリプト未承認",
+      "changed": "承認後にスクリプトが変更されました",
+      "reapprove": "再承認",
+      "confirm": "「{name}」のスクリプトを現在の状態で承認しますか？次回以降の実行ではこれらのファイルが使われます。",
+      "done": "スクリプトを承認しました"
+    },
     "secret": {
       "title": "Webhook のシークレット",
       "outboundTitle": "送信する呼び出しの署名シークレット",

@@ -3517,6 +3517,13 @@
     "rotateFailed": "The daemon did not return a secret",
     "rotateOutbound": "new signing secret",
     "rotateOutboundConfirm": "Give \"{name}\" a new signing secret? The receiver refuses its calls until it has the new one.",
+    "scriptApproval": {
+      "unapproved": "Script not approved",
+      "changed": "Script changed since it was approved",
+      "reapprove": "Re-approve",
+      "confirm": "Approve the script of \"{name}\" as it is now? Its next runs use these files.",
+      "done": "Script approved"
+    },
     "secret": {
       "title": "Webhook secret",
       "outboundTitle": "Signing secret of the calls it sends",

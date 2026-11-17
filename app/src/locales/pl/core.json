@@ -3697,6 +3697,13 @@
     "rotateFailed": "Demon nie zwrócił sekretu",
     "rotateOutbound": "nowy sekret podpisu",
     "rotateOutboundConfirm": "Nadać „{name}” nowy sekret podpisu? Odbiorca będzie odrzucał jego wywołania, dopóki nie dostanie nowego.",
+    "scriptApproval": {
+      "unapproved": "Skrypt niezatwierdzony",
+      "changed": "Skrypt zmieniony od zatwierdzenia",
+      "reapprove": "Zatwierdź ponownie",
+      "confirm": "Zatwierdzić skrypt „{name}” w obecnej postaci? Kolejne uruchomienia użyją tych plików.",
+      "done": "Skrypt zatwierdzony"
+    },
     "secret": {
       "title": "Sekret webhooka",
       "outboundTitle": "Sekret podpisu wysyłanych wywołań",
