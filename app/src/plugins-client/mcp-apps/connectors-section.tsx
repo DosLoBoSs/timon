@@ -172,7 +172,7 @@ export function ConnectorsSection(): ReactElement | null {
       });
       const s = (await start.json().catch(() => ({}))) as { authorize_url?: string; error?: string };
       if (!start.ok || !s.authorize_url) {
-        toast.error(t('apps.toast.connectFailed', { name: view.name, error: (s.error || start.statusText).slice(0, 160) }));
+        toast.error(t('apps.toast.connectFailed', { name: view.name, error: apiErrorMessage(s, start.statusText || { status: start.status }).slice(0, 160) }));
         return false;
       }
       const authorizeUrl = s.authorize_url;

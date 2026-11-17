@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { t as i18n } from '@/lib/i18n';
 import { formatRelativeTime } from '@/lib/intl';
-import { apiErrorMessage } from '@/lib/api-error';
+import { apiErrorMessage, responseErrorMessage } from '@/lib/api-error';
 
 type Dream = {
   id: number;
@@ -71,7 +71,7 @@ export function DreamsClient() {
         headers: { 'content-type': 'text/plain; charset=utf-8' },
         body: instr,
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await responseErrorMessage(r));
       toast.success(i18n('dreamsPage.instrSaved'));
       setShowInstr(false);
     } catch (e) {
@@ -104,7 +104,7 @@ export function DreamsClient() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ status, snooze_days }),
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await responseErrorMessage(r));
       const label = status === 'accepted' ? i18n('dreamsPage.kept') : status === 'rejected' ? i18n('dreamsPage.rejected') : i18n('dreamsPage.snoozed');
       toast.success(i18n('dreamsPage.dreamStatus', { label }));
       setDreams((d) => d.filter((x) => x.id !== id));
