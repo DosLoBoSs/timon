@@ -58,6 +58,11 @@ test('merge retenu quand la review demande des changements', () => {
   );
   assert.equal(gate.ok, false);
   assert.match(gate.ok === false ? (gate.blockedReason ?? '') : '', /changes_requested/);
+  // The code stored beside the reason carries the same review and finding (TODO #1063).
+  assert.deepEqual(gate.ok === false ? gate.blockedReasonCode : null, {
+    code: 'merge_held_changes_requested',
+    params: { reviewId: 'r1', finding: 'verdict: changes_requested\n\nN+1 sur le checkout.' },
+  });
 });
 
 test('merge retenu quand la review est DONE sans verdict exploitable', () => {
@@ -69,6 +74,10 @@ test('merge retenu quand la review est DONE sans verdict exploitable', () => {
       /NO usable verdict/,
       `comment=${JSON.stringify(comment)}`,
     );
+    assert.deepEqual(gate.ok === false ? gate.blockedReasonCode : null, {
+      code: 'merge_held_no_verdict',
+      params: { reviewId: 'r1' },
+    });
   }
 });
 
@@ -379,9 +388,13 @@ test('dep code full : changes_requested sans itération → attente datée, BLOC
   // Attente plausible : aucun motif.
   assert.equal(repairWaitStall(gate, closedAt + REPAIR_WAIT_BLOCK_MS - 1), null);
   // Au-delà : un motif lisible, qui cite la review.
-  const reason = repairWaitStall(gate, closedAt + REPAIR_WAIT_BLOCK_MS + 60_000);
-  assert.match(reason ?? '', /review r1 .* requested changes/);
-  assert.match(reason ?? '', /no iteration has appeared/);
+  const stall = repairWaitStall(gate, closedAt + REPAIR_WAIT_BLOCK_MS + 60_000);
+  assert.match(stall?.reason ?? '', /review r1 .* requested changes/);
+  assert.match(stall?.reason ?? '', /no iteration has appeared/);
+  assert.deepEqual(stall?.code, {
+    code: 'repair_wait_stalled',
+    params: { reviewId: 'r1', codeId: 'c1', waited: 11, limit: 10 },
+  });
 });
 
 test('dep code full : une itération en cours ou une review illisible ne sont jamais "bloquées par délai"', () => {

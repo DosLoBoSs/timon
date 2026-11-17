@@ -16,9 +16,10 @@
  * guarantee here, at the dispatch point, rather than prose instructions in
  * the task descriptions.
  *
- * No runtime import (types only): testable without opening SQLite.
+ * No SQLite import (`db.js` for its types only): testable without opening it.
  */
 import type { TaskRow } from './db.js';
+import { daemonMessage, type DaemonMessage } from './daemon-message.js';
 import { parseReviewVerdict } from './review-verdict.js';
 
 /** Result of the evaluation of a task's deps.
@@ -32,12 +33,16 @@ export type DepGate =
   | {
       ok: false;
       blockedReason: string | null;
+      /** The code of `blockedReason`, for the webview to translate (TODO #1063). */
+      blockedReasonCode?: DaemonMessage;
       waitingFor?: string;
       /** Set when the wait is "review requested changes, no repair iteration
        *  exists": the closure time of that review. The dispatcher turns a wait
        *  that outlasts `REPAIR_WAIT_BLOCK_MS` into a BLOCKED with a reason
        *  (`repairWaitStall`). Absent for every other wait. */
       awaitingRepairSince?: number;
+      /** The refused review and its code task, set with `awaitingRepairSince`. */
+      awaitingRepairOf?: { reviewId: string; codeId: string };
     };
 
 const SATISFIED: DepGate = { ok: true };
@@ -100,16 +105,22 @@ function verdictGate(review: DepTask): DepGate | null {
   const { verdict, feedback } = parseReviewVerdict(review.done_comment);
   if (verdict === 'pass') return null;
   if (verdict === 'changes_requested') {
-    const finding = feedback?.trim() ? `\n\nFinding:\n${feedback.trim()}` : '';
+    const finding = feedback?.trim() ?? '';
     return {
       ok: false,
       blockedReason:
         `Merge held: review ${review.id} carries the verdict "changes_requested". ` +
-        `Address the feedback (new code iteration), then run a review again before merging.${finding}`,
+        `Address the feedback (new code iteration), then run a review again before merging.` +
+        (finding ? `\n\nFinding:\n${finding}` : ''),
+      blockedReasonCode: daemonMessage('merge_held_changes_requested', {
+        reviewId: review.id,
+        finding: finding || 'none',
+      }),
     };
   }
   return {
     ok: false,
+    blockedReasonCode: daemonMessage('merge_held_no_verdict', { reviewId: review.id }),
     blockedReason:
       `Merge held: review ${review.id} is DONE but its done_comment carries NO ` +
       `usable verdict (expected a first line \`verdict: pass\` or \`verdict: changes_requested\`). ` +
@@ -120,7 +131,10 @@ function verdictGate(review: DepTask): DepGate | null {
 
 /** Readable reason for waiting on a `code` dependency whose chain has not
  *  reached a DONE merge yet. */
-function chainWait(dep: DepTask, chainTasks: DepTask[]): { reason: string; awaitingRepairSince?: number } {
+function chainWait(
+  dep: DepTask,
+  chainTasks: DepTask[],
+): { reason: string; awaitingRepairSince?: number; awaitingRepairOf?: { reviewId: string; codeId: string } } {
   const reviews = chainTasks.filter((t) => t.type === 'review');
   const codes = chainTasks.filter((t) => t.type === 'code');
   const lastIter = Math.max(0, ...[...reviews, ...codes].map((t) => t.iteration ?? 1));
@@ -141,6 +155,7 @@ function chainWait(dep: DepTask, chainTasks: DepTask[]): { reason: string; await
       ? {
           reason: `review ${refused.id} of code ${dep.id} requested changes, waiting for the repair iteration`,
           awaitingRepairSince: refused.updated_at,
+          awaitingRepairOf: { reviewId: refused.id, codeId: dep.id },
         }
       : { reason: `review ${refused.id} of code ${dep.id} has no usable verdict` };
   }
@@ -229,6 +244,7 @@ function codeChainGate(
     blockedReason: null,
     waitingFor: wait.reason,
     ...(wait.awaitingRepairSince !== undefined ? { awaitingRepairSince: wait.awaitingRepairSince } : {}),
+    ...(wait.awaitingRepairOf ? { awaitingRepairOf: wait.awaitingRepairOf } : {}),
   };
 }
 
@@ -255,17 +271,25 @@ export const REPAIR_WAIT_BLOCK_MS = 10 * 60 * 1000;
 
 /** Blocked reason for a dependent stuck behind a refused review with no repair
  *  iteration, or null while the wait is still plausible. Pure: the dispatcher
- *  passes `now`. */
-export function repairWaitStall(gate: DepGate, now: number): string | null {
+ *  passes `now`. `code` is null only for a gate built without the refused
+ *  review's ids, whose English the translation could not mirror. */
+export function repairWaitStall(gate: DepGate, now: number): { reason: string; code: DaemonMessage | null } | null {
   if (gate.ok || gate.awaitingRepairSince === undefined) return null;
   const waitedMs = now - gate.awaitingRepairSince;
   if (waitedMs < REPAIR_WAIT_BLOCK_MS) return null;
-  return (
-    `${gate.waitingFor ?? 'Waiting for a repair iteration'} — no iteration has appeared in ` +
-    `${Math.round(waitedMs / 60_000)} min (limit ${Math.round(REPAIR_WAIT_BLOCK_MS / 60_000)} min). ` +
-    `The verification loop did not create one (iteration cap reached, chain root gone, or a lost event). ` +
-    `Create the repair iteration by hand, or re-run the review, then unblock this task.`
-  );
+  const waited = Math.round(waitedMs / 60_000);
+  const limit = Math.round(REPAIR_WAIT_BLOCK_MS / 60_000);
+  const of = gate.awaitingRepairOf;
+  return {
+    reason:
+      `${gate.waitingFor ?? 'Waiting for a repair iteration'} — no iteration has appeared in ` +
+      `${waited} min (limit ${limit} min). ` +
+      `The verification loop did not create one (iteration cap reached, chain root gone, or a lost event). ` +
+      `Create the repair iteration by hand, or re-run the review, then unblock this task.`,
+    code: of
+      ? daemonMessage('repair_wait_stalled', { reviewId: of.reviewId, codeId: of.codeId, waited, limit })
+      : null,
+  };
 }
 
 /**

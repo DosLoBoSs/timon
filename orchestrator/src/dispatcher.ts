@@ -987,10 +987,14 @@ async function dispatch(): Promise<void> {
       // orchestrator.
       // Same for a wait that never ends: a review asked for changes and no
       // repair iteration exists past the limit (TODO #322).
-      const blockedReason = gate.blockedReason ?? repairWaitStall(gate, Date.now());
+      const stall = gate.blockedReason ? null : repairWaitStall(gate, Date.now());
+      const blockedReason = gate.blockedReason ?? stall?.reason ?? null;
       if (blockedReason) {
         console.warn(`[dispatcher] task ${task.id} → BLOCKED: ${blockedReason}`);
-        dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason });
+        dbApi.updateTaskStatus(task.id, 'BLOCKED', {
+          blockedReason,
+          blockedReasonCode: gate.blockedReason ? gate.blockedReasonCode ?? null : stall?.code ?? null,
+        });
         lastWaitLogged.delete(task.id);
       } else if (gate.waitingFor && lastWaitLogged.get(task.id) !== gate.waitingFor) {
         lastWaitLogged.set(task.id, gate.waitingFor);
