@@ -277,6 +277,53 @@ test('bootLicenseState: without an activation key, a damaged store grants nothin
   assert.equal(bootLicenseState({ keys, now: new Date(nowMs()) }).reason, 'expired', 'a hand-installed token says nothing about the server');
 });
 
+test('bootLicenseState: a damaged store gets its clock anchors back from the token', () => {
+  activated();
+  const contact = clock;
+  utimesSync(LICENSE_FILE, contact, contact);
+  writeFileSync(LICENSE_STATE_FILE, '');
+  clock = contact + 3600;
+  assert.equal(bootLicenseState({ keys, now: new Date(nowMs()) }).status, 'valid');
+  assert.equal(readLicenseStore().maxSrv, contact, 'the server clock of the last accepted token');
+  assert.ok((readLicenseStore().lastSeen ?? 0) >= contact, 'and a local clock seen since');
+  // An older token replayed after the reset is a rollback again.
+  writeFileSync(LICENSE_FILE, token(contact - 3600) + '\n');
+  assert.equal(readLicense(LICENSE_FILE, { keys, device: DEVICE, now: new Date(nowMs()) }).reason, 'invalid:clock:rollback');
+  writeFileSync(LICENSE_FILE, '');
+});
+
+/**
+ * No licence is Free (the maintainer's decision, 17/11/2026): whatever is left
+ * on disk, an expired paid token and its activation key included, the loop
+ * asks the licence server nothing and tells nobody anything.
+ */
+test('without a licence in force, no request reaches the licence server and no alert is raised', async () => {
+  for (const build of ['stable', 'beta'] as const) {
+    overrideBuildInfo({ channel: build, builtAt: new Date((clock - 86_400) * 1000).toISOString(), expiresAt: null });
+    try {
+      activated();
+      clock += 25 * 3600;
+      const boot = bootLicenseState({ keys, now: new Date(nowMs()) });
+      assert.equal(boot.reason, 'expired', build);
+      setLicenseState(boot);
+      assert.equal(licenseState().localFree, true, `${build}: the expired licence falls back to Free`);
+      const { refresh, calls } = loop([{ status: 200, body: { token: token(clock) } }]);
+      await refresh.tick(); await refresh.localTick(); await refresh.tick();
+      assert.deepEqual(calls, [], `${build}: no renewal`);
+      assert.deepEqual(notices, [], `${build}: no alert`);
+      assert.equal(licenseState().localFree, true);
+
+      forgetLicenseKey();
+      rmSync(LICENSE_FILE, { force: true });
+      setLicenseState(bootLicenseState({ keys, now: new Date(nowMs()) }));
+      assert.equal(licenseState().reason, 'missing');
+      await refresh.tick(); await refresh.localTick();
+      assert.deepEqual(calls, [], `${build}: nothing to ask without a token either`);
+      assert.deepEqual(notices, []);
+    } finally { overrideBuildInfo(undefined); }
+  }
+});
+
 test('the licence files are replaced whole, with no temporary file left behind', () => {
   activated();
   writeLicenseStore({ every: 600 });

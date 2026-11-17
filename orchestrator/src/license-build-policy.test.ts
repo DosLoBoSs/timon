@@ -133,13 +133,6 @@ test('beta: every other non-valid state is locked as well, keeping its own reaso
   }
 });
 
-test('beta: a stale Free receipt does not bring Free back', () => {
-  beta(3600);
-  setLicenseState({ ...validState(), planId: 'free' });
-  assert.equal(licenseState().status, 'unlicensed');
-  assert.equal(licenseState().localFree, false);
-});
-
 test('stable: a dead licence still falls back to local Free, and its expiresAt is ignored', () => {
   overrideBuildInfo({ channel: 'stable', builtAt: BUILT, expiresAt: iso(clock - 3600) });
   setLicenseState(unlicensed('revoked'));

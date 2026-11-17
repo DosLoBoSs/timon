@@ -32,12 +32,12 @@ export function LicenseBanner() {
   }, [locked]);
   const notice = licenseNotice(license);
   // The banner is global; `/license` is a grantable surface. An account that
-  // cannot open the page still deserves to know the instance is unlicensed —
+  // cannot open the page still deserves to know a licence is about to end —
   // it just gets no link to a screen that would answer 403.
   const capabilities = useCapabilities();
   const canActivate = isPageSurfaceAllowed(capabilities, '/license');
-  // The end dates are announced whatever the setup policy: the "not activated"
-  // banner below stays quiet during the beta, these never do.
+  // The end dates are announced whatever the setup policy: the payment and
+  // offline banner below stays quiet during the beta, these never do.
   // The build's end is a notice card of `@timon/updates`, beside the newer
   // version that is the way out of it; only the licence's end stays here.
   const ending = expiryNotices(license, Date.now()).filter((item) => item.kind === 'license');
@@ -59,14 +59,7 @@ export function LicenseBanner() {
       ))}
       {showLicense && (
         <div className="shrink-0 bg-amber-400 px-3 py-1 text-center text-xs font-semibold text-amber-950">
-          {notice.kind === 'unlicensed' ? (
-            <>
-              {t('license.notActivated')}
-              {canActivate && (
-                <>{' · '}<Link className="underline" href="/license">{t('license.activate')}</Link></>
-              )}
-            </>
-          ) : notice.kind === 'offline' ? (
+          {notice.kind === 'offline' ? (
             t('license.offlineSince', { date: formatDateTime(notice.since) })
           ) : notice.until !== null ? (
             t('license.pastDueUntil', { date: formatDate(notice.until, { year: 'numeric', month: 'numeric', day: 'numeric' }) })

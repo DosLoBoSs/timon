@@ -109,21 +109,44 @@ export function bootLicenseState(opts: VerifyOptions = {}): LicenseState {
  * is rewritten by every activation and renewal, so its date is the last server
  * contact that survived; the tolerance counts from it, as it would have.
  *
- * Only with an activation key: without one, the token was installed by hand
- * and its date says nothing about the server.
+ * Only with an activation key: without one, the token was installed by hand,
+ * nothing renews it, and its date says nothing about the server.
+ *
+ * The clock anchors went with the file too. The token's own `srv` is the
+ * server clock of the last token this install accepted, so it restores
+ * `maxSrv` (an older token replayed after the reset is refused again) and,
+ * with the file date, `lastSeen`. Never later than now: a forged `srv` could
+ * only push the anchors into the future, which locks its own author out.
  */
 function recoverLicenseStore(now: Date): LicenseStore {
   const store = readLicenseStore();
   if (!licenseStoreDamaged() || !readLicenseKey()) return store;
   let tokenWritten: number;
   try { tokenWritten = statSync(LICENSE_FILE).mtimeMs; } catch { return store; }
-  const lastContact = Math.floor(Math.min(tokenWritten, now.getTime()) / 1000);
+  const nowSeconds = Math.floor(now.getTime() / 1000);
+  const lastContact = Math.min(Math.floor(tokenWritten / 1000), nowSeconds);
+  const srv = tokenServerClock();
+  const patch: LicenseStore = {
+    lastContact,
+    lastSeen: lastContact,
+    ...(srv !== null ? { maxSrv: Math.min(srv, nowSeconds) } : {}),
+  };
   console.warn(`[license] license.state.json is unreadable; offline tolerance counted from the licence file date (${new Date(lastContact * 1000).toISOString()})`);
-  try { return writeLicenseStore({ lastContact }); }
+  try { return writeLicenseStore(patch); }
   catch (err) {
     console.warn('[license] could not rewrite license.state.json:', (err as Error).message);
-    return { ...store, lastContact };
+    return { ...store, ...patch };
   }
+}
+
+/** The `srv` claim of the installed token, unverified: only ever used to restore an anchor. */
+function tokenServerClock(): number | null {
+  try {
+    const claims = readFileSync(LICENSE_FILE, 'utf8').trim().split('.')[1];
+    if (!claims) return null;
+    const srv = (JSON.parse(Buffer.from(claims, 'base64url').toString('utf8')) as { srv?: unknown }).srv;
+    return typeof srv === 'number' && Number.isInteger(srv) && srv >= 0 ? srv : null;
+  } catch { return null; }
 }
 
 // ── The loop ────────────────────────────────────────────────────────────────
@@ -245,12 +268,13 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
    */
   const alertStillOff = (cause: string): void => {
     const state = licenseState();
-    if (state.status === 'valid' || state.reason === 'build_expired' || alertedStillOff) return;
+    // No licence is Free, not a failure: nothing to tell anyone.
+    if (state.status === 'valid' || state.localFree === true || state.reason === 'build_expired' || alertedStillOff) return;
     alertedStillOff = true;
     const minutes = Math.round((readLicenseStore().every ?? DEFAULT_EVERY_SECONDS) / 60);
     console.warn(`[license] licence still not valid (${state.reason}) and its renewal failed: ${cause}`);
     // Only a locked beta build gets here: `tick` never renews a licence that
-    // fell back to local Free, which keeps every module anyway.
+    // fell back to Free, which keeps every module anyway.
     notify({
       title: 'Licence not renewed',
       body: `Timon could not renew its licence (${cause}); the modules your licence covers stay off until it goes through. It tries again every ${minutes} min.`,
@@ -264,7 +288,7 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
     if (was.status === 'valid') {
       console.warn(`[license] licence is now off: ${reason} (${detail})`);
       const body = licenseState().localFree
-        ? `${detail}. Timon now uses local Free rights. Extra modules and plugins are suspended; all data is preserved.`
+        ? `${detail}. Timon continues without a licence: every feature and plugin stays available, accounts beyond the first superadmin are suspended; all data is preserved.`
         : `${detail}. This beta has no Free tier: Timon is locked until a valid licence is activated; all data is preserved.`;
       notify({ title: 'Licence is no longer valid', body, urgent: true });
     }
@@ -295,8 +319,9 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
 
   const tick = async (): Promise<void> => {
     lastOffline = false;
-    // Free never contacts the issuer, including installations retaining an old key.
-    if (licenseState().localFree || licenseState().planId === 'free') return;
+    // No licence in force means no server to ask, even with an old activation
+    // key still on disk: a licence that expired falls back to Free silently.
+    if (licenseState().localFree) return;
     // A build past its end date needs no answer from the server.
     if (licenseState().reason === 'build_expired') return;
     const key = readLicenseKey();

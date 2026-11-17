@@ -2,9 +2,10 @@
 title: Activate your licence
 ---
 
-Free works without a licence key, registration, activation or renewal request.
-Free includes every feature and plugin for one account. Activate a paid licence
-only when you need additional user accounts: they come from the Multi-user
+Without a licence, Timon is Free: complete, every feature and plugin, for one
+account. There is no Free licence to get: no key, registration, activation or
+renewal, and nothing to warn you about. Activate a paid licence only when you
+need additional user accounts: they come from the Multi-user
 plugin, reserved for a pro licence (see [Several accounts](multi-user.md)).
 One exception: a third-party layout that replaces the whole interface (White
 Label) needs a licence that includes White Label (see [Kinds](../plugins/kinds.md)).
@@ -48,11 +49,14 @@ sharing the key. See [Command-line interface](cli.md) for targeting an instance.
 Once activated, Timon renews the licence in the background, a few minutes
 apart. A short loss of connection, or a restart, does not turn it off. When
 the network is not ready yet as Timon starts, it tries again three times, 30
-seconds, 1 minute and 2 minutes apart, before going back to its usual pace. If
-Timon starts with its licence not valid and cannot renew it, an alert in the
-Notification center gives the cause (network, or why the renewal was refused).
-When a renewal goes through, the modules the licence covers turn back on by
-themselves, without a restart.
+seconds, 1 minute and 2 minutes apart, before going back to its usual pace.
+
+A licence that ends (expired, revoked or released) does not stop Timon: it
+continues on Free and stops asking for renewals. If the licence ends while
+Timon runs, one alert in the Notification center says why; found ended when
+Timon starts, it falls back to Free without a word, and no banner stays on
+screen. Additional accounts keep their data but cannot sign in until a licence
+is back. To get your paid licence back, enter its key again from your profile.
 
 ## Activation endpoint for custom clients
 
@@ -76,5 +80,6 @@ recording the submitted key. Missing authentication or insufficient rights must
 be resolved through normal sign-in; retrying does not grant permission.
 
 This is a customer activation interface, not an interface for creating,
-issuing or administering other people's licences. Free needs no call to it.
+issuing or administering other people's licences. Without a licence, nothing
+calls it.
 Prefer the supported CLI or Licence screen when you do not need a custom client.

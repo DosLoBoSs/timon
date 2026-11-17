@@ -46,14 +46,16 @@ export type PublicLicense = {
 
 /** What the banner has to say, if anything. Pure, so it can be tested. */
 export type LicenseNotice =
-  | { kind: 'unlicensed' }
   | { kind: 'pastDue'; until: string | null }
   | { kind: 'offline'; since: string };
 
+/**
+ * Only a licence in force has something to say. No licence is Free, whatever
+ * happened to the one before it (expired, revoked, released): nothing to warn
+ * about. A beta build without a licence gets the lock screen, not a banner.
+ */
 export function licenseNotice(license: PublicLicense | null): LicenseNotice | null {
-  if (!license) return null;
-  if (license.localFree && (license.reason === 'missing' || license.reason === null)) return null;
-  if (license.status === 'unlicensed') return { kind: 'unlicensed' };
+  if (!license || license.status !== 'valid') return null;
   if (license.paymentStatus === 'past_due') return { kind: 'pastDue', until: license.subscriptionExpiresAt };
   if (license.offlineSince) return { kind: 'offline', since: license.offlineSince };
   return null;
@@ -155,7 +157,7 @@ export function activationErrorMessage(
   if (code === 'transfer_pending' && typeof body.body?.retry_at === 'number') {
     return translate('freeLicense.transfer_pending_until', { until: formatDateTime(body.body.retry_at * 1000) });
   }
-  if (code && ['plugin_composition_fixed', 'single_superadmin_required', 'free_incompatible', 'license_changed', 'activation_key_missing', 'local_free', 'transfer_pending', 'free_unavailable', 'client_upgrade_required'].includes(code)) {
+  if (code && ['plugin_composition_fixed', 'single_superadmin_required', 'free_incompatible', 'license_changed', 'activation_key_missing', 'local_free', 'transfer_pending', 'client_upgrade_required'].includes(code)) {
     return translate(`freeLicense.${code}`);
   }
   const base = apiErrorMessage(body, translate('activate.rejected'));

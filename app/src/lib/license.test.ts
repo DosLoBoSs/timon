@@ -14,7 +14,7 @@ const VALID: PublicLicense = {
 
 test('an offline episode shows a banner without gating the app', () => {
   assert.deepEqual(licenseNotice({ ...VALID, offlineSince: '2026-09-04T08:00:00.000Z' }), { kind: 'offline', since: '2026-09-04T08:00:00.000Z' });
-  // Unlicensed and past-due win over offline.
+  // Past-due wins over offline.
   assert.deepEqual(licenseNotice({ ...VALID, offlineSince: '2026-09-04T08:00:00.000Z', paymentStatus: 'past_due' }), { kind: 'pastDue', until: null });
 });
 
@@ -31,10 +31,10 @@ test('a late payment shows a banner without gating the app', () => {
   );
 });
 
-test('an unlicensed daemon shows the activation banner, payment status aside', () => {
+test('no licence shows no banner, payment status and offline episode aside', () => {
   const unlicensed: PublicLicense = { ...VALID, status: 'unlicensed', reason: 'missing', edition: 'lite' };
-  assert.deepEqual(licenseNotice(unlicensed), { kind: 'unlicensed' });
-  assert.deepEqual(licenseNotice({ ...unlicensed, paymentStatus: 'past_due' }), { kind: 'unlicensed' });
+  assert.equal(licenseNotice(unlicensed), null);
+  assert.equal(licenseNotice({ ...unlicensed, paymentStatus: 'past_due', offlineSince: '2026-09-04T08:00:00.000Z' }), null);
 });
 
 test('a token minted for another machine names the expected device', () => {
@@ -64,7 +64,7 @@ test('an activation key is told apart from a JWT by the absence of a dot', () =>
 
 test('both locales cover every license key used by the banner and the activate page', () => {
   for (const dict of [en, fr]) {
-    for (const key of ['pastDue', 'pastDueUntil', 'notActivated', 'activate'] as const) {
+    for (const key of ['pastDue', 'pastDueUntil', 'offlineSince', 'activate'] as const) {
       assert.equal(typeof dict.license[key], 'string', `license.${key}`);
     }
     assert.equal(typeof dict.activate.deviceMismatch, 'string');
@@ -83,7 +83,7 @@ test('the banner keys resolve through t()', () => {
 
 test('commercial refusals resolve to actionable copy in both languages', () => {
   for (const dict of [en, fr]) {
-    for (const code of ['plugin_composition_fixed', 'single_superadmin_required', 'free_incompatible', 'license_changed', 'activation_key_missing', 'transfer_pending', 'free_unavailable', 'client_upgrade_required'] as const) {
+    for (const code of ['plugin_composition_fixed', 'single_superadmin_required', 'free_incompatible', 'license_changed', 'activation_key_missing', 'local_free', 'transfer_pending', 'client_upgrade_required'] as const) {
       const message = activationErrorMessage({ error: code, message: 'server detail' }, (key) => {
         assert.equal(key, `freeLicense.${code}`);
         return dict.freeLicense[code];
@@ -95,11 +95,19 @@ test('commercial refusals resolve to actionable copy in both languages', () => {
   }
 });
 
-test('normal local Free has no activation warning; a paid fallback explains lost rights', () => {
+test('Free has no warning, whatever ended the licence before it', () => {
   const free: PublicLicense = { ...VALID, status: 'unlicensed', localFree: true, plan: 'Free', reason: 'missing', edition: 'lite' };
-  assert.equal(licenseNotice(free), null);
-  assert.deepEqual(licenseNotice({ ...free, reason: 'revoked' }), { kind: 'unlicensed' });
-  assert.deepEqual(licenseNotice({ ...free, reason: 'expired' }), { kind: 'unlicensed' });
+  for (const reason of ['missing', null, 'expired', 'revoked', 'deactivated', 'invalid:format']) {
+    assert.equal(licenseNotice({ ...free, reason }), null, String(reason));
+  }
+});
+
+test('no message speaks of activating Free any more', () => {
+  for (const dict of [en, fr]) {
+    for (const code of ['free_incompatible', 'single_superadmin_required', 'local_free'] as const) {
+      assert.doesNotMatch(dict.freeLicense[code], /\bFree\b/, code);
+    }
+  }
 });
 
 test('a pending seat transfer names the time to retry (TIM-0017)', () => {
