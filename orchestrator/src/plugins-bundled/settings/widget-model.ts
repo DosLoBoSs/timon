@@ -155,7 +155,7 @@ export function mergeSnapshot(previous: StoredSnapshot | null, body: SnapshotBod
 
 /**
  * The plugin a placement id belongs to, read from the id itself
- * (`idPlacementPlugin`: `plugin:<pluginId>[:<key>]`). `null` for anything
+ * (`pluginPlacementId`: `plugin:<pluginId>[:<key>]`). `null` for anything
  * else — a registration id is not stable, it is never proposed.
  */
 export function pluginOfWidget(id: string): string | null {
