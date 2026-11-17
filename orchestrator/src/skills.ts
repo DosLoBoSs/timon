@@ -1004,7 +1004,7 @@ If they hesitate, take the simpler one; they can always ask for more.
   },
   {
     id: 'timon-tour-automation',
-    version: 1,
+    version: 2,
     content: `# timon-tour-automation
 
 The person chose **Automating tasks**: a few agents that work on their own, and
@@ -1016,10 +1016,9 @@ Short turns, one card at a time, the rules of \`timon-onboarding\` §3.
 
 ## Steps
 
-1. **A calmer menu.** \`nav_get\`, then say which pages stay (Cockpit, Agents,
-   Triggers, Workflows, Activity) and that the others are only hidden —
-   **Customize the menu**, at the foot of the menu, brings them back. Propose
-   \`automation.nav\`.
+1. **A calmer menu.** \`nav_get\`, then say which pages go (Multichat, Dreams,
+   Terminal, Plugins) and that they are only hidden — **Customize the menu**,
+   at the foot of the menu, brings them back. Propose \`automation.nav\`.
 2. **The agent view.** Their agents on the left; a click opens that agent's
    chat on the right, with nothing else around it. \`islands_get\` and
    \`widgets_get\` on \`/chat\` with \`project: ""\`, then propose
@@ -1047,11 +1046,12 @@ ${renderRecipes('automation')}
   },
   {
     id: 'timon-tour-beginner',
-    version: 1,
+    version: 2,
     content: `# timon-tour-beginner
 
 The person is **New to AI**. Keep it to the least: they talk to you, you do
-the rest. Not a word about plugins, islands, projects or the Kanban.
+the rest. Not a word about plugins or islands; the other pages of the menu
+are there for later, explain one only if they ask.
 
 Short turns, one card at a time, the rules of \`timon-onboarding\` §3.
 
@@ -1060,14 +1060,17 @@ Short turns, one card at a time, the rules of \`timon-onboarding\` §3.
 1. One sentence: they write to you as they would to a colleague, and you take
    care of the rest.
 2. **A simpler screen?** Ask it with \`question\` (Yes / Not now). On yes, one
-   card at a time, each with one sentence on what changes: \`beginner.nav\`,
-   then \`beginner.chat\`, then \`ui_navigate\` to \`/\` and \`beginner.cockpit\`.
+   card at a time, each with one sentence on what changes: \`beginner.nav\`
+   (the menu keeps the pages they will use — Cockpit, Brain, Agents, TIMs,
+   Projects, Kanban — and only hides the advanced ones), then
+   \`beginner.chat\`, then \`ui_navigate\` to \`/\` and \`beginner.cockpit\`.
    On "not now", change nothing.
 3. **A first real request.** Two or three examples from everyday life ("find a
    recipe with what is left in my fridge", "rewrite this email more politely",
    "plan my week") and let them try one, here, now. Answer it well.
-4. Say they can ask anything this way, and that **Guided tour** in the
-   appearance menu starts this again. Stop.
+4. Say they can ask anything this way, that **Customize the menu**, at the
+   foot of the menu, brings a hidden page back, and that **Guided tour** in
+   the appearance menu starts this again. Stop.
 
 ${renderRecipes('beginner')}
 `,
