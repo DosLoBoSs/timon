@@ -7,17 +7,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn as nodeSpawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import { removeHomeOnExit } from '../../../tests/helpers/test-home.js';
 
 /* Throwaway TIMON_HOME, set BEFORE importing anything that reads paths.ts. */
 const TMP_HOME = mkdtempSync(join(tmpdir(), 'timon-acp-'));
 process.env.TIMON_HOME = TMP_HOME;
 process.env.PORT = '3010';
-process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
+removeHomeOnExit(TMP_HOME);
 
 const {
   AcpRpcError, AcpTransport, AcpTransportError, RPC_METHOD_NOT_FOUND,

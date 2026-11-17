@@ -4,13 +4,14 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { removeHomeOnExit } from '../../tests/helpers/test-home.js';
 
 const TMP_HOME = mkdtempSync(join(tmpdir(), 'timon-account-instances-'));
 process.env.TIMON_HOME = TMP_HOME;
-process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
+removeHomeOnExit(TMP_HOME);
 
 const registryModule = await import('./registry.js');
 const { registerDialect, registerTrustedProfile, accountInstanceProfile } = registryModule;

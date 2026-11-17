@@ -8,15 +8,16 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { removeHomeOnExit } from '../../tests/helpers/test-home.js';
 
 const TMP_HOME = mkdtempSync(join(tmpdir(), 'timon-acp-profiles-'));
 process.env.TIMON_HOME = TMP_HOME;
 process.env.PORT = '3010';
 process.env.TIMON_RESOURCE_GUARD_ENABLED = '0';
-process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
+removeHomeOnExit(TMP_HOME);
 
 const REAL_PATH = process.env.PATH;
 const REAL_HOME = process.env.HOME;

@@ -10,15 +10,16 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { createInterface } from 'node:readline';
+import { removeHomeOnExit } from '../../tests/helpers/test-home.js';
 
 const TMP_HOME = mkdtempSync(join(tmpdir(), 'timon-registry-'));
 process.env.TIMON_HOME = TMP_HOME;
-process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
+removeHomeOnExit(TMP_HOME);
 
 const { registerDialect, registerProfile, registeredBackendOwners } = await import('./registry.js');
 const { backendNames, getBackend, isBackendName, backendCatalog } = await import('./index.js');

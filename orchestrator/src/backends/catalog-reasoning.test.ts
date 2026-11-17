@@ -7,10 +7,11 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { removeHomeOnExit } from '../../tests/helpers/test-home.js';
 
 const TMP_HOME = mkdtempSync(join(tmpdir(), 'timon-catalog-reasoning-'));
 process.env.TIMON_HOME = TMP_HOME;
-process.on('exit', () => rmSync(TMP_HOME, { recursive: true, force: true }));
+removeHomeOnExit(TMP_HOME);
 
 const { reloadLocalBackends, NO_KEY_PLACEHOLDER } = await import('./local-profiles.js');
 const { activeProfiles } = await import('./registry.js');
