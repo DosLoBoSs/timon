@@ -354,6 +354,32 @@ test('stacked with the glass off, the menu of a tab offers no Glass entry', asyn
   assert.ok(!document.querySelector('[data-island-menu="glass"]'));
 });
 
+test('the page alone hands its glass to the top bar, and takes it back once split (TODO #806)', async (t) => {
+  const w = await mount(t);
+  const { readPageGlass } = await import('./page-glass');
+  const base = w.tree.defaultIslandTree();
+  await w.render(base);
+  assert.equal(readPageGlass(), null, 'not before the arrangement is read: a write would be refused');
+  await w.render(base, true);
+  assert.equal(readPageGlass()?.scope, null, 'no choice yet: it follows Appearance');
+  await w.act(() => { readPageGlass()!.set('widgets'); });
+  const chosen = w.calls.at(-1)!.tree;
+  assert.equal(chosen.root.kind === 'leaf' && chosen.root.glassScope, 'widgets');
+  assert.equal(w.workspace().dataset.islandWorkspace, 'single', 'still nothing painted around the page');
+  assert.equal(w.workspace().getAttribute('data-glass-scope'), 'widgets');
+  assert.equal(readPageGlass()?.scope, 'widgets');
+  // Split, the page's island header carries the menu again.
+  await w.set(w.tree.insertAt(chosen, chosen.root.id, 'right', { type: FAKE, params: { id: 'a' } }).tree);
+  assert.equal(readPageGlass(), null);
+  // Alone under a popup, the page has no header: the top bar offers it again.
+  await w.set(w.tree.openFloat(chosen, { type: FAKE, params: { id: 'p' } }, { x: 0.25, y: 0.25, width: 0.5, height: 0.5 }).tree);
+  assert.equal(readPageGlass()?.scope, 'widgets');
+  await w.act(() => { readPageGlass()!.set(null); });
+  const back = w.calls.at(-1)!.tree;
+  assert.equal(back.root.kind === 'leaf' ? back.root.glassScope : 'split', undefined, 'back to the Appearance setting');
+  assert.equal(back.floats?.length, 1, 'the popup is untouched');
+});
+
 test('an announced workspace opens a content next to the focused island, once', async (t) => {
   const w = await mount(t);
   assert.equal(w.bus.openInIsland({ type: FAKE, params: { id: 'a' } }), false, 'no workspace: refused');

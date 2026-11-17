@@ -128,6 +128,7 @@ import {
 import { GlassClear, IslandGlassScopeProvider, useGlassScope } from '@/components/glass-scope';
 import { type GlassScope } from '@/lib/glass-scope';
 import { IslandGlassSubmenu } from './island-glass-menu';
+import { publishPageGlass } from './page-glass';
 import {
   ISLAND_MIN_HEIGHT,
   ISLAND_MIN_WIDTH,
@@ -630,6 +631,21 @@ export function IslandWorkspaceView({
   const frameIsIsland = (className ?? '').split(/\s+/).includes('timon-island');
   const singleGlass = tree.root.kind === 'leaf' ? tree.root.glassScope ?? null : null;
   const routeBare = painted && !stacked && tree.root.kind === 'leaf' && tree.root.id === routeLeafId && tree.root.tabs.length === 1;
+  // No header is painted for the page (alone, or alone under popups): its Glass
+  // choice moves to the top bar's Appearance menu. Not before the arrangement
+  // is read: a write would be refused.
+  const pageGlassOffered = announce && tree.root.kind === 'leaf' && (!painted || routeBare);
+  useEffect(() => {
+    if (!pageGlassOffered) return undefined;
+    return publishPageGlass({
+      scope: singleGlass,
+      // The route's island of the tree it is handed, so a replay on a row
+      // another window rewrote still finds it (or is left alone).
+      set: (scope) => {
+        applyRef.current((tr) => setLeafGlassScope(tr, allLeaves(tr).find((leaf) => leaf.tabs.some((tab) => tab.content.type === HOST_ROUTE))?.id ?? '', scope));
+      },
+    });
+  }, [pageGlassOffered, singleGlass]);
   // Docked islands whose only tab asks to be the whole island (`bare`): no header painted.
   const bareLeaves = new Set(
     painted && !stacked

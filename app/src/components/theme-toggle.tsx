@@ -19,6 +19,7 @@ import { NativeViewCover } from '@/lib/native-view-cover';
 // Painted inside the open menu only: fetched then (docs/BUNDLE-SIZE.md).
 const LayoutPresetsSection = dynamic(() => import('@/components/layout-presets-menu').then((m) => m.LayoutPresetsSection), { ssr: false });
 const GlassProfilesMenuSection = dynamic(() => import('@/components/glass-profiles').then((m) => m.GlassProfilesMenuSection), { ssr: false });
+const PageGlassSubmenu = dynamic(() => import('@/components/islands/island-glass-menu').then((m) => m.PageGlassSubmenu), { ssr: false });
 const IslandArrangementsSection = dynamic(() => import('@/components/island-arrangements-menu').then((m) => m.IslandArrangementsSection), { ssr: false });
 
 const ITEM = 'flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-xs outline-none focus:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
@@ -102,6 +103,8 @@ export function ThemeToggle() {
             <Dropdown.ItemIndicator><Check className="size-3.5" /></Dropdown.ItemIndicator>
           </Dropdown.CheckboxItem>
         )}
+        {/* The page alone has no island header to carry its Glass menu. */}
+        <PageGlassSubmenu triggerClassName={ITEM} />
         {GUIDED_TOUR_ENABLED && (
           <Dropdown.Item className={ITEM} onSelect={() => {
             void startOnboardingTour(t('guidedTour.firstMessage')).then((out) => {
