@@ -6,8 +6,12 @@ import { join } from 'node:path';
 import { ALLOW_TEMPORARY_HOME_FLAG, temporaryHomeNotice, underTemporaryDir } from './temporary-home.js';
 
 const none = () => null;
+// The module resolves with the host's own `node:path`: on Windows a POSIX
+// fixture lands on a drive (`D:\tmp`) and compares without case, so the Linux
+// and macOS cases below only hold on a POSIX host.
+const POSIX_ONLY = process.platform === 'win32' && 'POSIX fixtures resolve against a drive on Windows';
 
-test('#464: a home under the OS temporary folder is recognised, a sibling is not', () => {
+test('#464: a home under the OS temporary folder is recognised, a sibling is not', { skip: POSIX_ONLY }, () => {
   assert.equal(underTemporaryDir('/tmp/tmp.AbC123', { platform: 'linux', tmp: '/tmp', realpath: none }), true);
   assert.equal(underTemporaryDir('/tmp', { platform: 'linux', tmp: '/tmp', realpath: none }), true);
   assert.equal(underTemporaryDir('/tmpfoo/home', { platform: 'linux', tmp: '/tmp', realpath: none }), false);
@@ -17,7 +21,7 @@ test('#464: a home under the OS temporary folder is recognised, a sibling is not
   assert.equal(underTemporaryDir('/Var/Folders/ab/T/x', { platform: 'darwin', tmp: '/var/folders/ab/T', realpath: none }), true);
 });
 
-test('#464: macOS — a home spelled through /private still counts', () => {
+test('#464: macOS — a home spelled through /private still counts', { skip: POSIX_ONLY }, () => {
   // `mktemp -d` prints /var/folders/…, the realpath of TMPDIR is /private/var/folders/….
   const realpath = (path: string) => (path.startsWith('/var/') ? `/private${path}` : path);
   assert.equal(underTemporaryDir('/private/var/folders/ab/T/tmp.x', { platform: 'darwin', tmp: '/var/folders/ab/T', realpath }), true);
