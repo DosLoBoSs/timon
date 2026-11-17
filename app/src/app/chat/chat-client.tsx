@@ -177,12 +177,12 @@ import {
   PUSH_TO_TALK_DEFAUT,
 } from '@/lib/push-to-talk';
 import {
-  DICTEE_GRACE_MS,
-  DICTEE_RESTART_DELAY_MS,
-  composerDictee,
-  doitRelancerDictee,
-  erreurDicteeFatale,
-  texteSession,
+  DICTATION_GRACE_MS,
+  DICTATION_RESTART_DELAY_MS,
+  composeDictation,
+  shouldRestartDictation,
+  isFatalDictationError,
+  sessionText,
 } from '@/lib/stt-dictee';
 import { choiceFailure, createRecognition, dictationLang, useDictationRoute } from '@/lib/dictation/recognition';
 import { presentEngineConsent } from '@/components/dictation/engine-consent-card';
@@ -5196,7 +5196,7 @@ export function ChatClient({
         silenceTimerRef.current = null;
         manualStopRef.current = true;
         recognition.stop();
-      }, DICTEE_GRACE_MS);
+      }, DICTATION_GRACE_MS);
     };
     armSilenceTimer();
     // The silence window counts from when the engine listens: the desktop's
@@ -5214,13 +5214,13 @@ export function ChatClient({
       // continuous listening the index points at the only segment that just
       // changed, and composing from it would drop everything said before the
       // pause (cf. lib/stt-dictee).
-      const text = texteSession(
+      const text = sessionText(
         Array.from({ length: event.results.length }, (_, i) => ({
           isFinal: event.results[i]!.isFinal,
           transcript: event.results[i]![0].transcript,
         })),
       );
-      const next = composerDictee(dictationBaseRef.current, text);
+      const next = composeDictation(dictationBaseRef.current, text);
       const draft = dictationDraftRef.current;
       const written = draft
         ? writeDictationDraft(draft, { owner: draftOwnerRef.current, text: liveInputRef.current }, next)
@@ -5261,7 +5261,7 @@ export function ChatClient({
         relanceApresConflitRef.current = true;
         return;
       }
-      if (erreurDicteeFatale(event.error)) {
+      if (isFatalDictationError(event.error)) {
         dicteeFataleRef.current = true;
         toast.error(i18n('chatPage.dictationUnavailable', { error: event.error }));
         return;
@@ -5279,10 +5279,10 @@ export function ChatClient({
       if (recognitionRef.current !== recognition) return;
       if (
         !relanceApresConflitRef.current &&
-        doitRelancerDictee({
-          arretManuel: manualStopRef.current,
-          erreurFatale: dicteeFataleRef.current,
-          depuisDerniereActivite: Date.now() - derniereActiviteRef.current,
+        shouldRestartDictation({
+          stoppedByUser: manualStopRef.current,
+          fatalError: dicteeFataleRef.current,
+          sinceLastActivity: Date.now() - derniereActiviteRef.current,
         })
       ) {
         // Still within the grace window: the speaker is looking for their
@@ -5290,7 +5290,7 @@ export function ChatClient({
         // the new session starts from an empty `event.results` and its first
         // `onresult` would otherwise wipe everything said so far. `recording`
         // stays true, the button doesn't blink.
-        dictationBaseRef.current = composerDictee(dictationBaseRef.current, texteSessionRef.current);
+        dictationBaseRef.current = composeDictation(dictationBaseRef.current, texteSessionRef.current);
         texteSessionRef.current = '';
         if (restartTimerRef.current !== null) window.clearTimeout(restartTimerRef.current);
         restartTimerRef.current = window.setTimeout(() => {
@@ -5303,7 +5303,7 @@ export function ChatClient({
             // The engine still holds the previous instance: its own `onend`
             // will come back through here.
           }
-        }, DICTEE_RESTART_DELAY_MS);
+        }, DICTATION_RESTART_DELAY_MS);
         return;
       }
       manualStopRef.current = false;

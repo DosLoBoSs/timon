@@ -1,8 +1,8 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
-import { composerDictee, erreurDicteeFatale, texteSession } from '@/lib/stt-dictee';
-import { fusionnerSegments, lireResultats } from '@/lib/stt-transcript';
+import { composeDictation, isFatalDictationError, sessionText } from '@/lib/stt-dictee';
+import { mergeSegments, readResults } from '@/lib/stt-transcript';
 import type { ModelState, SpeechBridge, SpeechEvent, SpeechState } from '@/plugins-client/local-dictation/desktop-speech';
 import { createLocalDictationEngine } from '@/plugins-client/local-dictation/engine';
 import { LocalEngineStore } from '@/plugins-client/local-dictation/local-engine';
@@ -157,7 +157,7 @@ test('an event out of the contract\'s schema is ignored, whatever it carries', a
   assert.deepEqual(seen.errors, []);
   assert.equal(seen.ended, 0);
   fake.emit({ type: 'final', text: 'Bonjour.' });
-  assert.equal(lireResultats(seen.results.at(-1)!.results).final, 'Bonjour.');
+  assert.equal(readResults(seen.results.at(-1)!.results).final, 'Bonjour.');
 });
 
 test('a partial or a final after `stopped` is ignored, and the end is reported once', async () => {
@@ -169,7 +169,7 @@ test('a partial or a final after `stopped` is ignored, and the end is reported o
   fake.emit({ type: 'stopped' });
   await settle();
   assert.equal(seen.results.length, 1);
-  assert.equal(lireResultats(seen.results[0]!.results).final, 'Avant.');
+  assert.equal(readResults(seen.results[0]!.results).final, 'Avant.');
   assert.equal(seen.ended, 1);
 });
 
@@ -177,7 +177,7 @@ test('an engine whose feed throws loses the chunk, not the dictation', async () 
   const { fake, seen } = await running({ feedThrows: true });
   fake.chunk();
   fake.emit({ type: 'final', text: 'Toujours là.' });
-  assert.equal(lireResultats(seen.results.at(-1)!.results).final, 'Toujours là.');
+  assert.equal(readResults(seen.results.at(-1)!.results).final, 'Toujours là.');
   assert.deepEqual(seen.errors, []);
 });
 
@@ -191,12 +191,12 @@ test('an engine that says it is unavailable is never started, nor the microphone
 
 // --- The draft and the session. ---
 
-test('a realistic partial/final sequence lands whole in the chat draft (texteSession)', async () => {
+test('a realistic partial/final sequence lands whole in the chat draft (sessionText)', async () => {
   const { fake, rec, seen } = await running();
   let draft = '';
   rec.onresult = (event) => {
-    const text = texteSession(Array.from(event.results as ArrayLike<{ 0: { transcript: string }; isFinal: boolean }>, (r) => ({ isFinal: r.isFinal, transcript: r[0].transcript })));
-    draft = composerDictee('Brouillon :', text);
+    const text = sessionText(Array.from(event.results as ArrayLike<{ 0: { transcript: string }; isFinal: boolean }>, (r) => ({ isFinal: r.isFinal, transcript: r[0].transcript })));
+    draft = composeDictation('Brouillon :', text);
   };
   for (const event of SEQUENCE) fake.emit(event);
   await settle();
@@ -204,12 +204,12 @@ test('a realistic partial/final sequence lands whole in the chat draft (texteSes
   assert.equal(seen.ended, 1);
 });
 
-test('the same sequence through the voice mode reading (lireResultats)', async () => {
+test('the same sequence through the voice mode reading (readResults)', async () => {
   const { fake, rec } = await running();
   let final = '';
   const interims: string[] = [];
   rec.onresult = (event) => {
-    const read = lireResultats(event.results);
+    const read = readResults(event.results);
     final = read.final;
     interims.push(read.interim);
   };
@@ -219,10 +219,10 @@ test('the same sequence through the voice mode reading (lireResultats)', async (
   assert.deepEqual(interims.slice(0, 3), ['Il faut', 'Il faut tester', '']);
 });
 
-test('why the engine does not go through fusionnerSegments: disjoint utterances would lose speech', () => {
+test('why the engine does not go through mergeSegments: disjoint utterances would lose speech', () => {
   const finals = ['Il faut tester.', 'Il faut tester encore.', 'Merci.', 'Merci.'];
-  assert.notEqual(fusionnerSegments(finals), SPOKEN);
-  assert.equal(finals.reduce(composerDictee, ''), SPOKEN);
+  assert.notEqual(mergeSegments(finals), SPOKEN);
+  assert.equal(finals.reduce(composeDictation, ''), SPOKEN);
 });
 
 test('audio captured while the engine loads is fed once the session exists', async () => {
@@ -387,7 +387,7 @@ test('every terminal failure carries a code no surface relaunches into', async (
     const { fake, seen } = await running(options);
     assert.deepEqual(seen.errors, [code], code);
     assert.equal(seen.ended, 1);
-    assert.ok(erreurDicteeFatale(code), code);
+    assert.ok(isFatalDictationError(code), code);
     if (fake.micOpened && !options.captureError) assert.ok(fake.captureStopped, `${code}: microphone closed`);
   }
 });
@@ -413,7 +413,7 @@ test('an unplugged microphone stops cleanly: what was said still lands, then a m
   await settle();
   assert.deepEqual(seen.errors, ['microphone-lost']);
   assert.deepEqual(fake.calls, ['start:null', 'stop']);
-  assert.equal(lireResultats(seen.results.at(-1)!.results).final, 'dernière phrase');
+  assert.equal(readResults(seen.results.at(-1)!.results).final, 'dernière phrase');
   assert.equal(seen.ended, 1);
 });
 
@@ -477,7 +477,7 @@ test('local engine: another surface taking the engine is reported busy, so the c
   local.emit({ type: 'final', sessionId: 's1', text: 'Bonjour.' });
   local.emit({ type: 'stopped', sessionId: 's1' });
   await settle();
-  assert.equal(lireResultats(seen.results.at(-1)!.results).final, 'Bonjour.');
+  assert.equal(readResults(seen.results.at(-1)!.results).final, 'Bonjour.');
   assert.deepEqual(seen.errors, ['busy']);
   assert.equal(seen.ended, 1);
 });
@@ -536,7 +536,7 @@ test('consent: an engine never consented to gets no microphone, no start, and th
     assert.equal(availabilityAsked, 0);
     assert.deepEqual(shown, ['acme']);
     assert.deepEqual(seen.errors, ['engine-consent']);
-    assert.equal(erreurDicteeFatale('engine-consent'), true, 'terminal: no surface relaunches into the card');
+    assert.equal(isFatalDictationError('engine-consent'), true, 'terminal: no surface relaunches into the card');
     assert.equal(seen.ended, 1);
 
     // Nothing could show the card: refused the same way, with a message.
