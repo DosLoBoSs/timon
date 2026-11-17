@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { refreshBackendCatalog } from '@/lib/backends';
+import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { formatDateTime } from '@/lib/intl';
 import { RevealDialog } from './reveal-dialog';
@@ -81,10 +82,10 @@ type Plugin = { id: string; label: string | null };
  *  body would turn a precise message into a useless "failed". */
 async function errorText(res: Response): Promise<string> {
   const raw = (await res.text().catch(() => '')).trim();
-  if (!raw) return `HTTP ${res.status}`;
+  if (!raw) return apiErrorMessage(null, { status: res.status });
   try {
-    const parsed = JSON.parse(raw) as { error?: string; message?: string };
-    return parsed.error || parsed.message || raw;
+    const parsed = JSON.parse(raw) as { error?: unknown; message?: string };
+    return apiErrorMessage(parsed, parsed.message || raw);
   } catch {
     return raw;
   }
