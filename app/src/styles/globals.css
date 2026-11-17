@@ -69,10 +69,14 @@
 
   /* The surface islands sit on: gaps between them show the chrome colour. */
   .timon-island-backdrop { background: var(--timon-chrome-fill); }
-  /* One zone of a split screen. No border: the gap around it is the line. */
+  /* One zone of a split screen. No border: the gap around it is the line.
+     An island with a colour of its own sets `--timon-island-fill` rather than
+     a `bg-*` utility: a utility would beat the glass below and leave the
+     island opaque whatever the glass scope, a variable only lasts while the
+     glass is off. */
   .timon-island {
     border-radius: var(--timon-island-radius);
-    background: hsl(var(--background));
+    background: var(--timon-island-fill, hsl(var(--background)));
     overflow: hidden;
   }
   /* Glass: the page shows the wallpaper. `:where` keeps this rule as weak as
