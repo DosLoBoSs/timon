@@ -854,7 +854,9 @@ test('windows: restart ends the launcher tree then runs the task, under one elev
   // on the port with the previous version (0.1.7 to 0.1.8).
   assert.deepEqual(steps.map((s) => s.label), ['stop', 'stop-port', 'sweep', 'run']);
   assert.deepEqual(steps[1], stopPortOwnerStep(opts));
-  assert.deepEqual(steps[2], stopInstallationProcessesStep(opts));
+  // The sweep is what `/Run` waits on: a task run over a daemon that outlived it changes nothing.
+  assert.deepEqual(steps[2], { ...stopInstallationProcessesStep(opts), stopOnFailure: true });
+  assert.equal(steps[3]!.stopOnFailure, undefined);
   const res = restartWindowsService({ ...opts, readFile: () => transcript({ stop: 0, 'stop-port': 0, sweep: 0, run: 0 }) });
   assert.equal(res.ok, true);
   assert.equal(calls.length, 1, 'a single elevated process');
@@ -865,16 +867,41 @@ test('windows: restart ends the launcher tree then runs the task, under one elev
     .map((needle) => batch.indexOf(needle));
   assert.ok(order.every((at) => at >= 0), batch);
   assert.deepEqual([...order].sort((x, y) => x - y), order, 'everything is ended before the task runs again');
+  // One guard, between the sweep's exit code and `/Run`: a sweep that did not answer 0 ends the batch there.
+  const guard = 'if not "%RC%"=="0" goto :done';
+  assert.equal(batch.split(guard).length - 1, 1, batch);
+  assert.ok(batch.indexOf('TIMON-STEP sweep=%RC%') < batch.indexOf(guard) && batch.indexOf(guard) < batch.indexOf('schtasks /Run'), batch);
   // Only this installation's daemon on the port, and its own background programs: never the directory alone.
   assert.ok(batch.includes(installationProcessNeedles(opts.installDir)[0]!.toLowerCase()), 'the daemon of this installation');
   assert.doesNotMatch(batch, /\/Create|\/Delete|\/End/, 'the task itself is left as it is');
 });
 
-test('windows: restart says when a program of the installation outlived it', () => {
+test('windows: restart refuses to run the task over a program of the installation that outlived it', () => {
   const opts = fixture('win32', () => ({ code: 0, stdout: '', stderr: '' }));
-  const res = restartWindowsService({ ...opts, readFile: () => transcript({ stop: 0, 'stop-port': 0, sweep: PROCESSES_REMAIN, run: 0 }) });
-  assert.equal(res.ok, true);
-  assert.match(res.lines.join('\n'), /still running after the stop/);
+  // What the batch writes then: the guard ended it before `/Run`.
+  const left = restartWindowsService({ ...opts, readFile: () => transcript({ stop: 0, 'stop-port': 0, sweep: PROCESSES_REMAIN }) });
+  assert.equal(left.ok, false);
+  assert.equal(left.code, 1);
+  assert.match(left.reason ?? '', /still running and could not be ended, so the service was not started again/);
+  assert.match(left.reason ?? '', /Task Manager or restart the computer, then open Timon again/, 'the refusal says what to do');
+  assert.doesNotMatch(left.lines.join('\n'), /service restarted/);
+  // A transcript that claims the task ran anyway is not believed over the sweep.
+  const claimed = restartWindowsService({ ...opts, readFile: () => transcript({ stop: 0, 'stop-port': 0, sweep: PROCESSES_REMAIN, run: 0 }) });
+  assert.equal(claimed.ok, false);
+  assert.doesNotMatch(claimed.lines.join('\n'), /service restarted/);
+
+  // A sweep that could not look (PowerShell failed, the batch ended early) proves nothing either.
+  for (const codes of [{ stop: 0, 'stop-port': 0, sweep: 1, run: 0 }, { stop: 0, 'stop-port': 0, run: 0 }]) {
+    const unchecked = restartWindowsService({ ...opts, readFile: () => transcript(codes) });
+    assert.equal(unchecked.ok, false, JSON.stringify(codes));
+    assert.match(unchecked.reason ?? '', /could not check that its previous daemon had ended \(exit (1|unknown)\), so the service was not started again/);
+    assert.doesNotMatch(unchecked.lines.join('\n'), /service restarted/);
+  }
+
+  // The same refusal through the gesture the desktop's runner calls.
+  const gesture = restartService({ ...opts, readFile: () => transcript({ stop: 0, 'stop-port': 0, sweep: PROCESSES_REMAIN }) });
+  assert.equal(gesture.ok, false);
+  assert.match(gesture.reason ?? '', /still running and could not be ended/);
 });
 
 test('restartService: Windows restarts the task under one elevation', () => {

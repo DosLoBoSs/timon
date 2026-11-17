@@ -1161,14 +1161,29 @@ function removeWindowsDefinition(opts: ServiceOpts, lines: string[]): ServiceRes
  * (0.1.7 to 0.1.8). So the daemon of this installation that holds the port is
  * ended too, then every background program of the installation, as a stop
  * does; a foreign program on the port is left alone.
+ *
+ * The sweep guards `/Run`: it is the only step that looks again once
+ * everything was ended. A task run over a daemon that outlived it starts a
+ * second one that finds the port and the data directory taken, while the
+ * restart reads as done and the previous version goes on answering.
  */
 export function windowsRestartSteps(opts: Pick<ServiceOpts, 'timonHome' | 'installDir' | 'port' | 'nodePath'>): ElevatedStep[] {
   return [
     stopLauncherStep(opts.timonHome),
     stopPortOwnerStep(opts),
-    stopInstallationProcessesStep(opts),
+    { ...stopInstallationProcessesStep(opts), stopOnFailure: true },
     { label: 'run', args: ['/Run', '/TN', WINDOWS_TASK] },
   ];
+}
+
+/** Why a restart did not run the task again: the sweep's own answer, in words the person can act on. */
+function restartSweepRefusal(swept: number | undefined): string {
+  const next = 'end the Timon programs that still run (node.exe, Timon.exe) from Task Manager or restart the computer, then open Timon again';
+  if (swept === PROCESSES_REMAIN) {
+    return `a Timon program of this installation is still running and could not be ended, so the service was not started again: ${next}`;
+  }
+  // Neither verdict: PowerShell did not run the check, or the batch stopped before it.
+  return `Timon could not check that its previous daemon had ended (exit ${swept ?? 'unknown'}), so the service was not started again: ${next}`;
 }
 
 export function restartWindowsService(opts: ServiceOpts): ServiceResult {
@@ -1176,7 +1191,11 @@ export function restartWindowsService(opts: ServiceOpts): ServiceResult {
   if (opts.platform !== 'win32') return { ok: false, code: 1, lines, reason: `no Windows task to restart on ${opts.platform}` };
   const { codes, output, cancelled } = runElevated(opts, lines, windowsRestartSteps(opts));
   if (cancelled) return { ok: false, code: 1, lines, reason: 'elevation refused' };
-  if (codes.get('sweep') === PROCESSES_REMAIN) lines.push(PROCESSES_REMAIN_NOTICE);
+  // Only a sweep that found nothing left lets the restart be called one: the
+  // batch did not reach `/Run` otherwise, and a transcript that says it did is
+  // not believed over it.
+  const swept = codes.get('sweep');
+  if (swept !== 0) return { ok: false, code: 1, lines, reason: restartSweepRefusal(swept) };
   const started = codes.get('run');
   if (started !== 0) {
     return { ok: false, code: 1, lines, reason: output.trim() || `the scheduled task ${WINDOWS_TASK} could not be started (exit ${started ?? 'unknown'})` };

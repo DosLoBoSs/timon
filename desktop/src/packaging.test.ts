@@ -714,7 +714,9 @@ test('the service runner knows every action the shell sends it', () => {
   for (const action of actions) assert.match(runner, new RegExp(`\\b${action}: ${action}Service\\b`), action);
   // The restart also ends a daemon no launcher holds: what an update leaves on the previous version.
   const install = readFileSync(join(root, '..', 'orchestrator', 'src', 'host', 'service-install.ts'), 'utf8');
-  assert.match(install, /stopLauncherStep\(opts\.timonHome\),\s+stopPortOwnerStep\(opts\),\s+stopInstallationProcessesStep\(opts\),\s+\{ label: 'run'/);
+  // And the task is not run again unless that sweep found nothing left.
+  assert.match(install, /stopLauncherStep\(opts\.timonHome\),\s+stopPortOwnerStep\(opts\),\s+\{ \.\.\.stopInstallationProcessesStep\(opts\), stopOnFailure: true \},\s+\{ label: 'run'/);
+  assert.match(install, /const swept = codes\.get\('sweep'\);\s+if \(swept !== 0\) return \{ ok: false,/);
 });
 
 // Volet F (docs/AUTO-UPDATE.md §10): the flag the shell passes is the one the installer reads.
