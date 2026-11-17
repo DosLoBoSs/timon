@@ -1,6 +1,5 @@
 {
   "webuiSettings": {
-    "category": "WebUI",
     "description": "Timon がどこで応答するか、スマートフォンからどう開くか、それが安全かどうか。",
     "loadError": "デーモンからネットワーク情報を読み取れませんでした。",
     "forbidden": "このマシンのネットワーク設定を読み取るには、管理者アカウントが必要です。",
@@ -9,7 +8,6 @@
     "servedExternally": "リバースプロキシ経由で、デーモンの外部から提供",
     "statusRemote": "リモートアクセス",
     "remoteReady": "準備完了",
-    "remoteReadyHint": "tailnet にサインインしている任意のデバイスから開けます。",
     "remoteNotPublished": "まだ公開されていません",
     "remoteStopped": "Tailscale は停止しています",
     "remoteAbsent": "Tailscale は未インストール",

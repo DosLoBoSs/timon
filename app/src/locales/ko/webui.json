@@ -1,6 +1,5 @@
 {
   "webuiSettings": {
-    "category": "WebUI",
     "description": "Timon이 어디서 응답하는지, 휴대폰에서 어떻게 여는지, 그것이 안전한지.",
     "loadError": "데몬에서 네트워크 정보를 읽을 수 없습니다.",
     "forbidden": "이 컴퓨터의 네트워크 설정을 읽으려면 관리자 계정이 필요합니다.",
@@ -9,7 +8,6 @@
     "servedExternally": "리버스 프록시를 통해 데몬 밖에서 제공",
     "statusRemote": "원격 접근",
     "remoteReady": "준비됨",
-    "remoteReadyHint": "tailnet에 로그인한 모든 기기에서 열 수 있습니다.",
     "remoteNotPublished": "아직 게시되지 않음",
     "remoteStopped": "Tailscale이 중지됨",
     "remoteAbsent": "Tailscale이 설치되지 않음",

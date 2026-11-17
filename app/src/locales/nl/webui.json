@@ -1,6 +1,5 @@
 {
   "webuiSettings": {
-    "category": "WebUI",
     "description": "Waar Timon antwoordt, hoe je het vanaf je telefoon opent, en of dat veilig is.",
     "loadError": "De netwerkgegevens konden niet van de daemon worden gelezen.",
     "forbidden": "De netwerkconfiguratie van deze machine lezen vereist een beheerdersaccount.",
@@ -9,7 +8,6 @@
     "servedExternally": "Buiten de daemon geserveerd, via een reverse proxy",
     "statusRemote": "Externe toegang",
     "remoteReady": "Klaar",
-    "remoteReadyHint": "Open het vanaf elk apparaat dat in je tailnet is aangemeld.",
     "remoteNotPublished": "Nog niet gepubliceerd",
     "remoteStopped": "Tailscale is gestopt",
     "remoteAbsent": "Tailscale niet geïnstalleerd",

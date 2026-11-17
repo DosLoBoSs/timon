@@ -1,6 +1,5 @@
 {
   "webuiSettings": {
-    "category": "WebUI",
     "description": "Where Timon answers, how to open it from your phone, and whether that is safe.",
     "loadError": "Could not read the network facts from the daemon.",
     "forbidden": "Reading this machine's network configuration requires an administrator account.",
@@ -9,7 +8,6 @@
     "servedExternally": "Served outside the daemon, through a reverse proxy",
     "statusRemote": "Remote access",
     "remoteReady": "Ready",
-    "remoteReadyHint": "Open it from any device signed into your tailnet.",
     "remoteNotPublished": "Not published yet",
     "remoteStopped": "Tailscale is stopped",
     "remoteAbsent": "Tailscale not installed",
