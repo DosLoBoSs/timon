@@ -27,7 +27,9 @@ import {
   randomName, readyToCreate, shownModel, TEMPLATES, type AgentDraft, type TemplateId,
 } from '../agent-draft';
 import { randomLook } from '@/components/mascot/random-look';
-import { createMainAgent, loadMainAgent, loadSheetCatalogs, type MainAgentState, type SheetCatalogs } from '../agent-create';
+import {
+  createMainAgent, loadMainAgent, loadSheetCatalogs, loadSheetSkills, repickedSkills, type MainAgentState, type SheetCatalogs,
+} from '../agent-create';
 import { IdentityCard } from '../agent/identity-card';
 import { InterviewView, interviewAnswer, triggerLabel } from '../agent/interview-view';
 import { LookStylerPanel } from '../agent/look-styler-panel';
@@ -39,6 +41,8 @@ import { agentViewFor, useOnboardingProfile, type AgentCreationView } from '../o
 
 /** Long enough to see the mascot land its jump before "Discover Timon" opens. */
 const LEAVE_MS = 520;
+/** Pause before a new folder's skills are read: a quick second pick sends one request, not two. */
+const SKILLS_DEBOUNCE_MS = 250;
 
 const SEED_NAMES = new Set(['_main', 'timon.main']);
 
@@ -104,6 +108,26 @@ export function AgentStep(): ReactElement {
       mcp: agent.mcpServers.filter((id) => catalogs.mcp.some((s) => s.id === id)),
     }));
   }, [catalogs, agent]);
+
+  // A folder picked on the sheet brings its project's skills (`?cwd=`). Debounced,
+  // and a newer folder cancels the read still on its way: only the last one lands.
+  const [skillsFolder, setSkillsFolder] = useState('');
+  const agentRef = useRef(agent);
+  agentRef.current = agent;
+  useEffect(() => {
+    const folder = draft.folder.trim();
+    if (view !== 'sheet' || !catalogs || folder === skillsFolder) return;
+    const abort = new AbortController();
+    const timer = window.setTimeout(() => {
+      void loadSheetSkills(folder, fetch, abort.signal).then((skills) => {
+        if (abort.signal.aborted || skills === null) return;
+        setSkillsFolder(folder);
+        setCatalogs({ ...catalogs, skills });
+        setDraft((d) => ({ ...d, skills: repickedSkills(d.skills, catalogs.skills, skills, agentRef.current?.skills ?? []) }));
+      });
+    }, SKILLS_DEBOUNCE_MS);
+    return () => { window.clearTimeout(timer); abort.abort(); };
+  }, [view, catalogs, draft.folder, skillsFolder]);
 
   useEffect(() => () => { if (leaving.current !== null) window.clearTimeout(leaving.current); }, []);
 
