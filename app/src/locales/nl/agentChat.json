@@ -37,7 +37,7 @@
       "makeMainDone": "{name} is nu de hoofdorchestrator: wekoverzichten en meldingen gaan naar deze agent",
       "makeMainFailed": "Kan {name} niet als hoofdorchestrator instellen: {error}",
       "stopConfirm": "{name} echt stoppen? Lopende missies worden beëindigd, de inbox geleegd, openstaande taken geblokkeerd en de triggers en workflows die de agent zouden wekken uitgeschakeld.",
-      "stopped": "{name} gestopt: {missions} missie(s), {messages} bericht(en), {tasks} taak/taken, {triggers} trigger(s), {runs} workflowrun(s), {workflows} workflow(s) geneutraliseerd",
+      "stopped": "{name} gestopt: {missions, plural, one {# missie} other {# missies}}, {messages, plural, one {# bericht} other {# berichten}}, {tasks, plural, one {# taak} other {# taken}}, {triggers, plural, one {# trigger} other {# triggers}}, {runs, plural, one {# workflowrun} other {# workflowruns}}, {workflows, plural, one {# workflow} other {# workflows}} geneutraliseerd",
       "stopFailed": "Kan {name} niet stoppen: {error}",
       "duplicate": "Agent dupliceren"
     },
