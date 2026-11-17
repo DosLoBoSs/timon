@@ -12,16 +12,16 @@ import {
   DEFAULT_WIDGET_SLOTS,
 } from '../components/widget-host/widget-dnd';
 import {
-  deplacerWidget,
-  fusionnerLayout,
-  reordonnerRail,
-  retirerWidget,
-  widgetsAdmisParConfig,
-  widgetsDuRail,
-  widgetsRetires,
-  widgetsDisponibles,
-  orphelins,
-  placementHerite,
+  moveWidget,
+  mergeLayout,
+  reorderZone,
+  removeWidget,
+  widgetsAllowedByConfig,
+  widgetsOfZone,
+  removedWidgets,
+  availableWidgets,
+  orphanPlacements,
+  inheritedPlacement,
   type WidgetConstraints,
   type ZoneId,
   type WidgetLayout,
@@ -49,12 +49,12 @@ const CONTRAINTES: WidgetConstraints[] = [
 ];
 
 function base(): WidgetLayout[] {
-  return fusionnerLayout(null, CONTRAINTES);
+  return mergeLayout(null, CONTRAINTES);
 }
 
 /** `zone:id` pairs, in reading order — the shape a board actually shows. */
 function placement(layout: WidgetLayout[]): string[] {
-  return ZONES.flatMap((zone) => widgetsDuRail(layout, zone).map((w) => `${zone}:${w.id}`));
+  return ZONES.flatMap((zone) => widgetsOfZone(layout, zone).map((w) => `${zone}:${w.id}`));
 }
 
 test('defaults place every widget at its declared rank', () => {
@@ -90,7 +90,7 @@ test('hovering another zone targets it, before the hovered widget or at the end'
 test('the hovered move inserts before the hovered widget and renumbers both zones', () => {
   const cible = crossZoneTarget(base(), 'a', 'd', ZONES);
   assert.ok(cible);
-  const moved = deplacerWidget(base(), 'a', cible.zone, cible.before);
+  const moved = moveWidget(base(), 'a', cible.zone, cible.before);
   assert.deepEqual(placement(moved), ['gauche:b', 'gauche:c', 'droite:a', 'droite:d']);
 });
 
@@ -117,7 +117,7 @@ test('a widget dragged across zones then dropped keeps the place the hover gave 
   // change of zone, `dragEnd` only settles the order inside the new zone.
   const cible = crossZoneTarget(base(), 'b', zoneDropId('droite'), ZONES);
   assert.ok(cible);
-  const survole = deplacerWidget(base(), 'b', cible.zone, cible.before);
+  const survole = moveWidget(base(), 'b', cible.zone, cible.before);
   assert.deepEqual(placement(resolveDrop(survole, 'b', 'd', ZONES)), [
     'gauche:a', 'gauche:c', 'droite:b', 'droite:d',
   ]);
@@ -128,7 +128,7 @@ test('a stored placement survives a widget leaving and a widget joining the regi
     { id: 'a', rail: 'droite', rang: 1, hauteur: 260 },
     { id: 'disparu', rail: 'gauche', rang: 0, hauteur: 100 },
   ];
-  const merged = fusionnerLayout(stored, CONTRAINTES);
+  const merged = mergeLayout(stored, CONTRAINTES);
   // `a` kept its zone but not its stored rank: ranks are renumbered densely,
   // and `d` (default rank 0) sorts ahead of it.
   assert.deepEqual(placement(merged), ['gauche:b', 'gauche:c', 'droite:d', 'droite:a']);
@@ -168,31 +168,31 @@ test('a refused zone is never reached, even if collision detection points at it'
 });
 
 test('a widget moves into a zone that held nothing yet, and comes back', () => {
-  const parti = deplacerWidget(base(), 'a', 'sidebar.left.widget', null);
+  const parti = moveWidget(base(), 'a', 'sidebar.left.widget', null);
   assert.deepEqual(placement(parti), ['gauche:b', 'gauche:c', 'droite:d']);
-  assert.deepEqual(widgetsDuRail(parti, 'sidebar.left.widget').map((w) => w.id), ['a']);
+  assert.deepEqual(widgetsOfZone(parti, 'sidebar.left.widget').map((w) => w.id), ['a']);
 
-  const revenu = deplacerWidget(parti, 'a', 'gauche', 'c');
+  const revenu = moveWidget(parti, 'a', 'gauche', 'c');
   assert.deepEqual(placement(revenu), ['gauche:b', 'gauche:a', 'gauche:c', 'droite:d']);
-  assert.deepEqual(widgetsDuRail(revenu, 'sidebar.left.widget'), []);
+  assert.deepEqual(widgetsOfZone(revenu, 'sidebar.left.widget'), []);
 });
 
 test('a placement in an unmounted zone is kept, not relocated', () => {
   // A sidebar exists only on the pages that render it; a widget parked there
   // must survive a page that never mounts the zone.
   const stored = [{ id: 'a', rail: 'sidebar.left.widget', rang: 0, hauteur: 200 }];
-  const merged = fusionnerLayout(stored, CONTRAINTES);
+  const merged = mergeLayout(stored, CONTRAINTES);
   assert.equal(merged.find((w) => w.id === 'a')?.rail, 'sidebar.left.widget');
   assert.deepEqual(placement(merged), ['gauche:b', 'gauche:c', 'droite:d']);
 });
 
 test('reordering a zone leaves every other zone exactly where it was', () => {
-  const etale = deplacerWidget(base(), 'a', 'sidebar.left.widget', null);
-  const reordonne = reordonnerRail(etale, 'gauche', ['c', 'b']);
-  assert.deepEqual(widgetsDuRail(reordonne, 'gauche').map((w) => w.id), ['c', 'b']);
-  assert.deepEqual(widgetsDuRail(reordonne, 'droite').map((w) => w.id), ['d']);
+  const etale = moveWidget(base(), 'a', 'sidebar.left.widget', null);
+  const reordonne = reorderZone(etale, 'gauche', ['c', 'b']);
+  assert.deepEqual(widgetsOfZone(reordonne, 'gauche').map((w) => w.id), ['c', 'b']);
+  assert.deepEqual(widgetsOfZone(reordonne, 'droite').map((w) => w.id), ['d']);
   assert.deepEqual(
-    widgetsDuRail(reordonne, 'sidebar.left.widget').map((w) => w.id),
+    widgetsOfZone(reordonne, 'sidebar.left.widget').map((w) => w.id),
     ['a'],
   );
 });
@@ -209,7 +209,7 @@ test('a widget moved to a sidebar is still there after a reload', () => {
     return Response.json({ layout: stocke });
   };
 
-  const deplace = deplacerWidget(base(), 'a', 'sidebar.left.widget', null);
+  const deplace = moveWidget(base(), 'a', 'sidebar.left.widget', null);
   return saveLayout(deplace, { fetchImpl: daemon, storage: null })
     .then((ok) => {
       assert.equal(ok, true);
@@ -217,9 +217,9 @@ test('a widget moved to a sidebar is still there after a reload', () => {
     })
     .then((out) => {
       assert.equal(out.ok, true);
-      const rechargé = fusionnerLayout(out.raw, CONTRAINTES);
+      const rechargé = mergeLayout(out.raw, CONTRAINTES);
       assert.deepEqual(
-        widgetsDuRail(rechargé, 'sidebar.left.widget').map((w) => w.id),
+        widgetsOfZone(rechargé, 'sidebar.left.widget').map((w) => w.id),
         ['a'],
       );
       assert.deepEqual(placement(rechargé), ['gauche:b', 'gauche:c', 'droite:d']);
@@ -231,52 +231,52 @@ test('a widget moved to a sidebar is still there after a reload', () => {
 
 /** A layout round-tripped through the daemon: what actually survives a reload. */
 function recharger(layout: WidgetLayout[]): WidgetLayout[] {
-  return fusionnerLayout(JSON.parse(JSON.stringify(layout)), CONTRAINTES);
+  return mergeLayout(JSON.parse(JSON.stringify(layout)), CONTRAINTES);
 }
 
 test('a removed widget leaves its zone and shows up in the palette', () => {
-  const apres = retirerWidget(base(), 'b');
+  const apres = removeWidget(base(), 'b');
   assert.deepEqual(placement(apres), ['gauche:a', 'gauche:c', 'droite:d']);
-  assert.deepEqual(widgetsRetires(apres).map((w) => w.id), ['b']);
+  assert.deepEqual(removedWidgets(apres).map((w) => w.id), ['b']);
 });
 
 test('a removal survives a reload instead of undoing itself', () => {
   // The whole point of keeping the entry: dropping it would let the merge with
   // the registry treat the widget as new and put it back at its defaults.
-  const apres = recharger(retirerWidget(base(), 'b'));
+  const apres = recharger(removeWidget(base(), 'b'));
   assert.deepEqual(placement(apres), ['gauche:a', 'gauche:c', 'droite:d']);
-  assert.deepEqual(widgetsRetires(apres).map((w) => w.id), ['b']);
+  assert.deepEqual(removedWidgets(apres).map((w) => w.id), ['b']);
 });
 
 test('a removed widget is inert: neither a reorder nor a move of others loses it', () => {
   // `b` keeps the stale zone `gauche`, so any regrouping that forgets to set it
   // aside would drop it — and a dropped entry comes back placed on next load.
-  const retire = retirerWidget(base(), 'b');
+  const retire = removeWidget(base(), 'b');
 
-  const reordonne = reordonnerRail(retire, 'gauche', ['c', 'a']);
+  const reordonne = reorderZone(retire, 'gauche', ['c', 'a']);
   assert.deepEqual(placement(reordonne), ['gauche:c', 'gauche:a', 'droite:d']);
-  assert.deepEqual(widgetsRetires(reordonne).map((w) => w.id), ['b']);
+  assert.deepEqual(removedWidgets(reordonne).map((w) => w.id), ['b']);
 
-  const deplace = deplacerWidget(retire, 'a', 'droite', null);
+  const deplace = moveWidget(retire, 'a', 'droite', null);
   assert.deepEqual(placement(deplace), ['gauche:c', 'droite:d', 'droite:a']);
-  assert.deepEqual(widgetsRetires(deplace).map((w) => w.id), ['b']);
+  assert.deepEqual(removedWidgets(deplace).map((w) => w.id), ['b']);
 });
 
 test('a widget dragged out of the palette lands where it is dropped, and stays', () => {
-  const retire = retirerWidget(base(), 'b');
+  const retire = removeWidget(base(), 'b');
   // No zone of its own, so any admitting zone it hovers is a target.
   const cible = crossZoneTarget(retire, 'b', 'd', ZONES);
   assert.deepEqual(cible, { zone: 'droite', before: 'd' });
 
-  const remis = recharger(deplacerWidget(retire, 'b', 'droite', 'd'));
+  const remis = recharger(moveWidget(retire, 'b', 'droite', 'd'));
   assert.deepEqual(placement(remis), ['gauche:a', 'gauche:c', 'droite:b', 'droite:d']);
-  assert.deepEqual(widgetsRetires(remis), []);
+  assert.deepEqual(removedWidgets(remis), []);
 });
 
 test('a palette drop released before any hover still places the widget', () => {
   // The flick out of the palette: `dragEnd` fires without a single `dragOver`
   // having moved anything, so the drop has to do the placing itself.
-  const retire = retirerWidget(base(), 'b');
+  const retire = removeWidget(base(), 'b');
   assert.deepEqual(
     placement(resolveDrop(retire, 'b', zoneDropId('droite'), ZONES)),
     ['gauche:a', 'gauche:c', 'droite:d', 'droite:b'],
@@ -291,19 +291,19 @@ test('a palette drag cancelled before the drop leaves the widget removed', () =>
   // Escape mid-gesture. `dragOver` has already committed the preview — the very
   // move the drop test above releases on — so cancelling has to undo it, or the
   // widget stays out of the palette and the next write persists it as placed.
-  const avant = retirerWidget(base(), 'b');
+  const avant = removeWidget(base(), 'b');
   const cible = crossZoneTarget(avant, 'b', 'd', ZONES);
   assert.deepEqual(cible, { zone: 'droite', before: 'd' });
-  const apercu = deplacerWidget(avant, 'b', 'droite', 'd');
-  assert.deepEqual(widgetsRetires(apercu), []);
+  const apercu = moveWidget(avant, 'b', 'droite', 'd');
+  assert.deepEqual(removedWidgets(apercu), []);
 
   const annule = cancelDrag(avant, apercu);
-  assert.deepEqual(widgetsRetires(annule).map((w) => w.id), ['b']);
+  assert.deepEqual(removedWidgets(annule).map((w) => w.id), ['b']);
   assert.deepEqual(placement(annule), ['gauche:a', 'gauche:c', 'droite:d']);
   assert.deepEqual(annule, avant);
   // And it is still removed on the next load: the cancellation is the state the
   // following write will hand to the daemon.
-  assert.deepEqual(widgetsRetires(recharger(annule)).map((w) => w.id), ['b']);
+  assert.deepEqual(removedWidgets(recharger(annule)).map((w) => w.id), ['b']);
   assert.deepEqual(placement(recharger(annule)), ['gauche:a', 'gauche:c', 'droite:d']);
 });
 
@@ -312,7 +312,7 @@ test('a cancelled cross-zone drag puts the neighbours back too, not just the wid
   // restoring the dragged entry alone would leave `c` and `d` in an order the
   // user never released.
   const avant = base();
-  const apercu = deplacerWidget(avant, 'a', 'droite', 'd');
+  const apercu = moveWidget(avant, 'a', 'droite', 'd');
   assert.deepEqual(placement(apercu), ['gauche:b', 'gauche:c', 'droite:a', 'droite:d']);
 
   const annule = cancelDrag(avant, apercu);
@@ -321,16 +321,16 @@ test('a cancelled cross-zone drag puts the neighbours back too, not just the wid
 });
 
 test('no gesture in flight: cancelling keeps the current layout', () => {
-  const layout = retirerWidget(base(), 'b');
+  const layout = removeWidget(base(), 'b');
   assert.equal(cancelDrag(null, layout), layout);
 });
 
 test('a palette drop into a zone that refuses the widget places nothing', () => {
-  const retire = retirerWidget(base(), 'b');
+  const retire = removeWidget(base(), 'b');
   const zones = [...ZONES, 'reglages'];
   const refuse = (_id: string, zone: ZoneId) => zone !== 'reglages';
   const apres = resolveDrop(retire, 'b', zoneDropId('reglages'), zones, refuse);
-  assert.deepEqual(widgetsRetires(apres).map((w) => w.id), ['b']);
+  assert.deepEqual(removedWidgets(apres).map((w) => w.id), ['b']);
   assert.deepEqual(placement(apres), ['gauche:a', 'gauche:c', 'droite:d']);
 });
 
@@ -352,7 +352,7 @@ function caps(ui: string[], modules: { id: string; active: boolean }[] = []): Ca
 
 /** The host's own derivation, predicate included — not a stand-in for it. */
 function affichables(layout: WidgetLayout[], c: Capabilities | null): WidgetLayout[] {
-  return widgetsAdmisParConfig(layout, (id) => isZoneVisible(c, `cockpit.${id}`));
+  return widgetsAllowedByConfig(layout, (id) => isZoneVisible(c, `cockpit.${id}`));
 }
 
 // `dreams` est porté par le module `dreams` (`ZONE_MODULE`), `vault-graph` par
@@ -367,30 +367,30 @@ test('a widget masked by ui.hidden shows up neither in its zone nor in the palet
   // Retiré ET masqué : même dans ce cas, la palette ne le propose pas. Le
   // ranger est une décision de l'utilisateur, le masquer une décision de
   // config — et c'est la config qui filtre en premier.
-  const layout = retirerWidget(fusionnerLayout(null, CONTRAINTES_REELLES), 'dreams');
+  const layout = removeWidget(mergeLayout(null, CONTRAINTES_REELLES), 'dreams');
   const vus = affichables(layout, caps(['cockpit.dreams']));
 
-  assert.deepEqual(widgetsRetires(vus), []);
-  assert.deepEqual(widgetsDuRail(vus, 'gauche').map((w) => w.id), ['vault-graph']);
+  assert.deepEqual(removedWidgets(vus), []);
+  assert.deepEqual(widgetsOfZone(vus, 'gauche').map((w) => w.id), ['vault-graph']);
   // Rien n'est perdu pour autant : le placement garde l'entrée, et retirer
   // `cockpit.dreams` de la config la ramène telle qu'elle était.
-  assert.deepEqual(widgetsRetires(affichables(layout, caps([]))).map((w) => w.id), ['dreams']);
+  assert.deepEqual(removedWidgets(affichables(layout, caps([]))).map((w) => w.id), ['dreams']);
 });
 
 test('a widget whose module is off is not offered either', () => {
-  const layout = retirerWidget(fusionnerLayout(null, CONTRAINTES_REELLES), 'dreams');
+  const layout = removeWidget(mergeLayout(null, CONTRAINTES_REELLES), 'dreams');
   const eteint = caps([], [{ id: '@timon/dreams', active: false }]);
-  assert.deepEqual(widgetsRetires(affichables(layout, eteint)), []);
+  assert.deepEqual(removedWidgets(affichables(layout, eteint)), []);
   assert.deepEqual(
-    widgetsRetires(affichables(layout, caps([], [{ id: '@timon/dreams', active: true }]))).map((w) => w.id),
+    removedWidgets(affichables(layout, caps([], [{ id: '@timon/dreams', active: true }]))).map((w) => w.id),
     ['dreams'],
   );
 });
 
 test('capabilities not loaded yet: everything shows, palette included', () => {
   // Politique de repli du front — en cas de doute, on affiche.
-  const layout = retirerWidget(fusionnerLayout(null, CONTRAINTES_REELLES), 'dreams');
-  assert.deepEqual(widgetsRetires(affichables(layout, null)).map((w) => w.id), ['dreams']);
+  const layout = removeWidget(mergeLayout(null, CONTRAINTES_REELLES), 'dreams');
+  assert.deepEqual(removedWidgets(affichables(layout, null)).map((w) => w.id), ['dreams']);
 });
 
 // ── Catalogue : natifs + entrées de slot, une seule source de placement ─────
@@ -515,14 +515,14 @@ test('a registration declares its title, its heights and its first zone', () => 
 test('a plugin widget places, moves and is taken out like a native one', () => {
   const catalogue = buildWidgetCatalog(NATIFS, [inscription('acme')], defaultZoneForSlot);
   const id = 'plugin:acme';
-  const pose = fusionnerLayout(null, catalogue);
+  const pose = mergeLayout(null, catalogue);
   assert.deepEqual(placement(pose), ['gauche:a', 'gauche:b', 'gauche:c', `gauche:${id}`, 'droite:d']);
 
-  const deplace = deplacerWidget(pose, id, 'droite', 'd');
+  const deplace = moveWidget(pose, id, 'droite', 'd');
   assert.deepEqual(placement(deplace), ['gauche:a', 'gauche:b', 'gauche:c', `droite:${id}`, 'droite:d']);
 
-  const retire = retirerWidget(deplace, id);
-  assert.deepEqual(widgetsRetires(retire).map((w) => w.id), [id]);
+  const retire = removeWidget(deplace, id);
+  assert.deepEqual(removedWidgets(retire).map((w) => w.id), [id]);
   assert.deepEqual(placement(retire), ['gauche:a', 'gauche:b', 'gauche:c', 'droite:d']);
 });
 
@@ -538,21 +538,21 @@ test('a stored placement waits for a plugin that has not registered yet', () => 
   ];
   const sansPlugin = buildWidgetCatalog(NATIFS, [], defaultZoneForSlot);
 
-  assert.equal(fusionnerLayout(stocke, sansPlugin).some((w) => w.id === 'plugin:acme'), false);
-  assert.deepEqual(orphelins(stocke, sansPlugin).map((w) => w.id), ['plugin:acme']);
+  assert.equal(mergeLayout(stocke, sansPlugin).some((w) => w.id === 'plugin:acme'), false);
+  assert.deepEqual(orphanPlacements(stocke, sansPlugin).map((w) => w.id), ['plugin:acme']);
 
   // Ce que l'hôte réécrit après un geste : le layout placé, plus les orphelins.
   const ecrit = [
-    ...retirerWidget(fusionnerLayout(stocke, sansPlugin), 'a'),
-    ...orphelins(stocke, sansPlugin),
+    ...removeWidget(mergeLayout(stocke, sansPlugin), 'a'),
+    ...orphanPlacements(stocke, sansPlugin),
   ];
 
   // Le plugin s'enregistre enfin : sa place et sa hauteur sont intactes.
   const avecPlugin = buildWidgetCatalog(NATIFS, [inscription('acme')], defaultZoneForSlot);
-  const revenu = fusionnerLayout(ecrit, avecPlugin).find((w) => w.id === 'plugin:acme');
+  const revenu = mergeLayout(ecrit, avecPlugin).find((w) => w.id === 'plugin:acme');
   assert.equal(revenu?.rail, 'droite');
   assert.equal(revenu?.hauteur, 300);
-  assert.deepEqual(orphelins(ecrit, avecPlugin), []);
+  assert.deepEqual(orphanPlacements(ecrit, avecPlugin), []);
 });
 
 test('an entry the catalogue claims is never an orphan, and a corrupt one is dropped', () => {
@@ -564,19 +564,19 @@ test('an entry the catalogue claims is never an orphan, and a corrupt one is dro
     { id: 'plugin:y', rail: 'gauche', rang: 2, hauteur: 200, removed: true },
     { id: 'plugin:y', rail: 'droite', rang: 3, hauteur: 200 },
   ];
-  const restants = orphelins(stocke, catalogue);
+  const restants = orphanPlacements(stocke, catalogue);
   assert.deepEqual(restants.map((w) => w.id), ['plugin:y']);
   assert.equal(restants[0]?.removed, true);
-  assert.deepEqual(orphelins(null, catalogue), []);
+  assert.deepEqual(orphanPlacements(null, catalogue), []);
 });
 
 test('the catalog offers cockpit widgets on a chat without stealing visible placements', () => {
   const layout = base();
-  assert.deepEqual(widgetsDisponibles(layout, ['chat.left.widget', 'chat.right.widget']), layout);
-  const added = deplacerWidget(layout, 'a', 'chat.right.widget', null);
-  assert.deepEqual(widgetsDisponibles(added, ['chat.left.widget', 'chat.right.widget']).map(w => w.id).sort(), ['b', 'c', 'd']);
-  assert.equal(widgetsDuRail(layout, 'gauche').length, 3, 'the original cockpit layout is not mutated');
-  assert.ok(widgetsDisponibles(retirerWidget(added, 'a'), ['chat.right.widget']).some(w => w.id === 'a'));
+  assert.deepEqual(availableWidgets(layout, ['chat.left.widget', 'chat.right.widget']), layout);
+  const added = moveWidget(layout, 'a', 'chat.right.widget', null);
+  assert.deepEqual(availableWidgets(added, ['chat.left.widget', 'chat.right.widget']).map(w => w.id).sort(), ['b', 'c', 'd']);
+  assert.equal(widgetsOfZone(layout, 'gauche').length, 3, 'the original cockpit layout is not mutated');
+  assert.ok(availableWidgets(removeWidget(added, 'a'), ['chat.right.widget']).some(w => w.id === 'a'));
 });
 
 test('a horizontal zone only admits widgets that have a flat form', () => {
@@ -623,7 +623,7 @@ test('a product card moved to another module keeps its place; a third party cann
   }]);
   assert.deepEqual(moved?.formerIds, ['plugin:@timon/kanban-code:Git']);
   const stored = [{ id: 'plugin:@timon/kanban-code:Git', rail: 'chat.right.widget', rang: 4, hauteur: 260 }];
-  assert.deepEqual(placementHerite(stored, moved!.formerIds!, moved!.id), { ...stored[0], id: 'plugin:@timon/git:Git' });
+  assert.deepEqual(inheritedPlacement(stored, moved!.formerIds!, moved!.id), { ...stored[0], id: 'plugin:@timon/git:Git' });
 
   const [thief] = buildWidgetCatalog([], [{
     registrationId: 't:0', pluginId: 'acme-git', key: 'Git', slot: 'chat.left.widget',

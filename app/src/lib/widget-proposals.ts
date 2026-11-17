@@ -15,12 +15,12 @@
 
 import { mergeWorkspaceWidgets } from '@/components/widget-host/widget-defaults';
 import {
-  deplacerWidget,
-  orphelins,
-  reordonnerRail,
-  retirerWidget,
-  verserZone,
-  widgetsDuRail,
+  moveWidget,
+  orphanPlacements,
+  reorderZone,
+  removeWidget,
+  pourZone,
+  widgetsOfZone,
   type WidgetConstraints,
   type WidgetLayout,
 } from '@/components/widget-host/widget-layout';
@@ -173,29 +173,29 @@ export function applyWidgetsProposal(input: {
 
   let layout: WidgetLayout[] = mergeWorkspaceWidgets(input.widgetsRaw, constraints, proposal.view);
   const known = new Set(layout.map((w) => w.id));
-  for (const { tab, column } of closed) layout = verserZone(layout, tab, column);
+  for (const { tab, column } of closed) layout = pourZone(layout, tab, column);
 
   const zones = Object.entries(proposal.zones ?? {}).map(([ref, ids]) => ({ zone: zoneOf(ref), ids }));
   const listed = new Set(zones.flatMap((z) => z.ids));
   const missing = [...new Set([...listed, ...(proposal.remove ?? [])])].filter((id) => !known.has(id));
 
-  for (const id of proposal.remove ?? []) layout = retirerWidget(layout, id);
+  for (const id of proposal.remove ?? []) layout = removeWidget(layout, id);
   for (const { zone } of zones) {
-    for (const w of widgetsDuRail(layout, zone)) if (!listed.has(w.id)) layout = retirerWidget(layout, w.id);
+    for (const w of widgetsOfZone(layout, zone)) if (!listed.has(w.id)) layout = removeWidget(layout, w.id);
   }
   for (const { zone, ids } of zones) {
     for (const id of ids) {
       const entry = layout.find((w) => w.id === id);
-      if (entry && (entry.removed || entry.rail !== zone)) layout = deplacerWidget(layout, id, zone, null);
+      if (entry && (entry.removed || entry.rail !== zone)) layout = moveWidget(layout, id, zone, null);
     }
   }
   for (const { zone, ids } of zones) {
-    const present = widgetsDuRail(layout, zone).map((w) => w.id);
+    const present = widgetsOfZone(layout, zone).map((w) => w.id);
     const order = [...ids.filter((id) => present.includes(id)), ...present.filter((id) => !ids.includes(id))];
-    layout = reordonnerRail(layout, zone, order);
+    layout = reorderZone(layout, zone, order);
   }
 
-  return { widgets: [...layout, ...orphelins(input.widgetsRaw, constraints)], columns, missing };
+  return { widgets: [...layout, ...orphanPlacements(input.widgetsRaw, constraints)], columns, missing };
 }
 
 // ── catalog snapshot ────────────────────────────────────────────────────────

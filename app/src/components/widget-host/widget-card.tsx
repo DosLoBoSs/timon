@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useMobile } from '@/hooks/use-mobile';
 import { t } from '@/lib/i18n';
 import { useWidgetHost } from './widget-host';
-import { coteInsertion, type WidgetLayout } from './widget-layout';
+import { insertionSide, type WidgetLayout } from './widget-layout';
 import { CONTROL, WidgetContextMenu, WidgetGear, wantsNativeMenu } from './widget-menu';
 import { effectiveWidgetStyle, useWidgetStyleDefaults } from './use-widget-style';
 import type { WidgetOrientation } from './widget-dnd';
@@ -18,7 +18,7 @@ import type { WidgetOrientation } from './widget-dnd';
 function coteDuCurseur(members: WidgetLayout[], dragging: string | null, targetId: string): 'avant' | 'apres' | null {
   if (!dragging || dragging === targetId) return null;
   if (!members.some((m) => m.id === dragging)) return 'avant';
-  return coteInsertion(members, dragging, targetId);
+  return insertionSide(members, dragging, targetId);
 }
 
 /** A tab is a drag source AND a drop target, at any time: a stack is reordered
@@ -38,7 +38,7 @@ function WidgetTab({ entry, selected, onSelect, panelId, cote }: { entry: Widget
     className={cn('widget-tab relative flex h-7 min-w-0 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring', selected ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground', isDragging && 'opacity-40')}>
     {/* A line BETWEEN two tabs, not a highlighted tab: highlighting the
         target shows what is hovered, which still leaves you guessing on which
-        side the tab will fall. The side is the one `coteInsertion` will decide
+        side the tab will fall. The side is the one `insertionSide` will decide
         on drop; same function, so the line cannot lie. */}
     {curseur && <span aria-hidden data-cursor={curseur} className={cn('pointer-events-none absolute inset-y-0.5 z-10 w-[3px] rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.7)]', curseur === 'avant' ? '-left-[2px]' : '-right-[2px]')} />}
     <span className="max-w-40 truncate">{host.widget(entry.id)?.title}</span>

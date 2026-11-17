@@ -29,23 +29,23 @@ import { workspaceRowHandover } from '@/lib/workspace-route';
 import { useWorkspaceLayout } from '@/components/workspace-layout-provider';
 import { t } from '@/lib/i18n';
 import {
-  deplacerOnglet,
-  deplacerWidget,
+  moveStackTab,
+  moveWidget,
   dockWidget,
   selectWidgetTab,
-  fusionnerLayout,
-  orphelins,
-  placerEnFinDePile,
-  redimensionner,
-  remettreWidget,
-  repartirHauteurs,
-  retirerWidget,
-  widgetsRetires,
-  remplacerWidget,
-  verserZone,
-  widgetsAdmisParConfig,
-  widgetsDuRail,
-  widgetsDisponibles,
+  mergeLayout,
+  orphanPlacements,
+  placeAtStackEnd,
+  resizeWidget,
+  restoreWidget,
+  distributeHeights,
+  removeWidget,
+  removedWidgets,
+  replaceWidget,
+  pourZone,
+  widgetsAllowedByConfig,
+  widgetsOfZone,
+  availableWidgets,
   type ZoneId,
   type WidgetLayout,
 } from './widget-layout';
@@ -308,7 +308,7 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
       updateLayout((brut: unknown) => {
         const suivant = [
           ...op(mergeWorkspaceWidgets(brut, catalog.entries, workspace.view, chatZonesMounted)),
-          ...orphelins(brut, catalog.entries),
+          ...orphanPlacements(brut, catalog.entries),
         ];
         return suivant;
       }, ecrire);
@@ -364,10 +364,10 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   // rewritten: turning the module back on brings the card back to its place.
   const caps = useCapabilities();
   const layoutVisible = useMemo(
-    () => widgetsAdmisParConfig(layout, (id) => isZoneVisible(caps, `cockpit.${id}`)),
+    () => widgetsAllowedByConfig(layout, (id) => isZoneVisible(caps, `cockpit.${id}`)),
     [layout, caps],
   );
-  retiresRef.current = useMemo(() => new Set(widgetsRetires(layout).map((w) => w.id)), [layout]);
+  retiresRef.current = useMemo(() => new Set(removedWidgets(layout).map((w) => w.id)), [layout]);
 
   // What an agent's `widgets_get` reads, and its `widgets_propose` is checked against.
   const affichable = useCallback((id: string) => isZoneVisible(caps, `cockpit.${id}`), [caps]);
@@ -380,7 +380,7 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   });
 
   const widgetsOf = useCallback(
-    (zone: ZoneId) => widgetsDuRail(layoutVisible, zone),
+    (zone: ZoneId) => widgetsOfZone(layoutVisible, zone),
     [layoutVisible],
   );
 
@@ -395,25 +395,25 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   // from the placement read before the removal. A removal is one click in a
   // menu, so the way back has to be as cheap as the way out. Skipped when the
   // widget has been put back by other means in the meantime. Only that widget
-  // goes back (`remettreWidget`): writing the whole placement from before
+  // goes back (`restoreWidget`): writing the whole placement from before
   // would undo, too, whatever another window changed since (TODO #647).
   const stockeRef = useRef(stocke);
   stockeRef.current = stocke;
   const onRemove = useCallback(
     (id: string) => {
       const avant = mergeWorkspaceWidgets(stockeRef.current, catalog.entries, workspace.view, chatZonesMounted);
-      muter((l) => retirerWidget(l, id), true);
+      muter((l) => removeWidget(l, id), true);
       toast(t('widgets.removed', { title: catalog.byId.get(id)?.title ?? id }), {
         action: {
           label: t('widgets.undo'),
-          onClick: () => { if (!retiresRef.current.has(id)) return; muter((l) => remettreWidget(l, avant, id), true); },
+          onClick: () => { if (!retiresRef.current.has(id)) return; muter((l) => restoreWidget(l, avant, id), true); },
         },
       });
     },
     [muter, catalog, workspace.view, chatZonesMounted],
   );
   const onReplace = useCallback(
-    (id: string, replacement: string) => muter((l) => remplacerWidget(l, id, replacement), true),
+    (id: string, replacement: string) => muter((l) => replaceWidget(l, id, replacement), true),
     [muter],
   );
 
@@ -436,7 +436,7 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
   // is the usual cross-container move, which follows its node from one parent
   // to another; freezing the inventory during the drag would render it twice,
   // hence two nodes registered under a single id.
-  const retires = useMemo(() => widgetsDisponibles(layoutVisible, zones.map(z => z.id)), [layoutVisible, zones]);
+  const retires = useMemo(() => availableWidgets(layoutVisible, zones.map(z => z.id)), [layoutVisible, zones]);
 
   /** Mounted zone that would take the widget back, its default zone by preference. */
   const restoreTargetOf = useCallback(
@@ -460,13 +460,13 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
     (id: string, destination?: ZoneId) => {
       const zone = destination ?? restoreTargetOf(id);
       if (!zone || !admis(id, zone)) return;
-      muter((l) => deplacerWidget(l, id, zone, null), true);
+      muter((l) => moveWidget(l, id, zone, null), true);
     },
     [restoreTargetOf, admis, muter],
   );
 
   const onMergeZone = useCallback(
-    (from: ZoneId, to: ZoneId) => muter((l) => verserZone(l, from, to), true),
+    (from: ZoneId, to: ZoneId) => muter((l) => pourZone(l, from, to), true),
     [muter],
   );
 
@@ -496,7 +496,7 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
         const source = l.find((w) => w.id === id && !w.removed);
         if (!target) return l;
         const memePile = !!source?.group && source.group === target.group && source.rail === target.rail;
-        return memePile || admis(id, target.rail) ? placerEnFinDePile(l, id, target.id) : l;
+        return memePile || admis(id, target.rail) ? placeAtStackEnd(l, id, target.id) : l;
       }
       // Drop on a tab: reorder if it is the same stack, dock otherwise. It is the
       // same gesture from the user's side, "put it here".
@@ -506,12 +506,12 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
         const target = l.find((w) => w.id === cible && !w.removed);
         if (!target || cible === id) return l;
         if (source?.group && source.group === target.group && source.rail === target.rail) {
-          return deplacerOnglet(l, id, cible);
+          return moveStackTab(l, id, cible);
         }
         // From elsewhere: dock, then move BEFORE the hovered tab. `dockWidget` alone
         // would put the new tab at the head of the stack, far from the line the user
         // saw under the pointer.
-        return admis(id, target.rail) ? deplacerOnglet(dockWidget(l, id, target.id), id, cible, 'avant') : l;
+        return admis(id, target.rail) ? moveStackTab(dockWidget(l, id, target.id), id, cible, 'avant') : l;
       }
       const docking = over.startsWith('dock:');
       const insertion = over.startsWith('insert:');
@@ -523,20 +523,20 @@ export function WidgetHost({ children }: { children: React.ReactNode }) {
         const grouped = dockWidget(l, id, target.id);
         const group = grouped.find((w) => w.id === id)?.group;
         const minimum = Math.max(...grouped.filter((w) => w.group === group && w.rail === zone).map((w) => catalog.byId.get(w.id)?.minHeight ?? 0)) + 36;
-        return redimensionner(grouped, id, Math.max(target.hauteur, minimum), minimum);
+        return resizeWidget(grouped, id, Math.max(target.hauteur, minimum), minimum);
       }
-      return deplacerWidget(l, id, zone, target?.id ?? null);
+      return moveWidget(l, id, zone, target?.id ?? null);
     }, true);
   }, [muter, admis, enCours, catalog]);
 
   const onShares = useCallback((shares: ReadonlyArray<{ id: string; percent: number }>, persist: boolean) =>
-    muter((l) => repartirHauteurs(l, shares), persist), [muter]);
+    muter((l) => distributeHeights(l, shares), persist), [muter]);
 
 
   const onSelectTab = useCallback((id: string) => muter((l) => selectWidgetTab(l, id), true), [muter]);
   const onDetach = useCallback((id: string) => muter((l) => {
     const entry = l.find((w) => w.id === id);
-    return entry ? deplacerWidget(l, id, entry.rail, null) : l;
+    return entry ? moveWidget(l, id, entry.rail, null) : l;
   }, true), [muter]);
   const onStyle = useCallback((id: string, patch: { borderless?: boolean | undefined; transparent?: boolean | undefined; untitled?: boolean }) =>
     muter((l) => l.map((w) => {

@@ -65,7 +65,7 @@ export type CatalogEntry = WidgetConstraints & {
 /**
  * Heights of a plugin widget. A plugin does not declare them yet (the manifest
  * does not carry them), and leaving them undefined would make
- * `fusionnerLayout` clamp on `undefined`, hence persist `NaN`s.
+ * `mergeLayout` clamp on `undefined`, hence persist `NaN`s.
  */
 export const PLUGIN_DEFAULT_HEIGHT = 260;
 export const PLUGIN_MIN_HEIGHT = 120;
@@ -98,7 +98,7 @@ function formerIdsOf(pluginId: string, options: WidgetOptions | undefined): stri
  * after them, in the order the registry reports them.
  *
  * `defaultZoneForSlot` translates a slot into a first-placement zone. It is
- * injected, as `estAffichable` is into `widgetsAdmisParConfig`: the only known
+ * injected, as `isVisible` is into `widgetsAllowedByConfig`: the only known
  * exception is the cockpit, whose two rails share the `cockpit.widget` slot
  * (see `widget-dnd.ts`), and that knowledge belongs to the cockpit, not to the
  * model. By default the zone carries the slot's name, which is true of
@@ -153,7 +153,7 @@ export function buildWidgetCatalog(
 /**
  * Current id of a widget named by an id it carried before (`formerIds`).
  *
- * `placementHerite` only migrates the host's layout; an id written elsewhere
+ * `inheritedPlacement` only migrates the host's layout; an id written elsewhere
  * (an island tab) must find its card too. A current id always wins; when two
  * widgets claim the same former id, the first in the catalog keeps it.
  */

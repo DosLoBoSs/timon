@@ -173,7 +173,7 @@ function listeDeChaines(brut: unknown): string[] {
 /**
  * Reads the stored value back, checking it against the zones the page mounts.
  *
- * Tolerant by construction, like `fusionnerLayout`: an unknown zone is ignored
+ * Tolerant by construction, like `mergeLayout`: an unknown zone is ignored
  * (rename, missing plugin), a known zone missing from storage is added at its
  * original place, and a duplicate counts once. An unreadable value is thus
  * never a broken page, only a return to the defaults.

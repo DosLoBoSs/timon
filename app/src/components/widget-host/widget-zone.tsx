@@ -10,7 +10,7 @@ import { t } from '@/lib/i18n';
 import { WidgetCard } from './widget-card';
 import { useWidgetHost } from './widget-host';
 import { type WidgetOrientation, type WidgetZoneDef } from './widget-dnd';
-import { deplacerBord, partsDepuisHauteurs, partsNormalisees, widgetStacks, type WidgetLayout, type ZoneId } from './widget-layout';
+import { moveEdge, sharesFromHeights, normalizedShares, widgetStacks, type WidgetLayout, type ZoneId } from './widget-layout';
 import { WidgetInsertion } from './widget-drop';
 import { Fragment } from 'react';
 import { useMobile } from '@/hooks/use-mobile';
@@ -188,7 +188,7 @@ export function WidgetZone({
   const partages = horizontal ? [] : stacks.filter((members) => !nu(members));
   // Weights against each other, rescaled to 100 %: the card left alone when
   // its neighbour moves away fills the column instead of keeping its half.
-  const parts = partsNormalisees(partages.map((members) =>
+  const parts = normalizedShares(partages.map((members) =>
     poidsDe(tete(members), Math.max(0, hauteurZone - ECART_CARTES * (partages.length - 1)))));
   const fillsHeight = partages.length > 0;
   const vide = entrees.length === 0;
@@ -209,8 +209,8 @@ export function WidgetZone({
     const hauteurs = depart ?? cadres.map((c) => c!.getBoundingClientRect().height);
     if (delta === 0 && depart === null && !persist) return hauteurs;
     const minimums = partages.map((members) => Math.max(...members.map((m) => widget(m.id)?.minHeight ?? 0)) + (members.length > 1 ? 46 : 0));
-    const suivantes = deplacerBord(hauteurs, minimums, index, delta, !libre);
-    const parts = partsDepuisHauteurs(suivantes);
+    const suivantes = moveEdge(hauteurs, minimums, index, delta, !libre);
+    const parts = sharesFromHeights(suivantes);
     onShares(partages.map((members, i) => ({ id: tete(members).id, percent: parts[i]! })), persist);
     return hauteurs;
   }, [partages, widget, onShares]);

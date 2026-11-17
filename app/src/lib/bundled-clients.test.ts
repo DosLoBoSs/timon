@@ -7,7 +7,7 @@ import { registerProductLayout } from './plugin-host/slot-root';
 import { mountBundledClients } from '@/plugins-client/mount';
 import { UI_LAYOUT_MODULE } from '@/plugins-client/ui-layout';
 import { buildWidgetCatalog, type WidgetSlotEntry } from '../components/widget-host/widget-catalog';
-import { fusionnerLayout, orphelins, widgetsDuRail, type WidgetLayout } from '../components/widget-host/widget-layout';
+import { mergeLayout, orphanPlacements, widgetsOfZone, type WidgetLayout } from '../components/widget-host/widget-layout';
 import { defaultZoneForSlot } from '../components/cockpit/cockpit-zones';
 import { mergeWorkspaceWidgets } from '../components/widget-host/widget-defaults';
 import { NAV_SECONDARY_ORDER } from '@/plugins-client/nav';
@@ -603,15 +603,15 @@ test('the retired mail placement is ignored without a gap or a transfer to the t
     { id: 'plugin:@timon/vault:vault-graph', rail: 'gauche', rang: 2, hauteur: 300 },
   ];
   const catalogue = catalogueDesTuiles();
-  const layout = fusionnerLayout(saved, catalogue);
+  const layout = mergeLayout(saved, catalogue);
   assert.equal(layout.some((entry) => entry.id === retired.id), false);
-  assert.deepEqual(orphelins(saved, catalogue), [retired]);
-  const rail = widgetsDuRail(layout, 'gauche');
+  assert.deepEqual(orphanPlacements(saved, catalogue), [retired]);
+  const rail = widgetsOfZone(layout, 'gauche');
   assert.deepEqual(rail.map((entry) => entry.rang), rail.map((_, index) => index));
   assert.equal(catalogue.some((entry) => entry.pluginId === 'old-mail'), false);
 
   register({ slot: 'cockpit.widget', pluginId: 'old-mail', key: 'old-mail' }, Empty);
-  const installed = fusionnerLayout(saved, catalogueDesTuiles());
+  const installed = mergeLayout(saved, catalogueDesTuiles());
   const widget = installed.find((entry) => entry.id === 'plugin:old-mail:old-mail');
   assert.ok(widget);
   assert.notEqual(widget.hauteur, retired.hauteur, 'the new widget uses its own defaults');

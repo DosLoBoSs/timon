@@ -10,9 +10,9 @@ import { arrayMove } from '@dnd-kit/sortable';
 
 import { isSlotAdmissible } from '@/lib/plugin-host/slot-compat';
 import {
-  deplacerWidget,
-  reordonnerRail,
-  widgetsDuRail,
+  moveWidget,
+  reorderZone,
+  widgetsOfZone,
   type ZoneId,
   type WidgetLayout,
 } from './widget-layout';
@@ -150,17 +150,17 @@ export function resolveDrop(
   if (layout.find((w) => w.id === activeId)?.removed) {
     const cible = zoneOfDragId(layout, overId, zones);
     if (!cible || !accepts(activeId, cible)) return layout;
-    return deplacerWidget(layout, activeId, cible, isZoneDropId(overId) ? null : overId);
+    return moveWidget(layout, activeId, cible, isZoneDropId(overId) ? null : overId);
   }
 
   const zone = zoneOfDragId(layout, activeId, zones);
   if (!zone) return layout;
   if (isZoneDropId(overId) || overId === activeId) return layout;
-  const ids = widgetsDuRail(layout, zone).map((w) => w.id);
+  const ids = widgetsOfZone(layout, zone).map((w) => w.id);
   const from = ids.indexOf(activeId);
   const to = ids.indexOf(overId);
   if (from < 0 || to < 0) return layout;
-  return reordonnerRail(layout, zone, arrayMove(ids, from, to));
+  return reorderZone(layout, zone, arrayMove(ids, from, to));
 }
 
 /**

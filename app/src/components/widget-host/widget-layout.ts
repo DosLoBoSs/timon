@@ -3,7 +3,7 @@
  * height.
  *
  * Pure model: this file reads and writes nothing. Persistence is the daemon's
- * (`lib/ui-layout-store.ts`), which returns a raw value; `fusionnerLayout` is
+ * (`lib/ui-layout-store.ts`), which returns a raw value; `mergeLayout` is
  * what checks it against the registry.
  *
  * A zone is identified by a free string, no longer by the two cockpit rails:
@@ -18,7 +18,7 @@ export type WidgetHeightMode = 'fixed' | 'fill';
 
 /** Includes placements waiting in an unmounted zone (e.g. cockpit widgets
  * while visiting a chat). Adding one affects only the current workspace. */
-export function widgetsDisponibles(layout: readonly WidgetLayout[], mounted: readonly ZoneId[]): WidgetLayout[] {
+export function availableWidgets(layout: readonly WidgetLayout[], mounted: readonly ZoneId[]): WidgetLayout[] {
   const zones = new Set(mounted);
   return layout.filter(widget => widget.removed || !zones.has(widget.rail));
 }
@@ -37,7 +37,7 @@ export type WidgetLayout = {
   /**
    * Taken out of the interface by the user. The entry stays: it remembers the
    * widget is deliberately away, where dropping it from the layout would let
-   * `fusionnerLayout` put it back at its defaults on the next load.
+   * `mergeLayout` put it back at its defaults on the next load.
    *
    * This is placement state, owned by the user and stored in the layout JSON.
    * It is NOT `ui.hidden` (config) nor a disabled module (host capabilities):
@@ -78,17 +78,17 @@ export type WidgetConstraints = {
  * would either shift the placed widgets or, worse, drop the removed one along
  * the way and resurrect it at its defaults on the next load.
  */
-function partitionner(layout: readonly WidgetLayout[]): {
-  places: WidgetLayout[];
-  retires: WidgetLayout[];
+function partition(layout: readonly WidgetLayout[]): {
+  placed: WidgetLayout[];
+  removed: WidgetLayout[];
 } {
-  const places: WidgetLayout[] = [];
-  const retires: WidgetLayout[] = [];
-  for (const w of layout) (w.removed ? retires : places).push(w);
-  return { places, retires };
+  const placed: WidgetLayout[] = [];
+  const removed: WidgetLayout[] = [];
+  for (const w of layout) (w.removed ? removed : placed).push(w);
+  return { placed, removed };
 }
 
-function estZone(v: unknown): v is ZoneId {
+function isZone(v: unknown): v is ZoneId {
   return typeof v === 'string' && v.length > 0;
 }
 
@@ -96,27 +96,27 @@ function estZone(v: unknown): v is ZoneId {
  * Groups a layout by zone, each group sorted by rank, in the order the zones
  * appear. Used to rewrite a layout without ever mixing two zones.
  */
-function grouperParZone(layout: readonly WidgetLayout[]): Map<ZoneId, WidgetLayout[]> {
-  const groupes = new Map<ZoneId, WidgetLayout[]>();
+function groupByZone(layout: readonly WidgetLayout[]): Map<ZoneId, WidgetLayout[]> {
+  const groups = new Map<ZoneId, WidgetLayout[]>();
   for (const w of [...layout].sort((a, b) => a.rang - b.rang)) {
-    const groupe = groupes.get(w.rail);
-    if (groupe) groupe.push(w);
-    else groupes.set(w.rail, [w]);
+    const group = groups.get(w.rail);
+    if (group) group.push(w);
+    else groups.set(w.rail, [w]);
   }
-  return groupes;
+  return groups;
 }
 
 /** A raw storage entry, before being checked against the registry. */
-function lireEntree(brut: unknown): WidgetLayout | null {
-  if (typeof brut !== 'object' || brut === null) return null;
-  const o = brut as Record<string, unknown>;
+function readEntry(raw: unknown): WidgetLayout | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const o = raw as Record<string, unknown>;
   if (typeof o.id !== 'string') return null;
-  if (!estZone(o.rail)) return null;
+  if (!isZone(o.rail)) return null;
   if (typeof o.rang !== 'number' || !Number.isFinite(o.rang)) return null;
   if (typeof o.hauteur !== 'number' || !Number.isFinite(o.hauteur)) return null;
   const e: WidgetLayout = { id: o.id, rail: o.rail, rang: o.rang, hauteur: o.hauteur };
   if (o.heightMode === 'fixed' || o.heightMode === 'fill') e.heightMode = o.heightMode;
-  const part = lireFillPercent(o.fillPercent);
+  const part = readFillPercent(o.fillPercent);
   if (part !== null) e.fillPercent = part;
   // Read back explicitly: this whitelist is what persists across a reload, and
   // a field missing here is a removal that silently undoes itself.
@@ -138,21 +138,21 @@ function lireEntree(brut: unknown): WidgetLayout | null {
  * ids still on screen. A former id the user had removed hands nothing down —
  * the widget then lands where it would for anyone.
  */
-export function placementHerite(brut: unknown, formerIds: readonly string[], id: string): WidgetLayout | null {
-  if (!Array.isArray(brut) || formerIds.length === 0) return null;
+export function inheritedPlacement(raw: unknown, formerIds: readonly string[], id: string): WidgetLayout | null {
+  if (!Array.isArray(raw) || formerIds.length === 0) return null;
   for (const former of formerIds) {
-    const e = brut.map(lireEntree).find((entry) => entry?.id === former);
+    const e = raw.map(readEntry).find((entry) => entry?.id === former);
     if (e && !e.removed) return { ...e, id };
   }
   return null;
 }
 
 /** Renumbers the ranks 0..n in each rail, in the current order. */
-function normaliserRangs(layout: WidgetLayout[]): WidgetLayout[] {
-  const compteurs = new Map<ZoneId, number>();
+function renumberRanks(layout: WidgetLayout[]): WidgetLayout[] {
+  const counters = new Map<ZoneId, number>();
   return layout.map((w) => {
-    const rang = compteurs.get(w.rail) ?? 0;
-    compteurs.set(w.rail, rang + 1);
+    const rang = counters.get(w.rail) ?? 0;
+    counters.set(w.rail, rang + 1);
     return { ...w, rang };
   });
 }
@@ -160,7 +160,7 @@ function normaliserRangs(layout: WidgetLayout[]): WidgetLayout[] {
 /** A departure must not leave a one-tab stack or several selected siblings.
  * Only normalize the affected stack: unrelated singleton records may belong
  * to a plugin that has not registered yet and must retain their group. */
-function normaliserGroupe(layout: WidgetLayout[], source: WidgetLayout): WidgetLayout[] {
+function normalizeStack(layout: WidgetLayout[], source: WidgetLayout): WidgetLayout[] {
   if (!source.group) return layout;
   const members = layout.filter((w) => !w.removed && w.rail === source.rail && w.group === source.group);
   const selected = members.find((w) => w.activeTab) ?? members[0];
@@ -171,7 +171,7 @@ function normaliserGroupe(layout: WidgetLayout[], source: WidgetLayout): WidgetL
 
 /** Group identity is independent of a tab's identity. A detached founding tab
  * can become the target of a new stack without collecting its former siblings. */
-function nouveauGroupe(layout: WidgetLayout[], targetId: string): string {
+function newStackGroup(layout: WidgetLayout[], targetId: string): string {
   const used = new Set(layout.flatMap((w) => w.group ? [w.group] : []));
   const prefix = `stack:${encodeURIComponent(targetId)}:`;
   let suffix = 1;
@@ -185,28 +185,28 @@ function nouveauGroupe(layout: WidgetLayout[], targetId: string): string {
  * who had put it somewhere, and a widget added to the code must appear without
  * the user having to purge their storage.
  */
-export function fusionnerLayout(
-  brut: unknown,
-  contraintes: readonly WidgetConstraints[],
+export function mergeLayout(
+  raw: unknown,
+  constraints: readonly WidgetConstraints[],
 ): WidgetLayout[] {
-  const parId = new Map(contraintes.map((c) => [c.id, c]));
-  const vus = new Set<string>();
+  const byId = new Map(constraints.map((c) => [c.id, c]));
+  const seen = new Set<string>();
 
-  const depuisStorage: WidgetLayout[] = [];
-  if (Array.isArray(brut)) {
-    for (const item of brut) {
-      const e = lireEntree(item);
+  const fromStorage: WidgetLayout[] = [];
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      const e = readEntry(item);
       if (!e) continue;
-      const c = parId.get(e.id);
+      const c = byId.get(e.id);
       if (!c) continue; // widget gone from the registry → ignored
-      if (vus.has(e.id)) continue; // doublon de storage corrompu
-      vus.add(e.id);
-      depuisStorage.push({ ...e, ...(c.heightMode && !e.heightMode ? { heightMode: c.heightMode } : {}), hauteur: Math.max(c.minHeight, e.hauteur) });
+      if (seen.has(e.id)) continue; // duplicate left by a corrupted storage
+      seen.add(e.id);
+      fromStorage.push({ ...e, ...(c.heightMode && !e.heightMode ? { heightMode: c.heightMode } : {}), hauteur: Math.max(c.minHeight, e.hauteur) });
     }
   }
 
-  const manquants = contraintes
-    .filter((c) => !vus.has(c.id))
+  const missing = constraints
+    .filter((c) => !seen.has(c.id))
     .map<WidgetLayout>((c) => ({
       id: c.id,
       rail: c.defaultZone,
@@ -217,26 +217,26 @@ export function fusionnerLayout(
 
   // Missing ones are inserted at their default rank; the ranks are then
   // renumbered to stay dense even after a widget is removed.
-  const { places, retires } = partitionner([...depuisStorage, ...manquants]);
+  const { placed, removed } = partition([...fromStorage, ...missing]);
   // Legacy stacks may contain different plugin defaults. One frame must keep
   // the same sizing when switching tabs, including after a plugin reload.
-  for (const members of widgetStacks(places)) {
+  for (const members of widgetStacks(placed)) {
     if (members.length < 2) continue;
-    const tete = members.find((w) => w.activeTab) ?? members[0]!;
-    const mode = tete.heightMode ?? 'fixed';
+    const head = members.find((w) => w.activeTab) ?? members[0]!;
+    const mode = head.heightMode ?? 'fixed';
     for (const member of members) {
       member.heightMode = mode;
-      member.fillPercent = tete.fillPercent;
+      member.fillPercent = head.fillPercent;
     }
   }
-  places.sort((a, b) => a.rang - b.rang);
-  return [...normaliserRangs(places), ...retires];
+  placed.sort((a, b) => a.rang - b.rang);
+  return [...renumberRanks(placed), ...removed];
 }
 
 /**
  * Stored placements that no catalogue entry claims.
  *
- * `fusionnerLayout` drops them, and that had no consequence while the
+ * `mergeLayout` drops them, and that had no consequence while the
  * catalogue was a table compiled into the app: an unknown id meant a widget
  * removed from the code. The catalogue is now live (a plugin registers after
  * the page loads, and a disabled plugin does not appear at all): rewriting the
@@ -246,21 +246,21 @@ export function fusionnerLayout(
  * The host thus puts them back at the end of what it persists. They are
  * neither placed, nor renumbered, nor shown: they wait for their plugin.
  */
-export function orphelins(
-  brut: unknown,
-  contraintes: readonly WidgetConstraints[],
+export function orphanPlacements(
+  raw: unknown,
+  constraints: readonly WidgetConstraints[],
 ): WidgetLayout[] {
-  if (!Array.isArray(brut)) return [];
-  const connus = new Set(contraintes.map((c) => c.id));
-  const vus = new Set<string>();
-  const sortie: WidgetLayout[] = [];
-  for (const item of brut) {
-    const e = lireEntree(item);
-    if (!e || connus.has(e.id) || vus.has(e.id)) continue;
-    vus.add(e.id);
-    sortie.push(e);
+  if (!Array.isArray(raw)) return [];
+  const known = new Set(constraints.map((c) => c.id));
+  const seen = new Set<string>();
+  const out: WidgetLayout[] = [];
+  for (const item of raw) {
+    const e = readEntry(item);
+    if (!e || known.has(e.id) || seen.has(e.id)) continue;
+    seen.add(e.id);
+    out.push(e);
   }
-  return sortie;
+  return out;
 }
 
 /**
@@ -275,16 +275,16 @@ export function orphelins(
  * passes `isZoneVisible` (`lib/capabilities.ts`), which already answers for
  * both `ui.hidden` and the module state.
  */
-export function widgetsAdmisParConfig(
+export function widgetsAllowedByConfig(
   layout: readonly WidgetLayout[],
-  estAffichable: (id: string) => boolean,
+  isVisible: (id: string) => boolean,
 ): WidgetLayout[] {
-  return layout.filter((w) => estAffichable(w.id));
+  return layout.filter((w) => isVisible(w.id));
 }
 
 /** A template becomes its configured instance without changing its placement.
  * Keep the template in the palette so another instance can be created. */
-export function remplacerWidget(layout: WidgetLayout[], id: string, replacement: string): WidgetLayout[] {
+export function replaceWidget(layout: WidgetLayout[], id: string, replacement: string): WidgetLayout[] {
   const source = layout.find((w) => w.id === id && !w.removed);
   if (!source || replacement === id) return layout;
   return [
@@ -294,7 +294,7 @@ export function remplacerWidget(layout: WidgetLayout[], id: string, replacement:
 }
 
 /** Widgets of a zone, sorted by rank. A removed widget is in no zone. */
-export function widgetsDuRail(layout: readonly WidgetLayout[], zone: ZoneId): WidgetLayout[] {
+export function widgetsOfZone(layout: readonly WidgetLayout[], zone: ZoneId): WidgetLayout[] {
   return layout.filter((w) => !w.removed && w.rail === zone).sort((a, b) => a.rang - b.rang);
 }
 
@@ -302,7 +302,7 @@ export function widgetsDuRail(layout: readonly WidgetLayout[], zone: ZoneId): Wi
  * Widgets the user took out of the interface, in registry order — the palette
  * they can be dragged back from.
  */
-export function widgetsRetires(layout: readonly WidgetLayout[]): WidgetLayout[] {
+export function removedWidgets(layout: readonly WidgetLayout[]): WidgetLayout[] {
   return layout.filter((w) => w.removed === true);
 }
 
@@ -311,90 +311,90 @@ export function widgetsRetires(layout: readonly WidgetLayout[]): WidgetLayout[] 
  * are left as they were: they cost nothing, and they are a sensible starting
  * point should a later version offer a "put it back where it was".
  */
-export function retirerWidget(layout: WidgetLayout[], id: string): WidgetLayout[] {
-  const { places, retires } = partitionner(layout);
-  const source = places.find((w) => w.id === id);
+export function removeWidget(layout: WidgetLayout[], id: string): WidgetLayout[] {
+  const { placed, removed } = partition(layout);
+  const source = placed.find((w) => w.id === id);
   if (!source) return layout;
-  return normaliserGroupe([
-    ...normaliserRangs(places.filter((w) => w.id !== id)),
-    ...retires,
+  return normalizeStack([
+    ...renumberRanks(placed.filter((w) => w.id !== id)),
+    ...removed,
     { ...source, removed: true, group: undefined, activeTab: undefined },
   ], source);
 }
 
 /**
- * Undoes a removal: `id` back where it stood in `avant` — zone, rank, stack
- * and selected tab — on the layout as it is NOW. Not a write of `avant`
+ * Undoes a removal: `id` back where it stood in `before` — zone, rank, stack
+ * and selected tab — on the layout as it is NOW. Not a write of `before`
  * itself: replayed over another window's write (TODO #647), that would erase
  * whatever the other window changed since. The stack is rebuilt with the
  * siblings still loose in the zone (a stack of two dissolves when one
  * leaves); a sibling stacked elsewhere since keeps its new place. A widget
  * already back by other means is left alone.
  */
-export function remettreWidget(layout: WidgetLayout[], avant: readonly WidgetLayout[], id: string): WidgetLayout[] {
-  const source = avant.find((w) => w.id === id && !w.removed);
-  const actuel = layout.find((w) => w.id === id);
-  if (!source || !actuel?.removed) return layout;
-  const { places, retires } = partitionner(layout);
-  const groupes = grouperParZone(places);
-  const cible = groupes.get(source.rail) ?? [];
-  groupes.set(source.rail, cible);
-  const freres = new Set(source.group
-    ? avant.filter((w) => w.id !== id && !w.removed && w.rail === source.rail && w.group === source.group).map((w) => w.id)
+export function restoreWidget(layout: WidgetLayout[], before: readonly WidgetLayout[], id: string): WidgetLayout[] {
+  const source = before.find((w) => w.id === id && !w.removed);
+  const current = layout.find((w) => w.id === id);
+  if (!source || !current?.removed) return layout;
+  const { placed, removed } = partition(layout);
+  const groups = groupByZone(placed);
+  const column = groups.get(source.rail) ?? [];
+  groups.set(source.rail, column);
+  const siblings = new Set(source.group
+    ? before.filter((w) => w.id !== id && !w.removed && w.rail === source.rail && w.group === source.group).map((w) => w.id)
     : []);
-  const rejoints = cible.filter((w) => freres.has(w.id) && (w.group === undefined || w.group === source.group));
-  const pile = rejoints.length > 0 ? source.group : undefined;
-  const actifAvant = (w: WidgetLayout) => avant.find((x) => x.id === w.id)?.activeTab;
-  const zone = cible.map((w) => rejoints.includes(w) ? { ...w, group: pile, activeTab: actifAvant(w) } : w);
-  const remis: WidgetLayout = { ...actuel, rail: source.rail, removed: undefined, group: pile, activeTab: pile ? source.activeTab : undefined };
-  zone.splice(Math.max(0, Math.min(source.rang, zone.length)), 0, remis);
-  groupes.set(source.rail, zone);
-  return normaliserGroupe([
-    ...normaliserRangs([...groupes.values()].flat()),
-    ...retires.filter((w) => w.id !== id),
-  ], remis);
+  const rejoined = column.filter((w) => siblings.has(w.id) && (w.group === undefined || w.group === source.group));
+  const stack = rejoined.length > 0 ? source.group : undefined;
+  const wasActive = (w: WidgetLayout) => before.find((x) => x.id === w.id)?.activeTab;
+  const zone = column.map((w) => rejoined.includes(w) ? { ...w, group: stack, activeTab: wasActive(w) } : w);
+  const restored: WidgetLayout = { ...current, rail: source.rail, removed: undefined, group: stack, activeTab: stack ? source.activeTab : undefined };
+  zone.splice(Math.max(0, Math.min(source.rang, zone.length)), 0, restored);
+  groups.set(source.rail, zone);
+  return normalizeStack([
+    ...renumberRanks([...groups.values()].flat()),
+    ...removed.filter((w) => w.id !== id),
+  ], restored);
 }
 
 /**
- * Moves `id` right before `idCible` (or at the end of the zone if `idCible` is
+ * Moves `id` right before `beforeId` (or at the end of the zone if `beforeId` is
  * null). Used both for reordering within a zone and for moving from one zone
  * to another: it is the same operation from the model's side.
  */
-export function deplacerWidget(
+export function moveWidget(
   layout: WidgetLayout[],
   id: string,
-  zoneCible: ZoneId,
-  idCible: string | null,
+  targetZone: ZoneId,
+  beforeId: string | null,
 ): WidgetLayout[] {
   const source = layout.find((w) => w.id === id);
   if (!source) return layout;
 
-  const { places, retires } = partitionner(layout);
-  const groupes = grouperParZone(places.filter((w) => w.id !== id));
-  let cible = groupes.get(zoneCible);
-  if (!cible) {
+  const { placed, removed } = partition(layout);
+  const groups = groupByZone(placed.filter((w) => w.id !== id));
+  let column = groups.get(targetZone);
+  if (!column) {
     // Zone still empty: it does not exist in the layout until a widget has been
     // put there, but that is precisely the case being handled.
-    cible = [];
-    groupes.set(zoneCible, cible);
+    column = [];
+    groups.set(targetZone, column);
   }
 
-  const target = cible.find((w) => w.id === idCible);
-  const idx = idCible === null ? cible.length : cible.findIndex((w) => target?.group ? w.group === target.group : w.id === idCible);
+  const target = column.find((w) => w.id === beforeId);
+  const idx = beforeId === null ? column.length : column.findIndex((w) => target?.group ? w.group === target.group : w.id === beforeId);
   // Dropping a widget somewhere IS putting it back: a removed widget dragged
   // out of the palette has no other way of re-entering the interface.
-  cible.splice(idx < 0 ? cible.length : idx, 0, { ...source, rail: zoneCible, removed: undefined, group: undefined, activeTab: undefined });
+  column.splice(idx < 0 ? column.length : idx, 0, { ...source, rail: targetZone, removed: undefined, group: undefined, activeTab: undefined });
 
-  return normaliserGroupe([
-    ...normaliserRangs([...groupes.values()].flat()),
-    ...retires.filter((w) => w.id !== id),
+  return normalizeStack([
+    ...renumberRanks([...groups.values()].flat()),
+    ...removed.filter((w) => w.id !== id),
   ], source);
 }
 
 /**
  * Pours every card of a zone at the end of another, stacks included.
  *
- * Not a series of `deplacerWidget`: that one detaches the card from its stack,
+ * Not a series of `moveWidget`: that one detaches the card from its stack,
  * and closing a chat column tab must undo neither the stacks nor the height
  * shares the user composed there. A stack whose name is already used in the
  * target zone is renamed — a stack's identity is (zone, group), and two stacks
@@ -403,69 +403,69 @@ export function deplacerWidget(
  * Removed cards keep their zone: the palette puts them back where they are
  * dropped, never where they were.
  */
-export function verserZone(layout: WidgetLayout[], de: ZoneId, vers: ZoneId): WidgetLayout[] {
-  if (de === vers) return layout;
-  const { places, retires } = partitionner(layout);
-  const groupes = grouperParZone(places);
-  const venus = groupes.get(de);
-  if (!venus?.length) return layout;
-  const cible = groupes.get(vers) ?? [];
-  const prises = new Set(cible.flatMap((w) => (w.group ? [w.group] : [])));
-  const utilises = new Set(layout.flatMap((w) => (w.group ? [w.group] : [])));
-  const renommes = new Map<string, string>();
-  const deplaces = venus.map((w) => {
-    if (!w.group || !prises.has(w.group)) return { ...w, rail: vers };
-    let group = renommes.get(w.group);
+export function pourZone(layout: WidgetLayout[], from: ZoneId, to: ZoneId): WidgetLayout[] {
+  if (from === to) return layout;
+  const { placed, removed } = partition(layout);
+  const groups = groupByZone(placed);
+  const moving = groups.get(from);
+  if (!moving?.length) return layout;
+  const column = groups.get(to) ?? [];
+  const taken = new Set(column.flatMap((w) => (w.group ? [w.group] : [])));
+  const used = new Set(layout.flatMap((w) => (w.group ? [w.group] : [])));
+  const renamed = new Map<string, string>();
+  const moved = moving.map((w) => {
+    if (!w.group || !taken.has(w.group)) return { ...w, rail: to };
+    let group = renamed.get(w.group);
     if (!group) {
       let n = 1;
-      while (utilises.has(`${w.group}:${n}`)) n += 1;
+      while (used.has(`${w.group}:${n}`)) n += 1;
       group = `${w.group}:${n}`;
-      utilises.add(group);
-      renommes.set(w.group, group);
+      used.add(group);
+      renamed.set(w.group, group);
     }
-    return { ...w, rail: vers, group };
+    return { ...w, rail: to, group };
   });
-  groupes.delete(de);
-  groupes.set(vers, [...cible, ...deplaces]);
-  return [...normaliserRangs([...groupes.values()].flat()), ...retires];
+  groups.delete(from);
+  groups.set(to, [...column, ...moved]);
+  return [...renumberRanks([...groups.values()].flat()), ...removed];
 }
 
 /** Rewrites a zone's order from an already ordered list of ids. */
-export function reordonnerRail(
+export function reorderZone(
   layout: WidgetLayout[],
   zone: ZoneId,
-  idsOrdonnes: string[],
+  orderedIds: string[],
 ): WidgetLayout[] {
-  const { places, retires } = partitionner(layout);
-  const parId = new Map(places.map((w) => [w.id, w]));
-  const ordonnes = idsOrdonnes
-    .map((id) => parId.get(id))
+  const { placed, removed } = partition(layout);
+  const byId = new Map(placed.map((w) => [w.id, w]));
+  const ordered = orderedIds
+    .map((id) => byId.get(id))
     .filter((w): w is WidgetLayout => w !== undefined && w.rail === zone);
-  const autres = grouperParZone(places.filter((w) => w.rail !== zone));
-  return [...normaliserRangs([...ordonnes, ...[...autres.values()].flat()]), ...retires];
+  const others = groupByZone(placed.filter((w) => w.rail !== zone));
+  return [...renumberRanks([...ordered, ...[...others.values()].flat()]), ...removed];
 }
 
 /** Applies a new height, bounded by the widget's floor. */
-export function redimensionner(
+export function resizeWidget(
   layout: WidgetLayout[],
   id: string,
-  hauteur: number,
+  height: number,
   minHeight: number,
 ): WidgetLayout[] {
   const source = layout.find((w) => w.id === id);
   return layout.map((w) =>
     w.id === id || (source?.group && w.group === source.group && w.rail === source.rail)
-      ? { ...w, hauteur: Math.max(minHeight, Math.round(hauteur)) } : w,
+      ? { ...w, hauteur: Math.max(minHeight, Math.round(height)) } : w,
   );
 }
 
 /** `null` = nothing usable, the entry keeps the default (100 %). One decimal
  *  is kept: a share dragged by its edge lands between two whole percents, and
  *  rounding it would make the edge jump under the pointer. */
-function lireFillPercent(brut: unknown): number | null {
-  if (typeof brut !== 'number' || !Number.isFinite(brut)) return null;
-  const arrondi = Math.round(brut * 10) / 10;
-  return arrondi >= 5 && arrondi <= 100 ? arrondi : null;
+function readFillPercent(raw: unknown): number | null {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
+  const rounded = Math.round(raw * 10) / 10;
+  return rounded >= 5 && rounded <= 100 ? rounded : null;
 }
 
 /**
@@ -485,7 +485,7 @@ export const HEIGHT_SNAP_TOLERANCE = 0.025;
  * the edge sticks when either card comes within `HEIGHT_SNAP_TOLERANCE` of a
  * known share of the whole column (`HEIGHT_SNAPS`) — the nearest one wins.
  */
-export function deplacerBord(
+export function moveEdge(
   heights: readonly number[], mins: readonly number[], index: number, delta: number, snap = true,
 ): number[] {
   const a = index;
@@ -494,32 +494,32 @@ export function deplacerBord(
   const total = heights[a]! + heights[b]!;
   const minA = Math.min(mins[a] ?? 0, total);
   const maxA = Math.max(minA, total - (mins[b] ?? 0));
-  const borne = (v: number) => Math.min(maxA, Math.max(minA, v));
-  let hauteurA = borne(heights[a]! + delta);
+  const clamp = (v: number) => Math.min(maxA, Math.max(minA, v));
+  let heightA = clamp(heights[a]! + delta);
   if (snap) {
-    const colonne = heights.reduce((sum, h) => sum + h, 0);
-    let meilleur: { valeur: number; ecart: number } | null = null;
+    const column = heights.reduce((sum, h) => sum + h, 0);
+    let best: { value: number; gap: number } | null = null;
     for (const part of HEIGHT_SNAPS) {
-      const cible = part * colonne;
-      for (const candidat of [cible, total - cible]) {
-        if (candidat < minA || candidat > maxA) continue;
-        const ecart = Math.abs(candidat - hauteurA);
-        if (ecart <= HEIGHT_SNAP_TOLERANCE * colonne && (!meilleur || ecart < meilleur.ecart)) meilleur = { valeur: candidat, ecart };
+      const target = part * column;
+      for (const candidate of [target, total - target]) {
+        if (candidate < minA || candidate > maxA) continue;
+        const gap = Math.abs(candidate - heightA);
+        if (gap <= HEIGHT_SNAP_TOLERANCE * column && (!best || gap < best.gap)) best = { value: candidate, gap };
       }
     }
-    if (meilleur) hauteurA = meilleur.valeur;
+    if (best) heightA = best.value;
   }
   const next = [...heights];
-  next[a] = hauteurA;
-  next[b] = total - hauteurA;
+  next[a] = heightA;
+  next[b] = total - heightA;
   return next;
 }
 
 /** Heights in px as shares of their sum, in percent with one decimal. */
-export function partsDepuisHauteurs(heights: readonly number[]): number[] {
-  const somme = heights.reduce((sum, h) => sum + h, 0);
-  if (somme <= 0) return heights.map(() => Math.round(1000 / Math.max(1, heights.length)) / 10);
-  return heights.map((h) => Math.max(5, Math.round((h / somme) * 1000) / 10));
+export function sharesFromHeights(heights: readonly number[]): number[] {
+  const total = heights.reduce((sum, h) => sum + h, 0);
+  if (total <= 0) return heights.map(() => Math.round(1000 / Math.max(1, heights.length)) / 10);
+  return heights.map((h) => Math.max(5, Math.round((h / total) * 1000) / 10));
 }
 
 /**
@@ -531,11 +531,11 @@ export function partsDepuisHauteurs(heights: readonly number[]): number[] {
  * card (a card dragged away leaves its neighbour at 50 %), so they are read
  * as weights against each other, never as fractions of the column.
  */
-export function partsNormalisees(poids: readonly number[]): number[] {
-  const valides = poids.map((p) => (Number.isFinite(p) && p > 0 ? p : 0));
-  const somme = valides.reduce((sum, p) => sum + p, 0);
-  if (somme <= 0) return poids.map(() => 100 / Math.max(1, poids.length));
-  return valides.map((p) => (p / somme) * 100);
+export function normalizedShares(weights: readonly number[]): number[] {
+  const valid = weights.map((p) => (Number.isFinite(p) && p > 0 ? p : 0));
+  const total = valid.reduce((sum, p) => sum + p, 0);
+  if (total <= 0) return weights.map(() => 100 / Math.max(1, weights.length));
+  return valid.map((p) => (p / total) * 100);
 }
 
 /**
@@ -543,19 +543,19 @@ export function partsNormalisees(poids: readonly number[]): number[] {
  * `fill` card: a column is always shared out at 100 %, nothing has a height of
  * its own any more that could push the last card past the bottom.
  */
-export function repartirHauteurs(
+export function distributeHeights(
   layout: WidgetLayout[], shares: ReadonlyArray<{ id: string; percent: number }>,
 ): WidgetLayout[] {
-  let suivant = layout;
+  let next = layout;
   for (const { id, percent } of shares) {
-    const part = lireFillPercent(percent);
+    const part = readFillPercent(percent);
     if (part === null) continue;
-    const source = suivant.find((w) => w.id === id && !w.removed);
+    const source = next.find((w) => w.id === id && !w.removed);
     if (!source) continue;
-    suivant = suivant.map((w) => !w.removed && (w.id === id || (source.group && w.group === source.group && w.rail === source.rail))
+    next = next.map((w) => !w.removed && (w.id === id || (source.group && w.group === source.group && w.rail === source.rail))
       ? { ...w, heightMode: 'fill' as const, fillPercent: part } : w);
   }
-  return suivant;
+  return next;
 }
 
 /** Sizing belongs to the whole frame rather than the selected tab. */
@@ -566,7 +566,7 @@ export function setWidgetHeightMode(
   if (!source) return layout;
   // 100 % is not written: it is the default, and an explicit value everywhere
   // would inflate every layout already persisted without changing the render.
-  const part = heightMode === 'fill' ? lireFillPercent(fillPercent ?? source.fillPercent ?? 100) : null;
+  const part = heightMode === 'fill' ? readFillPercent(fillPercent ?? source.fillPercent ?? 100) : null;
   const patch = part !== null && part !== 100 ? { fillPercent: part } : { fillPercent: undefined };
   return layout.map((w) => !w.removed && (w.id === id || (source.group && w.group === source.group && w.rail === source.rail))
     ? { ...w, heightMode, ...patch } : w);
@@ -576,8 +576,8 @@ export function setWidgetHeightMode(
 export function dockWidget(layout: WidgetLayout[], id: string, targetId: string): WidgetLayout[] {
   const target = layout.find((w) => w.id === targetId && !w.removed);
   if (!target || id === targetId || !layout.some((w) => w.id === id)) return layout;
-  const group = target.group ?? nouveauGroupe(layout, target.id);
-  const moved = deplacerWidget(layout, id, target.rail, target.id);
+  const group = target.group ?? newStackGroup(layout, target.id);
+  const moved = moveWidget(layout, id, target.rail, target.id);
   return moved.map((w) => w.id === id || w.id === target.id || (w.group === group && w.rail === target.rail)
     ? { ...w, group, activeTab: w.id === id, hauteur: target.hauteur, heightMode: target.heightMode ?? 'fixed', fillPercent: target.fillPercent } : w);
 }
@@ -593,39 +593,39 @@ export function dockWidget(layout: WidgetLayout[], id: string, targetId: string)
  * outside a stack): docking has its own function, `dockWidget`, and the two
  * gestures must not overlap.
  */
-export type CoteOnglet = 'avant' | 'apres' | 'geste';
+export type TabSide = 'avant' | 'apres' | 'geste';
 
 /** Where tab `id` lands relative to `targetId`, given the current ranks.
  *  A single source of truth: the insertion cursor draws EXACTLY what this
  *  function decides, otherwise the line lies about the result. */
-export function coteInsertion(
-  layout: readonly WidgetLayout[], id: string, targetId: string, cote: CoteOnglet = 'geste',
+export function insertionSide(
+  layout: readonly WidgetLayout[], id: string, targetId: string, side: TabSide = 'geste',
 ): 'avant' | 'apres' {
-  if (cote !== 'geste') return cote;
-  const places = layout.filter((w) => !w.removed).sort((a, b) => a.rang - b.rang);
-  const depart = places.findIndex((w) => w.id === id);
-  const arrivee = places.findIndex((w) => w.id === targetId);
-  return depart >= 0 && depart < arrivee ? 'apres' : 'avant';
+  if (side !== 'geste') return side;
+  const placed = layout.filter((w) => !w.removed).sort((a, b) => a.rang - b.rang);
+  const from = placed.findIndex((w) => w.id === id);
+  const to = placed.findIndex((w) => w.id === targetId);
+  return from >= 0 && from < to ? 'apres' : 'avant';
 }
 
-export function deplacerOnglet(
-  layout: WidgetLayout[], id: string, targetId: string, cote: CoteOnglet = 'geste',
+export function moveStackTab(
+  layout: WidgetLayout[], id: string, targetId: string, side: TabSide = 'geste',
 ): WidgetLayout[] {
   const source = layout.find((w) => w.id === id && !w.removed);
   const target = layout.find((w) => w.id === targetId && !w.removed);
   if (!source || !target || id === targetId) return layout;
   if (!source.group || source.group !== target.group || source.rail !== target.rail) return layout;
 
-  const { places, retires } = partitionner(layout);
-  const groupes = grouperParZone(places);
-  const rail = groupes.get(source.rail);
+  const { placed, removed } = partition(layout);
+  const groups = groupByZone(placed);
+  const rail = groups.get(source.rail);
   if (!rail) return layout;
-  const apres = coteInsertion(rail, id, targetId, cote) === 'apres';
-  const sansSource = rail.filter((w) => w.id !== id);
-  const cible = sansSource.findIndex((w) => w.id === targetId);
-  sansSource.splice(apres ? cible + 1 : cible, 0, source);
-  groupes.set(source.rail, sansSource);
-  return [...normaliserRangs([...groupes.values()].flat()), ...retires];
+  const after = insertionSide(rail, id, targetId, side) === 'apres';
+  const withoutSource = rail.filter((w) => w.id !== id);
+  const targetIndex = withoutSource.findIndex((w) => w.id === targetId);
+  withoutSource.splice(after ? targetIndex + 1 : targetIndex, 0, source);
+  groups.set(source.rail, withoutSource);
+  return [...renumberRanks([...groups.values()].flat()), ...removed];
 }
 
 /**
@@ -634,17 +634,17 @@ export function deplacerOnglet(
  * Tabs cannot carry this gesture: dropped on a tab, a widget lands before or
  * after IT, never after the last one when it comes from elsewhere.
  */
-export function placerEnFinDePile(layout: WidgetLayout[], id: string, targetId: string): WidgetLayout[] {
+export function placeAtStackEnd(layout: WidgetLayout[], id: string, targetId: string): WidgetLayout[] {
   const target = layout.find((w) => w.id === targetId && !w.removed);
   if (!target || (id === targetId && !target.group)) return layout;
   const source = layout.find((w) => w.id === id && !w.removed);
-  const memePile = !!source?.group && source.group === target.group && source.rail === target.rail;
-  const pose = memePile ? layout : dockWidget(layout, id, targetId);
-  const group = pose.find((w) => w.id === id)?.group;
+  const sameStack = !!source?.group && source.group === target.group && source.rail === target.rail;
+  const docked = sameStack ? layout : dockWidget(layout, id, targetId);
+  const group = docked.find((w) => w.id === id)?.group;
   if (!group) return layout;
-  const pile = pose.filter((w) => !w.removed && w.group === group && w.rail === target.rail).sort((a, b) => a.rang - b.rang);
-  const dernier = pile[pile.length - 1];
-  return dernier && dernier.id !== id ? deplacerOnglet(pose, id, dernier.id, 'apres') : pose;
+  const stack = docked.filter((w) => !w.removed && w.group === group && w.rail === target.rail).sort((a, b) => a.rang - b.rang);
+  const last = stack[stack.length - 1];
+  return last && last.id !== id ? moveStackTab(docked, id, last.id, 'apres') : docked;
 }
 
 export function selectWidgetTab(layout: WidgetLayout[], id: string): WidgetLayout[] {
