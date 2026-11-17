@@ -15,7 +15,9 @@ import {
 
 /** A home holding a main checkout, a linked worktree of it, and a folder a mission could aim at. */
 function layout() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'fence-git-')));
+  // Native: the module resolves the repository with it, and only it turns a
+  // Windows short name (`RUNNER~1`) into the long one.
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'fence-git-')));
   const home = join(root, 'home');
   const main = join(home, 'code', 'app');
   const common = join(main, '.git');
