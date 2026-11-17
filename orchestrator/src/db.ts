@@ -495,6 +495,10 @@ CREATE TABLE IF NOT EXISTS workflow_versions (
   workflow_id TEXT NOT NULL, version INTEGER NOT NULL, definition TEXT NOT NULL,
   published_at INTEGER NOT NULL, published_by TEXT, PRIMARY KEY (workflow_id, version)
 );
+-- What each script node runs, fingerprinted when a person saved, published or
+-- re-approved the workflow (JSON ScriptPin[], workflows/nodes/script.ts). A run
+-- whose files no longer match is refused; no row (every workflow saved before) runs no script.
+CREATE TABLE IF NOT EXISTS workflow_script_pins (workflow_id TEXT PRIMARY KEY, pins TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS workflow_runs (
   id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, version INTEGER NOT NULL, status TEXT NOT NULL,
   trigger TEXT NOT NULL, input TEXT, context TEXT NOT NULL, error TEXT, started_at INTEGER NOT NULL,
