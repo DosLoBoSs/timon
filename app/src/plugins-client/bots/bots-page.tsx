@@ -13,7 +13,9 @@
  * Right after the onboarding the page is also where the main TIM welcomes its
  * person (`bots-welcome.tsx`): while the daemon says the welcome has not ended
  * (`capabilities.mainAgentOnboarding`), the main TIM's chat is that
- * conversation, and it stays on screen for the rest of the visit.
+ * conversation, and it stays on screen for the rest of the visit. A later
+ * visit reopens it as it ended, as long as it is the main TIM's latest
+ * conversation (`useEndedWelcome`).
  */
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
@@ -32,7 +34,7 @@ import { useCapabilities } from '@/lib/capabilities';
 import { BOTS_ROUTE, botsRailContent, botsSeedTree, isBotsRailTab } from './bots-islands';
 import { BotsRail } from './bots-rail';
 import { useBotPick, useBotStates } from './bots-rail-widget';
-import { BotsWelcome, botsChatMode } from './bots-welcome';
+import { BotsEndedWelcome, BotsWelcome, botsChatMode, useEndedWelcome } from './bots-welcome';
 import { CloisonnementStrip } from './cloisonnement';
 import { mainBotOf } from './types';
 import { useBots } from './use-bots';
@@ -86,7 +88,11 @@ export function BotsPage(): React.ReactElement {
   const [welcomeMission, setWelcomeMission] = useState<{ agent: string; missionId: string } | null>(null);
   const onWelcomeMission = useCallback((agent: string, missionId: string) => setWelcomeMission({ agent, missionId }), []);
   const onWelcomeClosed = useCallback(() => setWelcomeMission(null), []);
-  const chatMode = botsChatMode({ selected, main, caps, welcomeAgent: welcomeMission?.agent ?? null });
+  const welcomeAgent = welcomeMission?.agent ?? null;
+  // Looked up only where it can matter: the main TIM, the welcome over and not on screen in this visit.
+  const welcomeOver = caps !== null && caps.firstRun === false && caps.mainAgentOnboarding !== true;
+  const ended = useEndedWelcome(selected && selected === main && welcomeOver && welcomeAgent !== selected ? selected : null);
+  const chatMode = botsChatMode({ selected, main, caps, welcomeAgent, ended });
 
   const selectedBot = useMemo(
     () => bots.find((bot) => bot.name === selected) ?? null,
@@ -141,7 +147,9 @@ export function BotsPage(): React.ReactElement {
           <Suspense fallback={null}>
             {chatMode === 'welcome'
               ? <BotsWelcome key={`welcome:${selected}`} onMission={onWelcomeMission} onClosed={onWelcomeClosed} />
-              : chatMode === 'chat' && <ChatClient key={selected} forcedAgent={selected} compact chromeComplet />}
+              : chatMode === 'ended' && ended
+                ? <BotsEndedWelcome key={`ended:${ended.missionId}`} welcome={ended} />
+                : chatMode === 'chat' && <ChatClient key={selected} forcedAgent={selected} compact chromeComplet />}
           </Suspense>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">

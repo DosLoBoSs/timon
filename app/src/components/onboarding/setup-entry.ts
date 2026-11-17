@@ -52,3 +52,18 @@ export function readResume(): { agent: string; missionId: string } | null {
       : null;
   } catch { return null; }
 }
+
+/**
+ * The setup conversation the reader skipped, kept on this machine: a later visit
+ * of the TIMs page reopens a welcome that ended, never one walked out of (the
+ * daemon stops both the same way, `terminated`).
+ */
+export const SKIPPED_KEY = 'timon.setup.skipped';
+
+export function markWelcomeSkipped(missionId: string): void {
+  try { machineScopedStorage(localStorage).setItem(SKIPPED_KEY, missionId); } catch { /* private mode */ }
+}
+
+export function welcomeSkipped(missionId: string): boolean {
+  try { return machineScopedStorage(localStorage).getItem(SKIPPED_KEY) === missionId; } catch { return false; }
+}

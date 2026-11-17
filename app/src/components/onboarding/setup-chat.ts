@@ -18,7 +18,7 @@ import { fetchCapabilities } from '@/lib/capabilities';
 import { armAutoTour } from '@/lib/guided-tour';
 import { getLocale } from '@/lib/i18n';
 import { machineScopedStorage } from '@/lib/machines/machine-storage';
-import { readResume, RESUME_KEY, setupEntry, type MainAgentStatus } from './setup-entry';
+import { markWelcomeSkipped, readResume, RESUME_KEY, setupEntry, type MainAgentStatus } from './setup-entry';
 import { requestSkip } from './setup-skip';
 import {
   SILENT_AFTER_MS, setupTrouble, type SetupChatSignal, type SetupMissionState, type SetupTrouble,
@@ -112,6 +112,8 @@ export function useSetupChat(opts: {
   const leavingRef = useRef(false);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
+  const stageRef = useRef(stage);
+  stageRef.current = stage;
 
   const onAgentSpoke = useCallback(() => setSpoke(true), []);
   const onSetupTrouble = useCallback((signal: SetupChatSignal) => {
@@ -225,6 +227,9 @@ export function useSetupChat(opts: {
     setSkipError(false);
     if (await requestSkip()) {
       leavingRef.current = true;
+      // Walked out of: a later visit of the TIMs page does not reopen it.
+      const current = stageRef.current;
+      if (current.kind === 'chat') markWelcomeSkipped(current.missionId);
       setSkipped(true);
       leaveRef.current('skipped');
       return;
