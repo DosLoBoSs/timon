@@ -285,6 +285,19 @@ const HIDDEN_TAB_ATTRS = { inert: true, 'aria-hidden': true } as const;
 
 const rectStyle = (rect: Rect): CSSProperties => ({ left: rect.x, top: rect.y, width: rect.width, height: rect.height });
 
+/**
+ * The tab an open just showed `content` in: every open focuses its island and
+ * activates the tab, a new one or the open one moved. Looked up by identity
+ * when the focus says otherwise.
+ */
+function openedTab(tree: IslandTree, content: IslandContent, existing: ((other: IslandContent) => boolean) | undefined): TabId | null {
+  const focused = tree.focus ? findLeaf(tree, tree.focus) : null;
+  const active = focused?.tabs.find((tab) => tab.id === focused.active);
+  if (active && active.content.type === content.type) return active.id;
+  const same = existing ?? sameContentAs(content.params, undefined);
+  return allLeaves(tree).flatMap((leaf) => leaf.tabs).find((tab) => tab.content.type === content.type && same(tab.content))?.id ?? null;
+}
+
 /** A drop as an op on the tree it is handed: planned again when replayed on a rewritten one. */
 function droppedOn(
   tree: IslandTree,
@@ -379,6 +392,17 @@ export function IslandWorkspaceView({
   applyRef.current = apply;
   const typesRef = useRef(types);
   typesRef.current = types;
+  /** New params for a tab, cleaned by its type: why they did not land, `null` once they did. */
+  const setParamsOf = (tabId: TabId, next: IslandParams): string | null => {
+    const tab = allLeaves(treeRef.current).flatMap((leaf) => leaf.tabs).find((x) => x.id === tabId);
+    const type = tab ? typesRef.current.get(tab.content.type) : undefined;
+    const parsed = type ? type.options.parseParams(next) : null;
+    const refused = parsed ? applyRef.current((tr) => setTabParams(tr, tabId, parsed)).refused : null;
+    if (parsed && !refused) return null;
+    return !tab ? 'unknown tab' : !type ? 'unknown type' : !parsed ? 'params refused by parseParams' : refused;
+  };
+  const setParamsRef = useRef(setParamsOf);
+  setParamsRef.current = setParamsOf;
   const actions = useRef(new Map<TabId, TabActions>());
   const actionsOf = (tabId: TabId): TabActions => {
     let found = actions.current.get(tabId);
@@ -387,13 +411,10 @@ export function IslandWorkspaceView({
         // A change that cannot land says so: a silent no-op left a popup's
         // View button dead for weeks (TIM-0127).
         setParams: (next) => {
-          const tab = allLeaves(treeRef.current).flatMap((leaf) => leaf.tabs).find((x) => x.id === tabId);
-          const type = tab ? typesRef.current.get(tab.content.type) : undefined;
-          const parsed = type ? type.options.parseParams(next) : null;
-          const refused = parsed ? applyRef.current((tr) => setTabParams(tr, tabId, parsed)).refused : null;
-          if (parsed && !refused) return;
-          const why = !tab ? 'unknown tab' : !type ? 'unknown type' : !parsed ? 'params refused by parseParams' : refused;
-          console.warn('[islands] setParams not applied', { tabId, type: tab?.content.type, why, next });
+          const why = setParamsOf(tabId, next);
+          if (!why) return;
+          const type = allLeaves(treeRef.current).flatMap((leaf) => leaf.tabs).find((x) => x.id === tabId)?.content.type;
+          console.warn('[islands] setParams not applied', { tabId, type, why, next });
           toast.error(t('islands.paramsRefused'), { id: 'islands-params-refused' });
         },
         setTitle: (title) => setTitles((old) => {
@@ -500,10 +521,10 @@ export function IslandWorkspaceView({
   }, [types]);
 
   // --------------------------------------------------- announced to the app
-  const open = useCallback((content: IslandContent, edge: DropRegion | 'float', pinned = false): boolean => {
+  const open = useCallback((content: IslandContent, edge: DropRegion | 'float', pinned = false): TabId | null => {
     const resolved = resolve(content);
     const type = types.get(content.type);
-    if (!resolved || !type) return false;
+    if (!resolved || !type) return null;
     const { content: clean, options } = resolved;
     const current = treeRef.current;
     const inTree = (id: string | null) => !!id && !floatOf(current, id);
@@ -533,14 +554,14 @@ export function IslandWorkspaceView({
     }
     else if (edge === 'center' || edge === 'float' || narrow) result = apply((tr) => addTab(tr, target, clean, undefined, options));
     else result = apply((tr) => insertAt(tr, target, edge, clean, options));
-    if (result.refused) return false;
+    if (result.refused) return null;
     const targetLeaf = allLeaves(current).find((leaf) => leaf.id === (group?.id ?? target));
     const where = targetLeaf ? titleOf(targetLeaf.tabs.find((x) => x.id === targetLeaf.active) ?? targetLeaf.tabs[0]!) : '';
     setAnnouncement(t(group || edge === 'center' || narrow ? 'islands.announce.tab' : `islands.announce.${edge}`, {
       title: type.options.title,
       target: where,
     }));
-    return true;
+    return openedTab(result.tree, clean, options.existing);
   }, [resolve, types, narrow, apply, titleOf]);
 
   const openRef = useRef(open);
@@ -548,7 +569,9 @@ export function IslandWorkspaceView({
   const viewKeyRef = useRef(viewKey);
   viewKeyRef.current = viewKey;
   const handle = useMemo<IslandWorkspaceHandle>(() => ({
-    open: (content, edge, pinned) => openRef.current(content, edge, pinned),
+    open: (content, edge, pinned) => openRef.current(content, edge, pinned) !== null,
+    openTab: (content, edge, pinned) => openRef.current(content, edge, pinned),
+    setParams: (tabId, params) => setParamsRef.current(tabId, params) === null,
     activate: (tabId) => { apply((tr) => activateTab(tr, tabId)); },
     close: (tabId) => { closeRef.current(tabId); },
     openGrid: (grid, cells) => {

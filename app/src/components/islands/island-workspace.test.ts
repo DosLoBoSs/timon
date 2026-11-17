@@ -397,6 +397,37 @@ test('an announced workspace opens a content next to the focused island, once', 
   assert.ok(w.mounts.includes('a'));
 });
 
+test('the bus names the tab it opened, and re-targets it in place (TODO #819)', async (t) => {
+  const w = await mount(t);
+  assert.equal(w.bus.openIslandTab({ type: FAKE, params: { id: 'a' } }), null, 'no workspace: nothing opened');
+  assert.equal(w.bus.setIslandTabParams('nope', { id: 'b' }), false, 'no workspace: nothing re-targeted');
+  await w.render(w.tree.defaultIslandTree(), true);
+  let tabId: string | null = null;
+  await w.act(() => { tabId = w.bus.openIslandTab({ type: FAKE, params: { id: 'a' } }, { edge: 'right' }); });
+  assert.ok(tabId);
+  const opened = w.calls.at(-1)!.tree;
+  assert.equal(w.tree.allLeaves(opened).flatMap((leaf) => leaf.tabs).find((tab) => tab.id === tabId)?.content.params.id, 'a');
+  // The same singleton again: the open tab is named, not a new one.
+  let again: string | null = null;
+  await w.act(() => { again = w.bus.openIslandTab({ type: FAKE, params: { id: 'a' } }, { edge: 'center' }); });
+  assert.equal(again, tabId);
+
+  let changed = false;
+  await w.act(() => { changed = w.bus.setIslandTabParams(tabId!, { id: 'b' }); });
+  assert.equal(changed, true);
+  const tabs = w.tree.allLeaves(w.calls.at(-1)!.tree).flatMap((leaf) => leaf.tabs).filter((tab) => tab.content.type === FAKE);
+  assert.deepEqual(tabs.map((tab) => [tab.id, tab.content.params.id]), [[tabId, 'b']], 'one tab, the same, showing b');
+  assert.equal(document.querySelectorAll('[data-board="b"]').length, 1);
+  assert.equal(document.querySelectorAll('[data-board="a"]').length, 0);
+
+  const before = w.calls.length;
+  await w.act(() => { changed = w.bus.setIslandTabParams(tabId!, { id: 3 }); });
+  assert.equal(changed, false, 'params refused by the type');
+  await w.act(() => { changed = w.bus.setIslandTabParams('gone', { id: 'c' }); });
+  assert.equal(changed, false, 'no such tab');
+  assert.equal(w.calls.length, before, 'a refused re-target writes nothing');
+});
+
 test('the stored workspace, before its view key is known, is the frame alone and offers nothing', async (t) => {
   const w = await mount(t);
   const React = await import('react');

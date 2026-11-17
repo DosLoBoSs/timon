@@ -12,7 +12,7 @@
  */
 
 import { useSyncExternalStore } from 'react';
-import type { DropRegion, GridShape, IslandContent, IslandTab, IslandTree, TabId } from './island-tree';
+import type { DropRegion, GridShape, IslandContent, IslandParams, IslandTab, IslandTree, TabId } from './island-tree';
 
 export type IslandWorkspaceHandle = {
   /**
@@ -20,6 +20,13 @@ export type IslandWorkspaceHandle = {
    * (`center`), or in a popup of its own (`float`).
    */
   open(content: IslandContent, edge: DropRegion | 'float', pinned?: boolean): boolean;
+  /** `open`, naming the tab that shows the content (a new one, or the open one moved), `null` when refused. */
+  openTab?(content: IslandContent, edge: DropRegion | 'float', pinned?: boolean): TabId | null;
+  /**
+   * Gives an open tab new params, through its type's `parseParams`, wherever
+   * it sits. `false` when no tab has that id or its type refused them.
+   */
+  setParams?(tabId: TabId, params: IslandParams): boolean;
   activate(tabId: TabId): void;
   close(tabId: TabId): void;
   /** Expands the route's island into a grid, preserving existing contents. */
@@ -98,6 +105,22 @@ export function openInIsland(
   { edge = 'right', pinned = false }: { edge?: DropRegion | 'float'; pinned?: boolean } = {},
 ): boolean {
   return handle ? handle.open(content, edge, pinned) : false;
+}
+
+/**
+ * `openInIsland`, for a source that keeps driving what it opened: the id of
+ * the tab showing `content`, `null` when nothing opened.
+ */
+export function openIslandTab(
+  content: IslandContent,
+  { edge = 'right', pinned = false }: { edge?: DropRegion | 'float'; pinned?: boolean } = {},
+): TabId | null {
+  return handle?.openTab?.(content, edge, pinned) ?? null;
+}
+
+/** Re-targets an open tab of the workspace on screen; `false` when it is gone or its type refused the params. */
+export function setIslandTabParams(tabId: TabId, params: IslandParams): boolean {
+  return handle?.setParams?.(tabId, params) ?? false;
 }
 
 export function activateIslandTab(tabId: TabId): void {
