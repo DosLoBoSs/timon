@@ -17,11 +17,13 @@ import {
 } from './release-manifest.mjs';
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'install.sh');
-const skip = process.platform === 'win32' ? 'install.sh is a POSIX shell script' : false;
+const posix = process.platform === 'win32' ? 'install.sh is a POSIX shell script' : false;
 
 const openssl = spawnSync('openssl', ['version'], { encoding: 'utf8' });
 const canVerify = openssl.status === 0 && /^OpenSSL ([3-9]|[1-9]\d)\./.test(openssl.stdout);
 const opensslPath = spawnSync('sh', ['-c', 'command -v openssl'], { encoding: 'utf8' }).stdout.trim();
+// The P-256 signature is mandatory, and only openssl checks it: every run needs it.
+const skip = posix || (!opensslPath && 'needs openssl');
 
 function pair() {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
@@ -50,13 +52,23 @@ function envelopeOf(payload, key) {
   return { keyId: key.keyId, payload: bytes.toString('base64'), sig: sign(null, signed, key.privateKey).toString('base64') };
 }
 
-function setup(envelope, key) {
+/** The P-256 key every run pins unless it pins its own (withP256). */
+const P256 = p256Pair();
+
+/**
+ * Writes the manifest, with the installers' P-256 signature of P256 added
+ * unless the envelope already carries one or `p256: false` asks for none.
+ */
+function setup(envelope, key, { p256 = true } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'timon-install-sh-'));
   const manifest = join(dir, 'releases.json');
-  writeFileSync(manifest, typeof envelope === 'string' ? envelope : serializeEnvelope(envelope));
+  const signed = typeof envelope !== 'string' && p256 && !envelope.p256 ? addInstallSignature(envelope, P256) : envelope;
+  writeFileSync(manifest, typeof signed === 'string' ? signed : serializeEnvelope(signed));
   const keyFile = join(dir, 'key.pem');
   writeFileSync(keyFile, key.publicKey);
-  return { dir, manifest, keyFile };
+  const p256File = join(dir, 'p256-default.pem');
+  writeFileSync(p256File, P256.publicKey);
+  return { dir, manifest, keyFile, p256File };
 }
 
 /** Pins a P-256 key in the run, as release-p256-keygen.mjs --pin does in the script. */
@@ -84,6 +96,8 @@ function run(ctx, key, args, extraEnv = {}) {
     TIMON_INSTALL_MANIFEST_URL: pathToFileURL(ctx.manifest).href,
     TIMON_INSTALL_PUBLIC_KEY_FILE: ctx.keyFile,
     TIMON_INSTALL_KEY_ID: key.keyId,
+    TIMON_INSTALL_P256_KEY_FILE: ctx.p256File,
+    TIMON_INSTALL_P256_KEY_ID: P256.keyId,
     TIMON_INSTALL_UNAME_S: 'Linux',
     TIMON_INSTALL_UNAME_M: 'x86_64',
     ...extraEnv,
@@ -110,7 +124,7 @@ test('dry run reads a manifest written by the release generator', { skip }, () =
     assert.match(r.out, /Timon 0\.2\.0 \(stable channel\) for linux-x64/);
     assert.match(r.out, /package: +timon-desktop_0\.2\.0_amd64\.deb/);
     assert.match(r.out, /from: +https:\/\/github\.com\/acme\/timon\/releases\/download\/v1\/timon-desktop_0\.2\.0_amd64\.deb/);
-    assert.match(r.out, new RegExp(`signature: +${canVerify ? 'verified' : 'unchecked'}`));
+    assert.match(r.out, /signature: +verified/);
     assert.match(r.out, /Dry run: nothing was downloaded or installed\./);
     assert.doesNotMatch(r.out, /evil/);
   } finally {
@@ -192,7 +206,7 @@ test('a manifest signed by another key, or altered, is refused', { skip: skip ||
   }
 });
 
-test('with LibreSSL, as on macOS, the P-256 signature is checked', { skip: skip || (!opensslPath && 'needs openssl') }, () => {
+test('with LibreSSL, as on macOS, the P-256 signature is checked', { skip }, () => {
   const key = pair();
   const p256 = p256Pair();
   const other = p256Pair();
@@ -228,22 +242,23 @@ test('with LibreSSL, as on macOS, the P-256 signature is checked', { skip: skip 
   }
 });
 
-test('a manifest without the P-256 signature behaves as before', { skip: skip || (!opensslPath && 'needs openssl') }, () => {
+test('a manifest without the P-256 signature is refused, with OpenSSL 3 as with LibreSSL', { skip }, () => {
   const key = pair();
-  const p256 = p256Pair();
   const { payload } = composeReleasesPayload({ entry: entry('0.2.0', linuxArtifacts('0.2.0')) });
-  const ctx = setup(signReleasesPayload(payload, key), key);
+  const ctx = setup(signReleasesPayload(payload, key), key, { p256: false });
   try {
-    const r = run(ctx, key, ['--dry-run', '--format', 'deb'], { ...withP256(ctx, p256), ...asLibreSSL(ctx) });
-    assert.equal(r.code, 0, r.err);
-    assert.match(r.out, /signature: +unchecked/);
-    assert.match(r.err, /could not check the manifest signature \(it needs OpenSSL 3\): relying on HTTPS and the package checksum/);
+    for (const [label, env] of [['openssl', {}], ['LibreSSL', asLibreSSL(ctx)]]) {
+      const r = run(ctx, key, ['--dry-run', '--format', 'deb'], env);
+      assert.equal(r.code, 1, `${label}: ${r.out}`);
+      assert.match(r.err, /has no P-256 signature: nothing was installed/, label);
+      assert.doesNotMatch(r.out, /package:/, label);
+    }
   } finally {
     rmSync(ctx.dir, { recursive: true, force: true });
   }
 });
 
-test('until the installers\' manifest is served, the release manifest is read', { skip }, () => {
+test('the release manifest of the daemons is no fallback for the installers\' one', { skip }, () => {
   const key = pair();
   const { payload } = composeReleasesPayload({ entry: entry('0.2.0', linuxArtifacts('0.2.0')) });
   const ctx = setup(signReleasesPayload(payload, key), key);
@@ -252,8 +267,9 @@ test('until the installers\' manifest is served, the release manifest is read', 
       TIMON_INSTALL_MANIFEST_URL: pathToFileURL(join(ctx.dir, 'missing.json')).href,
       TIMON_INSTALL_FALLBACK_MANIFEST_URL: pathToFileURL(ctx.manifest).href,
     });
-    assert.equal(r.code, 0, r.err);
-    assert.match(r.out, /Timon 0\.2\.0 \(stable channel\)/);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /could not download the release manifest/);
+    assert.doesNotMatch(r.out, /Timon 0\.2\.0/);
   } finally {
     rmSync(ctx.dir, { recursive: true, force: true });
   }
@@ -324,7 +340,7 @@ test('--download-only keeps a package that matches the manifest and refuses one 
   }
 });
 
-test('outside the test hooks, only the pinned manifest and key are read', { skip }, () => {
+test('outside the test hooks, only the pinned manifest and key are read', { skip: posix }, () => {
   const text = readFileSync(SCRIPT, 'utf8');
   // The key the daemon pins (updates/keyring.ts) is the one the script embeds.
   const keyring = readFileSync(join(dirname(SCRIPT), '..', 'orchestrator', 'src', 'plugins-bundled', 'updates', 'keyring.ts'), 'utf8');
@@ -333,7 +349,11 @@ test('outside the test hooks, only the pinned manifest and key are read', { skip
   const pem = createPublicKey({ key: { kty: 'OKP', crv: 'Ed25519', x }, format: 'jwk' }).export({ type: 'spki', format: 'pem' }).toString().trim();
   assert.ok(text.includes(`RELEASE_KEY_ID='${keyId}'`), 'install.sh pins the keyId of keyring.ts');
   assert.ok(text.includes(`RELEASE_PUBLIC_KEY='${pem}'`), 'install.sh pins the public key of keyring.ts');
-  assert.match(text, /\nMANIFEST_URL='https:\/\/timon-ai\.com\/\.well-known\/timon-releases\.json'/);
+  // No way back to the manifest without a P-256 signature, nor to an unchecked run.
+  for (const gone of ['timon-releases.json', 'FALLBACK', 'unchecked', 'relying on HTTPS']) {
+    assert.ok(!text.includes(gone), `install.sh no longer has ${gone}`);
+  }
+  assert.doesNotMatch(text, /(^|\s)MANIFEST_URL=/m, 'install.sh has no second manifest address');
   assert.match(text, /\nINSTALL_MANIFEST_URL='https:\/\/timon-ai\.com\/\.well-known\/timon-releases-install\.json'/);
   // install.ps1 pins the same P-256 key, its SPKI in base64 on one line.
   const p256Id = /\nRELEASE_P256_KEY_ID='([^']*)'/.exec(text)[1];
@@ -341,7 +361,8 @@ test('outside the test hooks, only the pinned manifest and key are read', { skip
   const ps1 = readFileSync(join(dirname(SCRIPT), 'install.ps1'), 'utf8');
   assert.ok(ps1.includes(`$releaseP256KeyId = '${p256Id}'`), 'install.ps1 pins the P-256 keyId of install.sh');
   assert.ok(ps1.includes(`$releaseP256PublicKey = '${p256Pem.replace(/-----[^-]+-----|\s/g, '')}'`), 'install.ps1 pins the P-256 key of install.sh');
-  if (p256Pem) assert.equal(keyIdFor(p256Pem), p256Id, 'the pinned P-256 keyId derives from the pinned key');
+  assert.ok(p256Pem, 'install.sh pins a P-256 key: the installer refuses to run without one');
+  assert.equal(keyIdFor(p256Pem), p256Id, 'the pinned P-256 keyId derives from the pinned key');
   assert.match(text, /if \[ "\$\{TIMON_INSTALL_TESTING:-\}" = 1 \]; then/);
   // The script must end by calling main: a truncated download then runs nothing.
   assert.equal(text.trimEnd().split('\n').pop(), 'main "$@"');
