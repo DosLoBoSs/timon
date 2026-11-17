@@ -1,6 +1,6 @@
 /**
  * The email code store (`docs/EMAIL-CODES.md`): 10-minute life, 5 wrong
- * guesses, single use, 60 s between two mails, a bounded map, and a quota of
+ * guesses per code and 10 per challenge, single use, 60 s between two mails, a bounded map, and a quota of
  * mails per origin that a flood cannot use to evict someone else's code.
  */
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -15,6 +15,7 @@ const {
   EmailCodeStore,
   EMAIL_CODE_CAPACITY,
   EMAIL_CODE_MAX_SENDS,
+  EMAIL_CODE_MAX_TOTAL_ATTEMPTS,
   EMAIL_CODE_ORIGIN_REQUESTS,
   EMAIL_CODE_ORIGIN_WINDOW_MS,
   EMAIL_CODE_RESEND_MS,
@@ -152,6 +153,35 @@ test('one challenge causes at most five mails', () => {
   const over = store.resend(id, 'verify', ORIGIN);
   assert.equal(over.ok, false);
   if (!over.ok) assert.equal(over.reason, 'send_limit');
+});
+
+test('a resend refills the guesses of the code, not of the challenge', () => {
+  const { store, clock, codes } = fixture();
+  const { id } = issue(store);
+  const miss = (left: number): void => {
+    assert.deepEqual(store.check(id, 'verify', '000000'), { ok: false, reason: 'invalid', attemptsLeft: left });
+  };
+  const resend = (): void => {
+    clock.now += EMAIL_CODE_RESEND_MS;
+    const attempt = store.resend(id, 'verify', ORIGIN);
+    assert.equal(attempt.ok, true);
+    if (attempt.ok) attempt.commit();
+  };
+  // 3 on the first code, 5 on the second (which burns it), 2 on the third.
+  for (const left of [4, 3, 2]) miss(left);
+  resend();
+  for (const left of [4, 3, 2, 1]) miss(left);
+  assert.deepEqual(store.check(id, 'verify', '000000'), { ok: false, reason: 'exhausted' });
+  resend();
+  miss(EMAIL_CODE_MAX_TOTAL_ATTEMPTS - 9);
+  assert.deepEqual(store.check(id, 'verify', '000000'), { ok: false, reason: 'exhausted' });
+  assert.deepEqual(store.check(id, 'verify', codes.at(-1)), { ok: false, reason: 'exhausted' }, 'not even the right code');
+  clock.now += EMAIL_CODE_RESEND_MS;
+  const drawn = codes.length;
+  const over = store.resend(id, 'verify', ORIGIN);
+  assert.equal(over.ok, false, 'three sends out of five, yet no new code');
+  if (!over.ok) assert.equal(over.reason, 'send_limit');
+  assert.equal(codes.length, drawn, 'nothing drawn, nothing to mail');
 });
 
 test('a second request for the same address waits like a resend', () => {

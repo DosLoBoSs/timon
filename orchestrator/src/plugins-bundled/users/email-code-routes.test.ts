@@ -4,7 +4,8 @@
  * 127.0.0.1:0.
  *
  * What matters: the first account exists only once its code is right; a code
- * dies after 10 minutes, 5 wrong guesses, or one use; a resend waits 60 s;
+ * dies after 10 minutes, 5 wrong guesses, or one use; a challenge takes 10
+ * wrong guesses over all its resends; a resend waits 60 s;
  * the reset request answers the same for a known and an unknown address; a
  * reset revokes every session; offline is a clear 503; an anonymous caller
  * asking in a loop is braked per network, and cannot evict the owner's code.
@@ -272,6 +273,39 @@ test('five wrong codes burn the challenge, and nothing is created', async () => 
   assert.equal(right.json.code, 'email_code_exhausted');
   const me = await (await fetch(`${base}/api/auth/me`)).json() as Json;
   assert.equal(me.needsSetup, true);
+});
+
+test('resends do not refill the challenge: ten wrong guesses, then start over', async () => {
+  const email = 'resend-guess@example.com';
+  const asked = await post('/api/auth/setup/email-code', { email });
+  assert.equal(asked.status, 202);
+  const id = asked.json.challengeId;
+  const guess = async (): Promise<Json> => {
+    const code = lastCode();
+    const miss = await post('/api/auth/setup', { ...account, email, challengeId: id, code: code === '000000' ? '111111' : '000000' });
+    assert.equal(miss.status, 400);
+    return miss.json;
+  };
+  const resend = async (): Promise<{ status: number; json: Json }> => {
+    clock.now += EMAIL_CODE_RESEND_MS;
+    return post('/api/auth/setup/email-code/resend', { challengeId: id });
+  };
+  for (const left of [4, 3, 2]) assert.equal((await guess()).attemptsLeft, left);
+  assert.equal((await resend()).status, 202);
+  for (const left of [4, 3, 2, 1]) assert.equal((await guess()).attemptsLeft, left);
+  assert.equal((await guess()).code, 'email_code_exhausted');
+  assert.equal((await resend()).status, 202, 'a burnt code can still be replaced');
+  const ninth = await guess();
+  assert.equal(ninth.code, 'email_code_invalid');
+  assert.equal(ninth.attemptsLeft, 1, 'what the challenge has left, not the fresh code');
+  assert.equal((await guess()).code, 'email_code_exhausted');
+  const right = await post('/api/auth/setup', { ...account, email, challengeId: id, code: lastCode() });
+  assert.equal(right.json.code, 'email_code_exhausted');
+  const mails = relayCalls.length;
+  const over = await resend();
+  assert.equal(over.status, 429);
+  assert.equal(over.json.code, 'email_code_send_limit');
+  assert.equal(relayCalls.length, mails, 'no mail for a code that could not be used');
 });
 
 test('the code only confirms the address it was sent to', async () => {
