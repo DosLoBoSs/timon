@@ -31,7 +31,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { AppWindow, ChevronDown, ChevronLeft, ChevronRight, Droplets, ExternalLink, GripVertical, Minus, PanelRight, Pin, PinOff, Plus, X } from 'lucide-react';
+import { AppWindow, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, GripVertical, Minus, PanelRight, Pin, PinOff, Plus, X } from 'lucide-react';
 import { Picto } from '@/components/picto';
 import { ChatTabIcon } from '@/plugins-client/missions/chat-tab-icon';
 import { createPortal } from 'react-dom';
@@ -123,15 +123,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { GlassClear, IslandGlassScopeProvider, useGlassScope } from '@/components/glass-scope';
-import { GLASS_TUNING_ENABLED, readGlassScope, type GlassScope } from '@/lib/glass-scope';
+import { type GlassScope } from '@/lib/glass-scope';
+import { IslandGlassSubmenu } from './island-glass-menu';
 import {
   ISLAND_MIN_HEIGHT,
   ISLAND_MIN_WIDTH,
@@ -1585,25 +1581,7 @@ function IslandHeader({
                 {t('islands.popup.minimize')}
               </DropdownMenuItem>
             )}
-            {glassOn && (
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger data-island-menu="glass">
-                  <Droplets className="size-4" aria-hidden />
-                  {t('islands.glass.menu')}
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuRadioGroup
-                    value={leaf.glassScope ?? 'follow'}
-                    onValueChange={(value) => { onGlassScope?.(readGlassScope(value)); }}
-                  >
-                    <DropdownMenuRadioItem value="follow" data-island-glass="follow">{t('islands.glass.follow')}</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="island" data-island-glass="island">{t('islands.glass.island')}</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="widgets" data-island-glass="widgets">{t('islands.glass.widgets')}</DropdownMenuRadioItem>
-                    {GLASS_TUNING_ENABLED && <DropdownMenuRadioItem value="both" data-island-glass="both">{t('islands.glass.both')}</DropdownMenuRadioItem>}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            )}
+            {glassOn && <IslandGlassSubmenu value={leaf.glassScope ?? null} onChange={(scope) => { onGlassScope?.(scope); }} />}
             {menuTab.content.type !== HOST_ROUTE && (
               <DropdownMenuItem data-island-menu="close" onSelect={() => onClose(menuTab.id)}>
                 <X className="size-4" aria-hidden />
