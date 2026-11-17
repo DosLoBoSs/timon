@@ -23,7 +23,7 @@ export const DAEMON_OFF_REASONS = ['off by default', 'disabled in timon.config.j
 /** The French sentences of a daemon from before TODO #628: an app can briefly face one during an update. */
 // french-ok: the exact sentences an older French daemon sends
 const LEGACY_LICENCE_REASONS = ['non couvert par la licence'];
-const LEGACY_OFF_REASONS = ['désactivé dans timon.config.json'];
+const LEGACY_OFF_REASONS = ['désactivé dans timon.config.json']; // i18n-exempt: input matched, never shown
 
 const LICENCE_REASONS: ReadonlySet<string> = new Set([...DAEMON_LICENCE_REASONS, ...LEGACY_LICENCE_REASONS]);
 const OFF_REASONS: ReadonlySet<string> = new Set([...DAEMON_OFF_REASONS, ...LEGACY_OFF_REASONS]);

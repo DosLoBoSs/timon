@@ -12,5 +12,8 @@
       "mcp": "MCP:",
       "tools": "tools:"
     }
+  },
+  "pluginHost": {
+    "renderFailed": "The plugin {id} failed to render."
   }
 }

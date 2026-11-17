@@ -12,5 +12,8 @@
       "mcp": "MCP :",
       "tools": "outils :"
     }
+  },
+  "pluginHost": {
+    "renderFailed": "Le plugin {id} n'a pas pu s'afficher."
   }
 }

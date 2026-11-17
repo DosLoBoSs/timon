@@ -185,7 +185,7 @@ test('each engine\'s panel is painted under its card; one that throws is contain
   try {
     const [, local, cloud, rogue] = pane.rows();
     assert.match(local!, /Speech model pane/);
-    assert.match(cloud!, /Plugin acme-dictation en erreur/, 'the error shows in place');
+    assert.match(cloud!, /The plugin acme-dictation failed to render/, 'the error shows in place');
     assert.match(cloud!, /Not allowed yet/, 'the engine\'s card is still there');
     assert.match(rogue!, /Acme settings/, 'the next engine renders');
     assert.equal(pane.radios().length, 4, 'the pane lives on');
