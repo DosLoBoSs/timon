@@ -4,7 +4,7 @@
       "loading": "Carregando…"
     },
     "dreams": {
-      "pending": "{count} pendentes",
+      "pending": "{count} {count, plural, one {pendente} other {pendentes}}",
       "empty": "Nenhum sonho pendente"
     },
     "accountUsage": {
