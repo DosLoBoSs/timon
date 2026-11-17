@@ -354,6 +354,12 @@
     "backup_enable_failed": "The backup could not be turned on: {detail}",
     "routine_fields_required": "A routine needs a name, an agent, a prompt and a schedule.",
     "routine_save_failed": "The routine could not be saved: {detail}",
-    "routine_enable_by_agent": "An agent cannot switch a routine on: the user does it from the Triggers page."
+    "routine_enable_by_agent": "An agent cannot switch a routine on: the user does it from the Triggers page.",
+    "trace_id_invalid": "The trace id must be a UUID.",
+    "spawn_fields_required": "Choose an agent and write a message.",
+    "delegation_not_allowed": "Only a running mission of an active account may delegate, and this one may not.",
+    "delegation_body_invalid": "This delegation request is invalid: {detail}",
+    "delegation_cycle": "This delegation would loop back to an agent already in the chain.",
+    "delegation_failed": "The delegated mission could not start: {detail}"
   }
 }
