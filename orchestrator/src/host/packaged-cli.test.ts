@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -8,7 +8,9 @@ import { packagedCliLauncher, writePackagedCli } from './packaged-cli.mjs';
 
 for (const platform of ['linux', 'darwin']) {
   test(`${platform} launcher resolves symlinks, preserves cwd/arguments/status without Node on PATH`, { skip: process.platform === 'win32' }, () => {
-    const home = mkdtempSync(join(tmpdir(), 'timon-cli-'));
+    // The child reports `process.cwd()`, which is canonical: on macOS the
+    // temporary folder `/var/…` is really `/private/var/…`.
+    const home = realpathSync(mkdtempSync(join(tmpdir(), 'timon-cli-')));
     try {
       const app = join(home, "Timon's app $test");
       const root = platform === 'darwin' ? join(app, 'Contents') : app;

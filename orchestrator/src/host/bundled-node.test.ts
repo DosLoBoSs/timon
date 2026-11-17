@@ -61,7 +61,8 @@ test('a service of the shipped Node runs it, staged inside the release, without 
   const linux = packagedServiceOptions(base, '/opt/Timon/resources/node/node', 3110, '0.1.7');
   assert.match(linux.nodePath, /desktop-runtime[\\/]releases[\\/][^\\/]+[\\/]resources[\\/]node[\\/]node$/);
   assert.equal(linux.environment?.ELECTRON_RUN_AS_NODE, undefined);
-  assert.match(linux.unitContent ?? '', /resources\/node\/node" --max-old-space-size=512/);
+  // The unit names the staged path with the host separator: only a Linux host writes it for real.
+  assert.match(linux.unitContent ?? '', /resources[\\/]node[\\/]node" --max-old-space-size=512/);
   const mac = packagedServiceOptions({ ...base, platform: 'darwin' }, '/Applications/Timon.app/Contents/Resources/node/node', 3110, '0.1.7');
   assert.match(mac.nodePath, /Timon\.app[\\/]Contents[\\/]Resources[\\/]node[\\/]node$/, 'the staged copy keeps the bundle name');
   assert.match(mac.installDir, /Timon\.app[\\/]Contents[\\/]Resources[\\/]orchestrator$/);

@@ -2,19 +2,24 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { binaryCandidates } from './binary-path.js';
 
-test('macOS cherche les outils du user même quand Finder fournit un PATH minimal', () => {
+// The Linux and macOS candidates are built with the host's own `node:path` and
+// PATH delimiter: on a Windows host a POSIX fixture comes back as `\usr\bin\…`
+// and `/usr/bin:/bin` stays one entry. Those lookups only run on a POSIX host.
+const POSIX_HOST = process.platform === 'win32' && 'Linux and macOS candidates use the host separators';
+
+test('macOS cherche les outils du user même quand Finder fournit un PATH minimal', { skip: POSIX_HOST }, () => {
   const node = binaryCandidates('node', { platform: 'darwin', path: '/usr/bin:/bin', homeDir: '/Users/sam' });
   assert.ok(node.includes('/Users/sam/.local/bin/node'));
   assert.ok(node.includes('/opt/homebrew/bin/node'));
 });
 
-test("le CLI Codex embarqué dans l'app ChatGPT est un candidat macOS", () => {
+test("le CLI Codex embarqué dans l'app ChatGPT est un candidat macOS", { skip: POSIX_HOST }, () => {
   const codex = binaryCandidates('codex', { platform: 'darwin', path: '/usr/bin', homeDir: '/Users/sam' });
   assert.ok(codex.includes('/Applications/ChatGPT.app/Contents/Resources/codex'));
   assert.ok(codex.includes('/Users/sam/Applications/ChatGPT.app/Contents/Resources/codex'));
 });
 
-import { chmodSync, mkdtempSync, mkdirSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { findExecutableBinary } from './binary-path.js';
@@ -331,7 +336,7 @@ test('macOS: a missing or unreadable claude-code directory yields no candidate',
   assert.deepEqual(claudeBuilds(binaryCandidates('claude', macOptions(claudeCodeReader({})))), []);
 });
 
-test('macOS: PATH and the usual install locations stay ahead of the Claude desktop build', () => {
+test('macOS: PATH and the usual install locations stay ahead of the Claude desktop build', { skip: POSIX_HOST }, () => {
   const paths = binaryCandidates('claude', macOptions(claudeCodeReader({ '2.1.275': 1 }), '/custom/bin'));
   const desktop = paths.indexOf(claudeBuild('2.1.275'));
   assert.equal(desktop, paths.length - 1);
@@ -364,7 +369,7 @@ test('the Claude desktop discovery is macOS- and claude-only', () => {
   assert.ok(!binaryCandidates('codex', macOptions(reader)).some((p) => p.includes('claude-code')));
 });
 
-test('macOS: the Claude desktop build is found on disk and a stale pin falls back to it', (t) => {
+test('macOS: the Claude desktop build is found on disk and a stale pin falls back to it', { skip: POSIX_HOST }, (t) => {
   const home = mkdtempSync(join(tmpdir(), 'timon-claude-desktop-'));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const root = posix.join(home, 'Library', 'Application Support', 'Claude', 'claude-code');
@@ -436,7 +441,7 @@ function stubBinary(file: string): string {
 
 const absentInstalled = join(tmpdir(), 'absent-timon-binaries.json');
 
-test('Linux: opencode from its install script is found with a service PATH that omits it', (t) => {
+test('Linux: opencode from its install script is found with a service PATH that omits it', { skip: POSIX_HOST }, (t) => {
   const home = mkdtempSync(join(tmpdir(), 'timon-opencode-linux-'));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const options = { platform: 'linux' as const, path: '/usr/bin:/bin', homeDir: home, env: {} };
@@ -450,7 +455,7 @@ test('Linux: opencode from its install script is found with a service PATH that 
   assert.equal(paths.at(-1), installed);
 });
 
-test('macOS: opencode from its install script is a candidate under a LaunchAgent PATH', (t) => {
+test('macOS: opencode from its install script is a candidate under a LaunchAgent PATH', { skip: POSIX_HOST }, (t) => {
   const paths = binaryCandidates('opencode', { platform: 'darwin', path: '/usr/bin:/bin', homeDir: MAC_HOME, env: {} });
   const installed = paths.indexOf(`${MAC_HOME}/.opencode/bin/opencode`);
   assert.equal(installed, paths.length - 1);
@@ -724,6 +729,7 @@ test('tailscale: the folders its installers use are candidates on Windows and ma
     directoryReader: { subdirectories: () => [], fileMtimeMs: () => null },
   });
   assert.ok(win.includes('C:\\Program Files\\Tailscale\\tailscale.exe'), win.join('\n'));
+  if (process.platform === 'win32') return; // the macOS half needs a POSIX host, see POSIX_HOST
   const mac = binaryCandidates('tailscale', { platform: 'darwin', path: '/usr/bin', homeDir: '/Users/sam' });
   assert.ok(mac.includes('/Applications/Tailscale.app/Contents/MacOS/tailscale'), mac.join('\n'));
   // The bundle's real name, for a case-sensitive volume.
@@ -733,7 +739,9 @@ test('tailscale: the folders its installers use are candidates on Windows and ma
 // GHSA-f58g: a binary a mission could have written is never the one the
 // daemon runs, wherever it sits on PATH.
 test('a binary in a folder a mission writes is skipped for the next one', { skip: process.platform === 'win32' }, (t) => {
-  const root = mkdtempSync(join(tmpdir(), 'timon-planted-bin-'));
+  // Canonical root: the case passes `platform: 'linux'`, which on a macOS host
+  // skips the canonical spelling, and a link resolves to `/private/var/…`.
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'timon-planted-bin-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const timonHome = join(root, 'timon-home');
   const exe = (dir: string) => {
