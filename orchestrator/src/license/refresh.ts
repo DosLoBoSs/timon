@@ -245,12 +245,13 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
    */
   const alertStillOff = (cause: string): void => {
     const state = licenseState();
-    if (state.status === 'valid' || state.reason === 'build_expired' || alertedStillOff) return;
+    // No licence is Free, not a failure: nothing to tell anyone.
+    if (state.status === 'valid' || state.localFree === true || state.reason === 'build_expired' || alertedStillOff) return;
     alertedStillOff = true;
     const minutes = Math.round((readLicenseStore().every ?? DEFAULT_EVERY_SECONDS) / 60);
     console.warn(`[license] licence still not valid (${state.reason}) and its renewal failed: ${cause}`);
     // Only a locked beta build gets here: `tick` never renews a licence that
-    // fell back to local Free, which keeps every module anyway.
+    // fell back to Free, which keeps every module anyway.
     notify({
       title: 'Licence not renewed',
       body: `Timon could not renew its licence (${cause}); the modules your licence covers stay off until it goes through. It tries again every ${minutes} min.`,
@@ -264,7 +265,7 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
     if (was.status === 'valid') {
       console.warn(`[license] licence is now off: ${reason} (${detail})`);
       const body = licenseState().localFree
-        ? `${detail}. Timon now uses local Free rights. Extra modules and plugins are suspended; all data is preserved.`
+        ? `${detail}. Timon continues without a licence: every feature and plugin stays available, accounts beyond the first superadmin are suspended; all data is preserved.`
         : `${detail}. This beta has no Free tier: Timon is locked until a valid licence is activated; all data is preserved.`;
       notify({ title: 'Licence is no longer valid', body, urgent: true });
     }
@@ -295,8 +296,9 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
 
   const tick = async (): Promise<void> => {
     lastOffline = false;
-    // Free never contacts the issuer, including installations retaining an old key.
-    if (licenseState().localFree || licenseState().planId === 'free') return;
+    // No licence in force means no server to ask, even with an old activation
+    // key still on disk: a licence that expired falls back to Free silently.
+    if (licenseState().localFree) return;
     // A build past its end date needs no answer from the server.
     if (licenseState().reason === 'build_expired') return;
     const key = readLicenseKey();
