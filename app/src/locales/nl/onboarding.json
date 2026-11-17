@@ -2,39 +2,298 @@
   "onboarding": {
     "back": "Terug",
     "continue": "Doorgaan",
-    "language": {
-      "title": "Kies je taal"
+    "progress": "Stap {current} van {total}",
+    "scheme": {
+      "label": "Lichte of donkere modus",
+      "light": "Licht",
+      "dark": "Donker"
     },
     "splash": {
       "title": "Je AI-team,\nbij jou thuis.",
       "subtitle": "Agents die op je eigen machine werken, met de AI-abonnementen die je al betaalt.",
       "hint": "Psst, je kunt ze vastpakken."
     },
+    "language": {
+      "title": "Kies je taal",
+      "previous": "Vorige taal",
+      "next": "Volgende taal"
+    },
+    "background": {
+      "title": "Moet Timon blijven werken als je je afmeldt?",
+      "subtitle": "Timon draait als achtergronddienst op deze computer. Kies of hij stopt met je sessie of doorgaat.",
+      "recommended": "Aanbevolen",
+      "session": {
+        "title": "Alleen zolang ik aangemeld ben",
+        "description": "Timon stopt als je je afmeldt en start weer als je je opnieuw aanmeldt. Het scherm vergrendelen houdt hem draaiende.",
+        "lingerNote": "Lingering staat al aan voor je account: deze keuze zet het uit, dus ook je andere gebruikersdiensten stoppen als je je afmeldt."
+      },
+      "always": {
+        "title": "Ook als ik afgemeld ben",
+        "description": "Routines, nachttaken en webhooks blijven draaien zonder dat er iemand achter het scherm zit, zolang de computer aanstaat. Op een Mac wordt hiervoor je beheerderswachtwoord gevraagd."
+      },
+      "later": "Je kunt dit altijd wijzigen in {settingsPath}."
+    },
     "account": {
       "title": "Maak je lokale account aan",
       "subtitle": "Hiermee meld je je aan bij Timon. Jij bent de beheerder.",
+      "name": "Voornaam",
+      "nameHint": "Zodat je agents je bij je voornaam noemen.",
+      "email": "E-mail",
+      "emailHint": "Om je aan te melden. We sturen er een code naartoe om het te bevestigen.",
+      "emailPlaceholder": "jij@voorbeeld.nl",
+      "password": "Wachtwoord",
+      "confirm": "Bevestig het wachtwoord",
+      "mismatch": "De twee wachtwoorden komen niet overeen.",
+      "tooShort": "Minstens {min} tekens.",
+      "create": "Mijn account aanmaken",
       "privacy": "Je account en wachtwoord blijven op deze computer. Je e-mailadres en de codes ervoor gaan via onze server, die ze je mailt. Anonieme gebruiksstatistieken worden standaard gedeeld; je kunt ze uitzetten in Instellingen."
+    },
+    "legacy": {
+      "opening": "Het volgende scherm wordt geopend…"
     },
     "llm": {
       "title": "Kies\nje LLM.",
-      "subtitle": "Timon draait op de AI-abonnementen die je al hebt. Nooit een rekening per token."
+      "subtitle": "Timon draait op de AI-abonnementen die je al hebt. Nooit een rekening per token.",
+      "plan": {
+        "title": "Mijn AI-abonnement gebruiken",
+        "detailAny": "De AI-tools waarvoor je al betaalt",
+        "hint": "Timon heeft gezocht naar AI-tools die al op deze machine staan.",
+        "ready": "Klaar met {names}.",
+        "none": "Verbind minstens één AI om verder te gaan.",
+        "anyway": "Toch doorgaan"
+      },
+      "local": {
+        "title": "Lokale modellen gebruiken",
+        "detail": "Ollama, geen abonnement, niets verlaat je machine",
+        "hint": "Je agents draaien op de eigen modellen van deze computer.",
+        "ollama": "Draait open modellen (Llama, Qwen, Mistral…) lokaal.",
+        "connect": "Zodra Ollama draait, voeg je het toe als provider in {settingsPath}."
+      },
+      "legal": "Door verder te gaan, accepteer je de {terms} en neem je kennis van het {privacy}.",
+      "terms": "Gebruiksvoorwaarden",
+      "privacy": "Privacybeleid"
     },
     "profile": {
       "title": "Wat brengt je hier?",
-      "subtitle": "Timon stemt zijn standaardinstellingen en rondleiding af op je antwoord."
+      "subtitle": "Timon stemt zijn standaardinstellingen en rondleiding af op je antwoord.",
+      "developer": {
+        "title": "Ik schrijf code",
+        "description": "Agents die coderen, reviewen en mergen in mijn repositories."
+      },
+      "automation": {
+        "title": "Ik automatiseer",
+        "description": "E-mail, agenda, monitoring, routines: werk dat vanzelf loopt."
+      },
+      "beginner": {
+        "title": "Ik ben aan het ontdekken",
+        "description": "Ik wil AI-agents stap voor stap begrijpen."
+      },
+      "failed": "Je keuze kon niet worden opgeslagen. Probeer het opnieuw."
     },
     "agent": {
+      "names": "Nova, Pixel, Ziggy, Misty, Oslo, Kiwi, Lumen, Sasha, Tempo, Pico",
+      "random": "Willekeurig",
+      "customise": "Aanpassen",
+      "nameLabel": "Zijn naam",
+      "namePlaceholder": "Geef hem een naam",
+      "nameRoll": "Willekeurige naam",
+      "create": "{name} tot leven wekken",
+      "createNoName": "Je agent tot leven wekken",
+      "creating": "{name} komt tot leven…",
+      "configFailed": "{name} heeft een naam, maar zijn instellingen konden niet worden opgeslagen. Probeer het opnieuw.",
+      "will": "Hij gaat",
+      "loading": "Je profiel wordt geladen…",
+      "profileError": "Je profiel kon niet worden gelezen, dus hier is de eenvoudigste weergave.",
+      "retry": "Opnieuw proberen",
+      "cap": {
+        "base": "Met je chatten in Timon",
+        "mail": "Je e-mail lezen en sorteren",
+        "agenda": "Je agenda bekijken en vullen",
+        "code": "Werken in je Git-repositories",
+        "watch": "Elke ochtend het nieuws volgen",
+        "write": "Documenten en berichten schrijven",
+        "research": "Zoeken en vergelijken op het web"
+      },
+      "mission": {
+        "mail": "E-mail",
+        "agenda": "Agenda",
+        "code": "Code",
+        "watch": "Nieuwsmonitoring",
+        "write": "Schrijven",
+        "research": "Onderzoek"
+      },
+      "views": {
+        "label": "Weergave",
+        "recommended": "Aanbevolen voor je profiel",
+        "templates": "Beginner · Sjablonen",
+        "interview": "Automatisering · Interview",
+        "sheet": "Ontwikkelaar · Fiche"
+      },
       "templates": {
         "title": "Kies zijn profiel",
-        "subtitle": "Een kant-en-klaar vertrekpunt. Je kunt later alles wijzigen."
+        "subtitle": "Een kant-en-klaar vertrekpunt. Je kunt later alles wijzigen.",
+        "none": "Nog geen profiel",
+        "empty": "Kies rechts een profiel: de kaart ervan verschijnt hier.",
+        "hint": "Kies eerst een profiel.",
+        "assist": {
+          "title": "Persoonlijke assistent",
+          "description": "E-mail, agenda, herinneringen."
+        },
+        "dev": {
+          "title": "Programmeermaatje",
+          "description": "Repareert, reviewt en levert op in je repositories."
+        },
+        "watch": {
+          "title": "Verkenner",
+          "description": "Elke ochtend een nieuwsoverzicht."
+        },
+        "write": {
+          "title": "Schrijver",
+          "description": "Artikelen, posts en antwoorden."
+        },
+        "research": {
+          "title": "Speurder",
+          "description": "Zoekt, vergelijkt en vat samen."
+        },
+        "blank": {
+          "title": "Vanaf nul beginnen",
+          "description": "Een generalist die je gaandeweg vormgeeft."
+        }
       },
       "interview": {
         "title": "Laten we je automatisering instellen",
-        "subtitle": "Vijf vragen, en je agent weet wat hij moet doen, waarmee en wanneer."
+        "subtitle": "Vijf vragen, en je agent weet wat hij moet doen, waarmee en wanneer.",
+        "role": "Automatiseerder",
+        "count": "{current}/{total}",
+        "edit": "Bewerken",
+        "finish": "Afronden",
+        "hint": "Beantwoord de vragen ({current}/{total}).",
+        "q1": "Wat automatiseer ik voor je?",
+        "q2": "Welke tools mag ik gebruiken?",
+        "q3": "Wanneer begin ik?",
+        "q4": "Wat doe ik vóór een belangrijke actie?",
+        "q5": "Waar laat ik het je weten?",
+        "other": "Iets anders? Beschrijf het…",
+        "toolsHint": "De tools die nog niet verbonden zijn, worden je direct daarna aangeboden.",
+        "always": "altijd",
+        "dailyAt": "Elke dag om",
+        "urlProvided": "URL opgegeven",
+        "tool": {
+          "gmail": "Gmail",
+          "gcal": "Google Agenda",
+          "gdrive": "Google Drive",
+          "slack": "Slack",
+          "notion": "Notion",
+          "telegram": "Telegram",
+          "github": "GitHub",
+          "browser": "Ingebouwde browser",
+          "files": "Lokale bestanden",
+          "webhook": "Webhooks"
+        },
+        "trigger": {
+          "chat": "Als je met me praat",
+          "daily": "Elke dag om {at}",
+          "mail": "Bij elke nieuwe e-mail",
+          "hook": "Bij een gebeurtenis (webhook)"
+        },
+        "autonomy": {
+          "ask": {
+            "title": "Vraag het me eerst",
+            "description": "Aanbevolen om mee te beginnen: je keurt elke verzending of wijziging goed."
+          },
+          "report": {
+            "title": "Doe het, vertel het me achteraf",
+            "description": "Voor routinewerk: hij handelt en brengt daarna verslag uit."
+          },
+          "silent": {
+            "title": "Doe het stilletjes",
+            "description": "Alleen voor veilige, goed geteste routines."
+          }
+        },
+        "notify": {
+          "timon": "In Timon",
+          "telegram": "Telegram",
+          "email": "Per e-mail"
+        },
+        "sum": {
+          "tools": "Tools",
+          "starts": "Start",
+          "autonomy": "Autonomie",
+          "notifies": "Meldt via"
+        }
       },
       "sheet": {
         "title": "Configureer je agent",
-        "subtitle": "Elke instelling blijft aanpasbaar in zijn profiel."
+        "subtitle": "Elke instelling blijft aanpasbaar in zijn profiel.",
+        "tab": {
+          "base": "Rol en project",
+          "engine": "Engine",
+          "perms": "Toestemmingen",
+          "tools": "Tools"
+        },
+        "roleTitle": "Hoofdtaak",
+        "roleHint": "Hij blijft je hoofdagent, de piloot: dit bepaalt alleen waar hij zich op richt.",
+        "role": {
+          "orchestrator": {
+            "title": "Orchestrator / piloot",
+            "description": "Verdeelt het werk in taken en delegeert."
+          },
+          "code": {
+            "title": "Coder",
+            "description": "Schrijft en wijzigt de code van je project."
+          },
+          "review": {
+            "title": "Reviewer",
+            "description": "Controleert wijzigingen voordat ze live gaan."
+          },
+          "research": {
+            "title": "Onderzoeker",
+            "description": "Verkent, leest documentatie, vergelijkt benaderingen."
+          },
+          "chore": {
+            "title": "Beheer",
+            "description": "Builds, deploys, onderhoud."
+          }
+        },
+        "project": "Project",
+        "noFolder": "Geen map gekozen",
+        "choose": "Kiezen…",
+        "worktree": "Eén geïsoleerde git-worktree per codetaak",
+        "worktreeDetail": "Hij werkt naast je branch, nooit erin.",
+        "engine": "Engine",
+        "permissions": "Toestemmingen",
+        "perm": {
+          "default": "Vragen bij elke gevoelige tool",
+          "acceptEdits": "Bestandswijzigingen accepteren, de rest vragen",
+          "plan": "Alleen lezen: plant, wijzigt niets",
+          "auto": "Auto: de classifier van Timon beslist, alleen een kaart bij twijfel",
+          "bypassPermissions": "Alles toestaan, zonder enige controle"
+        },
+        "bypassWarning": "Helemaal geen goedkeuringskaart: hij kan alles doen op deze machine.",
+        "skills": "Skills",
+        "noSkills": "Nog geen skill geïnstalleerd.",
+        "mcp": "MCP-servers",
+        "noMcp": "Nog geen MCP-server opgegeven.",
+        "rules": "Instructies",
+        "rulesPlaceholder": "Bijv. antwoord in het Nederlands, push nooit zonder te vragen.",
+        "sum": {
+          "project": "Project",
+          "toChoose": "nog te kiezen",
+          "permissions": "Toestemmingen",
+          "skills": "Skills",
+          "mcp": "MCP"
+        }
+      },
+      "style": {
+        "title": "Het uiterlijk van {name}",
+        "skull": "Schedel",
+        "fur": "Vacht",
+        "eyes": "Ogen",
+        "accessory": "Accessoire",
+        "try": "Een toestand uitproberen",
+        "random": "Verras me",
+        "done": "Klaar",
+        "close": "Sluiten"
       }
     },
     "signin": {
@@ -43,12 +302,11 @@
     },
     "mascot": {
       "title": "Maak kennis met de mascotte van {name}",
-      "subtitle": "Nieuw in deze versie: elke agent heeft een mascotte die laat zien wat hij doet — nadenken, werken, op je wachten. Kleed {name} aan zoals je wilt."
-    },
-    "scheme": {
-      "label": "Lichte of donkere modus",
-      "light": "Licht",
-      "dark": "Donker"
+      "subtitle": "Nieuw in deze versie: elke agent heeft een mascotte die laat zien wat hij doet — nadenken, werken, op je wachten. Kleed {name} aan zoals je wilt.",
+      "keep": "Dit uiterlijk houden",
+      "skip": "Niet nu",
+      "later": "Je kunt het altijd wijzigen op het tabblad Avatar van de agent.",
+      "failed": "Het uiterlijk kon niet worden opgeslagen. Probeer het opnieuw of kies ‘Niet nu’."
     },
     "discover": {
       "label": "Ontdek Timon",
@@ -103,6 +361,39 @@
         "workflows": "Workflows",
         "plugins": "Plugins"
       }
+    },
+    "usage": {
+      "title": "Voor wie gebruik je Timon?",
+      "optional": "Optioneel",
+      "solo": {
+        "title": "Voor mezelf",
+        "description": "Mijn eigen projecten en dagelijkse werk."
+      },
+      "team": {
+        "title": "Voor mijn team of bedrijf",
+        "description": "Meerdere mensen, gedeelde agents en projecten."
+      },
+      "agency": {
+        "title": "Voor mijn bureau of mijn klanten",
+        "description": "Ik bouw en beheer agents voor klanten.",
+        "badge": "Partnerprogramma"
+      },
+      "offer": {
+        "title": "Gemaakt voor bureaus",
+        "early": "Vroege toegang tot Timon Pro en een directe lijn met het team",
+        "partners": "Een plek in het partnerprogramma",
+        "discount": "De eerste 10 geselecteerde bureaus krijgen levenslang 50% korting op Timon Pro.",
+        "consent": "Stuur me het bureau-aanbod op",
+        "emailLabel": "E-mailadres voor het bureau-aanbod",
+        "notice": "Alleen dit aanbod, door Timon naar dit adres gestuurd. Je kunt je toestemming altijd intrekken in {settingsPath}.",
+        "invalidEmail": "Vul een geldig e-mailadres in of vink het vakje uit.",
+        "failed": "De aanvraag voor het aanbod kon niet worden geregistreerd. Probeer het opnieuw of vink het vakje uit.",
+        "refused": "Dit adres is geweigerd. Controleer het of vink het vakje uit."
+      },
+      "failed": "Je antwoord kon niet worden opgeslagen. Probeer het opnieuw.",
+      "continue": "Doorgaan",
+      "sending": "Verzenden…",
+      "pickProfile": "Kies wat je hierheen brengt om door te gaan."
     }
   }
 }

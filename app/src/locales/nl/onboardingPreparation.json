@@ -1,7 +1,31 @@
 {
   "onboarding": {
     "preparation": {
-      "title": "Timon voorbereiden"
+      "title": "Timon voorbereiden",
+      "ready": "Timon is klaar",
+      "needsYou": "Timon heeft je nodig",
+      "items": {
+        "service": "Achtergronddienst",
+        "servicePortable": "Draagbare modus: Timon draait zolang de app open is",
+        "serviceAccount": "Achtergronddienst, na je account",
+        "database": "Lokale database",
+        "browser": "Ingebouwde browser",
+        "browserAbsent": "Ingebouwde browser: niet aanwezig in deze installatie",
+        "providers": "Je AI's zoeken"
+      },
+      "doctorFailed": "Timon kon deze machine niet uitlezen. Probeer het zo meteen opnieuw.",
+      "retry": "Opnieuw proberen",
+      "retrying": "Opnieuw proberen…",
+      "repair": "Het herstelscherm openen",
+      "gate": {
+        "waitTitle": "Timon rondt zijn installatie af",
+        "waitBody": "Je agent draait op de achtergronddienst, dus hij blijft werken als dit venster gesloten is. Deze stap opent zodra de dienst antwoordt.",
+        "waitAccount": "De achtergronddienst start zodra je met je account bent aangemeld.",
+        "blockedTitle": "De achtergronddienst kon niet worden geïnstalleerd",
+        "blockedBody": "Je agent heeft hem nodig om te blijven werken als dit venster gesloten is. Los het probleem hieronder op en probeer het dan opnieuw.",
+        "configuring": "Je instellingen worden opgeslagen…",
+        "configureFailed": "Je instellingen konden niet worden opgeslagen"
+      }
     }
   }
 }
