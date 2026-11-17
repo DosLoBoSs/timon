@@ -21,21 +21,26 @@ import { t } from '@/lib/i18n';
 import { arrangementIdOf } from '@/lib/island-arrangements';
 import { useArrangements } from '@/lib/island-arrangements-store';
 import { islandsScope, recallArrangement } from '@/lib/island-arrangements-io';
+import { ISLANDS_SUFFIX } from '@/lib/island-presets';
+import { workspaceRowHandover } from '@/lib/workspace-route';
 import { useIslandContentTypes } from './island-content';
 
 export function IslandArrangementPage() {
   const pathname = usePathname();
   const id = arrangementIdOf(pathname);
-  const { key, owner, view } = useWorkspaceLayout();
+  const { key, owner, previousOwner, previousKey, view } = useWorkspaceLayout();
   // The provider follows the route one render late: until it names this
   // page, its key is the previous view's, and seeding it would lay the
   // arrangement on a page the user just left.
   const here = key && view === pathname ? key : null;
-  const { arrangements, ready } = useArrangements(owner);
+  const { arrangements, ready } = useArrangements(owner, previousOwner);
   const arrangement = useMemo(() => arrangements.find((a) => a.id === id) ?? null, [arrangements, id]);
   const registered = useIslandContentTypes();
   const types = useMemo(() => new Map([...registered].map(([typeId, type]) => [typeId, type.options])), [registered]);
-  const row = useStoredLayout(here ? islandsScope(here) : null);
+  // The workspace's own chain (`IslandWorkspace`): the row a remote machine
+  // held under the previous key is handed over before the page reads it as
+  // empty — seeding it then would lay the arrangement over the user's own.
+  const row = useStoredLayout(here ? islandsScope(here) : null, workspaceRowHandover(previousKey, ISLANDS_SUFFIX));
   const [busy, setBusy] = useState(false);
 
   // Once per scope and per visit: the row comes back empty when the user
