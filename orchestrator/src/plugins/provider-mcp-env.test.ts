@@ -121,7 +121,8 @@ const dialect: Dialect = {
       let strangerSync: unknown = null;
       try { stranger_ctx.provider.media.adoptSync(opts.missionId, dir.resolve('out'), since); } catch (error) { strangerSync = error; }
       let outside: unknown = null;
-      try { await ctx.provider.media.adopt(opts.missionId, '/etc', since); } catch (error) { outside = error; }
+      // A folder that exists on every system and lies outside the mission (`/etc` is missing on Windows).
+      try { await ctx.provider.media.adopt(opts.missionId, dirname(process.execPath), since); } catch (error) { outside = error; }
       let stranger: unknown = null;
       try { await stranger_ctx.provider.media.adopt(opts.missionId, dir.resolve('out'), since); } catch (error) { stranger = error; }
       ctx.provider.media.allowShow(opts.missionId, dir.resolve('out'));
@@ -135,7 +136,8 @@ const dialect: Dialect = {
       let writeError: unknown = null;
       let linkError: unknown = null;
       try { dir.writeFile('../../outside.txt', 'x'); } catch (error) { writeError = error; }
-      try { dir.link('/etc/hostname', 'hostname'); } catch (error) { linkError = error; }
+      // A file that exists on every system and no provider declared (`/etc/hostname` is Linux only).
+      try { dir.link(process.execPath, 'hostname'); } catch (error) { linkError = error; }
       seen.scratch = { path: dir.path, file, writeError, linkError };
       return { cmd: profile.cmd, args: ['--mcp-config', file], env: { ...profile.env }, cwd: opts.cfg.cwd, initialStdin: null };
     }
