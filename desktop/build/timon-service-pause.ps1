@@ -33,7 +33,7 @@ param(
   # The data directory of the account that runs the installer, which names it:
   # under another account's elevation, this script's own profile is not it.
   [string]$TimonHome = '',
-  # Where a failure is written. The stop phase computes it and hands it to the
+  # The journal of both phases. The stop phase computes it and hands it to the
   # resume phase, whose environment comes from WMI, not from the installer.
   [string]$Log = '',
   [switch]$Resume
@@ -49,9 +49,18 @@ $note = {
   param([string]$text)
   if (-not $Log) { return }
   try {
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Log) -ErrorAction Stop | Out-Null
-    Add-Content -LiteralPath $Log -Value ('{0} {1}' -f (Get-Date -Format o), $text) -ErrorAction Stop
+    $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Log) -ErrorAction Stop
+    # UTF-8: Windows PowerShell appends in the ANSI code page otherwise, and the
+    # diagnostic report reads this file as UTF-8.
+    Add-Content -LiteralPath $Log -Value ('{0} {1}' -f (Get-Date -Format o), $text) -Encoding UTF8 -ErrorAction Stop
   } catch { }
+}
+$taskState = {
+  try {
+    [string](Get-ScheduledTask -TaskName $task -TaskPath '\' -ErrorAction Stop).State
+  } catch {
+    if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { 'not registered' } else { "unreadable ($($_.Exception.Message))" }
+  }
 }
 
 # Not under SilentlyContinue: it hid why a killed installer left the task
@@ -80,15 +89,26 @@ if ($Resume) {
       if ($attempt -lt 3) { Start-Sleep -Seconds 5 }
     }
   }
-  if ($failure) { & $note "resume: could not enable and start $task ($failure)" }
+  if ($failure) { & $note "resume: could not enable and start $task ($failure)" } else { & $note ("resume: the installer exited, task {0} is {1}" -f $task, (& $taskState)) }
   Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction Ignore
   exit 0
 }
 
-$ErrorActionPreference = 'SilentlyContinue'
-
-Disable-ScheduledTask -TaskName $task -TaskPath '\' | Out-Null
-Stop-ScheduledTask -TaskName $task -TaskPath '\'
+# The stop phase writes what it found and what it did to $Log, call by call.
+# It used to run with every error silenced and every output discarded: when it
+# ended nothing at all on a tester's PC (0.1.7 to 0.1.8 update), no file said
+# so, and the cause had to be read out of the installer. A call that fails is
+# written down and the phase goes on: the net at its end decides.
+# Kept small: one run of the installer writes a few dozen lines.
+if ($Log) {
+  try {
+    if ((Get-Item -LiteralPath $Log -ErrorAction Stop).Length -gt 1MB) { Remove-Item -LiteralPath $Log -Force -ErrorAction Stop }
+  } catch { }
+}
+$elevated = $false
+try {
+  $elevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+} catch { }
 
 # Whose Timon this is: the owner of the installer's process, by SID. Never a
 # name. The installer passed `-User` built from the NSIS form that is replaced
@@ -103,18 +123,57 @@ $sidOf = {
   try { (Invoke-CimMethod -InputObject $process -MethodName GetOwnerSid -ErrorAction Stop).Sid } catch { $null }
 }
 $account = $null
-$installer = Get-CimInstance Win32_Process -Filter "ProcessId=$InstallerPid"
+$accountSource = 'the installer process'
+$installer = $null
+try { $installer = Get-CimInstance Win32_Process -Filter "ProcessId=$InstallerPid" -ErrorAction Stop } catch { }
 if ($installer) { $account = & $sidOf $installer }
 # The installer could not be read (it is elevated, this run is not): this
 # process then runs as the very account that started it.
-if (-not $account) { $account = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value }
+if (-not $account) {
+  $account = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  $accountSource = 'this process, the installer could not be read'
+}
 $mine = { param($process) $account -and ((& $sidOf $process) -eq $account) }
+& $note ("pause: start, elevated: {0}, installer pid {1}, account SID {2} (from {3}), installation '{4}', data '{5}'" -f $elevated, $InstallerPid, $account, $accountSource, $InstallDir, $TimonHome)
+
+# Disabled first: its 5-minute repeating trigger would otherwise start the
+# daemon again from half-replaced files.
+& $note ("pause: task {0} is {1}" -f $task, (& $taskState))
+try {
+  $null = Disable-ScheduledTask -TaskName $task -TaskPath '\' -ErrorAction Stop
+  & $note 'pause: task disabled'
+} catch { & $note "pause: task not disabled: $($_.Exception.Message)" }
+try {
+  Stop-ScheduledTask -TaskName $task -TaskPath '\' -ErrorAction Stop
+  & $note 'pause: task stopped'
+} catch { & $note "pause: task not stopped: $($_.Exception.Message)" }
+& $note ("pause: task {0} is now {1}" -f $task, (& $taskState))
 
 # The daemon runs on the Node the package ships (resources\node\node.exe);
 # a package before it ran it on $Exe as Node. An update from one to the other
 # finds either, so both are ours.
 $runtimes = @($Exe, 'node.exe')
-$end = { param($process) & taskkill.exe /F /T /PID $process.ProcessId | Out-Null }
+# The path, never the command line: a command line can carry a secret.
+$describe = {
+  param($process)
+  $path = 'path unreadable'
+  if ($process.ExecutablePath) { $path = $process.ExecutablePath }
+  "pid $($process.ProcessId), $($process.Name), session $($process.SessionId), $path"
+}
+$processes = {
+  try {
+    @(Get-CimInstance Win32_Process -ErrorAction Stop)
+  } catch {
+    & $note "pause: the process list could not be read: $($_.Exception.Message)"
+    @()
+  }
+}
+$end = {
+  param($process, [string]$what)
+  & $note ("pause: found {0}: {1}" -f $what, (& $describe $process))
+  $said = (& taskkill.exe /F /T /PID $process.ProcessId 2>&1 | ForEach-Object { "$_".Trim() }) -join ' '
+  & $note ("pause: taskkill of pid {0} ended with {1}: {2}" -f $process.ProcessId, $LASTEXITCODE, $said)
+}
 
 # Stop-ScheduledTask ends the launcher and leaves its daemon orphaned: end the
 # launcher's tree, then every daemon of this account it left behind, in
@@ -122,14 +181,25 @@ $end = { param($process) & taskkill.exe /F /T /PID $process.ProcessId | Out-Null
 # Interactive task) and wherever it is installed. The daemon names its entry
 # point on its command line; the window (no boot.js) is left to the installer's
 # own "close the application".
-Get-CimInstance Win32_Process | Where-Object {
+$launchers = @(& $processes | Where-Object {
   $_.Name -eq 'cmd.exe' -and $_.CommandLine -and
   $_.CommandLine.ToLowerInvariant().Contains('\run\timon-service.cmd') -and (& $mine $_)
-} | ForEach-Object { & $end $_ }
-Get-CimInstance Win32_Process | Where-Object {
+})
+& $note ("pause: {0} service launcher(s) of this account" -f $launchers.Count)
+$launchers | ForEach-Object { & $end $_ 'a service launcher' }
+$daemons = @(& $processes | Where-Object {
   $runtimes -contains $_.Name -and $_.CommandLine -and
-  $_.CommandLine.ToLowerInvariant().Contains('\dist\boot.js') -and (& $mine $_)
-} | ForEach-Object { & $end $_ }
+  $_.CommandLine.ToLowerInvariant().Contains('\dist\boot.js')
+})
+& $note ("pause: {0} daemon(s) by entry point" -f $daemons.Count)
+foreach ($daemon in $daemons) {
+  if (& $mine $daemon) {
+    & $end $daemon 'a daemon of this account'
+  } else {
+    # Written down: an owner that does not match is how the pause once ended nothing.
+    & $note ("pause: not this account's (owner SID {0}), left to the installation sweep: {1}" -f (& $sidOf $daemon), (& $describe $daemon))
+  }
+}
 
 # What runs from THIS installation is ended whoever owns it: the installer is
 # about to replace those very files, and the path alone says they are Timon's.
@@ -154,11 +224,12 @@ $fromInstallation = {
   foreach ($needle in $needles) { if ($line.Contains($needle)) { return $true } }
   $false
 }
-$ofInstallation = { Get-CimInstance Win32_Process | Where-Object { & $fromInstallation $_ } }
+$ofInstallation = { & $processes | Where-Object { & $fromInstallation $_ } }
 foreach ($pass in 1..2) {
   $found = @(& $ofInstallation)
+  & $note ("pause: installation sweep {0}: {1} process(es)" -f $pass, $found.Count)
   if ($found.Count -eq 0) { break }
-  $found | ForEach-Object { & $end $_ }
+  $found | ForEach-Object { & $end $_ 'a process of this installation' }
   Start-Sleep -Seconds 1
 }
 
@@ -167,9 +238,13 @@ foreach ($pass in 1..2) {
 $copy = Join-Path ([IO.Path]::GetTempPath()) ("timon-service-resume-{0}.ps1" -f $InstallerPid)
 # "Retry" in the installer runs this phase again: one resume already waits for
 # that installer, and a second would only do the same thing twice.
-$waiting = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($copy) })
-if ($waiting.Count -eq 0) {
-  Copy-Item -LiteralPath $PSCommandPath -Destination $copy -Force
+$waiting = @(& $processes | Where-Object { $_.Name -eq 'powershell.exe' -and $_.CommandLine -and $_.CommandLine.Contains($copy) })
+if ($waiting.Count -gt 0) {
+  & $note ("pause: the resume already waits for the installer (pid {0})" -f $waiting[0].ProcessId)
+} else {
+  try {
+    Copy-Item -LiteralPath $PSCommandPath -Destination $copy -Force -ErrorAction Stop
+  } catch { & $note "pause: the resume script could not be copied: $($_.Exception.Message)" }
   $powershell = Join-Path $PSHOME 'powershell.exe'
   $arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$copy`" -Resume " +
     "-InstallerPid $InstallerPid -Exe `"$Exe`""
@@ -180,13 +255,22 @@ if ($waiting.Count -eq 0) {
   # session's job took the waiting resume down with it (VM, 06/11/2026). WMI
   # creates the process from its own service, outside any job, with this
   # process's token (the elevation it holds) and its window hidden from the start.
-  $startup = New-CimInstance -CimClass (Get-CimClass -ClassName Win32_ProcessStartup) -Property @{ ShowWindow = [uint16]0 } -ClientOnly
-  $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
-    CommandLine = "`"$powershell`" $arguments"; ProcessStartupInformation = $startup
-  }
-  if (-not $created -or $created.ReturnValue -ne 0) {
-    & $note ("pause: WMI could not start the resume (result {0}), started as a child" -f $created.ReturnValue)
-    Start-Process -WindowStyle Hidden -FilePath $powershell -ArgumentList $arguments
+  $created = $null
+  try {
+    $startup = New-CimInstance -CimClass (Get-CimClass -ClassName Win32_ProcessStartup) -Property @{ ShowWindow = [uint16]0 } -ClientOnly
+    $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -ErrorAction Stop -Arguments @{
+      CommandLine = "`"$powershell`" $arguments"; ProcessStartupInformation = $startup
+    }
+  } catch { & $note "pause: WMI could not start the resume: $($_.Exception.Message)" }
+  if ($created -and $created.ReturnValue -eq 0) {
+    & $note ("pause: resume started (pid {0})" -f $created.ProcessId)
+  } else {
+    $result = 'no answer'
+    if ($created) { $result = $created.ReturnValue }
+    & $note ("pause: WMI could not start the resume (result {0}), started as a child" -f $result)
+    try {
+      Start-Process -WindowStyle Hidden -FilePath $powershell -ArgumentList $arguments -ErrorAction Stop
+    } catch { & $note "pause: the resume could not be started at all, the task stays disabled: $($_.Exception.Message)" }
   }
 }
 
@@ -198,21 +282,24 @@ if ($waiting.Count -eq 0) {
 # alive keeps serving the old version from memory, holds the port and the data
 # directory, and the new one never starts (0.1.7 to 0.1.8 update).
 $port = 3010
+$portSource = 'the packaged default'
 if ($TimonHome) {
   try {
     $config = Get-Content -LiteralPath (Join-Path $TimonHome 'timon.config.json') -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
     $configured = [int]$config.daemon.listen.port
-    if ($configured -gt 0) { $port = $configured }
-  } catch { }
+    if ($configured -gt 0) { $port = $configured; $portSource = 'timon.config.json' }
+  } catch { $portSource = "the packaged default, timon.config.json could not be read ($($_.Exception.Message))" }
 }
 $remaining = {
   $left = @(& $ofInstallation)
   $owners = @()
   # Read without elevation too, unlike a command line: it is what still sees a
-  # session-0 daemon from an installer that was refused its elevation.
+  # session-0 daemon from an installer that was refused its elevation. No
+  # listener at all is an error to this command, and the expected answer here.
   try { $owners = @(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction Stop | Select-Object -ExpandProperty OwningProcess -Unique) } catch { }
   foreach ($id in $owners) {
-    $listener = Get-CimInstance Win32_Process -Filter "ProcessId=$id"
+    $listener = $null
+    try { $listener = Get-CimInstance Win32_Process -Filter "ProcessId=$id" -ErrorAction Stop } catch { }
     if (-not $listener -or $runtimes -notcontains $listener.Name) { continue }
     if (@($left | Where-Object { $_.ProcessId -eq $listener.ProcessId }).Count -gt 0) { continue }
     # A command line that cannot be read is a process of session 0 seen without
@@ -226,6 +313,7 @@ $remaining = {
   }
   $left
 }
+& $note ("pause: checking what is left, daemon port {0} (from {1})" -f $port, $portSource)
 $left = @()
 foreach ($check in 1..5) {
   $left = @(& $remaining)
@@ -234,7 +322,9 @@ foreach ($check in 1..5) {
   if ($check -lt 5) { Start-Sleep -Seconds 1 }
 }
 if ($left.Count -gt 0) {
-  & $note ("pause: still running after the stop: {0}" -f (($left | ForEach-Object { "$($_.Name) (pid $($_.ProcessId), session $($_.SessionId))" }) -join ', '))
+  foreach ($process in $left) { & $note ("pause: still running: {0}" -f (& $describe $process)) }
+  & $note ("pause: exit {0}, {1} process(es) of Timon still run: the installer must not go on" -f $stillRunning, $left.Count)
   exit $stillRunning
 }
+& $note 'pause: exit 0, nothing of Timon runs any more'
 exit 0
