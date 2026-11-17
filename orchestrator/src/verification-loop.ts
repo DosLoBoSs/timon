@@ -323,6 +323,14 @@ async function handleCodeDone(task: TaskRow): Promise<void> {
   console.log(
     `[verification] code ${task.id} DONE → review ${reviewId} (iter ${iteration}, reviewer=${reviewer})`,
   );
+  // A chain created outside a mission (a `curl`, the board) has no pilot: its
+  // returns go nowhere and the series roles do not apply (TODO #1013).
+  if (!root.series_id) {
+    console.warn(
+      `[verification] review ${reviewId} chained from ${rootId}, which belongs to no series: ` +
+      `no pilot gets its returns (attach it: timon task attach ${rootId} --series <pilot mission>)`,
+    );
+  }
   const created = dbApi.getTask(reviewId);
   if (created) warnSandboxCascadeAhead(created);
 }
