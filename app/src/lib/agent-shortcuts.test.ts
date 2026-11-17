@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 async function mount(
   modes: { value: string; label: string; avatar?: string }[],
   agents: unknown[] = [],
-  projets: unknown[] = [],
+  projects: unknown[] = [],
 ) {
   const { JSDOM } = await import('jsdom');
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
@@ -32,7 +32,7 @@ async function mount(
   function Harness() {
     const [active, setActive] = React.useState(modes[0]!.value);
     shown.push(active);
-    return React.createElement(AgentShortcuts, { modes, active, agents: agents as never[], projets: projets as never[], onSelect: setActive });
+    return React.createElement(AgentShortcuts, { modes, active, agents: agents as never[], projets: projects as never[], onSelect: setActive });
   }
   const root = createRoot(document.getElementById('root')!);
   await React.act(async () => { root.render(React.createElement(Harness)); });
