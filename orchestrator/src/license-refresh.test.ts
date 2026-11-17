@@ -473,6 +473,19 @@ test('the quick boot retries are bounded, then the regular interval takes over',
   });
 });
 
+test('a quick boot retry never lands on the regular interval the server announced', async () => {
+  activated();
+  recordServerContact({ every: 1, offlineHours: 24 }, nowMs());
+  clock += 60;
+  await bootLoop(['down', 'down', 'down', 'down', 'down', 'down'], async ({ calls }) => {
+    await pause(1_600);
+    // At 0 and 100 ms the boot and its first retry, at 1 s the interval. The
+    // retry due at 1.3 s would come after the interval started: dropped.
+    assert.equal(calls.length, 3);
+  }, [100, 1_200, 100]);
+  recordServerContact({ every: 300, offlineHours: 24 }, nowMs());
+});
+
 test('an answer from the server is not retried quickly: 429 and refusals', async () => {
   activated();
   await bootLoop([{ status: 429, body: { error: 'rate_limited' } }, 'down'], async ({ calls }) => {

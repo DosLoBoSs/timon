@@ -50,8 +50,9 @@ const DEFAULT_OFFLINE_HOURS = 24;
 const LOCAL_TICK_MS = 60_000;
 /**
  * Delays of the quick retries after a boot whose first renewal found no
- * network, before the regular interval takes over. Their sum stays under the
- * 300 s default, so they never overlap the first regular tick.
+ * network, before the regular interval takes over. A retry that would land at
+ * or past the first regular tick is dropped (the server may announce a short
+ * interval), so the two never send a renewal at the same time.
  */
 const BOOT_RETRY_MS: readonly number[] = [30_000, 60_000, 120_000];
 
@@ -412,14 +413,14 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
   const retries = deps.bootRetryMs ?? BOOT_RETRY_MS;
   let stopped = false;
   let bootRetry: NodeJS.Timeout | null = null;
-  const bootTick = async (attempt: number): Promise<void> => {
+  const bootTick = async (attempt: number, elapsed: number): Promise<void> => {
     await tick();
     const delay = retries[attempt];
-    if (stopped || !lastOffline || delay === undefined) return;
-    bootRetry = setTimeout(() => { bootRetry = null; void bootTick(attempt + 1); }, delay);
+    if (stopped || !lastOffline || delay === undefined || elapsed + delay >= every) return;
+    bootRetry = setTimeout(() => { bootRetry = null; void bootTick(attempt + 1, elapsed + delay); }, delay);
     bootRetry.unref();
   };
-  void bootTick(0);
+  void bootTick(0, 0);
 
   return {
     tick,
