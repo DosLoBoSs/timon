@@ -68,10 +68,27 @@ test('a Free token carrying the string never grants the right', () => {
   assert.equal(whiteLabelAllowed(unlicensed('missing')), false);
 });
 
-test('tokens issued for earlier daemons verify unchanged, without the right', () => {
+test('the issuer examples grant the right exactly when their features name it (contract v9)', () => {
+  let granted = 0;
   for (const example of fixture.examples) {
     if (example.name === 'free') continue;
+    const features = example.claims.features as string[];
     const state = verifyLicenseToken(token(example.claims));
+    assert.equal(state.status, 'valid', example.name);
+    assert.equal(whiteLabelAllowed(state), features.includes(WHITE_LABEL_FEATURE), example.name);
+    if (features.includes(WHITE_LABEL_FEATURE)) granted += 1;
+  }
+  // v9 gives it to the Developer plan only: a fixture where nobody holds it
+  // would leave the positive path untested against the issuer's own shape.
+  assert.equal(granted, 1);
+});
+
+test('tokens issued for earlier daemons verify unchanged, without the right', () => {
+  // Before v9 no plan carried the string: the same claims minus the right.
+  for (const example of fixture.examples) {
+    if (example.name === 'free') continue;
+    const features = (example.claims.features as string[]).filter((f) => f !== WHITE_LABEL_FEATURE);
+    const state = verifyLicenseToken(token({ ...example.claims, features }));
     assert.equal(state.status, 'valid', example.name);
     assert.equal(whiteLabelAllowed(state), false, example.name);
   }

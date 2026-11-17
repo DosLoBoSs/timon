@@ -80,7 +80,7 @@ test('Free signed policy and all local admission boundaries', async (t) => {
   await t.test('legacy tokens remain valid; Free cannot omit or widen its signed limits', () => {
     assert.equal(verifyLicenseToken(paidToken()).status, 'valid');
     const fixture = JSON.parse(readFileSync(new URL('../fixtures/token-claims.json', import.meta.url), 'utf8')) as { version: number; examples: { name: string; claims: Record<string, unknown> }[] };
-    assert.equal(fixture.version, 6);
+    assert.equal(fixture.version, 9);
     const proposal = fixture.examples.find((example) => example.name === 'free')!;
     assert.equal(verifyLicenseToken(token({ ...proposal.claims, did: deviceId(), fph: fingerprintHash(fingerprint()), iat: now, nbf: now - 60, exp: now + 900, srv: now })).status, 'valid', 'the issuer handoff fixture is accepted by the real verifier');
     assert.equal(verifyLicenseToken(token()).status, 'valid');
