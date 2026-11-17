@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { formatTokens, type AgentInjections } from '@/lib/agent-injections';
 import { t } from '@/lib/i18n';
-import { agentPrincipal, type AgentInstalle } from '../agent-chat/instances';
+import { findMainAgent, type InstalledAgent } from '../agent-chat/instances';
 import { Body } from '../agent-injections/injection-detail';
 import { readError } from '../agent-injections/use-agent-injections';
 
@@ -13,8 +13,8 @@ type Loaded = { content: string; tokens: number };
 async function readPreamble(): Promise<Loaded | null> {
   const listRes = await fetch('/api/ui/agents', { cache: 'no-store' });
   if (!listRes.ok) throw new Error(await readError(listRes));
-  const list = await listRes.json() as { agents?: AgentInstalle[] };
-  const agent = agentPrincipal(Array.isArray(list.agents) ? list.agents : []);
+  const list = await listRes.json() as { agents?: InstalledAgent[] };
+  const agent = findMainAgent(Array.isArray(list.agents) ? list.agents : []);
   if (!agent) return null;
   const res = await fetch(`/api/ui/agents/${encodeURIComponent(agent)}/injections`, { cache: 'no-store' });
   if (!res.ok) throw new Error(await readError(res));

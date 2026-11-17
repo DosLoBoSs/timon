@@ -4,11 +4,11 @@
  * The page used to answer `_main`, the name the seed gives the main agent.
  * Onboarding renames it, so on most installs that name matches nobody: the
  * chat and the workspace provider each asked the daemon for it, and each got
- * a 404 (TIM-0011). The main agent is found by ROLE (`agentPrincipal()`), and
+ * a 404 (TIM-0011). The main agent is found by ROLE (`findMainAgent()`), and
  * this is resolved BEFORE the chat mounts, so nothing ever asks for an agent
  * by a name nobody chose.
  */
-import { agentPrincipal, type AgentInstalle } from '@/plugins-client/agent-chat/instances';
+import { findMainAgent, type InstalledAgent } from '@/plugins-client/agent-chat/instances';
 import { sharedGet } from '@/lib/shared-read';
 import { apiErrorMessage } from '@/lib/api-error';
 import { mainSeatCandidates } from '@/lib/main-agent';
@@ -50,8 +50,8 @@ export async function resolveChatAgent(
     const owner = detail?.task?.agent_name;
     if (typeof owner === 'string' && owner) return owner;
   }
-  const list = await readJson(fetcher, '/api/ui/agents') as { agents?: AgentInstalle[] } | null;
-  return agentPrincipal(Array.isArray(list?.agents) ? list.agents : []);
+  const list = await readJson(fetcher, '/api/ui/agents') as { agents?: InstalledAgent[] } | null;
+  return findMainAgent(Array.isArray(list?.agents) ? list.agents : []);
 }
 
 /**

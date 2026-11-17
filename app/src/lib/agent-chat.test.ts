@@ -10,17 +10,17 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  agentAffiche,
-  agentPrincipal,
-  grainePourAgent,
-  instancesAuChargement,
-  modesDeLInstance,
-  normaliserInstances,
-  nouvelIdInstance,
-  personnalisationDe,
-  personnaliserAgent,
-  retirerAgent,
-  titreInstance,
+  shownAgent,
+  findMainAgent,
+  seedForAgent,
+  instancesOnLoad,
+  instanceModes,
+  normalizeInstances,
+  newInstanceId,
+  customizationOf,
+  customizeAgent,
+  removeAgent,
+  instanceTitle,
   type AgentChatInstance,
 } from '@/plugins-client/agent-chat/instances';
 
@@ -35,7 +35,7 @@ const instance = (over: Partial<AgentChatInstance> = {}): AgentChatInstance => (
 });
 
 test('the stored list comes back with its order and its sub-agents', () => {
-  const read = normaliserInstances({
+  const read = normalizeInstances({
     instances: [
       { id: 'a', agent: 'alice.main', subAgents: [{ agent: 'Alice.helper', label: 'Santé' }] },
       { id: 'b', agent: 'initech.coder', title: 'Coder' },
@@ -47,31 +47,31 @@ test('the stored list comes back with its order and its sub-agents', () => {
 });
 
 test('a bare array is read too: the shape stored is the front\'s business', () => {
-  assert.equal(normaliserInstances([{ id: 'a', agent: 'alice.main' }]).length, 1);
+  assert.equal(normalizeInstances([{ id: 'a', agent: 'alice.main' }]).length, 1);
 });
 
 test('nothing stored yet, or stored garbage, gives no instance and no throw', () => {
   for (const raw of [null, undefined, 42, 'x', {}, { instances: 'nope' }, [null, 3]]) {
-    assert.deepEqual(normaliserInstances(raw), []);
+    assert.deepEqual(normalizeInstances(raw), []);
   }
 });
 
 test('an instance without id or without agent is unrenderable, so it is dropped', () => {
-  const read = normaliserInstances({
+  const read = normalizeInstances({
     instances: [{ agent: 'alice.main' }, { id: 'b' }, { id: 'c', agent: 'alice.main' }],
   });
   assert.deepEqual(read.map((i) => i.id), ['c']);
 });
 
 test('two instances sharing an id would share a placement: the second is dropped', () => {
-  const read = normaliserInstances({
+  const read = normalizeInstances({
     instances: [{ id: 'a', agent: 'alice.main' }, { id: 'a', agent: 'other' }],
   });
   assert.deepEqual(read.map((i) => i.agent), ['alice.main']);
 });
 
 test('the same agent listed twice under the avatar is one button, not two', () => {
-  const [read] = normaliserInstances({
+  const [read] = normalizeInstances({
     instances: [{
       id: 'a',
       agent: 'alice.main',
@@ -82,11 +82,11 @@ test('the same agent listed twice under the avatar is one button, not two', () =
 });
 
 test('a config written before shortcuts existed loads unchanged', () => {
-  const [read] = normaliserInstances({
+  const [read] = normalizeInstances({
     instances: [{ id: 'a', agent: 'alice.main', subAgents: [{ agent: 'Alice.helper' }] }],
   });
   assert.deepEqual(read?.subAgents, [{ agent: 'Alice.helper' }]);
-  assert.deepEqual(modesDeLInstance(read!), [
+  assert.deepEqual(instanceModes(read!), [
     { value: 'alice.main', label: 'alice.main' },
     { value: 'Alice.helper', label: 'Alice.helper' },
   ]);
@@ -112,11 +112,11 @@ test('per-agent nickname and photo load; blank or malformed ones are dropped', (
       ],
     }],
   };
-  const [read] = normaliserInstances(stored);
+  const [read] = normalizeInstances(stored);
   assert.deepEqual(read?.subAgents, [{ agent: 'Alice.helper', label: 'Santé', avatar: '/health.png' }, { agent: 'a.two' }, { agent: 'a.three' }]);
   // The card's own avatar is the one the daemon writes at onboarding: kept.
   assert.equal(read?.avatar, '/api/uploads/avatars/nova.png');
-  assert.deepEqual(modesDeLInstance(read!), [
+  assert.deepEqual(instanceModes(read!), [
     { value: 'Nova', label: 'Nova', avatar: '/api/uploads/avatars/nova.png' },
     { value: 'Alice.helper', label: 'Santé', avatar: '/health.png' },
     { value: 'a.two', label: 'a.two' },
@@ -130,18 +130,18 @@ test('per-agent nickname and photo load; blank or malformed ones are dropped', (
 
 test('there is no ceiling on the number of shortcuts', () => {
   const subAgents = Array.from({ length: 40 }, (_, i) => ({ agent: `agent.${i}` }));
-  const [read] = normaliserInstances({ instances: [{ id: 'a', agent: 'alice.main', subAgents }] });
+  const [read] = normalizeInstances({ instances: [{ id: 'a', agent: 'alice.main', subAgents }] });
   assert.equal(read?.subAgents.length, 40);
-  assert.equal(modesDeLInstance(read!).length, 41);
+  assert.equal(instanceModes(read!).length, 41);
 });
 
 test('an untitled card is named after the agent it shows', () => {
-  assert.equal(titreInstance(instance()), 'alice.main');
-  assert.equal(titreInstance(instance({ title: 'Alice' })), 'Alice');
+  assert.equal(instanceTitle(instance()), 'alice.main');
+  assert.equal(instanceTitle(instance({ title: 'Alice' })), 'Alice');
 });
 
 test('fresh ids never collide inside one list', () => {
-  const ids = new Set(Array.from({ length: 50 }, () => nouvelIdInstance()));
+  const ids = new Set(Array.from({ length: 50 }, () => newInstanceId()));
   assert.equal(ids.size, 50);
 });
 
@@ -152,16 +152,16 @@ test('an instance renders any agent: alice and its health sub-agent, as the hard
     title: 'Alice',
     subAgents: [{ agent: 'Alice.helper' }],
   });
-  assert.deepEqual(modesDeLInstance(alice), [
+  assert.deepEqual(instanceModes(alice), [
     { value: 'alice.main', label: 'Alice' },
     { value: 'Alice.helper', label: 'Alice.helper' },
   ]);
   // Same widget, another agent entirely: nothing of alice is baked in.
-  assert.deepEqual(modesDeLInstance(instance({ agent: 'initech.coder' })), [
+  assert.deepEqual(instanceModes(instance({ agent: 'initech.coder' })), [
     { value: 'initech.coder', label: 'initech.coder' },
   ]);
   // A sub-agent is named after the agent it opens.
-  assert.deepEqual(modesDeLInstance(instance({ subAgents: [{ agent: 'x.main' }] }))[1], {
+  assert.deepEqual(instanceModes(instance({ subAgents: [{ agent: 'x.main' }] }))[1], {
     value: 'x.main',
     label: 'x.main',
   });
@@ -169,8 +169,8 @@ test('an instance renders any agent: alice and its health sub-agent, as the hard
 
 test('a selection the config no longer offers falls back to the card\'s own agent', () => {
   const alice = instance({ subAgents: [{ agent: 'Alice.helper' }] });
-  assert.equal(agentAffiche(alice, 'Alice.helper'), 'Alice.helper');
-  assert.equal(agentAffiche(alice, 'removed.agent'), 'alice.main');
+  assert.equal(shownAgent(alice, 'Alice.helper'), 'Alice.helper');
+  assert.equal(shownAgent(alice, 'removed.agent'), 'alice.main');
 });
 
 /**
@@ -187,23 +187,23 @@ test("l'agent principal se lit par son rôle, pas par son nom", () => {
   ];
   // A named orchestrator beats the seed name; a hub `_main.<ws>` and a
   // project-bound orchestrator are never the main agent.
-  assert.equal(agentPrincipal(agents), 'Nova');
+  assert.equal(findMainAgent(agents), 'Nova');
   // Step 3 skipped: the placeholder is the answer because there is no other.
-  assert.equal(agentPrincipal([{ name: '_main', role: 'orchestrator', project: null }]), '_main');
+  assert.equal(findMainAgent([{ name: '_main', role: 'orchestrator', project: null }]), '_main');
   // Nothing to show: no card rather than a card pointing at nobody.
-  assert.equal(agentPrincipal([{ name: 'coder', role: 'coder', project: 'x' }]), null);
-  assert.equal(agentPrincipal([]), null);
+  assert.equal(findMainAgent([{ name: 'coder', role: 'coder', project: 'x' }]), null);
+  assert.equal(findMainAgent([]), null);
 });
 
 test('a never-written list is the seeded card; an emptied list stays empty', () => {
-  const seed = instancesAuChargement(null, [{ name: 'Nova', role: 'orchestrator', project: null }]);
-  assert.deepEqual(seed, [grainePourAgent('Nova')]);
+  const seed = instancesOnLoad(null, [{ name: 'Nova', role: 'orchestrator', project: null }]);
+  assert.deepEqual(seed, [seedForAgent('Nova')]);
   assert.equal(seed[0]?.agent, 'Nova');
   assert.equal(seed[0]?.id, 'main', 'the id the cockpit starter places');
   assert.equal(seed[0]?.zone, 'centre', 'the seeded card opens in the cockpit centre');
   // Deleting the card writes `{ instances: [] }`: the seed must not come back.
-  assert.deepEqual(instancesAuChargement({ instances: [] }), []);
-  assert.deepEqual(instancesAuChargement([]), []);
+  assert.deepEqual(instancesOnLoad({ instances: [] }), []);
+  assert.deepEqual(instancesOnLoad([]), []);
 });
 
 /**
@@ -213,40 +213,40 @@ test('a never-written list is the seeded card; an emptied list stays empty', () 
  * secondes. Une surface dont le sujet n'existe pas s'efface.
  */
 test('la carte seedée ne paraît que si un agent principal existe', () => {
-  assert.deepEqual(instancesAuChargement(null, []), []);
-  assert.deepEqual(instancesAuChargement(null, [{ name: 'coder', role: 'coder', project: 'x' }]), []);
+  assert.deepEqual(instancesOnLoad(null, []), []);
+  assert.deepEqual(instancesOnLoad(null, [{ name: 'coder', role: 'coder', project: 'x' }]), []);
   // Rien d'écrit et rien à montrer : aucune carte fantôme.
-  assert.deepEqual(instancesAuChargement(null, undefined), []);
+  assert.deepEqual(instancesOnLoad(null, undefined), []);
 });
 
 test("une carte configurée par l'utilisateur garde son fil, agent supprimé ou non", () => {
   // Décision délibérée (cf. `use-agents.ts`) : seule la carte que PERSONNE n'a
   // choisie s'efface. Une carte écrite reste, quelle que soit la liste.
   const written = { instances: [{ id: 'a', agent: 'disparu.main' }] };
-  assert.deepEqual(instancesAuChargement(written, []).map((i) => i.agent), ['disparu.main']);
+  assert.deepEqual(instancesOnLoad(written, []).map((i) => i.agent), ['disparu.main']);
 });
 
 test('a stored instance without a zone keeps the host default, not the seed\'s centre', () => {
-  const [read] = normaliserInstances([{ id: 'a', agent: 'other.main' }]);
+  const [read] = normalizeInstances([{ id: 'a', agent: 'other.main' }]);
   assert.equal(read?.zone, '');
 });
 
 test('customising the card\'s own agent writes its title and avatar, a sub-agent its label and avatar', () => {
   const base = instance({ subAgents: [{ agent: 'Alice.helper' }] });
-  const main = personnaliserAgent(base, 'alice.main', { label: ' Boss ', avatar: '/b.png' });
+  const main = customizeAgent(base, 'alice.main', { label: ' Boss ', avatar: '/b.png' });
   assert.deepEqual([main.title, main.avatar], ['Boss', '/b.png']);
-  const sub = personnaliserAgent(base, 'Alice.helper', { label: 'Santé', avatar: '' });
+  const sub = customizeAgent(base, 'Alice.helper', { label: 'Santé', avatar: '' });
   assert.deepEqual(sub.subAgents, [{ agent: 'Alice.helper', label: 'Santé' }]);
-  assert.deepEqual(personnalisationDe(sub, 'Alice.helper'), { label: 'Santé', avatar: '' });
+  assert.deepEqual(customizationOf(sub, 'Alice.helper'), { label: 'Santé', avatar: '' });
   // Emptying both puts the agent's own name and picture back.
-  assert.deepEqual(personnaliserAgent(sub, 'Alice.helper', { label: '', avatar: '' }).subAgents, [{ agent: 'Alice.helper' }]);
+  assert.deepEqual(customizeAgent(sub, 'Alice.helper', { label: '', avatar: '' }).subAgents, [{ agent: 'Alice.helper' }]);
 });
 
 test('removing an agent: a sub-agent leaves, the main one hands over, the last one takes the card away', () => {
   const base = instance({ title: 'Boss', subAgents: [{ agent: 'a.two', label: 'Deux', avatar: '/2.png' }, { agent: 'a.three' }] });
-  assert.deepEqual(retirerAgent(base, 'a.three')?.subAgents.map((s) => s.agent), ['a.two']);
-  const successor = retirerAgent(base, 'alice.main');
+  assert.deepEqual(removeAgent(base, 'a.three')?.subAgents.map((s) => s.agent), ['a.two']);
+  const successor = removeAgent(base, 'alice.main');
   assert.deepEqual([successor?.agent, successor?.title, successor?.avatar], ['a.two', 'Deux', '/2.png']);
   assert.deepEqual(successor?.subAgents, [{ agent: 'a.three' }]);
-  assert.equal(retirerAgent(instance(), 'alice.main'), null);
+  assert.equal(removeAgent(instance(), 'alice.main'), null);
 });

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { FramedFace } from './agent-avatar';
 import { AgentPicker } from './agent-picker';
 import {
-  nouvelIdInstance,
+  newInstanceId,
   type AgentChatInstance,
   type SubAgent,
 } from './instances';
@@ -58,7 +58,7 @@ export function InstanceConfig({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [brouillon, setBrouillon] = useState<AgentChatInstance>(
-    () => instance ?? { id: nouvelIdInstance(), agent: '', title: '', avatar: '', zone: '', subAgents: [] },
+    () => instance ?? { id: newInstanceId(), agent: '', title: '', avatar: '', zone: '', subAgents: [] },
   );
 
   const patch = (champs: Partial<AgentChatInstance>) =>

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { Input } from '@/components/ui/input';
 import { LogoField } from '@/components/logo-field';
 import { t } from '@/lib/i18n';
-import type { Personnalisation } from './instances';
+import type { Customization } from './instances';
 import type { Visage } from './use-agents';
 
 /**
@@ -23,10 +23,10 @@ export function CustomizeAgentDialog({
   onClose,
 }: {
   agent: string;
-  initial: Personnalisation;
+  initial: Customization;
   /** The agent's own face, for the preview when the card has no photo of its own. */
   visage: Visage;
-  onSave: (value: Personnalisation) => void;
+  onSave: (value: Customization) => void;
   onClose: () => void;
 }) {
   const [label, setLabel] = useState(initial.label);

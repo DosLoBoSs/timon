@@ -20,10 +20,10 @@ import {
   type Capabilities,
 } from './capabilities';
 import {
-  enregistrerInstance,
-  grainePourAgent,
-  reinitialiserInstancesPourTests,
-  supprimerInstance,
+  saveInstance,
+  seedForAgent,
+  resetInstancesForTests,
+  deleteInstance,
   type AgentChatInstance,
 } from '@/plugins-client/agent-chat/instances';
 
@@ -519,7 +519,7 @@ test('a grant written for the former Routines page still opens the Triggers page
 // ── @timon/agent-chat : une carte par instance ─────────────────────────────
 
 test('the agent-chat half offers its creation card even with no instance', () => {
-  reinitialiserInstancesPourTests();
+  resetInstancesForTests();
   mountLayout();
   mountBundledClients(null);
   const cards = slotEntries('cockpit.widget').filter((e) => e.pluginId === '@timon/agent-chat');
@@ -527,15 +527,15 @@ test('the agent-chat half offers its creation card even with no instance', () =>
 });
 
 test('each instance gets its own registration, keyed by its id', async () => {
-  reinitialiserInstancesPourTests();
+  resetInstancesForTests();
   mountLayout();
   mountBundledClients(null);
 
-  await enregistrerInstance(instance({
+  await saveInstance(instance({
     id: 'alice', agent: 'alice.main', title: 'Alice',
     subAgents: [{ agent: 'Alice.helper' }],
   }));
-  await enregistrerInstance(instance({ id: 'coder', agent: 'initech.coder' }));
+  await saveInstance(instance({ id: 'coder', agent: 'initech.coder' }));
 
   const cards = slotEntries('cockpit.widget').filter((e) => e.pluginId === '@timon/agent-chat');
   assert.deepEqual(cards.map((e) => e.key), ['new', 'alice', 'coder']);
@@ -549,12 +549,12 @@ test('each instance gets its own registration, keyed by its id', async () => {
 });
 
 test('renaming a card keeps its placement; removing it takes the card away', async () => {
-  reinitialiserInstancesPourTests();
+  resetInstancesForTests();
   mountLayout();
   mountBundledClients(null);
 
-  await enregistrerInstance(instance({ id: 'alice', agent: 'alice.main', title: 'Alice' }));
-  await enregistrerInstance(instance({ id: 'alice', agent: 'alice.main', title: 'Pilote' }));
+  await saveInstance(instance({ id: 'alice', agent: 'alice.main', title: 'Alice' }));
+  await saveInstance(instance({ id: 'alice', agent: 'alice.main', title: 'Pilote' }));
 
   const card = slotEntries('cockpit.widget').find((e) => e.key === 'alice');
   assert.equal(card?.widget?.title, 'Pilote');
@@ -564,31 +564,31 @@ test('renaming a card keeps its placement; removing it takes the card away', asy
     'a re-registration replaces the card, it does not add a second one',
   );
 
-  await supprimerInstance('alice');
+  await deleteInstance('alice');
   assert.equal(slotEntries('cockpit.widget').some((e) => e.key === 'alice'), false);
 });
 
 test('unmounting the halves stops the instance store from putting cards back', async () => {
-  reinitialiserInstancesPourTests();
+  resetInstancesForTests();
   mountLayout();
   const unmount = mountBundledClients(null);
-  await enregistrerInstance(instance({ id: 'alice', agent: 'alice.main' }));
+  await saveInstance(instance({ id: 'alice', agent: 'alice.main' }));
   unmount();
-  await enregistrerInstance(instance({ id: 'autre', agent: 'other.main' }));
+  await saveInstance(instance({ id: 'autre', agent: 'other.main' }));
   assert.deepEqual(slotEntries('cockpit.widget'), []);
 });
 
 test('the seeded card opens in the cockpit centre, and removing it takes the card away', async () => {
-  reinitialiserInstancesPourTests();
+  resetInstancesForTests();
   mountLayout();
   mountBundledClients(null);
-  const seed = grainePourAgent('Nova');
-  await enregistrerInstance(seed);
+  const seed = seedForAgent('Nova');
+  await saveInstance(seed);
   const registered = slotEntries('cockpit.widget').find((e) => e.key === seed.id);
   assert.equal(registered?.widget?.zone, 'centre');
   const placedEntry = tileCatalog().find((e) => e.id === `plugin:@timon/agent-chat:${seed.id}`);
   assert.equal(placedEntry?.defaultZone, 'centre');
-  await supprimerInstance(seed.id);
+  await deleteInstance(seed.id);
   assert.equal(slotEntries('cockpit.widget').some((e) => e.key === seed.id), false);
 });
 

@@ -71,16 +71,16 @@ export type AgentChatInstance = {
  * It stays config and not code: renaming the card, pointing it at another
  * agent or deleting it writes the list and the seed never comes back.
  */
-export function grainePourAgent(agent: string): AgentChatInstance {
+export function seedForAgent(agent: string): AgentChatInstance {
   return { id: MAIN_AGENT_CARD_ID, agent, title: '', avatar: '', zone: COCKPIT_CENTER, subAgents: [] };
 }
 
 /** Summary of an installed agent, as `/api/agents` gives it. */
-export type AgentInstalle = MainAgentCandidate;
+export type InstalledAgent = MainAgentCandidate;
 
 /** The main agent: flagged by the daemon, found by role on an older one
  *  (`@/lib/main-agent`). */
-export function agentPrincipal(agents: readonly AgentInstalle[]): string | null {
+export function findMainAgent(agents: readonly InstalledAgent[]): string | null {
   return mainAgentOf(agents);
 }
 
@@ -88,23 +88,23 @@ function str(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function normaliserSousAgents(raw: unknown): SubAgent[] {
+function normalizeSubAgents(raw: unknown): SubAgent[] {
   if (!Array.isArray(raw)) return [];
-  const sortie: SubAgent[] = [];
-  const vus = new Set<string>();
-  for (const brut of raw) {
-    if (typeof brut !== 'object' || brut === null) continue;
-    const item = brut as Record<string, unknown>;
+  const out: SubAgent[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const item = entry as Record<string, unknown>;
     const agent = str(item.agent);
     // Two buttons on the same agent would toggle the same thread: the second
     // is a config mistake, not a mode.
-    if (!agent || vus.has(agent.toLowerCase())) continue;
-    vus.add(agent.toLowerCase());
+    if (!agent || seen.has(agent.toLowerCase())) continue;
+    seen.add(agent.toLowerCase());
     const label = str(item.label);
     const avatar = str(item.avatar);
-    sortie.push({ agent, ...(label ? { label } : {}), ...(avatar ? { avatar } : {}) });
+    out.push({ agent, ...(label ? { label } : {}), ...(avatar ? { avatar } : {}) });
   }
-  return sortie;
+  return out;
 }
 
 /**
@@ -112,39 +112,39 @@ function normaliserSousAgents(raw: unknown): SubAgent[] {
  * older version of this file, or by a hand-edited export: anything that isn't
  * an instance is dropped rather than crashing the cockpit.
  */
-export function normaliserInstances(raw: unknown): AgentChatInstance[] {
-  const liste = Array.isArray(raw)
+export function normalizeInstances(raw: unknown): AgentChatInstance[] {
+  const list = Array.isArray(raw)
     ? raw
     : typeof raw === 'object' && raw !== null
       ? (raw as { instances?: unknown }).instances
       : null;
-  if (!Array.isArray(liste)) return [];
+  if (!Array.isArray(list)) return [];
 
-  const sortie: AgentChatInstance[] = [];
-  const vus = new Set<string>();
-  for (const brut of liste) {
-    if (typeof brut !== 'object' || brut === null) continue;
-    const item = brut as Record<string, unknown>;
+  const out: AgentChatInstance[] = [];
+  const seen = new Set<string>();
+  for (const entry of list) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const item = entry as Record<string, unknown>;
     const id = str(item.id);
     const agent = str(item.agent);
     // An instance without an id has no placement and no registration key; one
     // without an agent has no thread to show. Both are unrenderable.
-    if (!id || !agent || vus.has(id)) continue;
-    vus.add(id);
-    sortie.push({
+    if (!id || !agent || seen.has(id)) continue;
+    seen.add(id);
+    out.push({
       id,
       agent,
       title: str(item.title),
       avatar: str(item.avatar),
       zone: str(item.zone),
-      subAgents: normaliserSousAgents(item.subAgents),
+      subAgents: normalizeSubAgents(item.subAgents),
     });
   }
-  return sortie;
+  return out;
 }
 
 /** Card title: what the config says, else the agent it shows. */
-export function titreInstance(instance: AgentChatInstance): string {
+export function instanceTitle(instance: AgentChatInstance): string {
   return instance.title || instance.agent;
 }
 
@@ -159,11 +159,11 @@ export type ModeAgent = { value: string; label: string; avatar?: string };
  * An instance on one agent with others under it offers one shortcut per
  * agent, whichever agents they are, and any number of them.
  */
-export function modesDeLInstance(instance: AgentChatInstance): ModeAgent[] {
-  const propre: ModeAgent = { value: instance.agent, label: titreInstance(instance) };
-  if (instance.avatar) propre.avatar = instance.avatar;
+export function instanceModes(instance: AgentChatInstance): ModeAgent[] {
+  const own: ModeAgent = { value: instance.agent, label: instanceTitle(instance) };
+  if (instance.avatar) own.avatar = instance.avatar;
   return [
-    propre,
+    own,
     ...instance.subAgents.map((s): ModeAgent => ({
       value: s.agent,
       label: s.label || s.agent,
@@ -174,32 +174,32 @@ export function modesDeLInstance(instance: AgentChatInstance): ModeAgent[] {
 
 /** Nickname and photo of one agent of the card, as the Customize dialog edits
  *  them. Empty strings mean "back to the agent's own". */
-export type Personnalisation = { label: string; avatar: string };
+export type Customization = { label: string; avatar: string };
 
 /** What the card currently overrides for `agent`. */
-export function personnalisationDe(instance: AgentChatInstance, agent: string): Personnalisation {
+export function customizationOf(instance: AgentChatInstance, agent: string): Customization {
   if (agent === instance.agent) return { label: instance.title, avatar: instance.avatar };
-  const sous = instance.subAgents.find((s) => s.agent === agent);
-  return { label: sous?.label ?? '', avatar: sous?.avatar ?? '' };
+  const sub = instance.subAgents.find((s) => s.agent === agent);
+  return { label: sub?.label ?? '', avatar: sub?.avatar ?? '' };
 }
 
 /** The instance with `agent` customised. The card's own agent keeps its
  *  nickname in `title` and its photo in `avatar`, as it always did. */
-export function personnaliserAgent(
+export function customizeAgent(
   instance: AgentChatInstance,
   agent: string,
-  { label, avatar }: Personnalisation,
+  { label, avatar }: Customization,
 ): AgentChatInstance {
-  const propre = { label: label.trim(), avatar: avatar.trim() };
-  if (agent === instance.agent) return { ...instance, title: propre.label, avatar: propre.avatar };
+  const trimmed = { label: label.trim(), avatar: avatar.trim() };
+  if (agent === instance.agent) return { ...instance, title: trimmed.label, avatar: trimmed.avatar };
   return {
     ...instance,
     subAgents: instance.subAgents.map((s) => {
       if (s.agent !== agent) return s;
       return {
         agent: s.agent,
-        ...(propre.label ? { label: propre.label } : {}),
-        ...(propre.avatar ? { avatar: propre.avatar } : {}),
+        ...(trimmed.label ? { label: trimmed.label } : {}),
+        ...(trimmed.avatar ? { avatar: trimmed.avatar } : {}),
       };
     }),
   };
@@ -210,13 +210,13 @@ export function personnaliserAgent(
  * then has nobody left to show and goes away. Removing the card's own agent
  * promotes the first sub-agent, which brings its nickname and photo with it.
  */
-export function retirerAgent(instance: AgentChatInstance, agent: string): AgentChatInstance | null {
+export function removeAgent(instance: AgentChatInstance, agent: string): AgentChatInstance | null {
   if (agent !== instance.agent) {
     return { ...instance, subAgents: instance.subAgents.filter((s) => s.agent !== agent) };
   }
-  const [premier, ...reste] = instance.subAgents;
-  if (!premier) return null;
-  return { ...instance, agent: premier.agent, title: premier.label ?? '', avatar: premier.avatar ?? '', subAgents: reste };
+  const [first, ...rest] = instance.subAgents;
+  if (!first) return null;
+  return { ...instance, agent: first.agent, title: first.label ?? '', avatar: first.avatar ?? '', subAgents: rest };
 }
 
 /**
@@ -224,38 +224,38 @@ export function retirerAgent(instance: AgentChatInstance, agent: string): AgentC
  * edited, an export was restored — falls back to the instance's own agent
  * rather than leaving the card on a thread it can no longer switch away from.
  */
-export function agentAffiche(instance: AgentChatInstance, selection: string): string {
-  return modesDeLInstance(instance).some((m) => m.value === selection) ? selection : instance.agent;
+export function shownAgent(instance: AgentChatInstance, selection: string): string {
+  return instanceModes(instance).some((m) => m.value === selection) ? selection : instance.agent;
 }
 
 /** Fresh id. `randomUUID` is absent from insecure origins and old browsers,
  *  where a timestamped counter is enough: the id only has to be unique inside
  *  one instance list. */
-let compteur = 0;
-export function nouvelIdInstance(): string {
+let counter = 0;
+export function newInstanceId(): string {
   const crypto = globalThis.crypto as { randomUUID?: () => string } | undefined;
   if (typeof crypto?.randomUUID === 'function') return crypto.randomUUID();
-  compteur += 1;
-  return `i${Date.now().toString(36)}${compteur.toString(36)}`;
+  counter += 1;
+  return `i${Date.now().toString(36)}${counter.toString(36)}`;
 }
 
 // ── Store ────────────────────────────────────────────────────────────────
 
 let instances: AgentChatInstance[] = [];
-let chargees = false;
-const abonnes = new Set<() => void>();
+let loaded = false;
+const subscribers = new Set<() => void>();
 
-function publier(): void {
-  for (const abonne of abonnes) abonne();
+function publish(): void {
+  for (const subscriber of subscribers) subscriber();
 }
 
-export function instancesActuelles(): readonly AgentChatInstance[] {
+export function currentInstances(): readonly AgentChatInstance[] {
   return instances;
 }
 
-export function abonnerInstances(listener: () => void): () => void {
-  abonnes.add(listener);
-  return () => abonnes.delete(listener);
+export function subscribeInstances(listener: () => void): () => void {
+  subscribers.add(listener);
+  return () => subscribers.delete(listener);
 }
 
 /**
@@ -264,21 +264,21 @@ export function abonnerInstances(listener: () => void): () => void {
  * written meanwhile — saving over a placement we failed to read is how a
  * config disappears.
  */
-export async function chargerInstances(): Promise<void> {
-  if (chargees) return;
+export async function loadInstances(): Promise<void> {
+  if (loaded) return;
   const { raw, ok } = await loadLayout({ scope: AGENT_CHAT_SCOPE });
   if (!ok) return;
   // `raw === null` is the only "never written" signal: an emptied list is
   // stored as `{ instances: [] }`, so deleting the seeded card keeps it
   // deleted instead of resurrecting it at the next reload.
-  const agents = raw === null ? await agentsInstalles() : undefined;
+  const agents = raw === null ? await installedAgents() : undefined;
   // Nothing written AND no answer about the agents: we do not know who the
   // card would show. Leaving `chargees` false makes the next mount ask again,
   // rather than fixing an empty cockpit until the page is reloaded.
   if (raw === null && agents === undefined) return;
-  chargees = true;
-  instances = instancesAuChargement(raw, agents);
-  publier();
+  loaded = true;
+  instances = instancesOnLoad(raw, agents);
+  publish();
 }
 
 /**
@@ -288,11 +288,11 @@ export async function chargerInstances(): Promise<void> {
  * failure is `undefined`, not an empty list: "we do not know" must not read as
  * "there is no agent" and silently swallow the card on a slow daemon.
  */
-async function agentsInstalles(): Promise<readonly AgentInstalle[] | undefined> {
+async function installedAgents(): Promise<readonly InstalledAgent[] | undefined> {
   try {
     const r = await fetch('/api/ui/agents', { cache: 'no-store' });
     if (!r.ok) return undefined;
-    const j = (await r.json()) as { agents?: AgentInstalle[] };
+    const j = (await r.json()) as { agents?: InstalledAgent[] };
     return j.agents ?? [];
   } catch {
     return undefined;
@@ -314,41 +314,41 @@ async function agentsInstalles(): Promise<readonly AgentInstalle[] | undefined> 
  * thread even if its agent was deleted since — that is a deliberate choice
  * (see `use-agents.ts`), and nobody chose the seed.
  */
-export function instancesAuChargement(
+export function instancesOnLoad(
   raw: unknown,
-  agents?: readonly AgentInstalle[],
+  agents?: readonly InstalledAgent[],
 ): AgentChatInstance[] {
-  if (raw !== null) return normaliserInstances(raw);
-  const principal = agentPrincipal(agents ?? []);
-  return principal ? [grainePourAgent(principal)] : [];
+  if (raw !== null) return normalizeInstances(raw);
+  const main = findMainAgent(agents ?? []);
+  return main ? [seedForAgent(main)] : [];
 }
 
-async function ecrire(suivantes: AgentChatInstance[]): Promise<boolean> {
-  instances = suivantes;
+async function write(next: AgentChatInstance[]): Promise<boolean> {
+  instances = next;
   // A write that lands before the load answered wins: reloading afterwards
   // would put back the list the user just changed.
-  chargees = true;
-  publier();
-  return saveLayout({ instances: suivantes }, { scope: AGENT_CHAT_SCOPE });
+  loaded = true;
+  publish();
+  return saveLayout({ instances: next }, { scope: AGENT_CHAT_SCOPE });
 }
 
 /** Adds the instance, or replaces the one carrying the same id. */
-export function enregistrerInstance(instance: AgentChatInstance): Promise<boolean> {
+export function saveInstance(instance: AgentChatInstance): Promise<boolean> {
   const index = instances.findIndex((i) => i.id === instance.id);
-  const suivantes = [...instances];
-  if (index === -1) suivantes.push(instance);
-  else suivantes[index] = instance;
-  return ecrire(suivantes);
+  const next = [...instances];
+  if (index === -1) next.push(instance);
+  else next[index] = instance;
+  return write(next);
 }
 
-export function supprimerInstance(id: string): Promise<boolean> {
-  return ecrire(instances.filter((i) => i.id !== id));
+export function deleteInstance(id: string): Promise<boolean> {
+  return write(instances.filter((i) => i.id !== id));
 }
 
 /** Test seam: the store is module state, and one test's list must not leak
  *  into the next. */
-export function reinitialiserInstancesPourTests(): void {
+export function resetInstancesForTests(): void {
   instances = [];
-  chargees = false;
-  abonnes.clear();
+  loaded = false;
+  subscribers.clear();
 }

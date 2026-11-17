@@ -16,11 +16,11 @@ import { AgentContextMenu, useChangeAvatar, type AgentMenuTarget } from './agent
 import { DuplicateAgentDialog } from '@/components/duplicate-agent-dialog';
 import { CustomizeAgentDialog } from './customize-agent-dialog';
 import {
-  agentAffiche,
-  modesDeLInstance,
-  personnalisationDe,
-  personnaliserAgent,
-  retirerAgent,
+  shownAgent,
+  instanceModes,
+  customizationOf,
+  customizeAgent,
+  removeAgent,
   type AgentChatInstance,
 } from './instances';
 import { useAgents, useProjets, visageAgent } from './use-agents';
@@ -124,16 +124,16 @@ export function AgentChatCard({
   const agents = useAgents();
   const projets = useProjets();
 
-  const modes = useMemo(() => modesDeLInstance(instance), [instance]);
+  const modes = useMemo(() => instanceModes(instance), [instance]);
   const surLaCarte = useMemo(() => new Set(modes.map((m) => m.value.toLowerCase())), [modes]);
-  const agent = agentAffiche(instance, selection);
+  const agent = shownAgent(instance, selection);
 
   const changerAgent = useCallback((nom: string) => {
     setSelection(nom);
   }, []);
 
   const retirer = useCallback((nom: string) => {
-    const suivante = retirerAgent(instance, nom);
+    const suivante = removeAgent(instance, nom);
     if (suivante) onSave(suivante);
     else onDelete();
   }, [instance, onSave, onDelete]);
@@ -199,11 +199,11 @@ export function AgentChatCard({
       {personnalise && (
         <CustomizeAgentDialog
           agent={personnalise}
-          initial={personnalisationDe(instance, personnalise)}
+          initial={customizationOf(instance, personnalise)}
           visage={visageAgent(personnalise, agents, projets)}
           onClose={() => setPersonnalise(null)}
           onSave={(valeur) => {
-            onSave(personnaliserAgent(instance, personnalise, valeur));
+            onSave(customizeAgent(instance, personnalise, valeur));
             setPersonnalise(null);
           }}
         />
