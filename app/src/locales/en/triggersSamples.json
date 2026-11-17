@@ -1,0 +1,9 @@
+{
+  "triggersPage": {
+    "samples": {
+      "todoText": "Bug: {field}",
+      "taskTitle": "Triage {field}",
+      "notifyTitle": "{field} is blocked"
+    }
+  }
+}

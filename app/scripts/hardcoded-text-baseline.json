@@ -117,12 +117,6 @@
   "app/src/plugins-client/todo-outcomes/outcome-block.tsx": {
     "jsxAttr": 1
   },
-  "app/src/plugins-client/triggers/test-and-journal.tsx": {
-    "jsxAttr": 2
-  },
-  "app/src/plugins-client/triggers/trigger-editor.tsx": {
-    "jsxAttr": 15
-  },
   "app/src/plugins-client/ui-theme-glass-tuning.tsx": {
     "jsxText": 1
   },

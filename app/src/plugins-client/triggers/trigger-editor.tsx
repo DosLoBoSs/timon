@@ -71,6 +71,7 @@ function SourceStep({ draft, set, editing, slugTouched, onSlug }: {
             </div>
           </Field>
           <Field label={t('triggersPage.editor.tz')} htmlFor="trigger-tz" hint={t('triggersPage.editor.tzHint')}>
+            {/* i18n-exempt: time zone name */}
             <input id="trigger-tz" value={draft.tz} onChange={(e) => set({ tz: e.target.value })} className={INPUT} placeholder="Europe/Paris" />
           </Field>
         </>
@@ -80,7 +81,7 @@ function SourceStep({ draft, set, editing, slugTouched, onSlug }: {
         <>
           <Field label={t('triggersPage.editor.slug')} htmlFor="trigger-slug" hint={t('triggersPage.editor.slugHint')}>
             {/* code-font: the webhook slug and the URL it builds */}
-            <input id="trigger-slug" value={draft.slug} onChange={(e) => onSlug(e.target.value)} className={cn(INPUT, 'font-mono')} placeholder="github-issues" />
+            <input id="trigger-slug" value={draft.slug} onChange={(e) => onSlug(e.target.value)} className={cn(INPUT, 'font-mono')} placeholder="github-issues" /* i18n-exempt: sample slug */ />
             <code className="mt-1 block truncate font-mono text-[11px] text-muted-foreground">{`${origin}/api/triggers/hooks/${draft.slug || '…'}`}</code>
           </Field>
           <Field label={t('triggersPage.editor.auth')} htmlFor="trigger-auth" hint={t(`triggersPage.editor.authHint.${draft.auth}`)}>
@@ -109,6 +110,7 @@ function SourceStep({ draft, set, editing, slugTouched, onSlug }: {
             <div />
             <Field label={t('triggersPage.editor.coalesceKey')} htmlFor="trigger-coalesce-key">
               {/* code-font: a path into the payload */}
+              {/* i18n-exempt: payload field path */}
               <input id="trigger-coalesce-key" value={draft.coalesceKey} onChange={(e) => set({ coalesceKey: e.target.value })} className={cn(INPUT, 'font-mono')} placeholder="pull_request.number" />
             </Field>
             <Field label={t('triggersPage.editor.coalesceQuiet')} htmlFor="trigger-coalesce-quiet">
@@ -144,6 +146,7 @@ function ConditionRow({ condition, index, onChange, onRemove }: {
         aria-label={t('triggersPage.editor.conditionPath', { n: index + 1 })}
         value={condition.path} onChange={(e) => onChange({ ...condition, path: e.target.value })}
         // code-font: a path into the payload
+        // i18n-exempt: payload field name
         className={cn(INPUT, 'w-44 flex-none font-mono text-xs')} placeholder="action"
       />
       <select
@@ -306,16 +309,19 @@ function ActionCard({ action, index, agents, workflows, onChange, onRemove }: {
       {action.type === 'todo' && (
         <>
           <Field label={t('triggersPage.editor.todoText')} htmlFor={id('text')}>
-            <input id={id('text')} value={action.text} onChange={(e) => set({ text: e.target.value })} className={INPUT} placeholder="Bug: {issue.title}" />
+            <input id={id('text')} value={action.text} onChange={(e) => set({ text: e.target.value })} className={INPUT} placeholder={t('triggersPage.samples.todoText', { field: '{issue.title}' })} />
           </Field>
           <Field label={t('triggersPage.editor.todoNotes')} htmlFor={id('notes')}>
+            {/* i18n-exempt: template field */}
             <textarea id={id('notes')} rows={2} value={action.notes} onChange={(e) => set({ notes: e.target.value })} className={INPUT} placeholder="{issue.body}" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label={t('triggersPage.editor.project')} htmlFor={id('project')}>
+              {/* i18n-exempt: sample project slug */}
               <input id={id('project')} value={action.project} onChange={(e) => set({ project: e.target.value })} className={cn(INPUT, 'text-xs')} placeholder="timon" />
             </Field>
             <Field label={t('triggersPage.editor.urgency')} htmlFor={id('urgency')} hint={t('triggersPage.editor.urgencyHint', { list: URGENCIES.join(', ') })}>
+              {/* i18n-exempt: urgency value */}
               <input id={id('urgency')} value={action.urgency} onChange={(e) => set({ urgency: e.target.value })} className={cn(INPUT, 'text-xs')} placeholder="bug" />
             </Field>
           </div>
@@ -338,13 +344,14 @@ function ActionCard({ action, index, agents, workflows, onChange, onRemove }: {
             </Field>
           </div>
           <Field label={t('triggersPage.editor.taskTitle')} htmlFor={id('title')}>
-            <input id={id('title')} value={action.title} onChange={(e) => set({ title: e.target.value })} className={INPUT} placeholder="Triage {issue.title}" />
+            <input id={id('title')} value={action.title} onChange={(e) => set({ title: e.target.value })} className={INPUT} placeholder={t('triggersPage.samples.taskTitle', { field: '{issue.title}' })} />
           </Field>
           <Field label={t('triggersPage.editor.taskPrompt')} htmlFor={id('prompt')} hint={action.raw ? t('triggersPage.editor.rawPrompt') : undefined}>
             <textarea id={id('prompt')} rows={3} value={action.prompt} onChange={(e) => set({ prompt: e.target.value })} className={INPUT} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label={t('triggersPage.editor.project')} htmlFor={id('project')}>
+              {/* i18n-exempt: sample project slug */}
               <input id={id('project')} value={action.project} onChange={(e) => set({ project: e.target.value })} className={cn(INPUT, 'text-xs')} placeholder="timon" />
             </Field>
             <Field label={t('triggersPage.editor.priority')} htmlFor={id('priority')}>
@@ -367,7 +374,7 @@ function ActionCard({ action, index, agents, workflows, onChange, onRemove }: {
       {action.type === 'notify' && (
         <>
           <Field label={t('triggersPage.editor.notifyTitle')} htmlFor={id('ntitle')}>
-            <input id={id('ntitle')} value={action.notifyTitle} onChange={(e) => set({ notifyTitle: e.target.value })} className={INPUT} placeholder="{task.title} is blocked" />
+            <input id={id('ntitle')} value={action.notifyTitle} onChange={(e) => set({ notifyTitle: e.target.value })} className={INPUT} placeholder={t('triggersPage.samples.notifyTitle', { field: '{task.title}' })} />
           </Field>
           <Field label={t('triggersPage.editor.notifyBody')} htmlFor={id('nbody')}>
             <textarea id={id('nbody')} rows={2} value={action.body} onChange={(e) => set({ body: e.target.value })} className={INPUT} />
@@ -398,6 +405,7 @@ function ActionCard({ action, index, agents, workflows, onChange, onRemove }: {
       {action.type === 'webhook' && (
         <Field label={t('triggersPage.editor.webhookUrl')} htmlFor={id('url')} hint={t('triggersPage.editor.webhookHint')}>
           {/* code-font: a URL */}
+          {/* i18n-exempt: sample URL */}
           <input id={id('url')} type="url" value={action.url} onChange={(e) => set({ url: e.target.value })} className={cn(INPUT, 'font-mono text-xs')} placeholder="https://example.com/hooks/timon" />
         </Field>
       )}
@@ -407,10 +415,12 @@ function ActionCard({ action, index, agents, workflows, onChange, onRemove }: {
           <p role="note" className={HINT}>{t('triggersPage.editor.scriptNote')}</p>
           <Field label={t('triggersPage.editor.scriptCommand')} htmlFor={id('command')} hint={t('triggersPage.editor.scriptCommandHint')}>
             {/* code-font: a command line */}
+            {/* i18n-exempt: sample command */}
             <input id={id('command')} value={action.command} onChange={(e) => set({ command: e.target.value })} className={cn(INPUT, 'font-mono text-xs')} placeholder="python3" />
           </Field>
           <Field label={t('triggersPage.editor.scriptArgs')} htmlFor={id('args')} hint={t('triggersPage.editor.scriptArgsHint')}>
             {/* code-font: command-line arguments */}
+            {/* i18n-exempt: sample arguments */}
             <textarea id={id('args')} rows={2} value={action.scriptArgs} onChange={(e) => set({ scriptArgs: e.target.value })} className={cn(INPUT, 'font-mono text-xs')} placeholder={'scripts/watch.py\npoll'} />
           </Field>
           <Field label={t('triggersPage.editor.scriptCwd')} htmlFor={id('cwd')} hint={t('triggersPage.editor.scriptCwdHint')}>
@@ -418,6 +428,7 @@ function ActionCard({ action, index, agents, workflows, onChange, onRemove }: {
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label={t('triggersPage.editor.scriptEnv')} htmlFor={id('env')} hint={t('triggersPage.editor.scriptEnvHint')}>
+              {/* i18n-exempt: sample variable name */}
               <input id={id('env')} value={action.scriptEnv} onChange={(e) => set({ scriptEnv: e.target.value })} className={INPUT} placeholder="TREG_API_KEY" />
             </Field>
             <Field label={t('triggersPage.editor.scriptTimeout')} htmlFor={id('timeout')}>
