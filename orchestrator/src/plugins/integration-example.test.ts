@@ -8,14 +8,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateKeyPairSync, sign, createHmac, randomUUID } from 'node:crypto';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import express from 'express';
 import { Context } from '@deepseek-ai/cordis';
 import { addPlugin, inventory } from './install.js';
+import { getHost } from '../host/index.js';
 import { hashPluginDirectory } from './signature.js';
 import { PluginLoader } from './loader.js';
 import { daemonHost } from './context.js';
@@ -61,7 +60,11 @@ before(async () => {
     config: configFile, publicKeys,
     npm: async (args, cwd) => {
       assert.ok(args.includes('--ignore-scripts'));
-      await promisify(execFile)('npm', [...args, '--offline', '--install-links'], { cwd, env: { ...process.env, npm_config_cache: join(home, 'npm-cache') } });
+      // Through the host, as the product runs npm: on Windows npm is a `.cmd` shim a bare execFile cannot start.
+      const run = await getHost().execAsync('npm', [...args, '--offline', '--install-links'], {
+        cwd, env: { ...process.env, npm_config_cache: join(home, 'npm-cache') }, maxBuffer: 16 * 1024 * 1024,
+      });
+      assert.equal(run.code, 0, run.stderr);
     },
   });
   assert.equal(result.refused, null); assert.equal(result.signature.ok, true); assert.equal(result.id, id);
