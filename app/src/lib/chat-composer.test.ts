@@ -13,7 +13,7 @@ import { clientContext } from './plugin-host/loader';
 import {
   CHAT_COMPOSER_ACTION_SLOT,
   CHAT_COMPOSER_SLOT,
-  monterComposerSlot,
+  mountComposerSlot,
 } from '@/components/chat/composer';
 
 const Plugin = () => React.createElement('p', null, 'composer du plugin');
@@ -24,7 +24,7 @@ function paint(): string {
 
 test('le chat déclare la saisie en slot single, et ses actions en liste', () => {
   resetSlotsForTests();
-  const unmount = monterComposerSlot();
+  const unmount = mountComposerSlot();
   assert.equal(slotKind(CHAT_COMPOSER_SLOT), 'single');
   assert.equal(slotKind(CHAT_COMPOSER_ACTION_SLOT), 'list');
   unmount();
@@ -33,7 +33,7 @@ test('le chat déclare la saisie en slot single, et ses actions en liste', () =>
 
 test('le composer du produit occupe le slot par défaut, sans le fermer', () => {
   resetSlotsForTests();
-  const unmount = monterComposerSlot();
+  const unmount = mountComposerSlot();
   const fallback = slotEntries(CHAT_COMPOSER_SLOT);
   assert.equal(fallback.length, 1);
   assert.equal(fallback[0]?.fallback, true, 'le produit cède la place, il ne la garde pas');
@@ -43,7 +43,7 @@ test('le composer du produit occupe le slot par défaut, sans le fermer', () => 
 
 test('un plugin qui déclare chat.composer remplace la saisie, et la rend en partant', () => {
   resetSlotsForTests();
-  const unmount = monterComposerSlot();
+  const unmount = mountComposerSlot();
   const context = clientContext('acme-composer', [CHAT_COMPOSER_SLOT]);
   const dispose = context.slots.register({ slot: CHAT_COMPOSER_SLOT }, Plugin);
 
@@ -57,7 +57,7 @@ test('un plugin qui déclare chat.composer remplace la saisie, et la rend en par
 
 test('un widget ne prend pas la saisie : le slot n’est pas de nature widget', () => {
   resetSlotsForTests();
-  const unmount = monterComposerSlot();
+  const unmount = mountComposerSlot();
   const widget = clientContext('widget-only', ['cockpit.widget']);
   assert.throws(
     () => widget.slots.register({ slot: CHAT_COMPOSER_SLOT }, Plugin),
@@ -68,8 +68,8 @@ test('un widget ne prend pas la saisie : le slot n’est pas de nature widget', 
 
 test('deux chats côte à côte partagent une inscription, et le dernier parti la rend', () => {
   resetSlotsForTests();
-  const first = monterComposerSlot();
-  const second = monterComposerSlot();
+  const first = mountComposerSlot();
+  const second = mountComposerSlot();
   assert.equal(slotEntries(CHAT_COMPOSER_SLOT).length, 1, 'une description, pas une par cellule');
 
   first();
@@ -83,7 +83,7 @@ test('deux chats côte à côte partagent une inscription, et le dernier parti l
 test('le chat monté dans un layout qui déclare déjà les slots ne les redéclare pas', () => {
   resetSlotsForTests();
   register({ slot: 'root', pluginId: '@timon/ui-layout', children: { [CHAT_COMPOSER_ACTION_SLOT]: 'list' } }, Plugin);
-  const unmount = monterComposerSlot();
+  const unmount = mountComposerSlot();
   assert.equal(slotKind(CHAT_COMPOSER_ACTION_SLOT), 'list');
   unmount();
   assert.equal(slotKind(CHAT_COMPOSER_ACTION_SLOT), 'list', 'le chat ne rend pas un slot qu’il n’a pas déclaré');

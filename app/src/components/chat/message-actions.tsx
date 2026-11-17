@@ -96,7 +96,7 @@ export function plainTextOf(html: string): string {
 export const CHAT_MESSAGE_ACTION_SLOT = 'chat.message.action';
 
 /**
- * Same bookkeeping as the composer's slots (`monterComposerSlot`): the
+ * Same bookkeeping as the composer's slots (`mountComposerSlot`): the
  * registry is global, the chat is not — the multichat mounts several. The first
  * chat declares and registers, the last one to leave undoes it.
  */

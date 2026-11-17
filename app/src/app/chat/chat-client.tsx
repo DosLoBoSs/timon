@@ -6323,7 +6323,7 @@ export function ChatClient({
               toggleDictation,
               dictationUnavailable,
               audioLevels,
-              visualiseurActif,
+              visualizerActive: visualiseurActif,
               missionCwd,
               gptLive: composerGptLive,
               thinking,

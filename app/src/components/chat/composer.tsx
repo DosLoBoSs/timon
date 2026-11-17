@@ -168,7 +168,7 @@ export type ChatComposerValue = {
   /** Web Speech has no recognition service here (desktop app, TIM-0061). */
   dictationUnavailable: boolean;
   audioLevels: number[];
-  visualiseurActif: boolean;
+  visualizerActive: boolean;
   missionCwd: string | null;
   /** GPT-Live conversation: null while the feature is off or has no key. */
   gptLive: { state: GptLiveState; toggle: () => void } | null;
@@ -204,8 +204,8 @@ export const CHAT_COMPOSER_ACTION_SLOT = 'chat.composer.action';
  * already filled), and closing the first would take away the input of all the
  * others.
  */
-let chatsMontes = 0;
-let aDefaire: Array<() => void> = [];
+let mountedChats = 0;
+let undoers: Array<() => void> = [];
 
 /**
  * Declares the composer slot and registers the default occupant in it.
@@ -215,26 +215,26 @@ let aDefaire: Array<() => void> = [];
  * guard covers the day a third-party layout mounts the chat in its tree: we
  * then make do with the slot already declared.
  */
-export function monterComposerSlot(): () => void {
-  if (chatsMontes++ === 0) {
-    for (const [nom, nature] of [
+export function mountComposerSlot(): () => void {
+  if (mountedChats++ === 0) {
+    for (const [name, kind] of [
       [CHAT_COMPOSER_SLOT, 'single'],
       [CHAT_COMPOSER_ACTION_SLOT, 'list'],
     ] as const) {
-      if (slotKind(nom) === null) aDefaire.push(declareSlot(nom, nature, 'chat-composer'));
+      if (slotKind(name) === null) undoers.push(declareSlot(name, kind, 'chat-composer'));
     }
     // `fallback`: the product occupies the slot WITHOUT closing it. A plugin that
     // declares `chat.composer` registers in it anyway and takes the place; the
     // product's composer comes back as soon as it is removed.
-    aDefaire.push(register(
+    undoers.push(register(
       { slot: CHAT_COMPOSER_SLOT, pluginId: '@timon/missions', fallback: true },
       ChatComposer,
     ));
   }
   return () => {
-    if (--chatsMontes === 0) {
-      for (const defaire of aDefaire.reverse()) defaire();
-      aDefaire = [];
+    if (--mountedChats === 0) {
+      for (const undo of undoers.reverse()) undo();
+      undoers = [];
     }
   };
 }
@@ -247,7 +247,7 @@ export function monterComposerSlot(): () => void {
  * change here.
  */
 export function ChatComposerSlot({ value, variant }: { value: ChatComposerValue; variant?: 'setup' }) {
-  useEffect(() => monterComposerSlot(), []);
+  useEffect(() => mountComposerSlot(), []);
   // The first-run conversation: nothing but the model, the voice and send. A
   // variant of THIS slot's host rather than a second occupant — the occupant
   // is the product's, and a plugin may still replace it everywhere else.
@@ -293,7 +293,7 @@ function ChatComposer() {
     placeholder, send, fileRef, pendingImages, setPendingImages, addImageFiles,
     pendingFiles, setPendingFiles, addAnyFiles, capturePastedText, setCaret,
     slashOpen, slashSuggestions, slashSel, setSlashSel, setSlashDismissed, acceptSlash,
-    recording, toggleDictation, dictationUnavailable, audioLevels, visualiseurActif, missionCwd,
+    recording, toggleDictation, dictationUnavailable, audioLevels, visualizerActive, missionCwd,
     gptLive, thinking, stopping, turnResumable, stopTurn, onNewConversation, newMission,
   } = c;
   // Declared by the backend: a remote agent cannot open a file announced by
@@ -593,12 +593,12 @@ function ChatComposer() {
                   key={index}
                   className={cn(
                     'h-5 w-0.5 origin-center rounded-full bg-current',
-                    visualiseurActif
+                    visualizerActive
                       ? 'transition-transform duration-75 ease-out motion-reduce:transform-none'
                       : 'animate-egaliseur',
                   )}
                   style={
-                    visualiseurActif
+                    visualizerActive
                       ? { transform: `scaleY(${Math.max(0.12, level)})` }
                       : // Wave-like offset, folded in the middle of the
                         // bar so both ends beat in phase.
