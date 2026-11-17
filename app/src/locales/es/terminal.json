@@ -43,7 +43,6 @@
       "unauthorized": "Inicia sesión para abrir un terminal.",
       "pty_unavailable": "Esta máquina no puede iniciar un terminal: falló la carga del componente de pseudoterminal. Consulta el registro del daemon."
     },
-    "titleScoped": "Terminal — {scope}",
     "scopes": {
       "none": "Sin proyecto",
       "label": "Proyectos"

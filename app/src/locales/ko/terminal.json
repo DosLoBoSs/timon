@@ -43,7 +43,6 @@
       "unauthorized": "터미널을 열려면 로그인하세요.",
       "pty_unavailable": "이 컴퓨터에서 터미널을 시작할 수 없습니다: 의사 터미널 구성 요소를 불러오지 못했습니다. 데몬 로그를 확인하세요."
     },
-    "titleScoped": "터미널 — {scope}",
     "scopes": {
       "none": "프로젝트 없음",
       "label": "프로젝트"

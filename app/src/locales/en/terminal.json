@@ -43,7 +43,6 @@
       "unauthorized": "Sign in to open a terminal.",
       "pty_unavailable": "This machine cannot start a terminal: the pseudo-terminal component failed to load. Check the daemon log."
     },
-    "titleScoped": "Terminal — {scope}",
     "scopes": {
       "none": "No project",
       "label": "Projects"

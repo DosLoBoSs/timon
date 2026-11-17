@@ -43,7 +43,6 @@
       "unauthorized": "Connectez-vous pour ouvrir un terminal.",
       "pty_unavailable": "Cette machine ne peut pas démarrer de terminal : le composant pseudo-terminal n'a pas pu être chargé. Consultez le journal du daemon."
     },
-    "titleScoped": "Terminal — {scope}",
     "scopes": {
       "none": "Sans projet",
       "label": "Projets"

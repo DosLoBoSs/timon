@@ -43,7 +43,6 @@
       "unauthorized": "Entre para abrir um terminal.",
       "pty_unavailable": "Este computador não consegue iniciar um terminal: o componente de pseudo-terminal falhou ao carregar. Confira o log do daemon."
     },
-    "titleScoped": "Terminal — {scope}",
     "scopes": {
       "none": "Nenhum projeto",
       "label": "Projetos"

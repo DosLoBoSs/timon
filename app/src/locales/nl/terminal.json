@@ -43,7 +43,6 @@
       "unauthorized": "Meld je aan om een terminal te openen.",
       "pty_unavailable": "Deze machine kan geen terminal starten: het pseudoterminalonderdeel kon niet worden geladen. Bekijk het daemonlog."
     },
-    "titleScoped": "Terminal — {scope}",
     "scopes": {
       "none": "Geen project",
       "label": "Projecten"

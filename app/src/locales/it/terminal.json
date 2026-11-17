@@ -43,7 +43,6 @@
       "unauthorized": "Accedi per aprire un terminale.",
       "pty_unavailable": "Questa macchina non può avviare un terminale: il componente di pseudo-terminale non si è caricato. Controlla il log del daemon."
     },
-    "titleScoped": "Terminale — {scope}",
     "scopes": {
       "none": "Nessun progetto",
       "label": "Progetti"
