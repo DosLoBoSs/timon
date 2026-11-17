@@ -29,6 +29,11 @@ const OwnerSchema = z.optional(z.nullable(z.string()));
 const ImportRecordSchema = z.strictObject({
   sourceApp: z.string(),
   sourceRef: z.string(),
+  /**
+   * Other refs of the same source agent: the name form an older Timon export
+   * gave it (`source-ref.ts`). An archive under one of them updates this agent.
+   */
+  aliases: z.optional(z.array(z.string())),
   ownerUserId: OwnerSchema,
   agent: z.string(),
   /** SHA-256 of each document as the import left it; `null` = absent. */
@@ -91,15 +96,25 @@ export function createRecords(kv: Kv) {
     /**
      * The record of this source agent the caller may build on: its own, else —
      * for a superadmin only — anybody's, a record without an owner included;
-     * among several accounts' records, the oldest import.
+     * among several accounts' records, the oldest import. `aliases` are the
+     * older refs of the same source agent: a record still keyed by one of
+     * them is found, as is a record that holds `sourceRef` among its own
+     * aliases (an older archive of an agent since keyed by its stable id),
+     * both after an exact match. Two alias lists are never compared: the name
+     * form of a renamed agent's copy must not catch a new agent of that name.
      */
-    async find(sourceApp: string, sourceRef: string, caller: RecordCaller): Promise<{ key: string; record: ImportRecord } | null> {
+    async find(
+      sourceApp: string, sourceRef: string, caller: RecordCaller, aliases: readonly string[] = [],
+    ): Promise<{ key: string; record: ImportRecord } | null> {
       const key = refKey(sourceApp, sourceRef, caller.userId);
       const parsed = ImportRecordSchema.safeParse(await kv.get(key));
       if (parsed.success && ownedBy(parsed.data.ownerUserId, caller)) return { key, record: parsed.data };
-      if (!caller.superadmin) return null;
-      const candidates = (await all()).filter(({ record }) => record.sourceApp === sourceApp && record.sourceRef === sourceRef);
-      return candidates.sort((a, b) => a.record.importedAt - b.record.importedAt)[0] ?? null;
+      const refs = new Set([sourceRef, ...aliases]);
+      const candidates = (await all()).filter(({ record }) => record.sourceApp === sourceApp
+        && ownedBy(record.ownerUserId, caller)
+        && (refs.has(record.sourceRef) || (record.aliases ?? []).includes(sourceRef)));
+      const rank = (record: ImportRecord): number => (record.sourceRef === sourceRef ? 0 : 1);
+      return candidates.sort((a, b) => rank(a.record) - rank(b.record) || a.record.importedAt - b.record.importedAt)[0] ?? null;
     },
     /** Writes `record` under its owner's key; `previousKey` (another key it was read from) is dropped. */
     async put(record: ImportRecord, previousKey?: string | null): Promise<void> {

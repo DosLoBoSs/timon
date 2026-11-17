@@ -77,7 +77,7 @@ Warnings under each agent list what will not come over and why. After a change, 
 
 Agents are named after the tool they come from: `grok-bot.ada`, `hermes.coder`, `timon.researcher`. When agents the import did not create already use that prefix, the import uses `import.` instead. A name already taken gets `-2`, `-3`…
 
-Importing the same export again **updates** the agents it created, even if you renamed them since. An agent you changed by hand in the meantime is skipped, and the preview says so. Another account importing the same export gets agents of its own: it never updates yours.
+Importing the same export again **updates** the agents it created, even if you renamed them since. From another Timon, a new export of an agent updates its copy too, even if the agent was renamed on that Timon in between. An agent you changed by hand in the meantime is skipped, and the preview says so. Another account importing the same export gets agents of its own: it never updates yours.
 
 ## What stays behind
 

@@ -2107,6 +2107,11 @@ var OwnerSchema = optional(nullable(string2()));
 var ImportRecordSchema = strictObject({
   sourceApp: string2(),
   sourceRef: string2(),
+  /**
+   * Other refs of the same source agent: the name form an older Timon export
+   * gave it (`source-ref.ts`). An archive under one of them updates this agent.
+   */
+  aliases: optional(array(string2())),
   ownerUserId: OwnerSchema,
   agent: string2(),
   /** SHA-256 of each document as the import left it; `null` = absent. */
@@ -2143,15 +2148,21 @@ function createRecords(kv) {
     /**
      * The record of this source agent the caller may build on: its own, else —
      * for a superadmin only — anybody's, a record without an owner included;
-     * among several accounts' records, the oldest import.
+     * among several accounts' records, the oldest import. `aliases` are the
+     * older refs of the same source agent: a record still keyed by one of
+     * them is found, as is a record that holds `sourceRef` among its own
+     * aliases (an older archive of an agent since keyed by its stable id),
+     * both after an exact match. Two alias lists are never compared: the name
+     * form of a renamed agent's copy must not catch a new agent of that name.
      */
-    async find(sourceApp, sourceRef, caller) {
+    async find(sourceApp, sourceRef, caller, aliases = []) {
       const key = refKey(sourceApp, sourceRef, caller.userId);
       const parsed = ImportRecordSchema.safeParse(await kv.get(key));
       if (parsed.success && ownedBy(parsed.data.ownerUserId, caller)) return { key, record: parsed.data };
-      if (!caller.superadmin) return null;
-      const candidates = (await all()).filter(({ record: record2 }) => record2.sourceApp === sourceApp && record2.sourceRef === sourceRef);
-      return candidates.sort((a, b) => a.record.importedAt - b.record.importedAt)[0] ?? null;
+      const refs = /* @__PURE__ */ new Set([sourceRef, ...aliases]);
+      const candidates = (await all()).filter(({ record: record2 }) => record2.sourceApp === sourceApp && ownedBy(record2.ownerUserId, caller) && (refs.has(record2.sourceRef) || (record2.aliases ?? []).includes(sourceRef)));
+      const rank = (record2) => record2.sourceRef === sourceRef ? 0 : 1;
+      return candidates.sort((a, b) => rank(a.record) - rank(b.record) || a.record.importedAt - b.record.importedAt)[0] ?? null;
     },
     /** Writes `record` under its owner's key; `previousKey` (another key it was read from) is dropped. */
     async put(record2, previousKey) {
@@ -2210,6 +2221,7 @@ function trackAgents(ctx, records) {
 
 // src/apply.ts
 var ERROR_MAX = 300;
+var ALIASES_MAX = 16;
 var errorText = (err2) => (err2 instanceof Error && err2.message ? err2.message : "unknown error").replace(/\s+/g, " ").slice(0, ERROR_MAX);
 var codeOf = (err2) => err2?.code;
 async function applyPlan(ctx, records, plan) {
@@ -2412,9 +2424,17 @@ async function applyAgent(ctx, records, sourceApp, plan, teams, undo, warnings) 
   }
   const docs = {};
   for (const file of FINGERPRINTED_DOCS) docs[file] = fingerprint(await ctx.agents.docs.get(name2, file));
+  const incoming = plan.source.sourceRef;
+  const sourceRef = previous && previous.sourceRef !== incoming && (previous.aliases ?? []).includes(incoming) ? previous.sourceRef : incoming;
+  const aliases = [.../* @__PURE__ */ new Set([
+    ...previous?.aliases ?? [],
+    ...previous ? [previous.sourceRef] : [],
+    ...plan.aliases
+  ])].filter((ref) => ref !== sourceRef).slice(-ALIASES_MAX);
   const record2 = {
     sourceApp,
-    sourceRef: plan.source.sourceRef,
+    sourceRef,
+    ...aliases.length ? { aliases } : {},
     // A superadmin's update leaves the record to the account that owns it.
     ownerUserId: previous && previous.ownerUserId !== void 0 ? previous.ownerUserId : plan.ownerUserId,
     agent: name2,
@@ -2978,6 +2998,25 @@ function stripAllowedTools(content) {
   return { content: [...lines.slice(0, open5 + 1), ...head.lines, rest[0], ...tail.lines].join("\n"), removed };
 }
 
+// src/source-ref.ts
+var EXPORT_SOURCE_APP = "timon";
+var SOURCE_REF_MAX = 300;
+var STABLE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+var STABLE_REF_RE = /^timon:([a-f0-9]{16}):id:([0-9a-f-]{36})$/;
+function legacySourceRef(instance, name2) {
+  return `timon:${instance}:${name2.toLowerCase()}`.slice(0, SOURCE_REF_MAX);
+}
+function exportSourceRef(instance, agent) {
+  if (typeof agent.id === "string" && STABLE_ID_RE.test(agent.id)) return `timon:${instance}:id:${agent.id}`;
+  return legacySourceRef(instance, agent.name);
+}
+function sourceRefAliases(sourceApp, agent) {
+  if (sourceApp !== EXPORT_SOURCE_APP) return [];
+  const match = STABLE_REF_RE.exec(agent.sourceRef);
+  if (!match || !STABLE_ID_RE.test(match[2])) return [];
+  return [legacySourceRef(match[1], agent.displayName)];
+}
+
 // src/plan.ts
 var MEMORY_RULES_PER_AGENT = 64;
 var ROUTINE_PROMPT_MAX = 2e4;
@@ -3178,7 +3217,8 @@ async function planImport(ctx, records, manifest, options = {}) {
   for (const source of manifest.agents) {
     const choice = choices.get(source.sourceRef);
     const notes = [];
-    const found = await records.find(sourceApp, source.sourceRef, caller);
+    const aliases = sourceRefAliases(sourceApp, source);
+    const found = await records.find(sourceApp, source.sourceRef, caller, aliases);
     const record2 = found?.record ?? null;
     const current = record2 ? byName.get(lower(record2.agent)) : void 0;
     const previous = record2 && current && current.mine ? record2 : null;
@@ -3399,6 +3439,7 @@ async function planImport(ctx, records, manifest, options = {}) {
       cwd: cwdMissing ? null : cwd,
       record: previous,
       recordKey: previous ? found?.key ?? null : null,
+      aliases,
       ownerUserId: caller.userId,
       backend,
       model,
@@ -8706,7 +8747,6 @@ async function readHermesManifest(installation, names, now = () => /* @__PURE__ 
 
 // src/export.ts
 import { randomBytes } from "node:crypto";
-var EXPORT_SOURCE_APP = "timon";
 var EXPORT_MAX_AGENTS = 100;
 var ExportError = class extends Error {
   constructor(code, message) {
@@ -8910,7 +8950,7 @@ async function buildExport(ctx, request, now = /* @__PURE__ */ new Date()) {
         ...def.cwd ? { cwd: def.cwd.slice(0, 4096) } : {},
         ...def.main ? { main: true } : {}
       },
-      sourceRef: `timon:${instance}:${def.name.toLowerCase()}`.slice(0, 300)
+      sourceRef: exportSourceRef(instance, def)
     });
   }
   const groups = [...teams.values()].map(({ group, members: members2 }) => ({ ...group, members: members2 }));
