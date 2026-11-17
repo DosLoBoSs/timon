@@ -315,10 +315,13 @@ function pageWorld(options: { refuse?: Set<string> } = {}) {
   const windows = new WindowRegistry<unknown, unknown>();
   const children: unknown[] = [];
   const log: string[] = [];
+  const focusLog: string[] = [];
   let nextId = 100;
+  /** The webContents holding the keyboard, as `webContents.getFocusedWebContents()` reports it. */
+  const keyboard = { holder: null as number | null, windowFocused: true };
   const window = {
-    webContents: { id: 1, isFocused: () => false },
-    isDestroyed: () => false, isFocused: () => true, getContentBounds: () => ({ x: 40, y: 30, width: 1200, height: 800 }),
+    webContents: { id: 1, isFocused: () => keyboard.holder === 1 },
+    isDestroyed: () => false, isFocused: () => keyboard.windowFocused, getContentBounds: () => ({ x: 40, y: 30, width: 1200, height: 800 }),
     contentView: {
       addChildView: (view: unknown, index: number) => { children.splice(index, 0, view); },
       removeChildView: (view: unknown) => { const at = children.indexOf(view); if (at >= 0) children.splice(at, 1); },
@@ -326,11 +329,12 @@ function pageWorld(options: { refuse?: Set<string> } = {}) {
     close: () => { log.push('window close'); },
   };
   const context: Record<string, unknown> = {
-    windows, console: { log: () => {} }, browserOwners: new Map<number, number>(), quitInProgress: false,
+    windows, console: { log: (line: string) => { if (line.includes('→ page')) focusLog.push(line); } }, browserOwners: new Map<number, number>(), quitInProgress: false,
     nativeBrowser: { detachWindow: () => { log.push('browser detach'); } },
     layoutChanges: 0,
     layoutKeeper: { changed: () => { context.layoutChanges = (context.layoutChanges as number) + 1; }, thaw: () => { log.push('layout thawed'); } },
     routeOfUrl,
+    webContents: { getFocusedWebContents: () => (keyboard.holder === null ? null : { id: keyboard.holder }) },
     BrowserWindow: { getFocusedWindow: () => null },
     refreshTitle: async () => {},
     app: { quit: () => { log.push('quit'); } },
@@ -339,12 +343,13 @@ function pageWorld(options: { refuse?: Set<string> } = {}) {
   const settle = (page: unknown, outcome: string) => (context.settlePage as (p: unknown, o: string) => void)(page, outcome);
   context.createPage = (record: { pages: { forget: (id: number) => void; keep: (id: number) => void } }, machineId: string | null, url: string) => {
     const id = nextId++;
-    const state = { destroyed: false, focused: 0 };
+    const state = { destroyed: false };
     const page: Record<string, unknown> = { contentsId: id, machineId };
     const contents = {
       id,
       isDestroyed: () => state.destroyed,
-      focus: () => { state.focused += 1; },
+      isFocused: () => keyboard.holder === id,
+      focus: () => { keyboard.holder = id; },
       close: (opts: { waitForBeforeUnload?: boolean }) => {
         log.push(`close ${machineId} ${opts?.waitForBeforeUnload ? 'asking' : 'unasked'}`);
         // `will-prevent-unload`, the user stays.
@@ -362,7 +367,7 @@ function pageWorld(options: { refuse?: Set<string> } = {}) {
     window.contentView.addChildView(view, 0);
     return page;
   };
-  const names = ['noteRoute', 'contentsOf', 'detachBrowser', 'layoutPages', 'showPage', 'hidePage', 'settlePage', 'closePage', 'enterMachine', 'closePages',
+  const names = ['noteRoute', 'contentsOf', 'detachBrowser', 'layoutPages', 'focusActivePage', 'showPage', 'hidePage', 'settlePage', 'closePage', 'enterMachine', 'closePages',
     'liveWindows', 'frontWindow', 'callOffQuit', 'windowsHoldQuit'];
   runInNewContext(names.map((name) => compile(functionText(name))).join('\n'), context);
   const record = windows.add({ id: 1, window, origin: ORIGIN, machineId: null, pages: new ViewPool<unknown>(), closing: false, route: null });
@@ -372,7 +377,8 @@ function pageWorld(options: { refuse?: Set<string> } = {}) {
   const closeWindow = () => (context.closePages as (r: unknown) => Promise<void>)(record);
   const holdQuit = () => (context.windowsHoldQuit as () => boolean)();
   const shown = () => (children as View[]).filter((v) => v.visible).map((v) => v.url);
-  return { windows, record, context, children: children as View[], log, enter, closeWindow, holdQuit, shown };
+  const focusPage = (why: string, take: string) => (context.focusActivePage as (r: unknown, w: string, t: string) => void)(record, why, take);
+  return { windows, record, context, children: children as View[], log, focusLog, keyboard, enter, closeWindow, holdQuit, shown, focusPage };
 }
 
 const settled = () => new Promise((resolve) => setImmediate(resolve));
@@ -400,12 +406,53 @@ test('TIM-0150: a window reporting an empty content area leaves its pages at the
   assert.equal(JSON.stringify(page.view.view.bounds), sized);
 });
 
+test('TIM-0152: a page put on screen in a focused window takes the keyboard, whoever held it', () => {
+  const world = pageWorld();
+  world.keyboard.holder = 999;
+  const a = world.enter('a');
+  assert.equal(world.keyboard.holder, a.contentsId);
+  world.keyboard.windowFocused = false;
+  world.enter('b');
+  assert.equal(world.keyboard.holder, a.contentsId, 'a window in the background takes nobody\'s keyboard');
+  assert.deepEqual(world.focusLog, ['[desktop] window 1 shown → page (keyboard was: view 999)']);
+});
+
+test('TIM-0152: the page on screen takes the keyboard from its window or a hidden page, from nobody only once settled, never from a browser panel', () => {
+  const world = pageWorld();
+  const a = world.enter('a');
+  const b = world.enter('b');
+  world.focusLog.length = 0;
+  world.keyboard.holder = 1;
+  world.focusPage('focus', 'ours');
+  assert.equal(world.keyboard.holder, b.contentsId, 'from the window\'s own webContents');
+  world.keyboard.holder = a.contentsId;
+  world.focusPage('focus', 'ours');
+  assert.equal(world.keyboard.holder, b.contentsId, 'from a hidden page of the window');
+  world.keyboard.holder = null;
+  world.focusPage('focus', 'ours');
+  assert.equal(world.keyboard.holder, null);
+  world.focusPage('load', 'idle');
+  assert.equal(world.keyboard.holder, b.contentsId, 'from nobody, once settled');
+  world.focusPage('load', 'idle');
+  world.keyboard.holder = 999;
+  world.focusPage('focus', 'ours');
+  world.focusPage('focus', 'idle');
+  assert.equal(world.keyboard.holder, 999, 'a native browser panel keeps it');
+  assert.deepEqual(world.focusLog, [
+    '[desktop] window 1 focus → page (keyboard was: window)',
+    `[desktop] window 1 focus → page (keyboard was: page ${a.contentsId})`,
+    '[desktop] window 1 load → page (keyboard was: nobody)',
+  ], 'a page that already has the keyboard is left alone');
+});
+
 /** `createWindow` run against a fake window: the listeners it registers, and its timers held until `flush`. */
 function windowWiring() {
   type Listener = () => void;
   const on = (into: Map<string, Listener[]>) => (event: string, listener: Listener) => { into.set(event, [...(into.get(event) ?? []), listener]); };
   const windowEvents = new Map<string, Listener[]>();
   const viewEvents = new Map<string, Listener[]>();
+  /** The webContents holding the keyboard: 7 is the window's own, 50 its page on screen. */
+  const keyboard = { holder: null as number | null, focusLog: [] as string[] };
   class FakeBrowserWindow {
     webContents = { id: 7, setWindowOpenHandler: () => {}, on: () => {} };
     contentView = { on: on(viewEvents) };
@@ -413,11 +460,13 @@ function windowWiring() {
     maximize() {}
     setFullScreen() {}
     isDestroyed() { return false; }
+    isFocused() { return true; }
   }
   const layouts: unknown[] = [];
   const timers: { kind: string; delay: number; run: Listener }[] = [];
   const context: Record<string, unknown> = {
-    BrowserWindow: FakeBrowserWindow, URL, console: { log: () => {} },
+    BrowserWindow: FakeBrowserWindow, URL, console: { log: (line: string) => { if (line.includes('→ page')) keyboard.focusLog.push(line); } },
+    webContents: { getFocusedWebContents: () => (keyboard.holder === null ? null : { id: keyboard.holder }) },
     windows: new WindowRegistry<unknown, unknown>(), ViewPool, browserOwners: new Map<number, number>(),
     releaseCheckWindowRetired: false, windowOrigin: '', desktopHome: '/home', DISPLAY_NAME: 'Timon', APP_ICON_PATH: '/icon.png',
     windowScheme: () => 'dark', windowBackground: () => '#000000',
@@ -426,12 +475,14 @@ function windowWiring() {
     setImmediate: (run: Listener) => { timers.push({ kind: 'immediate', delay: 0, run }); },
     setTimeout: (run: Listener, delay: number) => { timers.push({ kind: 'timeout', delay, run }); },
   };
-  runInNewContext(compile(functionText('createWindow')), context);
+  runInNewContext(['contentsOf', 'focusActivePage', 'createWindow'].map((name) => compile(functionText(name))).join('\n'), context);
   const opening = { machineId: null, placement: { width: 1200, height: 800 } };
-  (context.createWindow as (url: string, begin: string, opening: unknown) => unknown)(`${ORIGIN}/`, 'interface', opening);
+  const record = (context.createWindow as (url: string, begin: string, opening: unknown) => { pages: ViewPool<unknown> })(`${ORIGIN}/`, 'interface', opening);
+  const contents = { id: 50, isDestroyed: () => false, isFocused: () => keyboard.holder === 50, focus: () => { keyboard.holder = 50; } };
+  record.pages.enter(null, () => ({ contentsId: 50, machineId: null, view: { view: { webContents: contents } } }));
   const emit = (from: Map<string, Listener[]>, event: string) => { for (const listener of from.get(event) ?? []) listener(); };
   const flush = () => { for (const timer of timers.splice(0)) timer.run(); };
-  return { windowEvents, viewEvents, layouts, timers, emit, flush };
+  return { windowEvents, viewEvents, layouts, timers, keyboard, emit, flush };
 }
 
 test('TIM-0150: the pages follow the size the window manager actually applies to the content area', () => {
@@ -451,6 +502,36 @@ test('TIM-0150: maximize, full screen and the end of a resize lay the pages out 
     wiring.flush();
     assert.equal(wiring.layouts.length, 3, event);
   }
+});
+
+test('TIM-0152: a window coming back to the front hands the keyboard to its page, from its own webContents at once', () => {
+  const wiring = windowWiring();
+  wiring.keyboard.holder = 7;
+  wiring.emit(wiring.windowEvents, 'focus');
+  assert.deepEqual(wiring.timers.map((timer) => [timer.kind, timer.delay]), [['immediate', 0], ['timeout', 100]]);
+  wiring.timers[0]!.run();
+  assert.equal(wiring.keyboard.holder, 50);
+  wiring.timers[1]!.run();
+  assert.deepEqual(wiring.keyboard.focusLog, ['[desktop] window 7 focus → page (keyboard was: window)'], 'once: the page already has it');
+});
+
+test('TIM-0152: a window restored with nobody holding the keyboard gives it to its page once it has settled', () => {
+  const wiring = windowWiring();
+  wiring.emit(wiring.windowEvents, 'focus');
+  wiring.timers[0]!.run();
+  assert.equal(wiring.keyboard.holder, null, 'too early: the OS may still be handing focus to a view');
+  wiring.timers[1]!.run();
+  assert.equal(wiring.keyboard.holder, 50);
+  assert.deepEqual(wiring.keyboard.focusLog, ['[desktop] window 7 focus → page (keyboard was: nobody)']);
+});
+
+test('TIM-0152: a native browser panel the user was typing in keeps the keyboard when the window comes back', () => {
+  const wiring = windowWiring();
+  wiring.keyboard.holder = 300;
+  wiring.emit(wiring.windowEvents, 'focus');
+  wiring.flush();
+  assert.equal(wiring.keyboard.holder, 300);
+  assert.deepEqual(wiring.keyboard.focusLog, []);
 });
 
 test('TODO #760: the window remembers the page of the machine on screen, for the layout to reopen it', () => {

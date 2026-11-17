@@ -23,7 +23,7 @@ import {
   restartDesktopService, serviceStoppedByUser, startDesktopService, startStoppedServiceFailureMessage, stopServiceCopy, stopServiceFailureMessage,
   windowsRestartSeams, windowsServiceRefusedFile, windowsTaskState,
 } from './service.js';
-import { app, BrowserWindow, Menu, Tray, WebContentsView, clipboard, dialog, shell, nativeImage, ipcMain, screen, session, systemPreferences } from 'electron';
+import { app, BrowserWindow, Menu, Tray, WebContentsView, clipboard, dialog, shell, nativeImage, ipcMain, screen, session, systemPreferences, webContents } from 'electron';
 import { parseWindowSchemeReport, recordMachineScheme, WINDOW_BACKGROUND, WINDOW_SCHEME_CHANNEL, windowScheme, type Scheme } from './appearance.js';
 import {
   cascadeFrom, placeSavedWindows, readWindowLayout, routeOfUrl, WindowLayoutKeeper, writeWindowLayout, type DisplayArea, type SavedWindow, type WindowOpening,
@@ -397,11 +397,39 @@ function noteRoute(record: AppWindow, page: Page, target: string): void {
   layoutKeeper?.changed();
 }
 
+/**
+ * Whom the page on screen may take the keyboard from: `ours`, the window's own
+ * webContents or another of its pages; `idle`, also nobody at all; `any`, also a
+ * native browser panel, when the page was just put on screen.
+ */
+type FocusTake = 'ours' | 'idle' | 'any';
+
+/**
+ * Gives the keyboard to the page on screen of a focused window (TIM-0152): a
+ * window restored by the OS can come back with no webContents focused, every
+ * field then refusing typing until a native dialog moves the focus. A page
+ * that already has it is left alone, so the field it was typing in stays.
+ */
+function focusActivePage(record: AppWindow, why: string, take: FocusTake): void {
+  const w = record.window;
+  if (w.isDestroyed() || !w.isFocused()) return;
+  const page = record.pages.active;
+  if (!page) return;
+  const contents = contentsOf(page);
+  if (contents.isDestroyed() || contents.isFocused()) return;
+  const holder = webContents.getFocusedWebContents();
+  const from = holder === null ? 'nobody' : holder.id === record.id ? 'window' : record.pages.byContents(holder.id) ? `page ${holder.id}` : null;
+  const allowed = take === 'any' || (from === 'nobody' ? take === 'idle' : from !== null);
+  if (!allowed) return;
+  contents.focus();
+  console.log(`[desktop] window ${record.id} ${why} → page (keyboard was: ${from ?? `view ${holder?.id}`})`);
+}
+
 function showPage(record: AppWindow, page: Page): void {
   record.route = page.view.route;
   layoutPages(record);
   page.view.view.setVisible(true);
-  if (record.window.isFocused()) contentsOf(page).focus();
+  focusActivePage(record, 'shown', 'any');
 }
 
 /** Hidden, alive: its scroll, drafts and panels are there when it comes back. The native panel it presented leaves with it. */
@@ -495,7 +523,12 @@ function createPage(record: AppWindow, machineId: string | null, url: string): P
     record.pages.keep(id);
     settlePage(page, 'kept');
   });
-  contents.on('did-finish-load', () => { if (record.pages.isActive(id)) void refreshTitle(record); });
+  contents.on('did-finish-load', () => {
+    if (!record.pages.isActive(id)) return;
+    void refreshTitle(record);
+    // A reload does not hand the keyboard back on its own (TIM-0152).
+    focusActivePage(record, 'load', 'idle');
+  });
   contents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
     if (isMainFrame && !isInPlace) detachBrowser(id);
   });
@@ -676,11 +709,10 @@ function createWindow(url: string, begin: 'service' | 'interface', opening: Wind
   watchDisplays();
   layoutKeeper?.changed();
   // The window's own webContents, under the pages, takes the keyboard when the window comes back to the front: the page on screen gets it.
+  // A window the OS restores may still have nobody focused at first (TIM-0152): once it has settled, a keyboard nobody holds goes to the page too.
   w.on('focus', () => {
-    setImmediate(() => {
-      const page = record.pages.active;
-      if (page && !w.isDestroyed() && w.webContents.isFocused() && !contentsOf(page).isDestroyed()) contentsOf(page).focus();
-    });
+    setImmediate(() => focusActivePage(record, 'focus', 'ours'));
+    setTimeout(() => focusActivePage(record, 'focus', 'idle'), 100);
   });
   // The title is the machine's, not the page's: three windows on three machines must be told apart.
   w.on('page-title-updated', (event) => event.preventDefault());
