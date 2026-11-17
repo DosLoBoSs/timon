@@ -299,7 +299,7 @@ Timon is available in English, French, German, Spanish, Italian, Dutch, Polish, 
 
 In the desktop app, the application's own menus, the tray icon menu, the Dock menu on macOS, the taskbar jump list on Windows, the startup and update windows and Timon's dialogs follow the same choice. Menus switch as soon as you pick a language; a window already open keeps its words until it is opened again.
 
-The vault disc and its calendar, mission history and statistics, chat empty states and file controls, and the bundled quota monitor also follow the chosen language. Recognized system warnings about missing backend CLIs are translated in the notification list and archive; their stored diagnostic and command examples are unchanged. User-written messages, note names, paths, provider names and unknown diagnostic details are not translated.
+The vault disc and its calendar, mission history and statistics, chat empty states and file controls, and the bundled quota monitor also follow the chosen language. Recognized system warnings about missing backend CLIs are translated in the notification list and archive; their stored diagnostic and command examples are unchanged. User-written messages, note names, paths, provider names and unknown diagnostic details are not translated. Error messages from the daemon follow the chosen language too (tasks, the TO DO notebook, pipelines, memory, triggers and routines among others); a technical detail an error quotes, such as a git or validation message, stays in English.
 
 ## Voice conversation (GPT-Live)
 
