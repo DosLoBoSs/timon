@@ -18,6 +18,21 @@
       "feed": {
         "title": "Démo en direct jeudi",
         "body": "Agents et plugins, une heure."
+      },
+      "update": {
+        "highlight1": "Les mises à jour se téléchargent, se vérifient et s'installent depuis l'app.",
+        "highlight2": "Les missions reprennent où elles s'étaient arrêtées après un redémarrage.",
+        "highlight3": "Les longues conversations défilent plus vite.",
+        "highlight4": "Les plugins peuvent ajouter leur propre page de réglages.",
+        "states": "Aperçu",
+        "state": {
+          "downloading": "Téléchargement",
+          "verified": "Vérifié",
+          "missions": "Missions",
+          "network": "Erreur réseau",
+          "cancelled": "Mot de passe annulé"
+        },
+        "done": "Aperçu : rien n'a été installé."
       }
     }
   }

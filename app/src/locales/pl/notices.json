@@ -18,6 +18,21 @@
       "feed": {
         "title": "Pokaz na żywo w czwartek",
         "body": "Agenci i wtyczki, jedna godzina."
+      },
+      "update": {
+        "highlight1": "Aktualizacje pobierają się, weryfikują i instalują w aplikacji.",
+        "highlight2": "Misje wznawiają się po restarcie tam, gdzie się zatrzymały.",
+        "highlight3": "Długie rozmowy przewijają się szybciej.",
+        "highlight4": "Wtyczki mogą dodać własną stronę ustawień.",
+        "states": "Podgląd",
+        "state": {
+          "downloading": "Pobieranie",
+          "verified": "Zweryfikowano",
+          "missions": "Misje",
+          "network": "Błąd sieci",
+          "cancelled": "Anulowano hasło"
+        },
+        "done": "Podgląd: nic nie zostało zainstalowane."
       }
     }
   }
