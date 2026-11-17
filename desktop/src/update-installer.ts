@@ -95,6 +95,14 @@ export const CHECKSUM_EXIT = 65;
  */
 export const NSIS_SERVICE_STILL_RUNNING = 5;
 
+/**
+ * Exit status of the NSIS installer when its service pause did not run to its
+ * verdict (`TIMON_SERVICE_PAUSE_FAILED` in `installer.nsh`): Windows would not
+ * start PowerShell, or the script ended on an error. Nothing checked that the
+ * daemon was gone, so the installer replaced nothing either.
+ */
+export const NSIS_SERVICE_PAUSE_FAILED = 6;
+
 /** Written by the Windows watcher beside the installer when it did not end with 0; the next launch reads it. */
 export const WINDOWS_RESULT_FILE = 'install-result.txt';
 /** What the watcher writes when the installer never ran: its bytes changed, or Windows would not start it. */
@@ -214,6 +222,10 @@ export function windowsInstallFailureReason(outcome: string): string {
   if (outcome === String(NSIS_SERVICE_STILL_RUNNING)) {
     return 'Timon was still running in the background and could not be stopped, so nothing was installed. '
       + 'Install the update again and accept the Windows permission prompt; if it fails again, restart the computer first.';
+  }
+  if (outcome === String(NSIS_SERVICE_PAUSE_FAILED)) {
+    return 'The installer could not check that Timon was stopped in the background (Windows PowerShell did not run its check), so nothing was installed. '
+      + 'Install the update again; if it fails again, restart the computer first, or run the Timon installer yourself to read its message.';
   }
   if (outcome === WINDOWS_NOT_STARTED) return 'The installer could not be started. Nothing was installed.';
   return `The installer ended with code ${outcome}. Nothing may have been installed.`;

@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  CHECKSUM_EXIT, MAC_ADMIN_SCRIPT, NSIS_SERVICE_STILL_RUNNING, NSIS_SILENT_ARGS, ROOT_INSTALL_SCRIPT, WINDOWS_NOT_STARTED, WINDOWS_RESULT_FILE,
+  CHECKSUM_EXIT, MAC_ADMIN_SCRIPT, NSIS_SERVICE_PAUSE_FAILED, NSIS_SERVICE_STILL_RUNNING, NSIS_SILENT_ARGS, ROOT_INSTALL_SCRIPT, WINDOWS_NOT_STARTED, WINDOWS_RESULT_FILE,
   WINDOWS_WATCHER, debCommand, debOutcome, macCommand, macOutcome, silentInstall, takeWindowsInstallFailure, windowsCommand,
   windowsInstallFailureReason, windowsResultFile,
   type Command, type CommandResult, type InstallerSystem,
@@ -181,6 +181,13 @@ test('Windows: the next launch reports the installer\'s failure code once, and s
   assert.match(failure!.reason, /still running in the background.*nothing was installed.*permission prompt.*restart the computer/);
   assert.equal(existsSync(file), false, 'said once');
   assert.equal(takeWindowsInstallFailure(root), null);
+
+  // The installer that could not run its check stopped too, and says something else to do.
+  writeFileSync(file, String(NSIS_SERVICE_PAUSE_FAILED));
+  const unchecked = takeWindowsInstallFailure(root);
+  assert.deepEqual(unchecked, { version: '0.1.9', outcome: '6', reason: windowsInstallFailureReason('6') });
+  assert.match(unchecked!.reason, /could not check that Timon was stopped.*nothing was installed.*restart the computer/);
+  assert.notEqual(unchecked!.reason, windowsInstallFailureReason(String(NSIS_SERVICE_STILL_RUNNING)));
 
   writeFileSync(file, WINDOWS_NOT_STARTED);
   assert.match(takeWindowsInstallFailure(root)!.reason, /could not be started/);

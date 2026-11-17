@@ -258,13 +258,17 @@ test('the service pause knows its account by SID, and nothing of the build machi
 test('the installer stops when something of Timon still runs after the pause', async () => {
   const nsh = readFileSync(join(root, 'build', 'installer.nsh'), 'utf8');
   const ps1 = readFileSync(join(root, 'build', 'timon-service-pause.ps1'), 'utf8');
-  const { NSIS_SERVICE_STILL_RUNNING } = await import('./update-installer.js');
+  const { NSIS_SERVICE_PAUSE_FAILED, NSIS_SERVICE_STILL_RUNNING } = await import('./update-installer.js');
   const service = readFileSync(join(root, '..', 'orchestrator', 'src', 'host', 'service-install.ts'), 'utf8');
 
   // One number, in the script, the installer, the shell and the host adapter.
   assert.match(nsh, new RegExp(`!define TIMON_SERVICE_STILL_RUNNING ${NSIS_SERVICE_STILL_RUNNING}\\b`));
   assert.match(ps1, new RegExp(`\\$stillRunning = ${NSIS_SERVICE_STILL_RUNNING}\\b`));
   assert.match(service, new RegExp(`export const PROCESSES_REMAIN = ${NSIS_SERVICE_STILL_RUNNING};`));
+  // And one for a pause that reached no verdict, which the script itself never answers.
+  assert.match(nsh, new RegExp(`!define TIMON_SERVICE_PAUSE_FAILED ${NSIS_SERVICE_PAUSE_FAILED}\\b`));
+  assert.notEqual(NSIS_SERVICE_PAUSE_FAILED, NSIS_SERVICE_STILL_RUNNING);
+  assert.doesNotMatch(ps1, new RegExp(`exit ${NSIS_SERVICE_PAUSE_FAILED}\\b`));
 
   // The script lists what is left once everything was ended and the resume started.
   const net = ps1.slice(ps1.indexOf('# The net.'));
@@ -278,6 +282,8 @@ test('the installer stops when something of Timon still runs after the pause', a
   assert.match(net, /if \(-not \$listener\.CommandLine\) \{ \$left \+= \$listener; continue \}/);
   assert.match(net, /\$runtimes -notcontains \$listener\.Name\) \{ continue \}/, 'a foreign program on the port is not waited for');
   assert.match(net, /if \(\$left\.Count -gt 0\) \{[\s\S]*exit \$stillRunning\s+\}\s+& \$note '[^']+'\s+exit 0\s*$/);
+  // The 0 the installer waits for is said in one place only: after that list came back empty.
+  assert.equal((ps1.slice(ps1.indexOf('# The stop phase writes')).match(/^\s*exit 0\s*$/gm) ?? []).length, 1);
 
   // The installer reads that code: Retry or Cancel with a window, an exit code without one.
   const pause = nsh.match(/!macro timonPauseService\s+([\s\S]*?)!macroend/)?.[1] ?? '';
@@ -285,11 +291,34 @@ test('the installer stops when something of Timon still runs after the pause', a
   assert.match(pause, /ReadEnvStr \$3 TIMON_HOME\s+\$\{If\} \$3 == ""\s+StrCpy \$3 "\$PROFILE\\\.timon"/, 'read while the installer runs');
   const loop = pause.match(/\$\{Do\}([\s\S]*?)\$\{Loop\}/)?.[1] ?? '';
   assert.ok(loop.includes('"runas"') && loop.includes('"open"'), 'Retry asks for the elevation again');
-  assert.match(loop, /\$\{If\} \$1 != "ok"\s+\$\{OrIf\} \$0 != \$\{TIMON_SERVICE_STILL_RUNNING\}\s+\$\{ExitDo\}/, 'only the script\'s own verdict stops the installer');
-  assert.match(loop, /\$\{If\} \$\{Silent\}\s+SetErrorLevel \$\{TIMON_SERVICE_STILL_RUNNING\}\s+Quit\s+\$\{EndIf\}/, 'no window under /S: an exit code');
-  assert.match(loop, /\$\{If\} \$\{Cmd\} `MessageBox MB_RETRYCANCEL\|MB_ICONEXCLAMATION "[^`]*" IDCANCEL`\s+SetErrorLevel \$\{TIMON_SERVICE_STILL_RUNNING\}\s+Quit\s+\$\{EndIf\}/);
-  assert.ok(loop.indexOf('${If} ${Silent}') < loop.indexOf('MessageBox'), 'never a message box under /S');
-  assert.match(loop, /timon-service-pause\.log/, 'the message names the log');
+  // Fail closed: one way out of the loop, the script's own 0. A script that
+  // could not be started, or that ended on anything else, has checked neither
+  // the port nor the processes, and stops the installer like a daemon left alive.
+  assert.equal((loop.match(/\$\{ExitDo\}/g) ?? []).length, 1);
+  assert.match(loop, /\$\{If\} \$1 == "ok"\s+\$\{AndIf\} \$0 == 0\s+\$\{ExitDo\}\s+\$\{EndIf\}/, 'only "nothing of Timon runs any more" goes on');
+  assert.doesNotMatch(loop, /!= "ok"\s+\$\{(OrIf|ExitDo)\}/, 'a script that did not run never lets the installer through');
+  const verdict = loop.slice(loop.indexOf('${ExitDo}'));
+  assert.match(verdict, /StrCpy \$4 \$\{TIMON_SERVICE_PAUSE_FAILED\}\s+\$\{If\} \$1 != "ok"[\s\S]*?\$\{ElseIf\} \$0 == \$\{TIMON_SERVICE_STILL_RUNNING\}\s+StrCpy \$4 \$\{TIMON_SERVICE_STILL_RUNNING\}\s+\$\{EndIf\}/,
+    'a failure unless the script itself said that something still runs');
+  // No window under /S: the exit code, whichever of the two it is.
+  assert.match(verdict, /\$\{If\} \$\{Silent\}\s+SetErrorLevel \$4\s+Quit\s+\$\{EndIf\}/);
+  // With a window, Retry or Cancel, and Cancel leaves with that code. One message per case.
+  const boxes = [...verdict.matchAll(/\$\{If\} \$\{Cmd\} `MessageBox MB_RETRYCANCEL\|MB_ICONEXCLAMATION "([^`]*)" IDCANCEL`\s+SetErrorLevel \$4\s+Quit\s+\$\{EndIf\}/g)].map((box) => box[1]!);
+  assert.equal(boxes.length, 2);
+  assert.match(boxes[0]!, /still running in the background and could not be stopped/);
+  assert.match(boxes[1]!, /check that Timon is stopped in the background did not run: Windows PowerShell failed \(PowerShell: \$1, result: \$0\)/);
+  assert.match(verdict, /\$\{If\} \$4 == \$\{TIMON_SERVICE_STILL_RUNNING\}\s+\$\{If\} \$\{Cmd\}[\s\S]*?\$\{Else\}\s+\$\{If\} \$\{Cmd\}/);
+  for (const box of boxes) {
+    assert.match(box, /No file has been changed\./);
+    assert.match(box, /Details: \$3\\tmp\\timon-service-pause\.log/, 'the message names the journal');
+    assert.ok(box.length < 700, 'an NSIS string holds 1024 characters, the data directory included');
+  }
+  assert.ok(verdict.indexOf('${If} ${Silent}') < verdict.indexOf('MessageBox'), 'never a message box under /S');
+  assert.equal((verdict.match(/\bQuit\b/g) ?? []).length, 3, 'silent, and Cancel of either message');
+  // The script wrote nothing then: the installer leaves the line in its journal, for the diagnostic report.
+  assert.match(verdict, /\$\{If\} \$4 == \$\{TIMON_SERVICE_PAUSE_FAILED\}[\s\S]*?FileOpen \$5 "\$3\\tmp\\timon-service-pause\.log" a\s+\$\{IfNot\} \$\{Errors\}\s+FileSeek \$5 0 END\s+FileWrite \$5 "installer: the service pause did not complete \(PowerShell: \$1, result: \$0\)[^"]*"\s+FileClose \$5/);
+  assert.ok(verdict.indexOf('FileWrite $5') < verdict.indexOf('${If} ${Silent}'), 'written under /S too');
+  assert.match(pause, /Push \$4\s+Push \$5[\s\S]*Pop \$5\s+Pop \$4\s+Pop \$3/, 'the registers it borrows are given back');
 });
 
 // 0.1.7 to 0.1.8 update: the pause ended nothing on two testers' PCs and no
