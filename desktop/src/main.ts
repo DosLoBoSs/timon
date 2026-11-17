@@ -94,7 +94,7 @@ import { performUninstall, prepareCleanup, stopInstalledService, verifyStopped }
 import { runUninstallHelper } from './uninstall-helper.js';
 import { BROWSER_ATTACH_CHANNEL, BROWSER_DETACH_CHANNEL, trustedBrowserSender } from './native-browser-protocol.js';
 
-import { DaemonStartTimeoutError, updateOffer, finishUpdate, updateCopy, updateFailureDialog, unmanagedDaemon, type UpdateStage } from './data-update.js';
+import { DaemonStartTimeoutError, updateOffer, finishUpdate, finishUpdateDeps, updateCopy, updateFailureDialog, unmanagedDaemon, type UpdateStage } from './data-update.js';
 import { UpdateWindow } from './update-window.js';
 import { consentApproves, grantUpdateConsent, revokeUpdateConsent, takeUpdateConsent } from './update-consent.js';
 import { UpdateDownloader } from './update-download.js';
@@ -1316,7 +1316,19 @@ async function completeApprovedUpdate(cfg: DesktopConfig): Promise<void> {
   await finishUpdate({ home: cfg.home, origin: originOf(cfg.daemon.listen), version: app.getVersion(), locale: uiLocale(),
     progress: (message, progress) => updateWindow?.progress(message, progress),
     approving: () => { updateStage = 'approval'; },
+    replacing: () => { updateStage = 'service'; },
     warning: async (message, detail) => { await dialog.showMessageBox(updateWindow!.window, { type: 'warning', title: DISPLAY_NAME, message, detail }); },
+  }, {
+    ...finishUpdateDeps,
+    // Windows replaces the application in place and never rewrites the task:
+    // a daemon the installer did not end still runs the previous version.
+    // macOS and Linux move their service to the new release before this point.
+    ...(process.platform === 'win32' && app.isPackaged && hasDesktopService(cfg.home) ? {
+      replaceStaleDaemon: async () => {
+        console.log('[desktop] the daemon of this data directory runs another version: restarting the service');
+        console.log(`[desktop] service restarted: ${await controlDesktopService('restart', runnerSeams(cfg))}`);
+      },
+    } : {}),
   });
   // Keep a window alive while the main window is constructed (macOS lifecycle).
   const completed = updateWindow;

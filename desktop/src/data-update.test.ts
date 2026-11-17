@@ -7,7 +7,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { createReleaseNotes } from '../scripts/release-notes.mjs';
 import {
-  DaemonStartTimeoutError, finishUpdate, LIGHT_THEME, START_BUDGET_MS, readProgress, renderNotes, requestUpdate, THEME, themeFor, updateCopy, updateOffer, updatePage, updateProgressPage, updateUnauthorizedMessage,
+  DaemonStartTimeoutError, finishUpdate, LIGHT_THEME, REPLACE_BUDGET_MS, START_BUDGET_MS, readProgress, renderNotes, requestUpdate, THEME, themeFor, updateCopy, updateOffer, updatePage, updateProgressPage, updateUnauthorizedMessage,
   unmanagedDaemon, UpdateTokenMissingError, updateFailureDialog, type UpdateStatus,
 } from './data-update.js';
 import { instanceId, windowsLauncher } from './service.js';
@@ -541,6 +541,90 @@ test('a wrong daemon version never receives approval', async t => {
     health: async () => ({ ok: false, status: null }), sleep: async () => {},
   }), /not the installed version/);
   assert.equal(posts, 0);
+});
+
+// Windows, 0.1.7 to 0.1.8: the installer replaced the application under a
+// daemon it had not ended. That daemon kept the port and the data directory,
+// the installed version could not start, and every launch stopped on "The
+// running daemon is not the installed version".
+test('a daemon of this home on the previous version is replaced once, then the update goes on', async t => {
+  const home = fixture(t);
+  const order: string[] = [];
+  let running = '0.1.7';
+  let probes = 0;
+  await finishUpdate({ home, origin: 'http://127.0.0.1:3010', version: '0.2.0', locale: 'en',
+    progress: () => {}, warning: async () => {},
+    replacing: () => { order.push('replacing'); }, approving: () => { order.push('approving'); } }, {
+    request: async (_, __, version) => {
+      order.push(version ? 'post' : `status ${running}`);
+      // The installed version takes two reads to come up after the restart.
+      if (!version && running === 'starting') { running = '0.2.0'; throw new Error('connection refused'); }
+      return version ? state('ready') : { ...state('pending'), daemonVersion: running };
+    },
+    health: async () => ({ ok: true, status: 200, identity: 'timon', instance: instanceId(home), updatePending: probes++ === 0 ? false : probes < 3 }),
+    sleep: async () => {},
+    replaceStaleDaemon: async () => { order.push('replace'); running = 'starting'; },
+  });
+  assert.deepEqual(order, ['status 0.1.7', 'replacing', 'replace', 'status starting', 'status 0.2.0', 'approving', 'post']);
+});
+
+test('a previous version that cannot be replaced ends in a message that says what to do, and no approval', async t => {
+  const home = fixture(t);
+  const ours = async () => ({ ok: true as const, status: 200, identity: 'timon' as const, instance: instanceId(home) });
+  const stale = { ...state('pending'), daemonVersion: '0.1.7' };
+  const base = { home, origin: 'http://127.0.0.1:3010', version: '0.2.0', locale: 'en', progress: () => {}, warning: async () => {} };
+
+  // The elevation was refused: the stage says the service was touched, the text says why and what to do.
+  let posts = 0, replaced = 0, stage = 'none';
+  const refused = await finishUpdate({ ...base, replacing: () => { stage = 'service'; } }, {
+    request: async (_, __, version) => { if (version) posts++; return stale; },
+    health: ours, sleep: async () => {},
+    replaceStaleDaemon: async () => { replaced++; throw new Error('The service restart failed: elevation refused'); },
+  }).then(() => null, (e: unknown) => e as Error);
+  assert.match(refused!.message, /not the installed version: it runs 0\.1\.7, and Timon 0\.2\.0 is installed\./);
+  assert.match(refused!.message, /could not replace it: The service restart failed: elevation refused/);
+  assert.match(refused!.message, /Quit Timon, restart the computer, then open Timon again\./);
+  assert.deepEqual({ posts, replaced, stage }, { posts: 0, replaced: 1, stage: 'service' });
+
+  // Restarted, but the installed version never answers: once, then a bounded wait.
+  let clock = 5_000, reads = 0;
+  replaced = 0;
+  const silent = await finishUpdate(base, {
+    request: async (_, __, version) => { if (version) posts++; reads++; return stale; },
+    health: ours, sleep: async () => { clock += 30_000; }, now: () => clock,
+    replaceStaleDaemon: async () => { replaced++; },
+  }).then(() => null, (e: unknown) => e as Error);
+  assert.match(silent!.message, /restarted its background service, but version 0\.2\.0 did not answer in time \(version 0\.1\.7 still answers\)/);
+  assert.match(silent!.message, /restart the computer/);
+  assert.equal(replaced, 1, 'replaced once, never in a loop');
+  assert.equal(reads, 1 + REPLACE_BUDGET_MS / 30_000, 'the whole budget was waited, and no longer');
+  assert.equal(posts, 0);
+
+  // A shell with nothing to replace it with (no service of its own) says so at once.
+  const bare = await finishUpdate(base, { request: async () => stale, health: ours, sleep: async () => {} }).then(() => null, (e: unknown) => e as Error);
+  assert.match(bare!.message, /not the installed version: it runs 0\.1\.7.*Quit Timon, restart the computer/);
+});
+
+test('a daemon of another home on the port is never replaced', async t => {
+  const home = fixture(t);
+  const other = fixture(t);
+  const stale = { ...state('pending'), daemonVersion: '0.1.7' };
+  const answers = [
+    { ok: true as const, status: 200, identity: 'timon' as const, instance: instanceId(other) },
+    // Before the instance id existed, and a foreign server: neither proves this home.
+    { ok: true as const, status: 200, identity: 'timon' as const },
+    { ok: true as const, status: 200, identity: 'foreign' as const },
+    { ok: false as const, status: null },
+  ];
+  for (const health of answers) {
+    let replaced = 0, stage = 'none';
+    await assert.rejects(finishUpdate({ home, origin: 'http://127.0.0.1:3010', version: '0.2.0', locale: 'en',
+      progress: () => {}, warning: async () => {}, replacing: () => { stage = 'service'; } }, {
+      request: async () => stale, health: async () => health, sleep: async () => {},
+      replaceStaleDaemon: async () => { replaced++; },
+    }), /not the installed version/);
+    assert.deepEqual({ replaced, stage }, { replaced: 0, stage: 'none' }, JSON.stringify(health));
+  }
 });
 
 test('an already completed boot does not require the vanished update endpoint', async t => {

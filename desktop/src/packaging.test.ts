@@ -704,6 +704,19 @@ test('the macOS permission prompts are in English, and in French on a Mac set to
   assert.match(strings, /"NSMicrophoneUsageDescription" = "[^"]*dictée[^"]*site[^"]*";/, 'the French prompt names dictation too');
 });
 
+// The shell names an action, the host adapter's runner runs it: two packages built apart.
+test('the service runner knows every action the shell sends it', () => {
+  const service = readFileSync(join(root, 'src', 'service.ts'), 'utf8');
+  const actions = service.match(/export type ServiceControl = ([^;]+);/)?.[1]?.split('|').map((action) => action.trim().replace(/'/g, '')) ?? [];
+  assert.deepEqual(actions, ['stop', 'start', 'restart']);
+  const runner = readFileSync(join(root, '..', 'orchestrator', 'src', 'host', 'desktop-service-runner.ts'), 'utf8');
+  assert.match(runner, new RegExp(actions.map((action) => `action !== '${action}'`).join(' && ')));
+  for (const action of actions) assert.match(runner, new RegExp(`\\b${action}: ${action}Service\\b`), action);
+  // The restart also ends a daemon no launcher holds: what an update leaves on the previous version.
+  const install = readFileSync(join(root, '..', 'orchestrator', 'src', 'host', 'service-install.ts'), 'utf8');
+  assert.match(install, /stopLauncherStep\(opts\.timonHome\),\s+stopPortOwnerStep\(opts\),\s+stopInstallationProcessesStep\(opts\),\s+\{ label: 'run'/);
+});
+
 // Volet F (docs/AUTO-UPDATE.md §10): the flag the shell passes is the one the installer reads.
 test('the silent update flag of the shell is the one installer.nsh reads', async () => {
   const { NSIS_SILENT_ARGS } = await import('./update-installer.js');
