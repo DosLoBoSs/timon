@@ -43,7 +43,17 @@
     "heading": "Vault"
   },
   "memoryPage": {
-    "scopeOf": "scope {scope}"
+    "scopeOf": "scope {scope}",
+    "kind": {
+      "decision": "decision",
+      "pitfall": "pitfall",
+      "preference": "preference"
+    },
+    "kinds": {
+      "decision": "decisions",
+      "pitfall": "pitfalls",
+      "preference": "preferences"
+    }
   },
   "agentsGrid": {
     "age": {
