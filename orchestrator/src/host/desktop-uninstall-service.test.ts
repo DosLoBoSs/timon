@@ -74,7 +74,10 @@ test('macOS missing service is an idempotent success', () => {
   finally { f.clean(); }
 });
 
-for (const failure of [null, 'foreign', 'stop', 'still-running', 'reload']) test(`Linux ${failure ?? 'success'} verifies the unit and shutdown`, () => {
+// The unit carries a Windows home on a Windows host, which the systemd reader
+// cannot match: the Linux removal only runs on Linux.
+const LINUX_UNIT = process.platform === 'win32' && 'a systemd unit is read with POSIX paths';
+for (const failure of [null, 'foreign', 'stop', 'still-running', 'reload']) test(`Linux ${failure ?? 'success'} verifies the unit and shutdown`, { skip: LINUX_UNIT }, () => {
   const calls: string[] = [];
   const f = fixture('linux', (_cmd, args) => {
     calls.push(args.join(' '));
