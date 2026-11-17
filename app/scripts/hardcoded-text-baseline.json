@@ -24,10 +24,6 @@
   "app/src/app/remote/sessions/page.tsx": {
     "jsxText": 12
   },
-  "app/src/components/agent-editor/agent-editor.tsx": {
-    "jsxText": 21,
-    "jsxAttr": 14
-  },
   "app/src/components/beta-lock-screen.tsx": {
     "jsxAttr": 1
   },
