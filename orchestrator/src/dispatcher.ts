@@ -44,6 +44,7 @@ import {
   type InterruptionReason,
 } from './interruption.js';
 import { MissionFenceRefusedError, profileLimits } from './resources.js';
+import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal } from './code-gate.js';
 import { gitTaskRefusal } from './task-git.js';
 import { spawnWideningRefusal } from './users/privileged-overrides.js';
 import { isMirrorTask } from './task-mirror.js';
@@ -1516,6 +1517,27 @@ function autoCloseComment(task: { type?: string | null; agent_name: string }, mi
   return `[closed from the agent's last reply: its backend has no Timon tools to close the task]\n\n${body}`;
 }
 
+/**
+ * The DONE of a task whose mission ended without the agent closing it, unless
+ * the checks every close route applies refuse it (TODO #1053): a `merge` must
+ * prove its source branches in the base, a `full` code task already in its base
+ * must still be reviewable. A refused close goes BLOCKED with the reason, so the
+ * chain never starts on a merge that did not happen or a review of nothing.
+ */
+function autoCloseTask(task: TaskRow, missionId: string): 'DONE' | 'BLOCKED' {
+  const refusal = mergeCloseRefusal(task, effectiveMergeSha(task, null, null)) ?? codeCloseRefusal(task);
+  if (refusal) {
+    dbApi.updateTaskStatus(task.id, 'BLOCKED', {
+      blockedReason: `The mission ended without closing its task, and the automatic close was refused. ${refusal}`,
+      // Kept as the agent left it: updateTaskStatus writes the column whole.
+      doneComment: task.done_comment,
+    });
+    return 'BLOCKED';
+  }
+  dbApi.setTaskStatusOnly(task.id, 'DONE', autoCloseComment(task, missionId));
+  return 'DONE';
+}
+
 /** Wire the mission_complete bus event → task status update. Exported so
  *  tests can wire the watcher without starting the dispatch loop. */
 export function watchMissionComplete(): () => void {
@@ -1585,8 +1607,8 @@ export function watchMissionComplete(): () => void {
     // carries NO comment at all, a sentence qualifying this automatic
     // closure. Without it the pilot received a mute `task_closed`,
     // indistinguishable from an agent who simply had nothing to say.
-    dbApi.setTaskStatusOnly(task.id, newStatus, autoCloseComment(task, ev.missionId));
-    console.log(`[dispatcher] task ${task.id} → ${newStatus} (mission ${ev.missionId})`);
+    const closed = autoCloseTask(task, ev.missionId);
+    console.log(`[dispatcher] task ${task.id} → ${closed} (mission ${ev.missionId})`);
   };
   bus.on('event', onBusEvent);
   return () => void bus.off('event', onBusEvent);
@@ -1679,8 +1701,8 @@ export async function reconcileOrphanedTasks(graceMs = 0): Promise<void> {
     } else if (m.status === 'completed') {
       // Same qualified sentence as the live path: without it the pilot got a
       // mute `task_closed` for every orphan caught at boot (TODO #522).
-      dbApi.setTaskStatusOnly(t.id, 'DONE', autoCloseComment(t, t.mission_id));
-      console.log(`[dispatcher] reconcile: task ${t.id} IN_PROGRESS→DONE (mission ${t.mission_id.slice(0, 8)} completed)`);
+      const closed = autoCloseTask(t, t.mission_id);
+      console.log(`[dispatcher] reconcile: task ${t.id} IN_PROGRESS→${closed} (mission ${t.mission_id.slice(0, 8)} completed)`);
       fixed++;
     }
   }

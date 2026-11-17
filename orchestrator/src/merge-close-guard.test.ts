@@ -17,7 +17,8 @@ import express from 'express';
 import { dbApi, type TaskRow } from './db.js';
 import { agentDir } from './paths.js';
 import { writeRoles } from './projects.js';
-import { resolveWorktree } from './dispatcher.js';
+import { bus } from './bus.js';
+import { reconcileOrphanedTasks, resolveWorktree, watchMissionComplete } from './dispatcher.js';
 import { runVerificationChain } from './verification-loop.js';
 import { disposeWorktree, type WorktreeInfo } from './worktree.js';
 import { registerRoutes } from './plugins-bundled/kanban/routes.js';
@@ -316,4 +317,99 @@ test('a full code task already merged whose start cannot be found is refused DON
   } finally {
     await disposeWorktree(wt, true);
   }
+});
+
+// ── Automatic close: the mission ended without the agent closing (TODO #1053) ──
+
+/** Gives the task a dispatched mission (IN_PROGRESS), as the dispatcher would. */
+function dispatch(task: TaskRow): string {
+  const missionId = randomUUID();
+  dbApi.createMission(missionId, task.agent_name, task.title);
+  dbApi.assignTaskMission(task.id, missionId);
+  return missionId;
+}
+
+function missionCompletes(missionId: string): void {
+  bus.publish({ kind: 'mission_complete', missionId, status: 'completed', exitCode: 0 });
+}
+
+test('an automatic close of a merge whose branch is outside the base goes BLOCKED, not DONE', () => {
+  const { repo } = makeRepo();
+  const { merge } = mergeChain(repo);
+  const stop = watchMissionComplete();
+  try {
+    missionCompletes(dispatch(merge));
+    const after = dbApi.getTask(merge.id)!;
+    assert.equal(after.status, 'BLOCKED');
+    assert.match(after.blocked_reason ?? '', /automatic close was refused/);
+    assert.match(after.blocked_reason ?? '', /branch feature .* is not contained in main/);
+  } finally { stop(); }
+});
+
+test('an automatic close of a merge on a borrowed sha goes BLOCKED', () => {
+  const { repo, mainHead } = makeRepo();
+  const { merge } = mergeChain(repo);
+  mergeFeature(repo);
+  // The agent wrote a sha in its comment but never closed: the guard reads it there.
+  dbApi.updateTaskStatus(merge.id, 'IN_PROGRESS', { doneComment: `merged at ${mainHead}` });
+  const stop = watchMissionComplete();
+  try {
+    missionCompletes(dispatch(dbApi.getTask(merge.id)!));
+    const after = dbApi.getTask(merge.id)!;
+    assert.equal(after.status, 'BLOCKED');
+    assert.match(after.blocked_reason ?? '', /does not contain branch feature/);
+    assert.equal(after.done_comment, `merged at ${mainHead}`, 'the agent\'s comment is kept');
+  } finally { stop(); }
+});
+
+test('an automatic close of a proven merge still goes DONE', () => {
+  const { repo } = makeRepo();
+  const { merge } = mergeChain(repo);
+  const merged = mergeFeature(repo);
+  dbApi.updateTaskStatus(merge.id, 'IN_PROGRESS', { doneComment: `merged at ${merged}` });
+  const stop = watchMissionComplete();
+  try {
+    missionCompletes(dispatch(dbApi.getTask(merge.id)!));
+    const after = dbApi.getTask(merge.id)!;
+    assert.equal(after.status, 'DONE', after.blocked_reason ?? '');
+    assert.equal(after.merged_commit_sha, merged);
+  } finally { stop(); }
+});
+
+test('an automatic close of a full code task already merged with no known start goes BLOCKED', async () => {
+  const { task, wt, repo } = await selfMergedCode();
+  const stop = watchMissionComplete();
+  try {
+    git(repo, 'reflog', 'expire', '--expire=all', '--all');
+    missionCompletes(dispatch(task));
+    const after = dbApi.getTask(task.id)!;
+    assert.equal(after.status, 'BLOCKED');
+    assert.match(after.blocked_reason ?? '', /Code guard: branch .* is already contained in main/);
+  } finally {
+    stop();
+    await disposeWorktree(wt, true);
+  }
+});
+
+test('an automatic close of a full code task already merged whose start is known goes DONE', async () => {
+  const { task, wt } = await selfMergedCode();
+  const stop = watchMissionComplete();
+  try {
+    missionCompletes(dispatch(task));
+    assert.equal(dbApi.getTask(task.id)!.status, 'DONE');
+  } finally {
+    stop();
+    await disposeWorktree(wt, true);
+  }
+});
+
+test('an orphan merge reconciled at boot is checked like a live automatic close', async () => {
+  const { repo } = makeRepo();
+  const { merge } = mergeChain(repo);
+  const missionId = dispatch(merge);
+  dbApi.finishMission(missionId, 'completed', 0);
+  await reconcileOrphanedTasks();
+  const after = dbApi.getTask(merge.id)!;
+  assert.equal(after.status, 'BLOCKED');
+  assert.match(after.blocked_reason ?? '', /branch feature .* is not contained in main/);
 });
