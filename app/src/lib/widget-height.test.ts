@@ -55,11 +55,11 @@ test('temporarily missing plugins retain sizing and malformed values are ignored
 });
 
 test('third-party widget sizing preferences reach the placement defaults', () => {
-  const catalogue = buildWidgetCatalog([], [{
+  const catalog = buildWidgetCatalog([], [{
     registrationId: 'test:1', pluginId: 'test', slot: 'cockpit.widget',
     options: { heightMode: 'fill', height: 500, minHeight: 200 },
   }]);
-  assert.equal(mergeLayout(null, catalogue)[0]?.heightMode, 'fill');
+  assert.equal(mergeLayout(null, catalog)[0]?.heightMode, 'fill');
 });
 
 test('a fill share travels with the stack, survives a reload and never persists its default', () => {

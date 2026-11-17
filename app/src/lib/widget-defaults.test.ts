@@ -24,16 +24,16 @@ test('a fresh install opens on the short arrangement the product ships (05/11/20
   // The centre of the cockpit is the main agent's chat: that IS the first
   // screen of the product, and a starter that named anything else would give
   // a new install a board with no conversation on it.
-  const centre = cockpit.find(w => w.rail === 'centre');
-  assert.equal(centre?.id, MAIN_AGENT_WIDGET_ID);
-  assert.equal(centre?.heightMode, 'fill');
+  const center = cockpit.find(w => w.rail === 'centre');
+  assert.equal(center?.id, MAIN_AGENT_WIDGET_ID);
+  assert.equal(center?.heightMode, 'fill');
   const column = (cards: typeof cockpit, rail: string) => cards.filter(w => w.rail === rail).sort((a, b) => a.rang - b.rang);
-  const parRail = (rail: string) => column(cockpit, rail).map(w => w.id);
+  const byRail = (rail: string) => column(cockpit, rail).map(w => w.id);
   const shares = (cards: typeof cockpit, rail: string) => column(cards, rail).map(w => w.fillPercent);
-  assert.deepEqual(parRail('gauche'), ['plugin:@timon/agents:notifications', add]);
+  assert.deepEqual(byRail('gauche'), ['plugin:@timon/agents:notifications', add]);
   assert.deepEqual(shares(cockpit, 'gauche'), [66, 34], 'the notifications take two thirds, « Your widget here » the rest');
-  assert.deepEqual(parRail('centre'), [MAIN_AGENT_WIDGET_ID]);
-  assert.deepEqual(parRail('droite'), ['plugin:@timon/kanban:todo', 'plugin:@timon/agents:tasks']);
+  assert.deepEqual(byRail('centre'), [MAIN_AGENT_WIDGET_ID]);
+  assert.deepEqual(byRail('droite'), ['plugin:@timon/kanban:todo', 'plugin:@timon/agents:tasks']);
   assert.deepEqual(shares(cockpit, 'droite'), [50, 50]);
   // Frameless and transparent: the cockpit's cards sit on the background
   // rather than in boxes; the dashed placeholder draws its own outline.

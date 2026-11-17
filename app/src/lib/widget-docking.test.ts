@@ -188,30 +188,30 @@ test('a tab of the stack can be moved to the last place, and staying last is a n
 // TODO #647: the undo of a removal puts back that widget only, so that it can
 // be replayed over another window's write without undoing that write.
 test('undoing a removal puts the widget back at its rank, in its stack, with its selected tab', () => {
-  const avant = dockWidget(base(), 'b', 'c');
-  const layout = restoreWidget(removeWidget(avant, 'b'), avant, 'b');
-  assert.deepEqual(stacks(layout), stacks(avant));
-  assert.equal(entry(layout, 'b').group, entry(avant, 'b').group);
+  const before = dockWidget(base(), 'b', 'c');
+  const layout = restoreWidget(removeWidget(before, 'b'), before, 'b');
+  assert.deepEqual(stacks(layout), stacks(before));
+  assert.equal(entry(layout, 'b').group, entry(before, 'b').group);
   assert.equal(entry(layout, 'b').activeTab, true);
   assert.equal(entry(layout, 'c').activeTab, false);
   assert.equal(entry(layout, 'b').removed, undefined);
 });
 
 test('undoing a removal keeps what changed elsewhere in the meantime', () => {
-  const avant = base();
-  let layout = removeWidget(avant, 'b');
+  const before = base();
+  let layout = removeWidget(before, 'b');
   // Another window moves `e` to the other side, and removes `d`.
   layout = removeWidget(moveWidget(layout, 'e', 'right', null), 'd');
-  layout = restoreWidget(layout, avant, 'b');
+  layout = restoreWidget(layout, before, 'b');
   assert.deepEqual(stacks(layout), [['a'], ['b'], ['c']]);
   assert.deepEqual(stacks(layout, 'right'), [['e']]);
   assert.equal(entry(layout, 'd').removed, true);
 });
 
 test('undoing a removal does nothing to a widget already back by other means', () => {
-  const avant = base();
-  const back = moveWidget(removeWidget(avant, 'b'), 'b', 'right', null);
-  assert.deepEqual(restoreWidget(back, avant, 'b'), back);
+  const before = base();
+  const back = moveWidget(removeWidget(before, 'b'), 'b', 'right', null);
+  assert.deepEqual(restoreWidget(back, before, 'b'), back);
 });
 
 test('an edge between two cards trades height between them only, and sticks to the known shares', async () => {

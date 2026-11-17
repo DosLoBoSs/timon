@@ -32,9 +32,9 @@ test('the cards of a closed tab land after those of the first one, in order', ()
 });
 
 test('a stack and a height share keep their shape', () => {
-  const avant = setup();
-  const out = pourZone(avant, 'col#2', 'col');
-  assert.equal(entry(out, 'c').group, entry(avant, 'c').group);
+  const before = setup();
+  const out = pourZone(before, 'col#2', 'col');
+  assert.equal(entry(out, 'c').group, entry(before, 'c').group);
   assert.equal(entry(out, 'c').activeTab, true);
   assert.equal(entry(out, 'e').heightMode, 'fill');
   assert.equal(entry(out, 'e').fillPercent, 33);
