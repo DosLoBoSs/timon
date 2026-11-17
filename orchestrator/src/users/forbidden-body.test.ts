@@ -10,17 +10,18 @@
  * `forbiddenBody` is pure and needs no database; only the `forbidden` case
  * writes an `authz.denied` audit row, hence the temp `TIMON_HOME`.
  */
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Request, Response } from 'express';
 import type { RequestAuth, ForbiddenBody } from './identity.js';
+import { removeHomeOnExit } from '../../tests/helpers/test-home.js';
 
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-forbidden-body-'));
 process.env.TIMON_RESOURCE_GUARD_ENABLED = '0';
-process.on('exit', () => rmSync(process.env.TIMON_HOME!, { recursive: true, force: true }));
+removeHomeOnExit(process.env.TIMON_HOME!);
 
 const { forbiddenBody, forbidden, rejectIfNotDaemonToken } =
   await import('./identity.js');
