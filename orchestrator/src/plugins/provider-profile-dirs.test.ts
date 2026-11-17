@@ -8,6 +8,7 @@ import '../test-home.js';
 import '../../tests/helpers/paid-license.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
 import { Context } from '@deepseek-ai/cordis';
 import type { NativeProviderDefinition } from '../backends/engine/definition.js';
 
@@ -105,6 +106,8 @@ test('a profile on a dialect of another plugin spares ITS folder, not the dialec
   const base = pluginContext('acme-base-plugin', 'acme-base-bin', ['.acme-base']);
   const sub = pluginContext('acme-sub-plugin', 'acme-base-bin', ['.acme-sub']);
   const home = '/home/tester';
+  // Spelled with the host's path rules, as the policy spells it.
+  const inHome = (dir: string) => resolve(home, dir);
   const cfg = TimonConfigSchema.parse({});
   try {
     const releaseDialect = base.provider.registerProvider(dialect('acme-base', 'acme-base-bin', ['.acme-base']));
@@ -112,15 +115,15 @@ test('a profile on a dialect of another plugin spares ITS folder, not the dialec
     const releaseSub = sub.backends.registerProfile(profileOf('acme-sub-profile', 'acme-base', ['.acme-sub']));
 
     const onBase = resolveIsolation(cfg, { home, backend: 'acme-base-profile' });
-    assert.equal(onBase.deny.includes(`${home}/.acme-base`), false, 'the dialect\'s profile keeps the dialect\'s folder');
-    assert.ok(onBase.deny.includes(`${home}/.acme-sub`), 'and cannot read the sub-profile\'s');
+    assert.equal(onBase.deny.includes(inHome('.acme-base')), false, 'the dialect\'s profile keeps the dialect\'s folder');
+    assert.ok(onBase.deny.includes(inHome('.acme-sub')), 'and cannot read the sub-profile\'s');
 
     const onSub = resolveIsolation(cfg, { home, backend: 'acme-sub-profile' });
-    assert.equal(onSub.deny.includes(`${home}/.acme-sub`), false, 'the sub-profile keeps its own folder');
-    assert.ok(onSub.deny.includes(`${home}/.acme-base`), 'and does NOT inherit the dialect\'s: it must not read the base sign-in');
+    assert.equal(onSub.deny.includes(inHome('.acme-sub')), false, 'the sub-profile keeps its own folder');
+    assert.ok(onSub.deny.includes(inHome('.acme-base')), 'and does NOT inherit the dialect\'s: it must not read the base sign-in');
 
     const onClaude = resolveIsolation(cfg, { home, backend: 'claude' });
-    assert.ok(onClaude.deny.includes(`${home}/.acme-sub`) && onClaude.deny.includes(`${home}/.acme-base`), 'every other backend has both masked');
+    assert.ok(onClaude.deny.includes(inHome('.acme-sub')) && onClaude.deny.includes(inHome('.acme-base')), 'every other backend has both masked');
 
     assert.deepEqual(ownerCredentialDirs('acme-sub-plugin'), ['.acme-sub'], 'what scratch.link may read for the profile\'s plugin');
     assert.deepEqual(ownerCredentialDirs('acme-base-plugin'), ['.acme-base']);
@@ -143,7 +146,7 @@ test('REFUSAL: a third party cannot take a product backend\'s folder by register
       assert.throws(() => squatter.backends.registerProfile(profileOf(`${id}-profile`, 'codex', [dir])), /credential folder of the `.+` backend/);
       assert.equal(ownerCredentialDirs(`acme-squat-${id}`).length, 0, 'nothing for scratch.link to read');
       const isolation = resolveIsolation(TimonConfigSchema.parse({}), { home: '/home/tester', backend: `${id}-profile` });
-      assert.ok(isolation.deny.includes(`/home/tester/${dir}`), `${dir} stays masked for everyone but its owner`);
+      assert.ok(isolation.deny.includes(resolve('/home/tester', dir)), `${dir} stays masked for everyone but its owner`);
     }
     // The same declaration from a provider shipped in the release is accepted.
     const official = pluginContext('acme-official-ollama', 'acme-squat-bin', ['.ollama'], true);
