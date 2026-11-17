@@ -68,6 +68,8 @@ Agents & missions:
   timon agent set-avatar <name> --clear  remove it
   timon agent rename <old> <new>          rename an agent and its references (refused if <new>
                                          exists or a mission of <old> is running)
+  timon agent set-main <name>             make <name> the main orchestrator: it receives the recaps
+                                         and notifications (a project-less orchestrator; never from a mission)
   timon agent doc list <agent>            list the identity docs (*.md at ~/.timon/agents/<agent>/)
   timon agent doc get <agent> <file>      print one (SOUL.md, system-prompt.md…)
   timon agent doc put <agent> <file> [--file PATH]
@@ -367,7 +369,7 @@ Island workspace of the user's screen (an agent's mission owner):
                                              {open: {...}} or {layout: {...}})
   timon islands propose --arrangement ID [--view PATH] [--project SLUG] [--note TEXT]
                                              a card recalling a named arrangement on the view
-  timon setup avatar|soul|team|finish        the main agent's own setup conversation (refused elsewhere)
+  timon setup avatar|soul|team|tim|finish    the main agent's own setup conversation (refused elsewhere)
   timon navigate routes                      pages of the app an agent can send the user to
   timon navigate go <path> [--param k=v]... [--note TEXT]
                                              ask the user to go there (a card they follow)
@@ -623,10 +625,16 @@ usage: timon agent set-avatar <name> <image-file> | timon agent set-avatar <name
 usage: timon agent rename <old-name> <new-name>
 ```
 
+### timon agent set-main name
+
+```text
+usage: timon agent set-main <name>
+```
+
 ### timon agent …
 
 ```text
-usage: timon agent <create|update|set-scope|set-avatar|rename|doc|trash|export|import|export-skill> <name> …
+usage: timon agent <create|update|set-scope|set-avatar|rename|set-main|doc|trash|export|import|export-skill> <name> …
        (deletion: the app or the agent_delete tool, which move the agent to the trash)
 ```
 
@@ -1100,10 +1108,10 @@ usage: timon ui-doc render <file.html> [--title TEXT] [--reply] | timon ui-doc g
 usage: timon onboarding profile [set <developer|automation|beginner>]
 ```
 
-### timon setup avatar|soul|team --coder NAME --reviewer NAME|finish [--no-tour]
+### timon setup avatar|soul|team --coder NAME --reviewer NAME|tim --name NAME --role …
 
 ```text
-usage: timon setup <avatar|soul|team --coder NAME --reviewer NAME|finish [--no-tour]>
+usage: timon setup <avatar|soul|team --coder NAME --reviewer NAME|tim --name NAME --role ROLE [--job TEXT]|finish [--no-tour]>
 ```
 
 ### timon backup enable|status [--json]

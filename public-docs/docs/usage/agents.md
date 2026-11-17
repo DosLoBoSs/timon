@@ -201,11 +201,11 @@ One orchestrator receives what Timon says on its own: the wake recaps (a blocked
 
 A blocked task is reported to its orchestrator once, not again after a restart. A task you block yourself from the Kanban board is not reported at all: the decision is yours, so no orchestrator is woken to act on it.
 
-To give the seat to another orchestrator, for example one you created yourself, right-click its avatar in the chat card and choose **Set as main orchestrator**. It must have the orchestrator role, belong to no project and not be temporary; Timon says why when it is refused. The change takes effect for the next recap.
+To give the seat to another orchestrator, for example one you created yourself, right-click its avatar in the chat card and choose **Set as main orchestrator**, or run `timon agent set-main <name>` in a terminal (a mission cannot run it: the choice is yours). It must have the orchestrator role, belong to no project and not be temporary; Timon says why when it is refused. The change takes effect for the next recap.
 
 The agent that holds the seat cannot be removed: designate another orchestrator first, then remove the old one.
 
-If no agent holds the seat — after a database restore, for example — Timon checks it at startup and whenever an agent is created, renamed, removed or changes role: when exactly one orchestrator is eligible, it takes the seat. Otherwise the seat stays empty, because choosing among several is your call: a notification **No main orchestrator** lists the eligible ones, once per empty spell, and `timon doctor` shows `main orchestrator NONE` until you designate one.
+If no agent holds the seat — after a database restore, for example — Timon checks it at startup and whenever an agent is created, renamed, removed or changes role: when exactly one orchestrator is eligible, it takes the seat. Otherwise the seat stays empty, because choosing among several is your call: a notification **No main orchestrator** lists the eligible ones, once per empty spell, and `timon doctor` shows `main orchestrator NONE` until you designate one, which `timon agent set-main <name>` does.
 
 If no agent holds the seat, the **Agents** page draws no main agent: agents without a manager stay at the root of the graph and of the **Organization** panel, and a warning offers each eligible orchestrator the seat with **Set … as main orchestrator**.
 

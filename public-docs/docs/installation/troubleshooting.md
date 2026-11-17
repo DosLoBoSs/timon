@@ -115,7 +115,7 @@ The chat opens your main agent when no agent is named in the address. When it ca
 - **No agent is designated as the main agent:** each orchestrator without a project is listed with a **Make … the main agent** button. Pick the one you talk to; the chat opens it. Designating needs the right to manage agents. The same choice is in the right-click menu of an agent's avatar (**Set as main orchestrator**).
 - **No cross-project orchestrator:** create one from **Open agents**, or give the orchestrator role to an agent without a project.
 
-`timon doctor` prints a `main orchestrator` line: the agent that holds the seat, or `NONE` with the eligible orchestrators. While the seat is empty, recaps and notifications addressed to the main orchestrator have no recipient, and the notification centre shows **No main orchestrator** once.
+`timon doctor` prints a `main orchestrator` line: the agent that holds the seat, or `NONE` with the eligible orchestrators. While the seat is empty, recaps and notifications addressed to the main orchestrator have no recipient, and the notification centre shows **No main orchestrator** once. Designate one with `timon agent set-main <name>`.
 
 When reporting it, include the line the screen shows.
 
