@@ -38,7 +38,6 @@
       "dependencies": "Abhängigkeiten",
       "capabilities": "Fähigkeiten"
     },
-    "type": "Typ",
     "priority": {
       "label": "Priorität",
       "urgent": "Dringend",
@@ -87,7 +86,6 @@
     "modelInherit": "Projektrolle",
     "modelInheritHint": "Die Rolle des Projekts für diesen Aufgabentyp entscheidet, sonst der Agent",
     "modelInherited": "{model} (geerbt)",
-    "modelHelp": "« Projektrolle » führt die Aufgabe mit dem aus, was die Rolle des Projekts für diesen Typ, sonst der Agent, festlegt.",
     "worktreeBlocked": "Dieses Backend arbeitet außerhalb des Ordners von Timon: Eine ihm zugewiesene Code- oder Merge-Aufgabe wird blockiert.",
     "fallback": {
       "short": "Fallback",
@@ -138,13 +136,11 @@
     },
     "summary": {
       "label": "Übersicht",
-      "model": "Modell",
       "type": "Typ",
       "priority": "Priorität",
       "deps": "Abhängigkeiten",
       "depsNone": "Keine",
       "depsCount": "{count} zuerst abzuschließen",
-      "start": "Start",
       "startAsap": "So bald wie möglich",
       "status": "Status",
       "attachments": "Dateien",

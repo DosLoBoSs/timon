@@ -38,7 +38,6 @@
       "dependencies": "의존성",
       "capabilities": "기능"
     },
-    "type": "유형",
     "priority": {
       "label": "우선순위",
       "urgent": "긴급",
@@ -87,7 +86,6 @@
     "modelInherit": "프로젝트 역할",
     "modelInheritHint": "이 작업 유형에 대한 프로젝트 역할이 정하고, 없으면 에이전트가 정합니다",
     "modelInherited": "{model} (상속됨)",
-    "modelHelp": "« 프로젝트 역할 »은 이 유형에 대한 프로젝트 역할, 없으면 에이전트가 정한 설정으로 작업을 실행합니다.",
     "worktreeBlocked": "이 백엔드는 Timon 폴더 밖에서 작업합니다: 여기에 할당한 code 또는 merge 작업은 차단됩니다.",
     "fallback": {
       "short": "대체",
@@ -138,13 +136,11 @@
     },
     "summary": {
       "label": "요약",
-      "model": "모델",
       "type": "유형",
       "priority": "우선순위",
       "deps": "의존성",
       "depsNone": "없음",
       "depsCount": "먼저 끝나야 할 작업 {count}개",
-      "start": "시작",
       "startAsap": "가능한 한 빨리",
       "status": "상태",
       "attachments": "파일",

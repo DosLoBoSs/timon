@@ -38,7 +38,6 @@
       "dependencies": "Dipendenze",
       "capabilities": "Capacità"
     },
-    "type": "Tipo",
     "priority": {
       "label": "Priorità",
       "urgent": "Urgente",
@@ -87,7 +86,6 @@
     "modelInherit": "Ruolo del progetto",
     "modelInheritHint": "Decide il ruolo del progetto per questo tipo di attività, altrimenti l’agente",
     "modelInherited": "{model} (ereditato)",
-    "modelHelp": "« Ruolo del progetto » esegue l’attività con ciò che decide il ruolo del progetto per questo tipo, altrimenti l’agente.",
     "worktreeBlocked": "Questo backend lavora fuori dalla cartella di Timon: un’attività di codice o di merge assegnata a lui sarà bloccata.",
     "fallback": {
       "short": "Alternativa",
@@ -138,13 +136,11 @@
     },
     "summary": {
       "label": "Riepilogo",
-      "model": "Modello",
       "type": "Tipo",
       "priority": "Priorità",
       "deps": "Dipendenze",
       "depsNone": "Nessuna",
       "depsCount": "{count} da completare prima",
-      "start": "Avvio",
       "startAsap": "Il prima possibile",
       "status": "Stato",
       "attachments": "File",

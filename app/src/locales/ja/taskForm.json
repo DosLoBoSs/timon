@@ -38,7 +38,6 @@
       "dependencies": "依存関係",
       "capabilities": "機能"
     },
-    "type": "種類",
     "priority": {
       "label": "優先度",
       "urgent": "緊急",
@@ -87,7 +86,6 @@
     "modelInherit": "プロジェクトのロール",
     "modelInheritHint": "このタスク種類に対するプロジェクトのロールが決め、なければエージェントが決めます",
     "modelInherited": "{model} (継承)",
-    "modelHelp": "「プロジェクトのロール」では、この種類に対するプロジェクトのロール、なければエージェントが決めた設定でタスクを実行します。",
     "worktreeBlocked": "このバックエンドは Timon のフォルダー外で作業します: これに割り当てた code または merge タスクはブロックされます。",
     "fallback": {
       "short": "フォールバック",
@@ -138,13 +136,11 @@
     },
     "summary": {
       "label": "概要",
-      "model": "モデル",
       "type": "種類",
       "priority": "優先度",
       "deps": "依存関係",
       "depsNone": "なし",
       "depsCount": "先に完了が必要: {count}",
-      "start": "開始",
       "startAsap": "できるだけ早く",
       "status": "状態",
       "attachments": "ファイル",

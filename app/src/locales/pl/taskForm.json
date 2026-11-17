@@ -38,7 +38,6 @@
       "dependencies": "Zależności",
       "capabilities": "Możliwości"
     },
-    "type": "Typ",
     "priority": {
       "label": "Priorytet",
       "urgent": "Pilny",
@@ -87,7 +86,6 @@
     "modelInherit": "Rola projektu",
     "modelInheritHint": "Decyduje rola projektu dla tego typu zadania, w przeciwnym razie agent",
     "modelInherited": "{model} (dziedziczony)",
-    "modelHelp": "„Rola projektu” uruchamia zadanie na tym, o czym decyduje rola projektu dla tego typu, a w przeciwnym razie agent.",
     "worktreeBlocked": "Ten backend pracuje poza folderem Timon: przypisane mu zadanie code lub merge zostanie zablokowane.",
     "fallback": {
       "short": "Zapasowy",
@@ -138,13 +136,11 @@
     },
     "summary": {
       "label": "Podsumowanie",
-      "model": "Model",
       "type": "Typ",
       "priority": "Priorytet",
       "deps": "Zależności",
       "depsNone": "Brak",
       "depsCount": "do ukończenia wcześniej: {count}",
-      "start": "Start",
       "startAsap": "Jak najszybciej",
       "status": "Stan",
       "attachments": "Pliki",
