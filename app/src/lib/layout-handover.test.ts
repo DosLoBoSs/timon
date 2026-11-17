@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { handoverKey, handoverOf, readHandover, rowHandover } from './layout-handover';
+import { handoverKey, handoverOf, mergeHandedList, readHandover, rowHandover } from './layout-handover';
 import { workspaceRowHandover } from './workspace-route';
 
 test('a chain lists the previous row first, consumed, then the shared one, kept', () => {
@@ -35,4 +35,31 @@ test('the walk stops at the first source holding something, or at the first that
   assert.deepEqual(await readHandover(rowHandover('broken', 'c'), load), { ok: false });
   assert.deepEqual(seen, ['broken'], 'the shared row is not read past a failure');
   assert.deepEqual(await readHandover(rowHandover('a', 'z'), load), { ok: true, raw: null, from: null });
+});
+
+test('a list handed over keeps its own entries and adds only what the previous row holds alone', () => {
+  type E = { id: string; name: string; size?: number };
+  const rules = {
+    max: 3,
+    fits: (list: readonly E[]) => list.reduce((n, e) => n + (e.size ?? 1), 0) <= 4,
+    sameName: (a: string, b: string) => a.toLowerCase() === b.toLowerCase(),
+  };
+  const current: E[] = [{ id: 'a', name: 'Alpha' }];
+  assert.deepEqual(
+    mergeHandedList(current, [{ id: 'a', name: 'Renamed' }, { id: 'x', name: 'alpha' }, { id: 'b', name: 'Beta' }], rules),
+    [{ id: 'a', name: 'Alpha' }, { id: 'b', name: 'Beta' }],
+    'same id or same name is skipped: the current entry wins',
+  );
+  assert.equal(mergeHandedList(current, [{ id: 'a', name: 'Alpha' }], rules), null, 'nothing new, nothing to write');
+  assert.equal(mergeHandedList(current, [], rules), null);
+  assert.deepEqual(
+    mergeHandedList(current, [{ id: 'b', name: 'B' }, { id: 'c', name: 'C' }, { id: 'd', name: 'D' }], rules)?.map((e) => e.id),
+    ['a', 'b', 'c'],
+    'capped at the count',
+  );
+  assert.deepEqual(
+    mergeHandedList(current, [{ id: 'b', name: 'B', size: 2 }, { id: 'c', name: 'C', size: 2 }], rules)?.map((e) => e.id),
+    ['a', 'b'],
+    'the tail that does not fit is dropped, never an entry of the current list',
+  );
 });
