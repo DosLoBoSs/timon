@@ -382,7 +382,7 @@
       "osCredentialAccount": "Lee la entrada \"{service}\" ({account}) del almacén de credenciales de tu sistema (llavero de macOS). Solo lectura."
     },
     "install": {
-      "allow": "Permitir que Timon ejecute los programas indicados arriba.",
+      "allow": "Permitir que Timon ejecute {count, plural, one {el programa indicado} other {los programas indicados}} arriba.",
       "allowHint": "Sin esto, el proveedor se instala pero permanece inactivo hasta que lo autorices en {settingsPath}."
     },
     "plugins": {

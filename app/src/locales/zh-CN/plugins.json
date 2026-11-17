@@ -392,7 +392,7 @@
       "osCredentialAccount": "读取系统凭据存储（macOS 钥匙串）中的“{service}”（{account}）条目。只读。"
     },
     "install": {
-      "allow": "允许 Timon 运行上面列出的程序。",
+      "allow": "允许 Timon 运行上面列出的{count, plural, other {程序}}。",
       "allowHint": "若不勾选，提供商插件仍会安装，但需在 {settingsPath} 中授权后才会启用。"
     },
     "plugins": {

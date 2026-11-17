@@ -382,7 +382,7 @@
       "osCredentialAccount": "システムの認証情報ストア (macOS キーチェーン) の項目「{service}」({account}) を読み取ります。読み取り専用です。"
     },
     "install": {
-      "allow": "上に記載されたプログラムの実行を Timon に許可します。",
+      "allow": "上に記載された{count, plural, other {プログラム}}の実行を Timon に許可します。",
       "allowHint": "許可しない場合、プロバイダーはインストールされますが、{settingsPath} で承認するまで無効のままです。"
     },
     "plugins": {

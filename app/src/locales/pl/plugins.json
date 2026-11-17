@@ -382,7 +382,7 @@
       "osCredentialAccount": "Czyta wpis „{service}” ({account}) z systemowego magazynu poświadczeń (pęk kluczy macOS). Tylko odczyt."
     },
     "install": {
-      "allow": "Zezwól Timon na uruchamianie programów wymienionych powyżej.",
+      "allow": "Zezwól Timon na uruchamianie {count, plural, one {programu wymienionego} few {programów wymienionych} many {programów wymienionych} other {programów wymienionych}} powyżej.",
       "allowHint": "Bez tego dostawca jest zainstalowany, ale pozostaje nieaktywny, dopóki nie autoryzujesz go w {settingsPath}."
     },
     "plugins": {

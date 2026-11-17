@@ -412,7 +412,7 @@
       "osCredentialAccount": "Lit l'entrée « {service} » ({account}) du magasin d'identifiants de votre système (trousseau macOS). Lecture seule."
     },
     "install": {
-      "allow": "Autoriser Timon à lancer le ou les programmes listés ci-dessus.",
+      "allow": "Autoriser Timon à lancer {count, plural, one {le programme listé} other {les programmes listés}} ci-dessus.",
       "allowHint": "Sans cela, le fournisseur est installé mais reste inactif tant que vous ne l'autorisez pas dans {settingsPath}."
     },
     "plugins": {

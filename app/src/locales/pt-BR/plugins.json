@@ -382,7 +382,7 @@
       "osCredentialAccount": "Lê a entrada \"{service}\" ({account}) do repositório de credenciais do seu sistema (chaveiro do macOS). Somente leitura."
     },
     "install": {
-      "allow": "Permitir que o Timon execute o(s) programa(s) listado(s) acima.",
+      "allow": "Permitir que o Timon execute {count, plural, one {o programa listado} other {os programas listados}} acima.",
       "allowHint": "Sem isso, o provedor é instalado, mas permanece inativo até você autorizá-lo em {settingsPath}."
     },
     "plugins": {

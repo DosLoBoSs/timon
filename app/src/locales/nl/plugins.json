@@ -382,7 +382,7 @@
       "osCredentialAccount": "Leest het item ‘{service}’ ({account}) van je systeemopslag voor inloggegevens (macOS-sleutelhanger). Alleen lezen."
     },
     "install": {
-      "allow": "Timon toestaan de hierboven genoemde programma's uit te voeren.",
+      "allow": "Timon toestaan {count, plural, one {het hierboven genoemde programma} other {de hierboven genoemde programma's}} uit te voeren.",
       "allowHint": "Zonder dit is de provider geïnstalleerd maar blijft hij inactief tot je hem autoriseert in {settingsPath}."
     },
     "plugins": {
