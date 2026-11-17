@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { t } from '@/lib/i18n';
+import { BRAND } from '@/lib/brand';
 import {
   Dialog,
   DialogContent,
@@ -149,27 +150,27 @@ function StatusBadge({ status }: { status?: Summary['last_status'] }) {
   if (!status) return null;
   const map = {
     connected: {
-      label: 'connected',
+      label: t('mcpPage.status.connected'),
       Icon: CheckCircle2,
       cls: 'border-[hsl(var(--success)/0.3)] bg-[hsl(var(--success)/0.08)] text-[hsl(var(--success))]',
     },
     'needs-auth': {
-      label: 'needs auth',
+      label: t('mcpPage.status.needsAuth'),
       Icon: AlertCircle,
       cls: 'border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.08)] text-[hsl(var(--warning))]',
     },
     failed: {
-      label: 'failed',
+      label: t('mcpPage.status.failed'),
       Icon: AlertCircle,
       cls: 'border-destructive/30 bg-destructive/10 text-destructive',
     },
     pending: {
-      label: 'pending',
+      label: t('mcpPage.status.pending'),
       Icon: HelpCircle,
       cls: 'border-border bg-muted text-muted-foreground',
     },
     unknown: {
-      label: 'unknown',
+      label: t('mcpPage.status.unknown'),
       Icon: HelpCircle,
       cls: 'border-border bg-muted text-muted-foreground',
     },
@@ -195,7 +196,7 @@ async function startOAuth(id: string): Promise<void> {
     return;
   }
   const w = window.open(j.authorize_url, '_blank', 'noopener,noreferrer');
-  if (!w) toast.info('popup blocked — open the URL manually: ' + j.authorize_url);
+  if (!w) toast.info(t('mcpPage.popupBlocked', { url: j.authorize_url }));
 }
 
 /** `leading` opens the toolbar row: the Capabilities page puts its tabs there. */
@@ -314,7 +315,7 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
   async function save() {
     const id = draft.id.trim();
     if (!/^[a-z0-9._-]+$/.test(id)) {
-      toast.error('invalid id — lowercase letters, digits, . _ - only');
+      toast.error(t('mcpPage.invalidId'));
       return;
     }
     const body: {
@@ -337,11 +338,11 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
           : { type: 'http', url: draft.url.trim(), headers: parseKv(draft.headersText) },
     };
     if (body.transport.type === 'stdio' && !body.transport.command) {
-      toast.error('command is required for stdio');
+      toast.error(t('mcpPage.commandRequired'));
       return;
     }
     if (body.transport.type === 'http' && !body.transport.url) {
-      toast.error('url is required for http');
+      toast.error(t('mcpPage.urlRequired'));
       return;
     }
     setSaving(true);
@@ -352,7 +353,7 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
         body: JSON.stringify(body),
       });
       if (!r.ok) throw new Error(await responseErrorMessage(r));
-      toast.success('saved ' + id);
+      toast.success(t('mcpPage.saved', { id }));
       setOpen(false);
       await refresh();
     } catch (e) {
@@ -386,20 +387,20 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by id, name, description…"
+            placeholder={t('mcpPage.searchPlaceholder')}
             className="border-0 bg-transparent text-[12.5px] outline-none placeholder:text-muted-foreground/70"
           />
         </div>
         <div className="flex-1" />
         <span className="tabular-nums text-[12.5px] text-muted-foreground">
-          <b className="font-medium text-foreground">{servers.length}</b> servers
+          {t('mcpPage.serverCount', { count: servers.length })}
         </span>
         <Button
           size="sm"
           onClick={() => openEditor(null)}
           className="h-8 gap-1.5 font-semibold"
         >
-          <Plus className="size-3.5" /> New MCP
+          <Plus className="size-3.5" /> {t('mcpPage.newMcp')}
         </Button>
       </div>
 
@@ -497,7 +498,7 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
                       ) : (
                         <ChevronRight className="size-3" />
                       )}
-                      {s.tools_count} tool{s.tools_count === 1 ? '' : 's'}
+                      {t('mcpPage.toolCount', { count: s.tools_count })}
                     </button>
                   </div>
                   {isOpen && (
@@ -509,10 +510,9 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
           </div>
         ) : (
           <div className="mt-4 rounded-xl border border-dashed border-border p-10 text-center text-[13px] text-muted-foreground/80">
-            No MCP servers yet. Click{' '}
-            <strong className="text-foreground">＋ New MCP</strong> to add one.
-            Local servers run as stdio processes inside the orchestrator container;
-            remote servers connect to an HTTP endpoint.
+            {t('mcpPage.emptyBefore')}{' '}
+            <strong className="text-foreground">{t('mcpPage.newMcp')}</strong>{' '}
+            {t('mcpPage.emptyAfter')}
           </div>
         )}
       </PageTocLayout>
@@ -526,21 +526,21 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
                 value={draft.id}
                 disabled={editing !== null}
                 onChange={(e) => setDraft((d) => ({ ...d, id: e.target.value }))}
-                placeholder="my-mcp-id"
+                placeholder="my-mcp-id" // i18n-exempt: sample identifier
                 className="h-8 w-56 font-semibold"
               />
               <Badge variant={editing ? 'default' : 'secondary'}>
-                {editing ? 'editing' : 'new'}
+                {editing ? t('mcpPage.editor.editing') : t('mcpPage.editor.new')}
               </Badge>
             </div>
             <p className="text-[11.5px] text-muted-foreground/80">
-              Internal slug — used as the filename
-              <span /* code-font: file path */ className="mx-1 font-mono">~/.timon/mcp/&lt;id&gt;.json</span>
-              and as the reference in each agent's <span /* code-font: config key */ className="font-mono">mcp_servers</span> list.
-              Allowed: <span /* code-font: character set */ className="font-mono">a-z 0-9 . _ -</span>
+              {t('mcpPage.editor.idHintFile')}
+              <code /* code-font: file path */ className="mx-1 font-mono">~/.timon/mcp/&lt;id&gt;.json</code>
+              {t('mcpPage.editor.idHintReference')} <code /* code-font: config key */ className="font-mono">mcp_servers</code>{' '}
+              {t('mcpPage.editor.idHintAllowed')} <code /* code-font: character set */ className="font-mono">a-z 0-9 . _ -</code>
             </p>
             <DialogTitle className="sr-only">
-              {editing ? `Edit ${editing}` : 'New MCP server'}
+              {editing ? t('mcpPage.editor.editTitle', { id: editing }) : t('mcpPage.editor.newTitle')}
             </DialogTitle>
           </DialogHeader>
 
@@ -548,23 +548,23 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
             <div className="flex flex-col gap-4">
               <div className="grid gap-1.5">
                 <label className="text-[12px] font-semibold text-muted-foreground">
-                  Display name
+                  {t('mcpPage.editor.displayName')}
                 </label>
                 <Input
                   value={draft.name}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                  placeholder="(defaults to id)"
+                  placeholder={t('mcpPage.editor.displayNamePlaceholder')}
                 />
                 <p className="text-[11px] text-muted-foreground/70">
-                  Pretty label shown across TIMON. Also used as the key in claude's
-                  <span /* code-font: file name */ className="mx-1 font-mono">.mcp.json</span>
-                  (so tool names become <span /* code-font: tool name pattern */ className="font-mono">mcp__&lt;name&gt;__&lt;tool&gt;</span>).
-                  Falls back to the id if it contains spaces / dots.
+                  {t('mcpPage.editor.displayNameHintKey')}
+                  <code /* code-font: file name */ className="mx-1 font-mono">.mcp.json</code>
+                  {t('mcpPage.editor.displayNameHintTools')} <code /* code-font: tool name pattern */ className="font-mono">mcp__&lt;name&gt;__&lt;tool&gt;</code>.{' '}
+                  {t('mcpPage.editor.displayNameHintFallback')}
                 </p>
               </div>
               <div className="grid gap-1.5">
                 <label className="text-[12px] font-semibold text-muted-foreground">
-                  Description
+                  {t('mcpPage.editor.description')}
                 </label>
                 <Textarea
                   value={draft.description}
@@ -572,7 +572,7 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
                     setDraft((d) => ({ ...d, description: e.target.value }))
                   }
                   className="min-h-[60px]"
-                  placeholder="What this server does."
+                  placeholder={t('mcpPage.editor.descriptionPlaceholder')}
                 />
               </div>
 
@@ -584,16 +584,16 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
               >
                 <TabsList className="grid w-fit grid-cols-2">
                   <TabsTrigger value="stdio" className="gap-1.5">
-                    <Server className="size-3.5" /> stdio (local)
+                    <Server className="size-3.5" /> {t('mcpPage.editor.stdioTab')}
                   </TabsTrigger>
                   <TabsTrigger value="http" className="gap-1.5">
-                    <Cloud className="size-3.5" /> http (remote)
+                    <Cloud className="size-3.5" /> {t('mcpPage.editor.httpTab')}
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="stdio" className="mt-3 space-y-3">
                   <div className="grid gap-1.5">
                     <label className="text-[12px] font-semibold text-muted-foreground">
-                      Command
+                      {t('mcpPage.editor.command')}
                     </label>
                     <Input
                       /* code-font: shell command */ className="font-mono"
@@ -601,12 +601,12 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
                       onChange={(e) =>
                         setDraft((d) => ({ ...d, command: e.target.value }))
                       }
-                      placeholder="npx"
+                      placeholder="npx" // i18n-exempt: sample command
                     />
                   </div>
                   <div className="grid gap-1.5">
                     <label className="text-[12px] font-semibold text-muted-foreground">
-                      Arguments <span className="text-muted-foreground/60">(one per line)</span>
+                      {t('mcpPage.editor.arguments')} <span className="text-muted-foreground/60">{t('mcpPage.editor.argumentsHint')}</span>
                     </label>
                     <Textarea
                       /* code-font: command arguments */ className="min-h-[90px] font-mono text-[12px]"
@@ -614,12 +614,13 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
                       onChange={(e) =>
                         setDraft((d) => ({ ...d, argsText: e.target.value }))
                       }
+                      // i18n-exempt: sample arguments
                       placeholder={`-y\n@modelcontextprotocol/server-filesystem\n/workspace`}
                     />
                   </div>
                   <div className="grid gap-1.5">
                     <label className="text-[12px] font-semibold text-muted-foreground">
-                      Environment <span className="text-muted-foreground/60">(KEY=value per line)</span>
+                      {t('mcpPage.editor.environment')} <span className="text-muted-foreground/60">{t('mcpPage.editor.environmentHint')}</span>
                     </label>
                     <Textarea
                       /* code-font: environment variables */ className="min-h-[70px] font-mono text-[12px]"
@@ -627,6 +628,7 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
                       onChange={(e) =>
                         setDraft((d) => ({ ...d, envText: e.target.value }))
                       }
+                      // i18n-exempt: sample environment
                       placeholder={`NODE_ENV=production\nAPI_KEY=...`}
                     />
                   </div>
@@ -634,13 +636,13 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
                 <TabsContent value="http" className="mt-3 space-y-3">
                   <div className="grid gap-1.5">
                     <label className="text-[12px] font-semibold text-muted-foreground">
-                      URL
+                      {t('mcpPage.editor.url')}
                     </label>
                     <Input
                       /* code-font: URL */ className="font-mono"
                       value={draft.url}
                       onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
-                      placeholder="https://api.example.com/mcp"
+                      placeholder="https://api.example.com/mcp" // i18n-exempt: sample URL
                     />
                   </div>
                   {editing && (
@@ -652,13 +654,12 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
                   )}
                   {!editing && (
                     <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-[11.5px] text-muted-foreground/80">
-                      Save the server first, then come back here to authorize via OAuth
-                      if the endpoint requires it.
+                      {t('mcpPage.editor.saveBeforeOAuth')}
                     </p>
                   )}
                   <div className="grid gap-1.5">
                     <label className="text-[12px] font-semibold text-muted-foreground">
-                      Headers <span className="text-muted-foreground/60">(Key: value per line, '=' also works)</span>
+                      {t('mcpPage.editor.headers')} <span className="text-muted-foreground/60">{t('mcpPage.editor.headersHint')}</span>
                     </label>
                     <Textarea
                       /* code-font: HTTP headers */ className="min-h-[90px] font-mono text-[12px]"
@@ -666,6 +667,7 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
                       onChange={(e) =>
                         setDraft((d) => ({ ...d, headersText: e.target.value }))
                       }
+                      // i18n-exempt: sample headers
                       placeholder={`Authorization=Bearer xxx\nX-Custom-Header=value`}
                     />
                   </div>
@@ -681,14 +683,14 @@ export function McpClient({ leading }: { leading?: ReactNode } = {}) {
                 onClick={remove}
                 className="mr-auto gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
-                <Trash2 className="size-3.5" /> Delete
+                <Trash2 className="size-3.5" /> {t('confirmDialog.delete')}
               </Button>
             )}
             <Button variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button onClick={save} disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? t('mcpPage.editor.saving') : t('common.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -727,26 +729,25 @@ function ToolList({ id, fallback }: { id: string; fallback?: string[] }) {
   if (loading) {
     return (
       <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground/70">
-        loading tools…
+        {t('mcpPage.toolsLoading')}
       </div>
     );
   }
   if (!tools?.length) {
     return (
       <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground/70">
-        No tools cached yet. Attach this MCP to an agent and run a mission —
-        tools surface from the first init event.
+        {t('mcpPage.toolsEmpty')}
       </div>
     );
   }
   return (
     <div className="flex flex-wrap gap-1">
-      {tools.map((t) => (
+      {tools.map((tool) => (
         <span
-          key={t}
+          key={tool}
           className="rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10.5px] text-foreground/85"
         >
-          {t}
+          {tool}
         </span>
       ))}
     </div>
@@ -757,17 +758,17 @@ function OAuthPill({ status }: { status?: OAuthStatus }) {
   if (!status || status === 'none') return null;
   const map = {
     pending: {
-      label: 'oauth: pending',
+      label: t('mcpPage.oauth.pending'),
       Icon: KeyRound,
       cls: 'border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.08)] text-[hsl(var(--warning))]',
     },
     authorized: {
-      label: 'oauth: ok',
+      label: t('mcpPage.oauth.authorized'),
       Icon: ShieldCheck,
       cls: 'border-[hsl(var(--success)/0.3)] bg-[hsl(var(--success)/0.08)] text-[hsl(var(--success))]',
     },
     expired: {
-      label: 'oauth: expired',
+      label: t('mcpPage.oauth.expired'),
       Icon: AlertCircle,
       cls: 'border-destructive/30 bg-destructive/10 text-destructive',
     },
@@ -809,28 +810,25 @@ function OAuthBlock({
   }
   const label =
     status === 'authorized'
-      ? 'Re-authorize'
+      ? t('mcpPage.oauth.reauthorize')
       : status === 'expired'
-      ? 'Re-authorize (expired)'
-      : 'Authorize via OAuth';
+      ? t('mcpPage.oauth.reauthorizeExpired')
+      : t('mcpPage.oauth.authorize');
   return (
     <div className="rounded-md border border-border bg-muted/20 px-3 py-2.5">
       <div className="flex items-center gap-2">
         <KeyRound className="size-3.5 text-muted-foreground" />
-        <span className="text-[12px] font-semibold">OAuth</span>
+        <span className="text-[12px] font-semibold">{t('mcpPage.oauth.title')}</span>
         <OAuthPill status={status === 'none' ? undefined : status} />
         <div className="flex-1" />
         <Button size="sm" variant="outline" onClick={go} disabled={busy} className="h-7 gap-1.5">
-          {busy ? 'Opening…' : label}
+          {busy ? t('mcpPage.oauth.opening') : label}
         </Button>
       </div>
       <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground/80">
-        If this server returns <span >401</span> on
-        connect, click Authorize: TIMON discovers the auth server, registers
-        itself dynamically, and opens the provider's consent page in a new
-        tab. Tokens are stored server-side and injected automatically — no
-        need to paste an <span /* code-font: HTTP header name */ className="font-mono">Authorization</span>
-        {' '}header by hand.
+        {t('mcpPage.oauth.hintBefore', { brand: BRAND.displayName })}{' '}
+        <code /* code-font: HTTP header name */ className="font-mono">Authorization</code>{' '}
+        {t('mcpPage.oauth.hintAfter')}
       </p>
     </div>
   );

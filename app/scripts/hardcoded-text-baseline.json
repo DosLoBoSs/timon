@@ -2,10 +2,6 @@
   "app/src/app/(main)/license/license-client.tsx": {
     "jsxAttr": 1
   },
-  "app/src/app/(main)/mcp/mcp-client.tsx": {
-    "jsxText": 38,
-    "jsxAttr": 9
-  },
   "app/src/app/(main)/mcp/page.tsx": {
     "jsxText": 2
   },
