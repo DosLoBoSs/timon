@@ -515,6 +515,8 @@ for (const platform of ['win32', 'darwin', 'linux']) {
         // P3: the approval screen counts missions; the new AppImage drops the previous one.
         localDaemonGet: () => async () => null, readMissionCount: async () => null, missionsAtStake: () => 0, removeAppImageBackup: async () => {},
         takeUpdateConsent: () => null, consentApproves: () => false,
+        // What a silent Windows installer left behind is said by the launch that follows it.
+        reportSilentInstallFailure: (home: string) => { calls.push(`install-result ${home}`); },
       };
       await runInNewContext(`${compiled}\nmain()`, context);
       assert.equal(calls[0], pending ? 'approve' : 'browser');
@@ -522,6 +524,7 @@ for (const platform of ['win32', 'darwin', 'linux']) {
       if (mode === 'unmanaged') assert.ok(logs.some(line => /update offer: none, .*not started by the Timon app/.test(line)), logs.join('\n'));
       if (mode === 'unmanaged') assert.ok(calls.includes('window'));
       if (platform !== 'win32') assert.ok(calls.indexOf('service') < calls.indexOf('window'));
+      assert.ok(calls.includes('install-result home') && calls.indexOf('install-result home') < calls.indexOf('window'), 'a failed silent install is said before the window opens');
       // TODO #485: the daemon answers, so a dead interface is rearmed as the window opens.
       assert.ok(calls.includes('rearm') && calls.indexOf('rearm') < calls.indexOf('window'));
       if (pending) assert.ok(calls.indexOf('ready') < calls.indexOf('window'));

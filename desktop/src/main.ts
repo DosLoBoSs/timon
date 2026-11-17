@@ -101,7 +101,7 @@ import { UpdateDownloader } from './update-download.js';
 import { UPDATE_CHANNELS, UpdateController, localDaemonGet, registerUpdateIpc } from './update-ipc.js';
 import { checkLocalUpdatesIfStale } from './update-freshness.js';
 import { missionsAtStake, readMissionCount, removeAppImageBackup } from './update-install.js';
-import { nodeInstallerSystem, silentInstall } from './update-installer.js';
+import { nodeInstallerSystem, silentInstall, takeWindowsInstallFailure } from './update-installer.js';
 import { aboutCopy, readThirdPartyNotices, registerAboutIpc, thirdPartyNoticesPath } from './about.js';
 import { showAboutWindow } from './about-window.js';
 import { appMenuTemplate, newWindowCopy, newWindowShortcut } from './app-menu.js';
@@ -1298,6 +1298,19 @@ function reportRestore(home: string, id: string): void {
   });
 }
 
+/**
+ * The silent Windows installer shows nothing, and the shell that started it
+ * had quit: its watcher left the verdict in the update's folder. Said once, by
+ * the Timon that starts next, instead of an app that only seemed to restart.
+ */
+function reportSilentInstallFailure(home: string): void {
+  if (process.platform !== 'win32') return;
+  const failure = takeWindowsInstallFailure(join(home, 'updates'));
+  if (!failure) return;
+  console.log(`[updates] the silent installer of ${failure.version} ended with ${failure.outcome}: ${failure.reason}`);
+  void reportProblem({ type: 'warning', message: shellText(uiLocale())('update.failure'), detail: failure.reason });
+}
+
 async function completeApprovedUpdate(cfg: DesktopConfig): Promise<void> {
   if (!updateApproved || !updateWindow) return;
   await finishUpdate({ home: cfg.home, origin: originOf(cfg.daemon.listen), version: app.getVersion(), locale: uiLocale(),
@@ -1588,6 +1601,7 @@ async function main(): Promise<void> {
       });
     }
   }
+  reportSilentInstallFailure(cfg.home);
   if (restoreId) await waitForRestoreBoot(cfg, restoreId);
   let daemonOrigin = originOf(cfg.daemon.listen);
   let health = await probeHealth(daemonOrigin);

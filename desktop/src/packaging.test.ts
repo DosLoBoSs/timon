@@ -252,6 +252,46 @@ test('the service pause knows its account by SID, and nothing of the build machi
   assert.doesNotMatch(ps1, /-Resume[^\n]*\n[^\n]*-User/);
 });
 
+// The net under the fix above: whatever the pause missed (a refused elevation,
+// a filter that is wrong again), the installer never replaces the files of a
+// daemon that still runs. Windows renames a running executable without a word.
+test('the installer stops when something of Timon still runs after the pause', async () => {
+  const nsh = readFileSync(join(root, 'build', 'installer.nsh'), 'utf8');
+  const ps1 = readFileSync(join(root, 'build', 'timon-service-pause.ps1'), 'utf8');
+  const { NSIS_SERVICE_STILL_RUNNING } = await import('./update-installer.js');
+  const service = readFileSync(join(root, '..', 'orchestrator', 'src', 'host', 'service-install.ts'), 'utf8');
+
+  // One number, in the script, the installer, the shell and the host adapter.
+  assert.match(nsh, new RegExp(`!define TIMON_SERVICE_STILL_RUNNING ${NSIS_SERVICE_STILL_RUNNING}\\b`));
+  assert.match(ps1, new RegExp(`\\$stillRunning = ${NSIS_SERVICE_STILL_RUNNING}\\b`));
+  assert.match(service, new RegExp(`export const PROCESSES_REMAIN = ${NSIS_SERVICE_STILL_RUNNING};`));
+
+  // The script lists what is left once everything was ended and the resume started.
+  const net = ps1.slice(ps1.indexOf('# The net.'));
+  assert.ok(net.length > 0 && ps1.indexOf('# The net.') > ps1.lastIndexOf('MethodName Create'), 'after the resume is started: a refused install still enables the task again');
+  assert.match(net, /\$remaining = \{\s+\$left = @\(& \$ofInstallation\)/, 'the processes of this installation');
+  assert.match(net, /Get-NetTCPConnection -State Listen -LocalPort \$port -ErrorAction Stop/, 'and whoever listens on the daemon port');
+  assert.match(net, /\$port = 3010\b/, `the packaged default (${PACKAGED_DEFAULTS.daemon.listen.port})`);
+  assert.equal(PACKAGED_DEFAULTS.daemon.listen.port, 3010);
+  assert.match(net, /Join-Path \$TimonHome 'timon\.config\.json'[\s\S]*\$config\.daemon\.listen\.port/, 'or the port this home configured');
+  // A listener whose command line cannot be read is the session-0 daemon seen without elevation.
+  assert.match(net, /if \(-not \$listener\.CommandLine\) \{ \$left \+= \$listener; continue \}/);
+  assert.match(net, /\$runtimes -notcontains \$listener\.Name\) \{ continue \}/, 'a foreign program on the port is not waited for');
+  assert.match(net, /if \(\$left\.Count -gt 0\) \{[\s\S]*exit \$stillRunning\s+\}\s+exit 0\s*$/);
+
+  // The installer reads that code: Retry or Cancel with a window, an exit code without one.
+  const pause = nsh.match(/!macro timonPauseService\s+([\s\S]*?)!macroend/)?.[1] ?? '';
+  assert.equal((pause.match(/-TimonHome "\$3"/g) ?? []).length, 2, 'both runs know the data directory');
+  assert.match(pause, /ReadEnvStr \$3 TIMON_HOME\s+\$\{If\} \$3 == ""\s+StrCpy \$3 "\$PROFILE\\\.timon"/, 'read while the installer runs');
+  const loop = pause.match(/\$\{Do\}([\s\S]*?)\$\{Loop\}/)?.[1] ?? '';
+  assert.ok(loop.includes('"runas"') && loop.includes('"open"'), 'Retry asks for the elevation again');
+  assert.match(loop, /\$\{If\} \$1 != "ok"\s+\$\{OrIf\} \$0 != \$\{TIMON_SERVICE_STILL_RUNNING\}\s+\$\{ExitDo\}/, 'only the script\'s own verdict stops the installer');
+  assert.match(loop, /\$\{If\} \$\{Silent\}\s+SetErrorLevel \$\{TIMON_SERVICE_STILL_RUNNING\}\s+Quit\s+\$\{EndIf\}/, 'no window under /S: an exit code');
+  assert.match(loop, /\$\{If\} \$\{Cmd\} `MessageBox MB_RETRYCANCEL\|MB_ICONEXCLAMATION "[^`]*" IDCANCEL`\s+SetErrorLevel \$\{TIMON_SERVICE_STILL_RUNNING\}\s+Quit\s+\$\{EndIf\}/);
+  assert.ok(loop.indexOf('${If} ${Silent}') < loop.indexOf('MessageBox'), 'never a message box under /S');
+  assert.match(loop, /timon-service-pause\.log/, 'the message names the log');
+});
+
 // VM, 06/11/2026: an installer killed from SSH left the task Disabled and the
 // daemon stopped. SilentlyContinue hid any failure of the resume, and the
 // resume itself, a child of the pause, died with the SSH session's job object.
@@ -268,7 +308,8 @@ test('the service resume reports its failures, tries again and outlives the sess
   assert.match(resume, /foreach \(\$attempt in 1\.\.3\)[\s\S]*Start-Sleep -Seconds \d+/, 'a bounded retry');
   assert.match(resume, /\$failure\) \{ & \$note /, 'the last failure is written to the log');
   assert.match(ps1, /Add-Content -LiteralPath \$Log/);
-  assert.match(ps1, /\.timon\\tmp\\timon-service-pause\.log/);
+  assert.match(ps1, /\$Log = Join-Path \$TimonHome 'tmp\\timon-service-pause\.log'/);
+  assert.match(ps1, /\$TimonHome = Join-Path \$env:USERPROFILE '\.timon'/, 'the default home when the installer names none');
   // A task found Disabled is enabled whatever left it so; an uninstall's
   // deleted task is not an error.
   assert.match(resume, /-eq 'Disabled'\) \{ Enable-ScheduledTask/);
