@@ -9,7 +9,7 @@ import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { compareText } from '@/lib/intl';
 import { FramedFace } from '@/plugins-client/agent-chat/agent-avatar';
-import { visageAgent, type ProjetConnu } from '@/plugins-client/agent-chat/use-agents';
+import { agentFace, type KnownProject } from '@/plugins-client/agent-chat/use-agents';
 
 export type OrchestrationSource = 'explicit' | 'main' | 'orchestrator' | 'reports_to';
 
@@ -109,7 +109,7 @@ export type OrchestrationSectionProps = {
   /** The teams of bots, to name the team an agent belongs to. */
   teams?: readonly OrchestrationTeam[];
   /** The projects, for the avatar an agent without a picture borrows. */
-  projects?: readonly ProjetConnu[];
+  projects?: readonly KnownProject[];
   /** The daemon's answer after a write, to refresh what the editor holds. */
   onSaved?: (agent: OrchestrationAgent) => void;
   /** Whether a selection is picked but not applied yet, so the host can warn
@@ -137,12 +137,12 @@ function TeamTag({ team, mine }: { team: OrchestrationTeam | undefined; mine: bo
 function Row({ agent, roster, projects, tags }: {
   agent: OrchestrationRosterEntry;
   roster: readonly OrchestrationRosterEntry[];
-  projects: readonly ProjetConnu[];
+  projects: readonly KnownProject[];
   tags?: React.ReactNode;
 }) {
   return (
     <>
-      <FramedFace visage={visageAgent(agent.name, roster, projects)} className="size-7" glyphClassName="text-[11px]" />
+      <FramedFace visage={agentFace(agent.name, roster, projects)} className="size-7" glyphClassName="text-[11px]" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[12.5px] font-medium">{agent.name}</span>
         {(agent.project || agent.role) && (

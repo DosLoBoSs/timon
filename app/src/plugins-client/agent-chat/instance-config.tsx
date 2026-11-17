@@ -12,7 +12,7 @@ import {
   type AgentChatInstance,
   type SubAgent,
 } from './instances';
-import { useAgents, useProjets, visageAgent, type AgentChoisissable } from './use-agents';
+import { useAgents, useProjects, agentFace, type PickableAgent } from './use-agents';
 
 const CHAMP =
   'w-full rounded-lg border border-border bg-background/60 px-2.5 py-1.5 text-[12px] outline-none focus:border-primary/60';
@@ -54,7 +54,7 @@ export function InstanceConfig({
   onDelete?: () => void;
 }) {
   const agents = useAgents();
-  const projets = useProjets();
+  const projets = useProjects();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [brouillon, setBrouillon] = useState<AgentChatInstance>(
@@ -67,7 +67,7 @@ export function InstanceConfig({
   const ajouterSousAgent = (agent: string) =>
     patch({ subAgents: [...brouillon.subAgents, { agent }] });
 
-  const surLaCarte = useMemo(
+  const onCard = useMemo(
     () => new Set([brouillon.agent, ...brouillon.subAgents.map((s) => s.agent)].map((n) => n.trim().toLowerCase())),
     [brouillon.agent, brouillon.subAgents],
   );
@@ -134,7 +134,7 @@ export function InstanceConfig({
                 key={sous.agent}
                 className="group flex items-center gap-2 rounded-lg px-1.5 py-1 transition-colors hover:bg-muted/40"
               >
-                <FramedFace visage={visageAgent(sous.agent, agents, projets)} className="size-6" glyphClassName="text-[10px]" />
+                <FramedFace visage={agentFace(sous.agent, agents, projets)} className="size-6" glyphClassName="text-[10px]" />
                 <span className="min-w-0 flex-1 truncate text-[12px]">{sous.agent}</span>
                 <button
                   type="button"
@@ -172,7 +172,7 @@ export function InstanceConfig({
           </ul>
         )}
 
-        <AgentPicker agents={agents} projects={projets} excluded={surLaCarte} onPick={ajouterSousAgent} />
+        <AgentPicker agents={agents} projects={projets} excluded={onCard} onPick={ajouterSousAgent} />
       </div>
 
       {saveError && <p role="alert" className="text-xs text-destructive">{t('widgets.saveError')}</p>}
@@ -218,7 +218,7 @@ function ChoixAgent({
   value,
   onChange,
 }: {
-  agents: readonly AgentChoisissable[];
+  agents: readonly PickableAgent[];
   value: string;
   onChange: (value: string) => void;
 }) {

@@ -9,10 +9,10 @@ import { foldText } from '@/lib/multichat-rail';
 import { cn } from '@/lib/utils';
 import { FramedFace } from './agent-avatar';
 import {
-  trouverProjet,
-  visageAgent,
-  type AgentChoisissable,
-  type ProjetConnu,
+  findProject,
+  agentFace,
+  type PickableAgent,
+  type KnownProject,
 } from './use-agents';
 
 /**
@@ -22,16 +22,16 @@ import {
  * one-shot missions, never something to keep a shortcut to.
  */
 export function filterAgents(
-  agents: readonly AgentChoisissable[],
-  projects: readonly ProjetConnu[],
+  agents: readonly PickableAgent[],
+  projects: readonly KnownProject[],
   query: string,
-): AgentChoisissable[] {
+): PickableAgent[] {
   const words = foldText(query).split(/\s+/).filter(Boolean);
   return agents
     .filter((a) => !a.ephemeral)
     .filter((a) => {
       if (words.length === 0) return true;
-      const project = trouverProjet(projects, a.project);
+      const project = findProject(projects, a.project);
       const haystack = foldText([a.name, a.role ?? '', a.project ?? '', project?.name ?? '', a.team ?? ''].join(' '));
       return words.every((word) => haystack.includes(word));
     })
@@ -57,8 +57,8 @@ export function AgentPicker({
   open: alwaysOpen = false,
   autoFocus = false,
 }: {
-  agents: readonly AgentChoisissable[];
-  projects: readonly ProjetConnu[];
+  agents: readonly PickableAgent[];
+  projects: readonly KnownProject[];
   /** Lower-cased names of the agents already on the card. */
   excluded: ReadonlySet<string>;
   onPick: (agent: string) => void;
@@ -193,7 +193,7 @@ export function AgentPicker({
           ) : (
             candidates.map((a, i) => {
               const isExcluded = excluded.has(a.name.toLowerCase());
-              const project = trouverProjet(projects, a.project);
+              const project = findProject(projects, a.project);
               return (
                 <li
                   key={a.name}
@@ -213,7 +213,7 @@ export function AgentPicker({
                     i === active && 'bg-primary/15 text-foreground',
                   )}
                 >
-                  <FramedFace visage={visageAgent(a.name, agents, projects)} className="size-6" glyphClassName="text-[10px]" />
+                  <FramedFace visage={agentFace(a.name, agents, projects)} className="size-6" glyphClassName="text-[10px]" />
                   <span className="min-w-0 flex-1 truncate">{a.name}</span>
                   <span className="max-w-[45%] shrink-0 truncate text-[10.5px] text-muted-foreground/75">
                     {isExcluded ? t('agentChat.picker.onCard') : (project?.name || a.project || '')}

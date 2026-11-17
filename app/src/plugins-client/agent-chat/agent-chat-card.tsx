@@ -10,7 +10,7 @@ import type { WidgetProps } from '@/components/widget-host/widget-props';
 import { apiErrorMessage } from '@/lib/api-error';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { AjoutAgent } from './agent-add';
+import { AgentAdd } from './agent-add';
 import { AgentShortcuts } from './agent-shortcuts';
 import { AgentContextMenu, useChangeAvatar, type AgentMenuTarget } from './agent-context-menu';
 import { DuplicateAgentDialog } from '@/components/duplicate-agent-dialog';
@@ -23,7 +23,7 @@ import {
   removeAgent,
   type AgentChatInstance,
 } from './instances';
-import { useAgents, useProjets, visageAgent } from './use-agents';
+import { useAgents, useProjects, agentFace } from './use-agents';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
 
 // Loaded on demand: statically imported, it weighed on every page of the app.
@@ -122,10 +122,10 @@ export function AgentChatCard({
   const [personnalise, setPersonnalise] = useState<string | null>(null);
   const [duplique, setDuplique] = useState<string | null>(null);
   const agents = useAgents();
-  const projets = useProjets();
+  const projets = useProjects();
 
   const modes = useMemo(() => instanceModes(instance), [instance]);
-  const surLaCarte = useMemo(() => new Set(modes.map((m) => m.value.toLowerCase())), [modes]);
+  const onCard = useMemo(() => new Set(modes.map((m) => m.value.toLowerCase())), [modes]);
   const agent = shownAgent(instance, selection);
 
   const changerAgent = useCallback((nom: string) => {
@@ -159,10 +159,10 @@ export function AgentChatCard({
             onSelect={changerAgent}
             onContextMenu={(nom, e) => setMenu({ agent: nom, x: e.clientX, y: e.clientY })}
           />
-          <AjoutAgent
+          <AgentAdd
             agents={agents}
             projets={projets}
-            exclus={surLaCarte}
+            excluded={onCard}
             onAdd={(nom) => onSave({ ...instance, subAgents: [...instance.subAgents, { agent: nom }] })}
           />
         </div>
@@ -200,7 +200,7 @@ export function AgentChatCard({
         <CustomizeAgentDialog
           agent={personnalise}
           initial={customizationOf(instance, personnalise)}
-          visage={visageAgent(personnalise, agents, projets)}
+          visage={agentFace(personnalise, agents, projets)}
           onClose={() => setPersonnalise(null)}
           onSave={(valeur) => {
             onSave(customizeAgent(instance, personnalise, valeur));

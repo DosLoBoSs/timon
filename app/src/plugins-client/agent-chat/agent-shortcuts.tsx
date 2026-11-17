@@ -6,7 +6,7 @@ import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { FaceAgent, faceFrame } from './agent-avatar';
 import type { ModeAgent } from './instances';
-import { visageAgent, type AgentChoisissable, type ProjetConnu } from './use-agents';
+import { agentFace, type PickableAgent, type KnownProject } from './use-agents';
 
 /**
  * The row of agents on top of the card — the card's only picture of who it
@@ -29,8 +29,8 @@ export function AgentShortcuts({
 }: {
   modes: readonly ModeAgent[];
   active: string;
-  agents: readonly AgentChoisissable[];
-  projets?: readonly ProjetConnu[];
+  agents: readonly PickableAgent[];
+  projets?: readonly KnownProject[];
   onSelect: (agent: string) => void;
   /** Right click (or the menu key) on an avatar. */
   onContextMenu?: (agent: string, event: MouseEvent) => void;
@@ -65,7 +65,7 @@ export function AgentShortcuts({
         <ShortcutAvatar
           key={mode.value}
           mode={mode}
-          visage={visageAgent(mode.value, agents, projets, mode.avatar)}
+          visage={agentFace(mode.value, agents, projets, mode.avatar)}
           pressed={mode.value === active}
           onSelect={onSelect}
           onContextMenu={onContextMenu}
@@ -83,7 +83,7 @@ function ShortcutAvatar({
   onContextMenu,
 }: {
   mode: ModeAgent;
-  visage: ReturnType<typeof visageAgent>;
+  visage: ReturnType<typeof agentFace>;
   pressed: boolean;
   onSelect: (agent: string) => void;
   onContextMenu?: (agent: string, event: MouseEvent) => void;

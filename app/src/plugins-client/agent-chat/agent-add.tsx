@@ -7,7 +7,7 @@ import { Plus } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { AgentPicker } from './agent-picker';
-import type { AgentChoisissable, ProjetConnu } from './use-agents';
+import type { PickableAgent, KnownProject } from './use-agents';
 import { NativeViewCover } from '@/lib/native-view-cover';
 
 const LARGEUR = 264;
@@ -24,15 +24,15 @@ const HAUTEUR_UTILE = 300;
  * the list. It closes on a pick, on Escape, on a click outside, and when the
  * page scrolls or resizes under it (a fixed box would float off its button).
  */
-export function AjoutAgent({
+export function AgentAdd({
   agents,
   projets,
-  exclus,
+  excluded,
   onAdd,
 }: {
-  agents: readonly AgentChoisissable[];
-  projets: readonly ProjetConnu[];
-  exclus: ReadonlySet<string>;
+  agents: readonly PickableAgent[];
+  projets: readonly KnownProject[];
+  excluded: ReadonlySet<string>;
   onAdd: (agent: string) => void;
 }) {
   const bouton = useRef<HTMLButtonElement>(null);
@@ -121,7 +121,7 @@ export function AjoutAgent({
           <AgentPicker
             agents={agents}
             projects={projets}
-            excluded={exclus}
+            excluded={excluded}
             open
             autoFocus
             onPick={(agent) => {
