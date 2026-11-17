@@ -44,5 +44,13 @@
   },
   "memoryPage": {
     "scopeOf": "scope {scope}"
+  },
+  "agentsGrid": {
+    "age": {
+      "seconds": "{n} s",
+      "minutes": "{n} min",
+      "hours": "{n} h",
+      "days": "{n} d"
+    }
   }
 }

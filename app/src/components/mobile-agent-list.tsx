@@ -271,7 +271,7 @@ export function MobileAgentList() {
                         )}
                       </span>
                       <span className={cn('shrink-0 tabular-nums text-[10.5px]', vis.textClass)}>
-                        {vis.label}
+                        {t(vis.labelKey)}
                       </span>
                       {a.pending > 0 && (
                         <span

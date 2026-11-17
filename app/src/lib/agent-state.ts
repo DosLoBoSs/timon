@@ -33,7 +33,8 @@ export type ActiveAgent = {
 };
 
 export type StateVisual = {
-  label: string;
+  /** Message key of the state's short name. */
+  labelKey: string;
   /** Solid fill / border / glow colour, applied via inline style. */
   colorVar: string;
   /** Tailwind text-* utility for label readability. */
@@ -44,25 +45,25 @@ export type StateVisual = {
 
 export const STATE_VISUALS: Record<ActiveState, StateVisual> = {
   thinking: {
-    label: 'thinking',
+    labelKey: 'chatSurface.activeState.thinking',
     colorVar: 'hsl(var(--warning))',
     textClass: 'text-[hsl(var(--warning))]',
     pulse: true,
   },
   needs_action: {
-    label: 'needs you',
+    labelKey: 'chatSurface.activeState.needs_action',
     colorVar: 'hsl(var(--primary))',
     textClass: 'text-[hsl(var(--primary))]',
     pulse: true,
   },
   done: {
-    label: 'done',
+    labelKey: 'chatSurface.activeState.done',
     colorVar: 'hsl(var(--success))',
     textClass: 'text-[hsl(var(--success))]',
     pulse: false,
   },
   idle: {
-    label: 'idle',
+    labelKey: 'chatSurface.activeState.idle',
     colorVar: 'hsl(var(--muted-foreground))',
     textClass: 'text-muted-foreground',
     pulse: false,

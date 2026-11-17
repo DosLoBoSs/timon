@@ -138,7 +138,7 @@ function SecondaryAgent({ agent, state }: { agent: Agent; state: ActiveState | u
   return (
     <ChatLink
       href={chatHref(agent.name)}
-      title={`${agent.name}${role ? ` — ${role.label}` : ''}${state ? ` · ${STATE_VISUALS[state].label}` : ''}`}
+      title={`${agent.name}${role ? ` — ${role.label}` : ''}${state ? ` · ${t(STATE_VISUALS[state].labelKey)}` : ''}`}
       className={cn(
         'relative grid size-8 shrink-0 place-items-center rounded-full transition-colors',
         // A mascot is its own frame: no disc behind it; its pulse still says it works.
