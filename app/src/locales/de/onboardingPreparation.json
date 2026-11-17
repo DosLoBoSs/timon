@@ -1,7 +1,31 @@
 {
   "onboarding": {
     "preparation": {
-      "title": "Timon wird vorbereitet"
+      "title": "Timon wird vorbereitet",
+      "ready": "Timon ist bereit",
+      "needsYou": "Timon braucht dich",
+      "items": {
+        "service": "Hintergrunddienst",
+        "servicePortable": "Portabler Modus: Timon läuft, solange die App geöffnet ist",
+        "serviceAccount": "Hintergrunddienst, nach deinem Konto",
+        "database": "Lokale Datenbank",
+        "browser": "Integrierter Browser",
+        "browserAbsent": "Integrierter Browser: in dieser Installation nicht enthalten",
+        "providers": "Suche nach deinen KIs"
+      },
+      "doctorFailed": "Timon konnte diesen Rechner nicht auslesen. Versuche es gleich noch einmal.",
+      "retry": "Erneut versuchen",
+      "retrying": "Neuer Versuch…",
+      "repair": "Reparaturbildschirm öffnen",
+      "gate": {
+        "waitTitle": "Timon schließt seine Installation ab",
+        "waitBody": "Dein Agent läuft auf dem Hintergrunddienst und arbeitet daher weiter, wenn dieses Fenster geschlossen ist. Dieser Schritt öffnet sich, sobald der Dienst antwortet.",
+        "waitAccount": "Der Hintergrunddienst startet, sobald du mit deinem Konto angemeldet bist.",
+        "blockedTitle": "Der Hintergrunddienst konnte nicht installiert werden",
+        "blockedBody": "Dein Agent braucht ihn, um weiterzuarbeiten, wenn dieses Fenster geschlossen ist. Behebe das Problem unten und versuche es dann noch einmal.",
+        "configuring": "Deine Einrichtung wird gespeichert…",
+        "configureFailed": "Deine Einrichtung konnte nicht gespeichert werden"
+      }
     }
   }
 }
