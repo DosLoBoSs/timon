@@ -4400,7 +4400,6 @@
       "cancel": "Abbrechen",
       "verifying": "Installationsprogramm wird geprüft…",
       "ready": "{name} ist heruntergeladen und geprüft.",
-      "openInstaller": "Installationsprogramm öffnen",
       "openFolder": "Im Ordner zeigen",
       "openFailed": "Das System konnte es nicht öffnen. Nutze „Im Ordner zeigen“.",
       "retry": "Erneut versuchen",

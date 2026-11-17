@@ -4400,7 +4400,6 @@
       "cancel": "Anuluj",
       "verifying": "Weryfikowanie instalatora…",
       "ready": "{name} został pobrany i zweryfikowany.",
-      "openInstaller": "Otwórz instalator",
       "openFolder": "Pokaż w folderze",
       "openFailed": "System nie mógł go otworzyć. Użyj opcji Pokaż w folderze.",
       "retry": "Spróbuj ponownie",

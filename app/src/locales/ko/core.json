@@ -4400,7 +4400,6 @@
       "cancel": "취소",
       "verifying": "설치 프로그램 확인 중…",
       "ready": "{name}을(를) 다운로드하고 확인했습니다.",
-      "openInstaller": "설치 프로그램 열기",
       "openFolder": "폴더에서 보기",
       "openFailed": "시스템에서 열 수 없습니다. 폴더에서 보기를 사용하세요.",
       "retry": "다시 시도",

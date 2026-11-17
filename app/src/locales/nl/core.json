@@ -4400,7 +4400,6 @@
       "cancel": "Annuleren",
       "verifying": "Installatieprogramma controleren…",
       "ready": "{name} is gedownload en gecontroleerd.",
-      "openInstaller": "Installatieprogramma openen",
       "openFolder": "In map tonen",
       "openFailed": "Het systeem kon het niet openen. Gebruik In map tonen.",
       "retry": "Opnieuw proberen",

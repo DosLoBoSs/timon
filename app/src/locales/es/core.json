@@ -4400,7 +4400,6 @@
       "cancel": "Cancelar",
       "verifying": "Verificando el instalador…",
       "ready": "{name} está descargado y verificado.",
-      "openInstaller": "Abrir el instalador",
       "openFolder": "Mostrar en la carpeta",
       "openFailed": "El sistema no pudo abrirlo. Usa Mostrar en la carpeta.",
       "retry": "Reintentar",

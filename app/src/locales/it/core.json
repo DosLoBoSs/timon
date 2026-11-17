@@ -4400,7 +4400,6 @@
       "cancel": "Annulla",
       "verifying": "Verifica del programma di installazione…",
       "ready": "{name} è scaricato e verificato.",
-      "openInstaller": "Apri il programma di installazione",
       "openFolder": "Mostra nella cartella",
       "openFailed": "Il sistema non è riuscito ad aprirlo. Usa Mostra nella cartella.",
       "retry": "Riprova",
