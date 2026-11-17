@@ -5,7 +5,7 @@ import { Mic } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { t } from '@/lib/i18n';
-import { DICTATION_GRACE_MS } from '@/lib/stt-dictee';
+import { DICTATION_GRACE_MS } from '@/lib/stt-dictation';
 import {
   chargerPushToTalk,
   enregistrerPushToTalk,

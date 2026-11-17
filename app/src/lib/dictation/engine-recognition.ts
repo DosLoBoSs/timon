@@ -1,4 +1,4 @@
-import { composeDictation } from '@/lib/stt-dictee';
+import { composeDictation } from '@/lib/stt-dictation';
 
 import { CaptureError, type CaptureHandlers, type MicrophoneCapture } from './audio-capture';
 import {

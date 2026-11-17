@@ -8,7 +8,7 @@ import {
   isFatalDictationError,
   sessionText,
   webSpeechWithoutEngine,
-} from './stt-dictee';
+} from './stt-dictation';
 
 test('une hésitation courte relance l’écoute', () => {
   assert.equal(

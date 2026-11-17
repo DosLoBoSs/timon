@@ -5,7 +5,7 @@ import { getLocale, t, type Locale } from '@/lib/i18n';
 import { regionalTag } from '@/lib/intl';
 import { pluginsSynced } from '@/lib/plugin-host/loader';
 import { settingsPath } from '@/lib/settings-path';
-import { webSpeechWithoutEngine } from '@/lib/stt-dictee';
+import { webSpeechWithoutEngine } from '@/lib/stt-dictation';
 
 import { startMicrophoneCapture } from './audio-capture';
 import { AUTO_CHOICE, dictationChoice, resetDictationChoice, subscribeDictationChoice, type DictationChoice } from './choice';

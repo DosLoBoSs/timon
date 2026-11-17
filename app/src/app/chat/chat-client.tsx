@@ -183,7 +183,7 @@ import {
   shouldRestartDictation,
   isFatalDictationError,
   sessionText,
-} from '@/lib/stt-dictee';
+} from '@/lib/stt-dictation';
 import { choiceFailure, createRecognition, dictationLang, useDictationRoute } from '@/lib/dictation/recognition';
 import { presentEngineConsent } from '@/components/dictation/engine-consent-card';
 import { openSettingsFromAnywhere } from '@/lib/settings-navigation';
@@ -5213,7 +5213,7 @@ export function ChatClient({
       // The whole `results` array, never from `event.resultIndex`: in
       // continuous listening the index points at the only segment that just
       // changed, and composing from it would drop everything said before the
-      // pause (cf. lib/stt-dictee).
+      // pause (cf. lib/stt-dictation).
       const text = sessionText(
         Array.from({ length: event.results.length }, (_, i) => ({
           isFinal: event.results[i]!.isFinal,

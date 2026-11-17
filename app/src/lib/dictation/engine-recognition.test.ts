@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
-import { composeDictation, isFatalDictationError, sessionText } from '@/lib/stt-dictee';
+import { composeDictation, isFatalDictationError, sessionText } from '@/lib/stt-dictation';
 import { mergeSegments, readResults } from '@/lib/stt-transcript';
 import type { ModelState, SpeechBridge, SpeechEvent, SpeechState } from '@/plugins-client/local-dictation/desktop-speech';
 import { createLocalDictationEngine } from '@/plugins-client/local-dictation/engine';
