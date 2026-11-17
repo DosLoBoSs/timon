@@ -18,6 +18,21 @@
       "feed": {
         "title": "Demo dal vivo giovedì",
         "body": "Agenti e plugin, un'ora."
+      },
+      "update": {
+        "highlight1": "Gli aggiornamenti si scaricano, verificano e installano dall'app.",
+        "highlight2": "Le missioni riprendono da dove si erano fermate dopo un riavvio.",
+        "highlight3": "Le conversazioni lunghe scorrono più velocemente.",
+        "highlight4": "I plugin possono aggiungere una propria pagina di impostazioni.",
+        "states": "Anteprima",
+        "state": {
+          "downloading": "Download",
+          "verified": "Verificato",
+          "missions": "Missioni",
+          "network": "Errore di rete",
+          "cancelled": "Password annullata"
+        },
+        "done": "Anteprima: non è stato installato nulla."
       }
     }
   }

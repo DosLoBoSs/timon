@@ -7,18 +7,19 @@
  * for the life of the page, closings ignored, nothing written
  * (`startNoticesPreview`). Like every card, nothing without a session.
  *
- * Their actions open a public page or close the card in this page; none
- * starts a download or changes a setting.
+ * Their actions open a public page or close the card in this page; the
+ * update card's "Update" opens the update window's preview
+ * (`update-preview.ts`). None starts a download or changes a setting.
  */
 
 import { t } from '@/lib/i18n';
 import { formatDate } from '@/lib/intl';
 import type { NoticeInput } from '@/lib/notices';
+import { openUpdatePreview, UPDATE_PREVIEW_VERSION } from '@/components/updates/update-preview';
 import { GITHUB_REPOSITORY_URL, GITHUB_STAR_NOTICE_ID } from './github-star-notice';
 
 export const NOTICES_PREVIEW_PARAM = 'notices-preview';
 export const DISCORD_INVITE_URL = 'https://discord.gg/ZQGARNcpZ3';
-const PREVIEW_VERSION = '0.2.0';
 const DAY_MS = 86_400_000;
 
 /** Whether this address asks for the preview: `?notices-preview=1`. */
@@ -46,10 +47,10 @@ export function previewNotices(now: number = Date.now()): (NoticeInput & { plugi
     },
     {
       pluginId: '@timon/updates',
-      id: `update-${PREVIEW_VERSION}`,
+      id: `update-${UPDATE_PREVIEW_VERSION}`,
       icon: 'timon',
-      title: t('updates.notice.available', { version: PREVIEW_VERSION }),
-      actions: [{ label: t('updates.notice.update'), dismiss: true }],
+      title: t('updates.notice.available', { version: UPDATE_PREVIEW_VERSION }),
+      actions: [{ label: t('updates.notice.update'), onSelect: () => { openUpdatePreview(); } }],
     },
     {
       pluginId: '@timon/updates',

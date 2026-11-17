@@ -18,6 +18,21 @@
       "feed": {
         "title": "Live demo op donderdag",
         "body": "Agents en plug-ins, één uur."
+      },
+      "update": {
+        "highlight1": "Updates worden in de app gedownload, gecontroleerd en geïnstalleerd.",
+        "highlight2": "Missies gaan na een herstart verder waar ze stopten.",
+        "highlight3": "Lange gesprekken scrollen sneller.",
+        "highlight4": "Plugins kunnen een eigen instellingenpagina toevoegen.",
+        "states": "Voorbeeld",
+        "state": {
+          "downloading": "Download",
+          "verified": "Gecontroleerd",
+          "missions": "Missies",
+          "network": "Netwerkfout",
+          "cancelled": "Wachtwoord geannuleerd"
+        },
+        "done": "Voorbeeld: er is niets geïnstalleerd."
       }
     }
   }

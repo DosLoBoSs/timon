@@ -18,6 +18,21 @@
       "feed": {
         "title": "周四直播演示",
         "body": "智能体与插件,一小时。"
+      },
+      "update": {
+        "highlight1": "更新可在应用内下载、校验并安装。",
+        "highlight2": "重启后，任务会从中断处继续。",
+        "highlight3": "长对话滚动更快。",
+        "highlight4": "插件可以添加自己的设置页面。",
+        "states": "预览",
+        "state": {
+          "downloading": "下载",
+          "verified": "已校验",
+          "missions": "任务",
+          "network": "网络错误",
+          "cancelled": "已取消密码"
+        },
+        "done": "预览：未安装任何内容。"
       }
     }
   }
