@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-license-refresh-test-'));
-const { bootLicenseState, describeRenewFailure, recordServerContact, startLicenseRefresh, writeLicenseKey } = await import('./license/refresh.js');
+const { bootLicenseState, describeRenewFailure, forgetLicenseKey, recordServerContact, startLicenseRefresh, writeLicenseKey } = await import('./license/refresh.js');
 const { LicenseServerError } = await import('./license/client.js');
 const { overrideBuildInfo } = await import('./build-info.js');
 const { overrideSetupPolicyForTests } = await import('./users/setup-policy.js');
@@ -417,6 +417,91 @@ test('a licence that is valid while the server is down raises no such alert', as
   await loop(['down']).refresh.tick();
   assert.equal(licenseState().status, 'valid');
   assert.deepEqual(notices, []);
+});
+
+/**
+ * TIM-0147: at boot the network is often not up yet, and a licence read as
+ * off then kept its modules off for a whole 300 s interval. A renewal that
+ * failed for want of a network is retried a few times sooner, and only that.
+ */
+async function bootLoop(replies: Reply[], body: (s: ReturnType<typeof server>, stop: () => void) => Promise<void>, bootRetryMs: readonly number[] = [10, 20, 40]): Promise<void> {
+  const s = server(replies);
+  const refresh = startLicenseRefresh({
+    app: null,
+    client: { baseUrl: 'https://licence.test', fetch: s.fetch, keys },
+    verify: { keys, device: DEVICE },
+    now: nowMs,
+    notify: (n) => { notices.push({ title: n.title, urgent: n.urgent }); },
+    bootRetryMs,
+  });
+  try { await body(s, () => refresh.stop()); } finally { refresh.stop(); }
+}
+
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function reach(calls: string[], expected: number): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline && calls.length < expected) await pause(5);
+}
+
+async function settle(calls: string[], expected: number): Promise<void> {
+  await reach(calls, expected);
+  // Past the last retry delay: a call that was going to come has come.
+  await pause(150);
+}
+
+test('a boot renewal without network is retried quickly until it goes through', async () => {
+  await onBetaBuild(async () => {
+    activated();
+    setLicenseState(unlicensed('expired'));
+    clock += 60;
+    await bootLoop(['down', 'down', { status: 200, body: { token: token(clock), refresh: { every: 300, offlineHours: 24 } } }, 'down'], async ({ calls }) => {
+      await settle(calls, 3);
+      assert.equal(calls.length, 3, 'two quick retries, then nothing once renewed');
+      assert.equal(licenseState().status, 'valid');
+    });
+  });
+});
+
+test('the quick boot retries are bounded, then the regular interval takes over', async () => {
+  activated();
+  clock += 60;
+  await bootLoop(['down', 'down', 'down', 'down', 'down', 'down'], async ({ calls }) => {
+    await settle(calls, 4);
+    assert.equal(calls.length, 4, 'the first renewal and three retries');
+    assert.equal(licenseState().status, 'valid', 'offline within the tolerance changes nothing');
+  });
+});
+
+test('an answer from the server is not retried quickly: 429 and refusals', async () => {
+  activated();
+  await bootLoop([{ status: 429, body: { error: 'rate_limited' } }, 'down'], async ({ calls }) => {
+    await settle(calls, 1);
+    assert.equal(calls.length, 1, 'asking sooner would make the rate limit worse');
+  });
+  activated();
+  await bootLoop([{ status: 403, body: { error: 'revoked' } }, 'down'], async ({ calls }) => {
+    await settle(calls, 1);
+    assert.equal(calls.length, 1);
+    assert.equal(licenseState().reason, 'revoked');
+  });
+});
+
+test('no quick retry without an activation key, nor after stop()', async () => {
+  activated();
+  forgetLicenseKey();
+  await bootLoop(['down'], async ({ calls }) => {
+    await settle(calls, 0);
+    assert.equal(calls.length, 0, 'a token installed by hand has nothing to renew');
+  });
+  activated();
+  clock += 60;
+  await bootLoop(['down', 'down', 'down', 'down'], async ({ calls }, stop) => {
+    await reach(calls, 1);
+    stop();
+    await pause(400);
+    assert.equal(calls.length, 1, 'a stopped loop asks nothing more');
+  }, [100, 100, 100]);
 });
 
 test('every renewal failure names its side, and never the key', () => {

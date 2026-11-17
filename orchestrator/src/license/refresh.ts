@@ -48,6 +48,12 @@ import { licenseStoreDamaged, readLicenseStore, writeFileDurably, writeLicenseSt
 const DEFAULT_EVERY_SECONDS = 300;
 const DEFAULT_OFFLINE_HOURS = 24;
 const LOCAL_TICK_MS = 60_000;
+/**
+ * Delays of the quick retries after a boot whose first renewal found no
+ * network, before the regular interval takes over. Their sum stays under the
+ * 300 s default, so they never overlap the first regular tick.
+ */
+const BOOT_RETRY_MS: readonly number[] = [30_000, 60_000, 120_000];
 
 // ── Persistence of the activation key ───────────────────────────────────────
 
@@ -133,6 +139,8 @@ export type RefreshDeps = {
   manual?: boolean;
   /** Tests: whether the machine id can be read right now. */
   fingerprintReadable?: () => boolean;
+  /** Tests: shorter delays for the quick retries after the boot. */
+  bootRetryMs?: readonly number[];
 };
 
 export type LicenseRefresh = {
@@ -277,7 +285,15 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
     }
   };
 
+  /**
+   * Whether the last renewal failed for want of a network (unreachable, 5xx,
+   * unsigned): the only failure the boot retries quickly. A refusal or a 429
+   * is an answer, and asking again sooner would not change it.
+   */
+  let lastOffline = false;
+
   const tick = async (): Promise<void> => {
+    lastOffline = false;
     // Free never contacts the issuer, including installations retaining an old key.
     if (licenseState().localFree || licenseState().planId === 'free') return;
     // A build past its end date needs no answer from the server.
@@ -328,6 +344,7 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
       }
       // Unreachable, 5xx, unsigned: offline. The token stays good until the
       // plan's tolerance runs out; the local tick enforces that.
+      lastOffline = true;
       if (offlineSince === null) {
         const store = readLicenseStore();
         offlineSince = store.lastContact !== undefined ? store.lastContact * 1000 : now();
@@ -387,13 +404,33 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
   network.unref();
   local.unref();
   // First refresh right away: a daemon that was down for a while must not wait
-  // five minutes to learn its licence was revoked — or renewed.
-  void tick();
+  // five minutes to learn its licence was revoked — or renewed. At boot the
+  // network is often not up yet (a machine just woken, Wi-Fi still joining):
+  // a licence read as off then kept its modules off for a whole interval
+  // (TIM-0147), so a failure for want of a network is retried a few times
+  // sooner before the interval takes over.
+  const retries = deps.bootRetryMs ?? BOOT_RETRY_MS;
+  let stopped = false;
+  let bootRetry: NodeJS.Timeout | null = null;
+  const bootTick = async (attempt: number): Promise<void> => {
+    await tick();
+    const delay = retries[attempt];
+    if (stopped || !lastOffline || delay === undefined) return;
+    bootRetry = setTimeout(() => { bootRetry = null; void bootTick(attempt + 1); }, delay);
+    bootRetry.unref();
+  };
+  void bootTick(0);
 
   return {
     tick,
     localTick,
-    stop() { clearInterval(network); clearInterval(local); },
+    stop() {
+      stopped = true;
+      clearInterval(network);
+      clearInterval(local);
+      if (bootRetry) clearTimeout(bootRetry);
+      bootRetry = null;
+    },
   };
 }
 
