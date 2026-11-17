@@ -219,7 +219,7 @@ export function sendBundle(
   }
   const bundle = registry.get(id);
   if (!bundle) {
-    res.status(404).json({ error: `no browser half served for \`${id}\`` });
+    res.status(404).json(apiError('plugin_asset_not_found', `no browser half served for \`${id}\``));
     return;
   }
 
@@ -227,7 +227,7 @@ export function sendBundle(
   if (rev !== null && rev !== bundle.rev) {
     // Stale revision: it is up to the client to read `/api/plugins` again — serving
     // it the current file would pollute its immutable cache.
-    res.status(404).json({ error: 'unknown revision', rev: bundle.rev });
+    res.status(404).json({ ...apiError('plugin_revision_stale', 'unknown revision'), rev: bundle.rev });
     return;
   }
 
@@ -235,7 +235,7 @@ export function sendBundle(
   try {
     body = readFileSync(bundle.file);
   } catch (err) {
-    res.status(404).json({ error: `unreadable browser half: ${(err as Error).message}` });
+    res.status(404).json(apiError('plugin_asset_unreadable', `unreadable browser half: ${(err as Error).message}`));
     return;
   }
 

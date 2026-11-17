@@ -31,7 +31,9 @@ export function registerIntegrationWebhook(router: Router, service: IntegrationS
       const status = error instanceof IntegrationQueueError ? error.status
         : error instanceof PluginIntegrationError && error.code === 'invalid' ? 400 : 503;
       if (status === 429) res.setHeader('Retry-After', '60');
-      res.status(status).json({ error: status === 401 ? 'authentication failed' : status === 404 ? 'not found' : 'integration request refused' });
+      res.status(status).json(status === 401 ? { error: 'authentication failed' }
+        : status === 404 ? apiError('not_found', 'not found')
+          : apiError('integration_refused', 'integration request refused'));
     } finally { res.off('close', abort); }
   });
 }

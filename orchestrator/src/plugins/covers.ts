@@ -203,19 +203,19 @@ export function sendCover(
   }
   const cover = pick(registry, id);
   if (!cover) {
-    res.status(404).json({ error: `no cover served for \`${id}\`` });
+    res.status(404).json(apiError('plugin_asset_not_found', `no cover served for \`${id}\``));
     return;
   }
   const rev = typeof req.query.rev === 'string' ? req.query.rev : null;
   if (rev !== null && rev !== cover.rev) {
-    res.status(404).json({ error: 'unknown revision', rev: cover.rev });
+    res.status(404).json({ ...apiError('plugin_revision_stale', 'unknown revision'), rev: cover.rev });
     return;
   }
   let body: Buffer;
   try {
     body = readFileSync(cover.file);
   } catch (err) {
-    res.status(404).json({ error: `unreadable cover: ${(err as Error).message}` });
+    res.status(404).json(apiError('plugin_asset_unreadable', `unreadable cover: ${(err as Error).message}`));
     return;
   }
   res.set('Content-Type', cover.contentType);
@@ -250,19 +250,19 @@ export function sendStill(
   }
   const still = registry.getStill(id, index);
   if (!still) {
-    res.status(404).json({ error: `no still ${index} for \`${id}\`` });
+    res.status(404).json(apiError('plugin_asset_not_found', `no still ${index} for \`${id}\``));
     return;
   }
   const rev = typeof req.query.rev === 'string' ? req.query.rev : null;
   if (rev !== null && rev !== still.rev) {
-    res.status(404).json({ error: 'unknown revision', rev: still.rev });
+    res.status(404).json({ ...apiError('plugin_revision_stale', 'unknown revision'), rev: still.rev });
     return;
   }
   let body: Buffer;
   try {
     body = readFileSync(still.file);
   } catch (err) {
-    res.status(404).json({ error: `unreadable still: ${(err as Error).message}` });
+    res.status(404).json(apiError('plugin_asset_unreadable', `unreadable still: ${(err as Error).message}`));
     return;
   }
   res.set('Content-Type', still.contentType);
