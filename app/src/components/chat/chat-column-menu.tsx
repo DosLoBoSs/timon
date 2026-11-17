@@ -5,11 +5,11 @@ import { ArrowLeftRight, Columns2, PanelLeftClose, PanelRightClose, Plus, X } fr
 
 import { t as i18n } from '@/lib/i18n';
 import type { FileMenuItem } from './file-context-menu';
-import type { CoteColonne } from './chat-columns';
+import type { ColumnSide } from './chat-columns';
 
 /** What a column lets its menu do. Absent = the row is not offered. */
 export type CommandesColonne = {
-  cote: CoteColonne;
+  cote: ColumnSide;
   /** The column's zone, which is also its first tab: it cannot be closed. */
   zone: string;
   onAddTab?: () => void;

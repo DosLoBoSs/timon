@@ -25,7 +25,7 @@ import {
   type WidgetLayout,
 } from '@/components/widget-host/widget-layout';
 import type { CatalogEntry } from '@/components/widget-host/widget-catalog';
-import { lireColonnes, type ChatColumns } from '@/components/chat/chat-columns';
+import { readColumns, type ChatColumns } from '@/components/chat/chat-columns';
 
 /** The chat's two columns (`COLONNES` in `chat-rails.tsx`). */
 export const CHAT_COLUMN_ZONES = ['chat.left.widget', 'chat.right.widget'] as const;
@@ -139,7 +139,7 @@ export function applyWidgetsProposal(input: {
   const closed: Array<{ tab: string; column: string }> = [];
   if (proposal.columns && proposal.view === '/chat') {
     const p = proposal.columns;
-    const current = lireColonnes(input.columnsRaw, CHAT_COLUMN_ZONES);
+    const current = readColumns(input.columnsRaw, CHAT_COLUMN_ZONES);
     const onglets: Record<string, string[]> = { ...current.onglets };
     for (const [column, list] of Object.entries(p.tabs ?? {})) {
       const wanted = list.map(zoneOf);
@@ -158,8 +158,8 @@ export function applyWidgetsProposal(input: {
     };
     const actifs = merge(current.actifs, Object.fromEntries(Object.entries(p.active ?? {}).map(([c, ref]) => [c, zoneOf(ref) === c ? null : zoneOf(ref)])));
     const secondes = merge(current.secondes, Object.fromEntries(Object.entries(p.second ?? {}).map(([c, ref]) => [c, ref === null ? null : zoneOf(ref)])));
-    // `lireColonnes` normalises: unknown zones, foreign tabs and stale actives drop out.
-    columns = lireColonnes({
+    // `readColumns` normalises: unknown zones, foreign tabs and stale actives drop out.
+    columns = readColumns({
       ...current,
       ordre: p.order ?? current.ordre,
       masquees: p.hidden ?? current.masquees,

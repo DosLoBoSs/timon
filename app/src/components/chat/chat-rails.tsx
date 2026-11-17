@@ -29,33 +29,33 @@ import { declareSlot, register, slotKind, type WidgetOptions } from '@/lib/plugi
 import { zoneDropId } from '@/components/widget-host/widget-dnd';
 import { pluginPlacementId } from '@/components/widget-host/widget-catalog';
 import {
-  ajouterOnglet,
-  ajouterSeconde,
-  poserMasquee,
-  detacherSeconde,
-  choisirOnglet,
-  estMasquee,
-  inverserColonnes,
-  largeurDe,
-  lireColonnes,
-  ongletActif,
-  ongletsDe,
-  planifierRails,
-  poserLargeur,
-  poserFil,
-  retirerOnglet,
-  secondeDe,
-  zoneDuCote,
-  LARGEUR_MAX,
-  LARGEUR_MIN,
-  FIL_LECTURE_MIN,
-  largeursJumelees,
-  LARGEUR_SECONDE,
-  estEnTiroir,
+  addTab,
+  addSecond,
+  setCollapsed,
+  detachSecond,
+  selectTab,
+  isCollapsed,
+  swapColumns,
+  widthOf,
+  readColumns,
+  activeTab,
+  tabsOf,
+  planRails,
+  setWidth,
+  setThreadWidth,
+  removeTab,
+  secondOf,
+  zoneOfSide,
+  WIDTH_MAX,
+  WIDTH_MIN,
+  THREAD_READING_MIN,
+  pairedWidths,
+  SECOND_COLUMN_WIDTH,
+  showsDrawers,
   type ChatColumns,
-  type CoteColonne,
-  type DemandeCote,
-  type PlaceCote,
+  type ColumnSide,
+  type SideRequest,
+  type SidePlacement,
 } from './chat-columns';
 import { MissionRail } from './mission-rail';
 import { MissionCard } from './mission-card';
@@ -497,7 +497,7 @@ export function PanneauTiroir({
   children,
 }: {
   id: string;
-  cote: CoteColonne;
+  cote: ColumnSide;
   label: string;
   ouvert: boolean;
   onFermer: () => void;
@@ -646,40 +646,40 @@ export function useChatColumns(connues: readonly string[] = COLONNES): {
     key ? `${key}.columns` : null,
     workspaceRowHandover(previousKey, 'columns', 'chat.columns'),
   );
-  const colonnes = useMemo(() => lireColonnes(stocke, connues), [stocke, connues]);
+  const colonnes = useMemo(() => readColumns(stocke, connues), [stocke, connues]);
   const muter = useCallback((op: (c: ChatColumns) => ChatColumns) => {
-    update((raw) => op(lireColonnes(raw, connues)));
+    update((raw) => op(readColumns(raw, connues)));
   }, [update, connues]);
 
   // Swaps the sides seen: already swapped elsewhere, there is nothing left to do.
   const inverser = useCallback(() => {
     const premiere = colonnes.ordre[0];
-    muter((c) => c.ordre[0] === premiere ? inverserColonnes(c) : c);
+    muter((c) => c.ordre[0] === premiere ? swapColumns(c) : c);
   }, [colonnes, muter]);
   const largeur = useCallback((zone: string, valeur: number | null, persist = true) => {
-    void update((raw) => poserLargeur(lireColonnes(raw, connues), zone, valeur), persist);
+    void update((raw) => setWidth(readColumns(raw, connues), zone, valeur), persist);
   }, [update, connues]);
   const largeurs = useCallback((liste: ReadonlyArray<readonly [string, number | null]>, persist = true) => {
-    void update((raw) => liste.reduce((c, [zone, valeur]) => poserLargeur(c, zone, valeur), lireColonnes(raw, connues)), persist);
+    void update((raw) => liste.reduce((c, [zone, valeur]) => setWidth(c, zone, valeur), readColumns(raw, connues)), persist);
   }, [update, connues]);
   const fil = useCallback((valeur: number | null, persist = true) => {
-    void update((raw) => poserFil(lireColonnes(raw, connues), valeur), persist);
+    void update((raw) => setThreadWidth(readColumns(raw, connues), valeur), persist);
   }, [update, connues]);
   // What the click asks for is decided here, against the columns on screen:
   // an op runs again on a row another window rewrote (TODO #647), and must
   // neither toggle back nor mint another suffix there.
   const basculer = useCallback((zone: string) => {
-    const masquee = !estMasquee(colonnes, zone);
-    muter((c) => poserMasquee(c, zone, masquee));
+    const masquee = !isCollapsed(colonnes, zone);
+    muter((c) => setCollapsed(c, zone, masquee));
   }, [colonnes, muter]);
   // A clock-based suffix is never reused, even after a close (cf.
-  // `ajouterOnglet`).
+  // `addTab`).
   const ajouter = useCallback((colonne: string) => {
     const suffixe = Date.now().toString(36);
-    muter((c) => ajouterOnglet(c, colonne, suffixe));
+    muter((c) => addTab(c, colonne, suffixe));
   }, [muter]);
   const choisir = useCallback(
-    (colonne: string, zone: string) => muter((c) => choisirOnglet(c, colonne, zone)),
+    (colonne: string, zone: string) => muter((c) => selectTab(c, colonne, zone)),
     [muter],
   );
   // Cards leave before the tab does: the other way round, they would sit for a
@@ -688,21 +688,21 @@ export function useChatColumns(connues: readonly string[] = COLONNES): {
   const fermer = useCallback((colonne: string, zone: string) => {
     if (zone === colonne) return;
     onMergeZone(zone, colonne);
-    muter((c) => choisirOnglet(retirerOnglet(c, colonne, zone), colonne, colonne));
+    muter((c) => selectTab(removeTab(c, colonne, zone), colonne, colonne));
   }, [muter, onMergeZone]);
 
   // Same never-reused suffix as a tab: a second column IS a tab.
   const seconde = useCallback((colonne: string) => {
     const suffixe = Date.now().toString(36);
-    muter((c) => ajouterSeconde(c, colonne, suffixe));
+    muter((c) => addSecond(c, colonne, suffixe));
   }, [muter]);
   // An empty second column goes away; one holding cards goes back among the
   // tabs, cards included — removing a column never throws a card out.
   const retirerSecondeColonne = useCallback((colonne: string) => {
-    const zone = secondeDe(colonnes, colonne);
+    const zone = secondOf(colonnes, colonne);
     if (!zone) return;
     const garnie = widgetsOf(zone).length > 0;
-    muter((c) => secondeDe(c, colonne) !== zone ? c : garnie ? detacherSeconde(c, colonne) : retirerOnglet(c, colonne, zone));
+    muter((c) => secondOf(c, colonne) !== zone ? c : garnie ? detachSecond(c, colonne) : removeTab(c, colonne, zone));
   }, [colonnes, muter, widgetsOf]);
 
   return {
@@ -726,7 +726,7 @@ const LARGEUR_TIROIR = 340;
 
 /** Default width of a side's column. The left one keeps the narrower width it
  *  had below `xl` (1280px), where the fixed classes used to set it. */
-function largeurParDefaut(cote: CoteColonne, disponible: number): number {
+function largeurParDefaut(cote: ColumnSide, disponible: number): number {
   return cote === 'left' && disponible > 0 && disponible < 1280 ? 280 : 300;
 }
 
@@ -751,7 +751,7 @@ export type RailAffiche = {
 };
 
 export type CoteAffiche = {
-  cote: CoteColonne;
+  cote: ColumnSide;
   /** The column zone of this side. */
   colonne: string;
   /** Not collapsed, and has something to show (or a drag / edit is on). */
@@ -794,7 +794,7 @@ export function useChatRailsLayout(
       const nav = Number.parseFloat(getComputedStyle(noeud).getPropertyValue('--timon-nav-w')) || 0;
       const largeur = noeud.getBoundingClientRect().width;
       setDisponible(Math.max(0, largeur - nav));
-      setTiroir(estEnTiroir(largeur));
+      setTiroir(showsDrawers(largeur));
     };
     lire();
     if (typeof ResizeObserver === 'undefined') return;
@@ -812,18 +812,18 @@ export function useChatRailsLayout(
 
   return useMemo(() => {
     const cotes = (['left', 'right'] as const).map((cote) => {
-      const colonne = zoneDuCote(colonnes, cote) ?? (cote === 'left' ? CHAT_LEFT_ZONE : CHAT_RIGHT_ZONE);
-      const onglets = ongletsDe(colonnes, colonne);
+      const colonne = zoneOfSide(colonnes, cote) ?? (cote === 'left' ? CHAT_LEFT_ZONE : CHAT_RIGHT_ZONE);
+      const onglets = tabsOf(colonnes, colonne);
       const occupee = onglets.some(occupe);
       // Collapsing is the wide screen's gesture: a panel is closed already.
-      const visible = !compact && (tiroir || !estMasquee(colonnes, colonne)) && (occupee || ui);
-      const seconde = secondeDe(colonnes, colonne);
+      const visible = !compact && (tiroir || !isCollapsed(colonnes, colonne)) && (occupee || ui);
+      const seconde = secondOf(colonnes, colonne);
       const sans = seconde ? onglets.filter((z) => z !== seconde) : onglets;
-      const demande: DemandeCote | null = visible
+      const demande: SideRequest | null = visible
         ? {
-          largeur: largeurDe(colonnes, colonne, largeurParDefaut(cote, disponible)),
-          premiere: sans.some(occupe) || ui,
-          seconde: seconde && (occupe(seconde) || ui) ? largeurDe(colonnes, seconde, LARGEUR_SECONDE) : null,
+          width: widthOf(colonnes, colonne, largeurParDefaut(cote, disponible)),
+          first: sans.some(occupe) || ui,
+          second: seconde && (occupe(seconde) || ui) ? widthOf(colonnes, seconde, SECOND_COLUMN_WIDTH) : null,
         }
         : null;
       return { cote, colonne, onglets, sans, seconde, occupee, visible, demande };
@@ -833,7 +833,7 @@ export function useChatRailsLayout(
       // One panel per side, every tab in its bar — a second column included,
       // there is no room beside anything. The thread reserves nothing.
       const panneau = (c: typeof g): CoteAffiche => {
-        const actif = ongletActif(colonnes, c.colonne);
+        const actif = activeTab(colonnes, c.colonne);
         return {
           cote: c.cote,
           colonne: c.colonne,
@@ -845,8 +845,8 @@ export function useChatRailsLayout(
             slot: c.colonne,
             onglets: c.onglets,
             actif: c.onglets.includes(actif) ? actif : c.colonne,
-            largeur: largeurDe(colonnes, c.colonne, LARGEUR_TIROIR),
-            max: LARGEUR_MAX,
+            largeur: widthOf(colonnes, c.colonne, LARGEUR_TIROIR),
+            max: WIDTH_MAX,
             decalage: 0,
             seconde: false,
             noms: colonnes.noms ?? {},
@@ -856,35 +856,35 @@ export function useChatRailsLayout(
       };
       return { gauche: panneau(g), droite: panneau(d), tiroir, disponible, mesurer: setNoeud };
     }
-    const plan = planifierRails(disponible, g.demande, d.demande);
-    const affiche = (c: typeof g, place: PlaceCote | null): CoteAffiche => {
+    const plan = planRails(disponible, g.demande, d.demande);
+    const affiche = (c: typeof g, place: SidePlacement | null): CoteAffiche => {
       const rails: RailAffiche[] = [];
       // Folded for lack of room, the second column is a tab again: one tab
       // entry per column, in the bar of the column it belongs to.
-      const onglets = place?.secondeRepliee ? c.onglets : c.sans;
-      if (place && place.premiere !== null) {
-        const actif = ongletActif(colonnes, c.colonne);
+      const onglets = place?.secondFolded ? c.onglets : c.sans;
+      if (place && place.first !== null) {
+        const actif = activeTab(colonnes, c.colonne);
         rails.push({
           zone: c.colonne,
           slot: c.colonne,
           onglets,
           actif: onglets.includes(actif) ? actif : c.colonne,
-          largeur: place.premiere,
-          max: Math.min(LARGEUR_MAX, place.premiere + plan.marge),
+          largeur: place.first,
+          max: Math.min(WIDTH_MAX, place.first + plan.slack),
           decalage: 0,
           seconde: false,
           noms: colonnes.noms ?? {},
         });
       }
-      if (place && place.seconde !== null && c.seconde) {
+      if (place && place.second !== null && c.seconde) {
         rails.push({
           zone: c.seconde,
           slot: c.colonne,
           onglets: [c.seconde],
           actif: c.seconde,
-          largeur: place.seconde,
-          max: Math.min(LARGEUR_MAX, place.seconde + plan.marge),
-          decalage: place.decalageSeconde,
+          largeur: place.second,
+          max: Math.min(WIDTH_MAX, place.second + plan.slack),
+          decalage: place.secondOffset,
           seconde: true,
           noms: colonnes.noms ?? {},
         });
@@ -896,10 +896,10 @@ export function useChatRailsLayout(
         occupee: c.occupee,
         aSeconde: c.seconde !== null,
         rails,
-        gouttiere: place?.gouttiere ?? 0,
+        gouttiere: place?.gutter ?? 0,
       };
     };
-    return { gauche: affiche(g, plan.gauche), droite: affiche(d, plan.droite), tiroir, disponible, mesurer: setNoeud };
+    return { gauche: affiche(g, plan.left), droite: affiche(d, plan.right), tiroir, disponible, mesurer: setNoeud };
   }, [colonnes, compact, ui, occupe, disponible, tiroir]);
 }
 
@@ -932,12 +932,12 @@ function PoigneeLargeur({
   label,
   redimension,
 }: {
-  cote: CoteColonne;
+  cote: ColumnSide;
   label: string;
   redimension: RedimensionRail;
 }) {
   const { largeur, max, jumelle, onChange, onReset } = redimension;
-  const min = Math.min(LARGEUR_MIN, max);
+  const min = Math.min(WIDTH_MIN, max);
   const borne = useCallback((v: number) => Math.round(Math.max(min, Math.min(max, v))), [min, max]);
   // The edge follows the pointer: on the left the column grows to the right,
   // on the right it grows to the left.
@@ -950,8 +950,8 @@ function PoigneeLargeur({
   /** Where the gesture lands: this column, and its mirror unless `seul`. */
   const viser = (depart: number, twin: { largeur: number; max: number } | null, voulue: number, seul: boolean): [number, number | null] => {
     if (!twin || seul) return [borne(voulue), null];
-    const r = largeursJumelees(depart, voulue, max, twin);
-    return [r.largeur, r.jumelle];
+    const r = pairedWidths(depart, voulue, max, { width: twin.largeur, max: twin.max });
+    return [r.width, r.twin];
   };
   const suivre = (x: number, seul: boolean) => {
     const depart = glisse.current;
@@ -1052,7 +1052,7 @@ export function PoigneesFil({ onChange, onReset }: {
   // 48px: the reading column's own gutters, inside the box (`--chat-col` + 48).
   const GOUTTIERES = 48;
   const viser = (d: NonNullable<typeof glisse.current>, x: number) =>
-    Math.round(Math.max(FIL_LECTURE_MIN, Math.min(d.max, d.largeur + 2 * d.sens * (x - d.x))));
+    Math.round(Math.max(THREAD_READING_MIN, Math.min(d.max, d.largeur + 2 * d.sens * (x - d.x))));
   const finir = (x: number | null) => {
     const d = glisse.current;
     glisse.current = null;
@@ -1084,7 +1084,7 @@ export function PoigneesFil({ onChange, onReset }: {
           pointeur: e.pointerId,
           x: e.clientX,
           largeur: el.getBoundingClientRect().width - GOUTTIERES,
-          max: Math.max(FIL_LECTURE_MIN, parent - GOUTTIERES),
+          max: Math.max(THREAD_READING_MIN, parent - GOUTTIERES),
           sens: cote === 'left' ? -1 : 1,
         };
         setActif(cote);
@@ -1109,7 +1109,7 @@ export function PoigneesFil({ onChange, onReset }: {
         const pas = (e.shiftKey ? 128 : 32) * ((e.key === 'ArrowRight') === (cote === 'right') ? 1 : -1);
         const parent = el.parentElement?.getBoundingClientRect().width ?? 0;
         const actuelle = el.getBoundingClientRect().width - GOUTTIERES;
-        onChange(Math.round(Math.max(FIL_LECTURE_MIN, Math.min(Math.max(FIL_LECTURE_MIN, parent - GOUTTIERES), actuelle + pas))), true);
+        onChange(Math.round(Math.max(THREAD_READING_MIN, Math.min(Math.max(THREAD_READING_MIN, parent - GOUTTIERES), actuelle + pas))), true);
       }}
       onDoubleClick={onReset}
     />
@@ -1163,7 +1163,7 @@ export function ChatWidgetRail({
   /** Slot whose rules govern its zones. Absent = `zone` itself. */
   slot?: string;
   /** Side where the page puts it. Decides the icon and the controls' edge. */
-  cote: CoteColonne;
+  cote: ColumnSide;
   label: string;
   className?: string;
   /** Position and width, which the page computes from the room it has. */

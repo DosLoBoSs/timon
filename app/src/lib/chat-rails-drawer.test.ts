@@ -3,11 +3,11 @@ import { waitUntil } from './test-wait';
 import test from 'node:test';
 
 test('narrow threshold: the lg breakpoint, or the docked shell one', async () => {
-  const { estEnTiroir } = await import('../components/chat/chat-columns');
-  assert.equal(estEnTiroir(0), false, 'unmeasured: the floating columns, hidden by CSS');
-  assert.equal(estEnTiroir(390), true);
-  assert.equal(estEnTiroir(1023), true);
-  assert.equal(estEnTiroir(1024), false);
+  const { showsDrawers } = await import('../components/chat/chat-columns');
+  assert.equal(showsDrawers(0), false, 'unmeasured: the floating columns, hidden by CSS');
+  assert.equal(showsDrawers(390), true);
+  assert.equal(showsDrawers(1023), true);
+  assert.equal(showsDrawers(1024), false);
 });
 
 /**

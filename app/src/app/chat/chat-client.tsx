@@ -254,7 +254,7 @@ import {
   PoigneesFil,
   type ChatRailValue,
 } from '@/components/chat/chat-rails';
-import { estMasquee } from '@/components/chat/chat-columns';
+import { isCollapsed } from '@/components/chat/chat-columns';
 import {
   contextLimitFor,
   contextNudgePct,
@@ -5759,7 +5759,7 @@ export function ChatClient({
   // A column only exists if it holds something: the thread's gutter follows,
   // otherwise a rail emptied of its cards would leave a 300 px blank.
   // Across all tabs: an empty shown tab does not take the column away. Widths
-  // come from the layout, then from the room the chat has (`planifierRails`).
+  // come from the layout, then from the room the chat has (`planRails`).
   const rails = useChatRailsLayout(colonnes, { compact });
   const zoneGauche = rails.gauche.colonne;
   const zoneDroite = rails.droite.colonne;
@@ -5978,7 +5978,7 @@ export function ChatClient({
             had something to show: expanding an empty column would render
             nothing. Desktop only — on mobile the rail already lives in a
             drawer, there is nothing to collapse. */}
-        {!compact && !tiroir && !focus && estMasquee(colonnes, zoneGauche) && colonneGaucheOccupee && (
+        {!compact && !tiroir && !focus && isCollapsed(colonnes, zoneGauche) && colonneGaucheOccupee && (
           <button
             type="button"
             onClick={() => basculerColonne(zoneGauche)}
@@ -5994,7 +5994,7 @@ export function ChatClient({
           </button>
         )}
 
-        {!compact && !tiroir && !focus && estMasquee(colonnes, zoneDroite) && colonneDroiteOccupee && (
+        {!compact && !tiroir && !focus && isCollapsed(colonnes, zoneDroite) && colonneDroiteOccupee && (
           <button
             type="button"
             onClick={() => basculerColonne(zoneDroite)}
