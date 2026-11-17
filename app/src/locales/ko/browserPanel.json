@@ -156,8 +156,7 @@
       "needsControl": "녹화하려면 이 창에서 브라우저를 사용하세요. 다른 기기가 제어 중입니다",
       "recording": "녹화 중",
       "ended": "녹화 종료됨",
-      "stepsOne": "{count}단계",
-      "stepsMany": "{count}단계",
+      "steps": "{count}단계",
       "stop": "중지",
       "stopTitle": "녹화를 중지하고 단계 검토",
       "review": "검토",
@@ -271,7 +270,6 @@
       "card": {
         "label": "브라우저 주석 ({count})",
         "count": "주석 {count}개",
-        "countOne": "주석 1개",
         "details": "세부 정보",
         "enlarge": "주석 {n}의 캡처 확대",
         "source": "소스: {source}",
@@ -283,7 +281,6 @@
         }
       },
       "queue": "주석 {count}개",
-      "queueOne": "주석 1개",
       "history": "주석 기록",
       "sendQueue": "보내기",
       "sendQueueTitle": "이 대화에서 {agent}에게 보내기",

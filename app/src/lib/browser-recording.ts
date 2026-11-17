@@ -74,7 +74,7 @@ export type StoppedBrowserRecording = { recording: BrowserRecordingMeta; already
 export type LearnedBrowserRecording = { recording: BrowserRecordingMeta; missionId: string };
 
 export function stepCount(count: number): string {
-  return t(count === 1 ? 'browserPanel.recording.stepsOne' : 'browserPanel.recording.stepsMany', { count });
+  return t('browserPanel.recording.steps', { count });
 }
 
 /** Same rule as the daemon (`BrowserRecordingOp`, op `param`). */

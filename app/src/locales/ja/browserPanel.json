@@ -156,8 +156,7 @@
       "needsControl": "記録するにはこのウィンドウからブラウザーを操作してください。別のデバイスが操作中です",
       "recording": "記録中",
       "ended": "記録終了",
-      "stepsOne": "{count} ステップ",
-      "stepsMany": "{count} ステップ",
+      "steps": "{count} ステップ",
       "stop": "停止",
       "stopTitle": "記録を停止してステップを確認",
       "review": "確認",
@@ -271,7 +270,6 @@
       "card": {
         "label": "ブラウザーの注釈 ({count})",
         "count": "注釈 {count} 件",
-        "countOne": "注釈 1 件",
         "details": "詳細",
         "enlarge": "注釈 {n} のキャプチャを拡大",
         "source": "ソース: {source}",
@@ -283,7 +281,6 @@
         }
       },
       "queue": "注釈 {count} 件",
-      "queueOne": "注釈 1 件",
       "history": "注釈の履歴",
       "sendQueue": "送信",
       "sendQueueTitle": "この会話で {agent} に送信",

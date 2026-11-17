@@ -156,8 +156,7 @@
       "needsControl": "Aby nagrywać, używaj przeglądarki z tego okna: steruje nią inne urządzenie",
       "recording": "Nagrywanie",
       "ended": "Nagrywanie zakończone",
-      "stepsOne": "{count} krok",
-      "stepsMany": "{count} {count, plural, one {krok} few {kroki} many {kroków} other {kroku}}",
+      "steps": "{count} {count, plural, one {krok} few {kroki} many {kroków} other {kroku}}",
       "stop": "Zatrzymaj",
       "stopTitle": "Zatrzymaj nagrywanie i przejrzyj kroki",
       "review": "Przejrzyj",
@@ -271,7 +270,6 @@
       "card": {
         "label": "Adnotacje przeglądarki ({count})",
         "count": "{count} {count, plural, one {adnotacja} few {adnotacje} many {adnotacji} other {adnotacji}}",
-        "countOne": "1 adnotacja",
         "details": "Szczegóły",
         "enlarge": "Powiększ zrzut adnotacji {n}",
         "source": "Źródło: {source}",
@@ -283,7 +281,6 @@
         }
       },
       "queue": "{count} {count, plural, one {adnotacja} few {adnotacje} many {adnotacji} other {adnotacji}}",
-      "queueOne": "1 adnotacja",
       "history": "Historia adnotacji",
       "sendQueue": "Wyślij",
       "sendQueueTitle": "Wyślij je do {agent} w tej rozmowie",

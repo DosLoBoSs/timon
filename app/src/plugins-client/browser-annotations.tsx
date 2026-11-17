@@ -98,7 +98,7 @@ function QueueChip({ annotations }: { annotations: BrowserAnnotationsHandle }) {
   return (
     <div data-annotation-queue={count} className="flex shrink-0 items-center rounded-full bg-primary/10 py-0.5 pl-0.5 pr-0.5 text-[11px] text-primary">
       <button type="button" className={cn(pillButton, 'tabular-nums')} title={t('browserPanel.annotations.history')} onClick={() => annotations.open(null)}>
-        {count === 1 ? t('browserPanel.annotations.queueOne') : t('browserPanel.annotations.queue', { count })}
+        {t('browserPanel.annotations.queue', { count })}
       </button>
       <span aria-hidden className="text-primary/60">·</span>
       <button type="button" className={cn(pillButton, 'flex items-center gap-1')} disabled={annotations.busy || !annotations.target}

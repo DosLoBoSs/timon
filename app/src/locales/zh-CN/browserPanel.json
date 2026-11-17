@@ -156,8 +156,7 @@
       "needsControl": "另一台设备正在控制浏览器。请在此窗口接管后再录制。",
       "recording": "正在录制",
       "ended": "录制已结束",
-      "stepsOne": "{count} 个步骤",
-      "stepsMany": "{count} 个步骤",
+      "steps": "{count} 个步骤",
       "stop": "停止",
       "stopTitle": "停止录制并检查步骤",
       "review": "检查",
@@ -271,7 +270,6 @@
       "card": {
         "label": "浏览器批注（{count}）",
         "count": "{count} 条批注",
-        "countOne": "1 条批注",
         "details": "详情",
         "enlarge": "放大批注 {n} 的截图",
         "source": "来源：{source}",
@@ -283,7 +281,6 @@
         }
       },
       "queue": "{count} 条批注",
-      "queueOne": "1 条批注",
       "history": "批注历史",
       "sendQueue": "发送",
       "sendQueueTitle": "在当前对话中将这些批注发送给 {agent}",

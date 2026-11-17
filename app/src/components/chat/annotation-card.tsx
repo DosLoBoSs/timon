@@ -90,7 +90,7 @@ export function AnnotationCard({ card }: { card: AnnotationCardView }) {
       className="mt-1 w-full min-w-[16rem] space-y-2 rounded-lg bg-background/70 p-2.5 text-foreground">
       <div className="flex min-w-0 items-center gap-1.5 text-xs">
         <MessageSquareText aria-hidden className="size-3.5 shrink-0 text-primary" />
-        <span className="font-medium tabular-nums">{card.items.length === 1 ? t('browserPanel.annotations.card.countOne') : t('browserPanel.annotations.card.count', { count: card.items.length })}</span>
+        <span className="font-medium tabular-nums">{t('browserPanel.annotations.card.count', { count: card.items.length })}</span>
         {samePage && <span className="min-w-0 truncate text-muted-foreground" title={card.items[0]?.url}>· {pages[0]}</span>}
       </div>
       <ol className="space-y-2">
