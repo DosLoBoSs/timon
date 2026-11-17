@@ -16,6 +16,7 @@
  */
 import type { Request, Response } from 'express';
 import { forbidden } from '../../users/identity.js';
+import { apiError } from '../../api-error.js';
 
 const READS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -50,7 +51,7 @@ export function refuseBackendChange(req: Request, res: Response): boolean {
     });
   }
   if (req.originalUrl.includes('?')) {
-    res.status(400).json({ error: 'query parameters are not accepted here: send every field, the key included, in the JSON body', code: 'query-refused' });
+    res.status(400).json(apiError('query_refused', 'query parameters are not accepted here: send every field, the key included, in the JSON body'));
     return true;
   }
   return false;

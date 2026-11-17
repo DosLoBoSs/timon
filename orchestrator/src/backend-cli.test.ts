@@ -418,12 +418,12 @@ test('test reports each outcome, with an exit code a script can use', async () =
 test('a route\'s refusal is one readable line naming the flag, and the body it refused is not repeated', async () => {
   const invalid = await timon(['add', 'Bad box', '--base-url', 'ftp://nowhere', '--protocol', 'telnet', '--key-from-stdin'], { input: KEY });
   assert.equal(invalid.code, 2);
-  assert.match(invalid.stderr, /refused \(400\) — check --base-url, --protocol/);
+  assert.match(invalid.stderr, /refused \(400 invalid_fields\) — check --base-url, --protocol/);
   assert.doesNotMatch(invalid.stdout + invalid.stderr, LEAK);
 
   const duplicate = await timon(['add', 'Cli box', '--base-url', providerUrl, '--protocol', 'openai-responses', '--key-from-stdin'], { input: KEY });
   assert.equal(duplicate.code, 2);
-  assert.match(duplicate.stderr, /refused \(409 duplicate\) — a backend named cli-box already exists/);
+  assert.match(duplicate.stderr, /refused \(409 backend_duplicate\) — a backend named cli-box already exists/);
   assert.doesNotMatch(duplicate.stdout + duplicate.stderr, LEAK);
 });
 

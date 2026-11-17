@@ -730,7 +730,7 @@ test('a key is accepted in the body only: any query string on a change is refuse
   for (const [method, path, body] of CHANGES) {
     const out = await call(method, `${path}?key=${CLI_KEY}`, { cookie: adminCookie, body });
     assert.equal(out.status, 400, `${method} ${path}: ${out.text}`);
-    assert.equal((out.json as { code: string }).code, 'query-refused');
+    assert.equal((out.json as { code: string }).code, 'query_refused');
     assert.doesNotMatch(out.text, /sk-cli-witness/);
   }
   untouched(before);
