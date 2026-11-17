@@ -16,11 +16,9 @@ import { addMemoryRule } from '../memory-rule-add.js';
 import { isSkillId } from '../skill-attachments.js';
 import { getHost } from '../host/index.js';
 import { TIMON_HOME } from '../paths.js';
-import { mkdirSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
 import { secretsEnvFor, systemEnv } from '../secrets/env.js';
 import { redactDeep } from '../secrets/redact.js';
-import { scriptNodeDenied } from './nodes/script.js';
+import { scriptNodeDenied, scriptNodeFolder } from './nodes/script.js';
 import { runHttpNode } from './nodes/http.js';
 import { prepareWorkflowCoordinator, reportToWorkflowCoordinator } from './coordinator.js';
 
@@ -434,11 +432,7 @@ async function runNode(runId: string, nodeId: string, definition: WorkflowDefini
         // someone else than the owner who armed the script.
         const denied = scriptNodeDenied(workflow.owner_user_id) ?? (run.owner_user_id === workflow.owner_user_id ? null : scriptNodeDenied(run.owner_user_id));
         if (denied) throw new Error(denied);
-        const projectCwd = workflow.project ? dbApi.getProjectRow(workflow.project)?.cwd : null;
-        const fallback = join(TIMON_HOME, 'workflows', workflow.slug); mkdirSync(fallback, { recursive: true });
-        const allowed = projectCwd ?? fallback;
-        const cwd = cfg.cwd ? resolve(allowed, cfg.cwd) : allowed;
-        if (cwd !== allowed && !cwd.startsWith(allowed + sep)) throw new Error('script cwd escapes workflow directory');
+        const { cwd } = scriptNodeFolder(workflow, cfg.cwd);
         const secrets = secretsEnvFor({ agent: `wf.${workflow.slug}.${nodeId}`, project: workflow.project });
         const env = Object.fromEntries((cfg.env ?? []).filter((name) => Object.hasOwn(secrets, name)).map((name) => [name, secrets[name]!])) as NodeJS.ProcessEnv;
         // The system whitelist, never the daemon's own environment: the secrets

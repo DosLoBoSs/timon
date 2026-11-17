@@ -13,8 +13,11 @@
  *    every permission): it proposes the change (`workflow_propose`) and a
  *    person accepts it.
  */
+import { mkdirSync } from 'node:fs';
+import { join, resolve, sep } from 'node:path';
 import { z } from 'zod';
-import { dbApi } from '../../db.js';
+import { dbApi, type WorkflowRow } from '../../db.js';
+import { TIMON_HOME } from '../../paths.js';
 import { userAllows } from '../../users/permissions.js';
 
 export const SCRIPT_NODE_PERMISSION = 'scripts:run';
@@ -70,4 +73,17 @@ function canonical(value: unknown): string {
 export function changedScriptNodes(next: ReadonlyArray<NodeLike>, previous: ReadonlyArray<NodeLike> | null | undefined): string[] {
   const before = new Map((previous ?? []).filter((node) => node.type === 'script').map((node) => [node.id, canonical(node.config)]));
   return next.filter((node) => node.type === 'script' && before.get(node.id) !== canonical(node.config)).map((node) => node.id);
+}
+
+/**
+ * The folder a script node runs in: its `cwd` inside the workflow's project,
+ * or inside the workflow's own folder under the Timon home when it has none.
+ */
+export function scriptNodeFolder(workflow: Pick<WorkflowRow, 'slug' | 'project'>, configCwd: string | undefined): { allowed: string; cwd: string } {
+  const projectCwd = workflow.project ? dbApi.getProjectRow(workflow.project)?.cwd : null;
+  const fallback = join(TIMON_HOME, 'workflows', workflow.slug); mkdirSync(fallback, { recursive: true });
+  const allowed = projectCwd ?? fallback;
+  const cwd = configCwd ? resolve(allowed, configCwd) : allowed;
+  if (cwd !== allowed && !cwd.startsWith(allowed + sep)) throw new Error('script cwd escapes workflow directory');
+  return { allowed, cwd };
 }
