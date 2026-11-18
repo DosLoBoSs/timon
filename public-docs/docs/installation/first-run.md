@@ -53,7 +53,7 @@ To script it, give the email and pipe the password; the password is never accept
 printf '%s\n' "$TIMON_PASSWORD" | timon user create-admin --email you@example.com --name Ada --password-stdin
 ```
 
-The email address stays unconfirmed, so **Forgot password** on the sign-in screen cannot send you a code: until it is confirmed, recover a lost password with `timon user reset-password` (see [Troubleshooting](troubleshooting.md)).
+The email address stays unconfirmed, so **Forgot password** on the sign-in screen cannot send you a code yet. Confirm it later from your profile, once the machine is online: in **Profile**, under **Sign-in email**, **Confirm your address** › **Send the code**, then type the 6 digits you receive. Until then, recover a lost password with `timon user reset-password` (see [Troubleshooting](troubleshooting.md)).
 
 ## Confirm the setup
 
