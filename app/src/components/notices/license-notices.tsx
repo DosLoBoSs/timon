@@ -24,8 +24,8 @@ import { useNotices } from './notice-context';
 
 /** The licence block of the profile, where an administrator enters a key. */
 export const LICENSE_KEY_HREF = '/profile#license';
-/** The public page that explains renewal and the offline tolerance. */
-export const LICENSE_RENEWAL_DOCS_URL = `https://docs.${BRAND.domain}/usage/licence-api#renewal`;
+/** The public section that explains paused paid features and the offline tolerance. */
+export const LICENSE_RENEWAL_DOCS_URL = `https://docs.${BRAND.domain}/usage/licence-api#when-paid-features-are-paused`;
 
 function day(iso: string): string {
   return formatDate(iso, { year: 'numeric', month: 'numeric', day: 'numeric' });
