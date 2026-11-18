@@ -155,7 +155,7 @@ test('a plugin that takes kanban.todo.landing paints in place of the product, fr
     let dispose: () => void = () => {};
     await m.React.act(async () => { dispose = m.slots.register({ slot: 'kanban.todo.landing', pluginId: 'acme-issues' }, Acme); });
     await m.until(() => !!document.querySelector('[data-acme-landing]'), 'the plugin\'s badge');
-    assert.equal(document.querySelector('[data-todo-landing]'), null, 'the product badge is not painted under it');
+    assert.ok(!document.querySelector('[data-todo-landing]'), 'the product badge is not painted under it');
     assert.equal(document.querySelector('[data-idea="4"] [data-acme-landing]')?.getAttribute('data-acme-landing'), 'open');
     assert.equal(document.querySelector('[data-idea="4"] [data-acme-landing]')?.textContent, 'https://github.com/acme/app/pull/12');
     // A replacement may have something to say about an idea without a job.
