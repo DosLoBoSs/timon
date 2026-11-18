@@ -1,5 +1,5 @@
 /**
- * « Confirm your address » on the profile (docs/EMAIL-CODES.md): one row, one
+ * "Confirm your address" on the profile (docs/EMAIL-CODES.md): one row, one
  * action; the code goes to the account's own address, the code screen opens
  * in a dialog, the right code closes it; a relay that cannot mail is said on
  * the row, and nothing opens.

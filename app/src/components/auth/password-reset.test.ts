@@ -1,5 +1,5 @@
 /**
- * « Forgot password? » (docs/EMAIL-CODE-UI.md): the address → the code → the
+ * "Forgot password?" (docs/EMAIL-CODE-UI.md): the address → the code → the
  * new password twice → done; a wrong code learnt with the password goes back
  * to the code with its tries left; the offline way is always recalled; and a
  * refusal of the daemon is said, its wait counted down.
