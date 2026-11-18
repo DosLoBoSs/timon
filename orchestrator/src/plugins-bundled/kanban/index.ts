@@ -19,6 +19,7 @@ import { seedBundledPipelines } from '../../pipelines.js';
 import { startDispatcher } from '../../dispatcher.js';
 import { startTaskChain } from '../../task-chain.js';
 import { startWake } from '../../wake.js';
+import { startIntegrationPoller } from '../../integration-poller.js';
 import { settingInt } from '../../settings.js';
 import { todoApi, type TodoApi } from './todo-api.js';
 import { registerAttachmentRoutes } from './attachment-routes.js';
@@ -70,6 +71,9 @@ export function apply(ctx: Context): void {
   ctx.effect(() => startDispatcher(settingInt('DISPATCHER_INTERVAL_MS')));
   ctx.effect(() => startTaskChain());
   ctx.effect(() => startWake());
+  // Learns when the pull request of a job is merged or closed; reaches the
+  // network only while one is open.
+  ctx.effect(() => startIntegrationPoller());
 
   // A card's files live as long as the card. The sweep catches the cards
   // deleted while this module was off.
