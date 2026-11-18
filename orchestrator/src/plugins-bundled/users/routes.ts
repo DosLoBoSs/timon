@@ -660,7 +660,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
       return;
     }
     if (!freeAccountAllowed(user.id)) {
-      res.status(403).json({ error: 'free_account_restricted', message: FREE_ACCOUNT_RESTRICTED_MESSAGE });
+      res.status(403).json(apiError('free_account_restricted', FREE_ACCOUNT_RESTRICTED_MESSAGE));
       return;
     }
     clearThrottle(keys);

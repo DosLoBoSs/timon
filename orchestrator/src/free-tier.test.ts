@@ -318,8 +318,8 @@ test('Free signed policy and all local admission boundaries', async (t) => {
       const response = await actualFetch(base + '/api/license', { headers });
       assert.equal(response.status, 403);
       const body = await response.json();
-      assert.equal(body.error, 'free_account_restricted');
-      assert.equal(typeof body.message, 'string');
+      assert.equal(body.code, 'free_account_restricted');
+      assert.match(body.error, /first superadmin/);
     }
     assert.deepEqual(dbApi.listUsers(), before);
     paid();
