@@ -20,6 +20,7 @@ import { homedir } from 'node:os';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import { dbApi } from './db.js';
+import { checkRemoteUrl, REMOTE_URL_MESSAGES } from './git-remote-url.js';
 import { missionWritableProblem } from './host/mission-writable.js';
 import { isPlausibleGitRef } from './task-git.js';
 
@@ -49,6 +50,14 @@ const Account = z.string().trim().regex(GITHUB_LOGIN, 'not a valid GitHub login'
 
 const GhConfigDir = z.string().trim().min(1).max(1024);
 
+// The push URL the remote must answer before anything is pushed: a mission
+// writes `.git/config`, so the remote's URL there proves nothing on its own.
+// Same allow-list as every remote URL Timon accepts, credentials refused.
+const RemoteUrl = z.string().trim().superRefine((value, ctx) => {
+  const check = checkRemoteUrl(value);
+  if (!check.ok) ctx.addIssue({ code: 'custom', message: REMOTE_URL_MESSAGES[check.reason] });
+});
+
 export const ProjectIntegrationSchema = z.object({
   mode: z.enum(PROJECT_INTEGRATION_MODES),
   remote: GitName,
@@ -57,12 +66,14 @@ export const ProjectIntegrationSchema = z.object({
   account: Account.nullable(),
   gh_config_dir: GhConfigDir.nullable(),
   branch_prefix: BranchPrefix,
+  // Added after the first stored settings: a row without it reads as unset.
+  remote_url: RemoteUrl.nullable().default(null),
 }).strict();
 
 export type ProjectIntegration = z.infer<typeof ProjectIntegrationSchema>;
 
-/** Body of a write: only the fields to change; `null` clears `account` or
- *  `gh_config_dir`. Unknown keys are refused rather than dropped. */
+/** Body of a write: only the fields to change; `null` clears `account`,
+ *  `gh_config_dir` or `remote_url`. Unknown keys are refused rather than dropped. */
 export const ProjectIntegrationPatchSchema = z.object({
   mode: z.enum(PROJECT_INTEGRATION_MODES).optional(),
   remote: GitName.optional(),
@@ -71,6 +82,7 @@ export const ProjectIntegrationPatchSchema = z.object({
   account: Account.nullable().optional(),
   gh_config_dir: GhConfigDir.nullable().optional(),
   branch_prefix: BranchPrefix.optional(),
+  remote_url: RemoteUrl.nullable().optional(),
 }).strict();
 
 export type ProjectIntegrationPatch = z.infer<typeof ProjectIntegrationPatchSchema>;
@@ -83,6 +95,7 @@ export const DEFAULT_PROJECT_INTEGRATION: Readonly<ProjectIntegration> = Object.
   account: null,
   gh_config_dir: null,
   branch_prefix: 'feat/',
+  remote_url: null,
 });
 
 export class ProjectIntegrationError extends Error {

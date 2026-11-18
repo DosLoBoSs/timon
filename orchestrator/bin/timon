@@ -902,6 +902,12 @@ Worktrees (git isolation per code task):
   timon worktree create <task-id> [--base B]   force-create (dispatcher does it automatically for type=code)
   timon worktree dispose <task-id> [--force]   unmounts worktree + local branch (post-merge)
 
+Pull requests (projects whose jobs land through one, see set-integration):
+  timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]
+                                             checks the job's integration branch (account, remote URL,
+                                             identity, messages, ignored files, public tree), pushes it
+                                             without force and opens its pull request; sec/ is refused
+
 Projects (agent roles per project):
   timon project list                           lists configured projects
   timon project roles <slug>                   shows the role→agent mapping
@@ -911,9 +917,10 @@ Projects (agent roles per project):
                                              how the project's Kanban jobs land (local merge or pull request);
                                              --check asks gh which account the configured folder signs in as
   timon project set-integration <slug> [--mode local|pr] [--remote NAME] [--target BRANCH] [--forge github]
-                       [--account LOGIN] [--gh-config-dir ABSOLUTE_PATH] [--branch-prefix PREFIX/] | --reset
+                       [--account LOGIN] [--gh-config-dir ABSOLUTE_PATH] [--branch-prefix PREFIX/]
+                       [--remote-url PUSH_URL] | --reset
                                              changes what you pass (needs projects:manage); an empty
-                                             --account or --gh-config-dir clears it
+                                             --account, --gh-config-dir or --remote-url clears it
   timon project create <slug> [--name TEXT] [--cwd PATH] [--workspace NAME] [--create-workspace]
                        [--color #RRGGBB] [--icon TEXT] [--speech TEXT] [--kind TEXT] [--status TEXT]
                                              registers a project; the cwd must already exist on the host
@@ -2533,6 +2540,51 @@ async function cmdWorktree(argv) {
   }
 }
 
+/* ─── pull requests (a job landing through one) ─── */
+const PR_OPEN_USAGE =
+  'usage: timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]\n';
+
+async function cmdPrOpen(argv) {
+  const title = takeFlag(argv, 'title');
+  let body = takeFlag(argv, 'body');
+  const bodyFile = takeFlag(argv, 'body-file');
+  const id = argv[0];
+  if (!id || argv.length > 1 || !title || (body !== undefined && bodyFile !== undefined)) {
+    process.stderr.write(PR_OPEN_USAGE);
+    process.exit(64);
+  }
+  if (bodyFile !== undefined) body = fs.readFileSync(bodyFile, 'utf8');
+  const payload = { title, body: body ?? '' };
+  // The id names a task of the job or its series: the task route says when
+  // no task has it, and only then is the series asked.
+  const taskPath = `/api/tasks/${encodeURIComponent(id)}/pull-request`;
+  const asTask = await httpRaw('POST', taskPath, payload);
+  let j = asTask.body;
+  if (asTask.status === 404 && asTask.body?.code === 'pr_target_not_found') {
+    j = await http('POST', `/api/series/${encodeURIComponent(id)}/pull-request`, payload);
+  } else if (!asTask.ok) {
+    // Shown like `http` does, without sending the request again: a second
+    // call would run every check, and possibly the push, a second time.
+    const text = typeof asTask.body === 'string' ? asTask.body : JSON.stringify(asTask.body);
+    process.stderr.write(`timon POST ${taskPath} → ${asTask.status}\n`);
+    const line = refusalText(text);
+    if (line !== text) process.stderr.write(`${line}\n`);
+    process.stderr.write(`${text}\n`);
+    process.exit(2);
+  }
+  process.stdout.write(JSON.stringify(j, null, 2) + '\n');
+}
+
+async function cmdPr(argv) {
+  const [sub, ...rest] = argv;
+  switch (sub) {
+    case 'open': return cmdPrOpen(rest);
+    default:
+      process.stderr.write('usage: timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]\n');
+      process.exit(64);
+  }
+}
+
 /* ─── projects (agent roles per project) ─── */
 async function cmdProjectList() {
   const j = await http('GET', '/api/projects');
@@ -2574,11 +2626,13 @@ async function cmdProjectSetRole(argv) {
 const INTEGRATION_FLAGS = [
   ['mode', 'mode'], ['remote', 'remote'], ['target', 'target'], ['forge', 'forge'],
   ['account', 'account'], ['gh-config-dir', 'gh_config_dir'], ['branch-prefix', 'branch_prefix'],
+  ['remote-url', 'remote_url'],
 ];
-const INTEGRATION_NULLABLE = new Set(['account', 'gh_config_dir']);
+const INTEGRATION_NULLABLE = new Set(['account', 'gh_config_dir', 'remote_url']);
 const INTEGRATION_USAGE =
   'usage: timon project set-integration <slug> [--mode local|pr] [--remote NAME] [--target BRANCH]\n' +
   '       [--forge github] [--account LOGIN] [--gh-config-dir ABSOLUTE_PATH] [--branch-prefix PREFIX/]\n' +
+  '       [--remote-url PUSH_URL]\n' +
   '       timon project set-integration <slug> --reset   (back to the local merge)\n';
 
 async function cmdProjectGetIntegration(argv) {
@@ -5770,6 +5824,9 @@ async function main() {
         break;
       case 'worktree':
         await cmdWorktree(rest);
+        break;
+      case 'pr':
+        await cmdPr(rest);
         break;
       case 'project':
         await cmdProject(rest);

@@ -59,7 +59,8 @@ export const tools = [
     description:
       'Changes how a project\'s Kanban jobs land (CLI `timon project set-integration`): only the fields you pass change. ' +
       '`pr` needs `account`. `gh_config_dir` is an absolute folder inside the user\'s home that no agent can write; ' +
-      '`null` clears it or `account`. `reset: true` goes back to the local merge. Needs projects:manage.',
+      '`remote_url` is the push URL the remote must have before a pull request is opened. ' +
+      '`null` clears it, `account` or `remote_url`. `reset: true` goes back to the local merge. Needs projects:manage.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -71,6 +72,7 @@ export const tools = [
         account: { type: ['string', 'null'], description: 'GitHub login gh must sign in as.' },
         gh_config_dir: { type: ['string', 'null'], description: 'Absolute GH_CONFIG_DIR for this project.' },
         branch_prefix: { type: 'string', description: 'Prefix of integration branches, like feat/ or sec/.' },
+        remote_url: { type: ['string', 'null'], description: 'Push URL the remote must have before `pr_open` pushes, like git@github.com:owner/repo.git.' },
         reset: { type: 'boolean', description: 'Back to the local merge; no other field.' },
       },
       required: ['slug'],
@@ -172,7 +174,7 @@ export const handlers = {
     const path = `/api/projects/${enc(args.slug)}/integration`;
     if (args.reset) return await call('DELETE', path);
     const body = {};
-    for (const key of ['mode', 'remote', 'target', 'forge', 'account', 'gh_config_dir', 'branch_prefix']) {
+    for (const key of ['mode', 'remote', 'target', 'forge', 'account', 'gh_config_dir', 'branch_prefix', 'remote_url']) {
       if (args[key] !== undefined) body[key] = args[key];
     }
     return await call('PUT', path, body);

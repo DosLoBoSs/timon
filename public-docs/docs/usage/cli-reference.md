@@ -179,6 +179,12 @@ Worktrees (git isolation per code task):
   timon worktree create <task-id> [--base B]   force-create (dispatcher does it automatically for type=code)
   timon worktree dispose <task-id> [--force]   unmounts worktree + local branch (post-merge)
 
+Pull requests (projects whose jobs land through one, see set-integration):
+  timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]
+                                             checks the job's integration branch (account, remote URL,
+                                             identity, messages, ignored files, public tree), pushes it
+                                             without force and opens its pull request; sec/ is refused
+
 Projects (agent roles per project):
   timon project list                           lists configured projects
   timon project roles <slug>                   shows the role→agent mapping
@@ -188,9 +194,10 @@ Projects (agent roles per project):
                                              how the project's Kanban jobs land (local merge or pull request);
                                              --check asks gh which account the configured folder signs in as
   timon project set-integration <slug> [--mode local|pr] [--remote NAME] [--target BRANCH] [--forge github]
-                       [--account LOGIN] [--gh-config-dir ABSOLUTE_PATH] [--branch-prefix PREFIX/] | --reset
+                       [--account LOGIN] [--gh-config-dir ABSOLUTE_PATH] [--branch-prefix PREFIX/]
+                       [--remote-url PUSH_URL] | --reset
                                              changes what you pass (needs projects:manage); an empty
-                                             --account or --gh-config-dir clears it
+                                             --account, --gh-config-dir or --remote-url clears it
   timon project create <slug> [--name TEXT] [--cwd PATH] [--workspace NAME] [--create-workspace]
                        [--color #RRGGBB] [--icon TEXT] [--speech TEXT] [--kind TEXT] [--status TEXT]
                                              registers a project; the cwd must already exist on the host
@@ -827,6 +834,12 @@ usage: timon worktree dispose <task-id> [--force]
 
 ```text
 usage: timon worktree <info|create|dispose> <task-id> …
+```
+
+### timon pr open task-id|series-id --title TEXT [--body TEXT | --body-file PATH]
+
+```text
+usage: timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]
 ```
 
 ### timon project roles slug
