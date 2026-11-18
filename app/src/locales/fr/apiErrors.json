@@ -477,6 +477,17 @@
     "secret_request_session_required": "Une demande de secret se traite depuis votre navigateur connecté.",
     "secret_request_value_invalid": "La valeur doit compter de 1 à 16384 caractères.",
     "secret_reveal_session_required": "Afficher la valeur d'un secret demande votre navigateur connecté.",
-    "password_required": "Saisissez votre mot de passe."
+    "password_required": "Saisissez votre mot de passe.",
+    "terminal_session_required": "Le terminal s'ouvre depuis votre navigateur connecté.",
+    "terminal_forbidden": "Ce compte ne peut pas ouvrir de terminal.",
+    "terminal_disabled": "Le terminal web est désactivé.",
+    "terminal_status_failed": "L'état du terminal n'a pas pu être lu.",
+    "terminal_limit": "Aucun terminal de plus ne peut être ouvert : {detail}",
+    "pty_unavailable": "Le module de terminal n'est pas disponible sur cette installation.",
+    "terminal_start_failed": "Le shell n'a pas pu démarrer.",
+    "command_request_session_required": "Une demande de commande se traite depuis votre navigateur connecté.",
+    "command_request_invalid": "Cette réponse à la demande de commande est invalide.",
+    "command_request_decided": "Cette demande de commande a déjà reçu une réponse.",
+    "command_request_not_offered": "Ce choix n'est pas proposé pour cette commande."
   }
 }

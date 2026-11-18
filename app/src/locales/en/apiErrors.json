@@ -477,6 +477,17 @@
     "secret_request_session_required": "A secret request is answered from your signed-in browser.",
     "secret_request_value_invalid": "The value must be 1 to 16384 characters long.",
     "secret_reveal_session_required": "Showing a secret's value needs your signed-in browser.",
-    "password_required": "Enter your password."
+    "password_required": "Enter your password.",
+    "terminal_session_required": "The terminal opens from your signed-in browser.",
+    "terminal_forbidden": "This account may not open a terminal.",
+    "terminal_disabled": "The web terminal is turned off.",
+    "terminal_status_failed": "The terminal state could not be read.",
+    "terminal_limit": "No more terminals can be opened: {detail}",
+    "pty_unavailable": "The terminal module is not available on this install.",
+    "terminal_start_failed": "The shell could not start.",
+    "command_request_session_required": "A command request is answered from your signed-in browser.",
+    "command_request_invalid": "This answer to the command request is invalid.",
+    "command_request_decided": "This command request was already answered.",
+    "command_request_not_offered": "This choice is not offered for this command."
   }
 }
