@@ -116,8 +116,8 @@ Everything below stays in the Timon folder (`~/.timon`, or `%USERPROFILE%\.timon
 
 | What | Where | How long |
 |---|---|---|
-| Mission history: your messages, the agents' answers, the tools they ran and what those tools returned, including the content of files they read | the database `timon.db`, and `archive/events.db` if you turned on archiving | forever by default, see `TIMON_EVENTS_RETENTION_DAYS` below |
-| Raw memory facts: short notes agents take after a mission, before the memory curation turns some into rules | the database, and `agents/<name>/memory/learnings.jsonl` (with `learnings.archive.jsonl`) | forever by default, see `TIMON_LEARNINGS_RETENTION_DAYS` below |
+| Mission history: your messages, the agents' answers, the tools they ran and what those tools returned, including the content of files they read | the database `timon.db`, and `archive/events.db` if you turned on archiving | 180 days after the mission's last activity, see [Keeping less](#keeping-less) |
+| Raw memory facts: short notes agents take after a mission, before the memory curation turns some into rules | the database, and `agents/<name>/memory/learnings.jsonl` (with `learnings.archive.jsonl`) | forever by default, see [Keeping less](#keeping-less) |
 | Memory rules: the instructions Timon gives your agents | the database | until you delete them |
 | The list of missions, with their first message, title and summary | the database | as long as the Timon folder |
 | A provider's own conversation files (for example Codex's), which let a conversation resume | `provider-runs/` | 30 days after the mission ends (**Provider sessions kept after a mission ends**) |
@@ -134,18 +134,18 @@ When you delete a memory rule, its text goes too: the memory journal keeps that 
 
 ### Keeping less
 
-Two settings delete old history once a day. Both are **0 by default**, which keeps everything: nothing is deleted until you set them.
+Open **Settings › System › Privacy**. The **Kept on this computer** card has one row for each kind of history, with how long it is kept; **Change** sets the number of days, and the row's **…** menu offers **Keep everything** and **Back to the default**. Timon deletes what is past the limit once a day.
 
-- `TIMON_EVENTS_RETENTION_DAYS`: the mission history older than this many days is deleted for good, archived history included, along with its text in the history search. A mission still running keeps its whole history. The list of missions stays.
-- `TIMON_LEARNINGS_RETENTION_DAYS`: raw memory facts older than this many days are deleted for good, from the database and from each agent's `learnings.jsonl` files. Memory rules are not affected.
+- **Mission history** (`TIMON_EVENTS_RETENTION_DAYS`, **180 days** by default): when a mission has had no activity for that many days, its messages, tool calls and outputs are deleted for good, archived history included, along with their text in the history search. A whole mission goes at once: a conversation you came back to keeps its beginning. A mission still running, or one an open Kanban task or a running workflow still needs, keeps its whole history. The mission stays in the list with its title, first message and summary, but its conversation can no longer be read and its timeline can no longer be rebuilt.
+- **Raw memory facts** (`TIMON_LEARNINGS_RETENTION_DAYS`, **kept** by default): facts older than that many days are deleted for good, from the database and from each agent's `learnings.jsonl` files. Memory rules are not affected.
 
-Set them in **Settings → System → Diagnostics**, or in `timon.config.json`:
+0 keeps everything. You can also set them in `timon.config.json`:
 
 ```json
 { "settings": { "TIMON_EVENTS_RETENTION_DAYS": 365, "TIMON_LEARNINGS_RETENTION_DAYS": 180 } }
 ```
 
-An environment variable of the same name wins over both. The first pass after you set them can take a while on a large history; Timon keeps working meanwhile.
+An environment variable of the same name wins over both, and the row then says so. The first pass on a large history deletes in small batches and can take several minutes; Timon keeps working meanwhile.
 
 ### Erasing everything
 
