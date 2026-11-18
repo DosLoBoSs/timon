@@ -780,6 +780,8 @@ Agents & missions:
            --look '{"shape":"round","color":"#d4a373","eyes":"happy","acc":"coffee"}'
                                     (mascot look; --look null clears it)
            --avatar emoji|image|mascot   (head shown; --avatar null = picture, logo, emoji, initial)
+    (--allowed-tools Bash pre-allows every shell command, Bash(git:*) only those starting
+     with git; in auto mode the claude CLI ignores Bash and Bash(*): use acceptEdits)
     (--skills is the whole checked set, stored as the agent's skill attachments:
      unlisted ones are detached; import mode / exclusion: timon skill attach)
     (deletion: the app or the agent_delete tool; the agent waits in the trash)
@@ -1553,6 +1555,14 @@ async function cmdAgentCreate(argv) {
     config: Object.keys(config).length ? config : undefined,
   });
   process.stdout.write(JSON.stringify(j, null, 2) + '\n');
+  printAgentWarnings(j);
+}
+
+/** The daemon saved the agent but flags a setting that will not do what it says
+ *  (a shell pre-allow its mode drops): on stderr, so a script reading the JSON
+ *  still gets it whole. */
+function printAgentWarnings(j) {
+  for (const w of Array.isArray(j?.warnings) ? j.warnings : []) process.stderr.write(`timon: warning: ${w}\n`);
 }
 
 async function cmdAgentUpdate(argv) {
@@ -1602,6 +1612,7 @@ async function cmdAgentUpdate(argv) {
       config: Object.keys(mergedCfg).length ? mergedCfg : undefined,
     });
     process.stdout.write(JSON.stringify(j, null, 2) + '\n');
+    printAgentWarnings(j);
     return;
   }
 
@@ -1611,6 +1622,7 @@ async function cmdAgentUpdate(argv) {
   }
   const j = await http('PATCH', `/api/agents/${encodeURIComponent(name)}/config`, cfgPatch);
   process.stdout.write(JSON.stringify(j, null, 2) + '\n');
+  printAgentWarnings(j);
 }
 
 async function cmdAgentSetScope(argv) {
