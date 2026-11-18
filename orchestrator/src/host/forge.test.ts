@@ -108,3 +108,36 @@ test('a pull request already open for the branch is returned, other failures are
 test('credentials are masked in what a command printed', () => {
   assert.equal(redactedOutput('fatal: https://user:tok@github.com/a/b'), 'fatal: https://[redacted]@github.com/a/b');
 });
+
+test('gh pr view reads the state and merge commit, with the project folder and no token', async () => {
+  const oid = 'c'.repeat(40);
+  const merged = recorder({ stdout: JSON.stringify({ state: 'MERGED', mergeCommit: { oid } }) });
+  const before = process.env.GH_TOKEN;
+  process.env.GH_TOKEN = 'ghp_should_not_pass';
+  try {
+    const out = await githubForge('/home/u/.config/gh-work', { gh: merged.run }).pullRequest('acme/app', 42);
+    assert.deepEqual(out, { ok: true, state: 'merged', mergeSha: oid });
+  } finally {
+    if (before === undefined) delete process.env.GH_TOKEN; else process.env.GH_TOKEN = before;
+  }
+  assert.deepEqual(merged.calls[0]?.args, ['pr', 'view', '42', '--repo=acme/app', '--json=state,mergeCommit']);
+  assert.equal(merged.calls[0]?.opts.env?.GH_CONFIG_DIR, '/home/u/.config/gh-work');
+  assert.equal(merged.calls[0]?.opts.env?.GH_TOKEN, undefined);
+
+  const closed = recorder({ stdout: JSON.stringify({ state: 'CLOSED', mergeCommit: null }) });
+  assert.deepEqual(await githubForge(null, { gh: closed.run }).pullRequest('acme/app', 7), { ok: true, state: 'closed', mergeSha: null });
+});
+
+test('gh pr view: a failure, a timeout or an odd answer is never a state', async () => {
+  const leaked = await githubForge(null, { gh: recorder({ code: 1, stderr: `HTTP 401 ghp_${'x'.repeat(36)}` }).run }).pullRequest('a/b', 1);
+  assert.equal(leaked.ok, false);
+  assert.doesNotMatch(leaked.ok ? '' : leaked.reason, /ghp_/);
+  assert.equal((await githubForge(null, { gh: recorder('missing').run }).pullRequest('a/b', 1)).ok, false);
+  assert.equal((await githubForge(null, { gh: recorder({ timedOut: true, code: 1 }).run }).pullRequest('a/b', 1)).ok, false);
+  assert.equal((await githubForge(null, { gh: recorder({ stdout: '{"state":"DRAFT"}' }).run }).pullRequest('a/b', 1)).ok, false);
+  assert.equal((await githubForge(null, { gh: recorder({ stdout: 'not json' }).run }).pullRequest('a/b', 1)).ok, false);
+  const odd = recorder({ stdout: '{}' });
+  assert.equal((await githubForge(null, { gh: odd.run }).pullRequest('--repo=x', 1)).ok, false);
+  assert.equal((await githubForge(null, { gh: odd.run }).pullRequest('a/b', -1)).ok, false);
+  assert.equal(odd.calls.length, 0, 'an odd repository or number never reaches gh');
+});
