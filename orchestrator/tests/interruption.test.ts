@@ -134,9 +134,9 @@ test('mission ended normally → neither field touched', async () => {
 
 test('usage limit: the cause seen at exit survives a late finalisation', async () => {
   const { taskId, missionId } = seedRunningTask();
-  // Exit sur limite d'usage : la mission reste `running`, on marque la cause.
+  // Exit on a usage limit: the mission stays `running`, the cause is recorded.
   dbApi.setMissionInterrupted(missionId, 'rate_limit');
-  // Bien plus tard, le reaper finalise l'orpheline en supposant un crash.
+  // Much later, the reaper finalises the orphan assuming a crash.
   const reason = dbApi.finishMission(missionId, 'terminated', 0, 'crash');
   assert.equal(reason, 'rate_limit', 'the cause already observed must win over the reaper default');
 
@@ -155,7 +155,7 @@ test('clean exit on a usage limit: derived from the events, task BLOCKED and not
   seedEvent(missionId, 'rate_limit_event', rateLimitRejected(resetsAt));
 
   const reason = dbApi.finishMission(missionId, 'completed', 0);
-  assert.equal(reason, 'rate_limit', 'le signal events doit primer sur un exit 0');
+  assert.equal(reason, 'rate_limit', 'the events signal must win over an exit 0');
   assert.equal(dbApi.getMission(missionId)?.interrupted_reason, 'rate_limit');
 
   bus.publish({ kind: 'mission_complete', missionId, status: 'completed', exitCode: 0, reason });
@@ -181,7 +181,7 @@ test('old rejected followed by activity → NOT rate_limit (anti false positive)
 
   assert.equal(dbApi.detectMissionDeathSignal(missionId), null);
   const reason = dbApi.finishMission(missionId, 'terminated', 0, 'killed');
-  assert.equal(reason, 'killed', "sans signal contemporain, la supposition de l'appelant reste");
+  assert.equal(reason, 'killed', "without a contemporary signal, the caller's assumption stays");
 
   bus.publish({ kind: 'mission_complete', missionId, status: 'terminated', exitCode: 0, reason });
   // `killed` being replayable, the task goes back in the queue, which is precisely

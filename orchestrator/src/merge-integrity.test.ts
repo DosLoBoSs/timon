@@ -141,7 +141,7 @@ test('a stale worktree is brought up to date, an up-to-date worktree is left as 
     // The base moves on while the branch sleeps: the case of an `[iter:3]` task.
     writeFileSync(join(dir, 'autre.ts'), 'export const autre = 1;\n');
     git(dir, 'add', '-A');
-    git(dir, 'commit', '-qm', 'une autre task a intégré du code');
+    git(dir, 'commit', '-qm', 'une autre task a intégré du code'); // french-ok: a sample commit message
 
     const first = await refreshWorktreeBase(wt, 'main');
     assert.equal(first.status, 'merged');
