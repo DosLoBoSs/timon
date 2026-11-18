@@ -71,6 +71,9 @@ Options:
   -Silent         run the installer without its window (skips Node.js and Git: install them first)
   -Help           this help
 
+Run it in a normal PowerShell window: from one opened as administrator, it
+refuses to install (Timon installs for the current user).
+
 Documentation: https://docs.timon-ai.com/installation/windows
 '@
     return
@@ -87,6 +90,21 @@ Documentation: https://docs.timon-ai.com/installation/windows
       $releaseP256KeyId = $env:TIMON_INSTALL_P256_KEY_ID
     }
   }
+
+  # The Windows installer installs for the current user. Started from an
+  # elevated PowerShell, it hands its work to an unelevated copy of itself
+  # and returns that copy's failure, 0xC0000005 (TIM-0160). Tests decide
+  # with TIMON_INSTALL_ELEVATED: a CI runner is often an administrator.
+  function Test-Elevated {
+    if ($testing) { return $env:TIMON_INSTALL_ELEVATED -eq '1' }
+    try {
+      $principal = New-Object Security.Principal.WindowsPrincipal ([Security.Principal.WindowsIdentity]::GetCurrent())
+      return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    } catch {
+      return $false
+    }
+  }
+  $elevatedHint = 'Timon installs for the current user: run this command again in a normal PowerShell window, not one opened with Run as administrator'
 
   function Stop-Install([string]$message) {
     throw "timon-install: $message"
@@ -167,6 +185,12 @@ Documentation: https://docs.timon-ai.com/installation/windows
   # Windows on ARM runs the x64 build under emulation.
   $arch = $env:PROCESSOR_ARCHITECTURE
   if (-not $testing -and $arch -ne 'AMD64' -and $arch -ne 'ARM64') { Stop-Install "unsupported processor: $arch" }
+
+  # Before anything is downloaded. -DownloadOnly runs nothing, so it stays
+  # allowed: the file it keeps installs once opened from the desktop.
+  if (-not $DownloadOnly -and (Test-Elevated)) {
+    Stop-Install "this PowerShell runs as administrator, and the Timon installer fails there. $elevatedHint. Nothing was downloaded or installed"
+  }
 
   # Windows PowerShell 5.1 may still offer TLS 1.0 first.
   if ($PSVersionTable.PSVersion.Major -lt 6) {
@@ -291,6 +315,11 @@ Documentation: https://docs.timon-ai.com/installation/windows
       $process = Start-Process -FilePath $package -PassThru
     }
     $process.WaitForExit()
+    # 0xC0000005 as a signed exit code: the installer's failure under an
+    # elevated session that Test-Elevated did not see.
+    if ($process.ExitCode -eq -1073741819) {
+      Stop-Install "the installer ended with code -1073741819 (0xC0000005): Timon was not installed. This happens when the installer starts from an administrator session. $elevatedHint. See $docsUrl"
+    }
     if ($process.ExitCode -ne 0) {
       Stop-Install "the installer ended with code $($process.ExitCode): Timon was not installed, or only partly. See $docsUrl"
     }

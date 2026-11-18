@@ -117,6 +117,33 @@ test('install.ps1 keeps to the syntax of Windows PowerShell 5.1', () => {
   }
 });
 
+test('install.ps1 refuses an administrator session before it reads or downloads anything', () => {
+  // TIM-0160: the per-user installer fails with 0xC0000005 under an elevated PowerShell.
+  assert.match(TEXT, /IsInRole\(\[Security\.Principal\.WindowsBuiltInRole\]::Administrator\)/);
+  const refusal = TEXT.indexOf('if (-not $DownloadOnly -and (Test-Elevated))');
+  assert.ok(refusal > 0, 'the elevated check exists and spares only -DownloadOnly, not -Silent nor -DryRun');
+  assert.ok(refusal < TEXT.indexOf('Get-Remote $installManifestUrl'), 'the elevated check runs before the manifest is read');
+  assert.match(TEXT, /\$process\.ExitCode -eq -1073741819/, 'the access-violation exit code names the administrator session');
+});
+
+const ELEVATED = { TIMON_INSTALL_ELEVATED: '1' };
+
+test('an administrator session is refused, with or without -DryRun and -Silent', { skip: needsShell }, () => {
+  const ctx = setup({ stable: channel('0.2.0', httpsArtifact('0.2.0')) });
+  try {
+    for (const args of [[], ['-DryRun'], ['-Silent']]) {
+      const r = run(ctx, args, ELEVATED);
+      assert.notEqual(r.code, 0, args.join(' '));
+      // PowerShell wraps a long error at the console width: match the start only.
+      assert.match(r.err + r.out, /runs as administrator/, args.join(' '));
+      assert.doesNotMatch(r.out, /package:|Downloading/, args.join(' '));
+    }
+    assert.equal(run(ctx, ['-DryRun'], { TIMON_INSTALL_ELEVATED: '0' }).code, 0, 'a normal session goes on');
+  } finally {
+    rmSync(ctx.dir, { recursive: true, force: true });
+  }
+});
+
 test('dry run picks the stable installer, else beta', { skip: needsShell }, () => {
   const ctx = setup({ stable: channel('0.2.0', httpsArtifact('0.2.0')), beta: channel('0.2.1-rc.1', httpsArtifact('0.2.1-rc.1')) });
   try {
@@ -217,12 +244,15 @@ test('-DownloadOnly keeps a matching installer and refuses one that does not mat
 
     const ok = setup({ stable: channel('0.2.0', artifact) });
     try {
-      const r = run(ok, ['-DownloadOnly']);
-      assert.equal(r.code, 0, r.err);
-      assert.match(r.out, /Package verified\./);
-      const kept = r.out.trim().split(/\r?\n/).pop();
-      assert.ok(existsSync(kept), `the verified installer stays at ${kept}`);
-      rmSync(dirname(kept), { recursive: true, force: true });
+      // -DownloadOnly runs nothing, so an administrator session may use it.
+      for (const env of [{}, ELEVATED]) {
+        const r = run(ok, ['-DownloadOnly'], env);
+        assert.equal(r.code, 0, r.err);
+        assert.match(r.out, /Package verified\./);
+        const kept = r.out.trim().split(/\r?\n/).pop();
+        assert.ok(existsSync(kept), `the verified installer stays at ${kept}`);
+        rmSync(dirname(kept), { recursive: true, force: true });
+      }
     } finally {
       rmSync(ok.dir, { recursive: true, force: true });
     }
