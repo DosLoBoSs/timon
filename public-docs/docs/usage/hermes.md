@@ -13,16 +13,16 @@ If your Hermes runs as a gateway, possibly on another machine, see [Hermes Gatew
 2. Sign in, in a terminal, under that same account:
 
    ```bash
-   hermes --setup
+   hermes setup
    ```
 
-   (or sign in to Nous, if that is how you use Hermes). On Windows, if `hermes` is not on your PATH, run `%LOCALAPPDATA%\hermes\bin\hermes.exe --setup`. Do not start `hermes-acp` yourself to sign in: Timon starts it, and run by hand it opens nothing and only waits.
+   With a Nous Portal subscription, `hermes portal` signs in to Nous and picks a model in one step. On Windows, if `hermes` is not on your PATH, run `%LOCALAPPDATA%\hermes\bin\hermes.exe setup`. The **Sign in** button of the Hermes card, in the onboarding and in **Settings › AI models › Providers**, copies this command with the path Timon found. Do not start `hermes-acp` yourself to sign in: Timon starts it, and run by hand it opens nothing and only waits.
 
 3. Restart Timon. **Hermes** then appears in the model selectors.
 
 Timon looks for `hermes-acp` on the service's PATH, in `~/.local/bin` on Linux and macOS, and in `%LOCALAPPDATA%\hermes\bin` on Windows, which is where Hermes' installer puts it.
 
-If Hermes does not appear, run `timon doctor`: it tells you whether the `hermes-acp` binary was found. A CLI installed anywhere else may be missing from the service's PATH; set `host.binaries.hermes-acp` to its absolute path in that case. If a mission stops with "sign in first", run `hermes --setup` in a terminal on the machine that runs Timon (not `hermes-acp`, which only waits), then start the mission again.
+If Hermes does not appear, run `timon doctor`: it tells you whether the `hermes-acp` binary was found. A CLI installed anywhere else may be missing from the service's PATH; set `host.binaries.hermes-acp` to its absolute path in that case. If a mission stops with "sign in first", run `hermes setup` (or `hermes portal` for Nous) in a terminal on the machine that runs Timon (not `hermes-acp`, which only waits), then start the mission again.
 
 ## Models
 
