@@ -392,6 +392,20 @@
     "grepai_rebuild_failed": "L'index sémantique n'a pas pu être reconstruit : {detail}",
     "grepai_stop_failed": "La surveillance de l'index n'a pas pu s'arrêter : {detail}",
     "vault_note_id_required": "Choisissez une note à ouvrir.",
-    "vault_note_not_found": "Cette note n'est pas dans votre vault."
+    "vault_note_not_found": "Cette note n'est pas dans votre vault.",
+    "workflow_script_by_agent": "Un agent ne peut pas ajouter, modifier, publier ni lancer un nœud script non publié ({nodes}) : il vous propose la modification à accepter.",
+    "workflow_pipeline_import_by_agent": "Un agent ne peut pas importer un pipeline : il devient un nœud script, qu'une personne ajoute.",
+    "workflow_import_failed": "L'import a échoué : {detail}",
+    "mission_token_required": "Seule la mission d'un agent peut faire cela.",
+    "workflow_proposal_refused": "Cette proposition de workflow a été refusée : {detail}",
+    "workflow_node_not_owned": "Cette mission n'exécute pas ce nœud du workflow.",
+    "workflow_route_invalid": "La sortie d'un nœud de workflow est un texte.",
+    "workflow_node_inactive": "Ce nœud du workflow ne tourne plus.",
+    "workflow_approve_by_agent": "Un agent ne peut pas approuver un script : c'est à vous de le faire.",
+    "workflow_runs_no_script": "Ce workflow ne lance aucun script.",
+    "workflow_script_denied": "Ce script ne peut pas être approuvé : {detail}",
+    "workflow_chat_agent_failed": "L'agent du workflow n'a pas pu être préparé : {detail}",
+    "workflow_human_not_waiting": "Cette étape n'attend plus de réponse.",
+    "workflow_refused": "Ce workflow a été refusé : {detail}"
   }
 }

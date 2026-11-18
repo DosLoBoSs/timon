@@ -392,6 +392,20 @@
     "grepai_rebuild_failed": "The semantic index could not be rebuilt: {detail}",
     "grepai_stop_failed": "The index watcher could not stop: {detail}",
     "vault_note_id_required": "Choose a note to open.",
-    "vault_note_not_found": "This note is not in your vault."
+    "vault_note_not_found": "This note is not in your vault.",
+    "workflow_script_by_agent": "An agent cannot add, change, publish or run an unpublished script node ({nodes}): it proposes the change for you to accept.",
+    "workflow_pipeline_import_by_agent": "An agent cannot import a pipeline: it becomes a script node, which a person adds.",
+    "workflow_import_failed": "The import failed: {detail}",
+    "mission_token_required": "Only an agent's mission can do this.",
+    "workflow_proposal_refused": "This workflow proposal was refused: {detail}",
+    "workflow_node_not_owned": "This mission does not run that workflow node.",
+    "workflow_route_invalid": "The route of a workflow node is a text.",
+    "workflow_node_inactive": "This workflow node is no longer running.",
+    "workflow_approve_by_agent": "An agent cannot approve a script: you do it.",
+    "workflow_runs_no_script": "This workflow runs no script.",
+    "workflow_script_denied": "This script cannot be approved: {detail}",
+    "workflow_chat_agent_failed": "The workflow's agent could not be prepared: {detail}",
+    "workflow_human_not_waiting": "This step no longer waits for an answer.",
+    "workflow_refused": "This workflow was refused: {detail}"
   }
 }
