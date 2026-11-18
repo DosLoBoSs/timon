@@ -130,3 +130,14 @@ test('a task return on the Messages page reads its coded reason, without the cod
   const agentReason = JSON.stringify({ kind: 'task_closed', blocked_reason: 'I need the key.', blocked_reason_code: null });
   assert.equal((JSON.parse(localizedNoticePayload(agentReason)) as Record<string, unknown>).blocked_reason, 'I need the key.');
 });
+
+test('a mission killed for memory reads its process, its ceiling and its advice', () => {
+  const stored = JSON.stringify({
+    code: 'resource_mission_killed',
+    params: { mission: 'abcd1234', cmd: 'node', pid: '4242', ceiling: '4.0 GB', whose: 'mission', rss: 'none' },
+  });
+  const fr = inLocale('fr', () => daemonNotificationText(stored, { title: 'English', body: 'English' }));
+  assert.equal(fr.title, 'OOM : mission abcd1234 — processus tué');
+  assert.match(fr.body ?? '', /Votre processus `node` \(pid 4242\) a été tué par le noyau : il utilisait plus de 4\.0 GB de mémoire, le plafond de cette mission\. Relancer/);
+  assert.match(fr.body ?? '', /npm test -- <file>/);
+});

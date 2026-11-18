@@ -61,6 +61,26 @@
     "task_stopped_by_scope": "Arrêtée par {by} (timon stop {kind} {name})",
     "task_blocked": {
       "title": "{title, select, none {Task bloquée ({taskId})} other {Task bloquée : {title}}}"
+    },
+    "resource_memory_max": {
+      "title": "Plafond mémoire atteint ({label})",
+      "body": "Le cgroup {unit} a touché MemoryMax ({max}) {times, plural, one {# fois} other {# fois}}. Aucun processus tué par l’OOM pour l’instant, mais il ne reste aucune marge."
+    },
+    "resource_memory_high": {
+      "title": "Pression mémoire ({label})",
+      "body": "Le cgroup {unit} a dépassé MemoryHigh ({high}) — utilisation {usage}. Le noyau freine et récupère de la mémoire ; rien n’est tué, mais la charge est anormale."
+    },
+    "resource_oom_killed": {
+      "title": "OOM : {count, plural, one {# processus tué} other {# processus tués}} dans {label}",
+      "body": "Le noyau a tué {count, plural, one {# processus} other {# processus}} du cgroup {unit} (mémoire {usage} / max {max}). Une task a pu échouer sans message lisible — consultez `journalctl -k -g \"Out of memory\"`."
+    },
+    "resource_mission_killed": {
+      "title": "OOM : mission {mission} — processus tué",
+      "body": "[Garde des ressources de Timon] {cmd, select, none {{pid, select, none {Un de vos processus} other {Votre processus pid {pid}}}} other {Votre processus `{cmd}`{pid, select, none {} other { (pid {pid})}}}} a été tué par le noyau : il utilisait {ceiling, select, none {trop de mémoire} other {plus de {ceiling} de mémoire}}, {whose, select, slice {le plafond partagé par toutes les missions en cours} other {le plafond de cette mission}}.{rss, select, none {} other { Il occupait {rss} quand il a été tué.}} Relancer la même commande la fera tuer de la même façon. Trouvez d’abord la cause — une boucle infinie, une fuite, un jeu de données sans limite — et lancez une cible plus étroite (`npm test -- <file>`) une fois corrigée."
+    },
+    "resource_pressure_high": {
+      "title": "Forte pression mémoire (missions)",
+      "body": "Les missions passent {pressure} % de leur temps bloquées à attendre de la mémoire (utilisation {usage} / max {max}). Au-delà de {limit} pendant 20 s, systemd-oomd tuera une mission."
     }
   }
 }

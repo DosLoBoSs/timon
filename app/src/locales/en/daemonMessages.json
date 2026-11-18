@@ -61,6 +61,26 @@
     "task_stopped_by_scope": "Stopped by {by} (timon stop {kind} {name})",
     "task_blocked": {
       "title": "{title, select, none {Task blocked ({taskId})} other {Task blocked: {title}}}"
+    },
+    "resource_memory_max": {
+      "title": "Memory ceiling reached ({label})",
+      "body": "Cgroup {unit} hit MemoryMax ({max}) {times, plural, one {# time} other {# times}}. No OOM kill so far, but there is no headroom left."
+    },
+    "resource_memory_high": {
+      "title": "Memory pressure ({label})",
+      "body": "Cgroup {unit} went over MemoryHigh ({high}) — usage {usage}. The kernel throttles and reclaims memory; nothing is killed, but the load is abnormal."
+    },
+    "resource_oom_killed": {
+      "title": "OOM: {count, plural, one {# process} other {# processes}} killed in {label}",
+      "body": "The kernel killed {count, plural, one {# process} other {# processes}} of cgroup {unit} (memory {usage} / max {max}). A task may have failed without a readable message — check `journalctl -k -g \"Out of memory\"`."
+    },
+    "resource_mission_killed": {
+      "title": "OOM: mission {mission} — process killed",
+      "body": "[Timon resource guard] {cmd, select, none {{pid, select, none {One of your processes} other {Your process pid {pid}}}} other {Your process `{cmd}`{pid, select, none {} other { (pid {pid})}}}} was killed by the kernel: it used {ceiling, select, none {too much memory} other {more than {ceiling} of memory}}, {whose, select, slice {the ceiling shared by all running missions} other {the ceiling of this mission}}.{rss, select, none {} other { It held {rss} when it was killed.}} Running the same command again will be killed the same way. Find the cause first — an infinite loop, a leak, an unbounded dataset — and run a narrower target (`npm test -- <file>`) once it is fixed."
+    },
+    "resource_pressure_high": {
+      "title": "High memory pressure (missions)",
+      "body": "Missions spend {pressure} % of their time stalled waiting for memory (usage {usage} / max {max}). Above {limit} for 20 s, systemd-oomd will kill a mission."
     }
   }
 }
