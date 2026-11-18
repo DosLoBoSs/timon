@@ -84,6 +84,8 @@ export async function responseErrorMessage(res: Response, fallback?: string): Pr
 export interface StoredDaemonMessage {
   code: string;
   params: Record<string, string | number>;
+  /** A notification whose body is another stored sentence (a task's blocked reason), one level deep. */
+  body?: StoredDaemonMessage;
 }
 
 /** The stored code: a JSON string or the object itself; `null` when absent or malformed. */
@@ -92,6 +94,13 @@ export function parseDaemonMessage(stored: unknown): StoredDaemonMessage | null 
   if (typeof stored === 'string') {
     try { value = JSON.parse(stored); } catch { return null; }
   }
+  const message = storedMessage(value);
+  if (!message) return null;
+  const body = storedMessage((value as { body?: unknown }).body);
+  return body ? { ...message, body } : message;
+}
+
+function storedMessage(value: unknown): StoredDaemonMessage | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
   const raw = value as { code?: unknown; params?: unknown };
   if (typeof raw.code !== 'string' || !CODE.test(raw.code)) return null;
@@ -144,8 +153,12 @@ export function daemonNotificationText(
   const message = parseDaemonMessage(stored);
   if (!message) return english;
   const key = daemonMessageKey(message.code);
+  const bodyKey = message.body ? daemonMessageKey(message.body.code) : null;
+  let body = english.body;
+  if (message.body && bodyKey && speaks(bodyKey, message.body.params)) body = t(bodyKey, message.body.params);
+  else if (speaks(`${key}.body`, message.params)) body = t(`${key}.body`, message.params);
   return {
     title: speaks(`${key}.title`, message.params) ? t(`${key}.title`, message.params) : english.title,
-    body: speaks(`${key}.body`, message.params) ? t(`${key}.body`, message.params) : english.body,
+    body,
   };
 }

@@ -2015,7 +2015,7 @@ CREATE TABLE IF NOT EXISTS integrations (
 `);
 if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
 // A writer that changes the reason without naming its code (an agent's own
-// reason, a scope stop, a statement written before the column) must not leave
+// reason, a statement written before the column) must not leave
 // the previous code behind: the webview would translate another sentence.
 db.exec(`
 CREATE TRIGGER IF NOT EXISTS tasks_blocked_reason_code_follows

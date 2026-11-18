@@ -80,6 +80,7 @@ import { cpus, homedir, loadavg } from 'node:os';
 import { basename, join } from 'node:path';
 import { config } from './config/load.js';
 import { apiError } from './api-error.js';
+import { daemonMessage, type DaemonMessage } from './daemon-message.js';
 import { CwdUnusableError } from './cwd-check.js';
 import { getHost } from './host/index.js';
 import { nodeRuntime } from './host/node-runtime.js';
@@ -103,6 +104,7 @@ import { RETIRED_SETTINGS, resolve, retiredSettingsInUse, settingBool, settingNu
 import {
   diffScopeKills,
   formatKillNotice,
+  killNoticeMessage,
   missionPrefixOfScope,
   parseKernelOom,
   readScopeSnapshots,
@@ -1052,7 +1054,7 @@ const lastEvents = new Map<string, Watched>();
 let watchTimer: NodeJS.Timeout | null = null;
 
 /** Injected by index.ts to avoid an import cycle with notifications.ts. */
-type AlertFn = (opts: { title: string; body: string; urgent: boolean }) => void;
+type AlertFn = (opts: { title: string; body: string; urgent: boolean; message?: DaemonMessage }) => void;
 let alertSink: AlertFn = ({ title, body }) => console.warn(`[resources] ALERTE ${title} — ${body}`);
 
 export function setResourceAlertSink(fn: AlertFn): void {
@@ -1090,6 +1092,9 @@ function checkUnit(
       body: `Cgroup ${unit} hit MemoryMax (${fmtGb(st.memoryMax)}) ${st.events.max - prev.max} time(s).`
         + ` No OOM kill so far, but there is no headroom left.`,
       urgent: true,
+      message: daemonMessage('resource_memory_max', {
+        label, unit, max: fmtGb(st.memoryMax), times: st.events.max - prev.max,
+      }),
     });
     return;
   }
@@ -1101,6 +1106,9 @@ function checkUnit(
       body: `Cgroup ${unit} went over MemoryHigh (${fmtGb(st.memoryHigh)}) — usage ${fmtGb(st.memoryCurrent)}.`
         + ` The kernel throttles and reclaims memory; nothing is killed, but the load is abnormal.`,
       urgent: false,
+      message: daemonMessage('resource_memory_high', {
+        label, unit, high: fmtGb(st.memoryHigh), usage: fmtGb(st.memoryCurrent),
+      }),
     });
   }
 }
@@ -1111,6 +1119,9 @@ function genericOomAlert(n: number, unit: string, label: string, st: CgroupStats
     body: `The kernel killed ${n} process(es) of cgroup ${unit} (memory ${fmtGb(st.memoryCurrent)} / max ${fmtGb(st.memoryMax)}).`
       + ` A task may have failed without a readable message — check \`journalctl -k -g "Out of memory"\`.`,
     urgent: true,
+    message: daemonMessage('resource_oom_killed', {
+      count: n, label, unit, usage: fmtGb(st.memoryCurrent), max: fmtGb(st.memoryMax),
+    }),
   });
 }
 
@@ -1192,6 +1203,7 @@ async function attributeMissionOoms(
       title: `OOM: mission ${prefix ?? kill.scope} — process killed`,
       body: text,
       urgent: true,
+      message: killNoticeMessage(kill, prefix ?? kill.scope),
     });
   }
   if (attributed === 0) genericOomAlert(n, MISSION_SLICE, 'missions', st);
@@ -1220,6 +1232,9 @@ export function checkSlicePressure(avg10: number | null, st: Pick<CgroupStats, '
       + `(usage ${fmtGb(st.memoryCurrent)} / max ${fmtGb(st.memoryMax)}). Above `
       + `${SLICE_OOMD_PRESSURE_LIMIT} for 20 s, systemd-oomd will kill a mission.`,
     urgent: true,
+    message: daemonMessage('resource_pressure_high', {
+      pressure: avg10.toFixed(0), usage: fmtGb(st.memoryCurrent), max: fmtGb(st.memoryMax), limit: SLICE_OOMD_PRESSURE_LIMIT,
+    }),
   });
 }
 

@@ -1,3 +1,4 @@
+import { daemonMessage, type DaemonMessage } from '../daemon-message.js';
 import { createHash } from 'node:crypto';
 /**
  * Licence refresh loop — L.3 of PRD 03, SECU-LICENCES L-1 / L-2 / L-7.
@@ -158,7 +159,7 @@ export type RefreshDeps = {
   now?: () => number;
   /** `applyLicensedSurfaces` — injected to keep this module free of the router. */
   recompose?: (app: Pick<Application, 'get'>) => Promise<void>;
-  notify?: (n: { title: string; body: string; urgent: boolean }) => void;
+  notify?: (n: { title: string; body: string; urgent: boolean; message?: DaemonMessage }) => void;
   /** Tests: no timers, no first tick — the test drives `tick()` / `localTick()`. */
   manual?: boolean;
   /** Tests: whether the machine id can be read right now. */
@@ -243,7 +244,10 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
     if (after.status === 'valid' && before.status !== 'valid') void clearLicenseAlerts();
     publish(after);
     if (after.reason === 'build_expired' && before.reason !== 'build_expired') {
-      notify({ title: 'This Timon beta build has expired', body: 'Install the current beta build to keep working. Your data is preserved.', urgent: true });
+      notify({
+        title: 'This Timon beta build has expired', body: 'Install the current beta build to keep working. Your data is preserved.', urgent: true,
+        message: daemonMessage('license_build_expired'),
+      });
     }
     if (deps.app && deps.recompose) {
       await deps.recompose(deps.app).catch((err: Error) => console.warn('[license] recomposition failed:', err.message));
@@ -279,6 +283,7 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
       title: 'Licence not renewed',
       body: `Timon could not renew its licence (${cause}); the modules your licence covers stay off until it goes through. It tries again every ${minutes} min.`,
       urgent: true,
+      message: daemonMessage('license_not_renewed', { cause, minutes }),
     });
   };
 
@@ -290,7 +295,10 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
       const body = licenseState().localFree
         ? `${detail}. Timon continues without a licence: every feature and plugin stays available, accounts beyond the first superadmin are suspended; all data is preserved.`
         : `${detail}. This beta has no Free tier: Timon is locked until a valid licence is activated; all data is preserved.`;
-      notify({ title: 'Licence is no longer valid', body, urgent: true });
+      notify({
+        title: 'Licence is no longer valid', body, urgent: true,
+        message: daemonMessage('license_off', { detail, free: licenseState().localFree ? 'yes' : 'no' }),
+      });
     }
   };
 
@@ -336,7 +344,7 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
       try { assertLicenseCompatible(candidate); }
       catch (err) {
         if (!(err instanceof LicenseCapabilityError)) throw err;
-        notify({ title: 'Licence change refused', body: err.message, urgent: true });
+        notify({ title: 'Licence change refused', body: err.message, urgent: true, message: daemonMessage('license_change_refused', { error: err.message }) });
         return;
       }
       const state = installLicenseToken(response.token, undefined, { ...deps.verify, fresh: true, now: new Date(now()) });
@@ -383,7 +391,12 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
       if (!warnedOffline && until !== null && now() >= offlineSince + (hours * 3_600_000) / 2) {
         warnedOffline = true;
         const left = Math.max(0, Math.round((until - now()) / 3_600_000));
-        notify({ title: 'Licence server unreachable', body: `No contact since ${new Date(offlineSince).toISOString()}. The licence stays valid for about ${left} h more.`, urgent: false });
+        notify({
+          title: 'Licence server unreachable',
+          body: `No contact since ${new Date(offlineSince).toISOString()}. The licence stays valid for about ${left} h more.`,
+          urgent: false,
+          message: daemonMessage('license_server_unreachable', { since: offlineSince, hours: left }),
+        });
       }
       console.warn(`[license] renew failed: ${cause}; offline since ${new Date(offlineSince).toISOString()}`);
       alertStillOff(cause);
@@ -460,8 +473,10 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
   };
 }
 
-function defaultNotify(n: { title: string; body: string; urgent: boolean }): void {
+function defaultNotify(n: { title: string; body: string; urgent: boolean; message?: DaemonMessage }): void {
   void import('../notifications.js').then(({ createNotification }) => {
-    createNotification({ type: 'alert', urgent: n.urgent, title: n.title, body: n.body, source: 'license', anchor: LICENSE_ALERT_ANCHOR });
+    createNotification({
+      type: 'alert', urgent: n.urgent, title: n.title, body: n.body, source: 'license', anchor: LICENSE_ALERT_ANCHOR, message: n.message,
+    });
   }).catch(() => { /* notifications unavailable: the log already said it */ });
 }

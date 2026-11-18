@@ -19,6 +19,7 @@ test('a failing plugin raises an English alert that names it', () => {
   assert.equal(n.body, 'boom');
   assert.equal(n.source, 'plugin:acme-widget');
   assert.equal(n.type, 'alert');
+  assert.deepEqual(n.message, { code: 'plugin_failed', params: { id: 'acme-widget' } });
   assert.doesNotMatch(n.title, FRENCH);
 });
 

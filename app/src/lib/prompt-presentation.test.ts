@@ -209,3 +209,19 @@ test('adjacent instruction parts share one fold, titled by the first label', () 
   assert.equal(html.match(/<details/g)?.length, 1);
   assert.match(html, /Agent message/);
 });
+
+test('a blocked return reads its coded reason in the reader\'s language', () => {
+  const { text, origin } = digest();
+  const reason = 'Stopped by rom (timon stop agent worker)';
+  const segments = origin.presentation.segments.map((s) => ({
+    ...s, card: { ...s.card, status: 'BLOCKED', blocked_reason: reason,
+      blocked_reason_code: { code: 'task_stopped_by_scope', params: { by: 'rom', kind: 'agent', name: 'worker' } } },
+  }));
+  setLocale('fr');
+  try {
+    const [first] = renderPromptSegments(text, { ...origin, presentation: { ...origin.presentation, segments } })!;
+    assert.match(first!.html, /Arrêtée par rom \(timon stop agent worker\)/);
+  } finally {
+    setLocale('en');
+  }
+});

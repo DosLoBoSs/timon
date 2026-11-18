@@ -66,6 +66,11 @@ test('a pair that exceeds the cap is no longer woken, in both directions', () =>
   assert.equal(next.woken, false);
   assert.equal(dbApi.getMessage(next.id)?.status, 'held');
   assert.equal(alertsAbout('jeff', 'nexus'), 1);
+  const alert = dbApi.listAllInbox({ limit: 500 })
+    .find((m) => m.from_agent === 'orchestrator' && m.payload.includes('jeff ↔ nexus'));
+  const payload = JSON.parse(alert?.payload ?? '{}') as { code?: string; params?: Record<string, unknown> };
+  assert.equal(payload.code, 'agent_pair_loop_stopped');
+  assert.equal(payload.params?.count, 4);
 });
 
 test('the case of the name does not create a second pair', () => {
