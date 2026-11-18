@@ -252,7 +252,8 @@ test('the retired MemoryHigh settings are gone from the registry but reported wh
   assert.deepEqual(retiredSettingsInUse(), []);
 });
 
-test('an OOM-killed process is named from the cgroup snapshots', () => {
+// The scope's processes are read from /proc, which only Linux has.
+test('an OOM-killed process is named from the cgroup snapshots', { skip: process.platform !== 'linux' && 'reads /proc' }, () => {
   const root = mkdtempSync(join(tmpdir(), 'timon-cg-'));
   const slice = '/user.slice/timon-x-missions.slice';
   const scope = 'timon-x-mission-abcd1234-1.scope';
