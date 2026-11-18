@@ -23,7 +23,10 @@ import { apiError } from '../../api-error.js';
 export function registerRoutes(app: Router): void {
   const answer = (res: Response, err: unknown): void => {
     if (!(err instanceof WorktreeServiceError)) throw err;
-    res.status(err.code === 'invalid' ? 400 : err.code === 'busy' ? 409 : 500).json({ error: err.message, code: `worktree_${err.code}` });
+    // One literal per code: the translation check reads them.
+    if (err.code === 'busy') res.status(409).json(apiError('worktree_busy', err.message));
+    else if (err.code === 'invalid') res.status(400).json(apiError('worktree_invalid', err.message, { detail: err.message }));
+    else res.status(500).json(apiError('worktree_failed', err.message, { detail: err.message }));
   };
 
   app.post('/api/tasks/:id/worktree', async (req, res) => {
@@ -79,7 +82,7 @@ export function registerRoutes(app: Router): void {
     if (!task) { res.status(404).json(apiError('not_found', 'not found')); return; }
     const sha = typeof parsed.value.sha === 'string' ? parsed.value.sha : undefined;
     if (!sha || !/^[0-9a-f]{7,40}$/i.test(sha)) {
-      res.status(400).json({ error: 'sha (7-40 hex chars) required' });
+      res.status(400).json(apiError('sha_invalid', 'sha (7-40 hex chars) required'));
       return;
     }
     // `timon task done --merged-sha` records here first: a merge that is not

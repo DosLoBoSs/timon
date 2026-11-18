@@ -406,6 +406,19 @@
     "workflow_script_denied": "Ce script ne peut pas être approuvé : {detail}",
     "workflow_chat_agent_failed": "L'agent du workflow n'a pas pu être préparé : {detail}",
     "workflow_human_not_waiting": "Cette étape n'attend plus de réponse.",
-    "workflow_refused": "Ce workflow a été refusé : {detail}"
+    "workflow_refused": "Ce workflow a été refusé : {detail}",
+    "notification_lifecycle_action_only": "Seule une carte qui demande une action peut se fermer d'elle-même ou expirer.",
+    "notification_reply_needs_mission": "Une carte qui se ferme à la réponse a besoin d'une mission.",
+    "notification_task_done_needs_task": "Une carte qui se ferme à la fin de sa task a besoin d'une task.",
+    "notification_fields_required": "Une notification a besoin d'un type et d'un titre.",
+    "notification_type_invalid": "Une notification est une action, une alerte ou un rapport.",
+    "notifications_disabled": "Le centre de notifications est désactivé.",
+    "push_subscription_invalid": "L'abonnement push de cet appareil est incomplet.",
+    "push_endpoint_required": "Choisissez l'appareil à désabonner.",
+    "telemetry_preference_forced": "Ce choix est fixé hors de Timon, par une variable d'environnement ou le fichier de configuration : changez-le là.",
+    "telemetry_event_invalid": "Cet événement d'usage est invalide.",
+    "worktree_busy": "La task tourne dans ce worktree. Arrêtez-la d'abord.",
+    "worktree_invalid": "Le worktree ne peut pas être préparé : {detail}",
+    "worktree_failed": "L'opération sur le worktree a échoué : {detail}"
   }
 }

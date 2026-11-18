@@ -406,6 +406,19 @@
     "workflow_script_denied": "This script cannot be approved: {detail}",
     "workflow_chat_agent_failed": "The workflow's agent could not be prepared: {detail}",
     "workflow_human_not_waiting": "This step no longer waits for an answer.",
-    "workflow_refused": "This workflow was refused: {detail}"
+    "workflow_refused": "This workflow was refused: {detail}",
+    "notification_lifecycle_action_only": "Only a card that asks for an action can close itself or expire.",
+    "notification_reply_needs_mission": "A card that closes on a reply needs a mission.",
+    "notification_task_done_needs_task": "A card that closes when its task ends needs a task.",
+    "notification_fields_required": "A notification needs a type and a title.",
+    "notification_type_invalid": "A notification is an action, an alert or a report.",
+    "notifications_disabled": "The notification centre is turned off.",
+    "push_subscription_invalid": "This device's push subscription is incomplete.",
+    "push_endpoint_required": "Choose the device to unsubscribe.",
+    "telemetry_preference_forced": "This choice is set outside Timon, by an environment variable or the configuration file: change it there.",
+    "telemetry_event_invalid": "This usage event is invalid.",
+    "worktree_busy": "The task is running in this worktree. Stop it first.",
+    "worktree_invalid": "The worktree cannot be prepared: {detail}",
+    "worktree_failed": "The worktree operation failed: {detail}"
   }
 }
