@@ -38,7 +38,7 @@ test('any type is persisted verbatim and announced by its absolute path', () => 
   assert.equal(readFileSync(files[1]!.path, 'utf8'), '# titre');
   // The mission owns the folder — that is what lets the cleanup know whose
   // files these are instead of guessing from their age.
-  assert.match(files[0]!.path, /\/uploads\/chat\/m-1\/[0-9a-f-]{36}\/deck\.pptx$/);
+  assert.match(files[0]!.path, /[\\/]uploads[\\/]chat[\\/]m-1[\\/][0-9a-f-]{36}[\\/]deck\.pptx$/);
   // No whitelist: an unknown mime keeps its bytes, it does not lose the file.
   assert.equal(files[1]!.mime, 'application/octet-stream');
 });

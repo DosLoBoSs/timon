@@ -128,13 +128,15 @@ async function describe(s: Scenario, cwd: string): Promise<Described> {
   } as SpawnOpts);
   const home = sp.env?.CODEX_HOME;
   assert.ok(typeof home === 'string' && home.length > 0, 'CODEX_HOME is set');
-  const swap = (text: string): string => text
-    .split(realpathSync(home)).join('<HOME>').split(home).join('<HOME>')
-    .split(cwd).join('<CWD>')
-    .split(TIMON_MCP_PATH).join('<TIMON_MCP>').split(PERMISSION_MCP_PATH).join('<FORMS_MCP>')
-    .split(process.env.TIMON_HOME!).join('<TIMON_HOME>')
-    .split(AUTH_DIR).join('<AUTH_DIR>')
-    .split(realpathSync(SCRATCH)).join('<TMP>')
+  // A TOML string escapes a Windows separator (`\\`): each path is swapped in
+  // its escaped spelling first, then as is.
+  const put = (text: string, path: string, tag: string): string =>
+    text.split(JSON.stringify(path).slice(1, -1)).join(tag).split(path).join(tag);
+  const swap = (text: string): string => [
+    [realpathSync(home), '<HOME>'], [home, '<HOME>'], [cwd, '<CWD>'],
+    [TIMON_MCP_PATH, '<TIMON_MCP>'], [PERMISSION_MCP_PATH, '<FORMS_MCP>'],
+    [process.env.TIMON_HOME!, '<TIMON_HOME>'], [AUTH_DIR, '<AUTH_DIR>'], [realpathSync(SCRATCH), '<TMP>'],
+  ].reduce((t, [path, tag]) => put(t, path!, tag!), text)
     .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '<uuid>');
   const config = tables(swap(readFileSync(join(home, 'config.toml'), 'utf8')));
   const auth = join(home, 'auth.json');

@@ -25,8 +25,9 @@ test('only a terminal run of the packaged runtime is a packaged CLI', () => {
   assert.equal(packagedCli({}, { ...process.versions, electron: undefined } as unknown as NodeJS.ProcessVersions), false);
   // The Node the package ships is the packaged runtime too.
   const shippedNode = { ...process.versions, electron: undefined } as unknown as NodeJS.ProcessVersions;
-  assert.equal(packagedCli({}, shippedNode, '/opt/Timon/resources/node/node'), true); // portability: simulated path
-  assert.equal(packagedCli({ TIMON_DESKTOP_SERVICE: '1' }, shippedNode, '/opt/Timon/resources/node/node'), false); // portability: simulated path
+  const shippedPath = join(tmpdir(), 'Timon', 'resources', 'node', process.platform === 'win32' ? 'node.exe' : 'node');
+  assert.equal(packagedCli({}, shippedNode, shippedPath), true);
+  assert.equal(packagedCli({ TIMON_DESKTOP_SERVICE: '1' }, shippedNode, shippedPath), false);
 });
 
 /** Loads db.ts as the packaged CLI does: the Electron runtime, no daemon marker. */
