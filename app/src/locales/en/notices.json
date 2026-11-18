@@ -23,6 +23,21 @@
       "feed": {
         "title": "Live demo on Thursday",
         "body": "Agents and plugins, one hour."
+      },
+      "update": {
+        "highlight1": "Updates download, verify and install from the app.",
+        "highlight2": "Missions pick up where they stopped after a restart.",
+        "highlight3": "Long conversations scroll faster.",
+        "highlight4": "Plugins can add their own settings page.",
+        "states": "Preview",
+        "state": {
+          "downloading": "Download",
+          "verified": "Verified",
+          "missions": "Missions",
+          "network": "Network error",
+          "cancelled": "Password cancelled"
+        },
+        "done": "Preview: nothing was installed."
       }
     },
     "license": {

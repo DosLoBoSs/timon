@@ -53,7 +53,7 @@ The download needs room for the installer plus a small margin; when the disk is 
 
 **Restart and install** (or **Install** on the card) first counts the missions running on this computer. When some are, the window and the card say how many: **Wait** leaves everything as it is (install later, once they are done), **Install anyway** goes on and they stop when the service moves to the new version. Then, depending on the package:
 
-- **AppImage**: the AppImage you launched is replaced by the verified one, in the same folder and under the same name, and Timon restarts on it. The previous file stays next to it, hidden, as `.<name>.previous`, until you approve the update (to go back to it after **Quit**, see [An AppImage you refused to update](downgrading.md#an-appimage-you-refused-to-update)); if the replacement or the restart fails, your current AppImage is left as it was. When the AppImage's folder is not writable, nothing is replaced: the new AppImage stays in the `updates` folder for you to move;
+- **AppImage**: the AppImage you launched is replaced by the verified one, in the same folder and under the same name, and Timon restarts on it. The previous file stays next to it, hidden, as `.<name>.previous`, and is deleted when the new version starts on your data: at its first start when nothing asks for your approval, as after this click, otherwise once you approve the update. Refuse it and **Go back to x.y.z** puts the previous version back (see [An AppImage you refused to update](downgrading.md#an-appimage-you-refused-to-update)). If the replacement or the restart fails, your current AppImage is left as it was. When the AppImage's folder is not writable, nothing is replaced: the new AppImage stays in the `updates` folder for you to move;
 - **`.deb`**: Timon asks your system for administrator rights (the password dialog of your desktop), installs the package and restarts on it. Without that dialog (no `pkexec`, a server session) or when the installation fails, the package opens in your software manager and the card shows the command that installs it (`sudo apt install '…/timon_<version>_amd64.deb'`) with a **Copy** button;
 - **macOS**: macOS asks for your administrator password, then Timon installs the `.pkg` and restarts on it. When the installation fails, the `.pkg` opens in Installer instead: once it is done, quit Timon and open it again;
 - **Windows**: Timon closes, the setup program installs the new version without its wizard, in the folder and for the users (you only, or everyone) of the current installation, and opens Timon again. Windows may ask for permission, to pause the background service and for an installation for everyone; the missions the service ran stop. If the installation does not happen (permission refused, an error), Timon opens again on the current version, and says so when the setup program stopped because the background service was still running; if the setup program cannot be started that way, it opens with its wizard instead.
@@ -127,6 +127,9 @@ package, then asks you to approve the update. When missions are still running
 on the previous version, that screen says how many: **Wait** quits and leaves
 them running (open Timon again once they are done), **Update anyway** moves the
 service now and stops them.
+Without missions running, the buttons read **Quit** and **Update**. An AppImage
+the desktop app replaced itself also offers **Go back to x.y.z**, which puts
+the previous version back and opens it.
 
 **Without the desktop app** (a headless server, or a session over SSH), run
 these commands on the daemon host, as the OS user who runs Timon, not with

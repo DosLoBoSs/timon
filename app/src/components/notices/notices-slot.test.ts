@@ -185,11 +185,12 @@ test('/?notices-preview=1 shows one card of each kind, closed ones included, and
 
     await m.click(document.querySelector('[data-notice="@timon/settings:discord"] [data-notice-dismiss]'));
     await m.until(() => cards().length === 7, 'closed in the page');
+    // "Update" opens the update window's preview (`update-preview.test.ts`) and keeps the card.
     await m.click(document.querySelector('[data-notice="@timon/updates:update-0.2.0"] [data-notice-action="0"]'));
-    await m.until(() => cards().length === 6, 'an action that closes, closed in the page');
+    assert.equal(cards().length, 7, 'Update keeps the card');
     await m.click(document.querySelector('[data-notice="@timon/settings:github-star"] [data-notice-action="0"]'));
     assert.deepEqual(m.opened, ['https://github.com/ai-timon/timon']);
-    await m.until(() => cards().length === 5, 'the link opened and the card closed in the page');
+    await m.until(() => cards().length === 6, 'the link opened and the card closed in the page');
     assert.deepEqual(m.writes, [], 'not a single write');
     assert.deepEqual([...m.server], ['@timon/settings:github-star'], 'the account\'s list untouched');
   } finally {
