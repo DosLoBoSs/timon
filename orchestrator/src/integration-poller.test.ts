@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, beforeEach, test } from 'node:test';
 import { dbApi } from './db.js';
-import type { ForgeReader, GitTransport, PullRequestStateOutcome } from './host/forge.js';
+import type { ForgeStateReader, GitTransport, PullRequestStateOutcome } from './host/forge.js';
 import { landIntegration } from './integration-landing.js';
 import { pollOpenIntegrations, type PollerDeps } from './integration-poller.js';
 import { updateProjectIntegration } from './project-integration.js';
@@ -113,7 +113,7 @@ beforeEach(() => {
   notices = [];
 });
 
-const forge: ForgeReader = {
+const forge: ForgeStateReader = {
   async pullRequest() {
     ghCalls += 1;
     return ghAnswer;

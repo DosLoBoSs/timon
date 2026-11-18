@@ -141,3 +141,29 @@ test('gh pr view: a failure, a timeout or an odd answer is never a state', async
   assert.equal((await githubForge(null, { gh: odd.run }).pullRequest('a/b', -1)).ok, false);
   assert.equal(odd.calls.length, 0, 'an odd repository or number never reaches gh');
 });
+
+test('gh pr list reads the open pull requests with the project folder, and drops what is not one', async () => {
+  const { run, calls } = recorder({ stdout: JSON.stringify([
+    { number: 4, title: 'x', author: { login: 'stranger' }, url: 'https://github.com/acme/app/pull/4', isDraft: true, updatedAt: 'd', headRepositoryOwner: { login: 'stranger' } },
+    { number: 'five', url: 'https://github.com/acme/app/pull/5' },
+    { number: 6, title: 'no url' },
+  ]) });
+  const out = await githubForge('/home/u/.config/gh-work', { gh: run }).listOpenPullRequests('acme/app');
+  assert.deepEqual(out, { ok: true, pulls: [
+    { number: 4, title: 'x', author: 'stranger', url: 'https://github.com/acme/app/pull/4', isDraft: true, updatedAt: 'd', headOwner: 'stranger' },
+  ] });
+  assert.deepEqual(calls[0]!.args.slice(0, 2), ['pr', 'list']);
+  assert.ok(calls[0]!.args.includes('--state=open'));
+  assert.equal(calls[0]!.opts.env?.GH_CONFIG_DIR, '/home/u/.config/gh-work');
+  assert.equal((await githubForge(null, { gh: run }).listOpenPullRequests('not a repo')).ok, false);
+});
+
+test('gh pr diff is text, cut past the limit and said so', async () => {
+  const big = recorder({ code: 1, stdout: 'diff --git a/x b/x\n', stderr: 'stdout maxBuffer length exceeded' });
+  const cut = await githubForge(null, { gh: big.run }).pullRequestDiff('acme/app', 4);
+  assert.deepEqual(cut, { ok: true, diff: 'diff --git a/x b/x\n', truncated: true });
+  assert.deepEqual(big.calls[0]!.args.slice(0, 3), ['pr', 'diff', '4']);
+  const failed = recorder({ code: 1, stderr: 'no pull requests found' });
+  assert.equal((await githubForge(null, { gh: failed.run }).pullRequestDiff('acme/app', 4)).ok, false);
+  assert.equal((await githubForge(null, { gh: failed.run }).pullRequestDiff('acme/app', 0)).ok, false);
+});

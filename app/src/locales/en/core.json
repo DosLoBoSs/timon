@@ -2329,6 +2329,10 @@
       "title": "Project TO DO",
       "description": "The TO DO notebook of one project: ideas to sort, turn into tasks or close."
     },
+    "pullRequests": {
+      "title": "Open pull requests",
+      "description": "The pull requests open on one project's repository, and their read-only review by the project's reviewer."
+    },
     "workflowRuns": {
       "title": "Workflow runs",
       "description": "The latest runs of your workflows and how each one ended."
@@ -2928,6 +2932,47 @@
     "save": "Save outcome",
     "saved": "Outcome saved",
     "saveError": "Could not save the outcome"
+  },
+  "pullRequests": {
+    "title": "Open pull requests",
+    "selectProject": "Project",
+    "noProjectOption": "Project…",
+    "chooseProject": "Choose a project to see its pull requests.",
+    "loading": "Loading…",
+    "empty": "No open pull request.",
+    "emptyAuthor": "No open pull request from this author.",
+    "filterAuthor": "Filter by author",
+    "allAuthors": "All authors",
+    "deletedAuthor": "deleted account",
+    "draft": "draft",
+    "review": "Review",
+    "preparing": "Preparing…",
+    "reviewing": "Reviewing…",
+    "more": "More actions",
+    "openOnForge": "Open on GitHub",
+    "showReport": "Show the report",
+    "outdated": "The pull request changed after this review",
+    "prepareError": "The review could not be prepared",
+    "sendError": "The review could not be sent",
+    "sent": "Review sent to {agent}",
+    "verdict": {
+      "mergeable": "Mergeable",
+      "changes_requested": "Changes requested",
+      "reject": "Reject",
+      "product_decision": "Your decision",
+      "none": "No verdict",
+      "failed": "Review failed"
+    },
+    "dialog": {
+      "title": "Review pull request #{number}",
+      "reviewer": "Sent to {agent}, who reads and writes nothing on GitHub.",
+      "cancel": "Cancel",
+      "send": "Send",
+      "sending": "Sending…"
+    },
+    "report": {
+      "title": "Review of pull request #{number}"
+    }
   },
   "projectTodo": {
     "detail": {

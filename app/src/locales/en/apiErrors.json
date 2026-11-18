@@ -596,6 +596,14 @@
     "setup_team_invalid_preset": "Choose one of the offered teams.",
     "setup_restart_steps_pending": "Finish the previous setup steps before restarting.",
     "setup_restart_unavailable": "Timon cannot restart itself on this machine. Restart it with the command shown.",
-    "setup_restart_required": "This machine runs Timon as a service: restart it to finish the setup."
+    "setup_restart_required": "This machine runs Timon as a service: restart it to finish the setup.",
+    "integration_not_pr": "This project lands its jobs locally: set its integration to pull requests to list them.",
+    "pr_repository_unknown": "The project's integration names no GitHub push URL for its remote.",
+    "forge_read_failed": "GitHub could not be read: {detail}",
+    "pr_read_failed": "The pull request could not be read.",
+    "pr_review_running": "This pull request is already being reviewed.",
+    "pr_review_not_found": "No review of this pull request waits to be sent: prepare it again.",
+    "pr_reviewer_unavailable": "The project has no reviewer agent, and none could be created.",
+    "pr_review_send_failed": "The review could not be started: {detail}"
   }
 }

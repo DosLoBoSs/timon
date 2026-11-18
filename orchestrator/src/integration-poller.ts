@@ -23,7 +23,7 @@ import { existsSync } from 'node:fs';
 import { dbApi, type IntegrationRow } from './db.js';
 import {
   githubForge, githubRepoFromUrl, gitTransport,
-  type ForgeReader, type ForgeRunners, type GitTransport,
+  type ForgeStateReader, type ForgeRunners, type GitTransport,
 } from './host/forge.js';
 import { getHost } from './host/index.js';
 import type { ExecResult } from './host/types.js';
@@ -42,7 +42,7 @@ export type PollerDeps = {
   /** Stand-ins for gh and git's network side: tests never reach a forge. */
   runners?: ForgeRunners;
   transport?: (repo: string) => GitTransport;
-  forge?: (configDir: string | null) => ForgeReader;
+  forge?: (configDir: string | null) => ForgeStateReader;
   notify?: Notify;
 };
 
