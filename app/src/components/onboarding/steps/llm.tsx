@@ -7,8 +7,9 @@
  * subscription the person already pays for, or the local models. "Back"
  * first brings the two choices back on this same screen.
  *
- * The terms sit under the two choices. No usage-statistics box: sharing is on
- * by default and turned off in Settings › Privacy.
+ * The terms sit under the two choices, with one line saying that anonymous
+ * usage statistics are sent and a one-click way to turn them off. No box to
+ * tick: sharing is on by default, an opt-out.
  */
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { ArrowRight, Check, ChevronRight, ExternalLink } from 'lucide-react';
@@ -27,6 +28,7 @@ import {
 } from '../llm-choice';
 import { useOnboarding, useOnboardingBack } from '../onboarding-context';
 import { ViewSwap } from '../view-swap';
+import { TelemetryNotice } from '../telemetry-notice';
 
 /** The row above the title: a small crowd of every skull, standing on one line. */
 const TEAM: readonly { look: Partial<AgentLook>; size: number }[] = [
@@ -125,6 +127,7 @@ function ChooseBlock({ onPick, known }: { onPick: (view: LlmView) => void; known
             </a>
           )))}
       </p>
+      <TelemetryNotice />
     </>
   );
 }
