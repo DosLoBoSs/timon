@@ -91,7 +91,7 @@ test('commercial refusals resolve to actionable copy in both languages', () => {
       assert.ok(message.length > 20);
       assert.notEqual(message, code);
     }
-    assert.match(dict.freeLicense.deactivateConfirm, /data|données/);
+    assert.match(dict.freeLicense.deactivateConfirm, /data|données/); // french-ok: the French locale under test
   }
 });
 
