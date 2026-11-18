@@ -19,7 +19,7 @@ An on/off setting is a switch. A setting whose value is not its default shows th
 
 ## Global instructions
 
-**Settings → Instructions**, the first category, holds what you want from **every** agent: the language to answer in, your commit style, how you test. It is one Markdown file, `global-instructions.md` in the Timon folder (the table in [Where Timon keeps its files](../installation/configuration.md) gives its place on your OS).
+**Settings → Instructions** opens on this tab, **Global instructions**, and holds what you want from **every** agent: the language to answer in, your commit style, how you test. It is one Markdown file, `global-instructions.md` in the Timon folder (the table in [Where Timon keeps its files](../installation/configuration.md) gives its place on your OS).
 
 Timon sends it to every agent each time one starts, right after the Timon preamble. A change applies from the next mission, not to one already running. In an agent's **Injections** tab it appears under its own origin, marked as yours. Keep it short: it is added to every prompt.
 
@@ -35,7 +35,7 @@ Stored secrets are never displayed by default. To read one again, open it from t
 
 ## Obsidian vault
 
-**Settings → Memory** opens on the **Obsidian** tab. Type the path of your vault folder, or choose **Browse**: the desktop app on this computer opens your system's folder picker; connected to another machine, or in a plain browser, Timon lists the folders of the machine it runs on, since that is where the vault is read.
+The **Obsidian** tab is the last one of **Settings → Memory**, which opens on **Injection**. Type the path of your vault folder, or choose **Browse**: the desktop app on this computer opens your system's folder picker; connected to another machine, or in a plain browser, Timon lists the folders of the machine it runs on, since that is where the vault is read.
 
 ## Memory presets
 
