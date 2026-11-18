@@ -2329,6 +2329,10 @@
       "title": "TO DO du projet",
       "description": "Le carnet TO DO d'un seul projet : idées à trier, transformer en tasks ou clore."
     },
+    "pullRequests": {
+      "title": "PR ouvertes",
+      "description": "Les pull requests ouvertes sur le dépôt d'un projet, et leur relecture en lecture seule par le relecteur du projet."
+    },
     "workflowRuns": {
       "title": "Exécutions de workflows",
       "description": "Les dernières exécutions de vos workflows et leur issue."
@@ -2928,6 +2932,47 @@
     "save": "Enregistrer l’issue",
     "saved": "Issue enregistrée",
     "saveError": "Impossible d’enregistrer l’issue"
+  },
+  "pullRequests": {
+    "title": "PR ouvertes",
+    "selectProject": "Projet",
+    "noProjectOption": "Projet…",
+    "chooseProject": "Choisissez un projet pour voir ses pull requests.",
+    "loading": "Chargement…",
+    "empty": "Aucune pull request ouverte.",
+    "emptyAuthor": "Aucune pull request ouverte de cet auteur.",
+    "filterAuthor": "Filtrer par auteur",
+    "allAuthors": "Tous les auteurs",
+    "deletedAuthor": "compte supprimé",
+    "draft": "brouillon",
+    "review": "Relire",
+    "preparing": "Préparation…",
+    "reviewing": "En relecture…",
+    "more": "Plus d'actions",
+    "openOnForge": "Ouvrir sur GitHub",
+    "showReport": "Voir le rapport",
+    "outdated": "La pull request a changé depuis cette relecture",
+    "prepareError": "La relecture n'a pas pu être préparée",
+    "sendError": "La relecture n'a pas pu être envoyée",
+    "sent": "Relecture envoyée à {agent}",
+    "verdict": {
+      "mergeable": "Mergeable",
+      "changes_requested": "Changements à demander",
+      "reject": "À refuser",
+      "product_decision": "Votre décision",
+      "none": "Sans verdict",
+      "failed": "Relecture échouée"
+    },
+    "dialog": {
+      "title": "Relire la pull request #{number}",
+      "reviewer": "Envoyé à {agent}, qui lit et n'écrit rien sur GitHub.",
+      "cancel": "Annuler",
+      "send": "Envoyer",
+      "sending": "Envoi…"
+    },
+    "report": {
+      "title": "Relecture de la pull request #{number}"
+    }
   },
   "projectTodo": {
     "detail": {

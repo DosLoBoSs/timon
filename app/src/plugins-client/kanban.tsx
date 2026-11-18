@@ -15,6 +15,7 @@ import { KANBAN_CARD_SLOT, TASK_FORM_SLOT, TODO_FORM_SLOT } from '@/lib/plugin-h
 const KanbanTodoColumn = dynamic(() => import('./kanban/kanban-todo-column').then((m) => m.KanbanTodoColumn), { ssr: false });
 const ProjectTodoTile = dynamic(() => import('./kanban/project-todo-tile').then((m) => m.ProjectTodoTile), { ssr: false });
 const ProjectTodoWidget = dynamic(() => import('./kanban/project-todo-project-widget').then((m) => m.ProjectTodoWidget), { ssr: false });
+const PullRequestsWidget = dynamic(() => import('./kanban/pull-requests-widget').then((m) => m.PullRequestsWidget), { ssr: false });
 
 // Loaded on demand: statically imported, it weighed on every page of the app.
 const KanbanPage = dynamic(() => import('./kanban/page').then((m) => m.KanbanPage), { ssr: false });
@@ -94,6 +95,21 @@ export const kanbanClient: BundledClientPlugin = {
         frame: 'none',
       },
       Component: ProjectWidget,
+    });
+
+    // The pull requests open on the repository of one project in `pr` mode,
+    // and their read-only relecture: "Review" prepares a brief the person
+    // reads and sends; the verdict comes back on the row.
+    registerWidget(ctx, {
+      key: 'pull-requests',
+      widget: {
+        title: t('widgetCatalog.pullRequests.title'), icon: widgetPicto('pullRequests'), description: t('widgetCatalog.pullRequests.description'),
+        zone: 'droite',
+        height: 320,
+        minHeight: 160,
+        frame: 'none',
+      },
+      Component: PullRequestsWidget,
     });
   },
 };

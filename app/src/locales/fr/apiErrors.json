@@ -594,6 +594,14 @@
     "setup_team_invalid_preset": "Choisissez l'une des équipes proposées.",
     "setup_restart_steps_pending": "Terminez les étapes précédentes avant de redémarrer.",
     "setup_restart_unavailable": "Timon ne peut pas se redémarrer lui-même sur cette machine. Redémarrez-le avec la commande affichée.",
-    "setup_restart_required": "Cette machine fait tourner Timon comme un service : redémarrez-le pour terminer la configuration."
+    "setup_restart_required": "Cette machine fait tourner Timon comme un service : redémarrez-le pour terminer la configuration.",
+    "integration_not_pr": "Ce projet intègre ses chantiers en local : passez son intégration en pull requests pour les lister.",
+    "pr_repository_unknown": "L'intégration du projet ne nomme aucune URL de push GitHub pour son remote.",
+    "forge_read_failed": "GitHub n'a pas pu être lu : {detail}",
+    "pr_read_failed": "La pull request n'a pas pu être lue.",
+    "pr_review_running": "Cette pull request est déjà en relecture.",
+    "pr_review_not_found": "Aucune relecture de cette pull request n'attend d'envoi : préparez-la de nouveau.",
+    "pr_reviewer_unavailable": "Le projet n'a pas d'agent relecteur, et aucun n'a pu être créé.",
+    "pr_review_send_failed": "La relecture n'a pas pu démarrer : {detail}"
   }
 }
