@@ -124,7 +124,7 @@ export function splitRemoteRef(
   remotes: readonly string[],
 ): { remote: string; target: string } | null {
   const match = [...remotes]
-    .filter((r) => r && ref.startsWith(`${r}/`) && ref.length > r.length + 1)
+    .filter((r) => r && ref.startsWith(`${r}/`) && ref.length > r.length + 1)  // portability: a git remote ref (origin/main), not a path
     .sort((a, b) => b.length - a.length)[0];
   return match ? { remote: match, target: ref.slice(match.length + 1) } : null;
 }
