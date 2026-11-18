@@ -4249,7 +4249,11 @@ async function cmdService(argv) {
       break;
     }
     case 'stop': {
-      res = mod.stopService(opts);
+      // Windows has no stop signal to send: the daemon is asked first, then
+      // the stop's kills end what did not leave (host/cooperative-stop).
+      const { cooperativeStopOf, withCooperativeStop } = await loadDist('host/cooperative-stop');
+      const { daemonOrigin } = await loadDist('host/diagnostic-report');
+      res = await withCooperativeStop(opts, mod.stopService, cooperativeStopOf(daemonOrigin(cfg), opts.timonHome));
       if (res.ok && !dryRun) {
         const { endMissionsOfStoppedDaemon } = await loadDist('host/mission-processes');
         const ended = await endMissionsOfStoppedDaemon(opts.timonHome, host);
