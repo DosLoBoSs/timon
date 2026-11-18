@@ -108,8 +108,14 @@ let ownerCookie = '';
 
 test('the daemon token creates the first superadmin, no code asked, the address kept unconfirmed', async () => {
   const before = relayCalls.length;
+  const { bus } = await import('../../bus.js');
+  const heard: unknown[] = [];
+  const listen = (ev: { kind: string }): void => { if (ev.kind === 'onboarding_step') heard.push(ev); };
+  bus.on('event', listen);
   const created = await call('POST', '/api/users/first-admin', { ...account, email: ' Owner@Example.com ' }, operator);
+  bus.off('event', listen);
   assert.equal(created.status, 201);
+  assert.deepEqual(heard, [{ kind: 'onboarding_step', step: 'account', action: 'completed', via: 'operator' }]);
   const user = created.json.user as Json;
   assert.equal(user.email, EMAIL);
   assert.equal(user.is_superadmin, true);

@@ -613,3 +613,39 @@ test('the account provider refusing a new account reaches the destination as the
     await rt.dispose();
   }
 });
+
+/* ── Onboarding funnel (v6) ─────────────────────────────────────────────── */
+
+test('onboarding_step: the email code and the account\'s origin are closed words', () => {
+  assert.deepEqual(
+    validateEvent('onboarding_step', { step: 'account', action: 'code_sent', resend: true }),
+    { step: 'account', action: 'code_sent', resend: true },
+  );
+  assert.deepEqual(
+    validateEvent('onboarding_step', { step: 'account', action: 'code_failed', reason: 'email_connection_required' }),
+    { step: 'account', action: 'code_failed', reason: 'email_connection_required' },
+  );
+  assert.deepEqual(
+    validateEvent('onboarding_step', { step: 'account', action: 'completed', via: 'operator' }),
+    { step: 'account', action: 'completed', via: 'operator' },
+  );
+  assert.equal(validateEvent('onboarding_step', { step: 'account', action: 'code_failed', reason: 'SMTP 550 mailbox owner@example.com unknown' }), null);
+  assert.equal(validateEvent('onboarding_step', { step: 'account', action: 'code_failed', reason: 'other' }), null);
+  assert.equal(validateEvent('onboarding_step', { step: 'account', action: 'completed', via: 'magic-link' }), null);
+  assert.equal(validateEvent('onboarding_step', { step: 'account', action: 'code_sent', resend: 'yes' }), null);
+});
+
+test('collector: the code\'s outcome and the account\'s origin reach analytics as published', async () => {
+  const { TelemetryCollector } = await import('./collector.js');
+  const emitted: [string, Record<string, unknown>][] = [];
+  const collector = new TelemetryCollector({ missionFacts: () => null, taskFacts: () => null, now: () => 0 }, (name, props) => emitted.push([name, props]));
+  collector.handle({ kind: 'onboarding_step', step: 'account', action: 'code_sent', resend: false });
+  collector.handle({ kind: 'onboarding_step', step: 'account', action: 'code_failed', reason: 'email_rate_limited' });
+  collector.handle({ kind: 'onboarding_step', step: 'account', action: 'completed', via: 'code' });
+  assert.deepEqual(emitted, [
+    ['onboarding_step', { step: 'account', action: 'code_sent', resend: false }],
+    ['onboarding_step', { step: 'account', action: 'code_failed', reason: 'email_rate_limited' }],
+    ['onboarding_step', { step: 'account', action: 'completed', via: 'code' }],
+  ]);
+  for (const [name, props] of emitted) assert.ok(validateEvent(name, props), `${name} passes the catalogue`);
+});

@@ -142,7 +142,13 @@ export class TelemetryCollector {
       case 'browser_annotation': return this.emit('browser_action', { kind: 'annotation', action: ev.event });
       case 'onboarding_step': {
         const usage = this.deps.usageKind?.() ?? null;
-        return this.emit('onboarding_step', { step: ev.step, action: ev.action, ...(usage ? { usage_kind: usage } : {}) });
+        return this.emit('onboarding_step', {
+          step: ev.step, action: ev.action,
+          ...(ev.resend !== undefined ? { resend: ev.resend } : {}),
+          ...(ev.reason ? { reason: ev.reason } : {}),
+          ...(ev.via ? { via: ev.via } : {}),
+          ...(usage ? { usage_kind: usage } : {}),
+        });
       }
       case 'usage_kind_set': return this.emit('usage_kind_set', { usage_kind: ev.usageKind }, { userId: ev.userId });
       case 'account_limit_reached':

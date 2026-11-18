@@ -13,7 +13,9 @@
  * text; addresses, host or user names; database ids.
  */
 import { z } from 'zod';
-import { ONBOARDING_STEP_ACTIONS, ONBOARDING_STEPS } from '../../onboarding-events.js';
+import {
+  ONBOARDING_ACCOUNT_VIA, ONBOARDING_CODE_FAILURES, ONBOARDING_STEP_ACTIONS, ONBOARDING_STEPS,
+} from '../../onboarding-events.js';
 import { USAGE_KINDS } from '../../onboarding-usage-kind.js';
 import { builtinProviderIds } from '../../backends/builtin-declarations.js';
 import { baseBackendId } from '../../backends/instance-id.js';
@@ -22,7 +24,7 @@ import {
   MILESTONES, PAGE_SECTIONS, PREVIOUS_EXITS, RAM_CLASSES, UPGRADE_ACTIONS, WAIT_BUCKETS,
 } from './features.js';
 
-export const EVENT_SCHEMA_VERSION = 5;
+export const EVENT_SCHEMA_VERSION = 6;
 
 /**
  * Backends of the product's own providers, as their official manifests declare
@@ -113,6 +115,12 @@ export const EVENT_SCHEMAS = {
     step: z.enum(ONBOARDING_STEPS),
     action: z.enum(ONBOARDING_STEP_ACTIONS),
     usage_kind: usageKind.optional(),
+    /** v6, `code_sent`: a resend rather than the first code. */
+    resend: z.boolean().optional(),
+    /** v6, `code_failed`: the error code the route answered. */
+    reason: z.enum(ONBOARDING_CODE_FAILURES).optional(),
+    /** v6, `account / completed`: confirmed by code, made from the terminal, or with no code asked. */
+    via: z.enum(ONBOARDING_ACCOUNT_VIA).optional(),
   }).strict(),
   /** An account answered, or changed, who it uses Timon for. The agency offer's address never comes here. */
   usage_kind_set: z.object({ usage_kind: usageKind }).strict(),
