@@ -46,6 +46,7 @@ contexts are distinct; import these contracts as types in plugin code.
 - [IslandParamSpec](type-aliases/IslandParamSpec.md)
 - [LocalBackendFile](type-aliases/LocalBackendFile.md)
 - [LocalEnvPolicy](type-aliases/LocalEnvPolicy.md)
+- [MascotHeadComponent](type-aliases/MascotHeadComponent.md)
 - [MascotPart](type-aliases/MascotPart.md)
 - [MascotPartLabel](type-aliases/MascotPartLabel.md)
 - [MascotPoint](type-aliases/MascotPoint.md)
