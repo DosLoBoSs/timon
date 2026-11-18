@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { getHost } from './host/index.js';
 import { loadConfig } from './agent-config.js';
+import { integrationOfTask } from './chain-landing.js';
 import { db, dbApi, isCodeOnlyPipeline, type TaskRow } from './db.js';
 
 /** Null distinguishes an unavailable inspection from an empty branch. */
@@ -402,6 +403,25 @@ export function mergeCloseRefusal(task: TaskRow, sha: string | null): string | n
     console.warn(`[merge-guard] task ${task.id}: merge not fully verified (${verdict.undecided.join('; ')})`);
   }
   return verdict.refusal;
+}
+
+/**
+ * Whether the task that opens a job's pull request (`landing = 'pr'`) may go
+ * DONE (`docs/KANBAN-PR-PIPELINE.md` §2.4). Closing it without `timon pr open`
+ * left the integration row at 'branch': the poller only reads open pull
+ * requests, so the job never landed, its ideas stayed partial and nobody was
+ * told. DONE waits for the row to be open, merged or closed; a failed close
+ * stays possible. Fail-closed: a row that cannot be found has no pull request.
+ */
+export function pullRequestCloseRefusal(task: TaskRow): string | null {
+  if (task.type !== 'merge' || task.landing !== 'pr') return null;
+  const row = integrationOfTask(task);
+  if (row && row.state !== 'branch') return null;
+  const branch = task.base_branch ?? 'the integration branch';
+  const why = row ? `${branch} has no pull request yet` : `no integration branch of this job was found`;
+  return `Pull request guard: this task opens the job's pull request, and ${why}. ` +
+    `Open it first with \`timon pr open ${task.id} --title "<title>" --body-file <file>\` ` +
+    `(MCP tool \`pr_open\`), then close the task. If it cannot be opened, mark the task failed with the reason.`;
 }
 
 /**

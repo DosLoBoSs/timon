@@ -68,6 +68,7 @@ test('the pull request brief: bring the target in, move the branch by reference,
   assert.match(brief, /git -C \/repo push \. timon\/merge\/t:feat\/topic/);
   assert.match(brief, /timon pr open <TASK_ID> --title "<title>" --body-file <file>/);
   assert.match(brief, /--merged-sha "\$\(git -C \/repo rev-parse feat\/topic\)"/);
+  assert.match(brief, /refuses DONE \(`pr_not_opened`\) until step 4 opened the pull request/);
   assert.match(brief, /Fixes #n/);
   assert.doesNotMatch(brief, /git merge --no-ff/, 'it merges no task branch');
   assert.doesNotMatch(brief, /Integrate each source branch/);

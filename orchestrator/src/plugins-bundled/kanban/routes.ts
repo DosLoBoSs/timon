@@ -10,8 +10,8 @@ import { z } from 'zod';
 import { AgentConfig, killAgent, listAgents } from '../../agent.js';
 import { backendIdForModel, catalogClaimsModel } from '../../backends/catalog.js';
 import { asBackendName } from '../../backends/index.js';
-import { codeCloseRefusal, effectiveMergeSha, evaluateCodeDone, inspectGitBranch, mergeCloseRefusal, shaInBase, taskRepo } from '../../code-gate.js';
-export { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal } from '../../code-gate.js';
+import { codeCloseRefusal, effectiveMergeSha, evaluateCodeDone, inspectGitBranch, mergeCloseRefusal, pullRequestCloseRefusal, shaInBase, taskRepo } from '../../code-gate.js';
+export { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal, pullRequestCloseRefusal } from '../../code-gate.js';
 import { config } from '../../config/load.js';
 import { FALLBACK_SCOPES, TASK_TYPES, db, dbApi, isCodeOnlyPipeline, isFallbackScope, isTaskType, normalizeTaskStatusInput, rowVisible, type TaskDeleteOutcome, type TaskDeleteResult, type TaskRow, type TaskType } from '../../db.js';
 import { forbidden, forbiddenBody, isPersonAuth, rejectIfDenied, requireAuth, viewerFromRequest } from '../../users/identity.js';
@@ -383,6 +383,9 @@ export function mergedShaRefusal(task: TaskRow, sha: string): string | null {
 
 /** Answers 409 when a `merge` or `full` code task may not go DONE yet; true if it did. */
 function rejectUnprovenClose(res: express.Response, task: TaskRow, sha: string | null): boolean {
+  // First: until its pull request is open, the PR task has nothing to prove.
+  const prRefusal = pullRequestCloseRefusal(task);
+  if (prRefusal) { res.status(409).json(apiError('pr_not_opened', prRefusal, { detail: prRefusal })); return true; }
   const mergeRefusal = mergeCloseRefusal(task, sha);
   if (mergeRefusal) { res.status(409).json(apiError('merge_not_proven', mergeRefusal, { detail: mergeRefusal })); return true; }
   const codeRefusal = codeCloseRefusal(task);
