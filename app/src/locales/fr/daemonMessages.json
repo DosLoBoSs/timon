@@ -126,6 +126,10 @@
       "title": "Pré-autorisation du shell ignorée en mode auto : {agent}",
       "body": "{agent} pré-autorise {rules} mais tourne en mode auto : le CLI claude y ignore une règle qui autorise toutes les commandes shell, et une commande que son classifieur ne sait pas juger attend une approbation (une mission autonome est refusée au bout du délai). Pour garder la règle, passez l'agent en acceptEdits, et son rôle de projet aussi s'il fixe un mode ; ou pré-autorisez des motifs plus étroits comme Bash(git:*).\n\nLe mode auto vient de {source, select, mission {sa task ou son rôle de projet} other {sa propre configuration}}."
     },
+    "shell_preallow_rerouted": {
+      "title": "Pré-autorisation du shell non utilisée : {named}",
+      "body": "La task {task} nomme {named}, qui pré-autorise {rules}, mais elle tourne sur {routed}, qui ne l'a pas ({why}). Ses commandes shell passent par le classifieur, et une commande qu'il ne sait pas juger attend une approbation. Donnez à {routed} les mêmes outils autorisés, ou laissez la task tourner sur {named}."
+    },
     "backend_no_credit": {
       "title": "Backend {backend} : plus de crédit",
       "body": "`{backend}` répond par une erreur de paiement (HTTP 402 / solde épuisé) : le compte n’a plus de crédit.\n\nContrairement à une limite d’usage, **cela ne se rouvre pas tout seul** — il faut recharger le compte.\n\n- Backend écarté jusqu’au {until, date, medium} {until, time, short} (ou jusqu’à ce qu’un tour y réussisse de nouveau).\n- Les missions et les tasks qui en dépendent basculent sur leur plan de repli."
