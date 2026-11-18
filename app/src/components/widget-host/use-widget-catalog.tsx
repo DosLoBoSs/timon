@@ -129,14 +129,16 @@ export function useWidgetCatalog(): WidgetCatalog {
       // whose header carries a live subtitle and the handle. It then receives the
       // same props as a native one; framing it as well would give two borders and
       // two titles.
-      const Component = registration.Component as ComponentType<WidgetProps>;
+      // The controls go under `handle`, the SDK's name since API 17, and under
+      // `poignee` too, the name a widget written for an earlier API reads.
+      const Component = registration.Component as ComponentType<WidgetProps & { handle: ReactNode }>;
       const bare = registration.widget?.frame === 'none';
       byId.set(entry.id, {
         ...entry,
         render: (props) =>
           bare ? (
             <PluginBoundary pluginId={registration.pluginId}>
-              <Component {...props} />
+              <Component {...props} handle={props.poignee} />
             </PluginBoundary>
           ) : (
             <PluginCard
