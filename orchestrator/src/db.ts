@@ -1901,8 +1901,10 @@ if (!cols.includes('browser_profile_resolved')) db.exec(`ALTER TABLE missions AD
 // a mission the machine started (`mission-origin.ts`).
 if (!cols.includes('user_engaged')) db.exec(`ALTER TABLE missions ADD COLUMN user_engaged INTEGER NOT NULL DEFAULT 0`);
 // The task mission ended a clean turn with its task still open after every
-// closure question was delivered, and no turn has started since. Read when it
-// is killed idle: that death is the end of its work, not a system death.
+// closure question was delivered, and no turn has started since (1). The idle
+// reap confirms it (2) as it takes the process: only that death is the end of
+// its work, not a system death. A manual kill, a scope stop or a config reload
+// leave 1, and their death stays a system death.
 if (!cols.includes('closure_ignored')) db.exec(`ALTER TABLE missions ADD COLUMN closure_ignored INTEGER NOT NULL DEFAULT 0`);
 // The retention deleted this mission's history (data-retention.ts): the
 // retention in days that applied, NULL while nothing was deleted. The chat
@@ -2475,7 +2477,7 @@ export type MissionRow = {
   /** Workflow node that spawned the mission. NULL outside a workflow run. */
   workflow_run_id: string | null;
   workflow_node_id: string | null;
-  /** 1 while the mission sits idle after ignoring every closure question (see the column). */
+  /** 1 while the mission sits idle after ignoring every closure question, 2 once the idle reap took it (see the column). */
   closure_ignored: number;
   /** Retention in days that deleted the history; NULL while nothing was deleted (see the column). */
   history_purged_days: number | null;
@@ -6577,8 +6579,12 @@ export const dbApi = {
   },
   /** See the `closure_ignored` column: set after the last ignored question, cleared when a turn starts. */
   setMissionClosureIgnored(id: string, ignored: boolean): void {
-    db.prepare(`UPDATE missions SET closure_ignored = ? WHERE id = ? AND closure_ignored != ?`)
-      .run(ignored ? 1 : 0, id, ignored ? 1 : 0);
+    if (ignored) db.prepare(`UPDATE missions SET closure_ignored = 1 WHERE id = ? AND closure_ignored = 0`).run(id);
+    else db.prepare(`UPDATE missions SET closure_ignored = 0 WHERE id = ? AND closure_ignored != 0`).run(id);
+  },
+  /** The idle reap takes a mission that ignored its closure questions: the only death that ends its task (see the column). */
+  confirmClosureIgnoredReap(id: string): void {
+    db.prepare(`UPDATE missions SET closure_ignored = 2 WHERE id = ? AND closure_ignored = 1`).run(id);
   },
   getLatestSessionForAgent(agentName: string, ownerUserId?: string | null): string | null {
     const row = (ownerUserId === undefined ? latestSessionStmt.get(agentName)
