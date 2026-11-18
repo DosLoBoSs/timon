@@ -49,7 +49,8 @@ export type PrCheckName = (typeof PR_CHECKS)[number];
 export type PrCheck = { name: PrCheckName; ok: boolean; skipped?: boolean; detail: string };
 
 export type PrOpenRequest = {
-  /** A task of the job, or its series. */
+  /** What `id` names: a task of the job, or its series. */
+  target: 'task' | 'series';
   id: string;
   title: string;
   body: string;
@@ -177,7 +178,7 @@ function resolveFromTask(task: TaskRow, agentCwd: (name: string) => string | nul
 
 function resolveFromSeries(seriesId: string): Resolved | Refusal {
   const rows = dbApi.listIntegrationsBySeries(seriesId);
-  if (rows.length === 0) return refuse(404, 'pr_target_not_found', 'no task and no series with an integration branch has this id');
+  if (rows.length === 0) return refuse(404, 'pr_target_not_found', 'no series with an integration branch has this id');
   if (rows.length > 1) {
     return refuse(409, 'pr_refused', `the series has several integration branches (${rows.map((r) => r.branch).join(', ')}): name one of its tasks`);
   }
@@ -357,8 +358,15 @@ function settingRefusal(setting: ProjectIntegration, row: IntegrationRow): strin
  * Nothing reaches the forge before every check passed.
  */
 export async function openPullRequest(request: PrOpenRequest, deps: PrOpenDeps = {}): Promise<PrOpenOutcome> {
-  const task = dbApi.getTask(request.id);
-  const resolved = task ? resolveFromTask(task, deps.agentCwd ?? defaultAgentCwd) : resolveFromSeries(request.id);
+  let resolved: Resolved | Refusal;
+  if (request.target === 'task') {
+    const task = dbApi.getTask(request.id);
+    resolved = task
+      ? resolveFromTask(task, deps.agentCwd ?? defaultAgentCwd)
+      : refuse(404, 'pr_target_not_found', 'no task has this id');
+  } else {
+    resolved = resolveFromSeries(request.id);
+  }
   if ('ok' in resolved) return resolved;
   const { row, chainIds, project } = resolved;
 

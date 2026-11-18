@@ -272,17 +272,21 @@ test('project get/set-integration: the CLI takes the routes of the MCP tools, wi
   });
 });
 
-test('pr open: the CLI takes the route of the MCP tool, with the same body, a file body included', async () => {
+test('pr open: the CLI takes the routes of the MCP tool, with the same body, a file body included', async () => {
   await withDaemon(async (base, seen) => {
     const body = 'Adds x.\n\nWhy: y needed it.\n';
     await session(base, [{ method: 'tools/call', params: { name: 'pr_open', arguments: { id: 't1', title: 'Add x', body } } }], true);
-    const viaMcp = seen.find((x) => x.method === 'POST' && x.url === '/api/pull-requests');
-    assert.deepEqual(viaMcp?.body, { id: 't1', title: 'Add x', body });
+    const viaMcp = seen.filter((x) => x.method === 'POST' && x.url.endsWith('/pull-request'));
+    assert.ok(viaMcp.length >= 1);
+    assert.equal(viaMcp[0]?.url, '/api/tasks/t1/pull-request');
+    assert.deepEqual(viaMcp[0]?.body, { title: 'Add x', body });
     seen.length = 0;
     const file = join(mkdtempSync(join(tmpdir(), 'timon-pr-body-')), 'body.md');
     writeFileSync(file, body);
-    assert.equal((await cli(base, ['pr', 'open', 't1', '--title', 'Add x', '--body-file', file])).code, 0);
-    assert.deepEqual(seen.find((x) => x.method === 'POST' && x.url === '/api/pull-requests')?.body, viaMcp?.body);
+    await cli(base, ['pr', 'open', 't1', '--title', 'Add x', '--body-file', file]);
+    const viaCli = seen.filter((x) => x.method === 'POST' && x.url.endsWith('/pull-request'));
+    assert.deepEqual(viaCli.map((x) => x.url), viaMcp.map((x) => x.url));
+    assert.deepEqual(viaCli[0]?.body, viaMcp[0]?.body);
     seen.length = 0;
     // No title, two bodies, or no id: a usage error, never a request.
     assert.equal((await cli(base, ['pr', 'open', 't1'])).code, 64);
@@ -290,6 +294,27 @@ test('pr open: the CLI takes the route of the MCP tool, with the same body, a fi
     assert.equal((await cli(base, ['pr', 'open', '--title', 'x'])).code, 64);
     assert.equal(seen.length, 0);
   });
+});
+
+test('pr open: the series is asked only when no task has the id, never after another refusal', async () => {
+  const urls = (seen: Seen[]) => seen.filter((x) => x.url.endsWith('/pull-request')).map((x) => x.url);
+  const notFound = { status: 404, body: { error: 'no task has this id', code: 'pr_target_not_found' } };
+  await withDaemon(async (base, seen) => {
+    await session(base, [{ method: 'tools/call', params: { name: 'pr_open', arguments: { id: 's1', title: 'x' } } }], true);
+    assert.deepEqual(urls(seen), ['/api/tasks/s1/pull-request', '/api/series/s1/pull-request']);
+    seen.length = 0;
+    assert.equal((await cli(base, ['pr', 'open', 's1', '--title', 'x'])).code, 2);
+    assert.deepEqual(urls(seen), ['/api/tasks/s1/pull-request', '/api/series/s1/pull-request']);
+  }, notFound);
+  const refused = { status: 409, body: { error: 'account: gh signs in as someone', code: 'pr_precheck_failed' } };
+  await withDaemon(async (base, seen) => {
+    await session(base, [{ method: 'tools/call', params: { name: 'pr_open', arguments: { id: 't1', title: 'x' } } }], true);
+    assert.deepEqual(urls(seen), ['/api/tasks/t1/pull-request']);
+    seen.length = 0;
+    const out = await cli(base, ['pr', 'open', 't1', '--title', 'x']);
+    assert.equal(out.code, 2);
+    assert.deepEqual(urls(seen), ['/api/tasks/t1/pull-request']);
+  }, refused);
 });
 
 test('project create/update and workspace list: the MCP tools and the CLI take the same routes, with the same body', async () => {

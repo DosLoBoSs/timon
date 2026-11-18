@@ -1,25 +1,33 @@
 /**
- * `POST /api/pull-requests`: open the pull request of a Kanban job
- * (`pr-open.ts`). The CLI `timon pr open` and the MCP tool `pr_open` call it.
+ * Open the pull request of a Kanban job (`pr-open.ts`), named by one of its
+ * tasks (`POST /api/tasks/:id/pull-request`) or by its series
+ * (`POST /api/series/:id/pull-request`). The CLI `timon pr open` and the MCP
+ * tool `pr_open` call the first, then the second when no task has the id.
  *
  * Authentication is required, and `projects:manage`: the gesture pushes to
  * the remote of a project and writes on its forge with the account its
  * setting names. The daemon token passes, as for every project setting the
  * CLI and the agents write; an anonymous request never reaches the checks.
  */
-import type { Router } from 'express';
+import type { Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { apiError } from '../../api-error.js';
 import { openPullRequest, type PrOpenDeps, type PrOpenRefusalCode } from '../../pr-open.js';
 import { auditRequest } from '../../users/audit-actor.js';
 import { rejectIfDenied, requireAuth } from '../../users/identity.js';
 
+const PrOpenParams = z.object({
+  id: z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/, 'a task or series id'),
+});
+
 const PrOpenBody = z.object({
-  /** A task of the job, or its series. */
-  id: z.string().trim().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/, 'a task or series id'),
   title: z.string().trim().min(1).max(256),
   body: z.string().max(16_000).default(''),
 }).strict();
+
+function zodDetail(err: z.ZodError): string {
+  return err.issues.map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message)).join('; ');
+}
 
 /** One literal per code, so the webview's messages can be checked against them. */
 function refusalBody(code: PrOpenRefusalCode, reason: string) {
@@ -35,18 +43,19 @@ function refusalBody(code: PrOpenRefusalCode, reason: string) {
 }
 
 export function registerPrRoutes(app: Router, deps: PrOpenDeps = {}): void {
-  app.post('/api/pull-requests', async (req, res) => {
+  const handler = (target: 'task' | 'series') => async (req: Request, res: Response): Promise<void> => {
     if (!requireAuth(req, res)) return;
     if (rejectIfDenied(req, res, 'projects:manage')) return;
+    const params = PrOpenParams.safeParse(req.params);
     const parsed = PrOpenBody.safeParse(req.body ?? {});
-    if (!parsed.success) {
-      const detail = parsed.error.issues.map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message)).join('; ');
+    if (!params.success || !parsed.success) {
+      const detail = !params.success ? zodDetail(params.error) : !parsed.success ? zodDetail(parsed.error) : '';
       res.status(400).json(apiError('pr_request_invalid', detail, { detail }));
       return;
     }
     let out;
     try {
-      out = await openPullRequest(parsed.data, deps);
+      out = await openPullRequest({ target, id: params.data.id, ...parsed.data }, deps);
     } catch (err) {
       // Not echoed: an unexpected failure may quote a path of this machine.
       console.error('[kanban] opening a pull request failed:', (err as Error).message);
@@ -62,5 +71,7 @@ export function registerPrRoutes(app: Router, deps: PrOpenDeps = {}): void {
     }
     auditRequest(req, 'integration.pr_opened', `${out.repository}#${out.pr.number}`);
     res.json(out);
-  });
+  };
+  app.post('/api/tasks/:id/pull-request', handler('task'));
+  app.post('/api/series/:id/pull-request', handler('series'));
 }

@@ -41,48 +41,53 @@ await once(server, 'listening');
 after(() => server.close());
 const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
-function post(who: 'anonymous' | 'writer' | 'manager' | 'daemon', body: unknown) {
+const ID = 'f2b0b1a4-6c3e-4a51-9a63-0c1d2e3f4a5b';
+const ROUTES = [`/api/tasks/${ID}/pull-request`, `/api/series/${ID}/pull-request`];
+
+function post(who: 'anonymous' | 'writer' | 'manager' | 'daemon', body: unknown, path = ROUTES[0]!) {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (who !== 'anonymous') headers['x-test-who'] = who;
-  return fetch(`${base}/api/pull-requests`, { method: 'POST', headers, body: JSON.stringify(body) });
+  return fetch(`${base}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
 }
 
-const VALID = { id: 'f2b0b1a4-6c3e-4a51-9a63-0c1d2e3f4a5b', title: 'Add x', body: 'Why x.' };
+const VALID = { title: 'Add x', body: 'Why x.' };
 
 test('an anonymous request is refused before anything is read or pushed', async () => {
-  const res = await post('anonymous', VALID);
-  assert.equal(res.status, 401);
+  for (const path of ROUTES) assert.equal((await post('anonymous', VALID, path)).status, 401, path);
   assert.equal(touched, 0);
 });
 
 test('a caller without projects:manage is refused', async () => {
-  const res = await post('writer', VALID);
-  assert.equal(res.status, 403);
+  for (const path of ROUTES) assert.equal((await post('writer', VALID, path)).status, 403, path);
   assert.equal(touched, 0);
 });
 
 test('a body that does not validate is refused with its reason', async () => {
   for (const body of [
     {},
-    { id: VALID.id },
-    { id: VALID.id, title: '   ' },
-    { id: '../etc', title: 'x' },
-    { id: VALID.id, title: 'x', force: true },
-    { id: VALID.id, title: 'x'.repeat(300) },
+    { body: 'no title' },
+    { title: '   ' },
+    { title: 'x', force: true },
+    { title: 'x', base: 'main' },
+    { title: 'x'.repeat(300) },
+    { title: 'x', body: 'y'.repeat(16_001) },
   ]) {
     const res = await post('manager', body);
-    assert.equal(res.status, 400, JSON.stringify(body));
+    assert.equal(res.status, 400, JSON.stringify(body).slice(0, 80));
     assert.equal(((await res.json()) as { code: string }).code, 'pr_request_invalid');
   }
+  assert.equal((await post('manager', VALID, '/api/tasks/a.b/pull-request')).status, 400);
   assert.equal(touched, 0);
 });
 
 test('the daemon token and a manager reach the action: an unknown job is 404', async () => {
   for (const who of ['daemon', 'manager'] as const) {
-    const res = await post(who, VALID);
-    assert.equal(res.status, 404, who);
-    assert.equal(((await res.json()) as { code: string }).code, 'pr_target_not_found');
+    for (const path of ROUTES) {
+      const res = await post(who, VALID, path);
+      assert.equal(res.status, 404, `${who} ${path}`);
+      assert.equal(((await res.json()) as { code: string }).code, 'pr_target_not_found');
+    }
   }
   assert.equal(touched, 0);
-  assert.equal(dbApi.getTask(VALID.id), undefined);
+  assert.equal(dbApi.getTask(ID), undefined);
 });

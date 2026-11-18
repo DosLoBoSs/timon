@@ -2554,7 +2554,24 @@ async function cmdPrOpen(argv) {
     process.exit(64);
   }
   if (bodyFile !== undefined) body = fs.readFileSync(bodyFile, 'utf8');
-  const j = await http('POST', '/api/pull-requests', { id, title, body: body ?? '' });
+  const payload = { title, body: body ?? '' };
+  // The id names a task of the job or its series: the task route says when
+  // no task has it, and only then is the series asked.
+  const taskPath = `/api/tasks/${encodeURIComponent(id)}/pull-request`;
+  const asTask = await httpRaw('POST', taskPath, payload);
+  let j = asTask.body;
+  if (asTask.status === 404 && asTask.body?.code === 'pr_target_not_found') {
+    j = await http('POST', `/api/series/${encodeURIComponent(id)}/pull-request`, payload);
+  } else if (!asTask.ok) {
+    // Shown like `http` does, without sending the request again: a second
+    // call would run every check, and possibly the push, a second time.
+    const text = typeof asTask.body === 'string' ? asTask.body : JSON.stringify(asTask.body);
+    process.stderr.write(`timon POST ${taskPath} → ${asTask.status}\n`);
+    const line = refusalText(text);
+    if (line !== text) process.stderr.write(`${line}\n`);
+    process.stderr.write(`${text}\n`);
+    process.exit(2);
+  }
   process.stdout.write(JSON.stringify(j, null, 2) + '\n');
 }
 

@@ -221,7 +221,16 @@ export const handlers = {
     return r.worktree;
   },
   async pr_open(args, { call }) {
-    return await call('POST', '/api/pull-requests', { id: args.id, title: args.title, body: args.body ?? '' });
+    const payload = { title: args.title, body: args.body ?? '' };
+    // The id names a task of the job or its series: the series is asked only
+    // when the task route says no task has it (never after any other refusal,
+    // which would run the checks and the push a second time).
+    try {
+      return await call('POST', `/api/tasks/${enc(args.id)}/pull-request`, payload);
+    } catch (err) {
+      if (!/ → 404 .*\[pr_target_not_found\]/.test(String(err?.message))) throw err;
+      return await call('POST', `/api/series/${enc(args.id)}/pull-request`, payload);
+    }
   },
   async worktree_dispose(args, { call }) {
     const r = await call('DELETE', `/api/tasks/${enc(args.task_id)}/worktree${args.force ? '?force=1' : ''}`);

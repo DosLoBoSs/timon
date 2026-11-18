@@ -118,7 +118,7 @@ function failedChecks(out: Awaited<ReturnType<typeof openPullRequest>>): string[
 
 test('every check passes: the branch is pushed without force, the pull request opened and recorded', async () => {
   const f = fixture();
-  const out = await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo));
+  const out = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo));
   assert.equal(out.ok, true, JSON.stringify(out));
   assert.ok(out.ok);
   assert.equal(out.pr.number, 12);
@@ -131,21 +131,21 @@ test('every check passes: the branch is pushed without force, the pull request o
   assert.equal(row?.pr_url, 'https://github.com/acme/app/pull/12');
   assert.equal(row?.head_sha, git(f.repo, 'rev-parse', f.branch));
   // A second call does not open another one.
-  const again = await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo));
+  const again = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo));
   assert.equal(again.ok, false);
   assert.equal(calls.push.length, 1);
 });
 
 test('the series id finds the same branch', async () => {
   const f = fixture();
-  const out = await openPullRequest({ id: f.seriesId, ...REQUEST }, deps(f.repo));
+  const out = await openPullRequest({ target: 'series', id: f.seriesId, ...REQUEST }, deps(f.repo));
   assert.equal(out.ok, true, JSON.stringify(out));
 });
 
 test('gh signed in as another account: refused, nothing pushed', async () => {
   const f = fixture();
   login = { ok: true, login: 'someone-else' };
-  const out = await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo));
+  const out = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo));
   assert.deepEqual(failedChecks(out), ['account']);
   assert.equal(out.ok ? '' : out.code, 'pr_precheck_failed');
   assert.deepEqual(calls.push, []);
@@ -156,14 +156,14 @@ test('gh signed in as another account: refused, nothing pushed', async () => {
 test('gh that cannot answer is a refusal too', async () => {
   const f = fixture();
   login = { ok: false, code: 'gh_missing', reason: 'the GitHub CLI (gh) was not found on this machine' };
-  assert.deepEqual(failedChecks(await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo))), ['account']);
+  assert.deepEqual(failedChecks(await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo))), ['account']);
   assert.deepEqual(calls.push, []);
 });
 
 test('a remote pushing elsewhere than the expected URL: refused', async () => {
   const f = fixture();
   git(f.repo, 'remote', 'set-url', '--push', 'origin', 'git@github.com:someone/fork.git');
-  assert.deepEqual(failedChecks(await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo))), ['remote_url']);
+  assert.deepEqual(failedChecks(await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo))), ['remote_url']);
   assert.deepEqual(calls.push, []);
 });
 
@@ -173,7 +173,7 @@ test('a commit by another identity than the repository\'s: refused, never rewrit
   execFileSync('git', ['-c', 'user.name=Someone', '-c', 'user.email=someone@else.test', 'commit', '-q', '--allow-empty', '-m', 'fix(x): tidy'], { cwd: f.repo });
   const tip = git(f.repo, 'rev-parse', 'HEAD');
   git(f.repo, 'checkout', '-q', 'main');
-  assert.deepEqual(failedChecks(await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo))), ['commit_identity']);
+  assert.deepEqual(failedChecks(await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo))), ['commit_identity']);
   assert.equal(git(f.repo, 'rev-parse', f.branch), tip, 'the branch is left as it was');
   assert.deepEqual(calls.push, []);
 });
@@ -181,7 +181,7 @@ test('a commit by another identity than the repository\'s: refused, never rewrit
 test('a repository with no identity configured: refused', async () => {
   const f = fixture();
   git(f.repo, 'config', '--unset', 'user.email');
-  const out = await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo));
+  const out = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo));
   assert.ok(failedChecks(out).includes('commit_identity'));
   assert.deepEqual(calls.push, []);
 });
@@ -192,7 +192,7 @@ test('a task id or a TODO number in a commit message: refused', async () => {
     git(f.repo, 'checkout', '-q', f.branch);
     commit(f.repo, 'src/y.ts', message);
     git(f.repo, 'checkout', '-q', 'main');
-    assert.deepEqual(failedChecks(await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo))), ['commit_messages'], message);
+    assert.deepEqual(failedChecks(await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo))), ['commit_messages'], message);
   }
   assert.deepEqual(calls.push, []);
 });
@@ -202,7 +202,7 @@ test('the short form of a task id of the job in a message: refused', async () =>
   git(f.repo, 'checkout', '-q', f.branch);
   commit(f.repo, 'src/y.ts', `fix(x): follow up on ${f.taskId.slice(0, 8)}`);
   git(f.repo, 'checkout', '-q', 'main');
-  assert.deepEqual(failedChecks(await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo))), ['commit_messages']);
+  assert.deepEqual(failedChecks(await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo))), ['commit_messages']);
 });
 
 test('an id, a TODO number or an attribution in the title or the description: refused', async () => {
@@ -213,7 +213,7 @@ test('an id, a TODO number or an attribution in the title or the description: re
     { title: 'Add x', body: 'Done.\n\nCo-Authored-By: A Tool <tool@example.com>' },
     { title: 'Add x', body: 'Generated with a tool' },
   ]) {
-    assert.deepEqual(failedChecks(await openPullRequest({ id: f.taskId, ...request }, deps(f.repo))), ['pr_text'], JSON.stringify(request));
+    assert.deepEqual(failedChecks(await openPullRequest({ target: 'task', id: f.taskId, ...request }, deps(f.repo))), ['pr_text'], JSON.stringify(request));
   }
   assert.deepEqual(calls.push, []);
 });
@@ -223,7 +223,7 @@ test('a file of docs/ in the diff (ignored by the repository, force-added): refu
   git(f.repo, 'checkout', '-q', f.branch);
   commit(f.repo, 'docs/notes.md', 'docs(x): add notes', { force: true });
   git(f.repo, 'checkout', '-q', 'main');
-  const out = await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo));
+  const out = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo));
   assert.deepEqual(failedChecks(out), ['private_paths']);
   assert.ok(!out.ok && /docs\//.test(out.reason));
   assert.deepEqual(calls.push, []);
@@ -232,14 +232,14 @@ test('a file of docs/ in the diff (ignored by the repository, force-added): refu
 test('the public tree check finds a blocker: refused', async () => {
   const f = fixture();
   publicTree = { ran: true, ok: false, summary: 'Blockers: 2' };
-  assert.deepEqual(failedChecks(await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo))), ['public_tree']);
+  assert.deepEqual(failedChecks(await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo))), ['public_tree']);
   assert.deepEqual(calls.push, []);
 });
 
 test('no public tree script: the check is skipped and says so', async () => {
   const f = fixture();
   publicTree = { ran: false };
-  const out = await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo));
+  const out = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo));
   assert.ok(out.ok);
   const check = out.checks.find((c) => c.name === 'public_tree');
   assert.equal(check?.skipped, true);
@@ -253,9 +253,9 @@ test('the repository\'s own public tree script runs on the branch and its blocke
     "const ref = process.argv[process.argv.indexOf('--ref') + 1];\n" +
     "console.log(`${ref}: 2 tracked files`);\nconsole.log('\\nBlockers: 1');\nprocess.exit(1);\n");
   const { publicTree: _stub, ...real } = deps(f.repo);
-  assert.deepEqual(failedChecks(await openPullRequest({ id: f.taskId, ...REQUEST }, real)), ['public_tree']);
+  assert.deepEqual(failedChecks(await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, real)), ['public_tree']);
   writeFileSync(join(f.repo, 'docs', 'oss', 'check-public-tree.mjs'), "console.log('Blockers: 0');\n");
-  const ok = await openPullRequest({ id: f.taskId, ...REQUEST }, real);
+  const ok = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, real);
   assert.equal(ok.ok, true, JSON.stringify(ok));
 });
 
@@ -265,7 +265,7 @@ test('a remote branch that moved on its own is never overwritten', async () => {
   git(f.repo, 'checkout', '-q', '-b', 'elsewhere', 'main');
   remoteSha = commit(f.repo, 'z.txt', 'chore: elsewhere');
   git(f.repo, 'checkout', '-q', 'main');
-  assert.deepEqual(failedChecks(await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo))), ['remote_branch']);
+  assert.deepEqual(failedChecks(await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo))), ['remote_branch']);
   assert.deepEqual(calls.push, []);
 });
 
@@ -275,13 +275,13 @@ test('a remote branch the local one contains is pushed forward', async () => {
   git(f.repo, 'checkout', '-q', f.branch);
   commit(f.repo, 'src/y.ts', 'feat(x): more');
   git(f.repo, 'checkout', '-q', 'main');
-  const out = await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo));
+  const out = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo));
   assert.equal(out.ok, true, JSON.stringify(out));
 });
 
 test('a branch under embargo (sec/) is never pushed, before any network call', async () => {
   const f = fixture({ branch: 'sec/fix-auth' });
-  const out = await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo));
+  const out = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo));
   assert.equal(out.ok, false);
   assert.equal(out.ok ? '' : out.code, 'pr_refused');
   assert.match(out.ok ? '' : out.reason, /embargo/);
@@ -293,7 +293,7 @@ test('a branch under embargo (sec/) is never pushed, before any network call', a
 test('a job that lands locally or by hand is refused', async () => {
   for (const mode of ['local', 'branch'] as const) {
     const f = fixture({ mode });
-    const out = await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo));
+    const out = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo));
     assert.equal(out.ok ? '' : out.code, 'pr_refused', mode);
   }
   assert.deepEqual(calls.push, []);
@@ -302,17 +302,27 @@ test('a job that lands locally or by hand is refused', async () => {
 test('a project without a push URL or in local mode is refused before any check', async () => {
   const f = fixture();
   updateProjectIntegration(f.slug, { remote_url: null });
-  const out = await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo));
+  const out = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo));
   assert.match(out.ok ? '' : out.reason, /remote_url/);
   updateProjectIntegration(f.slug, { remote_url: REMOTE_URL, mode: 'local' });
-  assert.equal((await openPullRequest({ id: f.taskId, ...REQUEST }, deps(f.repo))).ok, false);
+  assert.equal((await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo))).ok, false);
   assert.equal(calls.login, 0);
   assert.deepEqual(calls.push, []);
 });
 
-test('an unknown id is not found', async () => {
-  const out = await openPullRequest({ id: randomUUID(), ...REQUEST }, deps(root));
-  assert.equal(out.ok ? 0 : out.status, 404);
+test('an unknown id is not found, as a task or as a series', async () => {
+  for (const target of ['task', 'series'] as const) {
+    const out = await openPullRequest({ target, id: randomUUID(), ...REQUEST }, deps(root));
+    assert.equal(out.ok ? 0 : out.status, 404, target);
+    assert.equal(out.ok ? '' : out.code, 'pr_target_not_found');
+  }
+});
+
+test('a task id is not looked up as a series, nor a series id as a task', async () => {
+  const f = fixture();
+  assert.equal((await openPullRequest({ target: 'series', id: f.taskId, ...REQUEST }, deps(f.repo))).ok, false);
+  assert.equal((await openPullRequest({ target: 'task', id: f.seriesId, ...REQUEST }, deps(f.repo))).ok, false);
+  assert.deepEqual(calls.push, []);
 });
 
 test('a push the remote rejects is reported and nothing is recorded', async () => {
@@ -320,7 +330,7 @@ test('a push the remote rejects is reported and nothing is recorded', async () =
   const d = deps(f.repo);
   const base = d.transport!(f.repo);
   d.transport = () => ({ ...base, pushBranch: async () => ({ ok: false, code: 'rejected', reason: 'non-fast-forward' }) });
-  const out = await openPullRequest({ id: f.taskId, ...REQUEST }, d);
+  const out = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, d);
   assert.equal(out.ok ? '' : out.code, 'pr_push_failed');
   assert.deepEqual(calls.created, []);
   assert.equal(dbApi.getIntegration(f.repo, f.branch)?.state, 'branch');
