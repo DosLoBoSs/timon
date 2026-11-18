@@ -167,6 +167,7 @@
     "plugin_asset_unreadable": "This plugin file cannot be read.",
     "plugin_revision_stale": "This plugin was updated: reload the page.",
     "integration_refused": "The integration refused this request.",
+    "integration_invalid": "The integration setting was refused: {detail}",
     "connection_account_required": "A connection belongs to an account: sign in as a user.",
     "person_required": "Only a signed-in person can do this.",
     "connection_refused": "The connection request was refused: {detail}",

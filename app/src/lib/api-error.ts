@@ -10,6 +10,8 @@
  */
 import { hasKey, sourceText, t } from './i18n';
 import { messageArguments } from './i18n-core';
+import type { SettingsCategoryId } from './settings-layout';
+import { settingsPath } from './settings-path';
 
 /** Mirror of `ApiErrorBody` (orchestrator/src/plugins/contract/api-error.ts): the two packages share no code. */
 export interface ParsedApiError {
@@ -114,6 +116,28 @@ export function daemonMessageKey(code: string): string {
   return `daemonMessages.${code}`;
 }
 
+/**
+ * Stored sentences that send the user to a Settings tab. The reader writes the
+ * path (`{settingsPath}`) from the labels the dialog shows now: a path stored
+ * with the row would keep a tab's old name, and would stay in the daemon's
+ * language.
+ */
+const SETTINGS_PLACES: Readonly<Record<string, readonly [SettingsCategoryId, string]>> = {
+  integration_gave_up: ['secrets', 'connections'],
+  backend_launch_unauthorized: ['models', 'backends'],
+  device_paired: ['network', 'devices'],
+};
+
+/** Params the reader adds to a stored code's own: the daemon never sends them. Exported for the code scanner. */
+export function daemonMessageReaderParams(code: string): readonly string[] {
+  return Object.prototype.hasOwnProperty.call(SETTINGS_PLACES, code) ? ['settingsPath'] : [];
+}
+
+function readerParams(message: StoredDaemonMessage): Record<string, string | number> {
+  const place = Object.prototype.hasOwnProperty.call(SETTINGS_PLACES, message.code) ? SETTINGS_PLACES[message.code] : undefined;
+  return place ? { ...message.params, settingsPath: settingsPath(place[0], place[1]) } : message.params;
+}
+
 const ARGUMENTS = new Map<string, readonly string[] | null>();
 
 /**
@@ -139,7 +163,8 @@ export function daemonMessageText(stored: unknown, english: string): string {
   const message = parseDaemonMessage(stored);
   if (!message) return english;
   const key = daemonMessageKey(message.code);
-  return speaks(key, message.params) ? t(key, message.params) : english;
+  const params = readerParams(message);
+  return speaks(key, params) ? t(key, params) : english;
 }
 
 /**
@@ -153,12 +178,14 @@ export function daemonNotificationText(
   const message = parseDaemonMessage(stored);
   if (!message) return english;
   const key = daemonMessageKey(message.code);
+  const params = readerParams(message);
   const bodyKey = message.body ? daemonMessageKey(message.body.code) : null;
+  const bodyParams = message.body ? readerParams(message.body) : null;
   let body = english.body;
-  if (message.body && bodyKey && speaks(bodyKey, message.body.params)) body = t(bodyKey, message.body.params);
-  else if (speaks(`${key}.body`, message.params)) body = t(`${key}.body`, message.params);
+  if (bodyKey && bodyParams && speaks(bodyKey, bodyParams)) body = t(bodyKey, bodyParams);
+  else if (speaks(`${key}.body`, params)) body = t(`${key}.body`, params);
   return {
-    title: speaks(`${key}.title`, message.params) ? t(`${key}.title`, message.params) : english.title,
+    title: speaks(`${key}.title`, params) ? t(`${key}.title`, params) : english.title,
     body,
   };
 }

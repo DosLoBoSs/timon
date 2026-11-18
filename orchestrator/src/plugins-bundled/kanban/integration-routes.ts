@@ -33,13 +33,13 @@ function projectForRoute(req: Request, res: Response): string | null {
   if (rejectIfDenied(req, res, 'projects:manage')) return null;
   const slug = req.params.slug;
   if (typeof slug !== 'string') {
-    res.status(400).json(apiError('project_refused', 'invalid project slug'));
+    res.status(400).json(apiError('project_refused', 'invalid project slug', { detail: 'invalid project slug' }));
     return null;
   }
   // `readMeta` validates the slug and brings a project still described by its
   // legacy file into the table, where the setting lives.
   try { readMeta(slug); } catch {
-    res.status(400).json(apiError('project_refused', 'invalid project slug'));
+    res.status(400).json(apiError('project_refused', 'invalid project slug', { detail: 'invalid project slug' }));
     return null;
   }
   return slug;
@@ -53,7 +53,9 @@ function answerError(res: Response, err: unknown): void {
   }
   // Not echoed: an unexpected failure may quote the folder the setting names.
   console.error('[kanban] project integration request failed:', (err as Error).message);
-  res.status(500).json(apiError('project_request_failed', 'the integration setting could not be handled'));
+  res.status(500).json(apiError('project_request_failed', 'the integration setting could not be handled', {
+    detail: 'the integration setting could not be handled',
+  }));
 }
 
 export function registerIntegrationRoutes(app: Router, deps: IntegrationRouteDeps = {}): void {

@@ -162,3 +162,18 @@ test('system cards read their branches and counts in French', () => {
   assert.equal(series.title, 'Quota épuisé — tasks basculées, orchestrateur NON déplacé');
   assert.match(series.body ?? '', /ses tasks redémarrent sur des backends de secours/);
 });
+
+test('a stored sentence that sends to Settings reads the path the dialog shows now', () => {
+  const stored = JSON.stringify({ code: 'device_paired', params: { name: 'Pixel' } });
+  const english = { title: 'English', body: 'English' };
+  const en = inLocale('en', () => daemonNotificationText(stored, english));
+  assert.equal(en.body, '"Pixel" was paired with your account. If this was not you, revoke it in Settings → Access & network → Devices.');
+  const fr = inLocale('fr', () => daemonNotificationText(stored, english));
+  assert.match(fr.body ?? '', /révoquez-le dans Paramètres → Accès & réseau → Appareils\.$/);
+  const launch = inLocale('en', () => daemonNotificationText(
+    JSON.stringify({ code: 'backend_launch_unauthorized', params: { backend: 'codex', reason: 'Changed.' } }), english));
+  assert.match(launch.body ?? '', /\(Settings → AI models → Providers\)/);
+  const replay = inLocale('en', () => daemonNotificationText(
+    JSON.stringify({ code: 'integration_gave_up', params: { transport: 'telegram' } }), english));
+  assert.match(replay.body ?? '', /Replay it from Settings → Secrets → Connections\.$/);
+});
