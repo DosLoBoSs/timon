@@ -232,12 +232,16 @@ test('no internet, the email service down, no answer at all: a sentence each, ne
     ],
   });
   await w.fillForm({ email: 'ada@example.com', password: 'aaaaaaaa' });
+  const offline = () => w.doc.querySelector('[data-account-offline] code')?.textContent ?? null;
   await w.press(w.submit());
   assert.equal(w.status(), 'An internet connection is needed to confirm the email address.');
+  assert.equal(offline(), 'timon user create-admin', 'offline: the terminal command to make the account without the code');
   await w.press(w.submit());
   assert.equal(w.status(), "Timon's email service is unavailable right now. Try again in a few minutes.", 'the relay down is not a connection problem');
+  assert.equal(offline(), 'timon user create-admin', 'the relay down: the same way out');
   await w.press(w.submit());
   assert.equal(w.status(), 'Timon does not answer. Check that it is running, then try again.');
+  assert.equal(offline(), null, 'the daemon out of reach: a terminal command would not help');
   await w.press(w.submit());
   assert.equal(w.status(), 'Setup token missing or wrong. Run the command below on the server and try again.');
 });

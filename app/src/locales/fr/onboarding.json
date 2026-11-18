@@ -45,6 +45,7 @@
       "confirm": "Confirmez le mot de passe",
       "mismatch": "Les deux mots de passe ne correspondent pas.",
       "tooShort": "Au moins {min} caractères.",
+      "offlineCommand": "Pas de connexion ? Créez le compte depuis un terminal de cet ordinateur :",
       "create": "Créer mon compte",
       "privacy": "Votre compte et votre mot de passe restent sur cet ordinateur. Votre adresse e-mail et ses codes passent par notre serveur, qui vous les envoie. Des statistiques d'usage anonymes sont partagées par défaut ; vous pouvez les désactiver dans les Réglages."
     },
