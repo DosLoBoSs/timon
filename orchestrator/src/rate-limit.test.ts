@@ -1,9 +1,9 @@
 /**
- * Détection d'une limite d'usage dans le flux d'un backend.
+ * Detection of a usage limit in the stream of a backend.
  *
- * Ce qui est vérifié ici a un coût réel quand ça casse : une limite non
- * reconnue fait classer la mission "crash", donc morte et non reprenable,
- * alors qu'elle attend juste un quota.
+ * What is checked here has a real cost when it breaks: an unrecognised
+ * limit makes the mission classed "crash", hence dead and not resumable,
+ * while it is just waiting for a quota.
  *
  * `node --test --import tsx src/rate-limit.test.ts`
  */
@@ -17,56 +17,56 @@ const QUOTA_MSG =
   'You’ve reached your free Grok Build usage limit for now. '
   + 'Get SuperGrok for much higher limits, or try again later: https://grok.com/supergrok';
 
-test('le message de quota est reconnu quel que soit le champ qui le porte', () => {
-  // Forme claude/codex : une chaîne sur `error`.
+test('the quota message is recognised whatever field carries it', () => {
+  // claude/codex shape: a string on `error`.
   assert.ok(rateLimitFromEvent('result', { is_error: true, error: QUOTA_MSG }));
-  // Forme grok : un TABLEAU `errors`. Sans cette branche, une mission
-  // simplement à court de quota était classée "crash".
+  // grok shape: an `errors` ARRAY. Without this branch, a mission
+  // simply out of quota was classed "crash".
   assert.ok(rateLimitFromEvent('result', { is_error: true, errors: [QUOTA_MSG] }));
-  // Le tableau peut mélanger du bruit et le vrai message.
+  // The array can mix noise and the real message.
   assert.ok(rateLimitFromEvent('result', {
     is_error: true,
     errors: ['tool failed', QUOTA_MSG],
   }));
 });
 
-test('la source est bien « text » : ni fenêtre ni heure de réouverture', () => {
+test('the source is indeed "text": neither a window nor a reopening time', () => {
   const hit = rateLimitFromEvent('result', { is_error: true, errors: [QUOTA_MSG] });
   assert.equal(hit?.source, 'text');
   assert.equal(hit?.window, null);
-  // Un dialecte `textual` ne dit jamais QUAND : inventer une heure de reprise
-  // ferait replanifier une mission sur une valeur fausse.
+  // A `textual` dialect never says WHEN: inventing a resume time
+  // would reschedule a mission on a wrong value.
   assert.equal(hit?.resetsAt, null);
   assert.equal(hit?.pending, false);
 });
 
-test('un quota et un solde épuisé sont deux familles distinctes', () => {
-  // Fenêtre pleine : elle se rouvrira toute seule.
+test('a quota and an exhausted balance are two distinct families', () => {
+  // Full window: it will reopen on its own.
   assert.equal(rateLimitFromEvent('result', { is_error: true, error: QUOTA_MSG })?.kind, 'rate_limit');
   assert.equal(
     rateLimitFromEvent('result', { is_error: true, api_error_status: 429 })?.kind,
     'rate_limit',
   );
-  // Solde épuisé : rien ne se rouvre sans réapprovisionnement. Le statut
-  // structuré est la détection de référence — un entier survit à une
-  // reformulation du fournisseur, une regex non.
+  // Exhausted balance: nothing reopens without a top-up. The structured
+  // status is the reference detection: an integer survives a
+  // rewording by the provider, a regex does not.
   const dry = rateLimitFromEvent('result', { is_error: true, api_error_status: 402 });
   assert.equal(dry?.kind, 'exhausted');
   assert.equal(dry?.source, 'status');
   assert.equal(dry?.resetsAt, null);
 });
 
-test('une erreur ordinaire ne se fait pas passer pour un quota', () => {
+test('an ordinary error does not pass itself off as a quota', () => {
   assert.equal(rateLimitFromEvent('result', { is_error: true, errors: ['ENOENT: no such file'] }), null);
   assert.equal(rateLimitFromEvent('result', { is_error: true, errors: [] }), null);
-  // Un `errors` qui n'est pas un tableau ne doit pas faire tomber la sonde.
+  // An `errors` that is not an array must not bring the probe down.
   assert.equal(rateLimitFromEvent('result', { is_error: true, errors: 'boom' }), null);
   assert.equal(rateLimitFromEvent('result', { is_error: true, errors: [null, 42] }), null);
-  // Un result SANS erreur ne s'inspecte pas.
+  // A result WITHOUT an error is not inspected.
   assert.equal(rateLimitFromEvent('result', { is_error: false, errors: [QUOTA_MSG] }), null);
 });
 
-test('les tournures usuelles des trois CLI sont couvertes', () => {
+test('the usual wordings of the three CLIs are covered', () => {
   for (const msg of [
     'You’ve reached your free Grok Build usage limit for now',
     'Claude usage limit reached, try again later',
@@ -74,17 +74,17 @@ test('les tournures usuelles des trois CLI sont couvertes', () => {
     'rate limit exceeded',
     'quota exceeded for this org',
   ]) {
-    assert.ok(isRateLimitText(msg), `non reconnu : ${msg}`);
+    assert.ok(isRateLimitText(msg), `not recognised: ${msg}`);
   }
   assert.equal(isRateLimitText('permission denied'), false);
   assert.equal(isRateLimitText(undefined), false);
 });
 
-test('le payload exact de l’incident du 2026-09-01 est reconnu comme un solde épuisé', () => {
-  // Reproduit à l'octet près l'event `result` reçu cette nuit-là. Le 402 n'est
-  // ni un champ ni une phrase connue : il est enfoui dans une CHAÎNE de
-  // `errors[]`. Cinq missions sont mortes en 295 ms sans qu'aucun cooldown ne
-  // soit posé — `backend_cooldowns` est restée vide toute la nuit.
+test('the exact payload of the 2026-09-01 incident is recognised as an exhausted balance', () => {
+  // Reproduces to the byte the `result` event received that night. The 402 is
+  // neither a field nor a known sentence: it is buried in a STRING of
+  // `errors[]`. Five missions died in 295 ms without any cooldown being
+  // set; `backend_cooldowns` stayed empty all night.
   const payload = {
     type: 'result', subtype: 'error_during_execution', is_error: true,
     num_turns: 0, duration_ms: 295, total_cost_usd: 0,
@@ -95,12 +95,12 @@ test('le payload exact de l’incident du 2026-09-01 est reconnu comme un solde 
   const hit = rateLimitFromEvent('result', payload);
   assert.notEqual(hit, null);
   assert.equal(hit?.kind, 'exhausted');
-  // Le filet textuel ne sait rien de plus : ni fenêtre, ni réouverture.
+  // The textual net knows nothing more: neither a window nor a reopening.
   assert.equal(hit?.source, 'text');
   assert.equal(hit?.resetsAt, null);
 });
 
-test('le vocabulaire du solde épuisé est couvert, sans avaler les erreurs voisines', () => {
+test('the vocabulary of the exhausted balance is covered, without swallowing neighbouring errors', () => {
   for (const msg of [
     'API error (status 402 Payment Required)',
     'Payment Required',
@@ -109,22 +109,22 @@ test('le vocabulaire du solde épuisé est couvert, sans avaler les erreurs vois
     'Grok Build usage balance exhausted',
     'you are out of credits',
   ]) {
-    assert.ok(isExhaustedText(msg), `non reconnu : ${msg}`);
+    assert.ok(isExhaustedText(msg), `not recognised: ${msg}`);
   }
-  // `billing` seul ne suffit pas : contrairement à une fenêtre pleine, un
-  // `exhausted` écarte le backend pour tout le compte et pour 24 h — une task
-  // qui code une feature de facturation ne doit pas déclencher ça.
+  // `billing` alone is not enough: unlike a full window, an
+  // `exhausted` sets the backend aside for the whole account and for 24 h; a task
+  // coding a billing feature must not trigger that.
   assert.equal(isExhaustedText('TypeError in billing.ts'), false);
-  // Même raison pour le nombre nu : `:` est une frontière de mot, donc `\b402\b`
-  // matcherait le numéro de ligne de n'importe quelle stack trace posée dans
-  // `errors[]`. Le 402 n'est retenu qu'accolé à son étiquette.
+  // Same reason for the bare number: `:` is a word boundary, so `\b402\b`
+  // would match the line number of any stack trace set in
+  // `errors[]`. The 402 is only kept next to its label.
   assert.equal(isExhaustedText('Internal error: crash at /src/agent.ts:402:15'), false);
   assert.ok(isExhaustedText('{"http_status": 402}'));
   assert.equal(isExhaustedText('permission denied'), false);
   assert.ok(isExhaustedText('billing issue: card declined'));
 
-  // Une phrase de solde épuisé qui contient AUSSI le mot "limit" reste un
-  // solde épuisé : la reclasser en quota programmerait une reprise impossible.
+  // An exhausted balance sentence that ALSO holds the word "limit" stays an
+  // exhausted balance: reclassing it as a quota would schedule an impossible resume.
   const mixed = rateLimitFromEvent('result', {
     is_error: true,
     errors: ['usage limit reached', 'payment required: balance exhausted'],
