@@ -274,6 +274,10 @@ plugin's, from its page in the app):
   timon setup-token                          one-time token the first-run form asks for on an exposed install
   timon user list                            accounts (json)
   timon user reset-password <email-or-id>    temporary password, printed once
+  timon user create-admin [--email ADDRESS] [--name NAME] [--password-stdin]
+                                             the first account, without the emailed code (offline
+                                             machine); the password is typed hidden or piped, never
+                                             an argument; the email is kept unconfirmed
 
 Paired devices (another Timon that drives this machine — a headless server has no screen to click):
   timon device pair [--user EMAIL-OR-ID] [--json]
@@ -1184,10 +1188,10 @@ usage: timon user reset-password <email-or-id>
 usage: timon backend-account list|grant|revoke …
 ```
 
-### timon user list|reset-password …
+### timon user list|reset-password|create-admin …
 
 ```text
-usage: timon user list|reset-password …
+usage: timon user list|reset-password|create-admin …
 ```
 
 ### timon secret list|set|grant|revoke|rm|rekey|import-env …
