@@ -66,7 +66,7 @@ async function mount(ctx: TestContext, replies: Record<string, Reply[]>, me: Rec
   const nav = {
     step: 'account' as const, direction: 1 as const,
     next: () => { nexts += 1; }, back: () => {}, goTo: () => {},
-    setLanguage: async (tag: string) => tag,
+    setLanguage: async (tag: string) => tag, skip: () => {}, setOutcome: () => {},
     setBackHandler: (h: (() => boolean) | null) => { backHandler = h; },
   };
   const root = createRoot(dom.window.document.getElementById('root')!);

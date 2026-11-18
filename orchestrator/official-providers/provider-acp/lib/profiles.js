@@ -112,6 +112,11 @@ export const ANTIGRAVITY_PROFILE = {
   vendor: 'Google',
   brand: 'gemini',
   requiredBinary: manifestBackend('antigravity').binary?.names[0],
+  // Off by default: Google's Antigravity terms (§6) forbid reaching the service through third-party
+  // software, and accounts used through an orchestrator have been suspended
+  // (google-antigravity/antigravity-cli#1493). A person may switch it on from its provider page, at their
+  // own risk; the overlay's choice wins over this default (`activeProfiles`).
+  disabled: true,
   subscription: {
     note: 'Calls go through the personal Google account `agy` is signed in to '
       + `(\`${antigravitySignInCommand(process.platform)}\` on the host; Free, Google AI Pro or Ultra plan). `

@@ -8,6 +8,25 @@ const series_id = { type: 'string', description: 'Series id; defaults to THIS mi
 const group = { type: 'string', minLength: 1, maxLength: 60, description: 'Group of volets of the series plan; omitted = the series-wide rule.' };
 const TASK_TYPES = ['code', 'review', 'merge', 'research', 'doc', 'chore'];
 const id = (what) => ({ type: 'string', description: `${what} id.` });
+/**
+ * Copied onto every task the routine opens: a task starts with zero MCP server
+ * by default, so an agent outside any project role needs them to reach its tools.
+ */
+const ROUTINE_EXTRAS = {
+  extra_mcp_servers: {
+    type: ['array', 'null'], items: { type: 'string' },
+    description: 'MCP server ids given to every task this routine opens (see mcp_server_list); [] or null clears. From a mission, no stdio server the agent does not already hold.',
+  },
+  extra_skills: {
+    type: ['array', 'null'], items: { type: 'string' },
+    description: 'Skill ids injected into every task this routine opens; [] or null clears. From a mission, no skill whose `allowed-tools` the agent does not already hold.',
+  },
+  extra_allowed_tools: {
+    type: ['array', 'null'], items: { type: 'string' },
+    description: 'Tool patterns pre-allowed for every task this routine opens; [] or null clears. From a mission, only tools the agent already holds.',
+  },
+};
+const ROUTINE_EXTRA_KEYS = Object.keys(ROUTINE_EXTRAS);
 
 export const tools = [
   {
@@ -162,6 +181,7 @@ export const tools = [
         task_type: { type: 'string', enum: TASK_TYPES },
         project: { type: 'string', description: 'Project slug.' },
         enabled: { type: 'boolean', description: 'Default true; ignored from an agent (always switched off).' },
+        ...ROUTINE_EXTRAS,
       },
       required: ['name', 'agent_name', 'cron', 'prompt'],
     },
@@ -181,6 +201,7 @@ export const tools = [
         task_type: { type: 'string', enum: TASK_TYPES },
         project: { type: ['string', 'null'] },
         enabled: { type: 'boolean' },
+        ...ROUTINE_EXTRAS,
       },
       required: ['id'],
     },
@@ -267,6 +288,9 @@ export const handlers = {
     };
     if (args.task_type !== undefined) body.task_type = args.task_type;
     if (args.project !== undefined) body.project = args.project;
+    for (const key of ROUTINE_EXTRA_KEYS) {
+      if (args[key] !== undefined) body[key] = args[key];
+    }
     const created = await call('POST', '/api/routines', body);
     // The agent must read that its routine waits for the user.
     return created.needs_activation ? { ...created.routine, needs_activation: true, message: created.message } : created.routine;
@@ -274,7 +298,8 @@ export const handlers = {
   async routine_update(args, { call }) {
     const fields = {};
     for (const [from, to] of [['name', 'name'], ['agent_name', 'agent_name'], ['cron', 'cron_expr'], ['prompt', 'prompt'],
-      ['task_type', 'task_type'], ['project', 'project'], ['enabled', 'enabled']]) {
+      ['task_type', 'task_type'], ['project', 'project'], ['enabled', 'enabled'],
+      ...ROUTINE_EXTRA_KEYS.map((key) => [key, key])]) {
       if (args[from] !== undefined) fields[to] = args[from];
     }
     const updated = await call('PUT', `/api/routines/${enc(args.id)}`, fields);

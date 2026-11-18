@@ -592,7 +592,7 @@ export type IslandContentOptions = {
 import type { DictationEngine } from './dictation.js';
 import type { MascotPart } from '../../../orchestrator/src/plugins/contract/mascot.js';
 
-export type { MascotPart, MascotPartLabel, MascotPoint } from '../../../orchestrator/src/plugins/contract/mascot.js';
+export type { MascotHeadComponent, MascotPart, MascotPartLabel, MascotPoint } from '../../../orchestrator/src/plugins/contract/mascot.js';
 
 export type {
   DictationAvailability, DictationEngine, DictationErrorCode, DictationEvent, DictationInterim, DictationLanguages,

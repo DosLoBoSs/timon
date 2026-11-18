@@ -1657,6 +1657,11 @@ declare module '@timon/ui' {
    * agent's head in the onboarding, the agent creation or the chat. `null`
    * outside that slot. Paint a square of `size` pixels; draw what overflows
    * (an accessory) only when `fit` is false.
+   *
+   * A mascot pack's own head (a `shape` part with `head`, see `MascotPart`)
+   * reads the same value, for the agents whose `look.shape` is that part's id.
+   * Draw it as an `<svg>` or a `<canvas>`: the onboarding's welcome copies
+   * one of those into its scene and leaves any other element out.
    */
   export function useAgentMascot(): {
     look: AgentLook;

@@ -23,6 +23,8 @@ A schedule fires at the times of a cron expression, for example `0 9 * * 1` (Mon
 
 If Timon was not running at a scheduled time, that occurrence is skipped: the next run is computed from the moment Timon is back, without catching up.
 
+A Kanban task starts with no MCP server: only those of its project role and those it names itself. An agent outside any project role therefore has none of its tools when a routine opens its task. In the routine's editor, under **MCP servers for each task**, pick the servers the agent needs: every task the routine opens carries them. The agent's own configuration is never copied on its own. From the CLI or an agent's tools, the same lists are `--extra-mcp`, `--extra-skills` and `--allow` (`extra_mcp_servers`, `extra_skills`, `extra_allowed_tools`). An agent can only pass on servers, skills and tools the routine's agent already holds: a stdio server it does not hold, or a new tool, takes you.
+
 ### Webhooks
 
 A webhook gives an outside service an address to call. Each one has a readable route name, for example `discord-bugs`, and an address ending in `/api/triggers/hooks/discord-bugs`. Copy the full address from the trigger's row.

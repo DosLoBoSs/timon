@@ -370,6 +370,24 @@ test('plugin-mascot-pack: its declared parts load at API 15 and become valid in 
   });
 });
 
+test('plugin-mascot-head: its head loads at API 15 and becomes a valid skull in a look', async () => {
+  const { parseAgentLook } = await import('../agent-look.js');
+  const { mascotPartsOf } = await import('./mascot-packs.js');
+  await withExample('plugin-mascot-head', '@timon-ai/plugin-mascot-head', async (url, loader) => {
+    const gallery = await (await fetch(url('/api/plugins/example-mascot-head'))).json() as {
+      state: string; kind: string[]; client: { slots: string[] } | null; mascot: Record<string, string[]> | null;
+    };
+    assert.equal(gallery.state, 'active');
+    assert.deepEqual(gallery.kind, ['behavior']);
+    assert.deepEqual(gallery.client?.slots, ['mascot.parts']);
+    assert.deepEqual(gallery.mascot, { shape: ['ember'] });
+    const catalog = mascotPartsOf(loader.list());
+    const look = { shape: 'example-mascot-head:ember', color: '#3fa9ff', eyes: 'happy', acc: 'none' };
+    assert.deepEqual(parseAgentLook(look, catalog), look);
+    assert.throws(() => parseAgentLook({ ...look, shape: 'example-mascot-head:spark' }, catalog), /not declared for this field/);
+  });
+});
+
 test('plugin-remote-backend: a backend without a process loads without an allowlist and joins the catalogue', async () => {
   const { backendNames, getBackend } = await import('../backends/index.js');
   // No `pluginPolicy.exec.allow` entry: there is no binary to allow.

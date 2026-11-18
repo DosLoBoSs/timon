@@ -24,7 +24,7 @@ const { hashPassword } = await import('../../users/password.js');
 const { createDaemonAuthMiddleware } = await import('../http/auth.js');
 const { registerRoutes: registerUserRoutes } = await import('../users/routes.js');
 const { registerRoutes: registerSettingsRoutes } = await import('../settings/routes.js');
-const { registerRoutes: registerTelemetryRoutes } = await import('./routes.js');
+const { registerRoutes: registerTelemetryRoutes, ANONYMOUS_SCREEN_EVENTS } = await import('./routes.js');
 const { resolvePreference, TELEMETRY_SETTING_KEY } = await import('./preference.js');
 const { issueMissionApiToken } = await import('../../users/api-tokens.js');
 const { SESSION_COOKIE } = await import('../../users/session.js');
@@ -81,6 +81,54 @@ test('first run, anonymous: the generic settings route cannot write the telemetr
   const put = await call('PUT', `/api/settings/${TELEMETRY_SETTING_KEY}`, {}, { value: '1' });
   assert.equal(put.status, 400);
   assert.equal(stored(), null);
+});
+
+test('first run, anonymous: an onboarding screen is reported, nothing else is', async () => {
+  const sent: Array<{ name: string; properties: Record<string, unknown> }> = [];
+  const fake = (async (_url: string | URL | Request, init?: RequestInit) => {
+    sent.push((JSON.parse(String(init?.body)) as { payload: { name: string; properties: Record<string, unknown> } }).payload);
+    return new Response('{}', { status: 200 });
+  }) as typeof fetch;
+  const rt = startTelemetry({
+    env: { TIMON_TELEMETRY_CAPTURE_URL: 'http://127.0.0.1:9' }, packaged: false,
+    home: mkdtempSync(join(tmpdir(), 'timon-telemetry-route-screen-')), fetch: fake,
+    preference: { configValue: () => undefined, stored: () => null }, collector: { missionFacts: () => null, taskFacts: () => null },
+    intervalMs: 3_600_000,
+  });
+  setTelemetryRuntime(rt);
+  try {
+    const screen = { name: 'onboarding_screen', surface: 'web', screen: 'account', action: 'viewed' };
+    assert.equal((await call('POST', '/api/telemetry/ui-event', {}, screen)).status, 200);
+    assert.equal((await call('POST', '/api/telemetry/ui-event', {}, { name: 'page_viewed', surface: 'web', path: '/agents' })).status, 401);
+    assert.equal((await call('POST', '/api/telemetry/ui-event', {}, { ...screen, screen: 'my-screen' })).status, 401);
+    assert.equal((await call('POST', '/api/telemetry/ui-event', {}, { ...screen, note: 'typed text' })).status, 401);
+    await rt.flushNow();
+    const reported = sent.filter((p) => p.name === 'onboarding_screen');
+    assert.equal(reported.length, 1);
+    assert.equal(reported[0]!.properties.screen, 'account');
+    assert.equal(reported[0]!.properties.action, 'viewed');
+    assert.equal(reported[0]!.properties.account_slot, undefined, 'nobody behind it yet');
+  } finally {
+    clearTelemetryRuntime(rt);
+    await rt.dispose();
+  }
+});
+
+test('first run, anonymous: the onboarding screens are capped per daemon run', async () => {
+  const real = startTelemetry({ env: {}, packaged: false, home: mkdtempSync(join(tmpdir(), 'timon-telemetry-route-cap-')) });
+  let tracked = 0;
+  const spy = { ...real, trackUi: () => { tracked += 1; } };
+  setTelemetryRuntime(spy);
+  try {
+    const screen = { name: 'onboarding_screen', surface: 'web', screen: 'splash', action: 'viewed' };
+    for (let i = 0; i < ANONYMOUS_SCREEN_EVENTS + 5; i += 1) {
+      assert.equal((await call('POST', '/api/telemetry/ui-event', {}, screen)).status, 200);
+    }
+    // The previous test spent one.
+    assert.equal(tracked, ANONYMOUS_SCREEN_EVENTS - 1);
+  } finally {
+    clearTelemetryRuntime(spy);
+  }
 });
 
 let missionToken = '';
@@ -172,11 +220,18 @@ test('desktop-opened takes the daemon token alone', async () => {
 test('ui-event: only a signed-in person reports what they open, in a closed shape', async () => {
   const event = { name: 'page_viewed', surface: 'web', path: '/agents/acme.coder' };
   assert.equal((await call('POST', '/api/telemetry/ui-event', {}, event)).status, 401);
+  // Once an account exists, an onboarding screen needs its session like the rest.
+  const screen = { name: 'onboarding_screen', surface: 'web', screen: 'llm', action: 'completed', llmChoice: 'plan', backend: 'claude', connection: 'ok' };
+  assert.equal((await call('POST', '/api/telemetry/ui-event', {}, screen)).status, 401);
   assert.equal((await call('POST', '/api/telemetry/ui-event', { authorization: `Bearer ${missionToken}` }, event)).status, 403);
   assert.equal((await call('POST', '/api/telemetry/ui-event', { authorization: `Bearer ${DAEMON_TOKEN}` }, event)).status, 403);
   const cookie = await login();
   assert.equal((await call('POST', '/api/telemetry/ui-event', { cookie }, event)).status, 200);
+  assert.equal((await call('POST', '/api/telemetry/ui-event', { cookie }, screen)).status, 200);
   for (const bad of [
+    { ...screen, backend: 'https://my-proxy.example' },
+    { ...screen, failureCode: 'invalid api key sk-123' },
+    { ...screen, action: 'closed' },
     { ...event, name: 'prompt_sent' },
     { ...event, extra: 'acme' },
     { name: 'app_opened', surface: 'web', setupCompleted: 'yes' },

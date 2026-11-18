@@ -40,7 +40,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import type { Request, Response, Router } from 'express';
 import { z } from 'zod';
-import { canonicalAgentName } from '../../agent-config.js';
+import { canonicalAgentName, loadConfig } from '../../agent-config.js';
 import { automationOriginOf, emitAutomationEvent } from '../../plugins/automation-events.js';
 import { dbApi, type LayoutProposalRow, type LayoutProposalStatus } from '../../db.js';
 import {
@@ -51,6 +51,8 @@ import { agentDir } from '../../paths.js';
 import { PLUGIN_OWNER_PREFIX } from '../../users/api-tokens.js';
 import { requestHasPermission, viewerFromRequest, forbidden } from '../../users/identity.js';
 import { auditRequest } from '../../users/audit-actor.js';
+import { rejectOverride, spawnWideningDenied } from '../../users/privileged-overrides.js';
+import { routineTaskExtras } from '../../routines.js';
 import { scopedDb } from '../../users/scoped-db.js';
 import { ACTION_UNAVAILABLE, actionProvider, grantsAllow } from '../../triggers/actions.js';
 import { nextScheduleAt } from '../../triggers/engine.js';
@@ -593,6 +595,17 @@ export function registerRoutes(app: Router, options: { listensOnLoopback?: () =>
         return;
       }
       actions = [{ ...only, raw: true }];
+      // The routine's extras follow it to its new agent: judged again against
+      // that agent, as `PUT /api/routines/:id` does.
+      const routine = dbApi.getRoutine(row.id);
+      if (routine && only.agent !== routine.agent_name) {
+        const extras = routineTaskExtras(routine);
+        const target = (() => { try { return loadConfig(only.agent); } catch { return null; } })();
+        const widening = spawnWideningDenied(req, {
+          extra_skills: extras.extraSkills, extra_mcp_servers: extras.extraMcpServers, extra_allowed_tools: extras.extraAllowedTools,
+        }, target, only.agent);
+        if (widening) { rejectOverride(req, res, 'routine.override_denied', `agent:${only.agent}`, widening); return; }
+      }
     }
     // Routines stay system rows (NULL). A human re-grants with their own
     // permissions; an agent can only keep what both it and the trigger hold.

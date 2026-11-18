@@ -23,6 +23,7 @@ import { auditRequest } from '../../users/audit-actor.js';
 import { hashPassword } from '../../users/password.js';
 import { installId } from '../../users/install-id.js';
 import { EmailCodeStore, emailCodeOrigin, type CheckResult } from '../../users/email-code.js';
+import { onboardingStep, type OnboardingCodeFailure } from '../../onboarding-events.js';
 import {
   relayLocale,
   reportVerifiedEmail,
@@ -150,6 +151,29 @@ export function sendRelayFailure(res: Response, outcome: Exclude<MailOutcome, { 
   }
 }
 
+/** The error code `sendRelayFailure` answers for this outcome, as the onboarding funnel counts it. */
+export function relayFailureCode(outcome: Exclude<MailOutcome, { ok: true }>): OnboardingCodeFailure {
+  switch (outcome.kind) {
+    case 'offline': return 'email_connection_required';
+    case 'mail_unavailable': return 'email_service_unavailable';
+    case 'rate_limited': return 'email_rate_limited';
+    case 'invalid':
+    case 'unverified_email':
+      return 'email_rejected';
+  }
+}
+
+const ISSUE_REFUSAL_CODES = {
+  too_soon: 'email_code_too_soon',
+  origin_limited: 'email_code_origin_limited',
+  busy: 'email_code_busy',
+} as const satisfies Record<string, OnboardingCodeFailure>;
+
+/** A setup code that did not go out, for the onboarding funnel. Codes of a reset or a later verification are not counted. */
+function setupCodeFailed(reason: OnboardingCodeFailure): void {
+  onboardingStep('account', 'code_failed', { reason });
+}
+
 /** A refused code. `attemptsLeft` is top-level too, for the "N attempts left" line. */
 export function sendCodeRefusal(res: Response, result: Exclude<CheckResult, { ok: true }>): void {
   if (result.reason === 'invalid') {
@@ -229,10 +253,18 @@ export function confirmSetupEmail(deps: EmailCodeDeps, challengeId: string, emai
 export function registerEmailCodeRoutes(app: Router, deps: EmailCodeDeps): void {
   const { store } = deps;
 
-  /** Sends one code; `null` when the relay refused, the refusal already answered. */
-  async function mail(res: Response, purpose: 'verify' | 'reset', email: string, code: string, locale: string): Promise<boolean> {
+  /**
+   * Sends one code; `false` when the relay refused, the refusal already
+   * answered. `setup`: the first account's code, whose outcome the onboarding
+   * funnel counts (`resend` tells a second code from the first).
+   */
+  async function mail(
+    res: Response, purpose: 'verify' | 'reset', email: string, code: string, locale: string,
+    setup?: { resend: boolean },
+  ): Promise<boolean> {
     let id: string;
     try { id = deps.installId(); } catch {
+      if (setup) setupCodeFailed('install_id_unavailable');
       res.status(500).json({ error: 'install_id_unavailable' });
       return false;
     }
@@ -240,7 +272,11 @@ export function registerEmailCodeRoutes(app: Router, deps: EmailCodeDeps): void 
     // A reset to an address the relay never saw confirmed for this install is
     // answered like a sent one: telling them apart would reveal which
     // addresses hold an account here.
-    if (outcome.ok || (purpose === 'reset' && outcome.kind === 'unverified_email')) return true;
+    if (outcome.ok || (purpose === 'reset' && outcome.kind === 'unverified_email')) {
+      if (setup) onboardingStep('account', 'code_sent', { resend: setup.resend });
+      return true;
+    }
+    if (setup) setupCodeFailed(relayFailureCode(outcome));
     sendRelayFailure(res, outcome);
     return false;
   }
@@ -253,8 +289,12 @@ export function registerEmailCodeRoutes(app: Router, deps: EmailCodeDeps): void 
     const { email } = parsed.data;
     const locale = relayLocale(parsed.data.locale);
     const issued = store.issue({ purpose: 'verify', email, userId: null, locale, origin: originOf(req) });
-    if (!issued.ok) { sendIssueRefusal(res, issued); return; }
-    if (!(await mail(res, 'verify', email, issued.issued.code, locale))) {
+    if (!issued.ok) {
+      setupCodeFailed(ISSUE_REFUSAL_CODES[issued.reason]);
+      sendIssueRefusal(res, issued);
+      return;
+    }
+    if (!(await mail(res, 'verify', email, issued.issued.code, locale, { resend: false }))) {
       store.drop(issued.issued.id);
       return;
     }
@@ -271,7 +311,7 @@ export function registerEmailCodeRoutes(app: Router, deps: EmailCodeDeps): void 
       res.status(409).json(apiError('already_set_up', 'already set up'));
       return;
     }
-    await resend(req, res, 'verify');
+    await resend(req, res, 'verify', { setup: true });
   });
 
   /**
@@ -390,7 +430,7 @@ export function registerEmailCodeRoutes(app: Router, deps: EmailCodeDeps): void 
   app.post('/api/auth/email-verification/resend', async (req, res) => {
     const owner = pendingOwner(req, res);
     if (!owner) return;
-    await resend(req, res, 'verify', owner.id);
+    await resend(req, res, 'verify', { ownerId: owner.id });
   });
 
   /**
@@ -428,10 +468,18 @@ export function registerEmailCodeRoutes(app: Router, deps: EmailCodeDeps): void 
     res.json({ ok: true });
   });
 
-  async function resend(req: Request, res: Response, purpose: 'verify' | 'reset', ownerId?: string): Promise<void> {
+  async function resend(
+    req: Request, res: Response, purpose: 'verify' | 'reset', opts: { ownerId?: string; setup?: boolean } = {},
+  ): Promise<void> {
+    const { ownerId, setup = false } = opts;
     const parsed = ResendBody.safeParse(req.body ?? {});
     if (!parsed.success) { sendInvalidBody(res, 'challengeId is required'); return; }
     const attempt = store.resend(parsed.data.challengeId, purpose, originOf(req));
+    if (!attempt.ok && setup) {
+      setupCodeFailed(attempt.reason === 'too_soon' || attempt.reason === 'origin_limited'
+        ? ISSUE_REFUSAL_CODES[attempt.reason]
+        : attempt.reason === 'send_limit' ? 'email_code_send_limit' : 'email_code_expired');
+    }
     // A signed-in owner resends their own challenge, never another one.
     if (attempt.ok && ownerId !== undefined && attempt.userId !== ownerId) {
       attempt.release();
@@ -448,7 +496,7 @@ export function registerEmailCodeRoutes(app: Router, deps: EmailCodeDeps): void 
       sendCodeRefusal(res, { ok: false, reason: 'expired' });
       return;
     }
-    if (!(await mail(res, purpose, attempt.email, attempt.code, attempt.locale))) {
+    if (!(await mail(res, purpose, attempt.email, attempt.code, attempt.locale, setup ? { resend: true } : undefined))) {
       attempt.release();
       return;
     }

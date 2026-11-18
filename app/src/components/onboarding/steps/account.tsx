@@ -54,7 +54,7 @@ function Field({ id, label, required = false, hint, children }: { id: string; la
 }
 
 export function AccountStep(): ReactElement {
-  const { next, goTo } = useOnboarding();
+  const { next, skip, goTo } = useOnboarding();
   const ids = useId();
   const now = useNow();
   const [draft, setDraft] = useState<AccountDraft>(EMPTY);
@@ -71,12 +71,12 @@ export function AccountStep(): ReactElement {
     let alive = true;
     void fetchMe().then((me) => {
       if (!alive) return;
-      if (me.user) next();
+      if (me.user) skip();
       else if (!me.needsSetup) goTo('signin');
       else setNeedsToken(me.setupRequiresToken === true);
     });
     return () => { alive = false; };
-  }, [next, goTo]);
+  }, [skip, goTo]);
 
   // "Back" on the code returns to the form, filled as it was left.
   useOnboardingBack(() => {

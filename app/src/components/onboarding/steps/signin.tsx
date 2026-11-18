@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { apiErrorMessage } from '@/lib/api-error';
 import { fetchMe } from '@/lib/auth';
 import { t } from '@/lib/i18n';
+import { reportOnboardingScreen } from '@/lib/usage-events';
 import { landAfterSignin } from '../welcome-landing';
 
 export function SigninStep(): ReactElement {
@@ -56,6 +57,8 @@ export function SigninStep(): ReactElement {
         throw new Error(apiErrorMessage(payload, t('loginPage.failed')));
       }
       setPassword('');
+      // Signed in now: the funnel's event goes with the new session.
+      reportOnboardingScreen('signin', 'completed');
       await landAfterSignin(await fetchMe());
     } catch (error) {
       setMessage(error instanceof TypeError ? t('emailCode.unreachable') : (error as Error).message);

@@ -24,7 +24,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { CronExpressionParser } from 'cron-parser';
-import { db, dbApi, type RoutineRow, type TaskType } from './db.js';
+import { db, dbApi, type RoutineExtras, type RoutineRow, type TaskType } from './db.js';
 import { exportTimon, type ExportResult } from './export.js';
 import { bus } from './bus.js';
 import { closePushForAnchor, createNotification } from './notifications.js';
@@ -50,7 +50,33 @@ export type CreateRoutineInput = {
   project?: string | null;
   /** The account creating it; its tasks and missions run on its behalf. */
   ownerUserId?: string | null;
-};
+} & RoutineExtras;
+
+/** A stored extras list, read as none when it is missing or malformed. */
+function storedList(raw: string | null): string[] {
+  try {
+    const value: unknown = raw ? JSON.parse(raw) : null;
+    return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * What a routine copies onto each task it opens. A task starts with zero MCP
+ * server by default (only its role's and its own extras): the routine carries
+ * the extras its agent needs at every run, rather than a person adding them to
+ * each task by hand. The agent's own config is never inherited silently.
+ */
+export function routineTaskExtras(r: Pick<RoutineRow, keyof RoutineExtras>): {
+  extraSkills: string[]; extraMcpServers: string[]; extraAllowedTools: string[];
+} {
+  return {
+    extraSkills: storedList(r.extra_skills),
+    extraMcpServers: storedList(r.extra_mcp_servers),
+    extraAllowedTools: storedList(r.extra_allowed_tools),
+  };
+}
 
 /** Computes the next tick of a cron expression. Throws if invalid. */
 export function nextRunFromCron(expr: string, from: Date = new Date()): number {
@@ -81,6 +107,9 @@ export function createRoutine(input: CreateRoutineInput): RoutineRow {
     enabled: enabled ? 1 : 0,
     project: input.project ?? null,
     owner_user_id: input.ownerUserId ?? null,
+    extra_skills: input.extra_skills ?? null,
+    extra_mcp_servers: input.extra_mcp_servers ?? null,
+    extra_allowed_tools: input.extra_allowed_tools ?? null,
     last_run_at: null,
     next_run_at: nextAt,
   });
@@ -114,6 +143,9 @@ export function updateRoutine(
     cron_expr: fields.cron_expr,
     enabled: fields.enabled,
     project: fields.project,
+    extra_skills: fields.extra_skills,
+    extra_mcp_servers: fields.extra_mcp_servers,
+    extra_allowed_tools: fields.extra_allowed_tools,
     next_run_at: nextAt,
   });
   return dbApi.getRoutine(id)!;
@@ -492,6 +524,7 @@ export async function tickRoutines(): Promise<void> {
           // The routine's creator: the task, and the mission it starts, run on
           // that account's behalf.
           ownerUserId: r.owner_user_id,
+          ...routineTaskExtras(r),
         });
         dbApi.setTaskRoutine(taskId, r.id);
         console.log(`[routines] ${r.id} (${r.name}) → task ${taskId}`);

@@ -536,3 +536,28 @@ test('timon mission permission-mode get|set take the routes of mission_permissio
     assert.equal(seen.length, 0);
   });
 });
+
+test('routine extras: the MCP tools and `timon routine` send the same lists, and an empty value clears', async () => {
+  await withDaemon(async (base, seen) => {
+    const extras = { extra_mcp_servers: ['mail', 'docs'], extra_skills: ['inbox-rules'], extra_allowed_tools: ['Read'] };
+    const flags = ['--extra-mcp', 'mail,docs', '--extra-skills', 'inbox-rules', '--allow', 'Read'];
+    const create = { name: 'n', agent_name: 'a', cron: '0 * * * *', prompt: 'p' };
+    await session(base, [{ method: 'tools/call', params: { name: 'routine_create', arguments: { ...create, ...extras } } }], true);
+    const viaMcp = seen.find((x) => x.method === 'POST' && x.url === '/api/routines');
+    assert.deepEqual(viaMcp?.body, { name: 'n', agent_name: 'a', prompt: 'p', cron_expr: '0 * * * *', enabled: true, ...extras });
+    seen.length = 0;
+    assert.equal((await cli(base, ['routine', 'create', '--name', 'n', '--agent', 'a', '--cron', '0 * * * *', '--prompt', 'p', ...flags])).code, 0);
+    assert.deepEqual(seen.find((x) => x.method === 'POST' && x.url === '/api/routines')?.body, viaMcp?.body);
+
+    seen.length = 0;
+    await session(base, [{ method: 'tools/call', params: { name: 'routine_update', arguments: { id: '7', ...extras } } }], true);
+    const updateViaMcp = seen.find((x) => x.method === 'PUT' && x.url === '/api/routines/7');
+    assert.deepEqual(updateViaMcp?.body, extras);
+    seen.length = 0;
+    assert.equal((await cli(base, ['routine', 'update', '7', ...flags])).code, 0);
+    assert.deepEqual(seen.find((x) => x.method === 'PUT' && x.url === '/api/routines/7')?.body, updateViaMcp?.body);
+    seen.length = 0;
+    assert.equal((await cli(base, ['routine', 'update', '7', '--extra-mcp', ''])).code, 0);
+    assert.deepEqual(seen.find((x) => x.url === '/api/routines/7')?.body, { extra_mcp_servers: [] }, 'an empty value clears');
+  });
+});

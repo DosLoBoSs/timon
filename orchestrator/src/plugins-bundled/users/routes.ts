@@ -609,7 +609,9 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
       }
       audit(req, 'user.create', `user:${user.id}`);
       setSession(res, user.id, req.header('user-agent') ?? undefined);
-      onboardingStep('account', 'completed');
+      onboardingStep('account', 'completed', {
+        via: emailChallenge ? 'code' : req.auth?.kind === 'daemon-token' ? 'operator' : 'no_code',
+      });
       res.status(201).json({ user: toPublicUser(user) });
       // Recomposition must not hold up admission or turn a successful account
       // creation into an HTTP error. The helper already reports surface failures.
@@ -1045,7 +1047,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
       consumeSetupToken();
       if (emailVerification) dbApi.setUserEmailUnverified(user.id, true);
       audit(req, 'user.create', `user:${user.id}`);
-      onboardingStep('account', 'completed');
+      onboardingStep('account', 'completed', { via: 'operator' });
       res.status(201).json({ user: toPublicUser(user), emailUnverified: emailVerification });
     } catch (err: unknown) {
       if (err instanceof LicenseCapabilityError) { res.status(409).json({ error: err.code, message: err.message }); return; }
