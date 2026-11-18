@@ -65,6 +65,27 @@ test('the schema refuses what it does not know and what is malformed', () => {
   assert.equal(readProjectIntegration(slug).configured, false);
 });
 
+test('remote_url: an ssh or https push URL is kept, one with credentials or an option is refused', () => {
+  const slug = project('remote-url');
+  assert.equal(updateProjectIntegration(slug, { remote_url: 'git@github.com:acme/app.git' }, { home }).remote_url, 'git@github.com:acme/app.git');
+  assert.equal(updateProjectIntegration(slug, { remote_url: 'https://github.com/acme/app.git' }, { home }).remote_url, 'https://github.com/acme/app.git');
+  for (const remote_url of ['https://user:token@github.com/acme/app.git', '--upload-pack=x', 'ext::sh -c x', '']) {
+    assert.throws(() => updateProjectIntegration(slug, { remote_url }, { home }), ProjectIntegrationError, remote_url);
+  }
+  assert.equal(updateProjectIntegration(slug, { remote_url: null }, { home }).remote_url, null);
+});
+
+test('a setting stored before remote_url existed still reads, with no push URL', () => {
+  const slug = project('older');
+  dbApi.setProjectIntegration(slug, JSON.stringify({
+    mode: 'pr', remote: 'origin', target: 'main', forge: 'github', account: 'ai-bot', gh_config_dir: null, branch_prefix: 'feat/',
+  }));
+  const read = readProjectIntegration(slug);
+  assert.equal(read.invalid, undefined);
+  assert.equal(read.integration.remote_url, null);
+  assert.equal(read.integration.account, 'ai-bot');
+});
+
 test('a missing project is not_found, not created', () => {
   assert.throws(() => readProjectIntegration('ghost'), (err: unknown) => err instanceof ProjectIntegrationError && err.code === 'not_found');
   assert.throws(() => updateProjectIntegration('ghost', { mode: 'local' }, { home }), (err: unknown) => err instanceof ProjectIntegrationError && err.code === 'not_found');

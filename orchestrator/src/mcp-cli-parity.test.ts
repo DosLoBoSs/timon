@@ -250,12 +250,12 @@ test('nav, onboarding profile, demo project: the MCP tools and the CLI take the 
 test('project get/set-integration: the CLI takes the routes of the MCP tools, with the same body', async () => {
   await withDaemon(async (base, seen) => {
     const path = '/api/projects/acme/integration';
-    await session(base, [{ method: 'tools/call', params: { name: 'project_integration_set', arguments: { slug: 'acme', mode: 'pr', account: 'bot', gh_config_dir: null, branch_prefix: 'sec/' } } }], true);
+    await session(base, [{ method: 'tools/call', params: { name: 'project_integration_set', arguments: { slug: 'acme', mode: 'pr', account: 'bot', gh_config_dir: null, branch_prefix: 'sec/', remote_url: 'git@github.com:acme/app.git' } } }], true);
     const viaMcp = seen.find((x) => x.method === 'PUT' && x.url === path);
     seen.length = 0;
-    assert.equal((await cli(base, ['project', 'set-integration', 'acme', '--mode', 'pr', '--account', 'bot', '--gh-config-dir', '', '--branch-prefix', 'sec/'])).code, 0);
+    assert.equal((await cli(base, ['project', 'set-integration', 'acme', '--mode', 'pr', '--account', 'bot', '--gh-config-dir', '', '--branch-prefix', 'sec/', '--remote-url', 'git@github.com:acme/app.git'])).code, 0);
     assert.deepEqual(seen.find((x) => x.method === 'PUT' && x.url === path)?.body, viaMcp?.body);
-    assert.deepEqual(viaMcp?.body, { mode: 'pr', account: 'bot', gh_config_dir: null, branch_prefix: 'sec/' });
+    assert.deepEqual(viaMcp?.body, { mode: 'pr', account: 'bot', gh_config_dir: null, branch_prefix: 'sec/', remote_url: 'git@github.com:acme/app.git' });
     seen.length = 0;
     assert.equal((await cli(base, ['project', 'set-integration', 'acme', '--reset'])).code, 0);
     assert.ok(seen.some((x) => x.method === 'DELETE' && x.url === path));
