@@ -70,6 +70,40 @@ function missionWithHistory(opts: { running?: boolean; ageDays?: number; lastDay
   return { id, oldEvent, newEvent };
 }
 
+test('by default, history idle for 180 days goes and raw facts stay', async () => {
+  const stale = missionWithHistory({ ageDays: 400, lastDays: 200 });
+  const recent = missionWithHistory({ ageDays: 400, lastDays: 100 });
+  dbApi.insertLearning({ agent: 'retention-witness', kind: 'pitfall', text: 'very old fact', ts: NOW - 900 * DAY });
+
+  const outcome = await runDataRetention({ now: NOW, pauseMs: 0 });
+
+  assert.deepEqual(outcome, { events: 2, learnings: 0, learningLines: 0 });
+  assert.equal(eventsOf(stale.id), 0);
+  assert.equal(eventsOf(recent.id), 2);
+  assert.equal(count('SELECT COUNT(*) n FROM learnings'), 1);
+});
+
+test('a value set in the settings table wins over the default, 0 included', async () => {
+  const stale = missionWithHistory({ ageDays: 400, lastDays: 200 });
+  try {
+    dbApi.setSetting('TIMON_EVENTS_RETENTION_DAYS', '0');
+    invalidateSettingsCache();
+    assert.equal(await prune(), 0);
+    assert.equal(eventsOf(stale.id), 2);
+
+    dbApi.setSetting('TIMON_EVENTS_RETENTION_DAYS', '365');
+    invalidateSettingsCache();
+    assert.equal(await prune(), 0, 'idle 200 days is within a year');
+
+    // The environment wins over the table.
+    setDays(30, null);
+    assert.equal(await prune(), 2);
+  } finally {
+    dbApi.deleteSetting('TIMON_EVENTS_RETENTION_DAYS');
+    invalidateSettingsCache();
+  }
+});
+
 test('both retentions are off when set to 0: nothing is deleted', async () => {
   const done = missionWithHistory();
   dbApi.insertLearning({ agent: 'retention-witness', kind: 'pitfall', text: 'old fact', ts: OLD });

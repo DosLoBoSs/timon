@@ -2,11 +2,12 @@
  * Retention of what agents leave behind on the computer.
  *
  * Two settings, `0` keeping everything:
- *  - `TIMON_EVENTS_RETENTION_DAYS`: the history of the missions idle for
- *    longer (`events`, the cold archive included, and the text the history
- *    search copied from it);
- *  - `TIMON_LEARNINGS_RETENTION_DAYS`: the raw facts (`learnings` table, and
- *    the `learnings.jsonl` / `learnings.archive.jsonl` files of each agent).
+ *  - `TIMON_EVENTS_RETENTION_DAYS`, 180 days by default: the history of the
+ *    missions idle for longer (`events`, the cold archive included, and the
+ *    text the history search copied from it);
+ *  - `TIMON_LEARNINGS_RETENTION_DAYS`, off by default: the raw facts
+ *    (`learnings` table, and the `learnings.jsonl` / `learnings.archive.jsonl`
+ *    files of each agent), which feed the memory curation.
  *
  * Unlike `TIMON_EVENTS_HOT_DAYS`, which moves events and loses nothing, this
  * deletes. A running mission, or one an open task or workflow run still
