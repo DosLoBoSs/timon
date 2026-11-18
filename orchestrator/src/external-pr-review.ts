@@ -1,7 +1,7 @@
 /**
- * The open pull requests of a project, contributors' ones included, and their
- * relecture by the project's reviewer (`docs/KANBAN-PR-PIPELINE.md`, external
- * pull requests).
+ * The open pull requests of a project, contributors' ones included, and the
+ * brief of their relecture (`docs/KANBAN-PR-PIPELINE.md`, external pull
+ * requests).
  *
  * Read only, end to end:
  *
@@ -9,18 +9,19 @@
  *   with the account and the `gh` folder of the project's integration setting.
  *   The contributor's branch never reaches this machine's git: no fetch, no
  *   checkout, no install, build or test of their code. The diff is text.
- * - A relecture is prepared, shown to the person, and only sent on their click
- *   (`sendReview` asks for a person, not an agent or the daemon token). Its
- *   mission reads; nothing is written on the forge, by it or by this module.
+ * - A relecture is prepared and shown to the person; this module starts no
+ *   mission. A reviewer would hold a shell and Timon's tools, so nothing stops
+ *   it from checking the branch out or delegating: a mission waits for a
+ *   reviewer confined by construction. Nothing is written on the forge.
  * - What the contributor wrote (title, description, login, comments) reaches
- *   the reviewer as untrusted data: JSON, short excerpts, a bounded count, and
- *   an explicit instruction never to follow it.
+ *   the brief as untrusted data: JSON, short excerpts, a bounded count, and an
+ *   explicit instruction never to follow it.
  *
- * The verdict comes back from the mission's last answer (`VERDICT: …`) and is
- * kept on the pull request's row, which the widget shows.
+ * A row left `running` by an earlier build still gets its verdict from the
+ * mission's last answer (`VERDICT: …`), kept on the row the widget shows.
  */
 import { randomUUID } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { previewRoleAgent } from './agent-seed.js';
 import { bus, type BusEvent } from './bus.js';
@@ -28,13 +29,12 @@ import { db, dbApi } from './db.js';
 import {
   githubForge, githubRepoFromUrl, type ForgeReader, type PullRequestDetails, type PullRequestSummary,
 } from './host/forge.js';
-import { agentDir, projectDir } from './paths.js';
+import { projectDir } from './paths.js';
 import { readProjectIntegration, type ProjectIntegration } from './project-integration.js';
 import { readRoles } from './projects.js';
 import { getSkill } from './skills.js';
-import { roleAgentForProject } from './verification-loop.js';
 
-/** The skill a relecture mission carries when this machine has it. */
+/** The skill the brief names when this machine has it. */
 export const EXTERNAL_PR_REVIEW_SKILL = 'timon-external-pr-review';
 
 /** Most characters of one text written by a contributor in the brief. */
@@ -100,26 +100,13 @@ export type ExternalPrRefusalCode =
   | 'integration_not_pr'
   | 'pr_repository_unknown'
   | 'forge_read_failed'
-  | 'pr_review_running'
-  | 'pr_review_not_found'
-  | 'pr_reviewer_unavailable'
-  | 'pr_review_send_failed';
+  | 'pr_review_running';
 
 export type ExternalPrRefusal = { ok: false; status: number; code: ExternalPrRefusalCode; reason: string };
 
 export type ExternalPrDeps = {
   /** Stands in for `gh` in tests: nothing in the suite reaches GitHub. */
   forge?: (configDir: string | null) => ForgeReader;
-  /** Starts the reviewer's mission; returns its id. */
-  spawn?: (agent: string, brief: string, opts: SpawnReviewOptions) => Promise<string>;
-};
-
-export type SpawnReviewOptions = {
-  ownerUserId: string | null;
-  skills: string[];
-  title: string;
-  project: string;
-  number: number;
 };
 
 const refuse = (status: number, code: ExternalPrRefusalCode, reason: string): ExternalPrRefusal =>
@@ -183,14 +170,6 @@ const upsertDraftStmt = db.prepare(`
     created_at = excluded.created_at, updated_at = excluded.updated_at
   WHERE external_pr_reviews.state != 'running'
 `);
-// Claimed before the spawn: two clicks never start two missions.
-const claimDraftStmt = db.prepare(
-  `UPDATE external_pr_reviews SET state = 'running', agent = ?, updated_at = ? WHERE id = ? AND state = 'draft'`,
-);
-const releaseClaimStmt = db.prepare(
-  `UPDATE external_pr_reviews SET state = 'draft', updated_at = ? WHERE id = ? AND state = 'running' AND mission_id IS NULL`,
-);
-const setMissionStmt = db.prepare(`UPDATE external_pr_reviews SET mission_id = ?, updated_at = ? WHERE id = ?`);
 const concludeStmt = db.prepare(`
   UPDATE external_pr_reviews SET state = ?, verdict = ?, report = ?, updated_at = ?
   WHERE id = ? AND state = 'running'
@@ -212,9 +191,9 @@ function viewOf(row: ExternalPrReviewRow): ReviewView {
 }
 
 /**
- * The review the list shows on a pull request's row: a draft nobody sent
- * shows the last concluded relecture, so preparing a new one and closing the
- * dialog loses nothing.
+ * The review the list shows on a pull request's row: a draft shows the last
+ * concluded relecture, so preparing a new one and closing the dialog loses
+ * nothing.
  */
 function shownView(row: ExternalPrReviewRow): ReviewView {
   if (row.state !== 'draft' || (row.last_state !== 'done' && row.last_state !== 'failed')) return viewOf(row);
@@ -287,7 +266,7 @@ export type BriefInput = {
   withSkill: boolean;
 };
 
-/** The message the reviewer's mission starts with, shown to the person first. */
+/** The message a reviewer would start with, shown to the person. */
 export function buildReviewBrief(input: BriefInput): string {
   const { repo, pull } = input;
   const lines = [
@@ -497,10 +476,9 @@ export type PrepareOutcome = { ok: true; review: ReviewView; brief: string } | E
 
 /**
  * Reads the pull request and its diff, and writes the brief its relecture
- * would start with. Nothing starts here: the person reads the brief, then
- * sends it (`sendReview`). A new draft replaces the previous draft of the
- * same pull request, unless a review of it is still running; the last
- * concluded review stays on the row until the new one is sent.
+ * would start with. Nothing starts: the person reads the brief and copies it.
+ * A new draft replaces the previous draft of the same pull request, unless a
+ * review of it is still running; the last concluded review stays on the row.
  */
 export async function prepareReview(slug: string, number: number, deps: ExternalPrDeps = {}): Promise<PrepareOutcome> {
   const resolved = projectRepository(slug);
@@ -535,77 +513,13 @@ export async function prepareReview(slug: string, number: number, deps: External
     id, slug, value.repo, number, agent, brief, path, details.pull.headSha, details.pull.updatedAt || null, now, now,
   );
   if (written.changes === 0) {
-    // A send landed between the read above and this write.
+    // The row turned `running` between the read above and this write.
     removeDiff(slug, path);
     return refuse(409, 'pr_review_running', `pull request #${number} is already being reviewed`);
   }
   if (previous && previous.diff_path !== path) removeDiff(slug, previous.diff_path);
   const row = getReviewByIdStmt.get(id) as ExternalPrReviewRow;
   return { ok: true, review: viewOf(row), brief };
-}
-
-export type SendOutcome = { ok: true; review: ReviewView } | ExternalPrRefusal;
-
-/** Starts the relecture the person read: the draft `reviewId`, as it was shown. */
-export async function sendReview(
-  slug: string,
-  number: number,
-  reviewId: string,
-  ownerUserId: string | null,
-  deps: ExternalPrDeps = {},
-): Promise<SendOutcome> {
-  const resolved = projectRepository(slug);
-  if (!resolved.ok) return resolved;
-  const value = resolved.value;
-  const row = getReviewByIdStmt.get(reviewId) as ExternalPrReviewRow | undefined;
-  if (!row || row.project !== slug || row.repo !== value.repo || row.pr_number !== number) {
-    return refuse(404, 'pr_review_not_found', 'no relecture of this pull request waits to be sent: prepare it again');
-  }
-  if (row.state === 'running') return refuse(409, 'pr_review_running', `pull request #${number} is already being reviewed`);
-  // A draft whose diff was purged would send the reviewer to a missing file.
-  const diff = ownedDiffPath(slug, row.diff_path);
-  if (row.state !== 'draft' || !diff || fileMtime(diff) === null) {
-    return refuse(404, 'pr_review_not_found', 'no relecture of this pull request waits to be sent: prepare it again');
-  }
-  let agent: string | null;
-  try { agent = roleAgentForProject(slug, value.cwd, 'review'); } catch { agent = null; }
-  // The seed may name an agent it could not create (no backend yet).
-  if (!agent || !existsSync(agentDir(agent))) return refuse(409, 'pr_reviewer_unavailable', 'the project has no reviewer agent and none could be created');
-  if (claimDraftStmt.run(agent, Date.now(), reviewId).changes === 0) {
-    return refuse(409, 'pr_review_running', `pull request #${number} is already being reviewed`);
-  }
-  const spawn = deps.spawn ?? defaultSpawn;
-  let missionId: string;
-  try {
-    missionId = await spawn(agent, row.brief, {
-      ownerUserId,
-      skills: skillAvailable() ? [EXTERNAL_PR_REVIEW_SKILL] : [],
-      title: `Review of pull request #${number}`,
-      project: slug,
-      number,
-    });
-  } catch (err) {
-    releaseClaimStmt.run(Date.now(), reviewId);
-    return refuse(502, 'pr_review_send_failed', (err as Error).message.slice(0, 300));
-  }
-  setMissionStmt.run(missionId, Date.now(), reviewId);
-  return { ok: true, review: viewOf(getReviewByIdStmt.get(reviewId) as ExternalPrReviewRow) };
-}
-
-async function defaultSpawn(agent: string, brief: string, opts: SpawnReviewOptions): Promise<string> {
-  // Imported here: `agent.ts` pulls in the whole runtime, which the routes'
-  // tests replace with `deps.spawn`.
-  const { spawnAgent } = await import('./agent.js');
-  const missionId = randomUUID();
-  await spawnAgent(agent, brief, { channel: 'pr-review', meta: { project: opts.project, pr_number: opts.number } }, {
-    missionId,
-    // A fresh session: the reviewer's previous conversation is not this one.
-    explicitResume: null,
-    extraSkills: opts.skills,
-    ownerUserId: opts.ownerUserId,
-    title: opts.title,
-  });
-  return missionId;
 }
 
 /** Records how the mission of a running review ended. */

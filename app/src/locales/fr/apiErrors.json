@@ -606,9 +606,6 @@
     "pr_repository_unknown": "L'intégration du projet ne nomme aucune URL de push GitHub pour son remote.",
     "forge_read_failed": "GitHub n'a pas pu être lu : {detail}",
     "pr_read_failed": "La pull request n'a pas pu être lue.",
-    "pr_review_running": "Cette pull request est déjà en relecture.",
-    "pr_review_not_found": "Aucune relecture de cette pull request n'attend d'envoi : préparez-la de nouveau.",
-    "pr_reviewer_unavailable": "Le projet n'a pas d'agent relecteur, et aucun n'a pu être créé.",
-    "pr_review_send_failed": "La relecture n'a pas pu démarrer : {detail}"
+    "pr_review_running": "Cette pull request est déjà en relecture."
   }
 }

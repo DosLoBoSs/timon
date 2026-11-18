@@ -1,8 +1,9 @@
 /**
- * The open pull requests of a project and their read-only relecture. Every
+ * The open pull requests of a project and the brief of their relecture. Every
  * process the daemon would start goes through a recorder standing in for the
  * host: `gh` answers from fixtures, and the test proves no `git` ever ran (no
- * fetch, no checkout of a contributor's branch) and no `gh` verb but a read.
+ * fetch, no checkout of a contributor's branch), no `gh` verb but a read, and
+ * no mission ever started.
  */
 import '../../test-home.js';
 import assert from 'node:assert/strict';
@@ -10,19 +11,19 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, utimesS
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { after, mock, test } from 'node:test';
 import express from 'express';
 import { createTestAccount } from '../../../tests/helpers/accounts.js';
 import { bus } from '../../bus.js';
 import { db, dbApi } from '../../db.js';
 import { getHost } from '../../host/index.js';
-import { agentDir, projectDir } from '../../paths.js';
+import { projectDir } from '../../paths.js';
 import type { ExecOpts, ExecResult } from '../../host/types.js';
 import {
   buildReviewBrief, DIFF_MAX_AGE_MS, ownedDiffPath, parseReviewVerdict, purgeReviewDiffs, UNTRUSTED_COMMENT_COUNT,
   UNTRUSTED_EXCERPT_CHARS, watchReviewMissions,
-  type SpawnReviewOptions,
 } from '../../external-pr-review.js';
 import type { PullRequestDetails } from '../../host/forge.js';
 import { registerExternalPrRoutes } from './external-pr-routes.js';
@@ -36,9 +37,6 @@ dbApi.setProjectIntegration('acme', JSON.stringify({
   mode: 'pr', remote: 'origin', target: 'main', forge: 'github', account: 'ai-bot',
   gh_config_dir: null, branch_prefix: 'feat/', remote_url: 'git@github.com:acme/widgets.git',
 }));
-
-// The project's reviewer, as the seed would have made it.
-mkdirSync(agentDir('acme.reviewer'), { recursive: true });
 
 const person = createTestAccount(dbApi, { email: 'rom@example.test', name: 'Rom', passwordHash: 'x', isSuperadmin: true });
 
@@ -78,7 +76,8 @@ mock.method(getHost(), 'execAsync', async (name: string, args: string[], opts: E
   return { code: 1, stdout: '', stderr: 'unexpected gh call' };
 });
 
-const spawned: Array<{ agent: string; brief: string; opts: SpawnReviewOptions }> = [];
+const missionCount = (): number => (db.prepare(`SELECT COUNT(*) AS n FROM missions`).get() as { n: number }).n;
+const missionsAtStart = missionCount();
 
 const app = express();
 app.use(express.json());
@@ -91,14 +90,7 @@ app.use((req, _res, next) => {
   else if (who === 'person') req.auth = { kind: 'session', user: person, isSuperadmin: true };
   next();
 });
-registerExternalPrRoutes(app, {
-  spawn: async (agent, brief, opts) => {
-    spawned.push({ agent, brief, opts });
-    const id = `m-review-${spawned.length}`;
-    dbApi.createMission(id, agent, brief, undefined, opts.ownerUserId ?? undefined);
-    return id;
-  },
-});
+registerExternalPrRoutes(app);
 const server = app.listen(0, '127.0.0.1');
 await once(server, 'listening');
 const stopWatching = watchReviewMissions();
@@ -127,7 +119,6 @@ test('an anonymous caller is refused on every route, and gh never runs', async (
   assert.equal((await call('GET', LIST_URL, 'anonymous')).status, 401);
   assert.equal((await call('GET', `${LIST_URL}/12/diff`, 'anonymous')).status, 401);
   assert.equal((await call('POST', `${LIST_URL}/12/review`, 'anonymous', {})).status, 401);
-  assert.equal((await call('POST', `${LIST_URL}/12/review/send`, 'anonymous', { review_id: crypto.randomUUID() })).status, 401);
   assert.deepEqual(calls, []);
 });
 
@@ -183,7 +174,7 @@ test('a review is prepared, the contributor\'s text fenced as bounded data, and 
   const body = await res.json() as { brief: string; review: { id: string; state: string; agent: string } };
   assert.equal(body.review.state, 'draft');
   assert.equal(body.review.agent, 'acme.reviewer');
-  assert.deepEqual(spawned, []);
+  assert.equal(missionCount(), missionsAtStart);
 
   const brief = body.brief;
   const open = brief.indexOf('<untrusted-data>');
@@ -212,58 +203,64 @@ test('a review is prepared, the contributor\'s text fenced as bounded data, and 
   assertOnlyReads();
 });
 
-test('only a person sends a review: the daemon token is refused', async () => {
-  const prepared = await (await call('POST', `${LIST_URL}/12/review`, 'manager', {})).json() as { review: { id: string } };
-  const daemon = await call('POST', `${LIST_URL}/12/review/send`, 'daemon', { review_id: prepared.review.id });
-  assert.equal(daemon.status, 403);
-  assert.equal((await daemon.json() as { code: string }).code, 'person_required');
-  const agent = await call('POST', `${LIST_URL}/12/review/send`, 'manager', { review_id: prepared.review.id });
-  assert.equal(agent.status, 403);
-  assert.deepEqual(spawned, []);
-});
-
-test('the person sends the brief they read, once; the verdict comes back on the row', async () => {
-  const prepared = await (await call('POST', `${LIST_URL}/12/review`, 'manager', {})).json() as { brief: string; review: { id: string } };
-  assert.equal((await call('POST', `${LIST_URL}/12/review/send`, 'person', { review_id: prepared.review.id, extra: 1 })).status, 400);
-  const sent = await call('POST', `${LIST_URL}/12/review/send`, 'person', { review_id: prepared.review.id });
-  assert.equal(sent.status, 200);
-  const review = (await sent.json() as { review: { state: string; mission_id: string } }).review;
-  assert.equal(review.state, 'running');
-  assert.equal(spawned.length, 1);
-  assert.equal(spawned[0]!.brief, prepared.brief, 'the brief shown is the brief sent');
-  assert.equal(spawned[0]!.opts.ownerUserId, person.id);
-
-  // A second click, or a new preparation, starts nothing more.
-  assert.equal((await call('POST', `${LIST_URL}/12/review/send`, 'person', { review_id: prepared.review.id })).status, 409);
-  assert.equal((await call('POST', `${LIST_URL}/12/review`, 'manager', {})).status, 409);
-  assert.equal(spawned.length, 1);
-
-  // french-ok: the skill words its verdict line in French, as reviewers write it
-  dbApi.insertEvent(review.mission_id, 'assistant', {
-    message: { content: [{ type: 'text', text: '**VERDICT : CHANGEMENTS À DEMANDER**\n\nNo tests.' }] },
-  });
-  bus.publish({ kind: 'turn_complete', missionId: review.mission_id, outcome: 'completed' });
-
-  const listed = await (await call('GET', LIST_URL, 'manager')).json() as {
-    pulls: Array<{ number: number; review: { state: string; verdict: string; report: string } | null }>;
-  };
-  const pr = listed.pulls.find((p) => p.number === 12)!;
-  assert.equal(pr.review?.state, 'done');
-  assert.equal(pr.review?.verdict, 'changes_requested');
-  assert.match(pr.review?.report ?? '', /No tests/);
-  assertOnlyReads();
-});
-
 type ListedReview = { id: string; state: string; verdict: string | null; report: string | null; mission_id: string | null };
 async function listedReview(number: number): Promise<ListedReview | null> {
   const listed = await (await call('GET', LIST_URL, 'manager')).json() as { pulls: Array<{ number: number; review: ListedReview | null }> };
   return listed.pulls.find((p) => p.number === number)?.review ?? null;
 }
 
-test('preparing again keeps the last verdict on the row until the new review is sent', async () => {
+test('no route starts a relecture: sending is gone, whoever asks', async () => {
+  const prepared = await (await call('POST', `${LIST_URL}/12/review`, 'manager', {})).json() as { review: { id: string } };
+  for (const who of ['person', 'daemon', 'manager'] as const) {
+    const res = await call('POST', `${LIST_URL}/12/review/send`, who, { review_id: prepared.review.id });
+    assert.equal(res.status, 404, who);
+  }
+  assert.equal(missionCount(), missionsAtStart, 'no mission row was ever written');
+  assert.equal((await listedReview(12))?.state, 'draft');
+  // Nothing reachable from these routes can start a mission.
+  const here = dirname(fileURLToPath(import.meta.url));
+  for (const file of [join(here, 'external-pr-routes.ts'), join(here, '..', '..', 'external-pr-review.ts')]) {
+    const source = readFileSync(file, 'utf8');
+    assert.doesNotMatch(source, /spawnAgent|agent\.js|mission_spawn|missions:spawn|review\/send/, file);
+  }
+  assertOnlyReads();
+});
+
+/** What an earlier build left: the row of PR `number` running under a mission. */
+function leftRunning(number: number): string {
+  const missionId = `m-earlier-${crypto.randomUUID()}`;
+  dbApi.createMission(missionId, 'acme.reviewer', 'brief');
+  const changed = db.prepare(`
+    UPDATE external_pr_reviews SET state = 'running', mission_id = ?
+    WHERE project = 'acme' AND repo = 'acme/widgets' AND pr_number = ? AND state = 'draft'
+  `).run(missionId, number).changes;
+  assert.equal(changed, 1);
+  return missionId;
+}
+
+function conclude(missionId: string, text: string): void {
+  dbApi.insertEvent(missionId, 'assistant', { message: { content: [{ type: 'text', text }] } });
+  bus.publish({ kind: 'turn_complete', missionId, outcome: 'completed' });
+}
+
+test('a review left running by an earlier build blocks a new brief, then its verdict comes back on the row', async () => {
+  const missionId = leftRunning(12);
+  assert.equal((await listedReview(12))?.state, 'running');
+  assert.equal((await call('POST', `${LIST_URL}/12/review`, 'manager', {})).status, 409);
+
+  // french-ok: the skill words its verdict line in French, as reviewers write it
+  conclude(missionId, '**VERDICT : CHANGEMENTS À DEMANDER**\n\nNo tests.');
+  const pr = await listedReview(12);
+  assert.equal(pr?.state, 'done');
+  assert.equal(pr?.verdict, 'changes_requested');
+  assert.match(pr?.report ?? '', /No tests/);
+  assertOnlyReads();
+});
+
+test('preparing again keeps the last verdict on the row', async () => {
   const before = await listedReview(12);
   assert.equal(before?.verdict, 'changes_requested');
-  // Opened then closed without sending: the row still shows the verdict.
+  // Prepared then closed: the row still shows the verdict.
   const prepared = await (await call('POST', `${LIST_URL}/12/review`, 'manager', {})).json() as { review: { id: string; state: string } };
   assert.equal(prepared.review.state, 'draft');
   const kept = await listedReview(12);
@@ -275,16 +272,14 @@ test('preparing again keeps the last verdict on the row until the new review is 
   const again = await (await call('POST', `${LIST_URL}/12/review`, 'manager', {})).json() as { review: { id: string } };
   assert.equal((await listedReview(12))?.verdict, 'changes_requested');
 
-  // Sent, the new review takes the row; concluded, its verdict replaces the old one.
-  const sent = await call('POST', `${LIST_URL}/12/review/send`, 'person', { review_id: again.review.id });
-  assert.equal(sent.status, 200);
-  const running = (await sent.json() as { review: { mission_id: string } }).review;
-  assert.equal((await listedReview(12))?.state, 'running');
-  dbApi.insertEvent(running.mission_id, 'assistant', { message: { content: [{ type: 'text', text: 'VERDICT: MERGEABLE\nTests added.' }] } });
-  bus.publish({ kind: 'turn_complete', missionId: running.mission_id, outcome: 'completed' });
+  assert.equal((await listedReview(12))?.id, again.review.id);
+
+  // A newer concluded review replaces the old verdict.
+  const missionId = leftRunning(12);
+  conclude(missionId, 'VERDICT: MERGEABLE\nTests added.');
   const after_ = await listedReview(12);
   assert.equal(after_?.verdict, 'mergeable');
-  assert.equal(after_?.mission_id, running.mission_id);
+  assert.equal(after_?.mission_id, missionId);
 });
 
 const OLD = Date.now() - DIFF_MAX_AGE_MS - 60_000;
@@ -336,9 +331,7 @@ test('reading the list purges the diffs of closed pull requests, old ones and or
   assert.ok(existsSync(freshOrphan), 'a fresh file may be a preparation in flight');
   assert.ok(existsSync(stranger));
   assert.ok(!existsSync(draftDiff), 'a diff past the age cap');
-  // The draft's diff is gone: sending it would point the reviewer at nothing.
-  const send = await call('POST', `${LIST_URL}/13/review/send`, 'person', { review_id: draft.review.id });
-  assert.equal(send.status, 404);
+  assert.equal(diffPathOf(draft.review.id), null);
 });
 
 test('the purge never removes a path outside the project\'s diff folder', () => {
@@ -365,10 +358,9 @@ test('the purge never removes a path outside the project\'s diff folder', () => 
   assert.equal(ownedDiffPath('acme', join(diffFolder, 'x.diff')), null);
 });
 
-test('an unknown draft is 404, a bad id 400', async () => {
-  assert.equal((await call('POST', `${LIST_URL}/13/review/send`, 'person', { review_id: crypto.randomUUID() })).status, 404);
-  assert.equal((await call('POST', `${LIST_URL}/13/review/send`, 'person', { review_id: 'nope' })).status, 400);
+test('a bad number or an unknown field is 400', async () => {
   assert.equal((await call('GET', `${LIST_URL}/0/diff`, 'manager')).status, 400);
+  assert.equal((await call('POST', `${LIST_URL}/13/review`, 'manager', { extra: 1 })).status, 400);
 });
 
 test('the verdict line is read in English or French, decorations aside', () => {
