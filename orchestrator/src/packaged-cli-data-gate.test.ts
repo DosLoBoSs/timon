@@ -140,7 +140,7 @@ async function runPackagedCli(home: string, args: string[]): Promise<{ code: num
     const bin = new URL('bin/timon', orchestrator);
     try {
       const { stdout, stderr } = await promisify(execFile)(process.execPath,
-        ['--import', 'tsx', '--import', register, fileURLToPath(bin), ...args], { env, timeout: 90_000 });
+        ['--import', 'tsx', '--import', pathToFileURL(register).href, fileURLToPath(bin), ...args], { env, timeout: 90_000 });
       return { code: 0, stdout, stderr };
     } catch (error) {
       const failed = error as { code?: unknown; stdout?: string; stderr?: string };
