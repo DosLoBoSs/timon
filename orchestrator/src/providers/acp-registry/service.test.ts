@@ -6,7 +6,7 @@ import '../../test-home.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildTarGzWithModes, buildZip } from './archive-fixtures.js';
@@ -439,9 +439,9 @@ const ICON_URL = 'https://cdn.agentclientprotocol.com/registry/v1/latest/logo-ag
 const LOGO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M0 0h24v24H0z"/></svg>';
 
 /** A Windows zip build: installable on every runner, the program is never launched. */
-function iconAgent(id: string, icon: unknown, zip: Buffer) {
+function iconAgent(id: string, icon: unknown, zip: Buffer, version = '1.0.0') {
   return {
-    id, name: 'Logo Agent', version: '1.0.0', ...(icon === undefined ? {} : { icon }),
+    id, name: 'Logo Agent', version, ...(icon === undefined ? {} : { icon }),
     distribution: { binary: { 'windows-x86_64': { archive: `https://downloads.example.com/${id}.zip`, cmd: 'agent.cmd', args: ['acp'], sha256: sha(zip) } } },
   };
 }
@@ -560,4 +560,57 @@ test('logo: removing the agent removes its logo', async () => {
   assert.equal(existsSync(setup.iconFile), true);
   await service.remove('gone-logo');
   assert.equal(existsSync(setup.iconFile), false);
+});
+
+/** Installs v1.0.0 with a valid logo, then publishes v2.0.0 as `next` says and installs it with a fresh service. */
+async function upgradeFrom(id: string, next: { icon: unknown; body?: Buffer | { status: number } }) {
+  const setup = iconSetup(id, ICON_URL);
+  setup.served.set(ICON_URL, Buffer.from(LOGO));
+  const first = setup.make();
+  await first.install(id);
+  first.dispose();
+  assert.equal(readFileSync(setup.iconFile, 'utf8'), LOGO, 'v1 logo kept');
+
+  const zip = buildZip([{ path: 'agent.cmd', data: '@echo off' }]);
+  setup.served.set(REGISTRY_URL, registryDoc([iconAgent(id, next.icon, zip, '2.0.0')]));
+  if (next.body) setup.served.set(ICON_URL, next.body);
+  else setup.served.delete(ICON_URL);
+  const second = setup.make();
+  const view = await second.install(id);
+  second.dispose();
+  assert.equal(view.installed?.version, '2.0.0');
+  assert.equal(view.installed?.state, 'ok');
+  return setup;
+}
+
+test('logo upgrade: a new release whose icon is unsafe drops the kept logo', async () => {
+  const setup = await upgradeFrom('upgrade-unsafe', { icon: ICON_URL, body: Buffer.from('<svg onload="alert(1)"><path/></svg>') });
+  assert.deepEqual(setup.icons, [LOGO, null], 'v2 registered without a logo');
+  assert.equal(existsSync(setup.iconFile), false, 'the old logo is not kept for an unsafe release');
+});
+
+test('logo upgrade: a new release whose icon is unreachable keeps the logo already kept', async () => {
+  const setup = await upgradeFrom('upgrade-offline', { icon: ICON_URL, body: { status: 503 } });
+  assert.deepEqual(setup.icons, [LOGO, LOGO], 'v2 registered with the kept logo');
+  assert.equal(readFileSync(setup.iconFile, 'utf8'), LOGO);
+});
+
+test('logo upgrade: a new release with no icon, or an off-host one, drops the kept logo', async () => {
+  for (const [id, icon] of [['upgrade-none', undefined], ['upgrade-off-host', 'https://evil.example/logo.svg']] as const) {
+    const setup = await upgradeFrom(id, { icon });
+    assert.deepEqual(setup.icons, [LOGO, null], id);
+    assert.equal(existsSync(setup.iconFile), false, id);
+  }
+});
+
+test('logo: a logo that cannot be kept on disk never fails the install', async () => {
+  const setup = iconSetup('unwritable-logo', ICON_URL);
+  setup.served.set(ICON_URL, Buffer.from(LOGO));
+  // A folder where the file should go: the write fails, the install must not.
+  mkdirSync(setup.iconFile, { recursive: true });
+  const service = setup.make();
+  const view = await service.install('unwritable-logo');
+  service.dispose();
+  assert.equal(view.installed?.state, 'ok');
+  assert.deepEqual(setup.icons, [LOGO]);
 });

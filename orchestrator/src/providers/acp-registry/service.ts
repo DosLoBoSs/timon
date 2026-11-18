@@ -416,12 +416,14 @@ export class AcpRegistryService {
       // that does not answer is still installed, and the settings screen can ask again.
       const methods = await this.readMethods(next, program).catch(() => null);
       if (methods) next.authMethods = methods;
-      // The logo: decoration, so a failure only costs the logo. A failed download keeps the one already kept (it was
-      // checked when kept, and is checked again on read); a registry that no longer publishes one drops it.
+      // The logo: decoration, so a failure only costs the logo, never the install. What the registry says now wins: a
+      // valid icon replaces the kept one; an unsafe or invalid one, or no icon at all (an off-host one is dropped by the
+      // schema), deletes it, so an agent never keeps wearing a logo its registry entry no longer vouches for. Only an
+      // UNREACHABLE icon keeps the one already kept: it was checked when kept, and is checked again on read.
       const icon = await fetchIcon(agent.icon, work, this.fetchFn);
-      if (icon.kind === 'failed') console.warn(`[acp-registry] ${agent.id}: logo not kept: ${icon.reason}`);
+      if (icon.kind === 'refused' || icon.kind === 'unreachable') console.warn(`[acp-registry] ${agent.id}: logo not kept: ${icon.reason}`);
       const iconFile = this.paths.iconFile(agent.id);
-      const iconSvg = icon.kind === 'svg' ? icon.svg : icon.kind === 'none' ? null : readIcon(iconFile);
+      const iconSvg = icon.kind === 'svg' ? icon.svg : icon.kind === 'unreachable' ? readIcon(iconFile) : null;
       try {
         this.swapIn(next, program, iconSvg);
       } catch (err) {
@@ -431,8 +433,13 @@ export class AcpRegistryService {
       }
       this.health.set(agent.id, 'ok');
       writeState(this.paths, { ...state, [agent.id]: next });
-      if (icon.kind === 'svg') writeIcon(iconFile, icon.svg);
-      else if (icon.kind === 'none') rmSync(iconFile, { force: true });
+      try {
+        if (icon.kind === 'svg') writeIcon(iconFile, icon.svg);
+        else if (icon.kind !== 'unreachable') rmSync(iconFile, { force: true });
+      } catch {
+        // The agent is live already: a logo that cannot be kept on disk only costs the logo at the next restore.
+        console.warn(`[acp-registry] ${agent.id}: logo could not be kept on disk`);
+      }
       this.prune(next);
       return this.view(agent, next);
     } finally {

@@ -72,17 +72,21 @@ test('fetch: no address means no request', async () => {
 });
 
 test('fetch: unsafe, oversized, unreachable or redirected icons fail softly, and the reason names no address', async () => {
-  const cases: Array<[string, Fetcher]> = [
-    ['script', served('<svg><script>alert(1)</script></svg>')],
-    ['oversized', served(`<svg>${' '.repeat(17 * 1024)}</svg>`)],
-    ['http error', served({ status: 503 })],
-    ['redirect', served({ status: 302, headers: { location: 'https://elsewhere.example/x.svg' } })],
-    ['network', async () => { throw new Error('ECONNRESET'); }],
+  // `refused` judges the icon itself (the kept one is dropped); `unreachable` only the road to it (the kept one stays).
+  const cases: Array<[string, Fetcher, 'refused' | 'unreachable']> = [
+    ['script', served('<svg><script>alert(1)</script></svg>'), 'refused'],
+    ['not an svg', served('<html><svg/></html>'), 'refused'],
+    ['oversized', served(`<svg>${' '.repeat(17 * 1024)}</svg>`), 'refused'],
+    ['http error', served({ status: 503 }), 'unreachable'],
+    ['redirect', served({ status: 302, headers: { location: 'https://elsewhere.example/x.svg' } }), 'unreachable'],
+    ['network', async () => { throw new Error('ECONNRESET'); }, 'unreachable'],
   ];
-  for (const [name, fetchFn] of cases) {
+  for (const [name, fetchFn, kind] of cases) {
     const outcome = await fetchIcon(ICON_URL, work(), fetchFn);
-    assert.equal(outcome.kind, 'failed', name);
-    if (outcome.kind === 'failed') assert.doesNotMatch(outcome.reason, /https?:|agentclientprotocol|elsewhere/, name);
+    assert.equal(outcome.kind, kind, name);
+    if (outcome.kind === 'refused' || outcome.kind === 'unreachable') {
+      assert.doesNotMatch(outcome.reason, /https?:|agentclientprotocol|elsewhere/, name);
+    }
   }
 });
 

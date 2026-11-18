@@ -34,8 +34,13 @@ export type IconOutcome =
   | { kind: 'svg'; svg: string }
   /** The registry publishes no usable icon address. */
   | { kind: 'none' }
-  /** Unreachable or refused: the reason is safe to log (no address, no secret). */
-  | { kind: 'failed'; reason: string };
+  /** Served, but not acceptable as a logo (unsafe, wrong type, too big). The reason is safe to log (no address). */
+  | { kind: 'refused'; reason: string }
+  /** Not served (network error, timeout, non-2xx, redirect). The reason is safe to log (no address). */
+  | { kind: 'unreachable'; reason: string };
+
+/** Download failures that judge the icon itself, as opposed to the road to it. */
+const REFUSING_CODES = new Set<DownloadError['code']>(['too-large', 'insecure', 'checksum']);
 
 /** Downloads and checks the icon at `url` (already filtered by `trustedIconUrl`); never throws. */
 export async function fetchIcon(url: string | undefined, workDir: string, fetchFn: Fetcher): Promise<IconOutcome> {
@@ -45,9 +50,10 @@ export async function fetchIcon(url: string | undefined, workDir: string, fetchF
     // No redirect: the address was checked to be the registry's CDN, a hop could lead anywhere.
     await downloadVerified(url, file, { fetchFn, maxBytes: MAX_BRAND_SVG_BYTES, maxRedirects: 0, timeoutMs: ICON_TIMEOUT_MS });
     const checked = checkedIconSvg(readFileSync(file, 'utf8'));
-    return 'svg' in checked ? { kind: 'svg', svg: checked.svg } : { kind: 'failed', reason: checked.problem };
+    return 'svg' in checked ? { kind: 'svg', svg: checked.svg } : { kind: 'refused', reason: checked.problem };
   } catch (err) {
-    return { kind: 'failed', reason: err instanceof DownloadError ? err.message : 'the icon could not be read' };
+    if (!(err instanceof DownloadError)) return { kind: 'unreachable', reason: 'the icon could not be read' };
+    return { kind: REFUSING_CODES.has(err.code) ? 'refused' : 'unreachable', reason: err.message };
   } finally {
     rmSync(file, { force: true });
   }
