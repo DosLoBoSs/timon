@@ -1,3 +1,4 @@
+// french-ok-file: the localised part labels under test
 /**
  * The mascot pack contract: what a part must be to be drawn, and the strict
  * reader of an accessory's markup. The refusals come first: a pack's drawing

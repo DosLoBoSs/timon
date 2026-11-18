@@ -30,5 +30,5 @@ test('the login form receives the release policy from the daemon, defaulting to 
   }
 });
 
-// The first-account screen is the onboarding's account step: its « never a licence
-// field, whatever the policy » test lives with it (components/onboarding/steps/account.test.ts).
+// The first-account screen is the onboarding's account step: its "never a licence
+// field, whatever the policy" test lives with it (components/onboarding/steps/account.test.ts).
