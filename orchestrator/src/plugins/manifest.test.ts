@@ -750,7 +750,17 @@ test('a slot opened by API 17 needs a manifest that declares it', () => {
     const res = readManifest(pkg({ apiVersion: 17, client: { slots: [slot] } }));
     assert.ok(res.ok, res.ok ? '' : res.message);
   }
-  assert.equal(SLOT_API_VERSIONS['updates.dialog'], PLUGIN_API_VERSION);
+  assert.equal(SLOT_API_VERSIONS['updates.dialog'], 17);
+});
+
+test('a slot opened by API 18 needs a manifest that declares it', () => {
+  // A host 17 has no `kanban.todo.landing`: the registration would be refused
+  // there, and the badge never painted, without a word to the plugin's author.
+  assert.match(refusal(pkg({ apiVersion: 17, client: { slots: ['kanban.todo.landing'] } })),
+    /names `kanban\.todo\.landing`, which needs `apiVersion: 18`/);
+  const res = readManifest(pkg({ apiVersion: 18, client: { slots: ['kanban.todo.landing'] } }));
+  assert.ok(res.ok, res.ok ? '' : res.message);
+  assert.equal(SLOT_API_VERSIONS['kanban.todo.landing'], PLUGIN_API_VERSION);
 });
 
 test('`root` outside a layout is refused, whatever the other kind', () => {

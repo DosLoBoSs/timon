@@ -9,7 +9,7 @@ import { t } from '@/lib/i18n';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
 import type { BundledClientPlugin } from './types';
 import { widgetPicto } from './widget-pictos';
-import { KANBAN_CARD_SLOT, TASK_FORM_SLOT, TODO_FORM_SLOT } from '@/lib/plugin-host/slots';
+import { KANBAN_CARD_SLOT, TASK_FORM_SLOT, TODO_FORM_SLOT, TODO_LANDING_SLOT } from '@/lib/plugin-host/slots';
 
 // Loaded on demand (docs/BUNDLE-SIZE.md): statically imported, every page of the app paid for it.
 const KanbanTodoColumn = dynamic(() => import('./kanban/kanban-todo-column').then((m) => m.KanbanTodoColumn), { ssr: false });
@@ -22,6 +22,7 @@ const KanbanPage = dynamic(() => import('./kanban/page').then((m) => m.KanbanPag
 const ProductTaskForm = dynamic(() => import('@/components/task-form/task-form').then((m) => m.ProductTaskForm), { ssr: false });
 const ProductTodoForm = dynamic(() => import('./kanban/product-todo-form').then((m) => m.ProductTodoForm), { ssr: false });
 const ProductKanbanCard = dynamic(() => import('./kanban/product-kanban-card').then((m) => m.ProductKanbanCard), { ssr: false });
+const ProductTodoLanding = dynamic(() => import('./kanban/product-todo-landing').then((m) => m.ProductTodoLanding), { ssr: false });
 
 /**
  * Client half of `@timon/kanban`: the board page, and its "TO DO" column.
@@ -59,6 +60,10 @@ export const kanbanClient: BundledClientPlugin = {
     // Default occupant of `todo.form` (a boot slot), the twin of `task.form`:
     // the creation and edition of a TO DO idea.
     ctx.register({ slot: TODO_FORM_SLOT, fallback: true }, ProductTodoForm);
+    // Default occupant of `kanban.todo.landing` (a boot slot): where the branch
+    // of an idea's jobs stands, beside its tags. A plugin that takes the slot
+    // repaints it on every line and in the detail.
+    ctx.register({ slot: TODO_LANDING_SLOT, fallback: true }, ProductTodoLanding);
     registerPage(ctx, { route: '/kanban', Component: KanbanPage });
 
     // First in the list: the ideas column comes before the statuses. A

@@ -593,6 +593,16 @@ export const KANBAN_CARD_SLOT = 'kanban.card';
 export const TODO_FORM_SLOT = 'todo.form';
 
 /**
+ * Slot of the landing badge of a TO DO idea (client API 18): where the branch
+ * of its jobs stands — pull request not created, open, merged, closed — in
+ * every place the idea's badges show. The occupant reads the idea, its
+ * `landing` included, from `useTodoItem()`. A boot slot like `kanban.card`: a
+ * replacement registers when the plugins load, and the product's badge comes
+ * back when it leaves.
+ */
+export const TODO_LANDING_SLOT = 'kanban.todo.landing';
+
+/**
  * Slot of the table of contents of a long list page (the Skills and MCP tabs
  * of Capabilities): the sticky column on the left that jumps to a section.
  * Every page that has one paints its occupant, which reads `usePageToc()`. A
@@ -712,6 +722,7 @@ function declareBootSlots(): void {
   declareSlot(APP_CARD_SLOT, 'single');
   declareSlot(KANBAN_CARD_SLOT, 'single');
   declareSlot(TODO_FORM_SLOT, 'single');
+  declareSlot(TODO_LANDING_SLOT, 'single');
   declareSlot(PAGE_TOC_SLOT, 'single');
   declareSlot(CHAT_SECRET_REQUEST_SLOT, 'single');
   // Deprecated, never painted: declared so that its former occupants still load.

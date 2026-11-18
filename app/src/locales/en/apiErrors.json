@@ -306,6 +306,7 @@
     "crash_loop": "This task cannot be put back in the queue yet: {detail}",
     "todo_status_filter_invalid": "Choose open, done, promoted or all.",
     "todo_urgency_filter_invalid": "Unknown urgency in the filter.",
+    "todo_landing_filter_invalid": "Unknown pull request state in the filter.",
     "todo_limit_invalid": "The limit must be a whole number from 1 to {max}.",
     "todo_ids_invalid": "The ids must be positive whole numbers separated by commas.",
     "todo_progress_invalid": "Unknown progress value.",

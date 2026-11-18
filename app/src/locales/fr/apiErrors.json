@@ -306,6 +306,7 @@
     "crash_loop": "Cette tâche ne peut pas encore être remise en file : {detail}",
     "todo_status_filter_invalid": "Choisissez open, done, promoted ou all.",
     "todo_urgency_filter_invalid": "Urgence inconnue dans le filtre.",
+    "todo_landing_filter_invalid": "État de pull request inconnu dans le filtre.",
     "todo_limit_invalid": "La limite doit être un nombre entier de 1 à {max}.",
     "todo_ids_invalid": "Les identifiants doivent être des nombres entiers positifs séparés par des virgules.",
     "todo_progress_invalid": "Valeur d'avancement inconnue.",
