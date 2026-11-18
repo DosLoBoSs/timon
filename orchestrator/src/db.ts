@@ -4074,6 +4074,8 @@ export type MemoryAuditRow = {
   candidate_text: string | null;
   rationale: string | null;
   reverted: number;
+  /** 1 when the rule this row speaks of no longer exists (`listMemoryAudit`). */
+  rule_deleted?: number;
 };
 
 export type MemoryProposalRow = {
@@ -4858,6 +4860,28 @@ export function renameAgentInLayout(scope: string, value: unknown, oldName: stri
     }
   }
   return changed;
+}
+
+/**
+ * The missions `m` whose history the retention may delete, bound to `@cutoff`:
+ * over, and idle since before the cutoff by every measure we keep — its end
+ * (or start), its newest event hot or archived, its stats row — and needed by
+ * no open task or workflow run. A whole conversation goes or none of it:
+ * cutting by event date would leave a conversation resumed after months with
+ * its beginning missing, and an open task reads its mission's last events.
+ * Each newest-event lookup is one probe of `idx_events_mission`.
+ */
+function historyExpiredSql(archive: boolean): string {
+  const newest = (table: string) =>
+    `COALESCE((SELECT e.timestamp FROM ${table} e WHERE e.mission_id = m.id ORDER BY e.id DESC LIMIT 1), 0) < @cutoff`;
+  return `m.status != 'running'
+    AND COALESCE(m.ended_at, m.started_at) < @cutoff
+    AND ${newest('events')}
+    ${archive ? `AND ${newest('archive.events')}` : ''}
+    AND COALESCE((SELECT st.last_event_at FROM mission_stats st WHERE st.mission_id = m.id), 0) < @cutoff
+    AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.mission_id = m.id AND t.status != 'DONE')
+    AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id = m.task_id AND t.status != 'DONE')
+    AND NOT EXISTS (SELECT 1 FROM workflow_runs w WHERE w.id = m.workflow_run_id AND w.status IN ('running', 'waiting'))`;
 }
 
 export const dbApi = {
@@ -8201,7 +8225,13 @@ export const dbApi = {
     const args: unknown[] = [];
     if (opts.runId) { where.push('run_id=?'); args.push(opts.runId); }
     if (opts.project !== undefined) { where.push('project IS ?'); args.push(opts.project); }
-    const sql = `SELECT * FROM memory_audit ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY ts DESC LIMIT ?`;
+    // `rule_deleted`: the rule the row speaks of (the target of a merge) is
+    // gone, so an empty text is the deletion's doing, not a missing record.
+    const sql = `SELECT a.*, CASE WHEN COALESCE(CASE WHEN a.action = 'merge' THEN a.target_rule_id END, a.rule_id) IS NOT NULL
+                   AND NOT EXISTS (SELECT 1 FROM memory_rules r
+                                    WHERE r.id = COALESCE(CASE WHEN a.action = 'merge' THEN a.target_rule_id END, a.rule_id))
+                 THEN 1 ELSE 0 END AS rule_deleted
+                 FROM memory_audit a ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY a.ts DESC LIMIT ?`;
     return db.prepare(sql).all(...args, opts.limit ?? 100) as MemoryAuditRow[];
   },
   listRules(opts: { scope?: string; project?: string | null; agent?: string | null; source?: string } = {}): MemoryRuleRow[] {
@@ -9357,24 +9387,42 @@ export const dbApi = {
   },
 
   /**
-   * Deletes up to `batch` events older than `cutoff` from `table` (the hot one,
-   * or the cold archive when it is attached), with the text the history search
-   * copied from them. A running mission's events are never touched: its
-   * conversation is still in use. Returns how many events went.
+   * One page of the missions whose history is past the retention
+   * (`historyExpiredSql`) and still holds events, after `afterRowid` in
+   * insertion order. `archive`: the cold archive is attached and counts too.
    */
-  pruneEventsBatch(table: 'events' | 'archive.events', cutoff: number, batch: number): number {
-    const ids = (db.prepare(
-      `SELECT id FROM ${table} WHERE timestamp < ?
-         AND mission_id NOT IN (SELECT id FROM missions WHERE status = 'running')
-       ORDER BY id LIMIT ?`,
-    ).all(cutoff, batch) as { id: number }[]).map((r) => r.id);
-    if (!ids.length) return 0;
-    const list = ids.join(','); // integers read from the database: nothing to escape
-    db.transaction(() => {
-      db.exec(`DELETE FROM mission_search WHERE event_id IN (${list})`);
+  expiredHistoryMissions(cutoff: number, archive: boolean, afterRowid: number, limit: number): { rowid: number; id: string }[] {
+    const holds = (table: string) => `EXISTS (SELECT 1 FROM ${table} e WHERE e.mission_id = m.id)`;
+    return db.prepare(
+      `SELECT m.rowid AS rowid, m.id AS id FROM missions m
+        WHERE m.rowid > @after
+          AND (${holds('events')}${archive ? ` OR ${holds('archive.events')}` : ''})
+          AND ${historyExpiredSql(archive)}
+        ORDER BY m.rowid LIMIT @limit`,
+    ).all({ cutoff, after: afterRowid, limit }) as { rowid: number; id: string }[];
+  },
+
+  /**
+   * Deletes up to `batch` events of one mission from `table` (the hot one, or
+   * the cold archive when it is attached), with the text the history search
+   * copied from them. The mission is checked again in the same transaction: it
+   * may have been resumed since it was listed. Returns how many events went.
+   */
+  pruneMissionEventsBatch(
+    table: 'events' | 'archive.events', missionId: string, cutoff: number, archive: boolean, batch: number,
+  ): number {
+    return db.transaction((): number => {
+      const expired = db.prepare(`SELECT 1 FROM missions m WHERE m.id = @id AND ${historyExpiredSql(archive)}`)
+        .get({ id: missionId, cutoff });
+      if (!expired) return 0;
+      const ids = (db.prepare(`SELECT id FROM ${table} WHERE mission_id = ? ORDER BY id LIMIT ?`)
+        .all(missionId, batch) as { id: number }[]).map((r) => r.id);
+      if (!ids.length) return 0;
+      const list = ids.join(','); // integers read from the database: nothing to escape
+      db.exec(`DELETE FROM mission_search WHERE event_id IS NOT NULL AND event_id IN (${list})`);
       db.exec(`DELETE FROM ${table} WHERE id IN (${list})`);
+      return ids.length;
     })();
-    return ids.length;
   },
 
   /** Whether the cold events archive is attached to this connection. */

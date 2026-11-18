@@ -1446,7 +1446,7 @@
         "backup": "backup backups archive nightly restore keep retention days trash deleted agent recover undo purge",
         "diagnostics": "logs debug misc infra troubleshooting",
         "desktop": "uninstall remove delete electron app",
-        "privacy": "privacy telemetry analytics usage statistics anonymous tracking opt out"
+        "privacy": "privacy telemetry analytics usage statistics anonymous tracking opt out retention history delete keep data memory facts days"
       },
       "secrets": {
         "vault": "api keys tokens passwords credentials vault environment variables",
@@ -4172,6 +4172,29 @@
     "test": "Test",
     "turnOff": "Turn off",
     "turnOn": "Turn on notifications for this device"
+  },
+  "privacySettings": {
+    "section": "Kept on this computer",
+    "history": {
+      "title": "Mission history",
+      "after": "{days, plural, one {Deleted after # day without activity} other {Deleted after # days without activity}}",
+      "forever": "Kept forever"
+    },
+    "learnings": {
+      "title": "Raw memory facts",
+      "after": "{days, plural, one {Deleted after # day} other {Deleted after # days}}",
+      "forever": "Kept forever"
+    },
+    "lockedEnv": "set by the environment",
+    "lockedConfig": "set in timon.config.json",
+    "change": "Change",
+    "more": "More actions",
+    "keepAll": "Keep everything",
+    "reset": "{days, plural, =0 {Back to the default: keep everything} one {Back to the default: # day} other {Back to the default: # days}}",
+    "days": "days",
+    "zeroKeeps": "0 keeps everything.",
+    "cancel": "Cancel",
+    "save": "Save"
   },
   "telemetrySettings": {
     "tab": "Privacy",

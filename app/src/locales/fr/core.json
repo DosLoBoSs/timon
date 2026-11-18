@@ -1446,7 +1446,7 @@
         "backup": "sauvegarde sauvegardes archive nuit restaurer garder rétention jours corbeille agent supprimé récupérer annuler purger backup trash",
         "diagnostics": "journaux logs débogage divers infra dépannage",
         "desktop": "désinstaller supprimer retirer electron application",
-        "privacy": "confidentialité télémétrie statistiques usage anonyme suivi désactiver"
+        "privacy": "confidentialité télémétrie statistiques usage anonyme suivi désactiver conservation rétention historique effacer garder données mémoire faits jours"
       },
       "secrets": {
         "vault": "clés api jetons tokens mots de passe identifiants coffre variables environnement",
@@ -4172,6 +4172,29 @@
     "test": "Tester",
     "turnOff": "Désactiver",
     "turnOn": "Activer les notifications sur cet appareil"
+  },
+  "privacySettings": {
+    "section": "Conservé sur cet ordinateur",
+    "history": {
+      "title": "Historique des missions",
+      "after": "{days, plural, one {Effacé après # jour sans activité} other {Effacé après # jours sans activité}}",
+      "forever": "Conservé sans limite"
+    },
+    "learnings": {
+      "title": "Faits bruts de la mémoire",
+      "after": "{days, plural, one {Effacés après # jour} other {Effacés après # jours}}",
+      "forever": "Conservés sans limite"
+    },
+    "lockedEnv": "imposé par l’environnement",
+    "lockedConfig": "défini dans timon.config.json",
+    "change": "Modifier",
+    "more": "Plus d’actions",
+    "keepAll": "Tout garder",
+    "reset": "{days, plural, =0 {Revenir au défaut : tout garder} one {Revenir au défaut : # jour} other {Revenir au défaut : # jours}}",
+    "days": "jours",
+    "zeroKeeps": "0 garde tout.",
+    "cancel": "Annuler",
+    "save": "Enregistrer"
   },
   "telemetrySettings": {
     "tab": "Confidentialité",
