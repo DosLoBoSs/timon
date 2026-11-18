@@ -92,7 +92,7 @@ test('an anonymous caller is refused on both routes', async () => {
 test('the session stays shut while the setting is off, then while the key is missing', async () => {
   const off = await call('POST', '/api/gpt-live/session', { cookie: admin, body: { sdp: 'v=0 offer' } });
   assert.equal(off.status, 409);
-  assert.equal(off.json?.code, 'disabled');
+  assert.equal(off.json?.code, 'gpt_live_disabled');
 
   assert.deepEqual(setSetting(GPT_LIVE_SETTING, '1'), { ok: true });
   const status = await call('GET', '/api/gpt-live/status', { cookie: admin });
@@ -101,7 +101,8 @@ test('the session stays shut while the setting is off, then while the key is mis
 
   const noKey = await call('POST', '/api/gpt-live/session', { cookie: admin, body: { sdp: 'v=0 offer' } });
   assert.equal(noKey.status, 409);
-  assert.equal(noKey.json?.code, 'no-key');
+  assert.equal(noKey.json?.code, 'gpt_live_no_key');
+  assert.deepEqual(noKey.json?.params, { secret: 'OPENAI_GPT_LIVE_API_KEY' });
   assert.equal(sent.length, 0);
 });
 
@@ -179,8 +180,14 @@ test('an upstream refusal maps to a code, and its body never reaches the browser
   const res = await call('POST', '/api/gpt-live/session', { cookie: admin, body: { sdp: 'v=0 offer' } });
   upstreamStatus = 201;
   assert.equal(res.status, 502);
-  assert.equal(res.json?.code, 'bad-key');
+  assert.equal(res.json?.code, 'gpt_live_bad_key');
   assert.ok(!res.text.includes(KEY));
+  upstreamStatus = 500;
+  const other = await call('POST', '/api/gpt-live/session', { cookie: admin, body: { sdp: 'v=0 offer' } });
+  upstreamStatus = 201;
+  assert.equal(other.json?.code, 'gpt_live_refused');
+  assert.deepEqual(other.json?.params, { status: 500 });
+  assert.equal(other.json?.upstreamStatus, 500);
 });
 
 test('a spoken turn is written into the mission history, without waking its agent', async () => {

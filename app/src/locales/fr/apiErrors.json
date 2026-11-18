@@ -428,6 +428,15 @@
     "browser_sessions_failed": "Les sessions du navigateur n'ont pas pu être lues : {detail}",
     "browser_session_failed": "La session du navigateur n'a pas pu être lue : {detail}",
     "browser_start_failed": "Le navigateur n'a pas pu démarrer : {detail}",
-    "browser_stop_failed": "Le navigateur n'a pas pu s'arrêter : {detail}"
+    "browser_stop_failed": "Le navigateur n'a pas pu s'arrêter : {detail}",
+    "gpt_live_session_invalid": "La demande de session vocale est invalide.",
+    "gpt_live_disabled": "GPT-Live est désactivé.",
+    "gpt_live_no_key": "GPT-Live a besoin d'une clé OpenAI : ajoutez {secret} au coffre de secrets.",
+    "gpt_live_unreachable": "OpenAI est injoignable.",
+    "gpt_live_bad_key": "OpenAI a refusé la clé de GPT-Live.",
+    "gpt_live_rate_limited": "OpenAI limite les requêtes : réessayez dans un instant.",
+    "gpt_live_refused": "OpenAI a refusé la session vocale (HTTP {status}).",
+    "gpt_live_no_answer": "OpenAI n'a renvoyé aucune réponse à la session vocale.",
+    "gpt_live_transcript_invalid": "Un tour parlé a besoin d'un rôle et d'un texte de 4000 caractères au plus."
   }
 }

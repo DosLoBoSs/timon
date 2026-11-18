@@ -428,6 +428,15 @@
     "browser_sessions_failed": "The browser sessions could not be read: {detail}",
     "browser_session_failed": "The browser session could not be read: {detail}",
     "browser_start_failed": "The browser could not start: {detail}",
-    "browser_stop_failed": "The browser could not stop: {detail}"
+    "browser_stop_failed": "The browser could not stop: {detail}",
+    "gpt_live_session_invalid": "The voice session request is invalid.",
+    "gpt_live_disabled": "GPT-Live is turned off.",
+    "gpt_live_no_key": "GPT-Live needs an OpenAI key: add {secret} to the secrets vault.",
+    "gpt_live_unreachable": "OpenAI cannot be reached.",
+    "gpt_live_bad_key": "OpenAI refused the key of GPT-Live.",
+    "gpt_live_rate_limited": "OpenAI is limiting requests: try again in a moment.",
+    "gpt_live_refused": "OpenAI refused the voice session (HTTP {status}).",
+    "gpt_live_no_answer": "OpenAI returned no answer to the voice session.",
+    "gpt_live_transcript_invalid": "A spoken turn needs a role and a text of at most 4000 characters."
   }
 }
