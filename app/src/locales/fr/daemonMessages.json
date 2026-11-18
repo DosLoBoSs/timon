@@ -136,7 +136,7 @@
     },
     "integration_gave_up": {
       "title": "Une intégration de messagerie a cessé de réessayer un message",
-      "body": "Un message de la connexion {transport} n’a pas pu être traité. Rejouez-le depuis Réglages › Secrets › Connexions."
+      "body": "Un message de la connexion {transport} n’a pas pu être traité. Rejouez-le depuis {settingsPath}."
     },
     "plugin_spawn_requested": {
       "title": "Le plugin `{pluginId}` veut lancer des missions",
@@ -152,7 +152,7 @@
     },
     "backend_launch_unauthorized": {
       "title": "Le backend `{backend}` n’a pas été lancé : son programme attend votre autorisation",
-      "body": "{reason} Ouvrez cette carte pour examiner le programme sur la page du fournisseur (Réglages › Modèles IA › Backends) et autorisez-le de nouveau si c’est bien celui que vous attendez."
+      "body": "{reason} Ouvrez cette carte pour examiner le programme sur la page du fournisseur ({settingsPath}) et autorisez-le de nouveau si c’est bien celui que vous attendez."
     },
     "plugin_secret_global_lost": {
       "title": "Le plugin `{pluginId}` ne lit plus le secret `{name}`",
@@ -234,7 +234,7 @@
     },
     "device_paired": {
       "title": "Nouvel appareil connecté",
-      "body": "« {name} » a été appairé à votre compte. Si ce n’était pas vous, révoquez-le dans Réglages → Accès et réseau → Appareils."
+      "body": "« {name} » a été appairé à votre compte. Si ce n’était pas vous, révoquez-le dans {settingsPath}."
     },
     "accounts_suspended": {
       "title": "{count, plural, one {# compte est suspendu} other {# comptes sont suspendus}}",
