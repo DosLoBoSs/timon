@@ -28,6 +28,7 @@ const { registerRoutes: registerTelemetryRoutes } = await import('./routes.js');
 const { resolvePreference, TELEMETRY_SETTING_KEY } = await import('./preference.js');
 const { issueMissionApiToken } = await import('../../users/api-tokens.js');
 const { SESSION_COOKIE } = await import('../../users/session.js');
+const { startTelemetry, setTelemetryRuntime, clearTelemetryRuntime } = await import('./runtime.js');
 
 const DAEMON_TOKEN = 'telemetry-daemon-token';
 
@@ -122,6 +123,42 @@ test('a signed-in person turns sharing off and on', async () => {
   const on = await call('PUT', '/api/telemetry/preference', { cookie }, { enabled: true });
   assert.equal(on.body.enabled, true);
   assert.equal(stored(), '1');
+});
+
+test('turning sharing off through the route stops every event at once, without a restart', async () => {
+  const cookie = await login();
+  assert.equal((await call('PUT', '/api/telemetry/preference', { cookie }, { enabled: true })).status, 200);
+  const sent: string[] = [];
+  const fake = (async (_url: string | URL | Request, init?: RequestInit) => {
+    sent.push((JSON.parse(String(init?.body)) as { payload: { name: string } }).payload.name);
+    return new Response('{}', { status: 200 });
+  }) as typeof fetch;
+  // A local capture address, never reached: the injected fetch records instead.
+  // The preference is the real one (the settings row this route writes); the
+  // timer is out of the way, so nothing but the route can apply the change.
+  const rt = startTelemetry({
+    env: { TIMON_TELEMETRY_CAPTURE_URL: 'http://127.0.0.1:9' }, packaged: false,
+    home: mkdtempSync(join(tmpdir(), 'timon-telemetry-route-off-')), fetch: fake,
+    preference: { configValue: () => undefined }, collector: { missionFacts: () => null, taskFacts: () => null },
+    intervalMs: 3_600_000,
+  });
+  setTelemetryRuntime(rt);
+  try {
+    await rt.flushNow();
+    const atStart = sent.length;
+    rt.track('onboarding_step', { step: 'team', action: 'completed' });
+    const off = await call('PUT', '/api/telemetry/preference', { cookie }, { enabled: false });
+    assert.equal(off.status, 200);
+    assert.equal(off.body.enabled, false);
+    // The same second, from every source: the daemon, the web app.
+    rt.track('onboarding_step', { step: 'restart', action: 'completed' });
+    assert.equal((await call('POST', '/api/telemetry/ui-event', { cookie }, { name: 'page_viewed', surface: 'web', path: '/agents' })).status, 200);
+    await rt.flushNow();
+    assert.deepEqual(sent.slice(atStart), ['telemetry_preference_changed'], 'the queued event is dropped; only the goodbye leaves');
+  } finally {
+    clearTelemetryRuntime(rt);
+    await rt.dispose();
+  }
 });
 
 test('desktop-opened takes the daemon token alone', async () => {
