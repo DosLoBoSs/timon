@@ -85,6 +85,32 @@ export interface ForgeReader {
   pullRequest(repo: string, number: number): Promise<PullRequestStateOutcome>;
 }
 
+/** One check of a pull request, as the forge reports it. */
+export type PullRequestCheckStatus = 'pass' | 'fail' | 'pending' | 'skipped';
+export type PullRequestCheck = { name: string; status: PullRequestCheckStatus; url: string | null };
+
+/** What a pull request's page says about its readiness. Every string comes
+ *  from the forge: bounded, and never read as an instruction. */
+export type PullRequestChecks = {
+  state: PullRequestState;
+  draft: boolean;
+  mergeable: 'mergeable' | 'conflicting' | 'unknown';
+  review: 'approved' | 'changes_requested' | 'review_required' | null;
+  title: string;
+  body: string;
+  checks: PullRequestCheck[];
+};
+
+export type PullRequestChecksOutcome =
+  | { ok: true; view: PullRequestChecks }
+  | { ok: false; code: 'gh_missing' | 'gh_failed' | 'timed_out' | 'unexpected_answer'; reason: string };
+
+/** The checks, mergeability and review of an open pull request: read on
+ *  demand, while someone looks at the job. */
+export interface ForgeChecksReader {
+  pullRequestChecks(repo: string, number: number): Promise<PullRequestChecksOutcome>;
+}
+
 const GITHUB_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const COMMIT_SHA = /^[0-9a-f]{40,64}$/;
 
@@ -102,6 +128,75 @@ export function parsePullRequestView(stdout: string): { state: PullRequestState;
   return { state: known, mergeSha: typeof oid === 'string' && COMMIT_SHA.test(oid) ? oid : null };
 }
 
+export const MAX_FORGE_CHECKS = 100;
+const MAX_TITLE = 256;
+const MAX_BODY = 8_000;
+
+function boundedText(value: unknown, max: number): string {
+  if (typeof value !== 'string') return '';
+  // Control characters other than line breaks and tabs have no place on a card.
+  return value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').slice(0, max);
+}
+
+function httpsUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 500) return null;
+  try {
+    return new URL(value).protocol === 'https:' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+const RUN_FAILURES = new Set(['FAILURE', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE', 'STALE']);
+
+/** A check run (GitHub Actions…) or a commit status, as one shape. */
+function checkOf(item: unknown): PullRequestCheck | null {
+  if (typeof item !== 'object' || item === null) return null;
+  const o = item as Record<string, unknown>;
+  if (typeof o.context === 'string') {
+    const state = String(o.state ?? '');
+    const status: PullRequestCheckStatus = state === 'SUCCESS' ? 'pass'
+      : state === 'FAILURE' || state === 'ERROR' ? 'fail' : 'pending';
+    return { name: boundedText(o.context, 120) || 'status', status, url: httpsUrl(o.targetUrl) };
+  }
+  if (typeof o.name !== 'string') return null;
+  const conclusion = String(o.conclusion ?? '');
+  let status: PullRequestCheckStatus;
+  if (o.status !== 'COMPLETED') status = 'pending';
+  else if (conclusion === 'SUCCESS') status = 'pass';
+  else if (RUN_FAILURES.has(conclusion)) status = 'fail';
+  else status = 'skipped';
+  return { name: boundedText(o.name, 120) || 'check', status, url: httpsUrl(o.detailsUrl) };
+}
+
+/** The answer of `gh pr view --json state,isDraft,mergeable,reviewDecision,
+ *  title,body,statusCheckRollup`, or null when it is not what gh prints. */
+export function parsePullRequestChecks(stdout: string): PullRequestChecks | null {
+  let parsed: unknown;
+  try { parsed = JSON.parse(stdout); } catch { return null; }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const o = parsed as Record<string, unknown>;
+  const states: Record<string, PullRequestState> = { OPEN: 'open', CLOSED: 'closed', MERGED: 'merged' };
+  const state = typeof o.state === 'string' ? states[o.state] : undefined;
+  if (!state) return null;
+  const mergeable = o.mergeable === 'MERGEABLE' ? 'mergeable' : o.mergeable === 'CONFLICTING' ? 'conflicting' : 'unknown';
+  const reviews: Record<string, PullRequestChecks['review']> = {
+    APPROVED: 'approved', CHANGES_REQUESTED: 'changes_requested', REVIEW_REQUIRED: 'review_required',
+  };
+  const review = typeof o.reviewDecision === 'string' ? reviews[o.reviewDecision] ?? null : null;
+  const rollup = Array.isArray(o.statusCheckRollup) ? o.statusCheckRollup : [];
+  const checks = rollup.map(checkOf).filter((c): c is PullRequestCheck => c !== null).slice(0, MAX_FORGE_CHECKS);
+  return {
+    state,
+    draft: o.isDraft === true,
+    mergeable,
+    review,
+    title: boundedText(o.title, MAX_TITLE),
+    body: boundedText(o.body, MAX_BODY),
+    checks,
+  };
+}
+
 const PULL_URL = /https:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/(\d+)/;
 
 function pullRequestFrom(text: string): PullRequestRef | null {
@@ -111,10 +206,32 @@ function pullRequestFrom(text: string): PullRequestRef | null {
 }
 
 /** GitHub through `gh`, signed in with the project's config folder. */
-export function githubForge(configDir: string | null, runners: ForgeRunners = {}): Forge & ForgeReader {
+export function githubForge(configDir: string | null, runners: ForgeRunners = {}): Forge & ForgeReader & ForgeChecksReader {
   const gh = runners.gh ?? hostGh;
   return {
     login: () => ghLogin(configDir, gh),
+    async pullRequestChecks(repo, number) {
+      if (!GITHUB_REPO.test(repo) || !Number.isSafeInteger(number) || number <= 0) {
+        return { ok: false, code: 'unexpected_answer', reason: 'not a pull request of a GitHub repository' };
+      }
+      let result: ExecResult;
+      try {
+        result = await gh(
+          ['pr', 'view', String(number), `--repo=${repo}`, '--json=state,isDraft,mergeable,reviewDecision,title,body,statusCheckRollup'],
+          { env: ghEnv(configDir), timeout: GH_TIMEOUT_MS, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
+        );
+      } catch {
+        return { ok: false, code: 'gh_missing', reason: 'the GitHub CLI (gh) was not found on this machine' };
+      }
+      if (result.timedOut) return { ok: false, code: 'timed_out', reason: 'gh did not answer in time' };
+      if (result.code !== 0) {
+        return { ok: false, code: 'gh_failed', reason: redactedOutput(result.stderr || result.stdout) || `gh exited with code ${result.code}` };
+      }
+      const view = parsePullRequestChecks(result.stdout);
+      return view
+        ? { ok: true, view }
+        : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer the checks of a pull request' };
+    },
     async pullRequest(repo, number) {
       if (!GITHUB_REPO.test(repo) || !Number.isSafeInteger(number) || number <= 0) {
         return { ok: false, code: 'unexpected_answer', reason: 'not a pull request of a GitHub repository' };

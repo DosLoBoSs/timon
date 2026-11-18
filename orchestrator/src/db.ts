@@ -3059,6 +3059,15 @@ const listTasksByBaseBranchStmt = db.prepare(
 const listIntegrationsBySeriesStmt = db.prepare(
   `SELECT * FROM integrations WHERE series_id = ? ORDER BY created_at ASC`,
 );
+const listIntegrationsByProjectStmt = db.prepare(
+  `SELECT * FROM integrations WHERE project = ? ORDER BY created_at DESC LIMIT ?`,
+);
+const listRecentIntegrationsStmt = db.prepare(
+  `SELECT * FROM integrations ORDER BY created_at DESC LIMIT ?`,
+);
+// What the forge last said of the pull request (JSON, `integration-preview.ts`).
+// Never moves the state: the poller alone concludes a merge or a closing.
+const setIntegrationChecksStmt = db.prepare(`UPDATE integrations SET checks = ? WHERE id = ?`);
 // Only from 'branch': a pull request recorded once is never replaced by another.
 const markIntegrationOpenStmt = db.prepare(`
   UPDATE integrations SET state = 'open', pr_number = ?, pr_url = ?, head_sha = ?, updated_at = ?
@@ -5647,6 +5656,17 @@ export const dbApi = {
   },
   listIntegrationsBySeries(seriesId: string): IntegrationRow[] {
     return listIntegrationsBySeriesStmt.all(seriesId) as IntegrationRow[];
+  },
+  /** A project's integration branches, newest first. */
+  listIntegrationsByProject(project: string, limit = 100): IntegrationRow[] {
+    return listIntegrationsByProjectStmt.all(project, limit) as IntegrationRow[];
+  },
+  /** Every integration branch, newest first. Unscoped: routes filter. */
+  listRecentIntegrations(limit = 100): IntegrationRow[] {
+    return listRecentIntegrationsStmt.all(limit) as IntegrationRow[];
+  },
+  setIntegrationChecks(id: string, checks: string | null): void {
+    setIntegrationChecksStmt.run(checks, id);
   },
   /** Records the pull request opened for an integration branch; false when
    *  the row is gone or already past the 'branch' state. */

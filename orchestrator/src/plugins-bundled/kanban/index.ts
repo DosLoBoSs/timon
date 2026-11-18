@@ -25,6 +25,7 @@ import { todoApi, type TodoApi } from './todo-api.js';
 import { registerAttachmentRoutes } from './attachment-routes.js';
 import { registerIntegrationRoutes } from './integration-routes.js';
 import { registerPrRoutes } from './pr-routes.js';
+import { registerLandingRoutes } from './landing-routes.js';
 import { dbApi } from '../../db.js';
 import {
   purgeOrphanTaskAttachments, purgeOrphanTodoAttachments, watchTaskDeletions, watchTodoDeletions,
@@ -54,6 +55,7 @@ export function apply(ctx: Context): void {
   registerAttachmentRoutes(ctx.http.router());
   registerIntegrationRoutes(ctx.http.router());
   registerPrRoutes(ctx.http.router());
+  registerLandingRoutes(ctx.http.router());
 
   // `kanban` service: ordering token for the modules that create tasks
   // (`routines`) or extend the pipeline (`kanban-code`). It will carry the
