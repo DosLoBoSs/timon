@@ -461,6 +461,22 @@
     "machine_throttled": "Trop de tentatives. Patientez quelques minutes avant de réessayer.",
     "machine_requires_tls": "La machine ne voit pas cette connexion comme du HTTPS : vérifiez les réglages HTTPS de son reverse proxy.",
     "not_a_timon_machine": "Aucune machine Timon ne répond à cette adresse.",
-    "machine_not_saved": "La machine n'a pas pu être enregistrée."
+    "machine_not_saved": "La machine n'a pas pu être enregistrée.",
+    "secret_duplicate": "Un secret de ce nom existe déjà pour la même audience.",
+    "secret_name_invalid": "Le nom d'un secret s'écrit comme une variable d'environnement : majuscules, chiffres et tirets bas.",
+    "secret_mode_invalid": "Un secret est injecté ou relayé.",
+    "secret_scope_invalid": "Cette audience n'est pas valable pour un secret.",
+    "secret_broker_spec_required": "Un secret relayé a besoin des hôtes et de l'en-tête auxquels il peut être envoyé.",
+    "secret_value_required": "Donnez la valeur du secret.",
+    "secret_refused": "Le secret a été refusé : {detail}",
+    "secret_request_not_found": "Cette demande de secret n'existe plus.",
+    "secret_request_decided": "Cette demande de secret a déjà reçu une réponse.",
+    "secret_request_expired": "Cette demande de secret a expiré.",
+    "secret_request_duplicate": "Un secret de ce nom existe déjà.",
+    "secret_request_not_stored": "La valeur n'a pas pu être enregistrée dans le coffre.",
+    "secret_request_session_required": "Une demande de secret se traite depuis votre navigateur connecté.",
+    "secret_request_value_invalid": "La valeur doit compter de 1 à 16384 caractères.",
+    "secret_reveal_session_required": "Afficher la valeur d'un secret demande votre navigateur connecté.",
+    "password_required": "Saisissez votre mot de passe."
   }
 }

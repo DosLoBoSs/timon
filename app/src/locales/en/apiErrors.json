@@ -461,6 +461,22 @@
     "machine_throttled": "Too many attempts. Wait a few minutes before trying again.",
     "machine_requires_tls": "The machine does not see this connection as HTTPS: check the HTTPS settings of its reverse proxy.",
     "not_a_timon_machine": "No Timon machine answers at this address.",
-    "machine_not_saved": "The machine could not be saved."
+    "machine_not_saved": "The machine could not be saved.",
+    "secret_duplicate": "A secret with this name already exists for the same audience.",
+    "secret_name_invalid": "A secret's name is written like an environment variable: capital letters, digits and underscores.",
+    "secret_mode_invalid": "A secret is injected or brokered.",
+    "secret_scope_invalid": "This audience is not valid for a secret.",
+    "secret_broker_spec_required": "A brokered secret needs the hosts and the header it may be sent to.",
+    "secret_value_required": "Give the secret's value.",
+    "secret_refused": "The secret was refused: {detail}",
+    "secret_request_not_found": "This secret request no longer exists.",
+    "secret_request_decided": "This secret request was already answered.",
+    "secret_request_expired": "This secret request expired.",
+    "secret_request_duplicate": "A secret with this name already exists.",
+    "secret_request_not_stored": "The value could not be stored in the vault.",
+    "secret_request_session_required": "A secret request is answered from your signed-in browser.",
+    "secret_request_value_invalid": "The value must be 1 to 16384 characters long.",
+    "secret_reveal_session_required": "Showing a secret's value needs your signed-in browser.",
+    "password_required": "Enter your password."
   }
 }
