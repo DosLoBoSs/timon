@@ -2068,6 +2068,17 @@ CREATE TABLE IF NOT EXISTS external_pr_reviews (
 );
 CREATE INDEX IF NOT EXISTS external_pr_reviews_mission ON external_pr_reviews(mission_id);
 `);
+// The last concluded relecture, kept while a new draft waits on the row: a
+// brief prepared then never sent must not erase the verdict the person had.
+{
+  const reviewCols = (db.prepare(`PRAGMA table_info(external_pr_reviews)`).all() as { name: string }[]).map((c) => c.name);
+  for (const [col, type] of [
+    ['last_state', 'TEXT'], ['last_agent', 'TEXT'], ['last_verdict', 'TEXT'], ['last_report', 'TEXT'],
+    ['last_mission_id', 'TEXT'], ['last_pr_updated_at', 'TEXT'], ['last_concluded_at', 'INTEGER'],
+  ] as const) {
+    if (!reviewCols.includes(col)) db.exec(`ALTER TABLE external_pr_reviews ADD COLUMN ${col} ${type}`);
+  }
+}
 if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
 // A writer that changes the reason without naming its code (an agent's own
 // reason, a statement written before the column) must not leave

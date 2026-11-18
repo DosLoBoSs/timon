@@ -65,6 +65,14 @@ export type ExternalPrReviewRow = {
   report: string | null;
   created_at: number;
   updated_at: number;
+  /** The last concluded relecture, kept while a newer draft waits. */
+  last_state: ReviewState | null;
+  last_agent: string | null;
+  last_verdict: ReviewVerdict | null;
+  last_report: string | null;
+  last_mission_id: string | null;
+  last_pr_updated_at: string | null;
+  last_concluded_at: number | null;
 };
 
 /** What the routes show of a review: never the path of the diff file. */
@@ -155,6 +163,13 @@ const upsertDraftStmt = db.prepare(`
     (id, project, repo, pr_number, state, agent, brief, diff_path, head_sha, pr_updated_at, created_at, updated_at)
   VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT (project, repo, pr_number) DO UPDATE SET
+    last_state = CASE WHEN external_pr_reviews.state IN ('done', 'failed') THEN external_pr_reviews.state ELSE external_pr_reviews.last_state END,
+    last_agent = CASE WHEN external_pr_reviews.state IN ('done', 'failed') THEN external_pr_reviews.agent ELSE external_pr_reviews.last_agent END,
+    last_verdict = CASE WHEN external_pr_reviews.state IN ('done', 'failed') THEN external_pr_reviews.verdict ELSE external_pr_reviews.last_verdict END,
+    last_report = CASE WHEN external_pr_reviews.state IN ('done', 'failed') THEN external_pr_reviews.report ELSE external_pr_reviews.last_report END,
+    last_mission_id = CASE WHEN external_pr_reviews.state IN ('done', 'failed') THEN external_pr_reviews.mission_id ELSE external_pr_reviews.last_mission_id END,
+    last_pr_updated_at = CASE WHEN external_pr_reviews.state IN ('done', 'failed') THEN external_pr_reviews.pr_updated_at ELSE external_pr_reviews.last_pr_updated_at END,
+    last_concluded_at = CASE WHEN external_pr_reviews.state IN ('done', 'failed') THEN external_pr_reviews.updated_at ELSE external_pr_reviews.last_concluded_at END,
     id = excluded.id, state = 'draft', agent = excluded.agent, brief = excluded.brief,
     diff_path = excluded.diff_path, head_sha = excluded.head_sha, pr_updated_at = excluded.pr_updated_at,
     mission_id = NULL, verdict = NULL, report = NULL,
@@ -174,6 +189,7 @@ const concludeStmt = db.prepare(`
   WHERE id = ? AND state = 'running'
 `);
 
+/** The review a row stands for: its draft, its running mission, or its verdict. */
 function viewOf(row: ExternalPrReviewRow): ReviewView {
   return {
     id: row.id,
@@ -185,6 +201,26 @@ function viewOf(row: ExternalPrReviewRow): ReviewView {
     mission_id: row.mission_id,
     pr_updated_at: row.pr_updated_at,
     updated_at: row.updated_at,
+  };
+}
+
+/**
+ * The review the list shows on a pull request's row: a draft nobody sent
+ * shows the last concluded relecture, so preparing a new one and closing the
+ * dialog loses nothing.
+ */
+function shownView(row: ExternalPrReviewRow): ReviewView {
+  if (row.state !== 'draft' || (row.last_state !== 'done' && row.last_state !== 'failed')) return viewOf(row);
+  return {
+    id: row.id,
+    number: row.pr_number,
+    state: row.last_state,
+    agent: row.last_agent ?? row.agent,
+    verdict: row.last_verdict,
+    report: row.last_report,
+    mission_id: row.last_mission_id,
+    pr_updated_at: row.last_pr_updated_at,
+    updated_at: row.last_concluded_at ?? row.updated_at,
   };
 }
 
@@ -318,7 +354,7 @@ export async function listPullRequests(slug: string, deps: ExternalPrDeps = {}):
   if (!out.ok) return refuse(502, 'forge_read_failed', out.reason);
   reconcileRunningReviews();
   const reviews = new Map(
-    (listReviewsStmt.all(slug, value.repo) as ExternalPrReviewRow[]).map((r) => [r.pr_number, viewOf(r)]),
+    (listReviewsStmt.all(slug, value.repo) as ExternalPrReviewRow[]).map((r) => [r.pr_number, shownView(r)]),
   );
   const owner = value.repo.split('/')[0]!.toLowerCase();
   const account = value.integration.account?.toLowerCase() ?? null;
@@ -370,8 +406,9 @@ export type PrepareOutcome = { ok: true; review: ReviewView; brief: string } | E
 /**
  * Reads the pull request and its diff, and writes the brief its relecture
  * would start with. Nothing starts here: the person reads the brief, then
- * sends it (`sendReview`). A new draft replaces the previous review of the
- * same pull request, unless that one is still running.
+ * sends it (`sendReview`). A new draft replaces the previous draft of the
+ * same pull request, unless a review of it is still running; the last
+ * concluded review stays on the row until the new one is sent.
  */
 export async function prepareReview(slug: string, number: number, deps: ExternalPrDeps = {}): Promise<PrepareOutcome> {
   const resolved = projectRepository(slug);

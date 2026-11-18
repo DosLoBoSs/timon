@@ -253,6 +253,39 @@ test('the person sends the brief they read, once; the verdict comes back on the 
   assertOnlyReads();
 });
 
+type ListedReview = { id: string; state: string; verdict: string | null; report: string | null; mission_id: string | null };
+async function listedReview(number: number): Promise<ListedReview | null> {
+  const listed = await (await call('GET', LIST_URL, 'manager')).json() as { pulls: Array<{ number: number; review: ListedReview | null }> };
+  return listed.pulls.find((p) => p.number === number)?.review ?? null;
+}
+
+test('preparing again keeps the last verdict on the row until the new review is sent', async () => {
+  const before = await listedReview(12);
+  assert.equal(before?.verdict, 'changes_requested');
+  // Opened then closed without sending: the row still shows the verdict.
+  const prepared = await (await call('POST', `${LIST_URL}/12/review`, 'manager', {})).json() as { review: { id: string; state: string } };
+  assert.equal(prepared.review.state, 'draft');
+  const kept = await listedReview(12);
+  assert.equal(kept?.state, 'done');
+  assert.equal(kept?.verdict, 'changes_requested');
+  assert.match(kept?.report ?? '', /No tests/);
+  assert.equal(kept?.mission_id, before?.mission_id);
+  // A second preparation still keeps it.
+  const again = await (await call('POST', `${LIST_URL}/12/review`, 'manager', {})).json() as { review: { id: string } };
+  assert.equal((await listedReview(12))?.verdict, 'changes_requested');
+
+  // Sent, the new review takes the row; concluded, its verdict replaces the old one.
+  const sent = await call('POST', `${LIST_URL}/12/review/send`, 'person', { review_id: again.review.id });
+  assert.equal(sent.status, 200);
+  const running = (await sent.json() as { review: { mission_id: string } }).review;
+  assert.equal((await listedReview(12))?.state, 'running');
+  dbApi.insertEvent(running.mission_id, 'assistant', { message: { content: [{ type: 'text', text: 'VERDICT: MERGEABLE\nTests added.' }] } });
+  bus.publish({ kind: 'turn_complete', missionId: running.mission_id, outcome: 'completed' });
+  const after_ = await listedReview(12);
+  assert.equal(after_?.verdict, 'mergeable');
+  assert.equal(after_?.mission_id, running.mission_id);
+});
+
 test('an unknown draft is 404, a bad id 400', async () => {
   assert.equal((await call('POST', `${LIST_URL}/13/review/send`, 'person', { review_id: crypto.randomUUID() })).status, 404);
   assert.equal((await call('POST', `${LIST_URL}/13/review/send`, 'person', { review_id: 'nope' })).status, 400);
