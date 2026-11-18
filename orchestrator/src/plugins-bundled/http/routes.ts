@@ -115,7 +115,7 @@ export function registerRoutes(app: Router): void {
       const body = (req.body ?? {}) as SetupInput & { force?: boolean };
       const missing = noProviderForSetup(body);
       if (missing) {
-        res.status(409).json({ error: missing, code: 'no_provider' });
+        res.status(409).json(apiError('no_provider', missing));
         return;
       }
       const written = applySetup(body, undefined, body.force === true);
@@ -126,7 +126,7 @@ export function registerRoutes(app: Router): void {
       res.json({ ...written, restartRequired: armed, teamOnboarding: teamOnboardingPending() });
     } catch (e) {
       const status = e instanceof SetupError ? 400 : 500;
-      res.status(status).json({ error: (e as Error).message });
+      res.status(status).json(apiError('setup_failed', (e as Error).message, { detail: (e as Error).message }));
     }
   });
 
@@ -148,7 +148,7 @@ export function registerRoutes(app: Router): void {
     if (dbApi.countUsers() > 0 && !requireSuperadmin(req, res)) return;
     if (!isFirstRun()) {
       res.status(409).json({
-        error: 'onboarding is over on this machine (timon.config.json exists)',
+        ...apiError('onboarding_over', 'onboarding is over on this machine (timon.config.json exists)'),
         command: null,
       });
       return;
@@ -161,7 +161,7 @@ export function registerRoutes(app: Router): void {
       res.json(result);
     } catch (e) {
       const status = e instanceof OnboardingError ? 400 : 500;
-      res.status(status).json({ error: (e as Error).message });
+      res.status(status).json(apiError('onboarding_action_failed', (e as Error).message, { detail: (e as Error).message }));
     }
   });
 
@@ -337,7 +337,7 @@ export function registerRoutes(app: Router): void {
       }
       res.json({ backend: report.backend, supported: true, connected: true, ...report.usage });
     } catch (e) {
-      res.status(503).json({ backend: backend ?? null, error: (e as Error).message });
+      res.status(503).json({ backend: backend ?? null, ...apiError('usage_unavailable', (e as Error).message, { detail: (e as Error).message }) });
     }
   });
 

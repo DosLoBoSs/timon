@@ -163,7 +163,7 @@ function authenticateDevice(req: Request, res: Response, given: string): boolean
   // The relay is the first CSRF barrier; when it forwards the browser's
   // origin headers, the daemon checks them too, as for a cookie.
   if (isCrossSiteMutation(req)) {
-    res.status(403).json({ error: 'cross-site request refused' });
+    res.status(403).json(apiError('cross_site_refused', 'cross-site request refused'));
     return false;
   }
   req.auth = {
@@ -293,7 +293,7 @@ export function createDaemonAuthMiddleware(opts: {
     // gets for reaching this address (first-run setup, public paths). A page
     // that rebound its own domain onto the loopback must not be that caller.
     if (!hostAllowed(req.headers.host, hostPolicy())) {
-      res.status(421).json({ error: 'misdirected request' });
+      res.status(421).json(apiError('misdirected_request', 'misdirected request'));
       return;
     }
     const raw = readCookie(
@@ -311,7 +311,7 @@ export function createDaemonAuthMiddleware(opts: {
         // from our own origin, or a page elsewhere drives the daemon with the
         // user's session (SECU-USERS U-10, defence in depth over SameSite).
         if (isCrossSiteMutation(req)) {
-          res.status(403).json({ error: 'cross-site request refused' });
+          res.status(403).json(apiError('cross_site_refused', 'cross-site request refused'));
           return;
         }
         req.auth = {

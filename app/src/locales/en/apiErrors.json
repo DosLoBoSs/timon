@@ -493,6 +493,11 @@
     "sound_too_large": "A sound is at most {max} KiB.",
     "sound_unreadable": "The sound could not be read.",
     "sound_empty": "Choose a sound file.",
-    "sound_format_unsupported": "This is not a known audio file: use WAV, MP3, OGG, FLAC, AAC/M4A or WebM."
+    "sound_format_unsupported": "This is not a known audio file: use WAV, MP3, OGG, FLAC, AAC/M4A or WebM.",
+    "misdirected_request": "This request reached the wrong address.",
+    "no_provider": "No AI provider can run on this machine yet. Install one, then finish the setup.",
+    "setup_failed": "The setup could not be saved: {detail}",
+    "onboarding_over": "Onboarding is over on this machine.",
+    "onboarding_action_failed": "This setup step failed: {detail}"
   }
 }

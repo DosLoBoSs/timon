@@ -493,6 +493,11 @@
     "sound_too_large": "Un son pèse au plus {max} Kio.",
     "sound_unreadable": "Le son n'a pas pu être lu.",
     "sound_empty": "Choisissez un fichier son.",
-    "sound_format_unsupported": "Ce n'est pas un fichier audio reconnu : utilisez WAV, MP3, OGG, FLAC, AAC/M4A ou WebM."
+    "sound_format_unsupported": "Ce n'est pas un fichier audio reconnu : utilisez WAV, MP3, OGG, FLAC, AAC/M4A ou WebM.",
+    "misdirected_request": "Cette requête est arrivée à la mauvaise adresse.",
+    "no_provider": "Aucun fournisseur d'IA ne peut tourner sur cette machine pour l'instant. Installez-en un, puis terminez le setup.",
+    "setup_failed": "Le setup n'a pas pu être enregistré : {detail}",
+    "onboarding_over": "L'onboarding est terminé sur cette machine.",
+    "onboarding_action_failed": "Cette étape du setup a échoué : {detail}"
   }
 }
