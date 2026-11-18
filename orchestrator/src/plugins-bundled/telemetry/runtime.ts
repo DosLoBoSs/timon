@@ -38,7 +38,7 @@ import { resolvePreference, type PreferenceSources, type TelemetryPreference } f
 import { loadTelemetryState, saveTelemetryState, type TelemetryState } from './state.js';
 import { TelemetryTransport, telemetryDestination } from './transport.js';
 import {
-  ACCOUNT_LIMIT_CODES, FEATURE_MILESTONES, apiAreaOf, causeOf, cpuClassOf, featureOf, installAgeOf, pageSectionOf,
+  FEATURE_MILESTONES, apiAreaOf, causeOf, cpuClassOf, featureOf, installAgeOf, pageSectionOf,
   ramClassOf, type Actor, type Milestone,
 } from './features.js';
 
@@ -337,9 +337,6 @@ export function startTelemetry(opts: TelemetryOptions = {}): TelemetryRuntime {
       }, 'daemon', context);
       const milestone = FEATURE_MILESTONES[feature];
       if (milestone && request.status < 400) reachMilestone(milestone);
-      if ((feature === 'account.create' || feature === 'account.invite') && ACCOUNT_LIMIT_CODES.includes(failureCode)) {
-        track('upgrade_action', { action: 'account_limit_reached', entry_point: 'users' }, 'daemon', context);
-      }
     }
     if (request.status >= 500) {
       track('operation_failed', {

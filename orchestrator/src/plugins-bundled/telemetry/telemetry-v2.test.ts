@@ -113,7 +113,7 @@ test('the v2 events are closed too', () => {
 
 /* ── Requests ───────────────────────────────────────────────────────────── */
 
-test('finished requests become features, failures and the account limit, with the account slot only', async () => {
+test('finished requests become features and failures, with the account slot only', async () => {
   const { rt, sent } = start();
   const app = express();
   app.use((req, _res, next) => {
@@ -145,13 +145,12 @@ test('finished requests become features, failures and the account limit, with th
   }
   const events = sent.filter((p) => p.name !== 'app_started' && p.name !== 'milestone_reached');
   assert.deepEqual(sent.filter((p) => p.name === 'milestone_reached').map((p) => p.properties.milestone), ['first_agent_created'], 'once, the first success only');
-  assert.deepEqual(events.map((p) => p.name), ['feature_used', 'feature_used', 'feature_used', 'upgrade_action', 'operation_failed']);
+  assert.deepEqual(events.map((p) => p.name), ['feature_used', 'feature_used', 'feature_used', 'operation_failed'], 'the account limit comes from the bus, not a route');
   assert.deepEqual(
     events.slice(0, 3).map((p) => [p.properties.feature, p.properties.actor, p.properties.result, p.properties.failure_code, p.properties.account_slot]),
     [['agent.create', 'person', 'success', 'none', 1], ['agent.create', 'agent', 'success', 'none', 1], ['account.create', 'person', 'failure', 'user_limit', 2]],
   );
-  assert.deepEqual(events[3]!.properties.action, 'account_limit_reached');
-  assert.deepEqual([events[4]!.properties.area, events[4]!.properties.feature, events[4]!.properties.cause_code], ['missions', 'other', 'server_error']);
+  assert.deepEqual([events[3]!.properties.area, events[3]!.properties.feature, events[3]!.properties.cause_code], ['missions', 'other', 'server_error']);
   assert.ok(!JSON.stringify(sent).includes(MARKER), 'no name, path or message reaches a payload');
   assert.ok(!JSON.stringify(sent).includes(owner.id), 'the account id never leaves, only its slot');
 });
@@ -592,6 +591,24 @@ test('a backend_fallback published on the bus reaches the destination as fallbac
     assert.equal(used[0]!.properties.from_backend, first);
     assert.equal(used[0]!.properties.to_backend, other);
     assert.ok(!JSON.stringify(sent).includes(MARKER));
+  } finally {
+    await rt.dispose();
+  }
+});
+
+test('the account provider refusing a new account reaches the destination as the account limit, with the slot only', async () => {
+  const { bus } = await import('../../bus.js');
+  const { rt, sent } = start();
+  try {
+    bus.publish({ kind: 'account_limit_reached', userId: second.id });
+    bus.publish({ kind: 'account_limit_reached', userId: null });
+    await rt.flushNow();
+    const limits = sent.filter((p) => p.name === 'upgrade_action');
+    assert.deepEqual(
+      limits.map((p) => [p.properties.action, p.properties.entry_point, p.properties.account_slot]),
+      [['account_limit_reached', 'users', 2], ['account_limit_reached', 'users', undefined]],
+    );
+    assert.ok(!JSON.stringify(sent).includes(second.id), 'the account id never leaves, only its slot');
   } finally {
     await rt.dispose();
   }
