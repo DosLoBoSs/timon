@@ -41,6 +41,7 @@ Whatever the `timon` command does in a terminal, a tool of the same name does fo
 | Manage the skills and MCP servers an agent can use | `skill_list`, `skill_get`, `skill_put`, `skill_rm`, `skill_attach`, `skill_detach`, `skill_attachment_list`, `skill_resolve`, `skill_reads`, `mcp_server_list`, `mcp_server_get`, `mcp_server_put`, `mcp_server_rm` |
 | Create or edit a project, list the workspaces and the project's roles | `project_create`, `project_update`, `workspace_list`, `project_list`, `project_roles`, `project_set_role` |
 | Read or change how a project's Kanban jobs land (local merge or pull request) and check which GitHub account gh signs in as | `project_integration_get`, `project_integration_set` |
+| Open the pull request of a job that lands through one, after Timon's checks ([Land a job through a pull request](pull-requests.md)) | `pr_open` |
 | Create the demo project (a small sample repository to try the agents on) | `project_demo_create` |
 | Read or record the onboarding profile you chose (developer, automation, beginner) | `onboarding_profile_get`, `onboarding_profile_set` |
 | Follow a mission and write to it: `mission_send` never stops the running turn, `mission_steer` redirects it now ([Writing while the agent works](missions.md#writing-while-the-agent-works)) | `mission_wait`, `mission_status`, `mission_send`, `mission_steer`, `mission_kill`, `stop_scope`, `mission_summarize`, `mission_fork`, `mission_permission_mode_get`, `mission_permission_mode_set` |
