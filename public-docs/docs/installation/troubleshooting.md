@@ -16,6 +16,7 @@ sidebar_position: 10
 | Feature or model missing | Host capabilities, enabled plugins and backend catalogue | Inspect `timon doctor`, `timon module list` and `timon backends` |
 | Scheduled task did not run overnight | Whether the computer slept, and `timon service status` | Turn off automatic sleep; see [Running in the background](background.md) |
 | Timon takes a minute to open on a work PC, or shows "Checking the installation…" | Antivirus scanning every file Timon reads | Exclude the Timon folders from real-time scanning; see [Slow start behind an antivirus](#slow-start-behind-an-antivirus) |
+| Windows installer ends with code -1073741819 | Whether it was started from a PowerShell window opened with **Run as administrator** | Run the command again in a normal PowerShell window, or open the installer from File Explorer; see [The installer ends with code -1073741819](#windows-the-installer-ends-with-code--1073741819) |
 | Windows installer says Timon cannot be closed | Whether you allowed the permission prompt when the installer opened | Choose **Quit and stop the background service** in the tray icon menu before installing; or, in an administrator PowerShell, run `schtasks /End /TN TimonOrchestrator; Stop-Process -Name Timon -Force`, then choose Retry |
 | Windows installer says Timon is still running in the background or that its check did not run, or Timon says the running daemon is not the installed version | Whether you allowed the permission prompt | Choose **Retry** and allow the prompt, or restart the computer and install again; see [Updating while the background service runs](#windows-updating-while-the-background-service-runs) |
 | Quota state unavailable | Whether the backend has a working usage probe | Treat unknown as unknown, not as zero usage |
@@ -58,6 +59,20 @@ account): act on your own, or ask the operator. `explicitly_denied` means your
 role denies that permission on purpose (agent-to-agent messages, for one): only
 an administrator can lift it. A message between two agents of different teams
 is refused with `out_of_scope` and names both agents.
+
+## Windows: the installer ends with code -1073741819
+
+`-1073741819` is `0xC0000005` written as a signed number. A tester's Timon installer returned it when it started from an administrator session, and nothing was installed; the same command in a normal PowerShell window worked. (TIM-0160)
+
+The one-line install avoids it: from an administrator window, File Explorer opens the installer, as a double-click would. The installer starts from the administrator window itself only with `-Silent`, with User Account Control turned off, or when the window was elevated with another account's password. If you still see this code:
+
+- run the command again in a normal PowerShell window, opened from the Start menu without **Run as administrator**:
+
+  ```powershell
+  irm https://timon-ai.com/install.ps1 | iex
+  ```
+
+- or add `-DownloadOnly`, which downloads and checks the installer and prints its path, then open that file from File Explorer.
 
 ## Windows blocks the installer (Smart App Control)
 
