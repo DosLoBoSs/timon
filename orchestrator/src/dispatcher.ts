@@ -1741,6 +1741,7 @@ function autoCloseTask(task: TaskRow, missionId: string): 'DONE' | 'BLOCKED' {
   if (refusal) {
     dbApi.updateTaskStatus(task.id, 'BLOCKED', {
       blockedReason: `The mission ended without closing its task, and the automatic close was refused. ${refusal}`,
+      blockedReasonCode: daemonMessage('task_auto_close_refused', { refusal }),
       // Kept as the agent left it: updateTaskStatus writes the column whole.
       doneComment: task.done_comment,
     });

@@ -3,6 +3,7 @@
  * preferences, and the operator's account recovery. Administering accounts
  * belongs to the plugin that serves them (`ctx.accountProvider`).
  */
+import { daemonMessage, type DaemonMessage } from '../../daemon-message.js';
 import { writeAppearance } from '../../appearance.js';
 import type { Router, Request, RequestHandler, Response } from 'express';
 import { z } from 'zod';
@@ -40,6 +41,7 @@ import {
   forbidden,
   requireAuth,
   requestHasPermission,
+  requireSuperadmin,
   toPublicUser,
   viewerFromRequest,
   type PublicUser,
@@ -146,10 +148,10 @@ function parseAvatarUrl(raw: unknown): string | null | undefined {
  * to a person; a single unowned notification would be an announcement to the
  * whole instance, which is not what an identity move deserves.
  */
-function notifySuperadmins(title: string, body: string): void {
+function notifySuperadmins(title: string, body: string, message: DaemonMessage): void {
   for (const admin of dbApi.listUsers()) {
     if (!admin.is_superadmin || admin.status !== 'active') continue;
-    createNotification({ type: 'alert', title, body, ownerUserId: admin.id });
+    createNotification({ type: 'alert', title, body, ownerUserId: admin.id, message });
   }
 }
 
@@ -862,6 +864,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
     notifySuperadmins(
       'Email change requested',
       `${user.name} (${user.email}) asked to move their login to ${email}. Pending confirmation.`,
+      daemonMessage('email_change_requested', { name: user.name, email: user.email, newEmail: email }),
     );
     res.status(201).json({ token, email, expires_at: expiresAt });
   });
@@ -919,6 +922,7 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
     notifySuperadmins(
       'Email change confirmed',
       `${user.name} moved their login from ${previous} to ${pending.new_email}.`,
+      daemonMessage('email_change_confirmed', { name: user.name, previous, newEmail: pending.new_email }),
     );
     res.json({ ok: true, email: pending.new_email });
   });
@@ -967,6 +971,18 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
   // provider. Administering accounts belongs to that provider plugin, not to the core.
   app.get('/api/users', operatorOnly, (_req, res) => {
     res.json({ users: dbApi.listUsers().map(toPublicUser) });
+  });
+
+  /**
+   * Who a superadmin can name on a shared subscription account (owner, people it
+   * is shared with): a signed-in superadmin, or the daemon token. Id and display
+   * name only, never an e-mail, a status or a date: the core owns the accounts
+   * table whatever plugin serves the accounts, and a Free install lists its one
+   * account without needing that plugin.
+   */
+  app.get('/api/users/directory', (req, res) => {
+    if (!requireSuperadmin(req, res)) return;
+    res.json({ users: dbApi.listUsers().map((user) => ({ id: user.id, name: user.name })) });
   });
 
   app.post('/api/users/:id/reset-password', operatorOnly, async (req, res) => {

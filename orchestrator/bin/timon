@@ -907,6 +907,13 @@ Projects (agent roles per project):
   timon project roles <slug>                   shows the role→agent mapping
   timon project set-role <slug> <role> <agent> [--model SLUG] [--permission-mode MODE]
                                              sets the agent + model/permission for a role
+  timon project get-integration <slug> [--check]
+                                             how the project's Kanban jobs land (local merge or pull request);
+                                             --check asks gh which account the configured folder signs in as
+  timon project set-integration <slug> [--mode local|pr] [--remote NAME] [--target BRANCH] [--forge github]
+                       [--account LOGIN] [--gh-config-dir ABSOLUTE_PATH] [--branch-prefix PREFIX/] | --reset
+                                             changes what you pass (needs projects:manage); an empty
+                                             --account or --gh-config-dir clears it
   timon project create <slug> [--name TEXT] [--cwd PATH] [--workspace NAME] [--create-workspace]
                        [--color #RRGGBB] [--icon TEXT] [--speech TEXT] [--kind TEXT] [--status TEXT]
                                              registers a project; the cwd must already exist on the host
@@ -2562,6 +2569,51 @@ async function cmdProjectSetRole(argv) {
   process.stdout.write(JSON.stringify(j.roles, null, 2) + '\n');
 }
 
+/** Flag → field of `PUT /api/projects/:slug/integration`. An empty value
+ *  clears the two fields that may be null. */
+const INTEGRATION_FLAGS = [
+  ['mode', 'mode'], ['remote', 'remote'], ['target', 'target'], ['forge', 'forge'],
+  ['account', 'account'], ['gh-config-dir', 'gh_config_dir'], ['branch-prefix', 'branch_prefix'],
+];
+const INTEGRATION_NULLABLE = new Set(['account', 'gh_config_dir']);
+const INTEGRATION_USAGE =
+  'usage: timon project set-integration <slug> [--mode local|pr] [--remote NAME] [--target BRANCH]\n' +
+  '       [--forge github] [--account LOGIN] [--gh-config-dir ABSOLUTE_PATH] [--branch-prefix PREFIX/]\n' +
+  '       timon project set-integration <slug> --reset   (back to the local merge)\n';
+
+async function cmdProjectGetIntegration(argv) {
+  const check = argv.includes('--check');
+  const rest = argv.filter((a) => a !== '--check');
+  const slug = rest[0];
+  if (!slug || rest.length > 1) {
+    process.stderr.write('usage: timon project get-integration <slug> [--check]\n');
+    process.exit(64);
+  }
+  const path = `/api/projects/${encodeURIComponent(slug)}/integration`;
+  const j = await http('GET', path);
+  const out = check ? { ...j, check: await http('POST', `${path}/check`, {}) } : j;
+  process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+}
+
+async function cmdProjectSetIntegration(argv) {
+  const reset = argv.includes('--reset');
+  const rest = argv.filter((a) => a !== '--reset');
+  const body = {};
+  for (const [flag, field] of INTEGRATION_FLAGS) {
+    const value = takeFlag(rest, flag);
+    if (value === undefined) continue;
+    body[field] = value === '' && INTEGRATION_NULLABLE.has(field) ? null : value;
+  }
+  const slug = rest[0];
+  if (!slug || rest.length > 1 || (reset ? Object.keys(body).length > 0 : Object.keys(body).length === 0)) {
+    process.stderr.write(INTEGRATION_USAGE);
+    process.exit(64);
+  }
+  const path = `/api/projects/${encodeURIComponent(slug)}/integration`;
+  const j = reset ? await http('DELETE', path) : await http('PUT', path, body);
+  process.stdout.write(JSON.stringify(j, null, 2) + '\n');
+}
+
 const PROJECT_META_FLAGS = ['name', 'cwd', 'workspace', 'color', 'icon', 'speech', 'kind', 'status'];
 
 /** `project create|update`: same body as the MCP tools. An unknown workspace is refused unless --create-workspace. */
@@ -2610,6 +2662,8 @@ async function cmdProject(argv) {
     case 'list':      return cmdProjectList();
     case 'roles':     return cmdProjectRoles(rest);
     case 'set-role':  return cmdProjectSetRole(rest);
+    case 'get-integration': return cmdProjectGetIntegration(rest);
+    case 'set-integration': return cmdProjectSetIntegration(rest);
     case 'create':
     case 'update':    return cmdProjectWrite(sub, rest);
     case 'demo': {
@@ -2618,7 +2672,7 @@ async function cmdProject(argv) {
       return;
     }
     default:
-      process.stderr.write('usage: timon project <list|roles|set-role|create|update|demo> …\n');
+      process.stderr.write('usage: timon project <list|roles|set-role|get-integration|set-integration|create|update|demo> …\n');
       process.exit(64);
   }
 }
@@ -4249,7 +4303,11 @@ async function cmdService(argv) {
       break;
     }
     case 'stop': {
-      res = mod.stopService(opts);
+      // Windows has no stop signal to send: the daemon is asked first, then
+      // the stop's kills end what did not leave (host/cooperative-stop).
+      const { cooperativeStopOf, withCooperativeStop } = await loadDist('host/cooperative-stop');
+      const { daemonOrigin } = await loadDist('host/diagnostic-report');
+      res = await withCooperativeStop(opts, mod.stopService, cooperativeStopOf(daemonOrigin(cfg), opts.timonHome));
       if (res.ok && !dryRun) {
         const { endMissionsOfStoppedDaemon } = await loadDist('host/mission-processes');
         const ended = await endMissionsOfStoppedDaemon(opts.timonHome, host);

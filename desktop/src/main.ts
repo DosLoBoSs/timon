@@ -44,6 +44,7 @@ import { isTimon, probeHealth, waitForHealth, type HealthResult } from './health
 import {
   daemonEntryOf,
   daemonInstallDirOf,
+  stopRequestFor,
   superviseEmbeddedDaemon,
   terminateProcessTree,
   endEmbeddedLeftovers,
@@ -1117,6 +1118,9 @@ async function startEmbeddedDaemon(cfg: DesktopConfig, uiUrl: string): Promise<v
     ...daemonOpts,
     spawn,
     terminate: terminateProcessTree,
+    // Windows: the daemon runs its own stop first, so the next start reads
+    // this run as clean; `terminate` only ends one that did not leave.
+    ...stopRequestFor(process.platform, embeddedDaemonOrigin, cfg.home),
     // What the signal or `taskkill /T` on the daemon never reached: mission
     // CLIs it recorded (every OS), and on Windows the terminal host and a
     // mission's browser helper. Left behind, they blocked the next update.

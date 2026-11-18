@@ -58,6 +58,7 @@ import { runVerificationChain } from './verification-loop.js';
 import { maybeCreateDocTask } from './doc-task.js';
 import { evaluateGroupCompleteForTask } from './wake.js';
 import { notifyUser } from './notify.js';
+import { daemonMessage } from './daemon-message.js';
 import { applyTodoClosure } from './todo-closure.js';
 import { isMirrorTask } from './task-mirror.js';
 
@@ -134,7 +135,12 @@ export async function runTaskChain(taskId: string): Promise<void> {
       `cannot be resolved, error in a step of the chain) — the \`[task-chain]\` logs of this task ` +
       `carry the cause.\n\n` +
       `To replay: dispatching the task again resets the counter.`,
-      { taskId },
+      {
+        taskId,
+        message: daemonMessage('chain_abandoned', {
+          title: task.title, taskId, type: task.type, attempts: task.chain_attempts,
+        }),
+      },
     );
     return;
   }

@@ -3,6 +3,7 @@
  *
  * Bodies extracted verbatim from `plugins-bundled/notifications/routes.ts`.
  */
+import { daemonMessage } from '../../daemon-message.js';
 import type { Router } from 'express';
 import { dbApi } from '../../db.js';
 import { createNotification } from '../../notifications.js';
@@ -68,6 +69,7 @@ export function registerRoutes(app: Router): void {
       title: 'Timon test push',
       body: 'If you can read this on your phone, the channel works.',
       anchor: '/notifications',
+      message: daemonMessage('push_test'),
     });
     if (!n) { res.status(503).json({ error: 'notifications module disabled' }); return; }
     res.json({ ok: true, id: n.id, devices: dbApi.listPushSubscriptions().length });

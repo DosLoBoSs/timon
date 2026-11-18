@@ -97,7 +97,7 @@ import { cooldownReason, redirectIfStillDry } from './backend-fallback.js';
 import { agentDir } from './paths.js';
 import { canonicalAgentName } from './agent-config.js';
 import { BackendAccountError } from './backends/account-launch.js';
-import { daemonMessage } from './daemon-message.js';
+import { daemonMessage, decodeDaemonMessage } from './daemon-message.js';
 import { notifyUser } from './notify.js';
 import { sandboxCascadeNotice } from './sandbox-cascade.js';
 import { mainAgentName, mainAgentNameOrSeed } from './main-agent.js';
@@ -1334,6 +1334,8 @@ export function handleTaskDone(taskId: string): void {
       done_comment: task.done_comment,
       summary: task.done_summary,
       blocked_reason: task.blocked_reason,
+      // Its code, for the screen to read the reason in the reader's language.
+      blocked_reason_code: decodeDaemonMessage(task.blocked_reason_code),
       group_id: task.group_id,
       ...todoReturnFields(task),
     }),

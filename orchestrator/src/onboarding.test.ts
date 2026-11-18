@@ -33,20 +33,20 @@ const APT = { platform: 'linux' as NodeJS.Platform, packageManager: 'apt' as con
 const MAC = { platform: 'darwin' as NodeJS.Platform, packageManager: null };
 const ok = () => Promise.resolve({ code: 0, stdout: '', stderr: '' });
 
-test('un nom hors de la liste fermée est refusé avant tout process', async () => {
+test('a name outside the closed list is refused before any process', async () => {
   let called = false;
   const exec = () => { called = true; return ok(); };
   await assert.rejects(
     () => runInstallBinary('curl; rm -rf ~', APT, exec),
     (e: Error) => e instanceof OnboardingError,
   );
-  // Et surtout : rien n'a été exécuté.
+  // And above all: nothing was run.
   assert.equal(called, false);
 });
 
-test("aucune chaîne du client n'atteint un argv", () => {
-  // Le corps ne porte qu'un nom d'action et un nom de binaire ; il n'y a
-  // aucune place pour une commande.
+test('no string from the client reaches an argv', () => {
+  // The body only carries an action name and a binary name; there is
+  // no room for a command.
   assert.deepEqual(parseOnboardingAction({ action: 'install-service' }), { action: 'install-service' });
   assert.deepEqual(
     parseOnboardingAction({ action: 'install-binary', name: 'claude' }),
@@ -59,11 +59,11 @@ test("aucune chaîne du client n'atteint un argv", () => {
   assert.deepEqual(parseOnboardingAction({ action: 'install-service', mode: 'session' }), { action: 'install-service', mode: 'session' });
   assert.throws(() => parseOnboardingAction({ action: 'install-service', mode: 'enable-linger root' }));
 
-  // L'argv vient de la table, jamais de la requête.
+  // The argv comes from the table, never from the request.
   assert.deepEqual(installPlanFor('claude', APT)?.argv, ['npm', 'install', '-g', '@anthropic-ai/claude-code']);
 });
 
-test('un paquet npm est installé, et son argv ne passe par aucun shell', async () => {
+test('an npm package is installed, and its argv goes through no shell', async () => {
   const calls: Array<[string, string[]]> = [];
   const res = await runInstallBinary('claude', APT, (c, a) => { calls.push([c, a]); return ok(); });
   assert.equal(res.ok, true);
@@ -71,7 +71,7 @@ test('un paquet npm est installé, et son argv ne passe par aucun shell', async 
   assert.deepEqual(calls, [['npm', ['install', '-g', '@anthropic-ai/claude-code']]]);
 });
 
-test('Node est installé automatiquement dans le compte macOS, sans Homebrew', async () => {
+test('Node is installed automatically in the macOS account, without Homebrew', async () => {
   let genericExecCalled = false;
   let internalCalled = false;
   const res = await runInstallBinary(
@@ -86,7 +86,7 @@ test('Node est installé automatiquement dans le compte macOS, sans Homebrew', a
   assert.equal(res.command, null);
 });
 
-test("Codex utilise l'installeur autonome officiel sur macOS", async () => {
+test('Codex uses the official standalone installer on macOS', async () => {
   const calls: Array<[string, string[]]> = [];
   const res = await runInstallBinary('codex', MAC, (c, a) => { calls.push([c, a]); return ok(); });
   assert.equal(res.ok, true);
@@ -97,10 +97,10 @@ test("Codex utilise l'installeur autonome officiel sur macOS", async () => {
 });
 
 /**
- * La décision du mainteneur : ce qu'on ne peut pas exécuter, on l'AFFICHE. Un `sudo`
- * lancé par un daemon attendrait un mot de passe que personne ne voit.
+ * The maintainer's decision: what cannot be run is SHOWN. A `sudo`
+ * launched by a daemon would wait for a password nobody sees.
  */
-test('une commande privilégiée est montrée, jamais exécutée', async () => {
+test('a privileged command is shown, never run', async () => {
   let called = false;
   const res = await runInstallBinary('git', APT, () => { called = true; return ok(); });
   assert.equal(called, false);
@@ -109,28 +109,28 @@ test('une commande privilégiée est montrée, jamais exécutée', async () => {
   assert.match(res.reason ?? '', /administrator rights/);
 });
 
-test('une machine sans commande connue le dit, sans inventer', async () => {
+test('a machine without a known command says so, without inventing', async () => {
   const res = await runInstallBinary('git', { platform: 'linux', packageManager: null }, () => ok());
   assert.equal(res.ok, false);
   assert.equal(res.command, null);
   assert.match(res.reason ?? '', /no install command known/);
 });
 
-test('un outil absent est un motif à afficher, pas une exception', async () => {
-  const res = await runInstallBinary('claude', APT, () => Promise.reject(new Error('binary « npm » not found in PATH')));
+test('a missing tool is a reason to show, not an exception', async () => {
+  const res = await runInstallBinary('claude', APT, () => Promise.reject(new Error('binary « npm » not found in PATH'))); // french-ok: sample error text with French quotes
   assert.equal(res.ok, false);
   assert.equal(res.command, 'npm install -g @anthropic-ai/claude-code');
   assert.match(res.reason ?? '', /npm/);
 });
 
-test("un échec d'installation remonte le motif et la commande", async () => {
+test('an install failure reports the reason and the command', async () => {
   const res = await runInstallBinary('claude', APT, () => Promise.resolve({ code: 1, stdout: '', stderr: 'EACCES: permission denied' }));
   assert.equal(res.ok, false);
   assert.equal(res.command, 'npm install -g @anthropic-ai/claude-code');
   assert.match(res.reason ?? '', /EACCES/);
 });
 
-test('le service installé rend ok, sans commande de repli', () => {
+test('the installed service returns ok, without a fallback command', () => {
   const res = runInstallService({} as never, () => ({ ok: true, lines: ['service installed'] }));
   assert.equal(res.ok, true);
   assert.equal(res.command, null);
@@ -138,11 +138,11 @@ test('le service installé rend ok, sans commande de repli', () => {
 });
 
 /**
- * Le cas nommé dans le brief : `loginctl enable-linger` derrière polkit. Le
- * refus de l'outil est ce qu'on affiche — il en dit plus que toute phrase
- * qu'on écrirait autour.
+ * The case named in the brief: `loginctl enable-linger` behind polkit. The
+ * refusal of the tool is what is shown: it says more than any sentence
+ * one would write around it.
  */
-test('un service refusé rend le motif sans supposer le CLI installé', () => {
+test('a refused service returns the reason without assuming the CLI installed', () => {
   const res = runInstallService({} as never, () => ({
     ok: false,
     lines: ['loginctl enable-linger rom → 1', 'systemctl refused: Interactive authentication required.'],
@@ -152,7 +152,7 @@ test('un service refusé rend le motif sans supposer le CLI installé', () => {
   assert.match(res.reason ?? '', /Interactive authentication required/);
 });
 
-test('un installeur qui lève expose le motif sans commande inventée', () => {
+test('an installer that throws exposes the reason without a made-up command', () => {
   const res = runInstallService({} as never, () => { throw new Error('systemd template not found'); });
   assert.equal(res.ok, false);
   assert.equal(res.command, null);
@@ -160,29 +160,29 @@ test('un installeur qui lève expose le motif sans commande inventée', () => {
 });
 
 /**
- * `host.exec` est `spawnSync` : un `npm install -g` derrière lui gèlerait la
- * boucle d'événements du daemon — HTTP, SSE, agents — le temps de
- * l'installation. Le chemin doit rester asynchrone de bout en bout.
+ * `host.exec` is `spawnSync`: an `npm install -g` behind it would freeze the
+ * event loop of the daemon (HTTP, SSE, agents) for the length of the
+ * install. The path must stay asynchronous end to end.
  */
-test("l'installation d'un prérequis ne gèle pas la boucle d'événements", async () => {
+test('installing a prerequisite does not freeze the event loop', async () => {
   let ticked = false;
   setImmediate(() => { ticked = true; });
   const pending = runInstallBinary('claude', APT, () => new Promise((resolve) => {
     setTimeout(() => resolve({ code: 0, stdout: '', stderr: '' }), 20);
   }));
-  // Si l'appel était synchrone, rien d'autre n'aurait pu s'exécuter d'ici là.
+  // If the call were synchronous, nothing else could have run by then.
   await new Promise((r) => setTimeout(r, 5));
-  assert.equal(ticked, true, 'la boucle a continué de tourner pendant l\'installation');
+  assert.equal(ticked, true, 'the loop kept turning during the install');
   assert.equal((await pending).ok, true);
 });
 
 /**
- * `check-path` (étape 5.9.4) : un `stat`, rien d'autre. Pas de listage, pas de
- * création, aucune commande. Il existe pour que l'utilisateur apprenne MAINTENANT
- * qu'un chemin est faux, et non trois semaines plus tard quand un agent ne
- * démarrera pas.
+ * `check-path` (step 5.9.4): a `stat`, nothing else. No listing, no
+ * creation, no command. It exists so that the user learns NOW
+ * that a path is wrong, and not three weeks later when an agent does not
+ * start.
  */
-test('un chemin existant est confirmé, un chemin faux est nommé', async () => {
+test('an existing path is confirmed, a wrong path is named', async () => {
   const { mkdtempSync, writeFileSync } = await import('node:fs');
   const dir = mkdtempSync(join(tmpdir(), 'timon-checkpath-'));
   const okRes = checkPath(dir);
@@ -193,7 +193,7 @@ test('un chemin existant est confirmé, un chemin faux est nommé', async () => 
   assert.equal(missing.ok, false);
   assert.match(missing.reason ?? '', /does not exist/);
 
-  // Un fichier n'est pas un dossier de projets.
+  // A file is not a projects folder.
   const file = join(dir, 'a-file');
   writeFileSync(file, 'x');
   const notDir = checkPath(file);
@@ -201,7 +201,7 @@ test('un chemin existant est confirmé, un chemin faux est nommé', async () => 
   assert.match(notDir.reason ?? '', /not a directory/);
 });
 
-test('check-path classe l\'errno, le cite dans le message et le journalise (#198)', () => {
+test('check-path classifies the errno, quotes it in the message and logs it (#198)', () => {
   const failing = (code?: string) => () => { throw Object.assign(new Error(code ?? 'boom'), code ? { code } : {}); };
   const logged: string[] = [];
   const original = console.warn;
@@ -227,7 +227,7 @@ test('check-path classe l\'errno, le cite dans le message et le journalise (#198
   }
 });
 
-test('check-path : les autorisations de macOS ne sont qu\'une piste, jamais une cause affirmée (#198)', () => {
+test('check-path: the macOS permissions are only a lead, never an asserted cause (#198)', () => {
   const denied = () => { throw Object.assign(new Error('denied'), { code: 'EPERM' }); };
   const original = console.warn;
   console.warn = () => {};
@@ -245,13 +245,13 @@ test('check-path : les autorisations de macOS ne sont qu\'une piste, jamais une 
   }
 });
 
-test('un chemin à espace et à accent, composé ou décomposé (NFC/NFD), est reconnu (#198)', async () => {
+test('a path with a space and an accent, composed or decomposed (NFC/NFD), is recognised (#198)', async () => {
   const { mkdirSync, rmSync } = await import('node:fs');
   const dir = mkdtempSync(join(tmpdir(), 'timon-198-'));
   try {
     // One parent per variant: a volume that compares names Unicode-normalised
     // would otherwise raise EEXIST on the second form before checkPath runs.
-    for (const [index, name] of ['timon projects', 'projets é'.normalize('NFC'), 'projets é'.normalize('NFD')].entries()) {
+    for (const [index, name] of ['timon projects', 'projets é'.normalize('NFC'), 'projets é'.normalize('NFD')].entries()) { // french-ok: an accented folder name
       const parent = join(dir, `case-${index}`);
       mkdirSync(parent);
       const created = join(parent, name);
@@ -267,21 +267,21 @@ test('un chemin à espace et à accent, composé ou décomposé (NFC/NFD), est r
   }
 });
 
-test('un chemin relatif ou vide est refusé, jamais deviné', async () => {
+test('a relative or empty path is refused, never guessed', async () => {
   assert.equal(checkPath('').ok, false);
   const relative = checkPath('projets');
   assert.equal(relative.ok, false);
   assert.match(relative.reason ?? '', /absolute/);
 });
 
-test('le ~ est étendu comme le daemon le fera', async () => {
+test('the ~ is expanded the way the daemon will', async () => {
   const { homedir } = await import('node:os');
   const res = checkPath('~');
   assert.equal(res.ok, true);
   assert.equal(res.lines[0], homedir());
 });
 
-test("check-path n'accepte qu'une chaîne, et reste une action nommée", () => {
+test('check-path only accepts a string, and stays a named action', () => {
   assert.deepEqual(parseOnboardingAction({ action: 'check-path', path: '/tmp' }), {
     action: 'check-path', path: '/tmp',
   });
@@ -367,7 +367,7 @@ test('Windows npm failures and missing output never record a successful installa
 // Guard for desktop/src/upgrade.ts: its migration skips Windows because the
 // logon task runs the installation directory. If Windows ever starts running a
 // staged copy, this test must fail until the migration covers it too.
-test('windows packagé : le service lance le dossier d\'installation, jamais une copie sous desktop-runtime/releases', () => {
+test('packaged windows: the service launches the install folder, never a copy under desktop-runtime/releases', () => {
   const installDir = 'C:\\Program Files\\Timon\\resources\\orchestrator';
   const executable = 'C:\\Program Files\\Timon\\Timon.exe';
   const base = {

@@ -82,7 +82,7 @@ An instance account has **no owner**: it is for the missions nobody launched fro
 
 An account belongs to its owner. An administrator can let other users use it without handing over the sign-in.
 
-On the provider's page (**Settings → AI models → Providers**, then the provider, **Connection** section), choose **Assign** on the account's row, tick the users who may use it, and **Save**. The owner is not offered: they use it anyway. The row then shows **Assigned to** and their names. Only administrators see the **Assign** button and that line.
+On the provider's page (**Settings → AI models → Providers**, then the provider, **Connection** section), choose **Assign** on the account's row, tick the users who may use it (every account of the installation, listed by its display name), and **Save**. The owner is not offered: they use it anyway. The row then shows **Assigned to** and their names. Only administrators see the **Assign** button and that line.
 
 From a terminal on the machine that runs Timon:
 

@@ -56,7 +56,7 @@ test('the shipped text holds nothing of the machine it was written on', () => {
   freshSeed();
   for (const id of IDS) {
     const content = getSkill(id)!.content;
-    for (const leak of [/\bRom\b/, /\/home\//, /~\/\.timon/, /\.timon-dev/, /pkos/i, /riderfx/, /mail-sentinel/, /adhero/, /[À-ÿ]/]) {
+    for (const leak of [/\bRom\b/, /\/home\//, /~\/\.timon/, /\.timon-dev/, /pkos/i, /riderfx/, /mail-sentinel/, /adhero/, /[À-ÿ]/]) { // french-ok: the letters that betray French
       assert.doesNotMatch(content, leak, `${id} contains ${leak}`);
     }
   }

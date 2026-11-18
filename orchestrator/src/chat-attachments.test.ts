@@ -87,7 +87,7 @@ test('the composed turn re-concatenates into its own text, sections included', (
 
 test('a long paste travels inside the message, only its presentation folds', async () => {
   const { pastedParts, MAX_PASTED_CHARS } = await import('./chat-attachments.js');
-  const turn = composeChatTurn({ expanded: 'Regarde ça' }, [], [
+  const turn = composeChatTurn({ expanded: 'Regarde ça' }, [], [ // french-ok: free-text sample data
     { name: 'Pasted', text: 'ligne\n'.repeat(3) },
     { name: '../evil', text: 'x' },
     { text: '' },
@@ -97,7 +97,7 @@ test('a long paste travels inside the message, only its presentation folds', asy
   assert.equal(parts.map((p) => p.text).join(''), turn.text);
   // The text itself is in the sent message: an agent must never have to open
   // a file to read what the human believes they said.
-  assert.match(turn.text, /Regarde ça[\s\S]*<pasted name="Pasted">/);
+  assert.match(turn.text, /Regarde ça[\s\S]*<pasted name="Pasted">/); // french-ok: free-text sample data
   // Two pastes fold as ONE block: composePrompt merges adjacent instructions,
   // so a title naming only the first would lie about what is inside.
   const fold = parts.find((p) => p.label === 'pastedTexts')!;

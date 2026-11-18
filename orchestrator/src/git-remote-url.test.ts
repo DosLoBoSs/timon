@@ -29,7 +29,7 @@ test('accepts what people type for GitHub, GitLab, Gitea or their own server', (
 });
 
 test('accepts an absolute local path, spaces included', () => {
-  const path = process.platform === 'win32' ? 'C:\\Users\\Zoé Lefèvre\\repos\\app.git' : '/srv/git/my repo.git';
+  const path = process.platform === 'win32' ? 'C:\\Users\\Zoé Lefèvre\\repos\\app.git' : '/srv/git/my repo.git'; // french-ok: an accented user folder
   assert.deepEqual(checkRemoteUrl(path), { ok: true, url: path, kind: 'path' });
 });
 

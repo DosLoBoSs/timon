@@ -53,6 +53,8 @@ export type ReturnPayload = {
   /** Human summary the agent gave at close (`tasks.done_summary`). */
   summary?: string | null;
   blocked_reason?: string | null;
+  /** The code of `blocked_reason` when the daemon wrote it (`DaemonMessage`). */
+  blocked_reason_code?: { code: string; params: Record<string, string | number> } | null;
   merged_commit_sha?: string | null;
   group_id?: string | null;
   /** TO DO ideas this closure marks done (todo-closure.ts) — the pilot no
@@ -281,7 +283,10 @@ export function returnCardOf(p: ReturnPayload): ReturnCard {
   if (p.todo_closed?.length) card.todo_closed = p.todo_closed;
   if (p.todo_progress?.length) card.todo_progress = p.todo_progress;
   if (p.summary?.trim()) card.summary = p.summary.trim();
-  if (p.task_status === 'BLOCKED') card.blocked_reason = p.blocked_reason?.trim() || '';
+  if (p.task_status === 'BLOCKED') {
+    card.blocked_reason = p.blocked_reason?.trim() || '';
+    if (card.blocked_reason && p.blocked_reason_code) card.blocked_reason_code = p.blocked_reason_code;
+  }
   if (!p.task_id && p.final_text?.trim()) card.report = p.final_text.trim();
   return card;
 }

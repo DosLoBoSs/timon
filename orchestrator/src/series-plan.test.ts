@@ -1,8 +1,8 @@
 /**
- * Tests du contrat "plan de série" (series-plan.ts).
+ * Tests of the "series plan" contract (series-plan.ts).
  *
- * `node --test --import tsx src/series-plan.test.ts`. Seules les tables de
- * correspondance et les validateurs sont exercés — aucun agent, aucune task.
+ * `node --test --import tsx src/series-plan.test.ts`. Only the mapping tables
+ * and the validators are exercised: no agent, no task.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,10 +10,12 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// `series-plan.ts` lit la liste autoritative des pipelines et des types de task
-// dans `db.ts`, qui ouvre SQLite à l'import. TIMON_HOME doit donc pointer sur un
-// dossier jetable AVANT l'import dynamique, sinon la suite écrirait dans la
-// base de production.
+// french-ok-file: accented part titles and group names the commands must quote
+
+// `series-plan.ts` reads the authoritative list of pipelines and task types
+// in `db.ts`, which opens SQLite on import. TIMON_HOME must therefore point to a
+// throwaway folder BEFORE the dynamic import, otherwise the suite would write into the
+// production database.
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-series-plan-test-'));
 const {
   validateSeriesPlanForm,
@@ -30,11 +32,11 @@ type SeriesPlanAnswer = import('./series-plan.js').SeriesPlanAnswer;
 
 const form = { kind: 'series_plan', chantier: 'Refonte du formulaire', volets: [{ title: 'front' }] };
 
-test('formulaire valide accepté', () => {
+test('a valid form is accepted', () => {
   assert.equal(validateSeriesPlanForm(form), null);
 });
 
-test('formulaire : défauts nommés', () => {
+test('form: named defaults', () => {
   assert.match(String(validateSeriesPlanForm({ ...form, kind: 'autre' })), /kind/);
   assert.match(String(validateSeriesPlanForm({ ...form, chantier: '  ' })), /chantier/);
   assert.match(String(validateSeriesPlanForm({ ...form, volets: [] })), /empty/);
@@ -43,34 +45,34 @@ test('formulaire : défauts nommés', () => {
   assert.match(String(validateSeriesPlanForm(trop)), /maximum 12/);
 });
 
-test('réponse : rôle hors du mode refusé', () => {
-  // Un reviewer réglé sur un pipeline sans review = un réglage mort, jamais
-  // appliqué. Le refuser vaut mieux que le laisser croire qu'il compte.
+test('answer: a role outside the mode is refused', () => {
+  // A reviewer set on a pipeline without review = a dead setting, never
+  // applied. Refusing it is better than letting one believe it counts.
   const answer = { mode: 'kanban-code-self', roles: { review: { fallbackBackend: 'codex' } } };
   assert.match(String(validateSeriesPlanAnswer(answer)), /is outside mode/);
 });
 
-test('réponse : repli à moitié renseigné refusé', () => {
+test('answer: a half-filled fallback is refused', () => {
   const answer = { mode: 'kanban-full', roles: { code: { fallbackModel: 'gpt-5.6-sol' } } };
   assert.match(String(validateSeriesPlanAnswer(answer)), /fallbackBackend/);
 });
 
-test('réponse : mode inconnu refusé', () => {
+test('answer: an unknown mode is refused', () => {
   assert.match(String(validateSeriesPlanAnswer({ mode: 'kanban-turbo', roles: {} })), /unknown mode/);
 });
 
-test('réponse minimale acceptée (tout hérite)', () => {
+test('minimal answer accepted (everything inherits)', () => {
   assert.equal(validateSeriesPlanAnswer({ mode: 'sequential-here', roles: {} }), null);
 });
 
-test('la mission neuve pose son repli sur le scope orchestrator', () => {
+test('the new mission sets its fallback on the orchestrator scope', () => {
   assert.equal(fallbackScopeForRole('mission'), 'orchestrator');
   assert.equal(fallbackScopeForRole('orchestrator'), 'orchestrator');
   assert.equal(fallbackScopeForRole('code'), 'code');
   assert.equal(fallbackScopeForRole('doc'), 'doc');
 });
 
-test('commandes : replis puis tasks, une par volet', () => {
+test('commands: fallbacks then tasks, one per part', () => {
   const answer: SeriesPlanAnswer = {
     mode: 'kanban-full',
     roles: {
@@ -90,7 +92,7 @@ test('commandes : replis puis tasks, une par volet', () => {
   assert.ok(cmds.indexOf('timon series role set --scope code --backend claude --model opus') < cmds.indexOf(tasks[0]!));
 });
 
-test('commandes : les choix review/merge/doc sont des overrides de série posés avant les tasks', () => {
+test('commands: the review/merge/doc choices are series overrides set before the tasks', () => {
   const rolesFile = join(process.env.TIMON_HOME!, 'projects', 'acme', 'roles.json');
   mkdirSync(join(process.env.TIMON_HOME!, 'projects', 'acme'), { recursive: true });
   const rolesBefore = JSON.stringify({ review: { agent: 'acme.reviewer', backend: 'claude', model: 'sonnet' } });
@@ -120,36 +122,36 @@ test('commandes : les choix review/merge/doc sont des overrides de série posés
   assert.equal(readFileSync(rolesFile, 'utf8'), rolesBefore);
 });
 
-test('commandes : seul un rôle réglé produit un override de série', () => {
+test('commands: only a set role produces a series override', () => {
   const cmds = seriesPlanCommands({ mode: 'kanban-code-self', roles: { code: { model: 'opus' } } }, [{ title: 'a' }]);
   assert.deepEqual(cmds.filter((c) => c.includes('series role')), ['timon series role set --scope code --model opus']);
 });
 
-test('commandes : le merge groupé ajoute sa task de consolidation', () => {
+test('commands: the grouped merge adds its consolidation task', () => {
   const cmds = seriesPlanCommands({ mode: 'kanban-code-group', roles: {} }, [{ title: 'a' }]);
   assert.equal(cmds.filter((c) => c.includes('--type merge')).length, 1);
   assert.ok(cmds.every((c) => c.includes('--group-id')));
 });
 
-test('commandes : un mode séquentiel ne crée aucune task', () => {
+test('commands: a sequential mode creates no task', () => {
   assert.deepEqual(seriesPlanCommands({ mode: 'sequential-here', roles: {} }, [{ title: 'a' }]), []);
 });
 
-test('un titre de volet à quote ne casse pas la commande', () => {
+test('a part title with a quote does not break the command', () => {
   const cmds = seriesPlanCommands({ mode: 'kanban-full', roles: {} }, [{ title: "l'index" }]);
   assert.ok(cmds[0].includes(`'l'\\''index'`));
 });
 
-test('chaque mode déclare ses rôles et un pipeline existant', () => {
+test('each mode declares its roles and an existing pipeline', () => {
   for (const mode of SERIES_PLAN_MODES) {
-    assert.ok(ROLES_BY_MODE[mode].length > 0, `mode ${mode} sans rôle`);
+    assert.ok(ROLES_BY_MODE[mode].length > 0, `mode ${mode} without a role`);
   }
   assert.equal(seriesPlanPipelineDrift(), null);
 });
 
-/* ── Groupes de volets (TODO #433) ──────────────────────────────────────────
- * Un volet peut porter un `group` ; la réponse règle alors les modèles PAR
- * GROUPE, les réglages globaux par rôle restant le défaut.
+/* ── Groups of parts (TODO #433) ──────────────────────────────────────────
+ * A part can carry a `group`; the answer then sets the models PER
+ * GROUP, the global per-role settings staying the default.
  * ───────────────────────────────────────────────────────────────────────── */
 
 const grouped = [
@@ -159,13 +161,13 @@ const grouped = [
   { title: 'doc', description: 'sans groupe' },
 ];
 
-test('formulaire : groupes acceptés, noms distincts dans l\'ordre des volets', () => {
+test("form: groups accepted, distinct names in the order of the parts", () => {
   assert.equal(validateSeriesPlanForm({ ...form, volets: grouped }), null);
   assert.deepEqual(planGroupNames(grouped), ['simple', 'complexe']);
   assert.deepEqual(planGroupNames([{ title: 'a' }]), []);
 });
 
-test('formulaire : nom de groupe vide, non textuel ou trop long refusé', () => {
+test('form: an empty, non-text or too long group name is refused', () => {
   assert.match(String(validateSeriesPlanForm({ ...form, volets: [{ title: 'a', group: '  ' }] })), /group/);
   assert.match(String(validateSeriesPlanForm({ ...form, volets: [{ title: 'a', group: 3 }] })), /group/);
   const long = { ...form, volets: [{ title: 'a', group: 'g'.repeat(61) }] };
@@ -173,33 +175,33 @@ test('formulaire : nom de groupe vide, non textuel ou trop long refusé', () => 
   assert.equal(validateSeriesPlanForm({ ...form, volets: [{ title: 'a', group: 'g'.repeat(60) }] }), null);
 });
 
-test('formulaire : caractère de contrôle dans un nom de groupe refusé', () => {
-  // `seriesPlanCommands` met le nom entre apostrophes : un retour à la ligne y
-  // survivrait et couperait la commande que l'agent recopie.
+test('form: a control character in a group name is refused', () => {
+  // `seriesPlanCommands` puts the name between single quotes: a line break would
+  // survive there and cut the command the agent copies.
   for (const group of ['a\nb', 'a\rb', 'tab\there', 'nul\u0000', 'del\u007f', '\u001b[0m']) {
     assert.match(String(validateSeriesPlanForm({ ...form, volets: [{ title: 'a', group }] })), /control character/, JSON.stringify(group));
   }
-  // Les lettres accentuées et les espaces internes restent des noms valides.
+  // Accented letters and inner spaces stay valid names.
   assert.equal(validateSeriesPlanForm({ ...form, volets: [{ title: 'a', group: 'très simple' }] }), null);
 });
 
-test('formulaire : trop de groupes distincts refusé', () => {
+test('form: too many distinct groups refused', () => {
   const many = Array.from({ length: MAX_GROUPS + 1 }, (_, i) => ({ title: `v${i}`, group: `g${i}` }));
   assert.match(String(validateSeriesPlanForm({ ...form, volets: many })), new RegExp(`maximum ${MAX_GROUPS}`));
-  // Le même nom répété ne compte qu'une fois.
+  // The same name repeated only counts once.
   const repeated = Array.from({ length: 10 }, (_, i) => ({ title: `v${i}`, group: `g${i % MAX_GROUPS}` }));
   assert.equal(validateSeriesPlanForm({ ...form, volets: repeated }), null);
 });
 
-test('réponse : un groupe absent du formulaire émis est refusé', () => {
+test('answer: a group missing from the issued form is refused', () => {
   const answer = { mode: 'kanban-full', roles: {}, groups: { fantôme: { code: { model: 'haiku' } } } };
   assert.match(String(validateSeriesPlanAnswer(answer, ['simple', 'complexe'])), /unknown group: fantôme/);
-  // Sans liste de groupes connus, aucun groupe n'est connu.
+  // Without a list of known groups, no group is known.
   assert.match(String(validateSeriesPlanAnswer(answer)), /unknown group/);
   assert.equal(validateSeriesPlanAnswer({ ...answer, groups: { simple: { code: { model: 'haiku' } } } }, planGroupNames(grouped)), null);
 });
 
-test('réponse : orchestrator et mission ne se règlent pas par groupe', () => {
+test('answer: orchestrator and mission are not set per group', () => {
   const groups = ['simple'];
   const orch = { mode: 'kanban-full', roles: {}, groups: { simple: { orchestrator: { model: 'opus' } } } };
   assert.match(String(validateSeriesPlanAnswer(orch, groups)), /`orchestrator` is not set per group/);
@@ -209,19 +211,19 @@ test('réponse : orchestrator et mission ne se règlent pas par groupe', () => {
   assert.match(String(validateSeriesPlanAnswer(unknown, groups)), /unknown role: chore/);
 });
 
-test('réponse : rôle de groupe hors du mode refusé', () => {
+test('answer: a group role outside the mode is refused', () => {
   const answer = { mode: 'kanban-code-self', roles: {}, groups: { simple: { review: { model: 'sonnet' } } } };
   assert.match(String(validateSeriesPlanAnswer(answer, ['simple'])), /group `simple`: role `review` is outside mode/);
 });
 
-test('réponse : repli de groupe à moitié renseigné refusé', () => {
+test('answer: a half-filled group fallback is refused', () => {
   const answer = { mode: 'kanban-full', roles: {}, groups: { simple: { code: { fallbackModel: 'gpt-5.6-sol' } } } };
   assert.match(String(validateSeriesPlanAnswer(answer, ['simple'])), /group `simple`, role `code`: `fallbackModel` without `fallbackBackend`/);
   assert.match(String(validateSeriesPlanAnswer({ mode: 'kanban-full', roles: {}, groups: 'simple' }, ['simple'])), /`groups`/);
   assert.match(String(validateSeriesPlanAnswer({ mode: 'kanban-full', roles: {}, groups: { simple: 3 } }, ['simple'])), /group `simple`/);
 });
 
-test('commandes : sans groupe, EXACTEMENT les commandes d\'avant', () => {
+test('commands: without a group, EXACTLY the commands from before', () => {
   const answer: SeriesPlanAnswer = {
     mode: 'kanban-full',
     roles: {
@@ -239,12 +241,12 @@ test('commandes : sans groupe, EXACTEMENT les commandes d\'avant', () => {
     "timon task create --type code --pipeline full --title back --description '<part brief>'",
   ];
   assert.deepEqual(seriesPlanCommands(answer, [{ title: 'front' }, { title: 'back' }]), expected);
-  // Un `groups` vide ou sans réglage ne change rien non plus.
+  // An empty `groups` or one without a setting changes nothing either.
   assert.deepEqual(seriesPlanCommands({ ...answer, groups: {} }, [{ title: 'front' }, { title: 'back' }]), expected);
   assert.ok(!seriesPlanCommands(answer, [{ title: 'front' }]).some((c) => c.includes('--group') || c.includes('--plan-group')));
 });
 
-test('commandes : réglages de groupe après les globaux, tasks avec --plan-group', () => {
+test('commands: group settings after the global ones, tasks with --plan-group', () => {
   const answer: SeriesPlanAnswer = {
     mode: 'kanban-full',
     roles: { code: { backend: 'claude', model: 'opus' } },
@@ -266,12 +268,12 @@ test('commandes : réglages de groupe après les globaux, tasks avec --plan-grou
   ]);
 });
 
-test('commandes : un nom de groupe à espace ou quote est cité', () => {
+test('commands: a group name with a space or a quote is quoted', () => {
   const volets = [{ title: 'a', group: "l'UI simple" }];
   const answer: SeriesPlanAnswer = { mode: 'kanban-code-group', roles: {}, groups: { "l'UI simple": { code: { model: 'haiku' } } } };
   const cmds = seriesPlanCommands(answer, volets);
   assert.ok(cmds.includes(`timon series role set --scope code --group 'l'\\''UI simple' --model haiku`));
   assert.ok(cmds.some((c) => c.includes(`--group-id <GROUP> --plan-group 'l'\\''UI simple' --title a`)));
-  // La task merge finale consolide tout le lot : elle n'appartient à aucun groupe.
+  // The final merge task consolidates the whole batch: it belongs to no group.
   assert.ok(!cmds.find((c) => c.includes('--type merge'))!.includes('--plan-group'));
 });

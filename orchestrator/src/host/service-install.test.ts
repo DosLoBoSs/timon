@@ -69,9 +69,9 @@ import {
 import { readServiceSessionMode, writeServiceSessionMode } from './service-session-mode.js';
 
 /**
- * Ce que le batch élevé laisse derrière lui : une ligne par étape exécutée.
- * Une étape absente de l'objet n'a pas tourné — c'est ainsi qu'un garde se
- * prouve ici, plutôt que par un appel que le test aurait vu passer.
+ * What the elevated batch leaves behind: one line per step run.
+ * A step missing from the object did not run: that is how a guard is
+ * proved here, rather than by a call the test would have seen go by.
  */
 function transcript(codes: Record<string, number>): string {
   return Object.entries(codes).map(([label, code]) => `TIMON-STEP ${label}=${code}\r\n`).join('');
@@ -434,15 +434,15 @@ test('macos: first install and a bootstrap refusal do not wait on a nonexistent 
 });
 
 /**
- * Windows (step 5.7.2) — l'installation du service y est obligatoire comme
- * ailleurs. Amendement au plan §5.3, qui la déclarait "non supportée en v1".
+ * Windows (step 5.7.2): installing the service is mandatory there as
+ * elsewhere. Amendment to plan §5.3, which declared it "not supported in v1".
  *
- * Rien de tout cela ne peut être exécuté ici : la seule vérification possible
- * est l'argv exact, et c'est précisément là que ça casse en silence (un chemin
- * `C:\Program Files\…` non quoté produit une tâche qui échoue au premier
- * logon, sans message).
+ * None of this can be run here: the only possible check
+ * is the exact argv, and that is precisely where it breaks silently (an unquoted
+ * `C:\Program Files\…` path produces a task that fails at the first
+ * logon, without a message).
  */
-test('windows: la tâche planifiée est créée depuis un XML, au boot, en S4U', () => {
+test('windows: the scheduled task is created from an XML, at boot, in S4U', () => {
   const calls: string[][] = [];
   const opts = fixture('win32', (n, a) => {
     calls.push([n, ...a]);
@@ -485,30 +485,30 @@ test('windows: la tâche planifiée est créée depuis un XML, au boot, en S4U',
   const command = calls[2]!.at(-1)!;
   assert.match(command, /Start-Process/);
   assert.match(command, /-Verb RunAs/);
-  assert.ok(command.includes(elevatedScriptPath()), 'le script élevé est celui qui vient d\'être écrit');
+  assert.ok(command.includes(elevatedScriptPath()), 'the elevated script is the one just written');
 
   const batch = readFileSync(elevatedScriptPath(), 'utf8');
-  // `/Run` : la tâche créée ne démarrerait qu'au prochain boot, et l'écran de
-  // premier lancement attend une réponse du service. Et entre les deux, le
-  // daemon qu'une réinstallation remplace : IgnoreNew ignorerait `/Run`.
+  // `/Run`: the created task would only start at the next boot, and the
+  // first launch screen waits for an answer from the service. And in between, the
+  // daemon a reinstall replaces: IgnoreNew would ignore `/Run`.
   // Onboarding: the embedded daemon on the port serves the wizard, never ended.
   assert.doesNotMatch(batch, /Get-NetTCPConnection/);
   const order = ['schtasks /Create /TN TimonOrchestrator /XML', 'taskkill.exe /F /T', 'schtasks /Run /TN TimonOrchestrator']
     .map((needle) => batch.indexOf(needle));
   assert.ok(order.every((at) => at >= 0), batch);
   assert.deepEqual([...order].sort((x, y) => x - y), order);
-  // La sortie de schtasks est lue telle quelle : sans cette page de code, un
-  // "Accès refusé" arrive dans l'UI en "Acc?s refus?".
+  // The schtasks output is read as is: without this code page, an
+  // "Access denied" reaches the UI garbled.
   assert.match(batch, /chcp 65001/);
 
   const xml = renderTaskXml({ ...opts, nodePath: 'C:\\Program Files\\Timon\\Timon.exe' });
-  // Au boot, sans session : une tâche InteractiveToken mourait à la déconnexion.
+  // At boot, without a session: an InteractiveToken task died on logout.
   assert.match(xml, /<BootTrigger><Enabled>true<\/Enabled><\/BootTrigger>/);
   assert.match(xml, /<LogonType>S4U<\/LogonType>/);
   assert.doesNotMatch(xml, /LogonTrigger|InteractiveToken|<Password>/);
-  // Le superviseur : une répétition sans fin que IgnoreNew écarte tant que le
-  // lanceur tient un daemon vivant, et qui le relance sinon — RestartOnFailure
-  // ne relance qu'un lancement raté, jamais un daemon qui tombe.
+  // The supervisor: an endless repetition that IgnoreNew sets aside as long as the
+  // launcher holds a live daemon, and that restarts it otherwise; RestartOnFailure
+  // only restarts a failed launch, never a daemon that falls.
   assert.match(xml, /<TimeTrigger>[\s\S]*<Interval>PT5M<\/Interval>[\s\S]*<StopAtDurationEnd>false<\/StopAtDurationEnd>[\s\S]*<\/TimeTrigger>/);
   assert.doesNotMatch(xml, /<Duration>/);
   assert.match(xml, /<MultipleInstancesPolicy>IgnoreNew<\/MultipleInstancesPolicy>/);
@@ -516,7 +516,7 @@ test('windows: la tâche planifiée est créée depuis un XML, au boot, en S4U',
   assert.match(xml, /<DisallowStartIfOnBatteries>false<\/DisallowStartIfOnBatteries>/);
   assert.match(xml, /<StopIfGoingOnBatteries>false<\/StopIfGoingOnBatteries>/);
   assert.match(xml, /<RestartOnFailure>/);
-  // Jamais de droits admin : c'est ce qui distingue une tâche d'un vrai service.
+  // Never admin rights: that is what tells a task from a real service.
   assert.match(xml, /<RunLevel>LeastPrivilege<\/RunLevel>/);
   assert.doesNotMatch(xml, /HighestAvailable/);
 });
@@ -609,7 +609,7 @@ test('windows: status reads what the registered task does at logoff from its log
   assert.match(status.lines.join('\n'), /logged out: stops when you log out/);
 });
 
-test('windows: sans témoin de session scellé, rien n\'est élevé ni enregistré', () => {
+test('windows: without a sealed session witness, nothing is elevated or registered', () => {
   const calls: string[][] = [];
   const res = installService(fixture('win32', (n, a) => {
     calls.push([n, ...a]);
@@ -630,24 +630,24 @@ const WINDOWS_PATHS = {
 };
 
 /**
- * La tâche lance un batch qui TIENT le daemon. Le lanceur `wscript` de la
- * révision 1 rendait la main aussitôt : la tâche ne suivait plus son daemon,
- * et rien ne pouvait relancer un daemon tombé. La fenêtre console qui avait
- * écarté `cmd` n'existe pas ici : une tâche S4U tourne en session 0.
+ * The task launches a batch that HOLDS the daemon. The `wscript` launcher of
+ * revision 1 returned at once: the task no longer followed its daemon,
+ * and nothing could restart a fallen daemon. The console window that had
+ * ruled out `cmd` does not exist here: an S4U task runs in session 0.
  */
-test('windows: la tâche lance un batch qui tient le daemon', () => {
+test('windows: the task launches a batch that holds the daemon', () => {
   assert.equal(windowsLauncherPath(WINDOWS_PATHS.timonHome),
     'C:\\Users\\robin\\.timon\\run\\timon-service.cmd');
   const args = windowsTaskCommand(WINDOWS_PATHS);
-  // `/s` + guillemets doublés : cmd retire la paire extérieure et garde le
-  // chemin quoté, quels que soient ses caractères.
+  // `/s` + doubled quotes: cmd removes the outer pair and keeps the
+  // quoted path, whatever its characters.
   assert.equal(args, '/d /s /c ""C:\\Users\\robin\\.timon\\run\\timon-service.cmd""');
   const xml = renderTaskXml({ ...WINDOWS_PATHS, userName: 'rom' });
   assert.match(xml, /<Command>cmd\.exe<\/Command>/);
   assert.doesNotMatch(xml, /wscript/);
 });
 
-test('windows: le lanceur attend le témoin DPAPI, puis démarre le daemon sur son log', () => {
+test('windows: the launcher waits for the DPAPI witness, then starts the daemon on its log', () => {
   const bat = renderWindowsLauncher(WINDOWS_PATHS);
   const lines = bat.split('\r\n');
   assert.equal(lines[0], '@echo off');
@@ -655,15 +655,15 @@ test('windows: le lanceur attend le témoin DPAPI, puis démarre le daemon sur s
   const chcp = lines.indexOf('chcp 65001 >nul');
   assert.ok(chcp > 0);
   assert.ok(lines.slice(0, chcp).every((line) => /^[\x20-\x7e]*$/.test(line)));
-  // L'environnement du PROCESSUS, posé par le batch.
+  // The PROCESS environment, set by the batch.
   assert.ok(lines.includes('set "ELECTRON_RUN_AS_NODE=1"'));
   assert.ok(lines.includes('set "TIMON_HOME=C:\\Users\\robin\\.timon"'));
   assert.ok(lines.includes('set "PORT=3010"'));
   assert.ok(lines.includes('set "TIMON_SERVICE_LOG=C:\\Users\\robin\\.timon\\tmp\\daemon.log"'));
   assert.ok(lines.includes('set "TIMON_SESSION_WITNESS=C:\\Users\\robin\\.timon\\run\\session-witness.dpapi"'));
-  // Le daemon, chaque chemin quoté, sortie et erreurs dans daemon.log — et il
-  // ne part qu'APRÈS le témoin : en S4U sans ouverture de session depuis le
-  // boot, un claude efface les identifiants Windows de l'utilisateur.
+  // The daemon, each path quoted, output and errors in daemon.log, and it
+  // only leaves AFTER the witness: in S4U without a logon since
+  // boot, a claude erases the user's Windows credentials.
   const daemon = lines.findIndex((line) => line.startsWith('"C:\\Program Files\\Timon\\Timon.exe" '));
   assert.ok(daemon > 0, bat);
   assert.equal(lines[daemon],
@@ -674,14 +674,14 @@ test('windows: le lanceur attend le témoin DPAPI, puis démarre le daemon sur s
   assert.ok(lines.includes('  goto wait'), 'the launcher loops until the witness opens');
   assert.ok(lines.includes('  exit /b 2'), 'a missing witness is refused, never skipped');
   assert.doesNotMatch(lines[witness]!, /"[^"]*"[^"]*"/, 'no quote inside the -Command string');
-  // Taille bornée : le log est déplacé à 10 Mio, au démarrage.
+  // Bounded size: the log is moved at 10 MiB, at startup.
   const rotate = lines.findIndex((line) => line.includes('move /y'));
   assert.ok(rotate > witness && rotate < daemon);
   assert.match(lines[rotate]!, /GEQ 10485760/);
   assert.match(lines[rotate]!, /^if exist "%TIMON_SERVICE_LOG%" /, 'an absent log would make the size test a syntax error');
 });
 
-test('windows: le lanceur double les % et refuse un guillemet', () => {
+test('windows: the launcher doubles the % and refuses a quote', () => {
   const bat = renderWindowsLauncher({ ...WINDOWS_PATHS, timonHome: 'C:\\Users\\100%\\.timon' });
   assert.ok(bat.includes('set "TIMON_HOME=C:\\Users\\100%%\\.timon"'));
   assert.throws(() => renderWindowsLauncher({ ...WINDOWS_PATHS, nodePath: 'C:\\a"b.exe' }), /Invalid service value/);
@@ -689,12 +689,12 @@ test('windows: le lanceur double les % et refuse un guillemet', () => {
 });
 
 /**
- * TODO #342 : `userInfo().username` seul (`guilldu`) nommait un compte que
- * Windows connaît sous `EUROPE\guilldu` sur un poste joint à Entra ID. Le
- * principal est le SID lu par `whoami` dans la session de l'utilisateur ; à
- * défaut `DOMAINE\user`, puis le nom nu.
+ * TODO #342: `userInfo().username` alone (`guilldu`) named an account that
+ * Windows knows as `EUROPE\guilldu` on a machine joined to Entra ID. The
+ * principal is the SID read by `whoami` in the user's session; failing
+ * that `DOMAIN\user`, then the bare name.
  */
-test('windows: le principal de la tâche est le SID du compte, sinon DOMAINE\\user', () => {
+test('windows: the task principal is the account SID, otherwise DOMAIN\\user', () => {
   const sid = 'S-1-12-1-1234567890-123456789-1234567890-123456789';
   const whoami = (stdout: string, code = 0) => (n: string): ExecResult =>
     (n === 'whoami' ? { code, stdout, stderr: '' } : { code: 0, stdout: '', stderr: '' });
@@ -716,32 +716,32 @@ test('windows: le principal de la tâche est le SID du compte, sinon DOMAINE\\us
 });
 
 /**
- * TODO #342 : `/Run` répond "SUCCESS: Attempted" même quand Windows refuse
- * ensuite la session S4U (poste joint à Entra ID) ; la tâche reste Ready,
- * `LastTaskResult` 0x41303, `LastRunTime` en 1999. Le batch élevé vérifie
- * donc qu'elle a VRAIMENT démarré, et la supprime sinon — même invite UAC.
+ * TODO #342: `/Run` answers "SUCCESS: Attempted" even when Windows then
+ * refuses the S4U session (machine joined to Entra ID); the task stays Ready,
+ * `LastTaskResult` 0x41303, `LastRunTime` in 1999. The elevated batch therefore
+ * checks that it REALLY started, and removes it otherwise, same UAC prompt.
  */
-test('windows: après /Run, le batch élevé vérifie que la tâche a tourné, et la supprime sinon', () => {
+test('windows: after /Run, the elevated batch checks the task ran, and removes it otherwise', () => {
   const opts = fixture('win32', () => ({ code: 0, stdout: '', stderr: '' }));
   installService({ ...opts, readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: 0 }) });
   const batch = readFileSync(elevatedScriptPath(), 'utf8');
   const run = batch.indexOf('schtasks /Run /TN TimonOrchestrator');
   const verify = batch.indexOf('Get-ScheduledTaskInfo');
   assert.ok(run >= 0 && verify > run, batch);
-  // `/Run` refusé : rien à vérifier, la tâche n'a pas été lancée par nous.
+  // `/Run` refused: nothing to check, the task was not launched by us.
   assert.match(batch.slice(run), /^[^\r\n]*\r\nset RC=%ERRORLEVEL%\r\necho TIMON-STEP run=%RC% [^\r\n]*\r\nif not "%RC%"=="0" goto :done/);
   const step = verifyTaskStartedStep().args.at(-1)!;
-  // Les DEUX signaux du "jamais exécutée", et un état illisible passe.
+  // BOTH signals of "never run", and an unreadable state passes.
   assert.ok(step.includes(`-ne ${WINDOWS_TASK_NEVER_RAN}`), step);
   assert.match(step, /LastRunTime\.Year -ge 2000/);
   assert.match(step, /if \(-not \$i\) \{ exit 0 \}/);
   assert.ok(step.includes(`AddSeconds(${TASK_VERIFY_SECONDS})`));
   assert.match(step, /schtasks\.exe \/Delete \/TN 'TimonOrchestrator' \/F/);
-  // Ni `"` ni `%` : la commande traverse cmd entre guillemets.
+  // Neither `"` nor `%`: the command crosses cmd between quotes.
   assert.doesNotMatch(step, /["%]/);
 });
 
-test('windows: une tâche jamais lancée est un refus honnête, sans révision, avec un marqueur', () => {
+test('windows: a task never launched is an honest refusal, without a revision, with a marker', () => {
   const opts = fixture('win32', () => ({ code: 0, stdout: '', stderr: '' }));
   const files = windowsServiceFiles(opts.timonHome, join);
   const res = installService({ ...opts, readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: TASK_NEVER_RAN_REMOVED }) });
@@ -752,7 +752,7 @@ test('windows: une tâche jamais lancée est un refus honnête, sans révision, 
   assert.equal(existsSync(files.revision), false, 'no revision: the desktop must not wait on a removed task');
   assert.equal(existsSync(files.refused), true);
 
-  // Pas supprimable : la tâche reste, sa révision aussi (le desktop la voit et repart en intégré).
+  // Not removable: the task stays, its revision too (the desktop sees it and falls back to embedded).
   const kept = fixture('win32', () => ({ code: 0, stdout: '', stderr: '' }));
   const keptFiles = windowsServiceFiles(kept.timonHome, join);
   const res2 = installService({ ...kept, readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: TASK_NEVER_RAN_KEPT }) });
@@ -760,18 +760,18 @@ test('windows: une tâche jamais lancée est un refus honnête, sans révision, 
   assert.equal(readFileSync(keptFiles.revision, 'utf8').trim(), WINDOWS_SERVICE_REVISION);
   assert.equal(existsSync(keptFiles.refused), true);
 
-  // Une installation dont la tâche tourne efface le constat.
+  // An install whose task runs clears the finding.
   const ok = installService({ ...kept, readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: 0 }) });
   assert.equal(ok.ok, true);
   assert.equal(existsSync(keptFiles.refused), false);
 });
 
 /**
- * Le chemin refusé dure invite UAC + 15 s de vérification : au plafond de 30 s
- * du bouton, le PowerShell extérieur était tué pendant que le batch élevé
- * continuait — et supprimait la tâche qu'on venait d'annoncer installée.
+ * The refused path lasts a UAC prompt + 15 s of checking: at the 30 s cap
+ * of the button, the outer PowerShell was killed while the elevated batch
+ * went on, and removed the task just announced as installed.
  */
-test('windows: l\'appel élevé a son propre budget, un batch coupé avant sa vérification n\'est pas une réussite', () => {
+test('windows: the elevated call has its own budget, a batch cut before its check is not a success', () => {
   const timeouts: (number | undefined)[] = [];
   const opts = fixture('win32', () => ({ code: 0, stdout: '', stderr: '' }));
   const files = windowsServiceFiles(opts.timonHome, join);
@@ -789,7 +789,7 @@ test('windows: l\'appel élevé a son propre budget, un batch coupé avant sa v�
   assert.equal(existsSync(files.refused), false);
 });
 
-test('windows: le XML échappe ce qui casserait le document', () => {
+test('windows: the XML escapes what would break the document', () => {
   const xml = renderTaskXml({
     userName: 'a & b',
     timonHome: 'C:\\home',
@@ -800,11 +800,11 @@ test('windows: le XML échappe ce qui casserait le document', () => {
 });
 
 /**
- * `schtasks /End` tue le `cmd.exe` du lanceur et laisse le daemon orphelin
- * (vérifié sous Windows 11, 23/09/2026). L'arrêt vise donc l'arbre du lanceur
- * de CETTE instance, retrouvé par sa ligne de commande.
+ * `schtasks /End` kills the launcher's `cmd.exe` and leaves the daemon orphaned
+ * (checked on Windows 11, 23/09/2026). Stopping therefore targets the launcher tree
+ * of THIS instance, found by its command line.
  */
-test('windows: arrêter la tâche arrête l\'arbre du lanceur de cette instance', () => {
+test('windows: stopping the task stops the launcher tree of this instance', () => {
   const step = stopLauncherStep(WINDOWS_PATHS.timonHome);
   assert.equal(step.program, 'powershell');
   const script = step.args.at(-1)!;
@@ -841,9 +841,9 @@ test('windows: install ends the daemon of this installation that holds the port'
 });
 
 /**
- * Le daemon S4U tourne en session 0 : un processus non élevé ne peut pas le
- * tuer, et un `/Run` sur un daemon vivant est ignoré (IgnoreNew). Le
- * redémarrage demandé par le desktop passe donc par UN lot élevé.
+ * The S4U daemon runs in session 0: a non-elevated process cannot
+ * kill it, and a `/Run` on a live daemon is ignored (IgnoreNew). The
+ * restart requested by the desktop therefore goes through ONE elevated batch.
  */
 test('windows: restart ends the launcher tree then runs the task, under one elevation', () => {
   const calls: string[][] = [];
@@ -946,7 +946,7 @@ test('windows: restart reports a refused elevation and a task that would not sta
   assert.equal(restartWindowsService(fixture('linux')).ok, false);
 });
 
-test('windows: uninstall supprime la tâche, arrête son daemon, et laisse TIMON_HOME', () => {
+test('windows: uninstall removes the task, stops its daemon, and leaves TIMON_HOME', () => {
   const calls: string[][] = [];
   const opts = fixture('win32', (n, a) => {
     calls.push([n, ...a]);
@@ -960,15 +960,15 @@ test('windows: uninstall supprime la tâche, arrête son daemon, et laisse TIMON
   assert.equal(res.ok, true);
   assert.equal(calls.length, 1);
   assert.equal(calls[0]![0], 'powershell');
-  // Supprimée AVANT l'arrêt de son daemon : sinon la répétition pourrait le
-  // relancer entre les deux. Et `/End` ne garde rien : une tâche à l'arrêt
-  // fait échouer `/End` et doit partir quand même.
+  // Removed BEFORE stopping its daemon: otherwise the repetition could
+  // restart it in between. And `/End` keeps nothing: a stopped task
+  // makes `/End` fail and must go anyway.
   const batch = readFileSync(elevatedScriptPath(), 'utf8');
   assert.ok(batch.indexOf('/Delete /TN TimonOrchestrator /F') < batch.indexOf('taskkill.exe'));
   assert.match(batch, /schtasks \/End \/TN TimonOrchestrator/);
   assert.doesNotMatch(batch, /goto :done/);
-  // Les fichiers de la tâche partent avec elle, le constat de refus aussi
-  // (TODO #342 : sinon le setup n'offrirait plus que le mode portable) ; les données restent.
+  // The task files go with it, the refusal finding too
+  // (TODO #342: otherwise the setup would only offer portable mode); the data stays.
   for (const file of [files.launcher, files.legacyLauncher, files.sessionWitness, files.revision, files.repairDeclined, files.refused]) {
     assert.equal(existsSync(file), false, file);
   }
@@ -1008,7 +1008,7 @@ test('windows: every service gesture writes under the home, nothing in the worki
   }
 });
 
-test('windows: une tâche qui n\'a pas pu être supprimée garde son lanceur', () => {
+test('windows: a task that could not be removed keeps its launcher', () => {
   const opts = fixture('win32', () => ({ code: 0, stdout: '', stderr: '' }));
   const files = windowsServiceFiles(opts.timonHome, join);
   mkdirSync(dirname(files.launcher), { recursive: true });
@@ -1019,7 +1019,7 @@ test('windows: une tâche qui n\'a pas pu être supprimée garde son lanceur', (
   assert.equal(existsSync(files.refused), true, 'the task is still there: so is the verdict on it');
 });
 
-test('windows: status lit la tâche, et une tâche absente n\'est pas « running »', () => {
+test('windows: status reads the task, and a missing task is not "running"', () => {
   const running = statusService(fixture('win32', () => ({
     code: 0, stdout: 'TaskName: \\TimonOrchestrator\nStatus: Running\n', stderr: '',
   })));
@@ -1056,13 +1056,13 @@ test('windows: a task that cannot be started is not a successful installation', 
   const text = res.lines.join(' ');
   assert.match(text, /could not be started/);
   assert.match(text, /cannot find the path specified/);
-  // Et surtout : jamais le message de succès.
+  // And above all: never the success message.
   assert.doesNotMatch(text, /installed and started/);
 });
 
-test("windows: la tâche n'est pas démarrée si sa création a échoué", () => {
-  // Le garde vit dans le batch élevé : une création qui échoue saute la suite,
-  // et l'absence de ligne `run=` est ce qui le prouve.
+test('windows: the task is not started if its creation failed', () => {
+  // The guard lives in the elevated batch: a failing creation skips the rest,
+  // and the absence of a `run=` line is what proves it.
   const res = installService({
     ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })),
     readFile: () => `Access is denied.\n${transcript({ create: 1 })}`,
@@ -1080,10 +1080,10 @@ test("windows: la tâche n'est pas démarrée si sa création a échoué", () =>
 });
 
 /**
- * Refuser l'invite UAC n'est pas la même chose qu'un schtasks qui échoue :
- * l'utilisateur doit lire qu'il a refusé, pas un code d'erreur Windows.
+ * Refusing the UAC prompt is not the same as a failing schtasks:
+ * the user must read that they refused, not a Windows error code.
  */
-test('windows: une élévation refusée le dit, et ne prétend pas avoir installé', () => {
+test('windows: a refused elevation says so, and does not claim to have installed', () => {
   const res = installService({
     // The witness is sealed without elevation; only the elevation is refused.
     ...fixture('win32', (_n, a) => ({ code: a.some((arg) => arg.includes('RunAs')) ? 1223 : 0, stdout: '', stderr: '' })),
@@ -1094,7 +1094,7 @@ test('windows: une élévation refusée le dit, et ne prétend pas avoir install
   assert.doesNotMatch(res.lines.join(' '), /installed and started/);
 });
 
-test('windows: un schtasks qui refuse remonte le refus, pas un succès', () => {
+test('windows: a schtasks that refuses reports the refusal, not a success', () => {
   const res = installService({
     ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })),
     readFile: () => `Access is denied.\n${transcript({ create: 1 })}`,
@@ -1146,18 +1146,18 @@ test('dry-run writes nothing and calls nothing', () => {
 });
 
 /**
- * Le port du service doit être celui que la config demande (étape 5.7.6).
+ * The service port must be the one the config asks for (step 5.7.6).
  *
- * Le gabarit figeait `PORT=3000`. Un paquet démarre sur 3010 pour ne heurter
- * ni la v1 ni le home de dev : le service aurait écouté ailleurs que là où le
- * client de bureau va chercher son daemon — fenêtre blanche, sans message.
+ * The template froze `PORT=3000`. A package starts on 3010 so as to hit
+ * neither v1 nor the dev home: the service would have listened elsewhere than where the
+ * desktop client looks for its daemon: a white window, without a message.
  */
-test('linux: l\'unit porte le port et le heap de la config, pas des constantes', () => {
+test('linux: the unit carries the port and heap of the config, not constants', () => {
   const opts = fixture('linux');
   const unit = renderUnit({ ...opts, port: 3010, heapMb: 2048 });
   assert.match(unit, /Environment=PORT=3010/);
   assert.match(unit, /--max-old-space-size=2048/);
-  assert.doesNotMatch(unit, /@PORT@|@HEAP@/, 'aucun gabarit laissé en place');
+  assert.doesNotMatch(unit, /@PORT@|@HEAP@/, 'no template left in place');
   assert.doesNotMatch(unit, /Environment=PORT=3000/);
 });
 
@@ -1176,10 +1176,10 @@ test('linux: the unit PATH starts with the agent CLI directories the shell found
   assert.equal(renderUnit({ ...opts }).match(/^Environment=PATH=.*$/m)?.[0], 'Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin');
 });
 
-test('status: « enregistré » et « tourne » sont deux réponses distinctes', { skip: SYSTEMD_IDENTITY }, () => {
-  // Unit écrite, mais systemd la dit inactive : installée, pas démarrée. C'est
-  // l'état exact d'un premier lancement empaqueté, où le daemon embarqué tient
-  // encore le port.
+test('status: "registered" and "running" are two distinct answers', { skip: SYSTEMD_IDENTITY }, () => {
+  // Unit written, but systemd says it is inactive: installed, not started. That is
+  // the exact state of a first packaged launch, where the embedded daemon still
+  // holds the port.
   const opts = fixture('linux', () => ({ code: 0, stdout: '', stderr: '' }));
   installService(opts);
   const stopped = statusService({ ...opts, exec: () => ({ code: 0, stdout: `LoadState=loaded\nNeedDaemonReload=no\nActiveState=inactive\nWorkingDirectory=${opts.installDir}\nEnvironment=TIMON_HOME=${opts.timonHome}`, stderr: '' }) });
@@ -1351,9 +1351,9 @@ test('a failed upgrade puts the previous definition back and restarts it', () =>
   const winCalls: string[][] = [];
   const win = fixture('win32', (n, a) => {
     winCalls.push([n, ...a]);
-    return { code: 0, stdout: '<?xml version="1.0"?><Task>é</Task>', stderr: '' };
+    return { code: 0, stdout: '<?xml version="1.0"?><Task>é</Task>', stderr: '' }; // french-ok: a non-ASCII byte the UTF-8 read keeps
   });
-  assert.equal(readServiceDefinition(win), '<?xml version="1.0"?><Task>é</Task>');
+  assert.equal(readServiceDefinition(win), '<?xml version="1.0"?><Task>é</Task>'); // french-ok: a non-ASCII byte the UTF-8 read keeps
   assert.match(winCalls[0]!.at(-1)!, /OutputEncoding = \[Text\.Encoding\]::UTF8; Export-ScheduledTask -TaskName 'TimonOrchestrator'/);
   assert.equal(readServiceDefinition(fixture('win32', () => ({ code: 1, stdout: '', stderr: 'not found' }))), null);
 

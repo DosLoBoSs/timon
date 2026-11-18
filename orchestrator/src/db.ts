@@ -1678,6 +1678,9 @@ if (!projectCols.includes('score_updated_at')) db.exec(`ALTER TABLE projects ADD
 if (!projectCols.includes('grepai_watch')) db.exec(`ALTER TABLE projects ADD COLUMN grepai_watch TEXT`);
 // `created_by` = `plugin:<id>` when a plugin registered the project (`ctx.projects.create`); NULL for every other project. Written by the facade only.
 if (!projectCols.includes('created_by')) db.exec(`ALTER TABLE projects ADD COLUMN created_by TEXT`);
+// `integration` = how the project's Kanban jobs land (`project-integration.ts`):
+// JSON validated by zod on every read and write; NULL = today's local merge.
+if (!projectCols.includes('integration')) db.exec(`ALTER TABLE projects ADD COLUMN integration TEXT`);
 
 // the UI shows them as "unknown author"
 // rather than wrongly attributing them. Web Push:
@@ -2015,7 +2018,7 @@ CREATE TABLE IF NOT EXISTS integrations (
 `);
 if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
 // A writer that changes the reason without naming its code (an agent's own
-// reason, a scope stop, a statement written before the column) must not leave
+// reason, a statement written before the column) must not leave
 // the previous code behind: the webview would translate another sentence.
 db.exec(`
 CREATE TRIGGER IF NOT EXISTS tasks_blocked_reason_code_follows
@@ -4024,6 +4027,7 @@ export type ProjectRow = {
   score_updated_at: number | null;
   grepai_watch: string | null; // conversation restarts empty without saying so. ── Memory & project types (DB
   created_by: string | null; // `plugin:<id>` for a project a plugin registered
+  integration: string | null; // JSON of `project-integration.ts`; NULL = local merge
   created_at: number;
   updated_at: number;
 };
@@ -7897,13 +7901,19 @@ export const dbApi = {
   setProjectCreatedBy(slug: string, origin: string): void {
     db.prepare(`UPDATE projects SET created_by = ? WHERE slug = ?`).run(origin, slug);
   },
+  /** The one door for `integration`: `upsertProject` never writes it, so a
+   *  meta edit cannot clear or forge the setting. False = no such project. */
+  setProjectIntegration(slug: string, json: string | null): boolean {
+    return db.prepare(`UPDATE projects SET integration = ?, updated_at = ? WHERE slug = ?`)
+      .run(json, Date.now(), slug).changes > 0;
+  },
   listProjectRows(): ProjectRow[] {
     return db.prepare(`SELECT * FROM projects ORDER BY slug`).all() as ProjectRow[];
   },
   /** Partial upsert: only defined fields are written (merge with the existing). */
   upsertProject(
     slug: string,
-    fields: Partial<Omit<ProjectRow, 'slug' | 'created_at' | 'updated_at' | 'created_by'>> = {},
+    fields: Partial<Omit<ProjectRow, 'slug' | 'created_at' | 'updated_at' | 'created_by' | 'integration'>> = {},
   ): void {
     const now = Date.now();
     const cur = this.getProjectRow(slug);

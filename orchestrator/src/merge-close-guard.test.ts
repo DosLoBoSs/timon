@@ -347,6 +347,9 @@ test('an automatic close of a merge whose branch is outside the base goes BLOCKE
     assert.equal(after.status, 'BLOCKED');
     assert.match(after.blocked_reason ?? '', /automatic close was refused/);
     assert.match(after.blocked_reason ?? '', /branch feature .* is not contained in main/);
+    const code = JSON.parse(after.blocked_reason_code ?? 'null') as { code: string; params: { refusal: string } };
+    assert.equal(code.code, 'task_auto_close_refused');
+    assert.match(code.params.refusal, /branch feature .* is not contained in main/);
   } finally { stop(); }
 });
 
