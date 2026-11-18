@@ -1,14 +1,14 @@
 /**
- * Les gabarits d'`examples/` chargent-ils vraiment ?
+ * Do the templates of `examples/` really load?
  *
- * Ils sont la promesse open-core rendue vérifiable : un tiers doit pouvoir
- * écrire une surface du produit sans toucher au daemon. Un gabarit qui ne
- * charge plus (manifeste périmé, capacité disparue du SDK) est une régression
- * du CONTRAT, pas un exemple de documentation à rafraîchir un jour.
+ * They are the open-core promise made checkable: a third party must be able to
+ * write a product surface without touching the daemon. A template that no longer
+ * loads (stale manifest, capability gone from the SDK) is a regression
+ * of the CONTRACT, not a documentation example to refresh some day.
  *
- * Le moniteur de quotas est le cas de référence : il a d'abord été livré en
- * module bundled, puis réécrit ici avec le seul SDK. S'il cesse de fonctionner,
- * c'est que le SDK a perdu quelque chose que le produit, lui, a gardé.
+ * The quota monitor is the reference case: it first shipped as a bundled
+ * module, then was rewritten here with the SDK alone. If it stops working,
+ * the SDK has lost something the product kept.
  */
 import '../test-home.js';
 import '../../tests/helpers/paid-license.js';
@@ -31,7 +31,7 @@ const { resetClaudeUsageCache } = await import('../../tests/helpers/claude-provi
 
 const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../../examples');
 
-test('plugin-quota-monitor : conserve la dernière mesure quand une sonde échoue', async () => {
+test('plugin-quota-monitor: keeps the last measure when a probe fails', async () => {
   const values = new Map<string, unknown>();
   const ctx = { storage: { kv: {
     get: async (key: string) => values.get(key),
@@ -74,11 +74,11 @@ test('plugin-quota-monitor : conserve la dernière mesure quand une sonde échou
   assert.equal(quotaShouldKeepPolling([]), true);
 });
 
-/** Installe un dossier d'`examples/` comme le ferait `timon plugin add`. */
+/** Installs a folder of `examples/` the way `timon plugin add` would. */
 function installExample(root: string, folder: string, pkgName: string): void {
   const dest = join(root, 'node_modules', pkgName);
   mkdirSync(dirname(dest), { recursive: true });
-  try { symlinkSync(join(EXAMPLES, folder), dest, 'dir'); } catch { /* déjà lié */ }
+  try { symlinkSync(join(EXAMPLES, folder), dest, 'dir'); } catch { /* already linked */ }
   writeFileSync(
     join(root, 'package.json'),
     JSON.stringify({ name: 'timon-plugins', private: true, dependencies: { [pkgName]: 'file:example' } }, null, 2),
@@ -104,14 +104,14 @@ async function withExample(
     dir,
     host: daemonHost(ctx),
     plugins: () => ({}),
-    // Les gabarits ne sont pas signés : sans ça la suite mesurerait la
-    // signature, pas le contrat.
+    // The templates are not signed: without this the suite would measure the
+    // signature, not the contract.
     allowUnsigned: () => true,
   });
   attachPluginLoader(app, loader);
   try {
     const [record] = await loader.update();
-    assert.equal(record?.state, 'active', `gabarit refusé : ${record?.error ?? 'raison inconnue'}`);
+    assert.equal(record?.state, 'active', `template refused: ${record?.error ?? 'unknown reason'}`);
     await body((path) => `http://127.0.0.1:${port}${path}`, loader);
   } finally {
     await loader.dispose();
@@ -155,26 +155,26 @@ test('plugin-quota-monitor: the trend only carries the backends the caller can s
   assert.deepEqual(points.map((point) => point.backend), ['claude', 'claude@adaaccount']);
 });
 
-test('plugin-quota-monitor : le produit entier tient dans le SDK', { concurrency: false }, async () => {
+test('plugin-quota-monitor: the whole product fits in the SDK', { concurrency: false }, async () => {
   await withoutClaudeSession(async () => {
     await withExample('plugin-quota-monitor', '@timon-ai/plugin-quota-monitor', async (url) => {
-      // `usage:read` : un backend actif par entrée, seuils venus des réglages
-      // déclarés au manifeste. Sans session CLI, Claude est idle (`disconnected`),
-      // pas une panne — les autres sondes restent unsupported / unavailable.
+      // `usage:read`: one active backend per entry, thresholds from the settings
+      // declared in the manifest. Without a CLI session, Claude is idle (`disconnected`),
+      // not down; the other probes stay unsupported / unavailable.
       const all = await (await fetch(url('/api/plugins/quota-monitor/all'))).json() as {
         entries: { backend: string; state: string; risk: number | null }[];
         thresholds: { warning: number; critical: number };
       };
-      assert.ok(all.entries.length > 0, 'au moins un backend actif');
+      assert.ok(all.entries.length > 0, 'at least one active backend');
       assert.deepEqual(all.thresholds, { warning: 70, critical: 90 });
       const states = ['available', 'unsupported', 'unavailable', 'disconnected'];
       for (const entry of all.entries) {
-        assert.ok(states.includes(entry.state), `état inattendu: ${entry.state}`);
-        // Jamais un zéro de substitution : sans mesure, pas de chiffre.
+        assert.ok(states.includes(entry.state), `unexpected state: ${entry.state}`);
+        // Never a stand-in zero: without a measure, no figure.
         if (entry.state !== 'available') assert.equal(entry.risk, null);
       }
       const claude = all.entries.find((entry) => entry.backend === 'claude');
-      assert.ok(claude, 'claude reste au catalogue');
+      assert.ok(claude, 'claude stays in the catalogue');
       assert.equal(claude.state, 'disconnected');
       assert.equal(claude.risk, null);
 
@@ -184,15 +184,15 @@ test('plugin-quota-monitor : le produit entier tient dans le SDK', { concurrency
       const forced = await refreshed.json() as { entries: { backend: string }[] };
       assert.deepEqual(forced.entries.map((entry) => entry.backend), all.entries.map((entry) => entry.backend));
 
-      // `storage` : l'appel précédent a écrit l'historique dans le KV du plugin.
+      // `storage`: the previous call wrote the history into the plugin KV.
       const history = await (await fetch(url('/api/plugins/quota-monitor/history'))).json() as {
         retentionDays: number; points: { backend: string; risk: number }[];
       };
       assert.equal(history.retentionDays, 90);
 
-      // La galerie voit le plugin comme n'importe quel tiers, avec ses deux
-      // prises et sa moitié navigateur servie. Plus de `topbar.item` : l'anneau
-      // est la forme à plat de son widget, sur la ligne de la barre.
+      // The gallery sees the plugin like any third party, with its two
+      // sockets and its browser half served. No more `topbar.item`: the ring
+      // is the flat form of its widget, on the line of the bar.
       const gallery = await (await fetch(url('/api/plugins/quota-monitor'))).json() as {
         state: string; kind: string[]; client: { slots: string[] } | null;
       };
@@ -203,26 +203,26 @@ test('plugin-quota-monitor : le produit entier tient dans le SDK', { concurrency
   });
 });
 
-test('plugin-hello : un manifeste `apiVersion 1` charge toujours', async () => {
-  // La politique additive (sdk.1) en un test : le daemon implémente le contrat
-  // 2, ce gabarit demande le 1, il tourne.
+test('plugin-hello: an `apiVersion 1` manifest still loads', async () => {
+  // The additive policy (sdk.1) in one test: the daemon implements contract
+  // 2, this template asks for 1, it runs.
   await withExample('plugin-hello', '@timon-ai/plugin-hello', async (url) => {
     const body = await (await fetch(url('/api/plugins/plugin-hello/hello'))).json() as { greeting: string };
     assert.equal(body.greeting, 'Bonjour depuis un plugin');
   });
 });
 
-test('plugin-provider : un fournisseur tiers se charge sans clé ni allowlist', async () => {
-  // Le gabarit doit rester installable en configuration NUE : sans clé son
-  // profil drop-in reste inactif, et sans allowlist son dialecte de démo est
-  // refusé — deux refus attendus, qui ne doivent pas faire échouer `apply`.
+test('plugin-provider: a third-party provider loads without a key or an allowlist', async () => {
+  // The template must stay installable in a BARE configuration: without a key its
+  // drop-in profile stays inactive, and without an allowlist its demo dialect is
+  // refused: two expected refusals, which must not make `apply` fail.
   await withExample('plugin-provider', '@timon-ai/plugin-provider', async (url) => {
     const gallery = await (await fetch(url('/api/plugins/provider-example'))).json() as {
       state: string; kind: string[]; client: unknown;
     };
     assert.equal(gallery.state, 'active');
     assert.deepEqual(gallery.kind, ['provider']);
-    assert.equal(gallery.client, null, 'un fournisseur n\'a pas de moitié navigateur');
+    assert.equal(gallery.client, null, 'a provider has no browser half');
   });
 });
 
@@ -359,23 +359,23 @@ test('plugin-mascot-pack: its declared parts load at API 15 and become valid in 
   });
 });
 
-test('plugin-remote-backend :un backend sans process se charge sans allowlist et entre au catalogue', async () => {
+test('plugin-remote-backend: a backend without a process loads without an allowlist and joins the catalogue', async () => {
   const { backendNames, getBackend } = await import('../backends/index.js');
-  // Aucune entrée `pluginPolicy.exec.allow` : il n'y a pas de binaire à autoriser.
+  // No `pluginPolicy.exec.allow` entry: there is no binary to allow.
   await withExample('plugin-remote-backend', '@timon-ai/plugin-remote-backend', async (url) => {
     const gallery = await (await fetch(url('/api/plugins/remote-backend-example'))).json() as {
       state: string; kind: string[];
     };
     assert.equal(gallery.state, 'active');
     assert.deepEqual(gallery.kind, ['provider']);
-    assert.ok(backendNames().includes('memory-remote'), 'le profil distant est dispatchable');
+    assert.ok(backendNames().includes('memory-remote'), 'the remote profile is dispatchable');
     assert.equal(typeof getBackend('memory-remote').openRemoteSession, 'function');
   });
-  // Retiré au déchargement, comme tout ce qu'un plugin a apporté.
+  // Removed on unload, like everything a plugin brought.
   assert.equal(backendNames().includes('memory-remote'), false);
 });
 
-test('plugin-user-connection : déclare son type de connexion et répond 401 sans compte', async () => {
+test('plugin-user-connection: declares its connection type and answers 401 without an account', async () => {
   const { integrationRegistries } = await import('./integration-host.js');
   await withExample('plugin-user-connection', '@timon-ai/plugin-user-connection', async (url) => {
     const lease = integrationRegistries.connectionTypes.get('user-connection-example:service@1');

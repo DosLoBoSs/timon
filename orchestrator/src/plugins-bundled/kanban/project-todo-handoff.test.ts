@@ -52,7 +52,7 @@ async function handoff(): Promise<{ status: number; body: { to_agent?: string; e
   const created = await fetch(d.url('/api/project-todo'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text: 'une idée', project: 'toto' }),
+    body: JSON.stringify({ text: 'une idée', project: 'toto' }), // french-ok: free-text sample data
   });
   assert.equal(created.status, 201);
   const { item } = (await created.json()) as { item: { id: number } };

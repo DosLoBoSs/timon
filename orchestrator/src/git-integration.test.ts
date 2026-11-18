@@ -61,7 +61,7 @@ function setup(): { dir: string; work: string; bare: string; remoteMain: string;
 }
 
 test('integration branch names: derived from the title, without ids', () => {
-  assert.equal(integrationBranchName('Kanban → PR : préconditions'), 'feat/kanban-pr-preconditions');
+  assert.equal(integrationBranchName('Kanban → PR : préconditions'), 'feat/kanban-pr-preconditions'); // french-ok: an accented title the branch name folds
   assert.equal(integrationBranchName('Fix token leak', { embargo: true }), 'sec/fix-token-leak');
   assert.equal(
     integrationBranchName('merge 1fc78347-4d3f-4a23-be2d-e1520d82ef8f and 4943a04e'),

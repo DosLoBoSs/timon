@@ -123,7 +123,7 @@ test('rejects self-recursion, unknown names and override payloads before launch'
 
 test('TIM-0074: mission_spawn from a mission carries its overrides through delegation, deduplicated per key', async () => {
   const count = launches;
-  const args = { agent_name: 'TIMON.librarian', mission: 'Summarise', model: 'sonnet', backend: 'claude', extra_skills: ['skill-a'], idempotency_key: 'tim-0074', title: 'Résumé du jour' };
+  const args = { agent_name: 'TIMON.librarian', mission: 'Summarise', model: 'sonnet', backend: 'claude', extra_skills: ['skill-a'], idempotency_key: 'tim-0074', title: 'Résumé du jour' }; // french-ok: an accented title the launcher keeps
   const first = await tool('mission_spawn', args);
   assert.notEqual(first.result?.isError, true, first.result?.content[0]?.text);
   const id = JSON.parse(first.result!.content[0]!.text).mission_id;
@@ -132,7 +132,7 @@ test('TIM-0074: mission_spawn from a mission carries its overrides through deleg
   assert.equal(lastLaunch?.backendOverride, 'claude');
   assert.deepEqual(lastLaunch?.extraSkills, ['skill-a']);
   assert.equal(lastLaunch?.ownerUserId, owner.id);
-  assert.equal(lastLaunch?.title, 'Résumé du jour', 'the preset title reaches the launcher (TODO #358)');
+  assert.equal(lastLaunch?.title, 'Résumé du jour', 'the preset title reaches the launcher (TODO #358)'); // french-ok: an accented title the launcher keeps
   assert.equal(dbApi.getMission(id)!.parent_mission_id, main.id);
   const replay = await tool('mission_spawn', args);
   assert.deepEqual(JSON.parse(replay.result!.content[0]!.text), { mission_id: id, idempotent: true });

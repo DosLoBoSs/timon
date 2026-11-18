@@ -187,7 +187,7 @@ test('a spoken turn is written into the mission history, without waking its agen
   const me = dbApi.getUserByEmail('admin@example.com')!;
   const missionId = 'mission-voice-1';
   dbApi.createMission(missionId, 'demo.agent', 'voice mission', undefined, me.id);
-  const body = { role: 'user', text: '  Où en est le build ?  ', startMs: 1000, endMs: 2400, clientId: 'v_1' };
+  const body = { role: 'user', text: '  Où en est le build ?  ', startMs: 1000, endMs: 2400, clientId: 'v_1' }; // french-ok: a spoken sample
 
   assert.equal((await call('POST', `/api/missions/${missionId}/voice-transcript`, { body })).status, 401);
   assert.equal((await call('POST', '/api/missions/nope/voice-transcript', { cookie: admin, body })).status, 404);
@@ -201,7 +201,7 @@ test('a spoken turn is written into the mission history, without waking its agen
   assert.equal(events.length, 1);
   assert.equal(events[0]!.type, 'voice_transcript');
   assert.deepEqual(JSON.parse(events[0]!.payload), {
-    type: 'voice_transcript', role: 'user', text: 'Où en est le build ?', start_ms: 1000, end_ms: 2400, client_id: 'v_1',
+    type: 'voice_transcript', role: 'user', text: 'Où en est le build ?', start_ms: 1000, end_ms: 2400, client_id: 'v_1', // french-ok: a spoken sample
   });
 });
 

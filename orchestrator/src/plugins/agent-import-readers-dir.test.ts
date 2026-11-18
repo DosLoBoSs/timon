@@ -251,7 +251,7 @@ test('names Windows refuses are recognised', () => {
   for (const bad of ['CON', 'nul.txt', 'COM1', 'a:b', 'what?', 'trailing.', 'trailing ', 'tab\there']) {
     assert.ok(isUnportableSegment(bad), bad);
   }
-  for (const ok of ['SKILL.md', 'café.md', 'console.md', '.hidden']) assert.ok(!isUnportableSegment(ok), ok);
+  for (const ok of ['SKILL.md', 'café.md', 'console.md', '.hidden']) assert.ok(!isUnportableSegment(ok), ok); // french-ok: an accented file name the reader must keep
 });
 
 test('limits can be tightened, never loosened', () => {
