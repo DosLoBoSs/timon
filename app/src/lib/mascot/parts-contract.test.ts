@@ -97,6 +97,20 @@ test('a part is checked whole: label, type and the data of its type', () => {
   assert.match(mascotPartProblem(null)!, /object/);
 });
 
+test('a shape is either a skull or a head the pack draws, never both, never neither', () => {
+  const Head = (): null => null;
+  const skull = { top: 70, bottom: 90, height: 70, radius: 34 };
+  assert.equal(mascotPartProblem({ type: 'shape', label: 'Flame', head: Head }), null);
+  assert.match(mascotPartProblem({ type: 'shape', label: 'Flame', head: '<svg/>' })!, /head must be a component \(a function\)/);
+  assert.match(mascotPartProblem({ type: 'shape', label: 'Flame', head: null })!, /head must be a component/);
+  assert.match(mascotPartProblem({ type: 'shape', label: 'Flame', head: Head, skull })!, /either skull or head, not both/);
+  assert.match(mascotPartProblem({ type: 'shape', label: 'Flame' })!, /a shape needs skull \{ top, bottom, height, radius \}/);
+  // The label is checked first, head or not.
+  assert.match(mascotPartProblem({ type: 'shape', label: '', head: Head })!, /label/);
+  // A head is read for a shape only: on another type it changes nothing.
+  assert.match(mascotPartProblem({ type: 'color', label: 'Night', hex: 'navy', head: Head })!, /#rrggbb/);
+});
+
 test('a label is read in the reader\'s language, then its base language, then English', () => {
   const label = { en: 'Cap', fr: 'Casquette', 'pt-BR': 'Boné' };
   assert.equal(mascotPartLabel(label, 'fr', 'cap'), 'Casquette');

@@ -3,7 +3,7 @@ title: Example cookbook
 sidebar_position: 18
 ---
 
-41 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
+42 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
 
 Obtain the example tree with your developer distribution. There is no public repository link. Use a licensed test instance and follow [Testing](testing.md) before installing third-party code.
 
@@ -1238,6 +1238,44 @@ export function apply(ctx) {
   const disposers = Object.entries(PARTS).map(([key, mascotPart]) =>
     ctx.slots.register({ slot: 'mascot.parts', key, mascotPart }))
   return () => { for (const dispose of disposers) dispose() }
+}
+```
+
+## A mascot head the plugin draws {#mascot-head}
+
+Source: `examples/plugin-mascot-head`. Manifest ID: `example-mascot-head`. Minimum API: **15**.
+
+API 15. A mascot pack whose part is a whole head drawn by the plugin's own component: an ember, a flame in the agent's colour whose eyes follow its state. The manifest declares the slug under timon.mascot.shape; the browser half registers it in the mascot.parts slot with a head component instead of the four skull numbers. Only the agents whose skull is `example-mascot-head:ember` are drawn by it; every other agent stays Timon's, in the person's 2D or 3D style, and several packs add their heads side by side. The component reads useAgentMascot(), like an agent.mascot occupant, and paints an svg (or a canvas) of `size` pixels. A head that throws is replaced by Timon's for that agent; remove the plugin and the agent shows its role's default skull.
+
+Permissions: none. Read the [related guide](mascot-pack.md).
+
+`timon plugin add ./examples/plugin-mascot-head` installs this package on the target instance.
+
+From `examples/plugin-mascot-head/lib/client.js`, line 42 (excerpt):
+
+```js
+function EmberHead() {
+  const m = useAgentMascot()
+  if (!m) return null
+  const e = React.createElement
+  const kind = STATE_EYES[m.state] || 'open'
+  const a11y = m.label ? { role: 'img', 'aria-label': m.label } : { 'aria-hidden': true }
+  return e('svg', { viewBox: '0 0 100 100', width: m.size, height: m.size, 'data-ember': m.state || 'still', ...a11y },
+    m.shadow ? e('ellipse', { cx: 50, cy: 96, rx: 30, ry: 3, fill: '#000', opacity: 0.25 }) : null,
+    // `fur`: the agent's colour as `#rrggbb`, a pack's fur included.
+    e('path', { d: FLAME, fill: m.fur },
+      // A flicker only for a live mascot: `live` is already false under reduced motion.
+      m.live ? e('animateTransform', { attributeName: 'transform', type: 'scale', values: '1 1;1.02 0.98;1 1', dur: '1.2s', repeatCount: 'indefinite', additive: 'sum' }) : null),
+    e('path', { d: 'M50 40 C 58 52, 68 58, 68 72 C 68 84, 60 90, 50 90 C 40 90, 32 84, 32 72 C 32 60, 44 54, 50 40 Z', fill: '#fff', opacity: 0.28 }),
+    eye(kind, 40), eye(kind, 60))
+}
+
+export function apply(ctx) {
+  return ctx.slots.register({
+    slot: 'mascot.parts',
+    key: 'ember',
+    mascotPart: { type: 'shape', label: { en: 'Ember', fr: 'Braise' }, head: EmberHead },
+  })
 }
 ```
 
