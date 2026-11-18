@@ -30,6 +30,10 @@ const CATALOG = {
   ],
 };
 
+/** What the daemon's branch check answers, and what it was asked. */
+let branchRoute: (branch: string) => Response = () => new Response(null, { status: 404 });
+const branchChecks: Array<{ url: string; branch: string }> = [];
+
 // Catalog bodies read so far. The store caches the catalog for the whole
 // process: only the first mount fetches it, later ones paint it at once.
 let served = 0;
@@ -65,8 +69,13 @@ async function mount(form: SeriesPlanFormPayload, opts: MountOptions = {}) {
   proto.releasePointerCapture = () => {};
   proto.scrollIntoView = () => {};
   install('IS_REACT_ACT_ENVIRONMENT', true);
-  install('fetch', async (url: string) => {
+  install('fetch', async (url: string, init?: RequestInit) => {
     if (url === '/api/ui/prefs/model-favorites') return Response.json({ favorites: [] });
+    if (url.endsWith('/integration/branch')) {
+      const { branch } = JSON.parse(String(init?.body ?? '{}')) as { branch: string };
+      branchChecks.push({ url, branch });
+      return branchRoute(branch);
+    }
     if (url !== '/api/ui/backends/catalog') return new Response(null, { status: 404 });
     const response = Response.json(CATALOG);
     const read = response.json.bind(response);
@@ -482,4 +491,107 @@ test('TODO #515: a plan the daemon did not receive keeps its draft; another miss
   try { assert.equal(document.querySelector('textarea')!.value, ''); } finally { await r.unmount(); }
   r = await mount({ ...grouped, chantier: 'Another job' }, { missionId: 'm1', storage });
   try { assert.equal(document.querySelector('textarea')!.value, ''); } finally { await r.unmount(); }
+});
+
+/* The branch field: only for a project that lands through pull requests. */
+const landed = (landing: NonNullable<SeriesPlanFormPayload['landing']>): SeriesPlanFormPayload => ({
+  kind: 'series_plan', chantier: 'Branch job', volets: [{ title: 'A' }], landing,
+});
+const LANDING = { project: 'acme', prefix: 'feat/', branch: 'feat/branch-job', base_ref: 'origin/main', locked: false };
+const branchSection = () => document.querySelector<HTMLElement>('[data-testid="plan-branch"]');
+const branchInput = () => branchSection()!.querySelector('input')!;
+const launchButton = () => Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Launch')!;
+
+async function typeTopic(r: Awaited<ReturnType<typeof mount>>, value: string) {
+  const React = await import('react');
+  await React.act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(r.window.HTMLInputElement.prototype, 'value')!.set!;
+    setter.call(branchInput(), value);
+    branchInput().dispatchEvent(new r.window.Event('input', { bubbles: true }));
+  });
+}
+
+test('a project without the pull request setting shows no branch field and sends no branch', async () => {
+  const r = await mount({ kind: 'series_plan', chantier: 'Job', volets: [{ title: 'A' }] });
+  try {
+    assert.equal(branchSection(), null);
+    await r.launch();
+    assert.equal('branch' in r.answers[0]!, false);
+  } finally { await r.unmount(); }
+});
+
+test('a pull request project folds the branch under Advanced, prefix shown, and sends the full name', async () => {
+  const r = await mount(landed(LANDING));
+  try {
+    const header = branchSection()!.querySelector('button')!;
+    assert.equal(header.getAttribute('aria-expanded'), 'false');
+    assert.match(header.textContent!, /Advanced.*feat\/branch-job/);
+    await r.click(header);
+    assert.equal(branchSection()!.querySelector('[data-testid="plan-branch-prefix"]')!.textContent, 'feat/');
+    assert.equal(branchInput().value, 'branch-job');
+    await r.launch();
+    assert.equal(r.answers[0]!.branch, 'feat/branch-job');
+    assert.deepEqual(branchChecks, [], 'the proposal judged at opening is not checked again');
+  } finally { await r.unmount(); }
+});
+
+test('a sequential mode hides the branch field', async () => {
+  const r = await mount(landed(LANDING));
+  try {
+    const sequential = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')).find((b) => b.title === 'Sequential — in this mission')!;
+    await r.click(sequential);
+    assert.equal(branchSection(), null);
+    await r.launch();
+    assert.equal('branch' in r.answers[0]!, false);
+  } finally { await r.unmount(); }
+});
+
+test('a typed name goes to the daemon: its refusal shows under the field and blocks the launch; its numbering is shown', async () => {
+  branchChecks.length = 0;
+  branchRoute = (branch) => (branch.includes('timon')
+    ? Response.json({ error: 'reserved', code: 'plan_branch_refused', params: { detail: 'reserved for Timon' }, ok: false, refusal: 'reserved for Timon' }, { status: 400 })
+    : Response.json({ ok: true, branch: `${branch}-2` }));
+  const r = await mount(landed(LANDING));
+  const React = await import('react');
+  const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);
+  try {
+    await r.click(branchSection()!.querySelector('button')!);
+    await typeTopic(r, 'timon-thing');
+    await until(() => branchSection()!.querySelector('[data-testid="plan-branch-error"]') !== null, 'the refusal to show');
+    assert.match(branchSection()!.querySelector('[data-testid="plan-branch-error"]')!.textContent!, /reserved for Timon/);
+    assert.equal(branchInput().getAttribute('aria-invalid'), 'true');
+    assert.equal(launchButton().disabled, true);
+    assert.deepEqual(branchChecks.map((c) => c.branch), ['feat/timon-thing']);
+    await typeTopic(r, 'taken');
+    await until(() => /Created as feat\/taken-2/.test(branchSection()!.textContent!), 'the numbered name to show');
+    assert.equal(launchButton().disabled, false);
+    await r.launch();
+    assert.equal(r.answers[0]!.branch, 'feat/taken');
+  } finally { await r.unmount(); }
+});
+
+test('an empty name or a refused proposal opens the field with its error', async () => {
+  const r = await mount(landed({ ...LANDING, branch: 'feat/fix-bfd1c111de16', refusal: 'it carries an id' }));
+  try {
+    assert.equal(branchSection()!.querySelector('button')!.getAttribute('aria-expanded'), 'true');
+    assert.match(branchSection()!.querySelector('[data-testid="plan-branch-error"]')!.textContent!, /it carries an id/);
+    assert.equal(launchButton().disabled, true);
+  } finally { await r.unmount(); }
+  const unnamed = await mount(landed({ ...LANDING, branch: 'feat/<topic>' }));
+  try {
+    assert.equal(branchInput().value, '');
+    assert.match(branchSection()!.querySelector('[data-testid="plan-branch-error"]')!.textContent!, /Name the branch/);
+  } finally { await unnamed.unmount(); }
+});
+
+test('a branch the job already started from is read-only and not sent back', async () => {
+  const r = await mount(landed({ ...LANDING, branch: 'feat/started', locked: true }));
+  try {
+    await r.click(branchSection()!.querySelector('button')!);
+    assert.equal(branchInput().readOnly, true);
+    assert.equal(branchInput().value, 'feat/started');
+    assert.match(branchSection()!.textContent!, /already started from this branch/);
+    await r.launch();
+    assert.equal('branch' in r.answers[0]!, false);
+  } finally { await r.unmount(); }
 });

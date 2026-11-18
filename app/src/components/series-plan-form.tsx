@@ -25,7 +25,7 @@
  */
 
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronRight, GitBranch, GitMerge, ShieldCheck, Sparkles, Zap } from 'lucide-react';
+import { ChevronDown, ChevronRight, GitBranch, GitMerge, Lock, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModelPickerPopover, type ModelPick } from '@/components/model-picker';
@@ -37,6 +37,7 @@ import {
   type BackendCatalog,
 } from '@/lib/backends';
 import { t } from '@/lib/i18n';
+import { apiErrorMessage } from '@/lib/api-error';
 import { sessionDraftStorage } from '@/lib/ask-user-draft';
 import {
   clearSeriesPlanDraft, DEFAULT_SERIES_PLAN_MODE, loadSeriesPlanDraft, saveSeriesPlanDraft,
@@ -77,11 +78,31 @@ export type SeriesPlanDefaults = Partial<
   Record<SeriesPlanRole, { model?: string; fallback?: string }>
 >;
 
+/** The job's integration branch, attached by the orchestrator when the
+ *  agent's project lands through pull requests (`plan-landing.ts`). Absent
+ *  for any other project: the form then has no branch field. */
+export type SeriesPlanLanding = {
+  /** The project whose check route judges a typed name. */
+  project: string;
+  /** `feat/`: shown before the field, never typed. */
+  prefix: string;
+  /** The name the job would get today, already numbered (`-2`). */
+  branch: string;
+  base_ref: string;
+  /** The series already started from this branch: it no longer changes. */
+  locked: boolean;
+  /** Why the agent's proposal cannot be used. */
+  refusal?: string;
+};
+
 export type SeriesPlanFormPayload = {
   kind: 'series_plan';
   chantier: string;
   volets: SeriesPlanVolet[];
+  /** The branch the agent proposed, as it sent it. */
+  branch?: string;
   defaults?: SeriesPlanDefaults;
+  landing?: SeriesPlanLanding;
 };
 
 export type SeriesPlanRoleConfig = {
@@ -100,6 +121,9 @@ export type SeriesPlanAnswer = {
    *  Absent when no group has a setting: touching nothing stays a no-op. */
   groups?: Record<string, SeriesPlanGroupConfig>;
   note?: string;
+  /** The job's integration branch, full name; only with a `landing`, never
+   *  once it is locked. The daemon checks it again. */
+  branch?: string;
 };
 
 /** Distinct group names, in the order the parts first show them. */
@@ -735,6 +759,142 @@ function collectRoles<R extends SeriesPlanRole>(
   return out;
 }
 
+/** The modes that create Kanban tasks: the only ones a branch applies to. */
+const KANBAN_MODES: ReadonlySet<SeriesPlanMode> = new Set(['kanban-full', 'kanban-code-self', 'kanban-code-group']);
+
+/** The placeholder the daemon writes when the title gives no usable name. */
+const UNNAMED_TOPIC = '<topic>';
+
+/** What the field holds: the name without the prefix the project imposes. */
+export function branchTopic(landing: SeriesPlanLanding): string {
+  if (landing.branch.endsWith(UNNAMED_TOPIC)) return '';
+  return landing.branch.startsWith(landing.prefix) ? landing.branch.slice(landing.prefix.length) : landing.branch;
+}
+
+/** The full name a typed topic stands for, written the daemon's way. */
+export function branchFullName(topic: string, prefix: string): string {
+  const name = topic.trim();
+  return name.startsWith(prefix) ? name : `${prefix}${name}`;
+}
+
+/** The daemon's verdict on the name in the field. */
+export type BranchCheck =
+  | { state: 'ok'; branch: string }
+  | { state: 'refused'; message: string }
+  /** Typed, not judged yet; or the check could not answer (the daemon judges at launch). */
+  | { state: 'pending' };
+
+function initialBranchCheck(landing: SeriesPlanLanding, topic: string): BranchCheck {
+  if (landing.locked) return { state: 'ok', branch: landing.branch };
+  if (landing.refusal) return { state: 'refused', message: t('apiErrors.plan_branch_refused', { detail: landing.refusal }) };
+  if (topic === '') return { state: 'refused', message: t('taskForm.seriesPlan.branch.empty') };
+  if (topic !== branchTopic(landing)) return { state: 'pending' };
+  return { state: 'ok', branch: landing.branch };
+}
+
+/** Asks the daemon what the typed name would become; `pending` when it cannot say. */
+async function checkBranch(project: string, branch: string): Promise<BranchCheck> {
+  try {
+    const res = await fetch(`/api/ui/projects/${encodeURIComponent(project)}/integration/branch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ branch }),
+    });
+    const body: unknown = await res.json().catch(() => null);
+    if (res.ok && body && typeof (body as { branch?: unknown }).branch === 'string') {
+      return { state: 'ok', branch: (body as { branch: string }).branch };
+    }
+    if (res.status === 400) return { state: 'refused', message: apiErrorMessage(body, { status: res.status }) };
+  } catch { /* offline: the daemon checks the name again at launch */ }
+  return { state: 'pending' };
+}
+
+/**
+ * The job's integration branch, folded under "Advanced": most plans keep the
+ * name the agent proposed. The prefix is the project's and is not typed; the
+ * daemon judges every name (`POST …/integration/branch`), so the field never
+ * accepts one the plan's answer would refuse.
+ */
+function BranchField({
+  landing,
+  topic,
+  check,
+  onTopic,
+  disabled,
+}: {
+  landing: SeriesPlanLanding;
+  topic: string;
+  check: BranchCheck;
+  onTopic: (topic: string) => void;
+  disabled: boolean;
+}) {
+  const panelId = useId();
+  const inputId = useId();
+  // A name to fix opens the field: folded, the error would stay unseen.
+  const [open, setOpen] = useState(() => check.state === 'refused');
+  useEffect(() => { if (check.state === 'refused') setOpen(true); }, [check.state]);
+  const typed = branchFullName(topic, landing.prefix);
+  const shown = landing.locked ? landing.branch : check.state === 'ok' ? check.branch : typed;
+  return (
+    <section className={cn('rounded-md', VEIL)} data-testid="plan-branch">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((v) => !v)}
+        className={cn('flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors', VEIL_HOVER, FOCUS_RING)}
+      >
+        <ChevronRight aria-hidden className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')} />
+        <span className="shrink-0 text-[12px] font-medium">{t('taskForm.seriesPlan.branch.advanced')}</span>
+        <span className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+          <GitBranch aria-hidden className="size-3 shrink-0" />
+          <span className="truncate" data-testid="plan-branch-summary">{shown}</span>
+          {landing.locked && <Lock aria-hidden className="size-3 shrink-0" />}
+        </span>
+      </button>
+      {open && (
+        <div id={panelId} className="flex flex-col gap-1 px-2.5 pb-2.5">
+          <div className="flex items-center gap-2">
+            <label htmlFor={inputId} className="w-[76px] shrink-0 text-[12px] font-medium sm:w-[92px]">
+              {t('taskForm.seriesPlan.branch.label')}
+            </label>
+            <div
+              className={cn(
+                'flex h-8 min-w-0 flex-1 items-center rounded px-2 text-[12px]',
+                INSET,
+                check.state === 'refused' && !landing.locked && 'ring-1 ring-inset ring-destructive/60',
+              )}
+            >
+              <span className="shrink-0 text-muted-foreground" data-testid="plan-branch-prefix">{landing.locked ? '' : landing.prefix}</span>
+              <input
+                id={inputId}
+                value={landing.locked ? landing.branch : topic}
+                readOnly={landing.locked}
+                disabled={disabled}
+                spellCheck={false}
+                autoComplete="off"
+                aria-invalid={check.state === 'refused' && !landing.locked}
+                title={landing.locked ? t('taskForm.seriesPlan.branch.locked') : undefined}
+                onChange={(e) => onTopic(e.target.value)}
+                className="min-w-0 flex-1 bg-transparent outline-none read-only:text-muted-foreground disabled:opacity-70"
+              />
+            </div>
+          </div>
+          {landing.locked ? (
+            <span className="text-[10.5px] text-muted-foreground sm:pl-[100px]">{t('taskForm.seriesPlan.branch.locked')}</span>
+          ) : check.state === 'refused' ? (
+            <span role="alert" className="text-[10.5px] text-destructive sm:pl-[100px]" data-testid="plan-branch-error">{check.message}</span>
+          ) : check.state === 'ok' && check.branch !== typed ? (
+            <span className="text-[10.5px] text-muted-foreground sm:pl-[100px]">
+              {t('taskForm.seriesPlan.branch.createdAs', { branch: check.branch })}
+            </span>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function SeriesPlanForm({
   form,
   pending,
@@ -772,18 +932,43 @@ export function SeriesPlanForm({
    *  the click, not only at the first changed menu. */
   const [groupCustom, setGroupCustom] = useState<Record<string, boolean>>(() => draft?.groupCustom ?? {});
   const [note, setNote] = useState(() => draft?.note ?? '');
+  const landing = form.landing;
+  /** The branch topic, without the project's prefix. */
+  const [topic, setTopic] = useState(() => (landing && !landing.locked && draft?.branch !== undefined ? draft.branch : landing ? branchTopic(landing) : ''));
+  const [branchCheck, setBranchCheck] = useState<BranchCheck>(() => (landing ? initialBranchCheck(landing, topic) : { state: 'pending' }));
+  useEffect(() => {
+    if (!landing || landing.locked || !pending) return;
+    if (topic.trim() === '') { setBranchCheck({ state: 'refused', message: t('taskForm.seriesPlan.branch.empty') }); return; }
+    // The opening already judged the proposal: no request until the name changes.
+    if (topic === branchTopic(landing) && !landing.refusal) { setBranchCheck({ state: 'ok', branch: landing.branch }); return; }
+    if (topic === branchTopic(landing) && landing.refusal) {
+      setBranchCheck({ state: 'refused', message: t('apiErrors.plan_branch_refused', { detail: landing.refusal }) });
+      return;
+    }
+    setBranchCheck({ state: 'pending' });
+    let live = true;
+    const timer = setTimeout(() => {
+      void checkBranch(landing.project, branchFullName(topic, landing.prefix)).then((out) => { if (live) setBranchCheck(out); });
+    }, 350);
+    return () => { live = false; clearTimeout(timer); };
+    // `landing` comes with `form`, a new object on every render of the card.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topic, pending]);
   useEffect(() => {
     if (!pending) return;
-    saveSeriesPlanDraft(sessionDraftStorage(), missionId, form, { mode, picks, groupPicks, groupCustom, note });
+    const branch = landing && !landing.locked && topic !== branchTopic(landing) ? { branch: topic } : {};
+    saveSeriesPlanDraft(sessionDraftStorage(), missionId, form, { mode, picks, groupPicks, groupCustom, note, ...branch });
     // `form` is a new object on every render of the card; the draft follows what the user changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, picks, groupPicks, groupCustom, note]);
+  }, [mode, picks, groupPicks, groupCustom, note, topic]);
 
   const roles = ROLES_BY_MODE[mode];
   const presetRoles: Record<PresetColumn, readonly SeriesPlanRole[]> = { main: roles.filter((role) => MAIN_EDITABLE[role]), fallback: roles };
   const groupRoles = roles.filter(isGroupRole);
   const tile = useMemo(() => MODE_TILES.find((t) => t.mode === mode)!, [mode]);
   const disabled = !pending || busy;
+  const showsBranch = landing !== undefined && KANBAN_MODES.has(mode);
+  const branchRefused = showsBranch && !landing.locked && branchCheck.state === 'refused';
 
   const groupNames = useMemo(() => planGroupNames(form.volets), [form.volets]);
   const indexed = form.volets.map((volet, index) => ({ volet, index }));
@@ -819,6 +1004,7 @@ export function SeriesPlanForm({
       roles: out,
       ...(Object.keys(groups).length > 0 ? { groups } : {}),
       note: trimmed || undefined,
+      ...(showsBranch && !landing.locked ? { branch: branchFullName(topic, landing.prefix) } : {}),
     });
     if (sent !== false) clearSeriesPlanDraft(sessionDraftStorage(), missionId, form);
   }
@@ -976,6 +1162,10 @@ export function SeriesPlanForm({
         })}
       </div>
 
+      {showsBranch && (
+        <BranchField landing={landing} topic={topic} check={branchCheck} onTopic={setTopic} disabled={disabled} />
+      )}
+
       <textarea
         value={note}
         disabled={disabled}
@@ -991,7 +1181,7 @@ export function SeriesPlanForm({
 
       {pending ? (
         <div className="flex items-center gap-2">
-          <Button size="sm" disabled={busy} onClick={() => void submit()} className="h-7 gap-1.5">
+          <Button size="sm" disabled={busy || branchRefused} onClick={() => void submit()} className="h-7 gap-1.5">
             {t('taskForm.seriesPlan.launch')}
           </Button>
           <Button

@@ -20,6 +20,8 @@ export type SeriesPlanDraft = {
   groupPicks: Record<string, SeriesPlanPicks>;
   groupCustom: Record<string, boolean>;
   note: string;
+  /** The branch topic typed in place of the proposed one; absent when untouched. */
+  branch?: string;
 };
 type DraftStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -54,7 +56,8 @@ function hasContent(draft: SeriesPlanDraft): boolean {
     || Object.keys(draft.picks).length > 0
     || Object.values(draft.groupPicks).some((p) => Object.keys(p).length > 0)
     || Object.values(draft.groupCustom).some(Boolean)
-    || draft.note.trim() !== '';
+    || draft.note.trim() !== ''
+    || draft.branch !== undefined;
 }
 
 /** Keeps the cells that still name a role of `roles` and hold a well-formed pair. */
@@ -100,6 +103,7 @@ export function loadSeriesPlanDraft(
     groupPicks: {},
     groupCustom: {},
     note: typeof stored.note === 'string' ? stored.note : '',
+    ...(typeof stored.branch === 'string' ? { branch: stored.branch } : {}),
   };
   if (stored.groupPicks && typeof stored.groupPicks === 'object') {
     for (const [name, picks] of Object.entries(stored.groupPicks as Record<string, unknown>)) {
