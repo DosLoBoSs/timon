@@ -6,7 +6,7 @@
  */
 import '../../test-home.js';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, utimesSync, writeFileSync } from 'node:fs';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -15,12 +15,13 @@ import { after, mock, test } from 'node:test';
 import express from 'express';
 import { createTestAccount } from '../../../tests/helpers/accounts.js';
 import { bus } from '../../bus.js';
-import { dbApi } from '../../db.js';
+import { db, dbApi } from '../../db.js';
 import { getHost } from '../../host/index.js';
-import { agentDir } from '../../paths.js';
+import { agentDir, projectDir } from '../../paths.js';
 import type { ExecOpts, ExecResult } from '../../host/types.js';
 import {
-  buildReviewBrief, parseReviewVerdict, UNTRUSTED_COMMENT_COUNT, UNTRUSTED_EXCERPT_CHARS, watchReviewMissions,
+  buildReviewBrief, DIFF_MAX_AGE_MS, ownedDiffPath, parseReviewVerdict, purgeReviewDiffs, UNTRUSTED_COMMENT_COUNT,
+  UNTRUSTED_EXCERPT_CHARS, watchReviewMissions,
   type SpawnReviewOptions,
 } from '../../external-pr-review.js';
 import type { PullRequestDetails } from '../../host/forge.js';
@@ -251,6 +252,117 @@ test('the person sends the brief they read, once; the verdict comes back on the 
   assert.equal(pr.review?.verdict, 'changes_requested');
   assert.match(pr.review?.report ?? '', /No tests/);
   assertOnlyReads();
+});
+
+type ListedReview = { id: string; state: string; verdict: string | null; report: string | null; mission_id: string | null };
+async function listedReview(number: number): Promise<ListedReview | null> {
+  const listed = await (await call('GET', LIST_URL, 'manager')).json() as { pulls: Array<{ number: number; review: ListedReview | null }> };
+  return listed.pulls.find((p) => p.number === number)?.review ?? null;
+}
+
+test('preparing again keeps the last verdict on the row until the new review is sent', async () => {
+  const before = await listedReview(12);
+  assert.equal(before?.verdict, 'changes_requested');
+  // Opened then closed without sending: the row still shows the verdict.
+  const prepared = await (await call('POST', `${LIST_URL}/12/review`, 'manager', {})).json() as { review: { id: string; state: string } };
+  assert.equal(prepared.review.state, 'draft');
+  const kept = await listedReview(12);
+  assert.equal(kept?.state, 'done');
+  assert.equal(kept?.verdict, 'changes_requested');
+  assert.match(kept?.report ?? '', /No tests/);
+  assert.equal(kept?.mission_id, before?.mission_id);
+  // A second preparation still keeps it.
+  const again = await (await call('POST', `${LIST_URL}/12/review`, 'manager', {})).json() as { review: { id: string } };
+  assert.equal((await listedReview(12))?.verdict, 'changes_requested');
+
+  // Sent, the new review takes the row; concluded, its verdict replaces the old one.
+  const sent = await call('POST', `${LIST_URL}/12/review/send`, 'person', { review_id: again.review.id });
+  assert.equal(sent.status, 200);
+  const running = (await sent.json() as { review: { mission_id: string } }).review;
+  assert.equal((await listedReview(12))?.state, 'running');
+  dbApi.insertEvent(running.mission_id, 'assistant', { message: { content: [{ type: 'text', text: 'VERDICT: MERGEABLE\nTests added.' }] } });
+  bus.publish({ kind: 'turn_complete', missionId: running.mission_id, outcome: 'completed' });
+  const after_ = await listedReview(12);
+  assert.equal(after_?.verdict, 'mergeable');
+  assert.equal(after_?.mission_id, running.mission_id);
+});
+
+const OLD = Date.now() - DIFF_MAX_AGE_MS - 60_000;
+const diffFolder = join(projectDir('acme'), 'pr-reviews');
+
+function seedReview(number: number, state: string, diffPath: string | null): string {
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO external_pr_reviews (id, project, repo, pr_number, state, agent, brief, diff_path, created_at, updated_at)
+    VALUES (?, 'acme', 'acme/widgets', ?, ?, 'acme.reviewer', 'b', ?, 0, 0)
+  `).run(id, number, state, diffPath);
+  return id;
+}
+
+function diffOf(id: string, age?: number): string {
+  mkdirSync(diffFolder, { recursive: true });
+  const path = join(diffFolder, `${id}.diff`);
+  writeFileSync(path, DIFF);
+  if (age !== undefined) utimesSync(path, age / 1000, age / 1000);
+  return path;
+}
+
+const diffPathOf = (id: string) =>
+  (db.prepare(`SELECT diff_path FROM external_pr_reviews WHERE id = ?`).get(id) as { diff_path: string | null }).diff_path;
+
+test('reading the list purges the diffs of closed pull requests, old ones and orphans, never a running one', async () => {
+  const closed = diffOf(crypto.randomUUID());
+  const closedRow = seedReview(40, 'done', closed);
+  const runningId = crypto.randomUUID();
+  const runningDiff = diffOf(runningId, OLD);
+  seedReview(41, 'running', runningDiff);
+  const oldOrphan = diffOf(crypto.randomUUID(), OLD);
+  const freshOrphan = diffOf(crypto.randomUUID());
+  // Not a diff of the folder: left alone, whatever its age.
+  const stranger = join(diffFolder, 'notes.txt');
+  writeFileSync(stranger, 'x');
+  utimesSync(stranger, OLD / 1000, OLD / 1000);
+
+  // PR 13 is open, but its draft's diff is older than the cap.
+  const draft = await (await call('POST', `${LIST_URL}/13/review`, 'manager', {})).json() as { review: { id: string } };
+  const draftDiff = diffPathOf(draft.review.id)!;
+  utimesSync(draftDiff, OLD / 1000, OLD / 1000);
+
+  assert.equal((await call('GET', LIST_URL, 'manager')).status, 200);
+  assert.ok(!existsSync(closed), 'the diff of a closed pull request');
+  assert.equal(diffPathOf(closedRow), null);
+  assert.ok(existsSync(runningDiff), 'a running review keeps its diff');
+  assert.ok(!existsSync(oldOrphan), 'an old file no review names');
+  assert.ok(existsSync(freshOrphan), 'a fresh file may be a preparation in flight');
+  assert.ok(existsSync(stranger));
+  assert.ok(!existsSync(draftDiff), 'a diff past the age cap');
+  // The draft's diff is gone: sending it would point the reviewer at nothing.
+  const send = await call('POST', `${LIST_URL}/13/review/send`, 'person', { review_id: draft.review.id });
+  assert.equal(send.status, 404);
+});
+
+test('the purge never removes a path outside the project\'s diff folder', () => {
+  const outside = join(home, 'outside.diff');
+  writeFileSync(outside, 'keep');
+  const sneakyName = `${crypto.randomUUID()}.diff`;
+  const sibling = join(projectDir('acme'), sneakyName);
+  writeFileSync(sibling, 'keep');
+  const other = join(projectDir('solo'), 'pr-reviews', sneakyName);
+  mkdirSync(join(projectDir('solo'), 'pr-reviews'), { recursive: true });
+  writeFileSync(other, 'keep');
+  const ids = [
+    seedReview(50, 'done', outside),
+    seedReview(51, 'failed', sibling),
+    seedReview(52, 'done', join(diffFolder, '..', sneakyName)),
+    seedReview(53, 'draft', other),
+    seedReview(54, 'done', join(diffFolder, '..', '..', 'solo', 'pr-reviews', sneakyName)),
+  ];
+  purgeReviewDiffs('acme', { repo: 'acme/widgets', open: new Set() }, Date.now() + 10 * DIFF_MAX_AGE_MS);
+  for (const path of [outside, sibling, other]) assert.ok(existsSync(path), path);
+  for (const id of ids) assert.notEqual(diffPathOf(id), null);
+  assert.equal(ownedDiffPath('acme', join(diffFolder, '..', 'pr-reviews', sneakyName)), join(diffFolder, sneakyName));
+  assert.equal(ownedDiffPath('acme', join(diffFolder, 'sub', sneakyName)), null);
+  assert.equal(ownedDiffPath('acme', join(diffFolder, 'x.diff')), null);
 });
 
 test('an unknown draft is 404, a bad id 400', async () => {
