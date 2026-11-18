@@ -1,0 +1,221 @@
+/**
+ * The forge, as the daemon reaches it to open a pull request
+ * (`docs/KANBAN-PR-PIPELINE.md` §2.5, §7.2): the account `gh` signs in as, the
+ * pull request it creates, and the three git gestures that talk to the remote
+ * (read a remote branch, fetch, push).
+ *
+ * This is the only place `gh` and the network side of `git` are called for a
+ * pull request. Every command goes through a runner the tests replace: nothing
+ * in the test suite reaches GitHub or pushes anywhere.
+ *
+ * Two rules hold here, whatever the caller asks:
+ *
+ * - **Never a forced push.** The push is built here, from a branch name, as a
+ *   plain `refs/heads/<b>:refs/heads/<b>` refspec; `assertNoForce` refuses any
+ *   argument that would overwrite, delete or mirror a remote branch, so a
+ *   branch already pushed is never rewritten.
+ * - **No secret in an answer.** What `gh` or `git` print is shortened and every
+ *   token-shaped string masked before it reaches a caller, a log or an error.
+ */
+import { ghEnv, ghLogin, type GhLoginOutcome, type GhRunner } from './gh.js';
+import { getHost } from './index.js';
+import type { ExecOpts, ExecResult } from './types.js';
+
+export type GitRunner = (args: string[], opts: ExecOpts) => Promise<ExecResult>;
+
+const hostGh: GhRunner = (args, opts) => getHost().execAsync('gh', args, opts);
+const hostGit: GitRunner = (args, opts) => getHost().execAsync('git', args, opts);
+
+export type ForgeRunners = { gh?: GhRunner; git?: GitRunner };
+
+const GH_TIMEOUT_MS = 60_000;
+const NETWORK_TIMEOUT_MS = 120_000;
+
+/** What a command said, short, without anything shaped like a credential. */
+export function redactedOutput(text: string): string {
+  return text
+    .replace(/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g, '[redacted]')
+    .replace(/(https?:\/\/)[^\s/@]+@/g, '$1[redacted]@')
+    .trim()
+    .slice(0, 400);
+}
+
+/** `owner/name` of a GitHub push URL (ssh, scp-like or https, an ssh host
+ *  alias included), or null. */
+export function githubRepoFromUrl(url: string): string | null {
+  const m = /^(?:[a-z][a-z0-9+.-]*:\/\/[^/]+\/|[^\s/:@]+@[^\s/:]+:|[^\s/:]+:)([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/i.exec(url.trim());
+  if (!m?.[1] || !m[2] || m[1] === '.' || m[1] === '..' || m[2] === '.' || m[2] === '..') return null;
+  return `${m[1]}/${m[2]}`;
+}
+
+export type PullRequestRef = { number: number; url: string };
+
+export type CreatePullRequestOutcome =
+  | { ok: true; pr: PullRequestRef; existing: boolean }
+  | { ok: false; code: 'gh_missing' | 'gh_failed' | 'timed_out' | 'unexpected_answer'; reason: string };
+
+export type PullRequestInput = {
+  /** `owner/name` on the forge. */
+  repo: string;
+  /** Branch the pull request targets (`main`). */
+  base: string;
+  /** Branch it brings (`feat/topic`), already pushed. */
+  head: string;
+  title: string;
+  body: string;
+};
+
+export interface Forge {
+  /** The login the configured credentials answer for: one call to the forge. */
+  login(): Promise<GhLoginOutcome>;
+  /** Opens the pull request; one already open for the same branches is
+   *  reported as such, not as a failure. */
+  createPullRequest(input: PullRequestInput): Promise<CreatePullRequestOutcome>;
+}
+
+const PULL_URL = /https:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/(\d+)/;
+
+function pullRequestFrom(text: string): PullRequestRef | null {
+  const m = PULL_URL.exec(text);
+  if (!m?.[1]) return null;
+  return { number: Number(m[1]), url: m[0] };
+}
+
+/** GitHub through `gh`, signed in with the project's config folder. */
+export function githubForge(configDir: string | null, runners: ForgeRunners = {}): Forge {
+  const gh = runners.gh ?? hostGh;
+  return {
+    login: () => ghLogin(configDir, gh),
+    async createPullRequest(input) {
+      const args = [
+        'pr', 'create',
+        '--repo', input.repo,
+        '--base', input.base,
+        '--head', input.head,
+        '--title', input.title,
+        '--body', input.body,
+      ];
+      let result: ExecResult;
+      try {
+        result = await gh(args, { env: ghEnv(configDir), timeout: GH_TIMEOUT_MS, windowsHide: true });
+      } catch {
+        return { ok: false, code: 'gh_missing', reason: 'the GitHub CLI (gh) was not found on this machine' };
+      }
+      if (result.timedOut) return { ok: false, code: 'timed_out', reason: 'gh did not answer in time' };
+      if (result.code !== 0) {
+        // gh names the pull request that already joins these two branches:
+        // opening it again would be the same pull request.
+        const existing = /already exists/i.test(result.stderr) ? pullRequestFrom(result.stderr) : null;
+        if (existing) return { ok: true, pr: existing, existing: true };
+        return {
+          ok: false,
+          code: 'gh_failed',
+          reason: redactedOutput(result.stderr || result.stdout) || `gh exited with code ${result.code}`,
+        };
+      }
+      const pr = pullRequestFrom(result.stdout);
+      if (!pr) return { ok: false, code: 'unexpected_answer', reason: 'gh did not answer the address of a pull request' };
+      return { ok: true, pr, existing: false };
+    },
+  };
+}
+
+/** Arguments that would let a push overwrite, delete or mirror a remote ref. */
+const FORCING = /^(?:--force(?:-with-lease|-if-includes)?(?:=.*)?|-[a-zA-Z]*f[a-zA-Z]*|--mirror|--delete|-d|--prune|--all|--tags)$/;
+
+/**
+ * Throws when `args` (the words after `git push`) could rewrite a branch that
+ * is already on the remote: a force flag, a deletion, a mirror, or a refspec
+ * with a leading `+` or an empty source.
+ */
+export function assertNoForce(args: readonly string[]): void {
+  let afterSeparator = false;
+  for (const arg of args) {
+    if (arg === '--') { afterSeparator = true; continue; }
+    if (!afterSeparator && FORCING.test(arg)) throw new Error(`refusing a forced push (${arg})`);
+    if (arg.startsWith('+') || arg.startsWith(':')) throw new Error('refusing a forced push (refspec)');
+  }
+}
+
+/** A branch name safe to put in a refspec: no option, no forcing prefix, no
+ *  refspec separator. */
+function plainBranch(branch: string): boolean {
+  return /^[A-Za-z0-9._/-]+$/.test(branch) && !branch.startsWith('-') && !branch.includes('..');
+}
+
+/** The words after `git push` for one branch, always the same shape. */
+export function pushArguments(url: string, branch: string): string[] {
+  if (!plainBranch(branch)) throw new Error('refusing to push a branch with an unusual name');
+  const args = ['--', url, `refs/heads/${branch}:refs/heads/${branch}`];
+  assertNoForce(args);
+  return args;
+}
+
+// No terminal behind the daemon: git must fail rather than wait for a
+// username or a passphrase nobody will type.
+function networkEnv(): NodeJS.ProcessEnv {
+  return { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+}
+
+export type RemoteBranchOutcome =
+  | { ok: true; sha: string | null }
+  | { ok: false; reason: string };
+
+export type GitNetworkOutcome =
+  | { ok: true }
+  | { ok: false; code: 'rejected' | 'failed' | 'timed_out'; reason: string };
+
+export interface GitTransport {
+  /** The sha of `branch` on the remote at `url`, or null when it has none. */
+  remoteBranchSha(url: string, branch: string): Promise<RemoteBranchOutcome>;
+  /** Fetches `refs/heads/<branch>` of `url` into the local ref `into`. */
+  fetchBranch(url: string, branch: string, into: string): Promise<GitNetworkOutcome>;
+  /** Pushes the local `branch` to the same name at `url`, never forced. */
+  pushBranch(url: string, branch: string): Promise<GitNetworkOutcome>;
+}
+
+function failure(result: ExecResult, what: string): Extract<GitNetworkOutcome, { ok: false }> {
+  if (result.timedOut) return { ok: false, code: 'timed_out', reason: `${what} timed out` };
+  const said = redactedOutput(result.stderr || result.stdout);
+  // `! [rejected]` is how git words a push the remote refused as not a
+  // fast-forward: the remote branch moved, and it is never overwritten.
+  const rejected = /\[rejected\]|non-fast-forward|fetch first/i.test(result.stderr);
+  return { ok: false, code: rejected ? 'rejected' : 'failed', reason: said || `${what} failed (code ${result.code})` };
+}
+
+/** The remote side of git for the repository at `repo`. */
+export function gitTransport(repo: string, runners: ForgeRunners = {}): GitTransport {
+  const git = runners.git ?? hostGit;
+  const run = async (args: string[]): Promise<ExecResult> => {
+    try {
+      return await git(['-C', repo, ...args], { env: networkEnv(), timeout: NETWORK_TIMEOUT_MS, windowsHide: true });
+    } catch (err) {
+      return { code: 1, stdout: '', stderr: (err as Error).message };
+    }
+  };
+  return {
+    async remoteBranchSha(url, branch) {
+      if (!plainBranch(branch)) return { ok: false, reason: 'unusual branch name' };
+      const result = await run(['ls-remote', '--heads', '--', url, `refs/heads/${branch}`]);
+      if (result.code !== 0) return { ok: false, reason: failure(result, 'reading the remote').reason };
+      const line = result.stdout.split('\n').map((l) => l.trim()).find((l) => l.endsWith(`\trefs/heads/${branch}`));
+      const sha = line?.split('\t')[0] ?? null;
+      if (sha !== null && !/^[0-9a-f]{40,64}$/.test(sha)) return { ok: false, reason: 'the remote answered something that is not a commit' };
+      return { ok: true, sha };
+    },
+    async fetchBranch(url, branch, into) {
+      if (!plainBranch(branch) || !plainBranch(into)) return { ok: false, code: 'failed', reason: 'unusual branch name' };
+      // No leading `+`: the local ref only moves forward, like the remote one.
+      const result = await run(['fetch', '--no-tags', '--', url, `refs/heads/${branch}:${into}`]);
+      return result.code === 0 ? { ok: true } : failure(result, 'the fetch');
+    },
+    async pushBranch(url, branch) {
+      let args: string[];
+      try { args = pushArguments(url, branch); } catch (err) {
+        return { ok: false, code: 'failed', reason: (err as Error).message };
+      }
+      const result = await run(['push', ...args]);
+      return result.code === 0 ? { ok: true } : failure(result, 'the push');
+    },
+  };
+}
