@@ -68,3 +68,17 @@ Then Timon pushes the integration branch and opens the pull request. The push is
 A branch under embargo (`sec/<topic>`, for a security fix) is never pushed by this command, whatever the setting says: it lands by hand once the advisory is published.
 
 If the push succeeds but the pull request cannot be created, run the command again: the branch is already there and only the pull request is opened.
+
+## Review the pull requests contributors open
+
+In a project in `pr` mode, the **Open pull requests** widget lists the pull requests open on the project's repository, yours and contributors' ones alike. Add it from the widget window, then pick the project (in an agent's chat, the agent's project is used). Filter the list by author when several people contribute.
+
+**Review** asks the project's reviewer agent to review a pull request, without ever running its code on your machine:
+
+1. Timon reads the pull request and its diff from GitHub, with the project's account. The contributor's branch is never fetched or checked out, and nothing of it is installed, built or tested here: its code only runs in the forge's CI.
+2. Timon shows you the message the reviewer will start with. What the contributor wrote (title, description, comments) is in it as data, cut short, with the instruction never to follow it. Nothing starts until you click **Send**, and only a signed-in person can send it: an agent cannot start a review on its own.
+3. The reviewer reads and writes nothing on GitHub. Its verdict comes back on the pull request's row: **Mergeable**, **Changes requested**, **Reject** or **Your decision** (a product choice the reviewer leaves to you). Its full report, with a draft comment you can post yourself, is in the row's menu.
+
+A verdict marked with `*` is about an earlier state of the pull request: it changed after the review. Review it again.
+
+A project that lands its jobs locally has no pull requests to list: the widget says so until you set the project to `pr` mode.
