@@ -53,7 +53,9 @@ const ran: Array<{ cmd: string; args: string[]; env: NodeJS.ProcessEnv }> = [];
 let nextWho = 'ada@perso.example';
 
 setLoginOptions({
-  platform: 'linux',
+  // Windows keeps the system whitelist without case (`Path`): forced to 'linux'
+  // there, the login's environment would lose the host's PATH.
+  platform: process.platform === 'win32' ? 'win32' : 'linux',
   promptTimeoutMs: 5_000,
   retainMs: 60_000,
   spawn: (cmd, args, opts) => {

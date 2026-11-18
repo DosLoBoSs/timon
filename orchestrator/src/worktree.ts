@@ -373,9 +373,19 @@ async function abortPendingMerge(worktreePath: string): Promise<void> {
  * itself, so it needs neither the agent's cwd nor the source repo (TIM-0113: a
  * task moved to an agent without a folder). No `--force`: git refuses a
  * worktree with uncommitted changes, which is work this gesture must not lose.
+ *
+ * The removal itself runs from the repository's common dir, never from inside
+ * the folder: Windows locks a process's current directory, and a git that
+ * stands in the folder it deletes fails with "Permission denied".
  */
 export async function releaseWorktreeFolder(path: string): Promise<void> {
-  await exec('git', ['-C', path, 'worktree', 'remove', path], { timeout: 15_000 });
+  const r = await exec(
+    'git',
+    ['-C', path, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+    { timeout: 10_000 },
+  );
+  const commonDir = r.stdout.trim();
+  await exec('git', ['-C', commonDir || path, 'worktree', 'remove', path], { timeout: 15_000 });
   purgeShell(WORKTREES_ROOT, path, 0, Date.now());
 }
 

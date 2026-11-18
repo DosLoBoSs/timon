@@ -35,13 +35,16 @@ test('generic bin names the missing binary in the error', () => {
   assert.throws(() => host.bin('binaire-inexistant'), /binaire-inexistant/);
 });
 
+/** The child prints its environment: Node instead of `env`, which Windows does not have. */
+const PRINT_ENV = ['-e', 'for (const [k, v] of Object.entries(process.env)) console.log(`${k}=${v}`)'];
+
 test('generic spawn: a given `env` is the FULL environment of the child', async () => {
   // Hinge of S.4: as long as `spawn` redid `{ ...process.env, ...opts.env }`,
   // the `missionEnv` allowlist had no effect and the absence tests
   // passed for the wrong reasons. This test fails if someone brings it back.
   process.env.TEMOIN_DU_DAEMON = 'ne-doit-pas-passer';
   try {
-    const child = host.spawn('env', [], { env: { SEUL_CE_QUI_EST_POSE: '1' }, stdio: ['ignore', 'pipe', 'ignore'] });
+    const child = host.spawn(process.execPath, PRINT_ENV, { env: { SEUL_CE_QUI_EST_POSE: '1' }, stdio: ['ignore', 'pipe', 'ignore'] });
     const out = await new Promise<string>((resolve) => {
       let buf = '';
       child.stdout!.on('data', (chunk) => { buf += String(chunk); });
@@ -57,7 +60,7 @@ test('generic spawn: a given `env` is the FULL environment of the child', async 
 test('generic spawn: without `env`, the child inherits as before', async () => {
   process.env.TEMOIN_HERITE = 'present';
   try {
-    const child = host.spawn('env', [], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const child = host.spawn(process.execPath, PRINT_ENV, { stdio: ['ignore', 'pipe', 'ignore'] });
     const out = await new Promise<string>((resolve) => {
       let buf = '';
       child.stdout!.on('data', (chunk) => { buf += String(chunk); });

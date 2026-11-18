@@ -77,7 +77,10 @@ test('legacy fallback: <slug>.main is found when nobody holds the role', async (
 
 test('an orchestrator with a free name is found by its role, ahead of <slug>.main', async () => {
   rmSync(AGENTS_DIR, { force: true, recursive: true });
-  agent('toto.main', { project: 'toto' });
+  // A legacy `<slug>.main`, from before roles were stamped: `upsertAgent` would
+  // give it the role too, and the order of the folder listing (sorted on
+  // Windows) would pick between two role holders.
+  flaggedAgent('toto.main', { project: 'toto' });
   agent('toto.Orchestrator', { project: 'toto', role: 'orchestrator' });
   // An orchestrator of ANOTHER project must not be picked up.
   agent('other.Orchestrator', { project: 'other', role: 'orchestrator' });

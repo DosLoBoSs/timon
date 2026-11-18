@@ -65,7 +65,10 @@ const httpsArtifact = (version) => ({
 });
 
 function run(ctx, args, extraEnv = {}) {
-  const r = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-File', SCRIPT, ...args], {
+  // A Windows machine may forbid scripts (policy Restricted): the process-scoped
+  // bypass runs this one file without changing the machine's policy.
+  const policy = process.platform === 'win32' ? ['-ExecutionPolicy', 'Bypass'] : [];
+  const r = spawnSync(shell, ['-NoProfile', '-NonInteractive', ...policy, '-File', SCRIPT, ...args], {
     env: {
       ...process.env,
       TIMON_INSTALL_TESTING: '1',

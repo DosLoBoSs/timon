@@ -27,6 +27,11 @@ import { createDaemonAuthMiddleware } from './plugins-bundled/http/auth.js';
 await import('../tests/helpers/claude-provider.js');
 
 const app = express();
+// One connection per request. The repositories are built with synchronous git
+// calls, which hold this process, server included, for seconds on a loaded
+// Windows machine: the server then drops an idle keep-alive socket at the very
+// moment fetch reuses it, and the request dies with ECONNRESET.
+app.use((_req, res, next) => { res.setHeader('connection', 'close'); next(); });
 app.use(express.json());
 app.use(createDaemonAuthMiddleware({ token: 'guard-test', required: true }));
 registerRoutes(app);

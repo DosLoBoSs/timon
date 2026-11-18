@@ -16,6 +16,7 @@
 import './test-home.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { sep } from 'node:path';
 import {
   CDP_PORT_RANGE,
   GENERAL_BROWSER_SLUG,
@@ -188,7 +189,7 @@ test('the container does not come back to life on its own at reboot', () => {
 test('the project profile is mounted on /config', () => {
   const args = runArgs('globex', 9300);
   const mount = args[args.indexOf('-v') + 1] ?? '';
-  assert.ok(mount.endsWith('/browser-profiles/globex:/config'), mount);
+  assert.match(mount, /[\\/]browser-profiles[\\/]globex:\/config$/, mount);
 });
 
 test('the web relay puts Traefik at the end of the browser loopback', () => {
@@ -210,7 +211,8 @@ test('the web relay puts Traefik at the end of the browser loopback', () => {
   assert.ok(!args.includes('-p'));
 });
 
-test('the project is mounted at the SAME absolute path, read-only', () => {
+// Under Windows the target is the POSIX form of the path: the TIM-0120 test below.
+test('the project is mounted at the SAME absolute path, read-only', { skip: process.platform === 'win32' }, () => {
   // The identical path on both sides is what makes `upload_file` usable
   // under Linux and macOS: the agent's path is valid in the container too.
   const args = runArgs('timon', 9300, process.cwd());
@@ -448,7 +450,7 @@ test('the general profile persists under TIMON_HOME without mounting the cwd', (
   const args = runArgs(GENERAL_BROWSER_SLUG, 9300);
   const mounts = args.filter((_, i) => args[i - 1] === '-v');
   assert.equal(mounts.length, 1);
-  assert.ok(mounts[0]?.endsWith(`/browser-profiles/${GENERAL_BROWSER_SLUG}:/config`));
+  assert.ok(mounts[0]?.endsWith(`${sep}browser-profiles${sep}${GENERAL_BROWSER_SLUG}:/config`), mounts[0]);
 });
 
 test('mcp: a slug outside the grammar is refused before any resolution', () => {

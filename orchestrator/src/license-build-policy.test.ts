@@ -9,12 +9,15 @@
  */
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { removeHomeOnExit } from '../tests/helpers/test-home.js';
 
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-build-policy-test-'));
+// Removed at exit, once the database is closed: Windows will not delete an open timon.db.
+removeHomeOnExit(process.env.TIMON_HOME);
 const { overrideBuildInfo } = await import('./build-info.js');
 const { bootLicenseState, recordServerContact, startLicenseRefresh, writeLicenseKey } = await import('./license/refresh.js');
 const { installLicenseToken, unlicensed } = await import('./license/license.js');
@@ -290,4 +293,4 @@ test('free policy: a beta build without a licence runs on local Free, and still 
   }
 });
 
-test.after(() => { overrideSetupPolicyForTests(undefined); overrideBuildInfo(undefined); rmSync(process.env.TIMON_HOME!, { recursive: true, force: true }); });
+test.after(() => { overrideSetupPolicyForTests(undefined); overrideBuildInfo(undefined); });

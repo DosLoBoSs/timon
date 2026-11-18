@@ -75,11 +75,16 @@ function write(root: string, files: Record<string, string>): void {
   }
 }
 
+/** Where Hermes keeps its root under a home on this host: `~/.hermes`, or the profile's local app data on Windows. */
+const WINDOWS = process.platform === 'win32';
+const hermesDir = (home: string): string => (WINDOWS ? join(home, 'AppData', 'Local', 'hermes') : join(home, '.hermes'));
+const HERMES_LABEL = WINDOWS ? '%USERPROFILE%\\AppData\\Local\\hermes' : '~/.hermes';
+
 /** A fake HOME with `~/.hermes`: the default profile, two named ones, and what must be ignored. */
 function fakeHome(): string {
   const home = mkdtempSync(join(tmpdir(), 'agent-import-hermes-'));
   cleanup.push(() => rmSync(home, { recursive: true, force: true }));
-  const hermes = join(home, '.hermes');
+  const hermes = hermesDir(home);
   write(hermes, {
     'SOUL.md': '<!-- Hermes template: edit me -->\n# Hermes\n\nI am the house assistant.\r\nI answer briefly.\n<!-- trailing\nnote -->\n',
     'memories/USER.md': 'Prefers French.\n§\nWorks at night.\n§\n\n',
@@ -143,12 +148,16 @@ function fakeHome(): string {
   return home;
 }
 
-const linux = (home: string): Platform => ({ platform: 'linux', env: {}, home });
+/** This host, with no environment: Windows then falls back on the profile folder. */
+const onHost = (home: string): Platform => ({ platform: process.platform, env: {}, home });
 
+/** The daemon reads the home of the account: HOME, or USERPROFILE and LOCALAPPDATA on Windows. */
 function useHome(home: string): void {
-  const before = process.env.HOME;
+  const names = ['HOME', 'USERPROFILE', 'LOCALAPPDATA'] as const;
+  const before = names.map((name) => process.env[name]);
   process.env.HOME = home;
-  cleanup.push(() => { if (before === undefined) delete process.env.HOME; else process.env.HOME = before; });
+  if (WINDOWS) { process.env.USERPROFILE = home; delete process.env.LOCALAPPDATA; }
+  cleanup.push(() => names.forEach((name, i) => { if (before[i] === undefined) delete process.env[name]; else process.env[name] = before[i]; }));
 }
 
 const noSecret = (text: string, label: string): void => {
@@ -175,20 +184,20 @@ test('the root is the platform default Hermes uses, never HERMES_HOME', () => {
 
 test('profiles: default and the named ones, never a deleted, stray, linked or misnamed folder', async () => {
   const home = fakeHome();
-  const hermes = join(home, '.hermes');
+  const hermes = hermesDir(home);
   const outside = mkdtempSync(join(tmpdir(), 'agent-import-hermes-out-'));
   cleanup.push(() => rmSync(outside, { recursive: true, force: true }));
   write(outside, { 'config.yaml': 'x: 1\n' });
   symlinkSync(outside, join(hermes, 'profiles', 'linked'), 'dir');
 
-  const found = await lib.detectHermes(linux(home));
+  const found = await lib.detectHermes(onHost(home));
   assert.ok(found);
   assert.equal(found.root, hermes);
-  assert.equal(found.label, '~/.hermes');
+  assert.equal(found.label, HERMES_LABEL);
   assert.deepEqual(found.profiles.map((p) => p.name), ['default', 'coder', 'my_profile']);
   assert.deepEqual(found.profiles.map((p) => p.root), [hermes, join(hermes, 'profiles', 'coder'), join(hermes, 'profiles', 'my_profile')]);
 
-  assert.equal(await lib.detectHermes(linux(mkdtempSync(join(tmpdir(), 'agent-import-nohermes-')))), null, 'no ~/.hermes, nothing');
+  assert.equal(await lib.detectHermes(onHost(mkdtempSync(join(tmpdir(), 'agent-import-nohermes-')))), null, 'no ~/.hermes, nothing');
   // A Windows root on this machine does not exist: nothing found, nothing thrown.
   assert.equal(await lib.detectHermes({ platform: 'win32', env: { LOCALAPPDATA: 'C:\\Nope' }, home: 'C:\\Users\\x' }), null);
 });
@@ -241,7 +250,7 @@ test('a Hermes tree becomes one agent per profile, with secrets reduced to names
   }
   let manifest: Manifest;
   try {
-    const found = await lib.detectHermes(linux(home));
+    const found = await lib.detectHermes(onHost(home));
     assert.ok(found);
     manifest = await lib.readHermesManifest(found);
   } finally {
@@ -316,11 +325,11 @@ test('a Hermes tree becomes one agent per profile, with secrets reduced to names
 
 test('one profile can be read alone; an unreadable config or job file is a warning, not a failure', async () => {
   const home = fakeHome();
-  write(join(home, '.hermes', 'profiles', 'coder'), {
+  write(join(hermesDir(home), 'profiles', 'coder'), {
     'config.yaml': `mcp_servers: [unclosed\n  secret: ${SECRETS[0]}\n`,
     'cron/jobs.json': `{"jobs": [${SECRETS[2]}`,
   });
-  const found = await lib.detectHermes(linux(home));
+  const found = await lib.detectHermes(onHost(home));
   assert.ok(found);
   const manifest = await lib.readHermesManifest(found, ['coder']);
   assert.deepEqual(manifest.agents.map((a) => a.key), ['coder']);
@@ -444,7 +453,7 @@ test('detect names the profiles without a path; stage takes names only, never a 
   assert.equal(detected.status, 200);
   assert.deepEqual(detected.body, {
     found: true,
-    label: '~/.hermes',
+    label: HERMES_LABEL,
     profiles: [{ name: 'default', displayName: 'Hermes' }, { name: 'coder', displayName: 'coder' }, { name: 'my_profile', displayName: 'my_profile' }],
   });
   assert.ok(!JSON.stringify(detected.body).includes(home));

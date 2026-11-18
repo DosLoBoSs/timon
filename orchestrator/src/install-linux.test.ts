@@ -70,7 +70,9 @@ function run(args: string[], opts: SpawnSyncOptions = {}) {
 // still holds everywhere bash exists.
 const LINUX_ONLY = process.platform !== 'linux' && 'the installer and its stand-ins run on Linux only';
 
-test('bash -n: the script parses', () => {
+const NO_BASH = spawnSync('bash', ['--version'], { encoding: 'utf8' }).status !== 0 && 'bash is not installed';
+
+test('bash -n: the script parses', { skip: NO_BASH }, () => {
   const r = spawnSync('bash', ['-n', script], { encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
 });

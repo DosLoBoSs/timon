@@ -209,7 +209,8 @@ test('two names equal but for case are both left out', { skip: foldsCase(tmpdir(
   }
 });
 
-test('a name Windows cannot hold is left out', async () => {
+// On Windows `a:b.md` is file `a` with an NTFS stream `b.md`: the name cannot be laid out there.
+test('a name Windows cannot hold is left out', { skip: process.platform === 'win32' ? 'NTFS reads the colon as a stream' : false }, async () => {
   const root = tree({ 'notes/a:b.md': 'x', 'notes/ok.md': 'ok' });
   try {
     const out = await readDirSource(root, ['notes/*']);
