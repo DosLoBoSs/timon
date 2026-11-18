@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { ProgressBadge, UrgencyBadge, todoAuthorLabel } from './project-todo-tag-chips';
 import { safeHref } from './project-todo-links';
 import { TODO_BADGE_SLOT, TodoBadgeSlot } from './todo-badge-slot';
+import { TodoLandingSlot, useTodoLandingReplaced } from './todo-landing-slot';
 import type { KanbanTodoCardValue } from './kanban-card-context';
 import type { ProjectTodo } from './project-todo-types';
 
@@ -39,16 +40,18 @@ export function todoAuthor(item: ProjectTodo): string | null {
  */
 export function useTodoHasBadges(item: ProjectTodo): boolean {
   const plugins = useSlotEntries(TODO_BADGE_SLOT).length > 0;
-  return !!item.urgency || effectiveProgress(item.progress) !== 'todo' || plugins;
+  const landing = useTodoLandingReplaced() || !!item.landing;
+  return !!item.urgency || effectiveProgress(item.progress) !== 'todo' || plugins || landing;
 }
 
-/** Urgency, progress (when it moved) and the plugins' badges. */
+/** Urgency, progress (when it moved), where its branch stands, and the plugins' badges. */
 export function TodoBadges({ item }: { item: ProjectTodo }): ReactElement {
   const progress = effectiveProgress(item.progress);
   return (
     <>
       {item.urgency && <UrgencyBadge value={item.urgency} />}
       {progress !== 'todo' && <ProgressBadge value={progress} />}
+      <TodoLandingSlot item={item} />
       <TodoBadgeSlot item={item} />
     </>
   );

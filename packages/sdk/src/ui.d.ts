@@ -192,11 +192,21 @@ declare module '@timon/ui' {
     links?: { provider: string; ref: string; url: string | null; label: string | null; plugin_id: string | null; created_at: number }[];
     /** Files attached to the idea; absent from a host older than client API 15. */
     attachment_count?: number;
+    /** Where the branch of the idea's jobs stands, read-only; `null` when no
+     *  job has an integration branch. Absent from a host older than client API 18. */
+    landing?: TodoLanding | null;
   };
+  /** State of one job's branch: `branch` (embargo, no pull request expected),
+   *  `pending` (pull request not created), `open`, `merged`, `closed` (without a merge). */
+  export type TodoLandingState = 'branch' | 'pending' | 'open' | 'merged' | 'closed';
+  /** One job (integration branch) of an idea. */
+  export type TodoLandingJob = { state: TodoLandingState; branch: string; prNumber: number | null; prUrl: string | null };
+  /** An idea's landing: its job furthest from landing on top, every job in `jobs`, oldest first. */
+  export type TodoLanding = TodoLandingJob & { jobs: TodoLandingJob[] };
   /**
-   * The idea a `kanban.todo.badge` occupant is rendered for; `null` outside
-   * that slot. Read it from here, never from props: the entry is registered
-   * once and rendered on every line.
+   * The idea a `kanban.todo.badge` or `kanban.todo.landing` (client API 18)
+   * occupant is rendered for; `null` outside those slots. Read it from here,
+   * never from props: the entry is registered once and rendered on every line.
    */
   export function useTodoItem(): TodoItem | null;
   /**
