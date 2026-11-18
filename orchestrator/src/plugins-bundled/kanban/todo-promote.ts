@@ -15,6 +15,7 @@ import { gitTaskRefusal, isPlausibleGitRef } from '../../task-git.js';
 import { scopedDb } from '../../users/scoped-db.js';
 import { withTodoOrigin } from '../../todo-origin.js';
 import { copyTodoAttachmentsToTask } from '../../attachments.js';
+import { apiError } from '../../api-error.js';
 import {
   TodoLinkError, publishTodoChanged, withLinksOne, type TodoCallerScope, type TodoWithLinks,
 } from './todo-api.js';
@@ -41,7 +42,7 @@ export function alreadyPromoted(item: ProjectTodoRow): PromotionRefusal | null {
   return {
     status: 409,
     json: {
-      error: `idea #${item.id} already promoted — task ${item.promoted_task_id}`,
+      ...apiError('todo_already_promoted', `idea #${item.id} already promoted — task ${item.promoted_task_id}`, { id: String(item.id) }),
       task_id: item.promoted_task_id,
     },
   };
@@ -67,8 +68,8 @@ export function promoteTodoItem(
       ok: false,
       status: 400,
       json: {
-        error: `idea #${item.id} belongs to project "${project}", which does not exist `
-          + `— fix the idea's project, or pass a known \`project\` to the promotion`,
+        ...apiError('todo_project_unknown', `idea #${item.id} belongs to project "${project}", which does not exist `
+          + `— fix the idea's project, or pass a known \`project\` to the promotion`, { project }),
       },
     };
   }

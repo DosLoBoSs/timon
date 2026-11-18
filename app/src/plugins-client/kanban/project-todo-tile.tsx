@@ -79,7 +79,7 @@ export function ProjectTodoTile({
   realtime,
   titre,
   entete,
-  poignee,
+  handle,
   className,
   editing = false,
 }: WidgetProps & {
@@ -243,7 +243,7 @@ export function ProjectTodoTile({
             icon={<Plus className="size-3" />}
             label={t('projectTodo.add')}
           />
-          {poignee}
+          {handle}
         </>
       }
     >

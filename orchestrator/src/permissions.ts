@@ -32,6 +32,7 @@ import { bus, type BusEvent } from './bus.js';
 import { dbApi } from './db.js';
 import { getTurnState, respawnWithResume, sendToAgent, isAutonomousMission } from './agent.js';
 import { notifyUser } from './notify.js';
+import { daemonMessage } from './daemon-message.js';
 import { closePushFor, createNotification } from './notifications.js';
 import { settingNum } from './settings.js';
 import {
@@ -810,7 +811,13 @@ export function requestPermission(input: RequestInput): Promise<PermissionDecisi
           + `mission: the agent was instructed to decide for itself while stating its `
           + `assumption, or to close out via \`timon task block\`. The decision it wanted to `
           + `submit to you is still pending.`,
-          { taskId: stuckTask?.id, fromMission: input.mission_id },
+          {
+            taskId: stuckTask?.id,
+            fromMission: input.mission_id,
+            message: daemonMessage('ask_user_form_looping', {
+              agent: input.agent, attempts, mission: input.mission_id.slice(0, 8), defect,
+            }),
+          },
         );
       }
       // Memorized like any other decision: a re-POST of the same tool_use_id
@@ -998,6 +1005,9 @@ export function requestPermission(input: RequestInput): Promise<PermissionDecisi
           // to promise a window we could not yet guarantee.
           ? ` Autonomous mission: with no answer within ${Math.round(timeoutMs / 60_000)} min, automatic refusal.`
           : ''),
+      message: daemonMessage('permission_required', {
+        tool: input.tool_name, agent: input.agent, minutes: timeoutMs > 0 ? Math.round(timeoutMs / 60_000) : 0,
+      }),
       missionId: input.mission_id,
       taskId: task?.id ?? null,
       anchor: id,
@@ -1445,6 +1455,12 @@ async function nudgeIfOrphaned(p: Omit<Pending, 'resolve'>, final: PermissionDec
     `Late answer could not be replayed: ${p.tool_name}`,
     `You answered \`${p.tool_name}\` for mission ${p.mission_id.slice(0, 8)} but it could not be relaunched (process dead, no resumable session). ` +
       (task ? `Associated task: ${task.id} (${task.title}). Relaunch it if needed.` : `Relaunch the mission if the action is still needed.`),
-    { taskId: task?.id, fromMission: p.mission_id },
+    {
+      taskId: task?.id,
+      fromMission: p.mission_id,
+      message: daemonMessage('late_answer_not_replayed', {
+        tool: p.tool_name, mission: p.mission_id.slice(0, 8), taskId: task?.id ?? 'none', taskTitle: task?.title ?? '',
+      }),
+    },
   );
 }

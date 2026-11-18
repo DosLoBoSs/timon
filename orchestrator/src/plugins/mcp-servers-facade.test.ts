@@ -9,7 +9,9 @@ import assert from 'node:assert/strict';
 import type { PluginMcpServer } from './contract/mcp-servers.js';
 
 const { PluginPermissionError, PluginCallerError } = await import('./context.js');
-const { upsertMcp, getMcp } = await import('../mcp.js');
+const { upsertMcp, getMcp, mcpRelayUpstream } = await import('../mcp.js');
+/** The headers the daemon would send the server: the vault holds their values, not `getMcp`. */
+const sentHeaders = async (id: string) => (await mcpRelayUpstream(id))?.headers;
 const { TimonConfigSchema } = await import('../config/schema.js');
 const { setConfig, resetConfig } = await import('../config/load.js');
 const { resetPluginPolicyState } = await import('./policy.js');
@@ -81,7 +83,8 @@ test('an http server is declared, marked, and read back masked', async () => {
   assert.equal(made.mine, true);
   assert.equal(made.createdBy, 'plugin:acme-api10');
   assert.deepEqual(made.transport, { type: 'http', url: 'https://mcp.acme.test/sse', headers: { Authorization: '***' } });
-  assert.deepEqual((getMcp('acme-search')!.transport as { headers: Record<string, string> }).headers, { Authorization: 'Bearer acme-token' }, 'the stored value is the real one');
+  assert.deepEqual(await sentHeaders('acme-search'), { Authorization: 'Bearer acme-token' }, 'the stored value is the real one');
+  assert.ok(!JSON.stringify(getMcp('acme-search')).includes('acme-token'), 'the vault holds it, not the file');
   assert.equal(getMcp('acme-search')!.created_by?.agent, 'plugin:acme-api10');
   assert.equal(getMcp('acme-search')!.public_only, true, 'judged again at each launch');
   await dispose();
@@ -91,7 +94,7 @@ test('writing back a masked secret keeps the stored one, and is refused if the s
   const { plugin, dispose } = await pluginWith(BOTH);
   await as(manager, () => plugin.mcpServers.put('roundtrip', http('https://mcp.acme.test/sse', { Authorization: 'Bearer real' })));
   await as(manager, () => plugin.mcpServers.put('roundtrip', { description: 'edited', ...http('https://mcp.acme.test/sse', { Authorization: '***' }) }));
-  assert.deepEqual((getMcp('roundtrip')!.transport as { headers: Record<string, string> }).headers, { Authorization: 'Bearer real' });
+  assert.deepEqual(await sentHeaders('roundtrip'), { Authorization: 'Bearer real' });
   await assert.rejects(
     as(manager, () => plugin.mcpServers.put('roundtrip', http('https://elsewhere.test/sse', { Authorization: '***' }))),
     code('forbidden'),

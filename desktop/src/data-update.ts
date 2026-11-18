@@ -104,6 +104,14 @@ export function updateCopy(locale: string) {
     intact: t('update.intact'),
     quitDetail: t('update.quitDetail'),
     approve: t('update.approve'), quit: t('update.quit'),
+    /** A refused AppImage update: the replaced AppImage is still beside it, one click puts it back. */
+    rollback: (o: UpdateOffer) => t('update.rollback', { from: o.from }),
+    quitDetailRollback: (o: UpdateOffer) => t('update.quitDetailRollback', { from: o.from }),
+    rollbackRestarting: (o: UpdateOffer) => t('update.rollbackRestarting', { from: o.from }),
+    rolledBack: (o: UpdateOffer) => t('update.rolledBack', { from: o.from }),
+    rolledBackDetail: t('update.rolledBackDetail'),
+    rollbackFailed: (o: UpdateOffer) => t('update.rollbackFailed', { from: o.from }),
+    rollbackFailedDetail: t('update.rollbackFailedDetail'),
     /** Running missions on the version being replaced (P3): the approval would stop them. */
     missions: (count: number, from: string) => t('update.missions', { count, from }),
     wait: t('update.wait'), approveAnyway: t('update.approveAnyway'), notes: t('update.notes'), changelog: t('update.changelog'), downgrade: t('update.downgrade'),
@@ -167,7 +175,11 @@ export function renderNotes(markdown: string): string {
   flushParagraph(); flushList();
   return html.join('');
 }
-export function updatePage(offer: UpdateOffer, notesPath: string, locale: string, scheme: 'light' | 'dark' = 'dark'): { html: string; links: string[] } {
+/**
+ * `rollback`: the AppImage this update replaced is still beside it, so the
+ * screen offers to go back to it (`update-install.ts`, `rollBackAppImage`).
+ */
+export function updatePage(offer: UpdateOffer, notesPath: string, locale: string, scheme: 'light' | 'dark' = 'dark', rollback = false): { html: string; links: string[] } {
   const THEME = themeFor(scheme);
   const copy = updateCopy(locale);
   const catalog = readReleaseNotes(notesPath);
@@ -177,13 +189,13 @@ export function updatePage(offer: UpdateOffer, notesPath: string, locale: string
   return { links, html: `<!doctype html><html lang="${tag}" dir="${dir}"><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'">
 <title>${escape(copy.title(offer))}</title><style>
-:root{color-scheme:${scheme}}*{box-sizing:border-box}body{margin:0;background:${THEME.background};color:${THEME.foreground};font:15px/1.6 system-ui,sans-serif}main{max-width:760px;margin:auto;padding:32px}h1{font-size:24px;line-height:1.3;margin:0 0 20px}h2{font-size:18px}p{max-width:70ch}.muted{color:${THEME.muted};font-size:13px}a{color:${THEME.primary}}a:focus-visible{outline:3px solid ${THEME.primary};outline-offset:4px}.notes{overflow-wrap:anywhere}h4{font-size:15px;margin:16px 0 4px}ul{margin:4px 0;padding-left:22px}li{margin:4px 0}code{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:${THEME.chip};padding:1px 5px;border-radius:4px}section{border-top:1px solid ${THEME.border};margin-top:24px}footer{display:flex;gap:12px;justify-content:flex-end;margin-top:28px}.button{padding:9px 20px;border:1px solid ${THEME.border};border-radius:6px;text-decoration:none;color:${THEME.foreground}}.primary{background:${THEME.primary};border-color:${THEME.primary};color:${THEME.primaryForeground}}.button:hover{filter:brightness(1.2)}.button[aria-disabled=true]{opacity:.55;pointer-events:none}progress{width:100%;accent-color:${THEME.primary}}#status{white-space:pre-wrap}#progress-area:empty{display:none}.missions{background:${THEME.chip};padding:12px 16px;border-radius:6px}
-</style><main><h1>${escape(copy.title(offer))}</h1><div id="intro"><p>${escape(copy.detail)}</p><p class="muted">${escape(copy.intact)}</p><p>${escape(copy.quitDetail)}</p></div>
+:root{color-scheme:${scheme}}*{box-sizing:border-box}body{margin:0;background:${THEME.background};color:${THEME.foreground};font:15px/1.6 system-ui,sans-serif}main{max-width:760px;margin:auto;padding:32px}h1{font-size:24px;line-height:1.3;margin:0 0 20px}h2{font-size:18px}p{max-width:70ch}.muted{color:${THEME.muted};font-size:13px}a{color:${THEME.primary}}a:focus-visible{outline:3px solid ${THEME.primary};outline-offset:4px}.notes{overflow-wrap:anywhere}h4{font-size:15px;margin:16px 0 4px}ul{margin:4px 0;padding-left:22px}li{margin:4px 0}code{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:${THEME.chip};padding:1px 5px;border-radius:4px}section{border-top:1px solid ${THEME.border};margin-top:24px}footer{display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-end;margin-top:28px}.button{padding:9px 20px;border:1px solid ${THEME.border};border-radius:6px;text-decoration:none;color:${THEME.foreground}}.primary{background:${THEME.primary};border-color:${THEME.primary};color:${THEME.primaryForeground}}.button:hover{filter:brightness(1.2)}.button[aria-disabled=true]{opacity:.55;pointer-events:none}progress{width:100%;accent-color:${THEME.primary}}#status{white-space:pre-wrap}#progress-area:empty{display:none}.missions{background:${THEME.chip};padding:12px 16px;border-radius:6px}
+</style><main><h1>${escape(copy.title(offer))}</h1><div id="intro"><p>${escape(copy.detail)}</p><p class="muted">${escape(copy.intact)}</p><p>${escape(rollback ? copy.quitDetailRollback(offer) : copy.quitDetail)}</p></div>
 <p id="missions" class="missions" role="alert" hidden></p>
 <p><a href="${DOWNGRADE_URL}">${escape(copy.downgrade)}</a>${catalog ? ` · <a href="${escape(catalog.changelogUrl)}">${escape(copy.changelog)}</a>` : ''}</p>
 ${entries.length ? `<section><h2>${escape(copy.notes)}</h2>${entries.map(n => `<h3>${escape(n.version)}${n.date ? ` · ${escape(n.date)}` : ''}</h3><div class="notes">${renderNotes(n.content)}</div>`).join('')}</section>` : ''}
 <div id="progress-area"><p id="status" role="status" aria-live="polite"></p><progress id="progress" hidden></progress></div>
-<footer><a class="button" id="quit" role="button" href="timon-update:quit">${escape(copy.quit)}</a><a class="button primary" id="approve" role="button" href="timon-update:approve">${escape(copy.approve)}</a></footer></main></html>` };
+<footer><a class="button" id="quit" role="button" href="timon-update:quit">${escape(copy.quit)}</a>${rollback ? `<a class="button" id="rollback" role="button" href="timon-update:rollback">${escape(copy.rollback(offer))}</a>` : ''}<a class="button primary" id="approve" role="button" href="timon-update:approve">${escape(copy.approve)}</a></footer></main></html>` };
 }
 
 /**
@@ -281,19 +293,89 @@ export class DaemonStartTimeoutError extends Error {
  */
 export const START_BUDGET_MS = 300_000;
 
-export async function finishUpdate(input: { home: string; origin: string; version: string; locale: string;
+/**
+ * How long the installed version gets to answer its update routes once the
+ * previous version's daemon was replaced: the task starts, the launcher waits
+ * for the session, the daemon verifies its release. Bounded, so a service
+ * that never comes back ends in a message and not in a window that waits.
+ */
+export const REPLACE_BUDGET_MS = 180_000;
+
+export type FinishUpdateInput = { home: string; origin: string; version: string; locale: string;
   progress: (message: string, progress?: Progress | null) => void;
   warning: (message: string, detail: string) => Promise<void>;
   /** Called once the daemon holds the approval: from here, the data may change. */
   approving?: () => void;
-}, deps = { request: requestUpdate, health: probeHealth, sleep: (ms: number) => new Promise<void>(r => setTimeout(r, ms)), now: Date.now }): Promise<void> {
+  /** Called before the previous version's daemon is replaced: from here, the service was touched. */
+  replacing?: () => void;
+};
+
+export type FinishUpdateDeps = {
+  request: typeof requestUpdate;
+  health: typeof probeHealth;
+  sleep: (ms: number) => Promise<void>;
+  now?: () => number;
+  /**
+   * Ends the daemon of this data directory that still runs another version
+   * and starts the installed one (the service runner's `restart`). Absent:
+   * this shell has nothing that could replace it, and the failure says what
+   * the person can do.
+   */
+  replaceStaleDaemon?: () => Promise<void>;
+};
+
+export const finishUpdateDeps: FinishUpdateDeps = {
+  request: requestUpdate, health: probeHealth, sleep: (ms: number) => new Promise<void>(r => setTimeout(r, ms)), now: Date.now,
+};
+
+const STALE_ADVICE = 'Quit Timon, restart the computer, then open Timon again.';
+
+/**
+ * The daemon that answers runs another version than the one installed: an
+ * update replaced the application under a daemon that was never ended, which
+ * keeps the port and the data directory, so the installed version cannot
+ * start (Windows, 0.1.7 to 0.1.8). It used to be a dead end, "The running
+ * daemon is not the installed version", at every launch.
+ *
+ * Replaced once, and only when it is the daemon of THIS data directory: a
+ * daemon of another home on the port is someone else's, and is never ended.
+ * Nothing was approved yet, so the data are untouched whatever happens here.
+ */
+async function replaceStaleDaemon(input: FinishUpdateInput, deps: FinishUpdateDeps, health: HealthResult, running: string): Promise<UpdateStatus> {
+  const wrong = `The running daemon is not the installed version: it runs ${running}, and Timon ${input.version} is installed.`;
+  if (!deps.replaceStaleDaemon || !isTimon(health, input.home)) throw new Error(`${wrong} ${STALE_ADVICE}`);
+  input.replacing?.();
+  input.progress(updateCopy(input.locale).working);
+  try {
+    await deps.replaceStaleDaemon();
+  } catch (error) {
+    throw new Error(`${wrong} Timon could not replace it: ${(error as Error).message || String(error)}\n\n${STALE_ADVICE}`);
+  }
+  const now = deps.now ?? Date.now;
+  const deadline = now() + REPLACE_BUDGET_MS;
+  let last = `version ${running} still answers`;
+  while (now() < deadline) {
+    try {
+      const status = await deps.request(input.origin, input.home);
+      if (status.daemonVersion === input.version) return status;
+      last = `version ${status.daemonVersion} still answers`;
+    } catch (error) {
+      // The service is restarting: a refused connection is the expected answer for a while.
+      last = (error as Error).message || String(error);
+    }
+    await deps.sleep(500);
+  }
+  throw new Error(`${wrong} Timon restarted its background service, but version ${input.version} did not answer in time (${last}).\n\n${STALE_ADVICE}`);
+}
+
+export async function finishUpdate(input: FinishUpdateInput, deps: FinishUpdateDeps = finishUpdateDeps): Promise<void> {
   const copy = updateCopy(input.locale);
   const initialHealth = await deps.health(input.origin);
   // Another shell or an interrupted, already approved boot may have finished meanwhile.
   if (isTimon(initialHealth, input.home) && initialHealth.ok && !initialHealth.updatePending
     && readDataVersion(input.home) === input.version) return;
-  const status = await deps.request(input.origin, input.home);
-  if (status.daemonVersion !== input.version) throw new Error('The running daemon is not the installed version.');
+  let status = await deps.request(input.origin, input.home);
+  if (status.daemonVersion !== input.version) status = await replaceStaleDaemon(input, deps, initialHealth, status.daemonVersion);
   const since = Date.now();
   input.progress(copy.waiting);
   const timer = setInterval(() => {

@@ -21,7 +21,6 @@ import { Label } from '@/components/ui/label';
 import { apiErrorMessage } from '@/lib/api-error';
 import { fetchMe } from '@/lib/auth';
 import { t } from '@/lib/i18n';
-import { setupErrorMessage } from '@/lib/setup-license';
 import { landAfterSignin } from '../welcome-landing';
 
 export function SigninStep(): ReactElement {
@@ -54,7 +53,7 @@ export function SigninStep(): ReactElement {
       });
       const payload = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
-        throw new Error(payload.error === 'free_account_restricted' ? setupErrorMessage(payload.error, t) : apiErrorMessage(payload, t('loginPage.failed')));
+        throw new Error(apiErrorMessage(payload, t('loginPage.failed')));
       }
       setPassword('');
       await landAfterSignin(await fetchMe());

@@ -10,7 +10,7 @@ import { delegationRefusal } from '../../delegation-guard.js';
 import { automationOriginOf, emitAutomationEvent } from '../../plugins/automation-events.js';
 import { backupStatus, createRoutine, enableBackupRoutine, updateRoutine } from '../../routines.js';
 import { forbidden, requestHasPermission } from '../../users/identity.js';
-import { apiError } from '../../api-error.js';
+import { apiError, type ApiErrorBody } from '../../api-error.js';
 
 /**
  * A routine is a schedule trigger (same rows, same Triggers page): the routes
@@ -50,10 +50,12 @@ function loadVisible(req: Request, res: Response): RoutineRow | null {
  * grants nor acting agent, so the run does not re-check: the save does, as a
  * trigger's save does — delegation first, then the task permission.
  */
-function taskRefusal(req: Request, agent: string): string | null {
+function taskRefusal(req: Request, agent: string): ApiErrorBody | null {
   const denied = delegationRefusal(req, agent);
-  if (denied) return `task refused: ${denied}`;
-  if (!requestHasPermission(req, TASK_PERMISSION)) return `not permitted: a routine opens tasks, which needs ${TASK_PERMISSION}`;
+  if (denied) return apiError('orchestration_denied', `task refused: ${denied}`, { detail: denied });
+  if (!requestHasPermission(req, TASK_PERMISSION)) {
+    return apiError('routine_not_permitted', `not permitted: a routine opens tasks, which needs ${TASK_PERMISSION}`, { permission: TASK_PERMISSION });
+  }
   return null;
 }
 
@@ -102,7 +104,7 @@ export function registerRoutes(app: Router): void {
     try {
       res.json({ ok: true, ...enableBackupRoutine() });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('backup_enable_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -125,15 +127,15 @@ export function registerRoutes(app: Router): void {
       project?: string | null;
     };
     if (!body.name || !body.agent_name || !body.prompt || !body.cron_expr) {
-      res.status(400).json({ error: 'name, agent_name, prompt, cron_expr required' });
+      res.status(400).json(apiError('routine_fields_required', 'name, agent_name, prompt, cron_expr required'));
       return;
     }
     if (body.task_type !== undefined && !isTaskType(body.task_type)) {
-      res.status(400).json({ error: `invalid task_type "${body.task_type}"` });
+      res.status(400).json(apiError('task_type_invalid', `invalid task_type "${body.task_type}"`, { type: String(body.task_type) }));
       return;
     }
     const refused = taskRefusal(req, body.agent_name);
-    if (refused) { res.status(403).json({ error: refused }); return; }
+    if (refused) { res.status(403).json(refused); return; }
     const byAgent = callerIsAgent(req);
     try {
       const r = createRoutine({
@@ -149,7 +151,7 @@ export function registerRoutes(app: Router): void {
       emitAutomationEvent({ kind: 'routine_created', row: r, origin: automationOriginOf(req) });
       res.status(201).json({ routine: r, ...(byAgent ? { needs_activation: true, message: AGENT_ROUTINE_OFF } : {}) });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('routine_save_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 
@@ -159,7 +161,7 @@ export function registerRoutes(app: Router): void {
     if (!r) return;
     const body = req.body as Record<string, unknown>;
     if (body.task_type !== undefined && !isTaskType(body.task_type)) {
-      res.status(400).json({ error: `invalid task_type "${body.task_type}"` });
+      res.status(400).json(apiError('task_type_invalid', `invalid task_type "${body.task_type}"`, { type: String(body.task_type) }));
       return;
     }
     const fields = {
@@ -177,12 +179,12 @@ export function registerRoutes(app: Router): void {
       || (key === 'enabled' && value === false));
     if (!offOnly) {
       const refused = taskRefusal(req, fields.agent_name ?? r.agent_name);
-      if (refused) { res.status(403).json({ error: refused }); return; }
+      if (refused) { res.status(403).json(refused); return; }
     }
     let switchedOff = false;
     if (callerIsAgent(req)) {
       if (r.enabled !== 1 && fields.enabled === true) {
-        res.status(403).json({ error: 'an agent cannot switch a routine on: the user does it (Triggers page)' });
+        res.status(403).json(apiError('routine_enable_by_agent', 'an agent cannot switch a routine on: the user does it (Triggers page)'));
         return;
       }
       switchedOff = r.enabled === 1 && fields.enabled !== false
@@ -194,7 +196,7 @@ export function registerRoutes(app: Router): void {
       emitAutomationEvent({ kind: 'routine_updated', row: updated, origin: automationOriginOf(req) });
       res.json({ routine: updated, ...(switchedOff ? { needs_activation: true, message: AGENT_ROUTINE_OFF } : {}) });
     } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
+      res.status(400).json(apiError('routine_save_failed', (err as Error).message, { detail: (err as Error).message }));
     }
   });
 

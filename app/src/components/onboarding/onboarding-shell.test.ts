@@ -1,5 +1,5 @@
 /**
- * The onboarding's frame, rendered: « Continue » walks the steps, « Back »
+ * The onboarding's frame, rendered: "Continue" walks the steps, "Back"
  * walks them back (a step's own sub-view first, a skipped step skipped both
  * ways), the dots and the address follow, and a reload reopens the step. With
  * the real card and guard: a stand-in that leaves the page installs nothing.
@@ -68,7 +68,7 @@ async function renderShell(
       const { next } = useOnboarding();
       return h('section', { 'data-step': id }, h('button', { 'data-next': '', onClick: next }, 'next'));
     };
-    // A step with a sub-view: « Back » closes the sub-view before leaving the step.
+    // A step with a sub-view: "Back" closes the sub-view before leaving the step.
     function WithSubView() {
       const { next } = useOnboarding();
       const [sub, setSub] = React.useState(false);
@@ -113,7 +113,7 @@ const backButton = (host: HTMLElement): HTMLButtonElement | undefined =>
   Array.from(host.querySelectorAll('button')).find((b) => !b.hasAttribute('data-next') && !b.hasAttribute('data-open-sub') && !b.hasAttribute('data-mascot-style'));
 const styleToggle = (host: HTMLElement): Element | null => host.querySelector('[data-mascot-style-toggle]');
 
-test('« Continue » walks the steps; the dots and the address follow; a skipped step is skipped', async () => {
+test('"Continue" walks the steps; the dots and the address follow; a skipped step is skipped', async () => {
   await renderShell('http://localhost/onboarding', async (host, click, dom) => {
     assert.equal(shown(host), 'splash');
     assert.deepEqual(dots(host), [], 'no dots on the welcome');
@@ -133,7 +133,7 @@ test('« Continue » walks the steps; the dots and the address follow; a skipped
     assert.deepEqual(dots(host), ['done', 'done', 'done', 'done', 'current']);
     finished = 0;
     await click(host.querySelector('[data-next]'));
-    assert.equal(shown(host), 'discover', 'the agent made, « Discover Timon » follows');
+    assert.equal(shown(host), 'discover', 'the agent made, "Discover Timon" follows');
     assert.deepEqual(dots(host), [], 'no dots on the slides');
     assert.equal(backButton(host), undefined, 'no way back to the agent\'s creation');
     assert.equal(finished, 0);
@@ -151,7 +151,7 @@ test('a tab still on the former chat step goes to the welcome, not to the splash
   });
 });
 
-test('« Back » walks back: past a skipped step, and through a sub-view before leaving its step', async () => {
+test('"Back" walks back: past a skipped step, and through a sub-view before leaving its step', async () => {
   await renderShell('http://localhost/onboarding?step=agent', async (host, click) => {
     assert.equal(shown(host), 'agent', 'a reload reopens the step of the address');
     await click(backButton(host));
@@ -176,14 +176,14 @@ test('the guard keeps the agent step closed while the service is not ready; the 
     await click(host.querySelector('[data-next]'));
     assert.equal(shown(host), null, 'the agent step is not mounted');
     assert.equal(host.querySelector('[data-gate]')?.getAttribute('data-gate'), 'agent');
-    assert.deepEqual(dots(host), ['done', 'done', 'done', 'done', 'current'], 'the frame stays: dots and « Back »');
+    assert.deepEqual(dots(host), ['done', 'done', 'done', 'done', 'current'], 'the frame stays: dots and "Back"');
     await click(backButton(host));
-    assert.equal(shown(host), 'llm', '« Back » still leaves a closed step');
+    assert.equal(shown(host), 'llm', '"Back" still leaves a closed step');
   }, 'closed');
 });
 
 /**
- * The real « Preparing Timon » card and guard against a fake daemon: what the
+ * The real "Preparing Timon" card and guard against a fake daemon: what the
  * page asked, in order — `/api/ui/onboarding` actions, the configuration
  * write, and the moment the stand-in left (`left:<hash>`).
  */

@@ -28,6 +28,7 @@ import { dbApi, type TaskRow } from './db.js';
 import { loadConfig } from './agent.js';
 import { getHost } from './host/index.js';
 import { notifyUser } from './notify.js';
+import { daemonMessage } from './daemon-message.js';
 
 /** top-level folder of the repo → docker compose service to rebuild (automatic, safe). */
 const DOCKER_DIRS: Record<string, string> = {
@@ -87,7 +88,12 @@ function rebuildService(repoDir: string, service: string, task: TaskRow, sha: st
         `The Docker rebuild of service \`${service}\` after merge ${sha.slice(0, 8)} ` +
           `("${task.title}") failed.\n\n${stderr.slice(-1500)}\n\n` +
           `Manual rebuild: \`docker compose up -d --build ${service}\` (in ${repoDir}).`,
-        { taskId: task.id },
+        {
+          taskId: task.id,
+          message: daemonMessage('deploy_rebuild_failed', {
+            service, sha: sha.slice(0, 8), title: task.title, output: stderr.slice(-1500), dir: repoDir,
+          }),
+        },
       );
       return;
     }
@@ -96,7 +102,7 @@ function rebuildService(repoDir: string, service: string, task: TaskRow, sha: st
       `Automatic deploy: \`${service}\` rebuilt ✅`,
       `Merge ${sha.slice(0, 8)} ("${task.title}") changed \`${service}/\` → container ` +
         `rebuilt and restarted automatically. The change is live.`,
-      { taskId: task.id },
+      { taskId: task.id, message: daemonMessage('deploy_rebuilt', { service, sha: sha.slice(0, 8), title: task.title }) },
     );
   });
 }
@@ -142,7 +148,12 @@ async function handleMerge(missionId: string): Promise<void> {
       `Merge ${sha.slice(0, 8)} ("${task.title}") changed \`${notifyDirs.join('/`, `')}/\` — ` +
         `not deployed until the orchestrator restarts.\n\n` +
         `When you can (it stops the missions in flight):\n${cmds}`,
-      { taskId: task.id },
+      {
+        taskId: task.id,
+        message: daemonMessage('orchestrator_restart_required', {
+          sha: sha.slice(0, 8), title: task.title, dirs: notifyDirs.join('/`, `'), commands: cmds,
+        }),
+      },
     );
   }
 }

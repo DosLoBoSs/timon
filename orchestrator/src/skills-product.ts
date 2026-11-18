@@ -236,8 +236,9 @@ also cut the verification loop, so nothing goes BLOCKED automatically.
 
 **If your task is \`code-self\` or \`code-group\`, you create NO \`review\` or
 \`merge\` task** (your brief repeats it). In \`code-self\`, you integrate your
-branch yourself, with an explicit message (see "Merge messages" below), and
-close with:
+branch yourself from your own worktree, on a detached copy of the base, with
+an explicit message (see "Merge messages" below), then move the base by
+reference as your brief says, and close with:
 
 \`\`\`bash
 timon task done <TASK_ID> --comment "…" --merged-sha <sha of the merge commit>
@@ -266,17 +267,23 @@ message:
 git merge --no-ff -m "merge: integrate the task branch into <base>" <source-branch>
 \`\`\`
 
-The final integration is one command, repeated at the end of your brief:
+The final integration moves the base **by reference**, one command repeated
+at the end of your brief:
 
 \`\`\`bash
-git -C <main-repository> merge --ff-only timon/merge/<task-id>
+git -C <main-repository> push . timon/merge/<task-id>:<base>
 \`\`\`
 
-If it refuses, the base has moved: go back to your worktree,
+It only accepts a fast-forward, and git refuses it for a branch checked out
+anywhere. Never a \`--ff-only\` merge in the main repository: it moves
+whatever HEAD stands on, which, detached, is the user's own position and not
+the base. The one exception, when the main repository is checked out ON the
+base, is spelled out by your brief. Then read the base back
+(\`git -C <main-repository> rev-parse <base>\`): it must equal your tip.
+
+If the move refuses, the base has moved: go back to your worktree,
 \`git merge --no-edit -m "merge: bring <base> into the task branch" <base>\`,
-resolve, try again. Never \`--force\`. When the main repository is checked
-out on another branch than the base, your brief gives the reference-only
-command to use instead: follow it.
+resolve, try again. Never \`--force\`.
 
 ### Merge messages
 
@@ -286,7 +293,7 @@ with **no task or mission id**. Git's default, \`Merge branch
 hook, which leaves the merge unfinished; where no hook stops it, it publishes
 internal ids. After resolving a conflict, conclude with \`git commit
 --no-edit\`: the message given with \`-m\` is kept. A fast-forward
-(\`--ff-only\`, \`push .\`) creates no commit and needs no message.
+(\`push .\`, \`--ff-only\`) creates no commit and needs no message.
 
 **Never delete a file your branch does not ask to delete.** An automatic
 check compares what your merge deleted with what your branch deleted; on a
@@ -460,16 +467,19 @@ You have YOUR worktree (branch \`timon/merge/<TASK_ID>\`). You integrate
    into <base>" <source-branch>\`), resolve conflicts, build, test.
 3. **Never write to the main repository's working directory** (\`git add\`,
    \`commit\`, \`checkout\`, \`reset\`, \`update-ref\`): other agents share it. The
-   final integration is the single command your brief gives, usually:
+   final integration is the single command your brief gives, usually a move
+   by reference:
    \`\`\`bash
-   git -C <main-repository> merge --ff-only <your-branch>
+   git -C <main-repository> push . <your-branch>:<base>
    \`\`\`
-   If it refuses, the base has moved: \`git merge --no-edit -m "merge: bring
-   <base> into the task branch" <base>\` in your worktree, resolve, try
-   again. Never force.
+   Never a \`--ff-only\` merge in the main repository unless your brief says
+   it stands on the base. If the move refuses, the base has moved:
+   \`git merge --no-edit -m "merge: bring <base> into the task branch" <base>\`
+   in your worktree, resolve, try again. Never force.
 4. Get the COMPLETE sha (40 hex):
    \`\`\`bash
    MERGED_SHA=$(git -C <main-repository> rev-parse <base>)
+   test "$MERGED_SHA" = "$(git rev-parse HEAD)"   # the base really moved
    \`\`\`
 5. **Only if a push is authorised**: \`git push\`. Say so in the close comment.
 6. Close with the sha:

@@ -179,11 +179,25 @@ Worktrees (git isolation per code task):
   timon worktree create <task-id> [--base B]   force-create (dispatcher does it automatically for type=code)
   timon worktree dispose <task-id> [--force]   unmounts worktree + local branch (post-merge)
 
+Pull requests (projects whose jobs land through one, see set-integration):
+  timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]
+                                             checks the job's integration branch (account, remote URL,
+                                             identity, messages, ignored files, public tree), pushes it
+                                             without force and opens its pull request; sec/ is refused
+
 Projects (agent roles per project):
   timon project list                           lists configured projects
   timon project roles <slug>                   shows the role→agent mapping
   timon project set-role <slug> <role> <agent> [--model SLUG] [--permission-mode MODE]
                                              sets the agent + model/permission for a role
+  timon project get-integration <slug> [--check]
+                                             how the project's Kanban jobs land (local merge or pull request);
+                                             --check asks gh which account the configured folder signs in as
+  timon project set-integration <slug> [--mode local|pr] [--remote NAME] [--target BRANCH] [--forge github]
+                       [--account LOGIN] [--gh-config-dir ABSOLUTE_PATH] [--branch-prefix PREFIX/]
+                       [--remote-url PUSH_URL] | --reset
+                                             changes what you pass (needs projects:manage); an empty
+                                             --account, --gh-config-dir or --remote-url clears it
   timon project create <slug> [--name TEXT] [--cwd PATH] [--workspace NAME] [--create-workspace]
                        [--color #RRGGBB] [--icon TEXT] [--speech TEXT] [--kind TEXT] [--status TEXT]
                                              registers a project; the cwd must already exist on the host
@@ -274,6 +288,10 @@ plugin's, from its page in the app):
   timon setup-token                          one-time token the first-run form asks for on an exposed install
   timon user list                            accounts (json)
   timon user reset-password <email-or-id>    temporary password, printed once
+  timon user create-admin [--email ADDRESS] [--name NAME] [--password-stdin]
+                                             the first account, without the emailed code (offline
+                                             machine); the password is typed hidden or piped, never
+                                             an argument; the email is kept unconfirmed
 
 Paired devices (another Timon that drives this machine — a headless server has no screen to click):
   timon device pair [--user EMAIL-OR-ID] [--json]
@@ -818,6 +836,12 @@ usage: timon worktree dispose <task-id> [--force]
 usage: timon worktree <info|create|dispose> <task-id> …
 ```
 
+### timon pr open task-id|series-id --title TEXT [--body TEXT | --body-file PATH]
+
+```text
+usage: timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]
+```
+
 ### timon project roles slug
 
 ```text
@@ -832,16 +856,22 @@ usage: timon project set-role <slug> <code|review|merge|research|doc|chore> <age
        timon project set-role <slug> <role> ""   (to clear)
 ```
 
+### timon project get-integration slug [--check]
+
+```text
+usage: timon project get-integration <slug> [--check]
+```
+
 ### timon workspace list [--json]
 
 ```text
 usage: timon workspace list [--json]
 ```
 
-### timon project list|roles|set-role|create|update|demo …
+### timon project list|roles|set-role|get-integration|set-integration|create|update|demo …
 
 ```text
-usage: timon project <list|roles|set-role|create|update|demo> …
+usage: timon project <list|roles|set-role|get-integration|set-integration|create|update|demo> …
 ```
 
 ### timon msg send to_agent payload...
@@ -1184,10 +1214,10 @@ usage: timon user reset-password <email-or-id>
 usage: timon backend-account list|grant|revoke …
 ```
 
-### timon user list|reset-password …
+### timon user list|reset-password|create-admin …
 
 ```text
-usage: timon user list|reset-password …
+usage: timon user list|reset-password|create-admin …
 ```
 
 ### timon secret list|set|grant|revoke|rm|rekey|import-env …
