@@ -25,6 +25,7 @@ import { createBodyParser } from '../kernel/body-parser.js';
 import { dbApi } from '../db.js';
 import { getAgent, readDoc, upsertAgent } from '../agent.js';
 import { mountOfficialProviders } from '../../tests/helpers/official-providers.js';
+import { forgeZip } from '../../../plugins/agent-import/test/zip-writer.js';
 
 await mountOfficialProviders();
 
@@ -520,4 +521,69 @@ test('stage → preview → apply imports the profiles; a Hermes Gateway agent s
   const secondAgents = (second.body.preview as { agents: Json[]; warnings: string[] });
   assert.deepEqual(secondAgents.agents.map((a) => a.finalName), ['import.coder']);
   assert.ok(secondAgents.warnings.some((w) => w.includes('import.')));
+});
+
+/** Stages one zip upload, as the archive card does. */
+async function stageZip(base: string, user: string, manifest: Json): Promise<string> {
+  const bytes = forgeZip([{ name: 'timon-agent-import.json', data: JSON.stringify(manifest) }]);
+  const res = await fetch(`${base}/stage`, { method: 'POST', headers: { 'x-test-user': user, 'content-type': 'application/zip' }, body: bytes });
+  const body = await res.json() as Json;
+  assert.equal(res.status, 201, JSON.stringify(body));
+  return String(body.token);
+}
+
+async function previewAndApply(base: string, user: string, token: string): Promise<{ previewed: string[][]; applied: string[][] }> {
+  const preview = await call(base, 'POST', 'preview', user, { token });
+  assert.equal(preview.status, 200, JSON.stringify(preview.body));
+  const applied = await call(base, 'POST', 'apply', user, { token });
+  assert.equal(applied.status, 200, JSON.stringify(applied.body));
+  return {
+    previewed: (preview.body.preview as { agents: Json[] }).agents.map((a) => [String(a.finalName), String(a.action)]),
+    applied: (applied.body.agents as Json[]).map((a) => [String(a.agent), String(a.status)]),
+  };
+}
+
+test('a named profile keeps one identity: the direct card and the zip of the skill run from it update the same agent', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'agent-import-hermes-named-'));
+  cleanup.push(() => rmSync(home, { recursive: true, force: true }));
+  const hermes = hermesDir(home);
+  write(hermes, {
+    'config.yaml': 'timezone: Europe/Paris\n',
+    'SOUL.md': 'I am the default profile.',
+    'profiles/work/config.yaml': 'timezone: Europe/Paris\n',
+    'profiles/work/SOUL.md': 'I am work, first version.',
+  });
+  useHome(home);
+  const base = await loaded();
+  const ada = account('ada', ['agents:manage']);
+
+  const direct = await call(base, 'POST', 'hermes/stage', ada, {});
+  assert.equal(direct.status, 201, JSON.stringify(direct.body));
+  const first = await previewAndApply(base, ada, String(direct.body.token));
+  // Earlier tests left `hermes.*` agents behind, so the final names may carry the `import.` prefix.
+  assert.deepEqual(first.applied.map(([, status]) => status), ['created', 'created']);
+  const [defaultAgent, workAgent] = first.applied.map(([name]) => name) as [string, string];
+  assert.match(workAgent, /\.work$/);
+
+  // What the skill writes when Hermes runs on `work` (HERMES_HOME = <root>/profiles/work).
+  const fromWork = {
+    format: 'timon-agent-import',
+    version: 1,
+    source: { app: 'hermes', exportedAt: '2026-11-18T10:00:00+01:00' },
+    agents: [{ key: 'work', displayName: 'work', sourceRef: 'profile:work', soul: 'I am work, from the zip.' }],
+  };
+  const zipped = await previewAndApply(base, ada, await stageZip(base, ada, fromWork));
+  assert.deepEqual(zipped.previewed, [[workAgent, 'update']]);
+  assert.deepEqual(zipped.applied, [[workAgent, 'updated']]);
+  assert.match(readDoc(workAgent, 'SOUL.md') ?? '', /from the zip/);
+  assert.match(readDoc(defaultAgent, 'SOUL.md') ?? '', /default profile/, 'the default profile is left alone');
+
+  // Back to the direct card.
+  write(join(hermes, 'profiles', 'work'), { 'SOUL.md': 'I am work, read again.' });
+  const again = await call(base, 'POST', 'hermes/stage', ada, { profiles: ['work'] });
+  assert.equal(again.status, 201, JSON.stringify(again.body));
+  const third = await previewAndApply(base, ada, String(again.body.token));
+  assert.deepEqual(third.previewed, [[workAgent, 'update']], 'the same agent again, never a copy');
+  assert.match(readDoc(workAgent, 'SOUL.md') ?? '', /read again/);
+  assert.match(readDoc(defaultAgent, 'SOUL.md') ?? '', /default profile/);
 });
