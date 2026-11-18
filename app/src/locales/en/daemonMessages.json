@@ -122,6 +122,10 @@
       "title": "Orchestrator restart required",
       "body": "Merge {sha} (\"{title}\") changed `{dirs}/` — not deployed until the orchestrator restarts.\n\nWhen you can (it stops the missions in flight):\n{commands}"
     },
+    "shell_preallow_inert": {
+      "title": "Shell pre-allow ignored in auto mode: {agent}",
+      "body": "{agent} pre-allows {rules} but runs in auto mode: the claude CLI ignores a rule that allows every shell command there, and a command its classifier cannot judge waits for an approval (an autonomous mission is denied after the delay). To keep the rule, run the agent in acceptEdits, and its project role too if it sets one; or pre-allow narrower patterns such as Bash(git:*).\n\nAuto mode was set by {source, select, mission {its task or project role} other {its own config}}."
+    },
     "backend_no_credit": {
       "title": "Backend {backend}: no credit left",
       "body": "`{backend}` answers with a payment error (HTTP 402 / balance exhausted): the account has no credit left.\n\nUnlike a usage limit, **this does not reopen on its own** — the account has to be topped up.\n\n- Backend sidelined until {until, date, medium} {until, time, short} (or until a turn succeeds on it again).\n- Missions and tasks that depend on it switch onto their fallback plan."
