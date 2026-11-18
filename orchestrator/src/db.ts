@@ -1531,6 +1531,25 @@ CREATE INDEX IF NOT EXISTS idx_mcp_tokens_mission ON mcp_tokens(mission_id);
   }
 }
 
+// An address nobody has confirmed with a mailed code: the first account made
+// from a terminal (`timon user create-admin`, `timon init`) on a machine that
+// may be offline. `1` until the owner confirms it from a signed-in session;
+// the relay only resets the password of an address it saw confirmed. The
+// accounts made by the account provider (members invited or created by an
+// admin) and every login moved by an email change get it too. When the column
+// appears, a superadmin was confirmed at setup or predates the codes and is
+// left alone; any other account came from the account provider, whose
+// addresses never received a code, so it starts unconfirmed.
+{
+  const userCols = (db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]).map((c) => c.name);
+  if (!userCols.includes('email_unverified')) {
+    db.transaction(() => {
+      db.exec(`ALTER TABLE users ADD COLUMN email_unverified INTEGER NOT NULL DEFAULT 0`);
+      db.exec(`UPDATE users SET email_unverified = 1 WHERE is_superadmin = 0`);
+    })();
+  }
+}
+
 // Self-service email change. The new address is only written onto the account
 // once the owner has proved they can read it, so the request lives here in the
 // meantime. Same hashing rule as sessions and invitations: the plaintext token
@@ -1659,6 +1678,9 @@ if (!projectCols.includes('score_updated_at')) db.exec(`ALTER TABLE projects ADD
 if (!projectCols.includes('grepai_watch')) db.exec(`ALTER TABLE projects ADD COLUMN grepai_watch TEXT`);
 // `created_by` = `plugin:<id>` when a plugin registered the project (`ctx.projects.create`); NULL for every other project. Written by the facade only.
 if (!projectCols.includes('created_by')) db.exec(`ALTER TABLE projects ADD COLUMN created_by TEXT`);
+// `integration` = how the project's Kanban jobs land (`project-integration.ts`):
+// JSON validated by zod on every read and write; NULL = today's local merge.
+if (!projectCols.includes('integration')) db.exec(`ALTER TABLE projects ADD COLUMN integration TEXT`);
 
 // the UI shows them as "unknown author"
 // rather than wrongly attributing them. Web Push:
@@ -1878,6 +1900,16 @@ if (!cols.includes('browser_profile_resolved')) db.exec(`ALTER TABLE missions AD
 // (a `wake` that resumed their session): the origin then reads `user`, even on
 // a mission the machine started (`mission-origin.ts`).
 if (!cols.includes('user_engaged')) db.exec(`ALTER TABLE missions ADD COLUMN user_engaged INTEGER NOT NULL DEFAULT 0`);
+// The task mission ended a clean turn with its task still open after every
+// closure question was delivered, and no turn has started since (1). The idle
+// reap confirms it (2) as it takes the process: only that death is the end of
+// its work, not a system death. A manual kill, a scope stop or a config reload
+// leave 1, and their death stays a system death.
+if (!cols.includes('closure_ignored')) db.exec(`ALTER TABLE missions ADD COLUMN closure_ignored INTEGER NOT NULL DEFAULT 0`);
+// The retention deleted this mission's history (data-retention.ts): the
+// retention in days that applied, NULL while nothing was deleted. The chat
+// tells an emptied conversation from one that never had a message by it.
+if (!cols.includes('history_purged_days')) db.exec(`ALTER TABLE missions ADD COLUMN history_purged_days INTEGER`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_missions_trace ON missions(trace_id)`);
 // The run view reads the missions of one run on every refresh (listSpansByRun).
 // Partial: outside workflows the column stays NULL, which is almost every row.
@@ -1953,9 +1985,53 @@ if (!taskCols.includes('parent_task_id')) db.exec(`ALTER TABLE tasks ADD COLUMN 
 // (`daemon-message.ts`), for the webview to translate. The English columns stay
 // what every other reader shows; NULL = no code, which describes every earlier row.
 if (!taskCols.includes('blocked_reason_code')) db.exec(`ALTER TABLE tasks ADD COLUMN blocked_reason_code TEXT`);
+// How the chain lands (`docs/KANBAN-PR-PIPELINE.md` §2): NULL or 'local' keeps
+// the historical behaviour (the base is a local branch, taken as it is);
+// 'branch' and 'pr' make `base_branch` an integration branch cut from the
+// remote-tracking ref `base_ref` (`origin/main`), created by the daemon and
+// refused rather than replaced when the remote cannot give it. Frozen on the
+// task at its first dispatch and copied by every task the chain creates, so a
+// project setting changed mid-way never splits one chain across two modes.
+if (!taskCols.includes('integration_mode')) db.exec(`ALTER TABLE tasks ADD COLUMN integration_mode TEXT`);
+if (!taskCols.includes('base_ref')) db.exec(`ALTER TABLE tasks ADD COLUMN base_ref TEXT`);
+// One row per integration branch of a repository. The branch is created here
+// (state 'branch'); the later steps of the pull request pipeline fill the PR
+// columns and move the state to 'open', 'merged' or 'closed'. Keyed by the
+// repository's path and the branch: two projects sharing a checkout share its
+// branches too.
+db.exec(`
+CREATE TABLE IF NOT EXISTS integrations (
+  id TEXT PRIMARY KEY,
+  repo TEXT NOT NULL,
+  branch TEXT NOT NULL,
+  remote TEXT NOT NULL,
+  target TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  project TEXT,
+  series_id TEXT,
+  state TEXT NOT NULL DEFAULT 'branch',
+  base_sha TEXT,
+  head_sha TEXT,
+  merge_sha TEXT,
+  pr_number INTEGER,
+  pr_url TEXT,
+  checks TEXT,
+  last_polled_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (repo, branch)
+);
+`);
+// When the landing of a merged integration branch was replayed on its chains
+// (`integration-landing.ts`): TO DO ideas closed, doc tasks created. Separate
+// from `state`, which the forge poller owns: a daemon stopped between the two
+// writes finds the row 'merged' with no landing, and the reconciliation
+// replays it. NULL = not replayed yet.
+const integrationCols = (db.prepare(`PRAGMA table_info(integrations)`).all() as { name: string }[]).map((c) => c.name);
+if (!integrationCols.includes('landed_at')) db.exec(`ALTER TABLE integrations ADD COLUMN landed_at INTEGER`);
 if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
 // A writer that changes the reason without naming its code (an agent's own
-// reason, a scope stop, a statement written before the column) must not leave
+// reason, a statement written before the column) must not leave
 // the previous code behind: the webview would translate another sentence.
 db.exec(`
 CREATE TRIGGER IF NOT EXISTS tasks_blocked_reason_code_follows
@@ -2265,6 +2341,34 @@ export type TaskRow = {
   started_at: number | null;
   /** Task this one follows, when the orchestrator created it (see migration). */
   parent_task_id: string | null;
+  /** How the chain lands (see migration): null | 'local' | 'branch' | 'pr'. */
+  integration_mode?: string | null;
+  /** Remote-tracking ref the integration branch was cut from (`origin/main`). */
+  base_ref?: string | null;
+};
+
+/** One integration branch (see the `integrations` migration). */
+export type IntegrationRow = {
+  id: string;
+  repo: string;
+  branch: string;
+  remote: string;
+  target: string;
+  mode: string;
+  project: string | null;
+  series_id: string | null;
+  state: 'branch' | 'open' | 'merged' | 'closed';
+  base_sha: string | null;
+  head_sha: string | null;
+  merge_sha: string | null;
+  pr_number: number | null;
+  pr_url: string | null;
+  checks: string | null;
+  last_polled_at: number | null;
+  /** Landing replayed on the chains (see the `landed_at` migration). */
+  landed_at: number | null;
+  created_at: number;
+  updated_at: number;
 };
 
 /**
@@ -2382,6 +2486,10 @@ export type MissionRow = {
   /** Workflow node that spawned the mission. NULL outside a workflow run. */
   workflow_run_id: string | null;
   workflow_node_id: string | null;
+  /** 1 while the mission sits idle after ignoring every closure question, 2 once the idle reap took it (see the column). */
+  closure_ignored: number;
+  /** Retention in days that deleted the history; NULL while nothing was deleted (see the column). */
+  history_purged_days: number | null;
 };
 
 /** MissionRow + joins for UI listings: title/type of the Kanban task that spawned
@@ -2892,6 +3000,46 @@ const setTaskStatusOnlyStmt = db.prepare(
 const setTaskBaseBranchStmt = db.prepare(
   `UPDATE tasks SET base_branch = ?, updated_at = ? WHERE id = ?`,
 );
+const setTaskIntegrationStmt = db.prepare(
+  `UPDATE tasks SET integration_mode = ?, base_ref = ?, updated_at = ? WHERE id = ?`,
+);
+// A row already there keeps its id, state and PR columns: recording the branch
+// again on a later dispatch must not reset what the PR steps wrote.
+const upsertIntegrationStmt = db.prepare(`
+  INSERT INTO integrations (id, repo, branch, remote, target, mode, project, series_id, base_sha, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT (repo, branch) DO UPDATE SET
+    project = COALESCE(integrations.project, excluded.project),
+    series_id = COALESCE(integrations.series_id, excluded.series_id),
+    base_sha = COALESCE(integrations.base_sha, excluded.base_sha),
+    updated_at = excluded.updated_at
+`);
+const getIntegrationStmt = db.prepare(`SELECT * FROM integrations WHERE repo = ? AND branch = ?`);
+const listIntegrationsByBranchStmt = db.prepare(`SELECT * FROM integrations WHERE branch = ? ORDER BY created_at ASC`);
+const getIntegrationByIdStmt = db.prepare(`SELECT * FROM integrations WHERE id = ?`);
+// 'merged' is final: a later 'closed' from a stale poll never takes it back.
+const markIntegrationMergedStmt = db.prepare(`
+  UPDATE integrations SET state = 'merged', merge_sha = COALESCE(?, merge_sha), updated_at = ?
+  WHERE id = ? AND state != 'merged'
+`);
+const claimIntegrationLandingStmt = db.prepare(
+  `UPDATE integrations SET landed_at = ?, updated_at = ? WHERE id = ? AND state = 'merged' AND landed_at IS NULL`,
+);
+const releaseIntegrationLandingStmt = db.prepare(`UPDATE integrations SET landed_at = NULL, updated_at = ? WHERE id = ?`);
+const listUnlandedIntegrationsStmt = db.prepare(
+  `SELECT * FROM integrations WHERE state = 'merged' AND landed_at IS NULL ORDER BY updated_at ASC`,
+);
+const listTasksByBaseBranchStmt = db.prepare(
+  `SELECT * FROM tasks WHERE base_branch = ? ORDER BY created_at ASC`,
+);
+const listIntegrationsBySeriesStmt = db.prepare(
+  `SELECT * FROM integrations WHERE series_id = ? ORDER BY created_at ASC`,
+);
+// Only from 'branch': a pull request recorded once is never replaced by another.
+const markIntegrationOpenStmt = db.prepare(`
+  UPDATE integrations SET state = 'open', pr_number = ?, pr_url = ?, head_sha = ?, updated_at = ?
+  WHERE id = ? AND state = 'branch'
+`);
 const setTaskTodoIdStmt = db.prepare(
   `UPDATE tasks SET todo_id = ?, updated_at = ? WHERE id = ?`,
 );
@@ -3921,6 +4069,7 @@ export type ProjectRow = {
   score_updated_at: number | null;
   grepai_watch: string | null; // conversation restarts empty without saying so. ── Memory & project types (DB
   created_by: string | null; // `plugin:<id>` for a project a plugin registered
+  integration: string | null; // JSON of `project-integration.ts`; NULL = local merge
   created_at: number;
   updated_at: number;
 };
@@ -3967,6 +4116,8 @@ export type MemoryAuditRow = {
   candidate_text: string | null;
   rationale: string | null;
   reverted: number;
+  /** 1 when the rule this row speaks of no longer exists (`listMemoryAudit`). */
+  rule_deleted?: number;
 };
 
 export type MemoryProposalRow = {
@@ -4753,6 +4904,28 @@ export function renameAgentInLayout(scope: string, value: unknown, oldName: stri
   return changed;
 }
 
+/**
+ * The missions `m` whose history the retention may delete, bound to `@cutoff`:
+ * over, and idle since before the cutoff by every measure we keep — its end
+ * (or start), its newest event hot or archived, its stats row — and needed by
+ * no open task or workflow run. A whole conversation goes or none of it:
+ * cutting by event date would leave a conversation resumed after months with
+ * its beginning missing, and an open task reads its mission's last events.
+ * Each newest-event lookup is one probe of `idx_events_mission`.
+ */
+function historyExpiredSql(archive: boolean): string {
+  const newest = (table: string) =>
+    `COALESCE((SELECT e.timestamp FROM ${table} e WHERE e.mission_id = m.id ORDER BY e.id DESC LIMIT 1), 0) < @cutoff`;
+  return `m.status != 'running'
+    AND COALESCE(m.ended_at, m.started_at) < @cutoff
+    AND ${newest('events')}
+    ${archive ? `AND ${newest('archive.events')}` : ''}
+    AND COALESCE((SELECT st.last_event_at FROM mission_stats st WHERE st.mission_id = m.id), 0) < @cutoff
+    AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.mission_id = m.id AND t.status != 'DONE')
+    AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id = m.task_id AND t.status != 'DONE')
+    AND NOT EXISTS (SELECT 1 FROM workflow_runs w WHERE w.id = m.workflow_run_id AND w.status IN ('running', 'waiting'))`;
+}
+
 export const dbApi = {
   listBackendOverlays(): BackendOverlayRow[] {
     return db.prepare('SELECT * FROM backend_overlays').all() as BackendOverlayRow[];
@@ -4821,6 +4994,11 @@ export const dbApi = {
        *  The chain's own children pass their root's, so the whole volet runs
        *  on the group's LLM. */
       planGroup?: string | null;
+      /** How the chain lands and the remote ref its integration branch comes
+       *  from (see the `integration_mode` migration). The chain's own children
+       *  pass their root's. */
+      integrationMode?: string | null;
+      baseRef?: string | null;
     } = {},
   ): void {
     const now = Date.now();
@@ -4857,6 +5035,9 @@ export const dbApi = {
     );
     if (opts.silentReturn) markTaskSilentReturnStmt.run(id);
     if (opts.baseBranch) setTaskBaseBranchStmt.run(opts.baseBranch, now, id);
+    if (opts.integrationMode || opts.baseRef) {
+      setTaskIntegrationStmt.run(opts.integrationMode ?? null, opts.baseRef ?? null, now, id);
+    }
     if (opts.parentTaskId) setTaskParentStmt.run(opts.parentTaskId, id);
     bus.publish({ kind: 'task_created', taskId: id });
   },
@@ -5366,6 +5547,62 @@ export const dbApi = {
    *  and a `code-self` merge land there (evening of 2026-09-05). */
   setTaskBaseBranch(id: string, base: string): void {
     setTaskBaseBranchStmt.run(base, Date.now(), id);
+  },
+  /** Freezes how the task's chain lands (see the `integration_mode` migration). */
+  setTaskIntegration(id: string, mode: string | null, baseRef: string | null): void {
+    setTaskIntegrationStmt.run(mode, baseRef, Date.now(), id);
+  },
+  /** Records an integration branch; idempotent on (repo, branch). */
+  recordIntegration(row: {
+    repo: string; branch: string; remote: string; target: string; mode: string;
+    project?: string | null; seriesId?: string | null; baseSha?: string | null;
+  }): IntegrationRow {
+    const now = Date.now();
+    upsertIntegrationStmt.run(
+      randomUUID(), row.repo, row.branch, row.remote, row.target, row.mode,
+      row.project ?? null, row.seriesId ?? null, row.baseSha ?? null, now, now,
+    );
+    return getIntegrationStmt.get(row.repo, row.branch) as IntegrationRow;
+  },
+  getIntegration(repo: string, branch: string): IntegrationRow | undefined {
+    return getIntegrationStmt.get(repo, branch) as IntegrationRow | undefined;
+  },
+  getIntegrationById(id: string): IntegrationRow | undefined {
+    return getIntegrationByIdStmt.get(id) as IntegrationRow | undefined;
+  },
+  /** Every integration row named `branch`, whatever its repository. */
+  listIntegrationsByBranch(branch: string): IntegrationRow[] {
+    return listIntegrationsByBranchStmt.all(branch) as IntegrationRow[];
+  },
+  /** Moves an integration to 'merged' (its work is in the target). False when
+   *  it already was, or the row is gone. */
+  markIntegrationMerged(id: string, mergeSha: string | null): boolean {
+    return markIntegrationMergedStmt.run(mergeSha, Date.now(), id).changes === 1;
+  },
+  /** Claims the landing replay of a merged integration: true for one caller only. */
+  claimIntegrationLanding(id: string): boolean {
+    const now = Date.now();
+    return claimIntegrationLandingStmt.run(now, now, id).changes === 1;
+  },
+  /** Hands a failed landing replay back to the reconciliation. */
+  releaseIntegrationLanding(id: string): void {
+    releaseIntegrationLandingStmt.run(Date.now(), id);
+  },
+  /** Merged integrations whose landing was never replayed. */
+  listUnlandedIntegrations(): IntegrationRow[] {
+    return listUnlandedIntegrationsStmt.all() as IntegrationRow[];
+  },
+  /** Every task based on `branch`, oldest first. */
+  listTasksByBaseBranch(branch: string): TaskRow[] {
+    return listTasksByBaseBranchStmt.all(branch) as TaskRow[];
+  },
+  listIntegrationsBySeries(seriesId: string): IntegrationRow[] {
+    return listIntegrationsBySeriesStmt.all(seriesId) as IntegrationRow[];
+  },
+  /** Records the pull request opened for an integration branch; false when
+   *  the row is gone or already past the 'branch' state. */
+  markIntegrationOpen(id: string, pr: { number: number; url: string; headSha: string }): boolean {
+    return markIntegrationOpenStmt.run(pr.number, pr.url, pr.headSha, Date.now(), id).changes > 0;
   },
   /** Repoint ONE requeued task at another backend and release it now. Unlike
    *  `updateTask`, a null model is written as null: COALESCE would keep the slug
@@ -6410,6 +6647,15 @@ export const dbApi = {
   /** See the `user_engaged` column. Never cleared: a conversation a person took part in stays theirs. */
   markMissionUserEngaged(id: string): void {
     db.prepare(`UPDATE missions SET user_engaged = 1 WHERE id = ? AND user_engaged = 0`).run(id);
+  },
+  /** See the `closure_ignored` column: set after the last ignored question, cleared when a turn starts. */
+  setMissionClosureIgnored(id: string, ignored: boolean): void {
+    if (ignored) db.prepare(`UPDATE missions SET closure_ignored = 1 WHERE id = ? AND closure_ignored = 0`).run(id);
+    else db.prepare(`UPDATE missions SET closure_ignored = 0 WHERE id = ? AND closure_ignored != 0`).run(id);
+  },
+  /** The idle reap takes a mission that ignored its closure questions: the only death that ends its task (see the column). */
+  confirmClosureIgnoredReap(id: string): void {
+    db.prepare(`UPDATE missions SET closure_ignored = 2 WHERE id = ? AND closure_ignored = 1`).run(id);
   },
   getLatestSessionForAgent(agentName: string, ownerUserId?: string | null): string | null {
     const row = (ownerUserId === undefined ? latestSessionStmt.get(agentName)
@@ -7762,13 +8008,19 @@ export const dbApi = {
   setProjectCreatedBy(slug: string, origin: string): void {
     db.prepare(`UPDATE projects SET created_by = ? WHERE slug = ?`).run(origin, slug);
   },
+  /** The one door for `integration`: `upsertProject` never writes it, so a
+   *  meta edit cannot clear or forge the setting. False = no such project. */
+  setProjectIntegration(slug: string, json: string | null): boolean {
+    return db.prepare(`UPDATE projects SET integration = ?, updated_at = ? WHERE slug = ?`)
+      .run(json, Date.now(), slug).changes > 0;
+  },
   listProjectRows(): ProjectRow[] {
     return db.prepare(`SELECT * FROM projects ORDER BY slug`).all() as ProjectRow[];
   },
   /** Partial upsert: only defined fields are written (merge with the existing). */
   upsertProject(
     slug: string,
-    fields: Partial<Omit<ProjectRow, 'slug' | 'created_at' | 'updated_at' | 'created_by'>> = {},
+    fields: Partial<Omit<ProjectRow, 'slug' | 'created_at' | 'updated_at' | 'created_by' | 'integration'>> = {},
   ): void {
     const now = Date.now();
     const cur = this.getProjectRow(slug);
@@ -8056,7 +8308,13 @@ export const dbApi = {
     const args: unknown[] = [];
     if (opts.runId) { where.push('run_id=?'); args.push(opts.runId); }
     if (opts.project !== undefined) { where.push('project IS ?'); args.push(opts.project); }
-    const sql = `SELECT * FROM memory_audit ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY ts DESC LIMIT ?`;
+    // `rule_deleted`: the rule the row speaks of (the target of a merge) is
+    // gone, so an empty text is the deletion's doing, not a missing record.
+    const sql = `SELECT a.*, CASE WHEN COALESCE(CASE WHEN a.action = 'merge' THEN a.target_rule_id END, a.rule_id) IS NOT NULL
+                   AND NOT EXISTS (SELECT 1 FROM memory_rules r
+                                    WHERE r.id = COALESCE(CASE WHEN a.action = 'merge' THEN a.target_rule_id END, a.rule_id))
+                 THEN 1 ELSE 0 END AS rule_deleted
+                 FROM memory_audit a ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY a.ts DESC LIMIT ?`;
     return db.prepare(sql).all(...args, opts.limit ?? 100) as MemoryAuditRow[];
   },
   listRules(opts: { scope?: string; project?: string | null; agent?: string | null; source?: string } = {}): MemoryRuleRow[] {
@@ -9212,24 +9470,64 @@ export const dbApi = {
   },
 
   /**
-   * Deletes up to `batch` events older than `cutoff` from `table` (the hot one,
-   * or the cold archive when it is attached), with the text the history search
-   * copied from them. A running mission's events are never touched: its
-   * conversation is still in use. Returns how many events went.
+   * One page of the missions whose history is past the retention
+   * (`historyExpiredSql`) and still holds events, after `afterRowid` in
+   * insertion order. `archive`: the cold archive is attached and counts too.
    */
-  pruneEventsBatch(table: 'events' | 'archive.events', cutoff: number, batch: number): number {
-    const ids = (db.prepare(
-      `SELECT id FROM ${table} WHERE timestamp < ?
-         AND mission_id NOT IN (SELECT id FROM missions WHERE status = 'running')
-       ORDER BY id LIMIT ?`,
-    ).all(cutoff, batch) as { id: number }[]).map((r) => r.id);
-    if (!ids.length) return 0;
-    const list = ids.join(','); // integers read from the database: nothing to escape
-    db.transaction(() => {
-      db.exec(`DELETE FROM mission_search WHERE event_id IN (${list})`);
+  expiredHistoryMissions(cutoff: number, archive: boolean, afterRowid: number, limit: number): { rowid: number; id: string }[] {
+    const holds = (table: string) => `EXISTS (SELECT 1 FROM ${table} e WHERE e.mission_id = m.id)`;
+    return db.prepare(
+      `SELECT m.rowid AS rowid, m.id AS id FROM missions m
+        WHERE m.rowid > @after
+          AND (${holds('events')}${archive ? ` OR ${holds('archive.events')}` : ''})
+          AND ${historyExpiredSql(archive)}
+        ORDER BY m.rowid LIMIT @limit`,
+    ).all({ cutoff, after: afterRowid, limit }) as { rowid: number; id: string }[];
+  },
+
+  /**
+   * Deletes up to `batch` events of one mission from `table` (the hot one, or
+   * the cold archive when it is attached), with the text the history search
+   * copied from them. The mission is checked again in the same transaction: it
+   * may have been resumed since it was listed. Returns how many events went.
+   *
+   * The same transaction marks the mission (`history_purged_days`) and takes
+   * the events out of its `mission_stats` count, which the mission list shows.
+   * The count only knows the rows it saw written, so the batch that empties
+   * the mission sets it to zero outright: a row the stats never counted (one
+   * archived before the backfill reached it) cannot leave it negative or stale.
+   * Its other aggregates stay: the last activity date and the turn state are
+   * still true of the mission, and the retention reads that date.
+   */
+  pruneMissionEventsBatch(
+    table: 'events' | 'archive.events', missionId: string, cutoff: number, archive: boolean, batch: number,
+    retentionDays: number,
+  ): number {
+    return db.transaction((): number => {
+      const expired = db.prepare(`SELECT 1 FROM missions m WHERE m.id = @id AND ${historyExpiredSql(archive)}`)
+        .get({ id: missionId, cutoff });
+      if (!expired) return 0;
+      const ids = (db.prepare(`SELECT id FROM ${table} WHERE mission_id = ? ORDER BY id LIMIT ?`)
+        .all(missionId, batch) as { id: number }[]).map((r) => r.id);
+      if (!ids.length) return 0;
+      const list = ids.join(','); // integers read from the database: nothing to escape
+      db.exec(`DELETE FROM mission_search WHERE event_id IS NOT NULL AND event_id IN (${list})`);
       db.exec(`DELETE FROM ${table} WHERE id IN (${list})`);
+      db.prepare(`UPDATE missions SET history_purged_days = ? WHERE id = ?`).run(retentionDays, missionId);
+      const left = (t: string) => db.prepare(`SELECT 1 FROM ${t} WHERE mission_id = ? LIMIT 1`).get(missionId);
+      const emptied = !left('events') && !(archive && left('archive.events'));
+      if (emptied) {
+        // A row still waiting for its backfill has nothing left to fold in.
+        db.prepare(`UPDATE mission_stats SET event_count = 0, ready = 1, backfill_cursor = backfill_upto
+                     WHERE mission_id = ?`).run(missionId);
+      } else {
+        // A row not backfilled yet is not read (the list counts the events
+        // themselves), and its count does not hold these rows yet.
+        db.prepare(`UPDATE mission_stats SET event_count = MAX(0, event_count - ?) WHERE mission_id = ? AND ready = 1`)
+          .run(ids.length, missionId);
+      }
+      return ids.length;
     })();
-    return ids.length;
   },
 
   /** Whether the cold events archive is attached to this connection. */
@@ -9419,6 +9717,16 @@ export const dbApi = {
     if (!current) throw new Error(`user not found: ${id}`);
     db.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).run(passwordHash, id);
     return this.getUserById(id)!;
+  },
+
+  /** Whether the account's address still waits for its mailed code (`email_unverified`). */
+  userEmailUnverified(id: string): boolean {
+    const row = db.prepare(`SELECT email_unverified FROM users WHERE id = ?`).get(id) as { email_unverified: number } | undefined;
+    return row?.email_unverified === 1;
+  },
+
+  setUserEmailUnverified(id: string, unverified: boolean): void {
+    db.prepare(`UPDATE users SET email_unverified = ? WHERE id = ?`).run(unverified ? 1 : 0, id);
   },
 
   setUserName(id: string, name: string): UserRow {

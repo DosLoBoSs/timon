@@ -98,7 +98,7 @@ With the update check off, no announcement is read either, and the **Announcemen
 
 ## When a beta build ends
 
-A beta build has an end date, and a paid licence may have one too. Fourteen days before the build's end, a warning card at the bottom left tells you; when a newer version is already out, it is the update card that says so. Closed, the card comes back for the last three days, even if you had put the update off. Fourteen days before the licence's end, a banner at the top of the app tells you; it turns red for the last three days. A licence that ends does not stop Timon: it continues on Free. After the build's end date, Timon shows a full-screen notice instead of the app: **This build has expired**, install a newer build.
+A beta build has an end date, and a paid licence may have one too. Fourteen days before the build's end, a warning card at the bottom left tells you; when a newer version is already out, it is the update card that says so. Closed, the card comes back for the last three days, even if you had put the update off. Fourteen days before the licence's end, a card at the bottom left tells you; it becomes a warning for the last three days. A licence that ends does not stop Timon: it continues on Free. After the build's end date, Timon shows a full-screen notice instead of the app: **This build has expired**, install a newer build.
 
 When a newer version is published, this notice shows it too, with **Update**: the installer for your system, downloaded and verified by the desktop app. It cannot be put off there: installing it is the way back into the app.
 

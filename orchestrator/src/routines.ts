@@ -19,6 +19,7 @@
  * once per tick: next_run_at is computed before creating the task,
  * so two coinciding ticks do not recreate the same task.
  */
+import { daemonMessage, type DaemonMessage } from './daemon-message.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -279,11 +280,11 @@ function hasOpenBackupAlert(): boolean {
     .some((n) => n.anchor === BACKUP_ALERT_ANCHOR);
 }
 
-function raiseBackupAlert(title: string, body: string): void {
+function raiseBackupAlert(title: string, body: string, message: DaemonMessage): void {
   // A card the user has not dismissed yet is enough; a dismissed one comes back
   // the next failed night.
   if (hasOpenBackupAlert()) return;
-  createNotification({ type: 'alert', title, body, source: 'backup', anchor: BACKUP_ALERT_ANCHOR });
+  createNotification({ type: 'alert', title, body, source: 'backup', anchor: BACKUP_ALERT_ANCHOR, message });
 }
 
 /**
@@ -301,11 +302,13 @@ function noteBackupFailure(err: unknown): void {
       raiseBackupAlert(
         'Nightly backup skipped: disk almost full',
         `${message}. Free some space on this disk; older backups can be deleted from the backups folder.`,
+        daemonMessage('backup_disk_full', { error: message }),
       );
     } else if (failures >= BACKUP_ALERT_AFTER_FAILURES) {
       raiseBackupAlert(
         `Nightly backup failed ${failures} nights in a row`,
         `Last error: ${message}. No new backup has been written since the first of these failures.`,
+        daemonMessage('backup_failed_nights', { nights: failures, error: message }),
       );
     }
   } catch (noteErr) {

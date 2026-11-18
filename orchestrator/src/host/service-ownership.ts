@@ -241,7 +241,10 @@ export function serviceOfAnotherHome(opts: ServiceOpts): string | null {
  * would stop or restart the real home's daemon (TODO #735). They have no
  * `--force`, and judge the home only: an update or a repair moves the install.
  */
-export function actOnOwnService(opts: ServiceOpts, gesture: (opts: ServiceOpts) => ServiceResult): ServiceResult {
+export function actOnOwnService<R extends ServiceResult | Promise<ServiceResult>>(
+  opts: ServiceOpts,
+  gesture: (opts: ServiceOpts) => R,
+): R | ServiceResult {
   const refusal = serviceOfAnotherHome(opts);
   return refusal ? { ok: false, code: 1, lines: [], reason: refusal, written: false } : gesture(opts);
 }

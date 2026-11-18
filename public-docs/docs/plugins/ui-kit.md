@@ -70,9 +70,11 @@ Theme custom properties remain usable in inline styles, for example `hsl(var(--m
 
 Use the existing `WidgetChromeProps` type from `@timon-ai/sdk` for a
 custom widget frame (`widget: { frame: 'none' }`). Forward `className`
-to the root, render `poignee` in the header actions, and use `editing`
-to show configuration controls. The SDK keeps `poignee` typed as `unknown`
+to the root, render `handle` in the header actions, and use `editing`
+to show configuration controls. The SDK keeps `handle` typed as `unknown`
 to avoid a React dependency; narrow it to `React.ReactNode` when rendering.
+`handle` is given from `"apiVersion": 17`; `poignee`, its former name,
+still holds the same controls and is deprecated.
 
 `DialogContent` includes its portal, overlay and close button. Set
 `hideClose` only when supplying your own accessible close control.

@@ -31,7 +31,7 @@ test('a fresh install opens on the short arrangement the product ships (05/11/20
   const byRail = (rail: string) => column(cockpit, rail).map(w => w.id);
   const shares = (cards: typeof cockpit, rail: string) => column(cards, rail).map(w => w.fillPercent);
   assert.deepEqual(byRail('gauche'), ['plugin:@timon/agents:notifications', add]);
-  assert.deepEqual(shares(cockpit, 'gauche'), [66, 34], 'the notifications take two thirds, « Your widget here » the rest');
+  assert.deepEqual(shares(cockpit, 'gauche'), [66, 34], 'the notifications take two thirds, "Your widget here" the rest');
   assert.deepEqual(byRail('centre'), [MAIN_AGENT_WIDGET_ID]);
   assert.deepEqual(byRail('droite'), ['plugin:@timon/kanban:todo', 'plugin:@timon/agents:tasks']);
   assert.deepEqual(shares(cockpit, 'droite'), [50, 50]);
@@ -84,7 +84,7 @@ test('a scope that has not answered yet paints nothing, an answered empty one pa
   assert.deepEqual(workspaceWidgets(null, false, constraints, '/'), []);
   assert.deepEqual(workspaceWidgets([{ id: constraints[0]!.id, rail: 'droite', rang: 0, hauteur: 420 }], false, constraints, '/'), []);
   const fresh = workspaceWidgets(null, true, constraints, '/').filter(w => !w.removed);
-  assert.equal(fresh.length, 5, 'notifications and « Your widget here », the main agent, TODO and Tasks');
+  assert.equal(fresh.length, 5, 'notifications and "Your widget here", the main agent, TODO and Tasks');
   const stored = workspaceWidgets([{ id: constraints[0]!.id, rail: 'droite', rang: 0, hauteur: 420 }], true, constraints, '/');
   assert.equal(stored.find(w => w.id === constraints[0]!.id)?.hauteur, 420);
 });
@@ -203,7 +203,7 @@ test('TODO #278: the single Git card takes over the place of the former publicat
 
 // TODO #479: the agent strip became the Working agents widget. It was on
 // screen on every view, so a view stored before it gets it in the middle of
-// the top bar, whatever it did with the former « Agents list » card. The
+// the top bar, whatever it did with the former "Agents list" card. The
 // marker is the id's absence from the row: it did not exist before #479, and a
 // row that names it was written since — a removal there is the user's.
 test('Working agents lands in the middle of the top bar on every view that never named it', () => {

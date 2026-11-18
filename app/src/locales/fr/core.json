@@ -585,6 +585,11 @@
     "emailLinkCopy": "Copier le lien",
     "emailLinkCopied": "Lien copié.",
     "emailLinkCopyFailed": "Impossible de copier le lien.",
+    "confirmEmailTitle": "Confirmer votre adresse",
+    "confirmEmailStatus": "Pas encore confirmée. Nécessaire pour réinitialiser votre mot de passe par e-mail.",
+    "confirmEmailSend": "Envoyer le code",
+    "confirmEmailSending": "Envoi…",
+    "confirmEmailDone": "Adresse e-mail confirmée.",
     "licenseTitle": "Clé de licence",
     "licenseDescription": "Timon est gratuit : toutes les fonctionnalités et tous les plugins, pour un compte. Une clé de licence ajoute une offre payante, pour plus de comptes sur cette machine.",
     "licensePlan": "Offre",
@@ -638,15 +643,6 @@
     "doneTitle": "Adresse confirmée",
     "doneBody": "Vous vous connectez désormais avec {email}.",
     "signIn": "Se connecter"
-  },
-  "license": {
-    "pastDue": "Paiement en retard — renouvelez votre abonnement",
-    "pastDueUntil": "Paiement en retard — abonnement jusqu'au {date}",
-    "notActivated": "Free est actif — les comptes supplémentaires nécessitent une licence",
-    "activate": "Activer",
-    "offlineSince": "Serveur de licences injoignable depuis le {date} — les droits payants restent disponibles pendant la tolérance hors ligne, puis Timon revient à Free.",
-    "licenseEndsSoon": "Votre licence prend fin le {date}. Saisissez une nouvelle clé avant cette date.",
-    "licenseEndsUrgent": "Votre licence prend fin le {date}. Saisissez une nouvelle clé dès maintenant."
   },
   "betaLock": {
     "eyebrow": "Bêta",
@@ -1442,7 +1438,7 @@
         "backup": "sauvegarde sauvegardes archive nuit restaurer garder rétention jours corbeille agent supprimé récupérer annuler purger backup trash",
         "diagnostics": "journaux logs débogage divers infra dépannage",
         "desktop": "désinstaller supprimer retirer electron application",
-        "privacy": "confidentialité télémétrie statistiques usage anonyme suivi désactiver"
+        "privacy": "confidentialité télémétrie statistiques usage anonyme suivi désactiver conservation rétention historique effacer garder données mémoire faits jours"
       },
       "secrets": {
         "vault": "clés api jetons tokens mots de passe identifiants coffre variables environnement",
@@ -2896,14 +2892,11 @@
 },
   "freeLicense": {
     "restrictedAccounts": "{count, plural, one {# compte supplémentaire suspendu} other {# comptes supplémentaires suspendus}}. Le premier superadmin actif conserve l’accès ; aucun compte ni aucune donnée n’a été supprimé.",
-    "retainedData": "Après un retour à Free, les comptes supplémentaires restent stockés mais indisponibles. Toutes les fonctionnalités et tous les plugins restent disponibles. Une licence valide rétablit les comptes qu’elle couvre.",
-    "local_free": "Free est local et n’a aucune activation de machine à gérer.",
-    "free_unavailable": "L’inscription Free n’est pas encore ouverte pour cette version. Réessayez plus tard ou utilisez une clé de licence existante.",
+    "local_free": "Aucune licence n’est installée sur cette machine.",
     "client_upgrade_required": "Mettez Timon à jour vers une version compatible, puis réessayez.",
-    "summary": "Free fonctionne localement sans clé ni renouvellement : toutes les fonctionnalités et tous les plugins, pour un superadmin actif.",
     "plugin_composition_fixed": "Cette offre impose une composition fixe. Configurez les plugins inclus ou changez d’offre pour la modifier.",
-    "single_superadmin_required": "Free autorise un seul compte actif, obligatoirement superadmin.",
-    "free_incompatible": "Activation Free refusée. Gardez un superadmin actif et désactivez les autres comptes, puis réessayez. Vos données et votre licence actuelle sont conservées.",
+    "single_superadmin_required": "Cette licence autorise un seul compte actif, obligatoirement superadmin.",
+    "free_incompatible": "Cette licence ne peut pas s’appliquer à l’installation actuelle. Gardez un superadmin actif et désactivez les autres comptes, puis réessayez. Vos données et votre licence actuelle sont conservées.",
     "license_changed": "La licence a changé pendant cette demande. Rechargez puis réessayez.",
     "activation_key_missing": "Aucune clé d’activation n’est conservée sur cet appareil. Libérez-le depuis votre compte de licence ou contactez le support.",
     "deactivate": "Désactiver cette machine",
@@ -4172,21 +4165,49 @@
     "turnOff": "Désactiver",
     "turnOn": "Activer les notifications sur cet appareil"
   },
+  "privacySettings": {
+    "section": "Conservé sur cet ordinateur",
+    "history": {
+      "title": "Historique des missions",
+      "after": "{days, plural, one {Effacé après # jour sans activité} other {Effacé après # jours sans activité}}",
+      "forever": "Conservé sans limite"
+    },
+    "learnings": {
+      "title": "Faits bruts de la mémoire",
+      "after": "{days, plural, one {Effacés après # jour} other {Effacés après # jours}}",
+      "forever": "Conservés sans limite"
+    },
+    "lockedEnv": "imposé par l’environnement",
+    "lockedConfig": "défini dans timon.config.json",
+    "change": "Modifier",
+    "more": "Plus d’actions",
+    "keepAll": "Tout garder",
+    "reset": "{days, plural, =0 {Revenir au défaut : tout garder} one {Revenir au défaut : # jour} other {Revenir au défaut : # jours}}",
+    "days": "jours",
+    "zeroKeeps": "0 garde tout.",
+    "cancel": "Annuler",
+    "save": "Enregistrer"
+  },
   "telemetrySettings": {
     "tab": "Confidentialité",
     "title": "Statistiques d'usage anonymes",
-    "description": "Timon peut dire à son équipe comment l'app est utilisée — quelles fonctionnalités, quelle part des tours réussit, où l'installation s'arrête — pour savoir quoi corriger d'abord. C'est anonyme : un identifiant aléatoire tiré sur cet ordinateur, jamais votre compte ni votre machine.",
     "share": "Partager des statistiques d'usage anonymes",
-    "shareDescription": "Activé par défaut. Le désactiver arrête aussitôt tout envoi ; un dernier message enregistre que vous l'avez désactivé.",
+    "statusOn": "Activé : anonyme, jamais votre contenu",
+    "statusOff": "Désactivé : rien n'est envoyé",
+    "turnOff": "Désactiver",
+    "turnOn": "Activer",
+    "details": "Ce qui est envoyé",
+    "more": "Plus d'actions",
+    "close": "Fermer",
     "lockedEnv": "Fixé par la variable d'environnement TIMON_TELEMETRY : changez-le là.",
     "lockedEnvMalformed": "TIMON_TELEMETRY contient une valeur qui n'est ni oui ni non : le partage est coupé.",
     "lockedConfig": "Fixé par telemetry.enabled dans timon.config.json : changez-le là.",
     "lockedConfigMalformed": "telemetry.enabled dans timon.config.json n'est ni true ni false : le partage est coupé.",
     "inactiveBuild": "Cette version de Timon n'envoie rien, quel que soit ce réglage.",
     "sentTitle": "Ce qui est envoyé",
-    "sent": "Version de l'app, système d'exploitation, niveau de licence ; démarrages et mises à jour ; étapes de l'installation ; tours, leur durée, leur issue et leur nombre de jetons ; outils intégrés et fournisseurs utilisés ; actions sur les tâches, plugins, licence et navigateur, en nombre.",
+    "sent": "Version de l'app, système d'exploitation, type de processeur et niveau de licence ; démarrages et mises à jour ; parties de l'app ouvertes ; étapes de l'installation ; fonctionnalités utilisées et leur réussite ; tours, leur durée, leur issue et leur nombre de jetons ; outils intégrés et fournisseurs d'IA utilisés ; un décompte quotidien des agents, projets et plugins ; actions sur les tâches, plugins, licence et navigateur.",
     "neverTitle": "Ce qui n'est jamais envoyé",
-    "never": "Vos prompts, réponses ou fichiers ; les noms de vos projets, agents, skills, routines ou serveurs MCP ; chemins, URL et commandes ; messages d'erreur ; votre e-mail, nom d'utilisateur, nom d'ordinateur ou adresse.",
+    "never": "Vos prompts, réponses ou fichiers ; les noms de vos projets, agents, skills, routines ou serveurs MCP ; chemins, URL et commandes ; messages d'erreur ; votre e-mail, nom d'utilisateur ou nom d'ordinateur. Votre adresse réseau n'est jamais mise dans un événement, même si le serveur la voit, comme tout serveur.",
     "learnMore": "Lire la notice de confidentialité",
     "loadFailed": "Impossible de lire ce réglage.",
     "saveFailed": "Impossible d'enregistrer ce réglage.",

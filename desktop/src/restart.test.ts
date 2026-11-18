@@ -414,7 +414,7 @@ test('the kept-embedded notice names the home and the reason, in the user\'s lan
   assert.match(en.message, /did not answer/);
   assert.match(en.detail, /\/home\/me\/\.timon/);
   assert.match(en.detail, /timeout/);
-  assert.match(handoverKeptMessage('fr', 'C:\\Users\\me\\.timon', null).message, /n’a pas répondu/);
+  assert.match(handoverKeptMessage('fr', 'C:\\Users\\me\\.timon', null).message, /n’a pas répondu/); // french-ok: the French locale under test
 });
 
 test('the configuration the wizard writes keeps the origins the window opened on', () => {

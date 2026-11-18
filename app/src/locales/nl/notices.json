@@ -6,6 +6,11 @@
       "title": "Een ster op GitHub?",
       "action": "Geef een ster op GitHub"
     },
+    "confirmEmail": {
+      "title": "Bevestig je e-mailadres",
+      "body": "Zo kun je je wachtwoord per e-mail opnieuw instellen.",
+      "action": "Bevestigen"
+    },
     "feed": {
       "open": "Meer weten"
     },
@@ -18,6 +23,28 @@
       "feed": {
         "title": "Live demo op donderdag",
         "body": "Agents en plug-ins, één uur."
+      }
+    },
+    "license": {
+      "enterKey": "Mijn sleutel invoeren",
+      "paused": {
+        "title": "Betaalde functies gepauzeerd",
+        "body": "Ze komen terug zodra {brand} de licentieserver bereikt.",
+        "action": "Meer informatie"
+      },
+      "refused": {
+        "title": "Je licentie is niet meer actief",
+        "body": "{brand} gaat verder als Free. Voer een sleutel in om de betaalde functies terug te krijgen."
+      },
+      "pastDue": {
+        "title": "Betaling achterstallig",
+        "body": "Verleng je abonnement om de betaalde functies te behouden.",
+        "bodyUntil": "Verleng je abonnement vóór {date} om de betaalde functies te behouden.",
+        "action": "Mijn licentie bekijken"
+      },
+      "ends": {
+        "title": "Je licentie eindigt op {date}",
+        "body": "Voer vóór die datum een nieuwe sleutel in om de betaalde functies te behouden."
       }
     }
   }

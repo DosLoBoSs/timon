@@ -641,7 +641,7 @@ test('the CLI checks ownership before the temporary-home check, the preflight an
   const body = cli.slice(start, cli.indexOf('async function replacesRunningRelease', start));
   const guard = body.indexOf('guardServiceGesture(opts, sub');
   assert.ok(guard > 0);
-  for (const later of ['temporaryHomeNotice(', 'mod.installPreflight(opts)', 'installWithRuntime(opts', 'uninstallWithRuntime(opts', 'mod.stopService(opts)', 'mod.startService(opts)']) {
+  for (const later of ['temporaryHomeNotice(', 'mod.installPreflight(opts)', 'installWithRuntime(opts', 'uninstallWithRuntime(opts', 'withCooperativeStop(opts, mod.stopService', 'mod.startService(opts)']) {
     assert.ok(guard < body.indexOf(later), later);
   }
   assert.match(body, /let res = guard\.refusal;\n\s+if \(!res\) switch \(sub\)/);
@@ -1075,6 +1075,7 @@ test('the runners the desktop launches go through that check', () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const runner = readFileSync(join(here, 'desktop-service-runner.ts'), 'utf8');
   assert.match(runner, /const GESTURES = \{ stop: stopService, start: startService, restart: restartService \} as const;/);
-  assert.match(runner, /actOnOwnService\(opts, GESTURES\[action\]\)/);
-  assert.match(readFileSync(join(here, 'windows-restart-runner.ts'), 'utf8'), /actOnOwnService\(serviceOptsFromEnvironment\(cfg, \(\) => host\), restartWindowsService\)/);
+  // Ownership first; inside it, the Windows stop and restart ask the daemon before their kills.
+  assert.match(runner, /await actOnOwnService\(opts, async \(o\)[^]*?withCooperativeStop\(o, GESTURES\[action\], ask\)/);
+  assert.match(readFileSync(join(here, 'windows-restart-runner.ts'), 'utf8'), /await actOnOwnService\(opts, \(o\) => withCooperativeStop\(o, restartWindowsService, ask\)\)/);
 });

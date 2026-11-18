@@ -225,7 +225,7 @@ test('the configurator follows its container\'s width: two columns when wide, th
   const preview = root().querySelector<HTMLElement>(':scope > [data-look-styler-preview]');
   const choices = root().querySelector<HTMLElement>(':scope > [data-look-styler-choices]');
   assert.ok(preview && choices, 'the preview and the grids are two zones side by side');
-  assert.ok(preview.querySelector('[data-try="happy"]') && preview.querySelector('[data-surprise]'), 'the states and « Surprise me » stay with the preview');
+  assert.ok(preview.querySelector('[data-try="happy"]') && preview.querySelector('[data-surprise]'), 'the states and "Surprise me" stay with the preview');
   assert.ok(!preview.querySelector('button[data-shape]'), 'no grid under the preview');
   for (const cell of ['data-shape', 'data-fur', 'data-eyes', 'data-acc']) {
     assert.ok(choices.querySelector(`button[${cell}]`), `the ${cell} grid sits with the choices`);

@@ -186,8 +186,10 @@ test('the routes close once the step is answered: no restart of a live daemon', 
     // stale tab left on step 5 must not be able to ask for one.
     const answeredPost = await fetch(base, { method: 'POST' });
     assert.equal(answeredPost.status, 409);
-    assert.equal(((await answeredPost.json()) as { error?: string }).error, 'setup_complete');
-    assert.equal((await fetch(`${base}/skip`, { method: 'POST' })).status, 409);
+    assert.equal(((await answeredPost.json()) as { code?: string }).code, 'setup_already_complete');
+    const skipped = await fetch(`${base}/skip`, { method: 'POST' });
+    assert.equal(skipped.status, 409);
+    assert.deepEqual(await skipped.json(), { error: 'Setup is already complete.', code: 'setup_already_complete' });
     // Reading stays harmless, and says the step is answered.
     const answered = await (await fetch(base)).json() as { pending: boolean };
     assert.equal(answered.pending, false);
@@ -211,7 +213,7 @@ test('the routes close once the step is answered: no restart of a live daemon', 
     const unavailable = await fetch(base, { method: 'POST' });
     assert.equal(unavailable.status, 409);
     assert.deepEqual(await unavailable.json(), {
-      restarting: false, error: 'restart_not_available',
+      restarting: false, error: 'Timon cannot restart itself on this machine.', code: 'setup_restart_unavailable',
       command: 'systemctl --user restart timon-orchestrator',
     });
     assert.equal(restarts, 1);

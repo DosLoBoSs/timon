@@ -6,7 +6,7 @@
  * what it sent before when nobody touches a group, that a group's inherit
  * option names the general setting chosen below it, and that the disclosure
  * opens from the keyboard. Every cell is the shared ModelPicker
- * (`docs/MODEL-PICKER.md`): its inherit entry stands for « no setting », and a
+ * (`docs/MODEL-PICKER.md`): its inherit entry stands for "no setting", and a
  * subscription account is picked by its own instance id.
  */
 import { test } from 'node:test';
@@ -110,7 +110,7 @@ async function mount(form: SeriesPlanFormPayload, opts: MountOptions = {}) {
     await until(() => options().length === 0, 'the model picker to close');
   };
   /** Opens a picker and clicks the row named `label`, on the provider `provider`
-   *  (its rail label, « Anthropic · KRZDIGITAL ») or on the first one offering it. */
+   *  (its rail label, "Anthropic · KRZDIGITAL") or on the first one offering it. */
   const choose = async (trigger: HTMLElement, label: string, provider?: string) => {
     await openMenu(trigger);
     const find = () => options().find((o) => optionLabel(o) === label && !o.disabled);

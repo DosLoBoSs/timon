@@ -1,6 +1,6 @@
 /**
- * « Discover Timon », the slides after the agent's creation: « Next » walks
- * them, the last one leaves for the welcome, « Skip all » leaves from any
+ * "Discover Timon", the slides after the agent's creation: "Next" walks
+ * them, the last one leaves for the welcome, "Skip all" leaves from any
  * slide, the progress bars follow and jump, the arrow keys walk both ways,
  * and the lead is the person's own TIM — its name on the last button.
  */
@@ -108,7 +108,7 @@ const slideOf = (host: HTMLElement): string | null =>
 const segments = (host: HTMLElement): string[] =>
   Array.from(host.querySelectorAll('[data-segment]')).map((el) => el.getAttribute('data-segment') ?? '');
 
-test('« Next » walks the slides; the last one leaves for the welcome, named after the TIM', async () => {
+test('"Next" walks the slides; the last one leaves for the welcome, named after the TIM', async () => {
   await renderDiscover(async ({ host, click, nexts }) => {
     assert.equal(slideOf(host), 'autonomous');
     assert.deepEqual(segments(host), ['current', 'todo', 'todo', 'todo']);
@@ -119,7 +119,7 @@ test('« Next » walks the slides; the last one leaves for the welcome, named af
       assert.equal(slideOf(host), id);
     }
     assert.deepEqual(segments(host), ['done', 'done', 'done', 'current']);
-    assert.ok(!host.querySelector('[data-discover-next]'), 'the last slide has no « Next »');
+    assert.ok(!host.querySelector('[data-discover-next]'), 'the last slide has no "Next"');
     const finish = host.querySelector('[data-discover-finish]');
     assert.equal(finish?.textContent, t('onboarding.discover.finish', { name: 'Nova' }));
     assert.equal(nexts(), 0, 'nothing left before the person\'s click');
@@ -128,7 +128,7 @@ test('« Next » walks the slides; the last one leaves for the welcome, named af
   });
 });
 
-test('« Skip all » leaves from the first slide; a progress bar jumps to its slide', async () => {
+test('"Skip all" leaves from the first slide; a progress bar jumps to its slide', async () => {
   await renderDiscover(async ({ host, click, nexts }) => {
     await click(host.querySelectorAll('[data-segment]')[2]);
     assert.equal(slideOf(host), 'projects', 'the third bar opens the third slide');
@@ -155,7 +155,7 @@ test('the arrow keys walk the slides both ways, past the last one too', async ()
   });
 });
 
-test('a TIM without a chosen name: the last button says « Let\'s go »', async () => {
+test('a TIM without a chosen name: the last button says "Let\'s go"', async () => {
   await renderDiscover(async ({ host, click }) => {
     await click(host.querySelectorAll('[data-segment]')[DISCOVER_SLIDE_IDS.length - 1]);
     assert.equal(host.querySelector('[data-discover-finish]')?.textContent, t('onboarding.discover.finishNoName'));

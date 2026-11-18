@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
         "usage/browser-annotations",
         "usage/html-cards",
         "usage/kanban",
+        "usage/pull-requests",
         "usage/triggers",
         "usage/workflows",
         "usage/notifications",

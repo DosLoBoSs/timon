@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AgentMascotHost } from '@/components/mascot/agent-mascot';
+import { CommandToRun } from '@/components/command-to-run';
 import { PasswordInput } from '@/components/auth/password-input';
 import { accountName, looksLikeEmail, passwordPairReady, passwordProblem, MIN_PASSWORD } from '@/components/auth/auth-form';
 import { EmailCodeHost, useNow, type EmailCodeResent, type EmailCodeVerdict } from '@/components/email-code/email-code';
@@ -34,6 +35,10 @@ const LOOK = { shape: 'round', color: '#3fa9ff', eyes: 'big' } as const;
 export type AccountDraft = { name: string; email: string; password: string; confirm: string; setupToken: string };
 
 const EMPTY: AccountDraft = { name: '', email: '', password: '', confirm: '', setupToken: '' };
+
+/** The code cannot be mailed: offline, or the relay answers without sending. The terminal makes the account without it. */
+const OFFLINE_CODES: ReadonlySet<string> = new Set(['email_connection_required', 'email_service_unavailable']);
+export const OFFLINE_ACCOUNT_COMMAND = 'timon user create-admin';
 
 function Field({ id, label, required = false, hint, children }: { id: string; label: string; required?: boolean; hint?: string; children: ReactNode }): ReactElement {
   return (
@@ -238,6 +243,11 @@ export function AccountStep(): ReactElement {
         <p role="status" aria-live="polite" data-account-status="" className="ml-0.5 min-h-4 text-[12.5px] leading-4 tabular-nums text-destructive">
           {line}
         </p>
+        {failure?.code && OFFLINE_CODES.has(failure.code) && (
+          <div data-account-offline="">
+            <CommandToRun command={OFFLINE_ACCOUNT_COMMAND} label={t('onboarding.account.offlineCommand')} />
+          </div>
+        )}
         <Button type="submit" size="lg" className="h-11 w-full gap-2 rounded-full" disabled={!ready || sending || blocked}>
           {sending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
           {t('onboarding.account.create')}

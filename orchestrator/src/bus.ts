@@ -123,6 +123,10 @@ export type BusEvent =
   // An account answered, or changed, who it uses Timon for
   // (`onboarding-usage-kind.ts`). No `missionId`: never relayed to a browser.
   | { kind: 'usage_kind_set'; usageKind: UsageKind; userId: string }
+  // The licence refused a new account the account provider asked for
+  // (`account-provider-facade.ts`): the person who asked, `null` for a job.
+  // No `missionId`: never relayed to a browser.
+  | { kind: 'account_limit_reached'; userId: string | null }
   // A compaction of `missionId` moved on (`mission-compact.ts`): one per phase,
   // transient like `event_delta` (the outcome is persisted as a `compact`
   // event; `GET /api/missions/:id/compact` says what is under way after a
