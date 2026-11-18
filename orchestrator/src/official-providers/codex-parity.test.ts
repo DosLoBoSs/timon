@@ -177,9 +177,24 @@ test('the official codex provider launches the CLI exactly as the dialect of the
   const golden = JSON.parse(readFileSync(GOLDEN, 'utf8')) as Record<string, Described>;
   assert.deepEqual(Object.keys(actual), Object.keys(golden));
   for (const [name, expected] of Object.entries(golden)) {
-    assert.deepEqual(actual[name], expected, name);
+    assert.deepEqual(actual[name], onThisPlatform(expected), name);
   }
 });
+
+/**
+ * The golden file was written on Linux. On Windows the provider adds its own
+ * `[windows]` table (the unelevated sandbox, TIM-0062) and opens no git root
+ * (the Windows sandbox refuses a writable folder under a read-only one, TIM-0121).
+ */
+function onThisPlatform(expected: Described): Described {
+  if (process.platform !== 'win32') return expected;
+  const config: Record<string, string[]> = {};
+  for (const [table, lines] of Object.entries(expected.config)) {
+    config[table] = table === 'sandbox_workspace_write' ? lines.filter((l) => !l.startsWith('writable_roots')) : lines;
+  }
+  config.windows = ['sandbox = "unelevated"'];
+  return { ...expected, config };
+}
 
 test('the mission token never reaches config.toml', async () => {
   const { worktree } = makeRepo();
