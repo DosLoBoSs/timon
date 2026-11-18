@@ -13,6 +13,8 @@ irm https://timon-ai.com/install.ps1 | iex
 
 It downloads the Timon installer, checks it, and opens it: the installer then runs as described below. Run it in your desktop session, not over SSH: the installer window would open where nobody can see it, so the command refuses unless you add `-Silent`. Options and checks: [Install with one command](overview.md#install-with-one-command).
 
+Run it in a normal PowerShell window, not one opened with **Run as administrator**. Timon installs for your own account, and its installer fails when it starts from an administrator session: the command refuses before it downloads anything and asks you to run it again in a normal window. Only `-DownloadOnly`, which runs nothing, is allowed there. If an installer started from an administrator session ends with code `-1073741819` (`0xC0000005`), nothing was installed: run the command again in a normal PowerShell window. See [Troubleshooting](troubleshooting.md#windows-the-installer-ends-with-code--1073741819).
+
 ## Desktop installer
 
 Run the supplied Timon NSIS installer, choose its installation directory and open Timon. If Node.js or Git is missing, the installer installs Node.js (LTS) and Git for Windows with `winget`, after one Windows permission prompt; this can take a few minutes. If that fails or you decline, the setup screen offers them again.
