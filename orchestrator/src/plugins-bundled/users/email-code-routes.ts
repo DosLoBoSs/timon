@@ -348,10 +348,96 @@ export function registerEmailCodeRoutes(app: Router, deps: EmailCodeDeps): void 
     res.json({ ok: true });
   });
 
-  async function resend(req: Request, res: Response, purpose: 'verify' | 'reset'): Promise<void> {
+  /**
+   * The signed-in owner of an address made without a code (`timon user
+   * create-admin`, `timon init`): a browser session only, and only while the
+   * address still waits. Anyone else never reaches here (the auth middleware
+   * answers 401 to an anonymous caller once an account exists).
+   */
+  function pendingOwner(req: Request, res: Response): { id: string; email: string } | null {
+    const user = req.auth?.kind === 'session' ? req.auth.user : undefined;
+    if (!user) {
+      res.status(403).json(apiError('session_required', 'sign in from the app to confirm your email address'));
+      return null;
+    }
+    if (!dbApi.userEmailUnverified(user.id)) {
+      res.status(409).json(apiError('email_already_confirmed', 'this email address is already confirmed'));
+      return null;
+    }
+    return { id: user.id, email: user.email };
+  }
+
+  app.post('/api/auth/email-verification', async (req, res) => {
+    const owner = pendingOwner(req, res);
+    if (!owner) return;
+    const parsed = z.object({ locale: LocaleField }).safeParse(req.body ?? {});
+    if (!parsed.success) { sendInvalidBody(res, 'invalid locale'); return; }
+    const locale = relayLocale(parsed.data.locale);
+    const issued = store.issue({ purpose: 'verify', email: owner.email, userId: owner.id, locale, origin: originOf(req) });
+    if (!issued.ok) { sendIssueRefusal(res, issued); return; }
+    if (!(await mail(res, 'verify', owner.email, issued.issued.code, locale))) {
+      store.drop(issued.issued.id);
+      return;
+    }
+    res.status(202).json({
+      challengeId: issued.issued.id,
+      email: owner.email,
+      expiresAt: issued.issued.expiresAt,
+      resendAt: issued.issued.resendAt,
+    });
+  });
+
+  app.post('/api/auth/email-verification/resend', async (req, res) => {
+    const owner = pendingOwner(req, res);
+    if (!owner) return;
+    await resend(req, res, 'verify', owner.id);
+  });
+
+  /**
+   * The code the owner received. The relay must record the address before it
+   * counts as confirmed — a password reset by email depends on it — so a relay
+   * that does not answer keeps the code alive for another try.
+   */
+  app.post('/api/auth/email-verification/confirm', async (req, res) => {
+    const owner = pendingOwner(req, res);
+    if (!owner) return;
+    const parsed = z.object({ challengeId: ChallengeField, code: z.string().max(16) }).safeParse(req.body ?? {});
+    if (!parsed.success) { sendInvalidBody(res, 'challengeId and code are required'); return; }
+    const keys = throttleKeys(req, 'email-code', null);
+    const verdict = checkThrottle(keys);
+    if (!verdict.allowed) { sendThrottled(res, verdict); return; }
+    const result = store.check(parsed.data.challengeId, 'verify', parsed.data.code, owner.email);
+    if (!result.ok || result.userId !== owner.id) {
+      if (!result.ok && result.reason !== 'expired') noteAuthFailure(req, keys);
+      sendCodeRefusal(res, result.ok ? { ok: false, reason: 'expired' } : result);
+      return;
+    }
+    let id: string;
+    try { id = deps.installId(); } catch {
+      res.status(500).json({ error: 'install_id_unavailable' });
+      return;
+    }
+    if (!(await reportVerifiedEmail({ email: owner.email, installId: id }, deps.relay))) {
+      res.status(503).json(apiError('email_service_unavailable', "Timon's email service is unavailable right now, try again later"));
+      return;
+    }
+    store.consume(result.id);
+    clearThrottle(keys);
+    dbApi.setUserEmailUnverified(owner.id, false);
+    auditRequest(req, 'user.email_verified', `user:${owner.id}`);
+    res.json({ ok: true });
+  });
+
+  async function resend(req: Request, res: Response, purpose: 'verify' | 'reset', ownerId?: string): Promise<void> {
     const parsed = ResendBody.safeParse(req.body ?? {});
     if (!parsed.success) { sendInvalidBody(res, 'challengeId is required'); return; }
     const attempt = store.resend(parsed.data.challengeId, purpose, originOf(req));
+    // A signed-in owner resends their own challenge, never another one.
+    if (attempt.ok && ownerId !== undefined && attempt.userId !== ownerId) {
+      attempt.release();
+      sendCodeRefusal(res, { ok: false, reason: 'expired' });
+      return;
+    }
     if (!attempt.ok) {
       if (attempt.reason === 'too_soon') { sendTooSoon(res, attempt.retryAfterMs); return; }
       if (attempt.reason === 'origin_limited') { sendOriginLimited(res, attempt.retryAfterMs); return; }

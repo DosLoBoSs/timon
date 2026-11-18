@@ -26,7 +26,7 @@ import { scopedDb } from '../../users/scoped-db.js';
 import { browseAgentFiles, deleteAgentPath, mkdirAgentPath, moveAgentPath, openAgentFileRaw, openExternalFileRaw, readExternalFile, renameAgentPath, writeAgentFile, writeExternalFile } from '../../files.js';
 import { sendMedia } from '../../media-send.js';
 import { handleSpawn } from '../../http-helpers.js';
-import { defaultExcludedMcpIds, deleteMcp, getMcp, listMcp, missionTransport, redactMcpServer, setMcpOAuth, type McpHttpConfig, type McpStdioConfig, upsertMcp } from '../../mcp.js';
+import { defaultExcludedMcpIds, deleteMcp, getMcp, listMcp, missionTransport, presentMcpServer, redactMcpServer, setMcpOAuth, type McpHttpConfig, type McpStdioConfig, upsertMcp } from '../../mcp.js';
 import { buildAuthorizeUrl, discoverOAuth, dynamicRegister, exchangeCode, OAUTH_CALLBACK_PATH, oauthRedirectUri, oauthReturnPath, pkcePair, putPending, randomState, takePending } from '../../oauth.js';
 import { apiPort } from '../../api-url.js';
 import { agentDir, skillFile } from '../../paths.js';
@@ -1810,17 +1810,17 @@ export function registerRoutes(app: express.IRouter): void {
         res.status(404).json(apiError('mcp_not_found', 'mcp not found'));
         return;
       }
-      // audit CLI/MCP P1-4: the full transport (headers, OAuth tokens, stdio env) must not
+      // audit CLI/MCP P1-4: the full transport (OAuth client secret, stdio env) must not
       // reach a caller who cannot manage MCP servers. Superadmin and
-      // `mcp:manage` holders keep the values — the editor round-trips them on
-      // save, so masking there would corrupt real secrets — everyone else gets
-      // the shape with every secret value scrubbed. A mission token is never
-      // shown them, `mcp:manage` or not: its context is what a prompt injection
-      // reads. A PUT that sends the masked value back keeps the stored one
-      // (`missionTransport`).
+      // `mcp:manage` holders keep those values for the editor; everyone else
+      // gets the shape with every secret value scrubbed. A mission token is
+      // never shown them, `mcp:manage` or not: its context is what a prompt
+      // injection reads. Header values are masked for every caller: the vault
+      // holds them and nothing reads them back. A save that sends the masked
+      // value back keeps the stored one (`upsertMcp`, `missionTransport`).
       const full = !isMissionToken(req)
         && (req.auth?.isSuperadmin || requestHasPermission(req, 'mcp:manage'));
-      res.json(full ? s : redactMcpServer(s));
+      res.json(full ? presentMcpServer(s) : redactMcpServer(s));
     } catch (err) {
       res.status(400).json(apiError('mcp_refused', (err as Error).message, { detail: (err as Error).message }));
     }
@@ -1878,7 +1878,7 @@ export function registerRoutes(app: express.IRouter): void {
       }
       // The saved server carries the secrets `missionTransport` just put back:
       // a mission must not read them from the response of its own write.
-      res.json(mission ? redactMcpServer(saved) : saved);
+      res.json(mission ? redactMcpServer(saved) : presentMcpServer(saved));
     } catch (err) {
       res.status(400).json(apiError('mcp_refused', (err as Error).message, { detail: (err as Error).message }));
     }

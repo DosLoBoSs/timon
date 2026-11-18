@@ -145,6 +145,8 @@ export class TelemetryCollector {
         return this.emit('onboarding_step', { step: ev.step, action: ev.action, ...(usage ? { usage_kind: usage } : {}) });
       }
       case 'usage_kind_set': return this.emit('usage_kind_set', { usage_kind: ev.usageKind }, { userId: ev.userId });
+      case 'account_limit_reached':
+        return this.emit('upgrade_action', { action: 'account_limit_reached', entry_point: 'users' }, { userId: ev.userId });
       default: return;
     }
   }

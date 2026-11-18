@@ -1,3 +1,4 @@
+import { daemonMessage } from './daemon-message.js';
 import { assertFreeAccountAccess } from './users/free-access.js';
 import { noteProviderSignedIn, noteProviderSignedOut } from './backends/sign-in-state.js';
 import { assertLicensedExecution } from './license/capabilities.js';
@@ -635,6 +636,7 @@ export function evictIdleMission(now = Date.now(), graceMs = EVICT_IDLE_GRACE_MS
     `(${oldest.agentName}, idle ${Math.round((now - lastActivityAt(oldest)) / 1000)} s)`,
   );
   oldest.terminationIntent = 'idle';
+  dbApi.confirmClosureIgnoredReap(oldest.missionId);
   try { oldest.handle.kill('SIGTERM'); } catch { /* already dead */ }
   return oldest.missionId;
 }
@@ -4538,6 +4540,7 @@ export function reapStaleMissions(processTable?: readonly ProcessEntry[], now = 
         if (!isAutonomousMission(m)) continue;
         const lastActivity = dbApi.lastEventAt(m.id) ?? m.started_at;
         if (now - lastActivity < REAP_IDLE_MS()) continue;
+        dbApi.confirmClosureIgnoredReap(m.id);
         const reason = dbApi.finishMission(m.id, 'terminated', 0, 'killed');
         bus.publish({ kind: 'mission_complete', missionId: m.id, status: 'terminated', exitCode: 0, reason });
         notifyParentOnComplete(m.id, 'terminated');
@@ -4635,6 +4638,8 @@ export function reapStaleMissions(processTable?: readonly ProcessEntry[], now = 
         (background.length > 0 ? ' (background ceiling reached)' : ''),
       );
       live.terminationIntent = 'idle'; // turn finished, only free the process → terminal `completed`
+      // The one death that ends the task of a mission that ignored its closure questions.
+      dbApi.confirmClosureIgnoredReap(m.id);
       try { live.handle.kill('SIGTERM'); } catch { /* already dead */ }
       idled++;
       continue;
@@ -5250,6 +5255,9 @@ function notifyRenamedTriggers(oldName: string, newName: string, triggers: reado
           : `Check ${own.length} triggers: agent ${oldName} is now ${newName}`,
         body: `The filter of these event triggers matches the agent's name by pattern or substring and no longer reads it the same way. They were left unchanged: review each one on the Triggers page.\n${own.map((t) => `- ${t.name}`).join('\n')}`,
         ownerUserId: owner,
+        message: daemonMessage('triggers_check_after_rename', {
+          count: own.length, oldName, newName, list: own.map((t) => `- ${t.name}`).join('\n'),
+        }),
       });
     } catch (err) {
       console.warn(`[agent] rename ${oldName}→${newName}: could not notify about ${own.length} trigger(s): ${(err as Error).message}`);

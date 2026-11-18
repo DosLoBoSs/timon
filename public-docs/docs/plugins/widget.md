@@ -51,14 +51,14 @@ Every widget receives `orientation`: `horizontal` on the top bar's line, `vertic
 
 The rule is the zone's, never the widget's width: the side navigation widens on hover, and a widget must not change form under the pointer. A widget without `bar` keeps its card everywhere it is admitted, sidebars included; a widget in a stack of tabs keeps its card too. The shape is not painted as a label: read it from `orientation` and `compact`.
 
-The compact form is icons and badges only. Its detail opens on click with `AnchoredPopover` from the [UI kit](ui-kit.md) (manifest `"apiVersion": 6`): `placement: 'below'` on the line, `'beside'` in a column. The popover keeps itself inside the window. Use `frame: 'none'` so the component chooses between the forms; a `tile` widget is painted without its frame in a compact zone. The host gives the compact form no height, no resize, no style menu and no tab stacking: only the grip and the gear (settings menu, whose last item deletes the widget), passed in `poignee` while editing, laid out after it in the zone's direction.
+The compact form is icons and badges only. Its detail opens on click with `AnchoredPopover` from the [UI kit](ui-kit.md) (manifest `"apiVersion": 6`): `placement: 'below'` on the line, `'beside'` in a column. The popover keeps itself inside the window. Use `frame: 'none'` so the component chooses between the forms; a `tile` widget is painted without its frame in a compact zone. The host gives the compact form no height, no resize, no style menu and no tab stacking: only the grip and the gear (settings menu, whose last item deletes the widget), passed in `handle` while editing, laid out after it in the zone's direction.
 
 ```js
 ctx.slots.register(
   { slot: 'cockpit.widget', key: 'status', widget: { title: 'Status', zone: 'topbar.widget', frame: 'none', bar: true } },
-  ({ orientation, compact, poignee, className }) => compact
-    ? h(React.Fragment, null, h(StatusButton, { placement: orientation === 'horizontal' ? 'below' : 'beside' }), poignee)
-    : h(Tile, { title: 'Status', actions: poignee, className }, h(StatusDetails)),
+  ({ orientation, compact, handle, className }) => compact
+    ? h(React.Fragment, null, h(StatusButton, { placement: orientation === 'horizontal' ? 'below' : 'beside' }), handle)
+    : h(Tile, { title: 'Status', actions: handle, className }, h(StatusDetails)),
 )
 ```
 
@@ -70,6 +70,8 @@ ctx.slots.register(
 
 ## Supplying your own frame
 
-Choose `frame: 'none'` only when the header needs custom content. The host passes `poignee` (layout controls), `className` (including height classes) and optional `editing`. Forward `className` to the root and propagate the host's full-height class for a fill-mode widget. In layout editing the host draws the card's own controls — a grip at the left and a gear at the right, in a strip above your header — and makes the body inert so the whole card can be grabbed: `poignee` is then empty on a card, and only filled on a compact form. Keep rendering it in your header's actions anyway, and keep your own actions (filters, an Add button) there: they never share a row with the layout controls. A right click on the card in layout editing, or on a stack's tab at any time, opens the same menu as the gear.
+Choose `frame: 'none'` only when the header needs custom content. The host passes `handle` (layout controls), `className` (including height classes) and optional `editing`. Forward `className` to the root and propagate the host's full-height class for a fill-mode widget. In layout editing the host draws the card's own controls — a grip at the left and a gear at the right, in a strip above your header — and makes the body inert so the whole card can be grabbed: `handle` is then empty on a card, and only filled on a compact form. Keep rendering it in your header's actions anyway, and keep your own actions (filters, an Add button) there: they never share a row with the layout controls. A right click on the card in layout editing, or on a stack's tab at any time, opens the same menu as the gear.
+
+`handle` is given from manifest `"apiVersion": 17`. A widget written for an earlier version reads the same controls as `poignee`: the host still passes it, and the SDK keeps it as a deprecated alias.
 
 Do not create another drag context or duplicate the host's palette. The [UI kit](ui-kit.md) provides `Tile` for a custom frame. The supplied `plugin-widget` is the simplest starting point.

@@ -175,6 +175,32 @@ test('backup retention and the agent trash share System › Backups & trash, not
   assert.deepEqual(offTab.keys, ['TIMON_AGENT_TRASH_ENABLED', 'TIMON_AGENT_TRASH_RETENTION_DAYS']);
 });
 
+test('the retention settings live in System › Privacy, above the telemetry pane, not in Diagnostics', () => {
+  const rows: SettingsRowLike[] = [
+    { key: 'TIMON_EVENTS_RETENTION_DAYS', group: 'Infra', advanced: false },
+    { key: 'TIMON_LEARNINGS_RETENTION_DAYS', group: 'Infra', advanced: false },
+    { key: 'TIMON_LOG_RETENTION_DAYS', group: 'Infra', advanced: false },
+  ];
+  const telemetry = { id: '@timon/telemetry', origin: 'occupant' as const, label: 'Privacy' };
+  const layout = buildSettingsLayout(input({ rows, plugins: [telemetry] }));
+  const system = layout.find((c) => c.id === 'system');
+  const privacy = system?.tabs.find((t) => t.id === 'privacy');
+  assert.ok(privacy && privacy.kind === 'native' && privacy.pane === 'privacy');
+  assert.deepEqual(privacy.keys, ['TIMON_EVENTS_RETENTION_DAYS', 'TIMON_LEARNINGS_RETENTION_DAYS']);
+  assert.deepEqual(privacy.hosted, { pluginId: '@timon/telemetry', origin: 'occupant' });
+  const diagnostics = system?.tabs.find((t) => t.id === 'diagnostics');
+  assert.ok(diagnostics && diagnostics.kind === 'rows');
+  assert.deepEqual(diagnostics.keys, ['TIMON_LOG_RETENTION_DAYS']);
+  assert.equal(layout.some((c) => c.id === 'plugins'), false, 'the hosted pane does not show again under Plugins');
+  assert.deepEqual(legacyGroupTarget('@timon/telemetry'), { category: 'system', tab: 'privacy' });
+
+  // Telemetry off: the retention rows keep the tab alive; with neither, it goes.
+  const alone = buildSettingsLayout(input({ rows }));
+  const kept = alone.find((c) => c.id === 'system')?.tabs.find((t) => t.id === 'privacy');
+  assert.ok(kept && kept.kind === 'native' && kept.hosted === undefined);
+  assert.equal(tabIds(buildSettingsLayout(input({ rows: [] })), 'system').includes('privacy'), false);
+});
+
 test('desktop tab only in the desktop client', () => {
   assert.equal(tabIds(buildSettingsLayout(input({ desktop: true })), 'system').includes('desktop'), true);
   assert.equal(tabIds(buildSettingsLayout(input()), 'system').includes('desktop'), false);

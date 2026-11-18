@@ -19,6 +19,7 @@ import { GlobalInstructionsSettings } from '@/plugins-client/settings/global-ins
 import { TimonPreambleSettings } from '@/plugins-client/settings/timon-preamble-settings';
 import { PluginSettingsPane } from '@/components/plugin-settings-sections';
 import { PluginWebhooksPane } from '@/components/plugin-webhooks-pane';
+import { PrivacySettings } from '@/components/settings/privacy-settings';
 import { PluginConnectionsSettings } from '@/components/settings/plugin-connections';
 import { DevicesSettings } from '@/components/settings/devices-settings';
 import { DeveloperModeSettings } from '@/components/settings/developer-mode-settings';
@@ -465,9 +466,9 @@ function SettingsPanel({ onClose, unsavedRef }: { onClose: () => void; unsavedRe
               <NativeSettingsContext.Provider value={{ resourceMemory, refresh: load, includeAdvanced }}>
                 <TabContent
                   tab={resolved.tab}
-                  rows={resolved.tab.kind === 'rows'
-                    ? resolved.tab.keys.flatMap((key) => byKey.get(key) ?? [])
-                    : []}
+                  rows={resolved.tab.kind === 'plugin'
+                    ? []
+                    : (resolved.tab.keys ?? []).flatMap((key) => byKey.get(key) ?? [])}
                   drafts={drafts}
                   saving={saving}
                   onDraft={onDraft}
@@ -588,10 +589,21 @@ function TabContent({
         return <DeveloperModeSettings />;
       case 'isolation':
         return <MissionIsolationSettings />;
+      case 'privacy':
+        return (
+          <div className="flex flex-col gap-8">
+            <PrivacySettings rows={rows} saving={saving} onSave={onSave} />
+            {tab.hosted && (tab.hosted.origin === 'occupant'
+              ? <><SlotKeyed name="settings.section" entryKey={tab.hosted.pluginId} /><PluginWebhooksPane pluginId={tab.hosted.pluginId} /></>
+              : <PluginSettingsPane pluginId={tab.hosted.pluginId} />)}
+          </div>
+        );
     }
   }
   return (
-    <div className="flex flex-col">
+    // The same measure as the panes beside it (Installation, Web interface):
+    // on a wide dialog a control no longer sits a screen away from its label.
+    <div className="flex max-w-3xl flex-col">
       {rows.map((s) => (
         <SettingsRow
           key={s.key}

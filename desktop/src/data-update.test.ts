@@ -1,3 +1,4 @@
+// french-ok-file: the French locale of the update dialogs under test
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
@@ -7,7 +8,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { createReleaseNotes } from '../scripts/release-notes.mjs';
 import {
-  DaemonStartTimeoutError, finishUpdate, LIGHT_THEME, START_BUDGET_MS, readProgress, renderNotes, requestUpdate, THEME, themeFor, updateCopy, updateOffer, updatePage, updateProgressPage, updateUnauthorizedMessage,
+  DaemonStartTimeoutError, finishUpdate, LIGHT_THEME, REPLACE_BUDGET_MS, START_BUDGET_MS, readProgress, renderNotes, requestUpdate, THEME, themeFor, updateCopy, updateOffer, updatePage, updateProgressPage, updateUnauthorizedMessage,
   unmanagedDaemon, UpdateTokenMissingError, updateFailureDialog, type UpdateStatus,
 } from './data-update.js';
 import { instanceId, windowsLauncher } from './service.js';
@@ -228,7 +229,7 @@ for (const platform of ['win32', 'darwin', 'linux']) {
       uiLocale: () => 'fr', initShellLocale: async () => {},
       // main() writes its decisions to the desktop log (TODO #343).
       console: { log: () => {} }, originOf: () => 'http://127.0.0.1',
-      process: { platform, resourcesPath: 'resources' },
+      process: { platform, resourcesPath: 'resources', env: {} },
       verifyInstalledRelease: async () => { calls.push('verify'); }, readFileSync: () => '', join,
       nativeImage: { createFromPath: () => ({ isEmpty: () => true }) }, APP_ICON_PATH: 'icon',
       windowScheme: () => 'dark', nativeTheme: { shouldUseDarkColors: true },
@@ -244,7 +245,7 @@ for (const platform of ['win32', 'darwin', 'linux']) {
         // Spell-check dictionaries stay local: a session setting, nothing to observe here.
         keepDictionariesLocal: () => {},
         // P3: the approval screen counts missions; the new AppImage drops the previous one.
-        localDaemonGet: () => async () => null, readMissionCount: async () => null, missionsAtStake: () => 0, removeAppImageBackup: async () => {},
+        localDaemonGet: () => async () => null, readMissionCount: async () => null, missionsAtStake: () => 0, removeAppImageBackup: async () => {}, previousAppImage: async () => null,
         // §10: no consent left by "Restart and install", so the approval screen asks.
         takeUpdateConsent: () => { calls.push('consent'); return null; }, consentApproves: () => false,
     };
@@ -364,7 +365,7 @@ test('§10: a consent for this exact update shows a progress only, without the m
       app: { isPackaged: true, getAppPath: () => 'app', getVersion: () => '0.2.0', quit: () => calls.push('quit') },
       uiLocale: () => 'en', initShellLocale: async () => {},
       console: { log: (line: string) => { logs.push(line); } }, originOf: () => 'http://127.0.0.1',
-      process: { platform: 'linux', resourcesPath: 'resources' },
+      process: { platform: 'linux', resourcesPath: 'resources', env: {} },
       verifyInstalledRelease: async () => {}, readFileSync: () => '', join,
       nativeImage: { createFromPath: () => ({ isEmpty: () => true }) }, APP_ICON_PATH: 'icon',
       windowScheme: () => 'dark', nativeTheme: { shouldUseDarkColors: true },
@@ -377,7 +378,7 @@ test('§10: a consent for this exact update shows a progress only, without the m
       },
       installWindowPermissions: () => {}, session: { defaultSession: {} }, microphone: {}, installAppMenu: () => {}, installJumpList: () => {},
       installMachineHeader: () => {}, interfaceUrl: '', keepDictionariesLocal: () => {},
-      localDaemonGet: () => async () => null, readMissionCount: async () => null, missionsAtStake: () => 0, removeAppImageBackup: async () => {},
+      localDaemonGet: () => async () => null, readMissionCount: async () => null, missionsAtStake: () => 0, removeAppImageBackup: async () => {}, previousAppImage: async () => null,
       takeUpdateConsent: (home: string) => { calls.push(`take ${home}`); return consent; },
       consentApproves: (given: unknown, seen: unknown) => { assert.equal(given, consent); assert.equal(seen, offer); return approves; },
     };
@@ -437,6 +438,170 @@ test('§10: the pre-approved window shows a progress, answers at once and cannot
   assert.match(scripts.at(-1)!, /Copying data/);
   assert.match(scripts.at(-1)!, /if \(e\) e\.hidden = true/);
   window.close();
+});
+
+test('a refused AppImage update offers "Go back to x.y.z" between Quit and Update, only when the previous file is there', t => {
+  const home = fixture(t);
+  const offer = { from: '0.1.8', to: '0.2.0' };
+  const offered = updatePage(offer, join(home, 'missing'), 'en', 'dark', true).html;
+  assert.match(offered, /id="quit"[^>]*>Quit<\/a><a class="button" id="rollback" role="button" href="timon-update:rollback">Go back to 0\.1\.8<\/a><a class="button primary" id="approve"/);
+  assert.match(offered, /Go back to 0\.1\.8 puts that version back and opens it\./);
+  assert.doesNotMatch(offered, /reinstall its installer/);
+  assert.match(offered, /footer\{display:flex;flex-wrap:wrap;/, 'three buttons wrap in a narrow window');
+  assert.match(updatePage(offer, join(home, 'missing'), 'fr', 'dark', true).html, />Revenir à 0\.1\.8<\/a>/);
+  for (const plain of [updatePage(offer, join(home, 'missing'), 'en').html, updatePage(offer, join(home, 'missing'), 'en', 'dark', false).html]) {
+    assert.doesNotMatch(plain, /rollback|Go back to/);
+    assert.match(plain, /reinstall its installer/);
+  }
+});
+
+test('"Go back to x.y.z" refuses the update, says it is going back and locks the screen', async t => {
+  const home = fixture(t);
+  const module = readFileSync(new URL('./update-window.ts', import.meta.url), 'utf8');
+  const tree = ts.createSourceFile('window.ts', module, ts.ScriptTarget.Latest, true);
+  const cls = tree.statements.find(ts.isClassDeclaration)!;
+  const code = ts.transpileModule(cls.getText(tree).replace('export class', 'class'), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  type Handler = (event: { preventDefault: () => void }, url?: string) => void;
+  for (const rollback of [true, false]) {
+    const handlers = new Map<string, Handler>();
+    const scripts: string[] = [];
+    const timers: { cleared: boolean }[] = [];
+    let asked = 0;
+    const context = {
+      updateCopy, updatePage, updateProgressPage, themeFor, MISSIONS_POLL_MS: 5000,
+      setInterval: () => { const timer = { cleared: false }; timers.push(timer); return timer; },
+      clearInterval: (timer: { cleared: boolean }) => { timer.cleared = true; },
+      shell: { openExternal: () => { throw new Error('nothing to open'); } },
+      BrowserWindow: class {
+        webContents = {
+          setWindowOpenHandler: () => {},
+          on: (name: string, fn: Handler) => handlers.set(name, fn),
+          executeJavaScript: async (s: string) => { scripts.push(s); },
+        };
+        on(name: string, fn: Handler) { handlers.set(name, fn); }
+        loadURL() { return Promise.resolve(); }
+        isDestroyed() { return false; }
+        destroy() {}
+      },
+      offer: { from: '0.1.8', to: '0.2.0' }, path: join(home, 'missing'), rollback,
+      countMissions: async () => { asked++; return 2; },
+    };
+    const window = runInNewContext(`${code}\nnew UpdateWindow(offer, path, 'en', 'dark', countMissions, false, rollback)`, context) as {
+      choice: Promise<boolean>; rollbackChosen: boolean;
+    };
+    let settled: boolean | undefined;
+    void window.choice.then(value => { settled = value; });
+    const event = { preventDefault: () => {} };
+    handlers.get('will-navigate')!(event, 'timon-update:rollback');
+    await new Promise(resolve => setImmediate(resolve));
+    if (!rollback) {
+      assert.equal(settled, undefined, 'no previous AppImage: the link does nothing');
+      assert.equal(window.rollbackChosen, false);
+      handlers.get('will-navigate')!(event, 'timon-update:quit');
+      assert.equal(await window.choice, false);
+      assert.equal(window.rollbackChosen, false);
+      continue;
+    }
+    assert.equal(settled, false);
+    assert.equal(window.rollbackChosen, true);
+    assert.equal(timers[0]!.cleared, true, 'the missions are no longer counted');
+    assert.match(scripts.at(-1)!, /Going back to Timon 0\.1\.8…/);
+    assert.match(scripts.at(-1)!, /\['approve', 'quit', 'rollback'\]/);
+    const written = scripts.length;
+    handlers.get('will-navigate')!(event, 'timon-update:approve');
+    handlers.get('did-finish-load')!(event);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(scripts.length, written, 'neither an approval nor a missions count follows the choice');
+    assert.equal(asked, 0);
+  }
+});
+
+test('main: a refused AppImage update offers the way back when the previous file is there, and takes it on request', async () => {
+  for (const [label, platform, previous, preApproved, chosen] of [
+    ['linux, previous present, going back', 'linux', '/apps/.Timon.AppImage.previous', false, true],
+    ['linux, previous present, quit', 'linux', '/apps/.Timon.AppImage.previous', false, false],
+    ['linux, no previous', 'linux', null, false, false],
+    ['linux, pre-approved', 'linux', '/apps/.Timon.AppImage.previous', true, false],
+    ['macOS', 'darwin', '/apps/.Timon.AppImage.previous', false, false],
+  ] as const) {
+    const calls: string[] = [];
+    const built: unknown[] = [];
+    const offer = { from: '0.1.8', to: '0.2.0' };
+    const context = {
+      app: { isPackaged: true, getAppPath: () => 'app', getVersion: () => '0.2.0', quit: () => calls.push('quit') },
+      uiLocale: () => 'en', initShellLocale: async () => {},
+      console: { log: () => {} }, originOf: () => 'http://127.0.0.1',
+      process: { platform, resourcesPath: 'resources', env: { APPIMAGE: '/apps/Timon.AppImage' } },
+      verifyInstalledRelease: async () => {}, readFileSync: () => '', join,
+      nativeImage: { createFromPath: () => ({ isEmpty: () => true }) }, APP_ICON_PATH: 'icon',
+      windowScheme: () => 'dark', nativeTheme: { shouldUseDarkColors: true },
+      desktopHome: 'home', packagedFirstRun: () => false, loadDesktopConfig: () => ({ home: 'home', daemon: { listen: {} }, app: { listen: {} } }), updateOffer: () => offer,
+      probeHealth: async () => ({ ok: false, status: null }), hasDesktopService: () => false, unmanagedDaemon: () => null,
+      updateWindow: null, updateApproved: false,
+      UpdateWindow: class {
+        choice = Promise.resolve(preApproved);
+        rollbackChosen = chosen;
+        constructor(...args: unknown[]) { built.push(args[6]); }
+      },
+      NativeBrowserEngine: class { constructor() { throw new Error('the window opens after the approval only'); } },
+      installWindowPermissions: () => {}, session: { defaultSession: {} }, microphone: {}, installAppMenu: () => {}, installJumpList: () => {},
+      installMachineHeader: () => {}, interfaceUrl: '', keepDictionariesLocal: () => {},
+      localDaemonGet: () => async () => null, readMissionCount: async () => null, missionsAtStake: () => 0,
+      removeAppImageBackup: async () => { calls.push('remove previous'); },
+      previousAppImage: async (appImage: string) => { calls.push(`look ${appImage}`); return previous; },
+      returnToPreviousAppImage: async (given: unknown) => { assert.equal(given, offer); calls.push('go back'); },
+      takeUpdateConsent: () => null, consentApproves: () => preApproved,
+    };
+    await runInNewContext(`${compiled}\nmain()`, context).catch((error: Error) => {
+      if (!preApproved) throw error;
+      assert.match(error.message, /approval only/);
+    });
+    const looked = platform === 'linux' && !preApproved;
+    assert.deepEqual(built, [looked && previous !== null], label);
+    assert.deepEqual(calls, [
+      ...(looked ? ['look /apps/Timon.AppImage'] : []),
+      ...(preApproved ? ['remove previous'] : chosen ? ['go back'] : ['quit']),
+    ], label);
+  }
+});
+
+test('going back relaunches the previous AppImage, or says what to do when it cannot', async () => {
+  const fn = parsed.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'returnToPreviousAppImage')!;
+  const code = ts.transpileModule(fn.getText(parsed), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  for (const [outcome, dialog] of [
+    [{ status: 'relaunched' }, null],
+    [{ status: 'restored', message: 'no pipe' }, { type: 'info', message: 'Timon 0.1.8 est remis en place', detail: 'Rouvrez Timon pour le lancer.' }],
+    [{ status: 'failed', message: 'EROFS' }, { type: 'error', message: 'Impossible de remettre Timon 0.1.8 en place' }],
+    [{ status: 'missing' }, { type: 'error', message: 'Impossible de remettre Timon 0.1.8 en place' }],
+  ] as const) {
+    const calls: string[] = [];
+    const shown: Record<string, string>[] = [];
+    const context = {
+      process: { platform: 'linux', env: { APPIMAGE: '/apps/Timon.AppImage' }, argv: ['/apps/Timon.AppImage'] },
+      desktopHome: 'home', uiLocale: () => 'fr', updateCopy,
+      relaunchOptions: () => ({ args: ['--flag'] }),
+      queueAppImageRelaunch: async (appImage: string, args: string[], home: string) => { calls.push(`queue ${appImage} ${args.join(' ')} ${home}`); },
+      rollBackAppImage: async (appImage: string, relaunch: (path: string) => Promise<unknown>) => {
+        calls.push(`roll back ${appImage}`);
+        if (outcome.status === 'relaunched') await relaunch(appImage);
+        return outcome;
+      },
+      updateWindow: { close: () => calls.push('close window') },
+      dialog: { showMessageBox: async (options: Record<string, string>) => { shown.push(options); calls.push('dialog'); return { response: 0 }; } },
+      app: { quit: () => calls.push('quit') },
+      console: { log: () => {} },
+    };
+    await runInNewContext(`${code}\nreturnToPreviousAppImage({ from: '0.1.8', to: '0.2.0' })`, context);
+    assert.equal(calls[0], 'roll back /apps/Timon.AppImage', outcome.status);
+    if (!dialog) {
+      assert.deepEqual(calls, ['roll back /apps/Timon.AppImage', 'queue /apps/Timon.AppImage --flag home', 'quit']);
+      assert.equal(shown.length, 0);
+      continue;
+    }
+    assert.deepEqual(calls.slice(1), ['close window', 'dialog', 'quit'], outcome.status);
+    for (const [key, value] of Object.entries(dialog)) assert.equal(shown[0]![key], value, `${outcome.status}: ${key}`);
+    if (outcome.status !== 'restored') assert.match(shown[0]!.detail!, /Vos données sont intactes/);
+  }
 });
 
 test('pending health is retained by the real HTTP probe', async t => {
@@ -513,8 +678,10 @@ for (const platform of ['win32', 'darwin', 'linux']) {
         // Spell-check dictionaries stay local: a session setting, nothing to observe here.
         keepDictionariesLocal: () => {},
         // P3: the approval screen counts missions; the new AppImage drops the previous one.
-        localDaemonGet: () => async () => null, readMissionCount: async () => null, missionsAtStake: () => 0, removeAppImageBackup: async () => {},
+        localDaemonGet: () => async () => null, readMissionCount: async () => null, missionsAtStake: () => 0, removeAppImageBackup: async () => {}, previousAppImage: async () => null,
         takeUpdateConsent: () => null, consentApproves: () => false,
+        // What a silent Windows installer left behind is said by the launch that follows it.
+        reportSilentInstallFailure: (home: string) => { calls.push(`install-result ${home}`); },
       };
       await runInNewContext(`${compiled}\nmain()`, context);
       assert.equal(calls[0], pending ? 'approve' : 'browser');
@@ -522,6 +689,7 @@ for (const platform of ['win32', 'darwin', 'linux']) {
       if (mode === 'unmanaged') assert.ok(logs.some(line => /update offer: none, .*not started by the Timon app/.test(line)), logs.join('\n'));
       if (mode === 'unmanaged') assert.ok(calls.includes('window'));
       if (platform !== 'win32') assert.ok(calls.indexOf('service') < calls.indexOf('window'));
+      assert.ok(calls.includes('install-result home') && calls.indexOf('install-result home') < calls.indexOf('window'), 'a failed silent install is said before the window opens');
       // TODO #485: the daemon answers, so a dead interface is rearmed as the window opens.
       assert.ok(calls.includes('rearm') && calls.indexOf('rearm') < calls.indexOf('window'));
       if (pending) assert.ok(calls.indexOf('ready') < calls.indexOf('window'));
@@ -538,6 +706,105 @@ test('a wrong daemon version never receives approval', async t => {
     health: async () => ({ ok: false, status: null }), sleep: async () => {},
   }), /not the installed version/);
   assert.equal(posts, 0);
+});
+
+// Windows, 0.1.7 to 0.1.8: the installer replaced the application under a
+// daemon it had not ended. That daemon kept the port and the data directory,
+// the installed version could not start, and every launch stopped on "The
+// running daemon is not the installed version".
+test('a daemon of this home on the previous version is replaced once, then the update goes on', async t => {
+  const home = fixture(t);
+  const order: string[] = [];
+  let running = '0.1.7';
+  let probes = 0;
+  await finishUpdate({ home, origin: 'http://127.0.0.1:3010', version: '0.2.0', locale: 'en',
+    progress: () => {}, warning: async () => {},
+    replacing: () => { order.push('replacing'); }, approving: () => { order.push('approving'); } }, {
+    request: async (_, __, version) => {
+      order.push(version ? 'post' : `status ${running}`);
+      // The installed version takes two reads to come up after the restart.
+      if (!version && running === 'starting') { running = '0.2.0'; throw new Error('connection refused'); }
+      return version ? state('ready') : { ...state('pending'), daemonVersion: running };
+    },
+    health: async () => ({ ok: true, status: 200, identity: 'timon', instance: instanceId(home), updatePending: probes++ === 0 ? false : probes < 3 }),
+    sleep: async () => {},
+    replaceStaleDaemon: async () => { order.push('replace'); running = 'starting'; },
+  });
+  assert.deepEqual(order, ['status 0.1.7', 'replacing', 'replace', 'status starting', 'status 0.2.0', 'approving', 'post']);
+});
+
+test('a previous version that cannot be replaced ends in a message that says what to do, and no approval', async t => {
+  const home = fixture(t);
+  const ours = async () => ({ ok: true as const, status: 200, identity: 'timon' as const, instance: instanceId(home) });
+  const stale = { ...state('pending'), daemonVersion: '0.1.7' };
+  const base = { home, origin: 'http://127.0.0.1:3010', version: '0.2.0', locale: 'en', progress: () => {}, warning: async () => {} };
+
+  // The elevation was refused: the stage says the service was touched, the text says why and what to do.
+  let posts = 0, replaced = 0, stage = 'none';
+  const refused = await finishUpdate({ ...base, replacing: () => { stage = 'service'; } }, {
+    request: async (_, __, version) => { if (version) posts++; return stale; },
+    health: ours, sleep: async () => {},
+    replaceStaleDaemon: async () => { replaced++; throw new Error('The service restart failed: elevation refused'); },
+  }).then(() => null, (e: unknown) => e as Error);
+  assert.match(refused!.message, /not the installed version: it runs 0\.1\.7, and Timon 0\.2\.0 is installed\./);
+  assert.match(refused!.message, /could not replace it: The service restart failed: elevation refused/);
+  assert.match(refused!.message, /Quit Timon, restart the computer, then open Timon again\./);
+  assert.deepEqual({ posts, replaced, stage }, { posts: 0, replaced: 1, stage: 'service' });
+
+  // The restart ended nothing and so did not run the task again (the host
+  // adapter's refusal): its words reach the person, and the update does not
+  // wait for a version nobody started.
+  let asked = 0;
+  const outlived = await finishUpdate(base, {
+    request: async (_, __, version) => { if (version) posts++; else asked++; return stale; },
+    health: ours, sleep: async () => {},
+    replaceStaleDaemon: async () => {
+      throw new Error('The service restart failed: a Timon program of this installation is still running and could not be ended, so the service was not started again: end the Timon programs that still run (node.exe, Timon.exe) from Task Manager or restart the computer, then open Timon again');
+    },
+  }).then(() => null, (e: unknown) => e as Error);
+  assert.match(outlived!.message, /could not replace it: The service restart failed: a Timon program of this installation is still running and could not be ended, so the service was not started again/);
+  assert.match(outlived!.message, /from Task Manager or restart the computer/);
+  assert.deepEqual({ posts, asked }, { posts: 0, asked: 1 });
+
+  // Restarted, but the installed version never answers: once, then a bounded wait.
+  let clock = 5_000, reads = 0;
+  replaced = 0;
+  const silent = await finishUpdate(base, {
+    request: async (_, __, version) => { if (version) posts++; reads++; return stale; },
+    health: ours, sleep: async () => { clock += 30_000; }, now: () => clock,
+    replaceStaleDaemon: async () => { replaced++; },
+  }).then(() => null, (e: unknown) => e as Error);
+  assert.match(silent!.message, /restarted its background service, but version 0\.2\.0 did not answer in time \(version 0\.1\.7 still answers\)/);
+  assert.match(silent!.message, /restart the computer/);
+  assert.equal(replaced, 1, 'replaced once, never in a loop');
+  assert.equal(reads, 1 + REPLACE_BUDGET_MS / 30_000, 'the whole budget was waited, and no longer');
+  assert.equal(posts, 0);
+
+  // A shell with nothing to replace it with (no service of its own) says so at once.
+  const bare = await finishUpdate(base, { request: async () => stale, health: ours, sleep: async () => {} }).then(() => null, (e: unknown) => e as Error);
+  assert.match(bare!.message, /not the installed version: it runs 0\.1\.7.*Quit Timon, restart the computer/);
+});
+
+test('a daemon of another home on the port is never replaced', async t => {
+  const home = fixture(t);
+  const other = fixture(t);
+  const stale = { ...state('pending'), daemonVersion: '0.1.7' };
+  const answers = [
+    { ok: true as const, status: 200, identity: 'timon' as const, instance: instanceId(other) },
+    // Before the instance id existed, and a foreign server: neither proves this home.
+    { ok: true as const, status: 200, identity: 'timon' as const },
+    { ok: true as const, status: 200, identity: 'foreign' as const },
+    { ok: false as const, status: null },
+  ];
+  for (const health of answers) {
+    let replaced = 0, stage = 'none';
+    await assert.rejects(finishUpdate({ home, origin: 'http://127.0.0.1:3010', version: '0.2.0', locale: 'en',
+      progress: () => {}, warning: async () => {}, replacing: () => { stage = 'service'; } }, {
+      request: async () => stale, health: async () => health, sleep: async () => {},
+      replaceStaleDaemon: async () => { replaced++; },
+    }), /not the installed version/);
+    assert.deepEqual({ replaced, stage }, { replaced: 0, stage: 'none' }, JSON.stringify(health));
+  }
 });
 
 test('an already completed boot does not require the vanished update endpoint', async t => {

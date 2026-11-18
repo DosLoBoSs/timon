@@ -48,7 +48,7 @@ export const SETTINGS_NAV_GROUPS: readonly { id: SettingsNavGroupId; titled: boo
 export const SETTINGS_CATEGORY_IDS: readonly SettingsCategoryId[] = SETTINGS_NAV_GROUPS.flatMap((group) => group.categories);
 
 /** Device-local panes: no row in the settings table. */
-export type NativePaneId = 'language' | 'push' | 'voice' | 'webui' | 'desktop' | 'installation' | 'instructions' | 'preamble' | 'fallback' | 'secrets' | 'connections' | 'devices' | 'developer' | 'isolation';
+export type NativePaneId = 'language' | 'push' | 'voice' | 'webui' | 'desktop' | 'installation' | 'instructions' | 'preamble' | 'fallback' | 'secrets' | 'connections' | 'devices' | 'developer' | 'isolation' | 'privacy';
 
 type Placement = { category: SettingsCategoryId; tab: string };
 
@@ -57,7 +57,8 @@ const PROVIDERS_PLUGIN = '@timon/backends';
 
 type StaticTab =
   | { id: string; kind: 'rows' }
-  | { id: string; kind: 'native'; pane: NativePaneId }
+  /** `hosts`: a plugin whose pane the native one paints below its own rows. */
+  | { id: string; kind: 'native'; pane: NativePaneId; hosts?: string }
   | { id: string; kind: 'plugin'; pluginId: string };
 
 /** Static tabs, in display order. Plugin-owned tabs are appended at runtime. */
@@ -120,8 +121,9 @@ export const STATIC_TABS: Readonly<Record<SettingsCategoryId, readonly StaticTab
     { id: 'backup', kind: 'rows' },
     { id: 'diagnostics', kind: 'rows' },
     { id: 'desktop', kind: 'native', pane: 'desktop' },
-    // Anonymous usage statistics: the telemetry module's own pane.
-    { id: 'privacy', kind: 'plugin', pluginId: '@timon/telemetry' },
+    // What Timon keeps on the computer and for how long, then the anonymous
+    // usage statistics of the telemetry module, painted below.
+    { id: 'privacy', kind: 'native', pane: 'privacy', hosts: '@timon/telemetry' },
   ],
   secrets: [
     { id: 'vault', kind: 'native', pane: 'secrets' },
@@ -177,6 +179,9 @@ const KEY_PLACEMENT: Readonly<Record<string, Placement>> = {
   TIMON_BACKUP_MAX_AGE_DAYS: { category: 'system', tab: 'backup' },
   TIMON_AGENT_TRASH_ENABLED: { category: 'system', tab: 'backup' },
   TIMON_AGENT_TRASH_RETENTION_DAYS: { category: 'system', tab: 'backup' },
+  // Painted as rows of the Privacy pane, with their own copy.
+  TIMON_EVENTS_RETENTION_DAYS: { category: 'system', tab: 'privacy' },
+  TIMON_LEARNINGS_RETENTION_DAYS: { category: 'system', tab: 'privacy' },
   // Switched from the "…" menu of the Updates pane, not as rows of their own under Plugins.
   TIMON_UPDATES_CHECK: { category: 'system', tab: 'updates' },
   TIMON_NOTICES_CHECK: { category: 'system', tab: 'updates' },
@@ -227,7 +232,13 @@ export function placeSetting(row: SettingsRowLike): Placement {
 
 export type SettingsTab =
   | { id: string; kind: 'rows'; keys: string[]; grafts: string[]; ownerLabel?: string }
-  | { id: string; kind: 'native'; pane: NativePaneId; grafts: string[] }
+  | {
+    id: string; kind: 'native'; pane: NativePaneId; grafts: string[];
+    /** The rows filed in the tab that the pane paints itself (Privacy). */
+    keys?: string[];
+    /** The plugin pane it paints below its own, when that plugin is there. */
+    hosted?: { pluginId: string; origin: SettingsPluginOrigin };
+  }
   | { id: string; kind: 'plugin'; pluginId: string; origin: SettingsPluginOrigin; label: string };
 
 export type SettingsCategory = { id: SettingsCategoryId; tabs: SettingsTab[] };
@@ -312,6 +323,17 @@ export function buildSettingsLayout(input: SettingsLayoutInput): SettingsCategor
         if (tab.pane === 'desktop' && !input.desktop) continue;
         if (tab.pane === 'secrets' && !input.secrets) continue;
         if ((tab.pane === 'installation' || tab.pane === 'developer' || tab.pane === 'isolation') && !input.superadmin) continue;
+        if (tab.hosts) {
+          const plugin = pluginById.get(tab.hosts);
+          if (plugin) placedPlugins.add(plugin.id);
+          const keys = rowsByTab.get(tabKey) ?? [];
+          if (keys.length === 0 && !plugin) continue;
+          tabs.push({
+            id: tab.id, kind: 'native', pane: tab.pane, grafts, keys,
+            ...(plugin ? { hosted: { pluginId: plugin.id, origin: plugin.origin } } : {}),
+          });
+          continue;
+        }
         tabs.push({ id: tab.id, kind: 'native', pane: tab.pane, grafts });
       } else {
         const plugin = pluginById.get(tab.pluginId);
@@ -424,7 +446,7 @@ export function legacyGroupTarget(slug: string): SettingsTarget {
   const known = LEGACY_SLUGS[slug];
   if (known) return known;
   for (const [category, tabs] of Object.entries(STATIC_TABS) as [SettingsCategoryId, readonly StaticTab[]][]) {
-    const tab = tabs.find((t) => t.kind === 'plugin' && t.pluginId === slug);
+    const tab = tabs.find((t) => (t.kind === 'plugin' && t.pluginId === slug) || (t.kind === 'native' && t.hosts === slug));
     if (tab) return { category, tab: tab.id };
   }
   return { category: 'plugins', tab: slug };
