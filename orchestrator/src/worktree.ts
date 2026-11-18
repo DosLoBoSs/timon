@@ -96,12 +96,46 @@ export function parseWorktreeLinks(text: string): string[] {
   return [...new Set(paths)];
 }
 
+function isInside(root: string, path: string): boolean {
+  const inside = relative(root, realpathSync(path));
+  return !(isAbsolute(inside) || inside === '..' || inside.startsWith(`..${sep}`));
+}
+
+/**
+ * Creates the missing parent folders of a declared link (`.claude` for
+ * `.claude/skills`: an untracked folder is absent from a fresh worktree), but
+ * only inside the worktree and only when git ignores them, since a `git add -A`
+ * would otherwise commit the link. Returns false when it refuses.
+ */
+async function createIgnoredParents(worktreePath: string, root: string, rel: string): Promise<boolean> {
+  const parts = dirname(rel).split(sep);
+  let depth = parts.length;
+  while (depth > 0 && !existsSync(join(worktreePath, ...parts.slice(0, depth)))) depth -= 1;
+  // The nearest existing ancestor may be a link: what gets created must stay in this worktree.
+  if (!isInside(root, join(worktreePath, ...parts.slice(0, depth)))) {
+    console.warn(`[worktree] ${rel} not linked: its parent folder resolves outside the worktree`);
+    return false;
+  }
+  // Git never looks inside an ignored folder, so checking the topmost missing one covers its
+  // descendants; the trailing slash makes git match it as the folder it will be.
+  const topmost = `${parts.slice(0, depth + 1).join('/')}/`;
+  try {
+    await exec('git', ['-C', worktreePath, 'check-ignore', '-q', '--', topmost], { timeout: 10_000 });
+  } catch {
+    console.warn(`[worktree] ${rel} not linked: its parent folder ${topmost} is missing from the worktree and git does not ignore it`);
+    return false;
+  }
+  mkdirSync(join(worktreePath, dirname(rel)), { recursive: true });
+  return true;
+}
+
 /**
  * Links the folders a repository declares in `.worktreelinks` (an ignored
- * notes repository, local fixtures…) from the main clone into a task worktree,
- * under the same guards as the dependencies: the folder exists in the main
- * clone, git ignores it, the worktree has nothing at that path yet, and the
- * link stays inside the worktree. Removing the worktree unlinks it without
+ * notes repository, the project's agent skills…) from the main clone into a
+ * task worktree, under the same guards as the dependencies: the folder exists
+ * in the main clone, git ignores it, the worktree has nothing at that path
+ * yet, and the link stays inside the worktree. Missing parent folders are
+ * created when git ignores them. Removing the worktree unlinks it without
  * touching the folder it points to.
  */
 async function linkDeclaredFolders(repoCwd: string, worktreePath: string, root: string): Promise<void> {
@@ -113,9 +147,8 @@ async function linkDeclaredFolders(repoCwd: string, worktreePath: string, root: 
     try {
       if (!existsSync(source) || !statSync(source).isDirectory()) continue;
       const parent = dirname(destination);
-      if (!existsSync(parent)) continue;
-      const inside = relative(root, realpathSync(parent));
-      if (isAbsolute(inside) || inside === '..' || inside.startsWith(`..${sep}`)) continue;
+      if (!existsSync(parent) && !(await createIgnoredParents(worktreePath, root, rel))) continue;
+      if (!isInside(root, parent)) continue;
       if (lstatSync(destination, { throwIfNoEntry: false })) continue;
       try {
         // Checked as git will see the link: a file. A directory-only rule (`/docs/`) does not

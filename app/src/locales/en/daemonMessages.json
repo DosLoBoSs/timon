@@ -136,7 +136,7 @@
     },
     "integration_gave_up": {
       "title": "A messaging integration stopped retrying a message",
-      "body": "A message on the {transport} connection could not be processed. Replay it from Settings › Secrets › Connections."
+      "body": "A message on the {transport} connection could not be processed. Replay it from {settingsPath}."
     },
     "plugin_spawn_requested": {
       "title": "Plugin `{pluginId}` wants to spawn missions",
@@ -152,7 +152,7 @@
     },
     "backend_launch_unauthorized": {
       "title": "Backend `{backend}` was not started: its program needs your authorization",
-      "body": "{reason} Open this card to review the program on the provider’s page (Settings › AI models › Backends) and authorize it again if it is the one you expect."
+      "body": "{reason} Open this card to review the program on the provider’s page ({settingsPath}) and authorize it again if it is the one you expect."
     },
     "plugin_secret_global_lost": {
       "title": "Plugin `{pluginId}` no longer reads the secret `{name}`",
@@ -234,7 +234,7 @@
     },
     "device_paired": {
       "title": "New device connected",
-      "body": "\"{name}\" was paired with your account. If this was not you, revoke it in Settings → Access & network → Devices."
+      "body": "\"{name}\" was paired with your account. If this was not you, revoke it in {settingsPath}."
     },
     "accounts_suspended": {
       "title": "{count, plural, one {# account is suspended} other {# accounts are suspended}}",
