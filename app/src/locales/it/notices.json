@@ -6,6 +6,11 @@
       "title": "Una stella su GitHub?",
       "action": "Metti una stella su GitHub"
     },
+    "confirmEmail": {
+      "title": "Conferma il tuo indirizzo email",
+      "body": "Ti permette di reimpostare la password via email.",
+      "action": "Conferma"
+    },
     "feed": {
       "open": "Scopri di più"
     },

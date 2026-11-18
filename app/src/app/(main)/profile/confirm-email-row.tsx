@@ -10,7 +10,7 @@
  * One row, one action: the code goes out, then the code screen (the
  * `email.code` slot, through `EmailCodeHost`) opens in a dialog.
  */
-import { useCallback, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -20,6 +20,7 @@ import {
 } from '@/components/email-code/email-code-api';
 import { expiredChallenge, failureText, type CodeFailure } from '@/components/email-code/email-code-failure';
 import { refreshMe } from '@/hooks/use-me';
+import { CONFIRM_EMAIL_ANCHOR } from '@/components/notices/confirm-email-notice';
 import { t } from '@/lib/i18n';
 
 /** Answers that mean there is nothing left to confirm: the row goes away. */
@@ -32,6 +33,18 @@ export function ConfirmEmailRow({ email }: { email: string }): ReactElement {
   const [failure, setFailure] = useState<CodeFailure | null>(null);
   const waiting = failureText(failure, now);
   const blocked = failure?.retryUntil != null && waiting !== null;
+  const button = useRef<HTMLButtonElement>(null);
+
+  // Reached from the bottom-left card (`/profile#confirm-email`): the page
+  // paints this row only once the account is read, after the browser gave up
+  // on the anchor, so the row brings itself into view. Focus, not a click:
+  // mailing a code stays the person's own gesture.
+  useEffect(() => {
+    if (window.location.hash !== `#${CONFIRM_EMAIL_ANCHOR}`) return;
+    const target = button.current;
+    target?.scrollIntoView?.({ block: 'center' });
+    target?.focus({ preventScroll: true });
+  }, []);
 
   const ask = useCallback(async (): Promise<CodeChallenge | CodeFailure> => {
     const answer = await requestEmailVerification();
@@ -80,14 +93,14 @@ export function ConfirmEmailRow({ email }: { email: string }): ReactElement {
   const close = useCallback((): void => { setChallenge(null); }, []);
 
   return (
-    <div data-confirm-email-row="" className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/40 px-4 py-3">
+    <div id={CONFIRM_EMAIL_ANCHOR} data-confirm-email-row="" className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/40 px-4 py-3">
       <div className="min-w-0">
         <p className="m-0 text-sm font-medium">{t('profile.confirmEmailTitle')}</p>
         <p role="status" aria-live="polite" className={waiting ? 'm-0 text-xs tabular-nums text-destructive' : 'm-0 text-xs text-muted-foreground'}>
           {waiting ?? t('profile.confirmEmailStatus')}
         </p>
       </div>
-      <Button type="button" size="sm" disabled={busy || blocked} onClick={() => { void send(); }}>
+      <Button ref={button} type="button" size="sm" disabled={busy || blocked} onClick={() => { void send(); }}>
         {busy ? t('profile.confirmEmailSending') : t('profile.confirmEmailSend')}
       </Button>
       <Dialog open={challenge !== null} onOpenChange={(open) => { if (!open) close(); }}>

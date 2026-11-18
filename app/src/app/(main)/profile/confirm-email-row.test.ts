@@ -9,9 +9,9 @@ import test, { type TestContext } from 'node:test';
 
 type Reply = { status: number; body: unknown } | 'network';
 
-async function mount(ctx: TestContext, replies: Record<string, Reply[]>) {
+async function mount(ctx: TestContext, replies: Record<string, Reply[]>, url = 'http://localhost/profile') {
   const { JSDOM } = await import('jsdom');
-  const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/profile', pretendToBeVisual: true });
+  const dom = new JSDOM('<div id="root"></div>', { url, pretendToBeVisual: true });
   const saved = new Map<string, PropertyDescriptor | undefined>();
   const install = (key: string, value: unknown) => {
     if (!saved.has(key)) saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
@@ -105,4 +105,16 @@ test('a relay that cannot mail is said on the row, and nothing opens', async (t)
   await w.press(w.button('Send the code'));
   assert.equal(w.row(), "Timon's email service is unavailable right now. Try again in a few minutes.");
   assert.equal(w.code(), null);
+});
+
+test('reached from the bottom-left card, the row takes the focus and sends nothing', async (t) => {
+  const w = await mount(t, {}, 'http://localhost/profile#confirm-email');
+  assert.equal(w.doc.querySelector('[data-confirm-email-row]')?.id, 'confirm-email');
+  assert.equal(w.doc.activeElement, w.button('Send the code'), 'the one action is focused');
+  assert.deepEqual(w.calls, [], 'mailing a code stays the person\'s gesture');
+});
+
+test('opened plainly, the Profile leaves the focus where it is', async (t) => {
+  const w = await mount(t, {});
+  assert.notEqual(w.doc.activeElement, w.button('Send the code'));
 });

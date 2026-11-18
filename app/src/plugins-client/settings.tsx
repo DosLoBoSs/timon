@@ -7,6 +7,7 @@ import { CONFIRM_DIALOG_SLOT, DIRECTORY_PICKER_SLOT, NOTICE_CARD_SLOT, NOTICES_S
 import { ProductConfirmDialog } from '@/components/confirm-dialog/confirm-dialog';
 import { ProductNoticeCard } from '@/components/notices/notices-host';
 import { GitHubStarNotice } from '@/components/notices/github-star-notice';
+import { ConfirmEmailNotice } from '@/components/notices/confirm-email-notice';
 
 // Loaded on demand (docs/BUNDLE-SIZE.md): only a folder request paints it.
 const ProductDirectoryBrowser = dynamic(() => import('@/components/directory-browser').then((m) => m.ProductDirectoryBrowser), { ssr: false });
@@ -29,5 +30,7 @@ export const coreSettingsClient: BundledClientPlugin = {
     ctx.register({ slot: NOTICE_CARD_SLOT, fallback: true }, ProductNoticeCard);
     // The product's first notice: a star on GitHub, after a few days of use.
     ctx.register({ slot: NOTICES_SLOT, key: 'github-star' }, GitHubStarNotice);
+    // An account whose address was never confirmed: no reset code reaches it.
+    ctx.register({ slot: NOTICES_SLOT, key: 'confirm-email' }, ConfirmEmailNotice);
   },
 };

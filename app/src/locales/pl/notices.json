@@ -6,6 +6,11 @@
       "title": "Gwiazdka na GitHubie?",
       "action": "Daj gwiazdkę na GitHubie"
     },
+    "confirmEmail": {
+      "title": "Potwierdź swój adres e-mail",
+      "body": "Pozwala zresetować hasło przez e-mail.",
+      "action": "Potwierdź"
+    },
     "feed": {
       "open": "Dowiedz się więcej"
     },

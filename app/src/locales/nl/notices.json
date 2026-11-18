@@ -6,6 +6,11 @@
       "title": "Een ster op GitHub?",
       "action": "Geef een ster op GitHub"
     },
+    "confirmEmail": {
+      "title": "Bevestig je e-mailadres",
+      "body": "Zo kun je je wachtwoord per e-mail opnieuw instellen.",
+      "action": "Bevestigen"
+    },
     "feed": {
       "open": "Meer weten"
     },

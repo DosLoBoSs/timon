@@ -6,6 +6,11 @@
       "title": "在 GitHub 上点个星？",
       "action": "在 GitHub 上点个星"
     },
+    "confirmEmail": {
+      "title": "确认你的电子邮件地址",
+      "body": "这样你就可以通过电子邮件重置密码。",
+      "action": "确认"
+    },
     "feed": {
       "open": "了解更多"
     },

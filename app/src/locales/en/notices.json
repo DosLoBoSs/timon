@@ -6,6 +6,11 @@
       "title": "A star on GitHub?",
       "action": "Star on GitHub"
     },
+    "confirmEmail": {
+      "title": "Confirm your email address",
+      "body": "It lets you reset your password by email.",
+      "action": "Confirm"
+    },
     "feed": {
       "open": "Learn more"
     },

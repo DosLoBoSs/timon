@@ -6,6 +6,11 @@
       "title": "GitHub でスターを付けませんか？",
       "action": "GitHub でスターを付ける"
     },
+    "confirmEmail": {
+      "title": "メールアドレスを確認してください",
+      "body": "メールでパスワードを再設定できるようになります。",
+      "action": "確認する"
+    },
     "feed": {
       "open": "詳細を見る"
     },
