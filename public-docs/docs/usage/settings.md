@@ -15,6 +15,8 @@ Every setting is always listed: nothing hides behind a "show advanced" button, a
 
 **Environment → configuration file → saved UI value → default** is the precedence order. If an environment or file value controls a setting, changing the saved value does not override it. See [Configuration](../installation/configuration.md).
 
+An on/off setting is a switch. A setting whose value is not its default shows the default underneath; a value you set in Settings also gets a **Default** button that restores it. On a computer, hover over a setting's name to see its key, such as `TIMON_MAX_LIVE_MISSIONS`, the name to use in the configuration file or the environment; on any device, the search finds a setting by its key.
+
 ## Global instructions
 
 **Settings → Instructions**, the first category, holds what you want from **every** agent: the language to answer in, your commit style, how you test. It is one Markdown file, `global-instructions.md` in the Timon folder (the table in [Where Timon keeps its files](../installation/configuration.md) gives its place on your OS).
