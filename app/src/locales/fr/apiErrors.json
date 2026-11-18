@@ -363,6 +363,15 @@
     "delegation_not_allowed": "Seule une mission en cours d'un compte actif peut déléguer, et celle-ci ne le peut pas.",
     "delegation_body_invalid": "Cette requête de délégation est invalide : {detail}",
     "delegation_cycle": "Cette délégation reviendrait vers un agent déjà présent dans la chaîne.",
-    "delegation_failed": "La mission déléguée n'a pas pu démarrer : {detail}"
+    "delegation_failed": "La mission déléguée n'a pas pu démarrer : {detail}",
+    "git_info_failed": "L'état Git n'a pas pu être lu : {detail}",
+    "git_remote_status_failed": "L'état de publication n'a pas pu être lu : {detail}",
+    "git_remote_create_failed": "Le dépôt distant n'a pas pu être créé : {detail}",
+    "git_remotes_list_failed": "Les dépôts distants n'ont pas pu être listés : {detail}",
+    "git_remote_add_failed": "Le dépôt distant n'a pas pu être ajouté : {detail}",
+    "git_remote_update_failed": "Le dépôt distant n'a pas pu être modifié : {detail}",
+    "git_remote_remove_failed": "Le dépôt distant n'a pas pu être retiré : {detail}",
+    "git_push_failed": "Le push a échoué : {detail}",
+    "git_fetch_failed": "La récupération (fetch) a échoué : {detail}"
   }
 }

@@ -363,6 +363,15 @@
     "delegation_not_allowed": "Only a running mission of an active account may delegate, and this one may not.",
     "delegation_body_invalid": "This delegation request is invalid: {detail}",
     "delegation_cycle": "This delegation would loop back to an agent already in the chain.",
-    "delegation_failed": "The delegated mission could not start: {detail}"
+    "delegation_failed": "The delegated mission could not start: {detail}",
+    "git_info_failed": "The Git state could not be read: {detail}",
+    "git_remote_status_failed": "The publication state could not be read: {detail}",
+    "git_remote_create_failed": "The remote repository could not be created: {detail}",
+    "git_remotes_list_failed": "The remotes could not be listed: {detail}",
+    "git_remote_add_failed": "The remote could not be added: {detail}",
+    "git_remote_update_failed": "The remote could not be changed: {detail}",
+    "git_remote_remove_failed": "The remote could not be removed: {detail}",
+    "git_push_failed": "The push failed: {detail}",
+    "git_fetch_failed": "The fetch failed: {detail}"
   }
 }
