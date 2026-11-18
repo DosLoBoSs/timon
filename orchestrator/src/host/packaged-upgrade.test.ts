@@ -164,11 +164,11 @@ test('windows rewrites the task only, without staging, marking or pruning a rele
 });
 
 /**
- * TODO #342 : Windows a enregistré la nouvelle tâche mais ne l'a jamais
- * lancée pour ce compte (S4U refusé). L'ancienne tourne sous la même session
- * S4U : la restaurer redonnerait une tâche refusée dont `/Run` répond
- * "SUCCESS", et le desktop l'attendrait. Ni restauration ni suppression
- * (le batch l'a déjà retirée) : le daemon intégré prend le relais.
+ * TODO #342: Windows registered the new task but never launched it
+ * for this account (S4U refused). The old one runs under the same S4U
+ * session: restoring it would give back a refused task whose `/Run` answers
+ * "SUCCESS", and the desktop would wait for it. Neither restore nor removal
+ * (the batch already removed it): the embedded daemon takes over.
  */
 test('windows: a task Windows never started is not restored, the embedded daemon takes over', async () => {
   const reason = 'Windows registered the TimonOrchestrator task but never started it for this account.';

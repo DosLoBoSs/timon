@@ -7,13 +7,13 @@ import { binaryCandidates } from './binary-path.js';
 // and `/usr/bin:/bin` stays one entry. Those lookups only run on a POSIX host.
 const POSIX_HOST = process.platform === 'win32' && 'Linux and macOS candidates use the host separators';
 
-test('macOS cherche les outils du user même quand Finder fournit un PATH minimal', { skip: POSIX_HOST }, () => {
+test('macOS looks for the user tools even when Finder provides a minimal PATH', { skip: POSIX_HOST }, () => {
   const node = binaryCandidates('node', { platform: 'darwin', path: '/usr/bin:/bin', homeDir: '/Users/sam' });
   assert.ok(node.includes('/Users/sam/.local/bin/node'));
   assert.ok(node.includes('/opt/homebrew/bin/node'));
 });
 
-test("le CLI Codex embarqué dans l'app ChatGPT est un candidat macOS", { skip: POSIX_HOST }, () => {
+test('the Codex CLI embedded in the ChatGPT app is a macOS candidate', { skip: POSIX_HOST }, () => {
   const codex = binaryCandidates('codex', { platform: 'darwin', path: '/usr/bin', homeDir: '/Users/sam' });
   assert.ok(codex.includes('/Applications/ChatGPT.app/Contents/Resources/codex'));
   assert.ok(codex.includes('/Users/sam/Applications/ChatGPT.app/Contents/Resources/codex'));
