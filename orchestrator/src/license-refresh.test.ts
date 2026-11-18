@@ -86,7 +86,7 @@ function activated(): void {
   events.length = 0;
 }
 
-test('renew réussi : nouveau jeton installé, contact enregistré, aucune notification', async () => {
+test('successful renew: new token installed, contact recorded, no notification', async () => {
   activated();
   clock += 600;
   const recomposed = { n: 0 };
@@ -119,7 +119,7 @@ test('a renewal that only adds or withdraws `whitelabel` recomposes the daemon',
   assert.equal(whiteLabelAllowed(licenseState()), false);
 });
 
-test('403 revoked : la licence s\'éteint sur-le-champ, bus + notification + recomposition', async () => {
+test('403 revoked: the licence goes off on the spot, bus + notification + recomposition', async () => {
   activated();
   const recomposed = { n: 0 };
   const { refresh } = loop([{ status: 403, body: { error: 'revoked', message: 'nope' } }], recomposed);
@@ -145,7 +145,7 @@ test('a signed revocation survives restart and Free makes no subsequent renewal 
   assert.equal(calls.length, 1);
 });
 
-test('403 deactivated / not_active et 403 expired ont chacun leur raison', async () => {
+test('403 deactivated / not_active and 403 expired each have their own reason', async () => {
   for (const [code, reason] of [['deactivated', 'deactivated'], ['not_active', 'deactivated'], ['expired', 'expired']] as const) {
     activated();
     const { refresh } = loop([{ status: 403, body: { error: code } }]);
@@ -154,7 +154,7 @@ test('403 deactivated / not_active et 403 expired ont chacun leur raison', async
   }
 });
 
-test('429 : rien ne change', async () => {
+test('429: nothing changes', async () => {
   activated();
   const { refresh } = loop([{ status: 429, body: { error: 'rate_limited' } }]);
   await refresh.tick();
@@ -163,7 +163,7 @@ test('429 : rien ne change', async () => {
   assert.equal(events.length, 0);
 });
 
-test('409 device_mismatch : invalid:machine, l\'identifiant d\'appareil n\'est PAS tourné', async () => {
+test('409 device_mismatch: invalid:machine, the device identifier is NOT rotated', async () => {
   activated();
   const before = deviceId();
   const { refresh, calls } = loop([{ status: 409, body: { error: 'device_mismatch' } }]);
@@ -173,7 +173,7 @@ test('409 device_mismatch : invalid:machine, l\'identifiant d\'appareil n\'est P
   assert.deepEqual(calls, ['/api/v1/license/renew']); // no second, rotated activation
 });
 
-test('serveur injoignable : hors-ligne toléré offlineHours, alerte à mi-course, coupure ensuite', async () => {
+test('unreachable server: offline tolerated for offlineHours, alert halfway, cut-off afterwards', async () => {
   activated();
   const contact = clock;
   const { refresh } = loop(['down', 'down', 'down', 'down']);
@@ -204,7 +204,7 @@ test('serveur injoignable : hors-ligne toléré offlineHours, alerte à mi-cours
   assert.equal(notices[1]!.urgent, true);
 });
 
-test('une réponse non signée compte comme hors-ligne, jamais comme un refus', async () => {
+test('an unsigned response counts as offline, never as a refusal', async () => {
   activated();
   const { refresh } = loop([{ status: 403, body: { error: 'revoked' }, unsigned: true }]);
   clock += 60;
@@ -213,7 +213,7 @@ test('une réponse non signée compte comme hors-ligne, jamais comme un refus', 
   assert.notEqual(licenseState().offlineSince, null);
 });
 
-test('sans clé persistée, aucun appel réseau : le jeton posé à la main expire seul', async () => {
+test('without a persisted key, no network call: a token set by hand expires on its own', async () => {
   activated();
   const { forgetLicenseKey } = await import('./license/refresh.js');
   forgetLicenseKey();
@@ -227,7 +227,7 @@ test('sans clé persistée, aucun appel réseau : le jeton posé à la main expi
   assert.equal(licenseState().reason, 'expired');
 });
 
-test('bootLicenseState : un jeton périmé reste bon dans la fenêtre hors-ligne, et le dit', () => {
+test('bootLicenseState: an expired token stays good within the offline window, and says so', () => {
   activated();
   const contact = clock;
   clock = contact + 3600;
@@ -334,7 +334,7 @@ test('the licence files are replaced whole, with no temporary file left behind',
   assert.deepEqual(readdirSync(dir).filter((f) => f.includes('.tmp-')), []);
 });
 
-test('un jeton renouvelé que ce daemon refuse (autre machine) éteint la licence', async () => {
+test('a renewed token this daemon refuses (another machine) turns the licence off', async () => {
   activated();
   const { refresh } = loop([{ status: 200, body: { token: token(clock, { did: 'dev_0000000000000000' }) } }]);
   await refresh.tick();
