@@ -68,3 +68,18 @@ Then Timon pushes the integration branch and opens the pull request. The push is
 A branch under embargo (`sec/<topic>`, for a security fix) is never pushed by this command, whatever the setting says: it lands by hand once the advisory is published.
 
 If the push succeeds but the pull request cannot be created, run the command again: the branch is already there and only the pull request is opened.
+
+## Follow a job's pull request
+
+The **Pull requests** widget shows one card per job that lands through a pull request. Add it from the widget window to any zone; in an agent chat's rail it only lists the jobs of the conversation's project. Each card gives the job's integration branch and target, then the state of its pull request: **Not pushed** before it is opened, **PR #n** (a link to the forge) while it is open, **Merged**, **Landed** once Timon has closed the job's tasks and ideas, or **Closed**. While the pull request is open, the card also shows its checks (failed, running, passed), a conflict with the target branch, a draft, and the review decision.
+
+Timon reads the checks from the forge when the widget appears, then about once a minute while a check is still running and the page is visible. **Refresh the checks** in the card's menu asks again. The background poller that notices a merged pull request keeps its own five-minute pace.
+
+**Preview** opens what the pull request carries, before anything is pushed:
+
+- **Changes**: every file the branch changes against the target as it was last fetched, with its added and removed lines. Very large diffs are cut, and the preview says so.
+- **Commits**: the commits of the branch that the target does not have.
+- **Pre-checks**: the checks of `timon pr open`, run without pushing, fetching or opening anything, with the result of each. The public tree check runs a script of the repository, so it waits for the actual opening, as does the check of a title the preview does not have yet. Running the pre-checks needs the permission to manage projects, as opening the pull request does.
+
+The preview also says whether the branch would merge into the target without a conflict.
+
