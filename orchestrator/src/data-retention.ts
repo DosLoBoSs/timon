@@ -131,7 +131,7 @@ export async function pruneOldEvents(opts: EventsPruneOptions = {}): Promise<num
           if (stopped()) break;
           if (sinceYield >= sliceRows) { await pause(); sinceYield = 0; }
           const room = sliceRows - sinceYield;
-          const slice = dbApi.pruneMissionEventsBatch(table, mission.id, cutoff, archive, room);
+          const slice = dbApi.pruneMissionEventsBatch(table, mission.id, cutoff, archive, room, days);
           dropped += slice;
           sinceYield += slice;
           if (slice < room) break; // nothing left of this mission in this table

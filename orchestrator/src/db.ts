@@ -1904,6 +1904,10 @@ if (!cols.includes('user_engaged')) db.exec(`ALTER TABLE missions ADD COLUMN use
 // closure question was delivered, and no turn has started since. Read when it
 // is killed idle: that death is the end of its work, not a system death.
 if (!cols.includes('closure_ignored')) db.exec(`ALTER TABLE missions ADD COLUMN closure_ignored INTEGER NOT NULL DEFAULT 0`);
+// The retention deleted this mission's history (data-retention.ts): the
+// retention in days that applied, NULL while nothing was deleted. The chat
+// tells an emptied conversation from one that never had a message by it.
+if (!cols.includes('history_purged_days')) db.exec(`ALTER TABLE missions ADD COLUMN history_purged_days INTEGER`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_missions_trace ON missions(trace_id)`);
 // The run view reads the missions of one run on every refresh (listSpansByRun).
 // Partial: outside workflows the column stays NULL, which is almost every row.
@@ -2473,6 +2477,8 @@ export type MissionRow = {
   workflow_node_id: string | null;
   /** 1 while the mission sits idle after ignoring every closure question (see the column). */
   closure_ignored: number;
+  /** Retention in days that deleted the history; NULL while nothing was deleted (see the column). */
+  history_purged_days: number | null;
 };
 
 /** MissionRow + joins for UI listings: title/type of the Kanban task that spawned
@@ -9407,9 +9413,18 @@ export const dbApi = {
    * the cold archive when it is attached), with the text the history search
    * copied from them. The mission is checked again in the same transaction: it
    * may have been resumed since it was listed. Returns how many events went.
+   *
+   * The same transaction marks the mission (`history_purged_days`) and takes
+   * the events out of its `mission_stats` count, which the mission list shows.
+   * The count only knows the rows it saw written, so the batch that empties
+   * the mission sets it to zero outright: a row the stats never counted (one
+   * archived before the backfill reached it) cannot leave it negative or stale.
+   * Its other aggregates stay: the last activity date and the turn state are
+   * still true of the mission, and the retention reads that date.
    */
   pruneMissionEventsBatch(
     table: 'events' | 'archive.events', missionId: string, cutoff: number, archive: boolean, batch: number,
+    retentionDays: number,
   ): number {
     return db.transaction((): number => {
       const expired = db.prepare(`SELECT 1 FROM missions m WHERE m.id = @id AND ${historyExpiredSql(archive)}`)
@@ -9421,6 +9436,19 @@ export const dbApi = {
       const list = ids.join(','); // integers read from the database: nothing to escape
       db.exec(`DELETE FROM mission_search WHERE event_id IS NOT NULL AND event_id IN (${list})`);
       db.exec(`DELETE FROM ${table} WHERE id IN (${list})`);
+      db.prepare(`UPDATE missions SET history_purged_days = ? WHERE id = ?`).run(retentionDays, missionId);
+      const left = (t: string) => db.prepare(`SELECT 1 FROM ${t} WHERE mission_id = ? LIMIT 1`).get(missionId);
+      const emptied = !left('events') && !(archive && left('archive.events'));
+      if (emptied) {
+        // A row still waiting for its backfill has nothing left to fold in.
+        db.prepare(`UPDATE mission_stats SET event_count = 0, ready = 1, backfill_cursor = backfill_upto
+                     WHERE mission_id = ?`).run(missionId);
+      } else {
+        // A row not backfilled yet is not read (the list counts the events
+        // themselves), and its count does not hold these rows yet.
+        db.prepare(`UPDATE mission_stats SET event_count = MAX(0, event_count - ?) WHERE mission_id = ? AND ready = 1`)
+          .run(ids.length, missionId);
+      }
       return ids.length;
     })();
   },
