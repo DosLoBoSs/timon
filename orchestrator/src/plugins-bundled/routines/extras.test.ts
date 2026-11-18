@@ -31,6 +31,7 @@ await mountOfficialProviders();
 const { registerRoutes: registerUserRoutes } = await import('../users/routes.js');
 const { registerRoutes: registerAgentRoutes } = await import('../agents/routes.js');
 const { registerRoutes: registerRoutineRoutes } = await import('./routes.js');
+const { registerRoutes: registerTriggerRoutes } = await import('../triggers/routes.js');
 const { dbApi } = await import('../../db.js');
 const { issueMissionApiToken } = await import('../../users/api-tokens.js');
 const { SESSION_COOKIE, hashSessionToken, issueSessionToken } = await import('../../users/session.js');
@@ -41,6 +42,7 @@ app.use(express.json());
 registerUserRoutes(app, { setupPolicy: 'free' });
 registerAgentRoutes(app);
 registerRoutineRoutes(app);
+registerTriggerRoutes(app);
 
 const server = app.listen(0, '127.0.0.1');
 await once(server, 'listening');
@@ -162,4 +164,16 @@ test('a malformed extras list is a 400 that names the field', async () => {
   const r = await call('POST', '/api/routines', person, routine('caller.plain', { extra_mcp_servers: 'mail-stdio' }));
   assert.equal(r.status, 400, JSON.stringify(r.json));
   assert.match(String(r.json.error), /extra_mcp_servers/);
+});
+
+test('the Triggers route cannot hand a routine and its extras to another agent either', async () => {
+  const created = await call('POST', '/api/routines', person, routine('caller.assistant', { extra_mcp_servers: ['mail-stdio'] }));
+  const id = (created.json.routine as { id: string }).id;
+  const action = { type: 'task', prompt: 'Sort the inbox.', task_type: 'chore', raw: true };
+  const moved = await call('PATCH', `/api/triggers/${id}`, mission, { actions: [{ ...action, agent: 'caller.plain' }] });
+  assert.equal(moved.status, 403, JSON.stringify(moved.json));
+  assert.match(String(moved.json.reason), /extra_mcp_servers attaches mail-stdio/);
+  assert.equal(dbApi.getRoutine(id)?.agent_name, 'caller.assistant');
+  const kept = await call('PATCH', `/api/triggers/${id}`, mission, { actions: [{ ...action, agent: 'caller.assistant', prompt: 'Sort it.' }] });
+  assert.equal(kept.status, 200, JSON.stringify(kept.json));
 });
