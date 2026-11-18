@@ -472,7 +472,7 @@ test('the NSIS installer removes the daemon task, and never registers it', () =>
   for (const file of ['service-revision', 'timon-service.vbs', 'timon-service.cmd', 'service-repair-declined', 'service-refused']) {
     assert.ok(service.includes(`'${file}'`) && desktopService.includes(`'${file}'`), file);
   }
-  // TODO #342: the « never ran » result the desktop reads after `/Run`.
+  // TODO #342: the "never ran" result the desktop reads after `/Run`.
   const neverRan = service.match(/export const WINDOWS_TASK_NEVER_RAN = (0x[0-9a-f]+);/u)?.[1];
   assert.ok(neverRan);
   assert.equal(desktopService.match(/export const WINDOWS_TASK_NEVER_RAN = (0x[0-9a-f]+);/u)?.[1], neverRan);
@@ -729,8 +729,8 @@ test('the macOS permission prompts are in English, and in French on a Mac set to
   assert.match(yml, /\n {2}extraResources:\n {4}- from: assets\/mac\/fr\.lproj\n {6}to: fr\.lproj\n/);
   assert.doesNotMatch(yml, /^\s*electronLanguages:/m, 'electronLanguages deletes every .lproj it does not list');
   const strings = readFileSync(join(root, 'assets', 'mac', 'fr.lproj', 'InfoPlist.strings'), 'utf8');
-  for (const key of keys) assert.match(strings, new RegExp(`^"${key}" = "[^"]*[éè][^"]*";$`, 'm'), `fr.lproj: ${key}`);
-  assert.match(strings, /"NSMicrophoneUsageDescription" = "[^"]*dictée[^"]*site[^"]*";/, 'the French prompt names dictation too');
+  for (const key of keys) assert.match(strings, new RegExp(`^"${key}" = "[^"]*[éè][^"]*";$`, 'm'), `fr.lproj: ${key}`); // french-ok: the French locale under test
+  assert.match(strings, /"NSMicrophoneUsageDescription" = "[^"]*dictée[^"]*site[^"]*";/, 'the French prompt names dictation too'); // french-ok: the French locale under test
 });
 
 // The shell names an action, the host adapter's runner runs it: two packages built apart.

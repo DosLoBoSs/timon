@@ -185,12 +185,12 @@ test('V3: Ctrl+Shift+N (Cmd+Shift+N on macOS) opens a new window', () => {
   assert.equal(newWindowShortcut(key({ control: true, type: 'keyUp' }), 'linux'), false);
 });
 
-test('V3: the macOS File menu offers « New window », and only then replaces Electron\'s', () => {
+test('V3: the macOS File menu offers "New window", and only then replaces Electron\'s', () => {
   let opened = 0;
   const flatten = (items: MenuItemConstructorOptions[]): MenuItemConstructorOptions[] =>
     items.flatMap((item) => [item, ...(Array.isArray(item.submenu) ? flatten(item.submenu) : [])]);
   const items = appMenuTemplate({ platform: 'darwin', appName: 'Timon', locale: 'fr-FR', onAbout: () => {}, onNewWindow: () => { opened += 1; } })!;
-  const entry = flatten(items).find((item) => item.label === 'Nouvelle fenêtre');
+  const entry = flatten(items).find((item) => item.label === 'Nouvelle fenêtre'); // french-ok: the French menu label under test
   assert.ok(entry);
   assert.equal(entry.registerAccelerator, false, 'the window\'s key handler opens it, once');
   entry.click?.({} as never, undefined, {} as never);
@@ -241,8 +241,8 @@ test('V3: a second launch opens a new window, unless the interface is failing or
 });
 
 /**
- * 01/11/2026: « Open in a new window » answered « No handler registered for
- * 'timon:open-window' ». The shell had been running for four days; each
+ * 01/11/2026: "Open in a new window" answered "No handler registered for
+ * 'timon:open-window'". The shell had been running for four days; each
  * `npm start` after a rebuild only handed over to it, and its new pages read
  * the rebuilt preload, whose bridge the old main process did not serve.
  */
@@ -251,7 +251,7 @@ test('a second launch of another build shows the window and asks for a restart i
   assert.deepEqual(secondLaunch({ daemonUp: true, failed: false, launch: { build: '0.1.6' } }), ['notice', 'show']);
 });
 
-/** The handler of « Open in a new window », run as main.ts has it, for a page of a window. */
+/** The handler of "Open in a new window", run as main.ts has it, for a page of a window. */
 function openWindowHandler(windows: ReturnType<typeof fleet>, state: { releasePending?: boolean } = {}) {
   const opened: { window: number; url: string; machine: string | null }[] = [];
   const context = {
@@ -634,7 +634,7 @@ test('TODO #758: a quit holds while a window has pages, closing them before anyt
   assert.equal(world.holdQuit(), false, 'an empty window no longer holds the quit');
 });
 
-test('TODO #758: « Stay » during a quit calls it off before anything was stopped', async () => {
+test('TODO #758: "Stay" during a quit calls it off before anything was stopped', async () => {
   const world = pageWorld({ refuse: new Set(['a']) });
   world.enter('a'); world.enter('b');
   world.context.quitInProgress = true;
