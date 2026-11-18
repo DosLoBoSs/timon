@@ -46,7 +46,7 @@ import {
   type SeriesPlanVolet,
 } from './series-plan.js';
 import { seriesPlanDefaults } from './series-plan-defaults.js';
-import { planLanding } from './plan-landing.js';
+import { planBranchName, planLanding } from './plan-landing.js';
 import type { ApprovalScope } from './backends/types.js';
 import { approvalMotif, findApproval, motifLabel, rememberApproval, rememberableScopes, shellCommandOfTool } from './approval-rules.js';
 import { loadConfig } from './agent-config.js';
@@ -656,10 +656,38 @@ function withSeriesPlanDefaults(input: RequestInput): unknown {
   if (!isRecord(form) || form.kind !== 'series_plan') return input.input;
   try {
     const defaults = seriesPlanDefaults(input.mission_id, input.agent);
-    return { ...(input.input as Record<string, unknown>), form: { ...form, defaults } };
+    return { ...(input.input as Record<string, unknown>), form: { ...form, defaults, ...formLanding(input, form) } };
   } catch (err) {
     console.error(`[permissions] series plan defaults unavailable: ${(err as Error).message}`);
     return input.input;
+  }
+}
+
+/**
+ * The branch field of the planner, for a project that lands through pull
+ * requests: the name the job would get, the prefix shown before it, whether
+ * it is already fixed, and why the agent's proposal cannot be used. Nothing for
+ * any other project, so its form stays what it was.
+ */
+function formLanding(input: RequestInput, form: Record<string, unknown>): { landing?: Record<string, unknown> } {
+  try {
+    const chantier = typeof form.chantier === 'string' ? form.chantier : '';
+    const proposed = typeof form.branch === 'string' ? form.branch : null;
+    const landing = planLanding(input.agent, chantier, { branch: proposed, seriesId: input.mission_id });
+    if (!landing) return {};
+    return {
+      landing: {
+        project: landing.project,
+        prefix: landing.prefix,
+        branch: landing.branch,
+        base_ref: landing.baseRef,
+        locked: landing.locked,
+        ...(landing.refusal ? { refusal: landing.refusal } : {}),
+      },
+    };
+  } catch (err) {
+    console.error(`[permissions] series plan branch unavailable: ${(err as Error).message}`);
+    return {};
   }
 }
 
@@ -1254,7 +1282,26 @@ function withSeriesPlan(p: Omit<Pending, 'resolve'>, final: PermissionDecision):
   // integration branch, and a last task that opens the pull request. Nothing
   // added for any other project, so its answer stays what it was.
   const chantier = typeof form.chantier === 'string' ? form.chantier : '';
-  const landing = PIPELINE_BY_MODE[plan.mode] ? planLanding(p.agent, chantier) : null;
+  // The name typed in the form, else the agent's proposal: checked again here,
+  // the form's own check being a convenience, not the guard.
+  const proposed = plan.branch ?? (typeof form.branch === 'string' ? form.branch : null);
+  const landing = PIPELINE_BY_MODE[plan.mode]
+    ? planLanding(p.agent, chantier, { branch: proposed, seriesId: p.mission_id })
+    : null;
+  const branchDefect = landing?.refusal
+    ?? (landing?.locked && plan.branch !== undefined && plan.branch.trim() !== ''
+      && planBranchName(plan.branch, landing.prefix) !== landing.branch
+      ? `the job already starts from ${landing.branch}; its name no longer changes`
+      : null);
+  if (branchDefect) {
+    console.log(`[permissions] series plan branch refused (mission ${p.mission_id.slice(0, 8)}) — ${branchDefect}`);
+    return {
+      behavior: 'deny',
+      message:
+        `The branch chosen in the Kanban planner was refused (${branchDefect}). Nothing was applied: `
+        + `call \`kanban_plan\` again, with another \`branch\` or none.`,
+    };
+  }
   const commands = seriesPlanCommands(plan, volets, landing);
   return {
     behavior: 'allow',

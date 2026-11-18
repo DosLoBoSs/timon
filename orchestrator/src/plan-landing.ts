@@ -4,14 +4,15 @@
  * §2.2, step 8 of §8).
  *
  * A project set to land through pull requests gets one integration branch per
- * job, named after the job's title: the plan's commands give it to every task
- * (`--base`) and end with the task that opens the pull request. Any other
- * project, or an agent outside one, gets null: the plan stays what it was.
+ * job, named after the job's title or the name the agent proposed (and the
+ * person answering the planner may change): the plan's commands give it to
+ * every task (`--base`) and end with the task that opens the pull request. Any
+ * other project, or an agent outside one, gets null: the plan stays what it was.
  */
 import { loadConfig } from './agent-config.js';
 import { dbApi } from './db.js';
 import { integrationBranchName, integrationBranchRefusal } from './git-integration.js';
-import { integrationBaseRef, readProjectIntegration } from './project-integration.js';
+import { integrationBaseRef, readProjectIntegration, type ProjectIntegration } from './project-integration.js';
 import type { SeriesPlanLanding } from './series-plan.js';
 import { taskProjectSlug } from './task-project.js';
 
@@ -20,17 +21,27 @@ export type PlanLanding = SeriesPlanLanding & {
   baseRef: string;
   /** What the orchestrator must know before it applies the plan. */
   note: string;
+  /** The project whose setting decided, for the form's check route. */
+  project: string;
+  /** `feat/`: shown before the field, never asked again. */
+  prefix: string;
+  /** The job already has its integration branch: the name no longer changes. */
+  locked: boolean;
+  /** Why the proposed name cannot be used; `branch` then holds it as typed. */
+  refusal?: string;
 };
 
 /** Beyond this, the title is too generic to name a job: the caller names it. */
 const MAX_SUFFIX = 20;
+/** A branch name the agent or the form proposes: a ref, not a paragraph. */
+export const MAX_PLAN_BRANCH_CHARS = 200;
 
 /**
  * The branch of a new job: the title's slug, with `-2`, `-3`… when Timon already
  * recorded that branch for an earlier job of the repository, so two jobs never
  * share one pull request.
  */
-function freeBranch(base: string, repo: string | null): string | null {
+export function freeBranch(base: string, repo: string | null): string | null {
   if (!repo) return base;
   for (let n = 1; n <= MAX_SUFFIX; n++) {
     const name = n === 1 ? base : `${base}-${n}`;
@@ -40,20 +51,110 @@ function freeBranch(base: string, repo: string | null): string | null {
   return null;
 }
 
-export function planLanding(agentName: string, chantier: string): PlanLanding | null {
-  let cfg: ReturnType<typeof loadConfig> | null = null;
-  try { cfg = loadConfig(agentName); } catch { return null; }
-  const slug = taskProjectSlug({}, cfg);
-  if (!slug) return null;
+/**
+ * The full name a proposal stands for: the project's prefix is written once,
+ * so `topic` and `feat/topic` both mean `feat/topic`.
+ */
+export function planBranchName(proposed: string, prefix: string): string {
+  const name = proposed.trim();
+  return name.startsWith(prefix) ? name : `${prefix}${name}`;
+}
+
+export type PlanBranchCheck =
+  | { ok: true; branch: string }
+  | { ok: false; branch: string; refusal: string };
+
+/**
+ * Whether `proposed` can name a new job of a project that lands through pull
+ * requests, and the name it will really get (`-2` when an earlier job holds
+ * it). The form's check route and the plan's answer both go through here: the
+ * browser never decides alone.
+ */
+export function checkPlanBranch(
+  proposed: string,
+  setting: { target: string; remote: string; branch_prefix: string },
+  repo: string | null,
+): PlanBranchCheck {
+  const raw = proposed.trim();
+  const branch = planBranchName(raw, setting.branch_prefix);
+  if (!raw || branch === setting.branch_prefix) {
+    return { ok: false, branch, refusal: 'name the branch after the job\'s topic' };
+  }
+  // A task branch pasted as is would only be renamed under the prefix: say why
+  // it cannot serve rather than accept a lookalike.
+  if (raw.startsWith('timon/')) return { ok: false, branch: raw, refusal: integrationBranchRefusal(raw)! };
+  if (branch.length > MAX_PLAN_BRANCH_CHARS) {
+    return { ok: false, branch, refusal: `the name is longer than ${MAX_PLAN_BRANCH_CHARS} characters` };
+  }
+  const baseRef = integrationBaseRef(setting);
+  if (branch === setting.target || branch === baseRef) {
+    return {
+      ok: false, branch,
+      refusal: `the pull request targets ${setting.target}: the job needs a branch of its own`,
+    };
+  }
+  const refusal = integrationBranchRefusal(branch);
+  if (refusal) return { ok: false, branch, refusal };
+  const free = freeBranch(branch, repo);
+  if (!free) {
+    return { ok: false, branch, refusal: `${branch} and its numbered variants are already taken by earlier jobs` };
+  }
+  return { ok: true, branch: free };
+}
+
+/** The project's setting when it lands through pull requests, with its repository. */
+export function prLandingSetting(slug: string, cwd?: string | null): {
+  setting: ProjectIntegration; repo: string | null;
+} | null {
   let read: ReturnType<typeof readProjectIntegration>;
   try { read = readProjectIntegration(slug); } catch { return null; }
   // A broken setting is refused at dispatch, with its reason, on the first task.
   if (read.invalid || read.integration.mode !== 'pr') return null;
-  const setting = read.integration;
+  return { setting: read.integration, repo: dbApi.getProjectRow(slug)?.cwd ?? cwd ?? null };
+}
+
+/**
+ * The integration branch the series already holds in this project: once a task
+ * was dispatched on it, every task of the job starts from it, so a plan opened
+ * again reuses it instead of numbering a new one.
+ */
+function seriesBranch(seriesId: string | null | undefined, slug: string, repo: string | null): string | null {
+  if (!seriesId) return null;
+  const row = dbApi.listIntegrationsBySeries(seriesId)
+    .find((r) => r.project === slug || (repo !== null && r.repo === repo));
+  return row?.branch ?? null;
+}
+
+export type PlanLandingOptions = {
+  /** The name the agent (`kanban_plan`) or the form proposed. */
+  branch?: string | null;
+  /** The mission that opens the planner: the series of the job's tasks. */
+  seriesId?: string | null;
+};
+
+export function planLanding(agentName: string, chantier: string, opts: PlanLandingOptions = {}): PlanLanding | null {
+  let cfg: ReturnType<typeof loadConfig> | null = null;
+  try { cfg = loadConfig(agentName); } catch { return null; }
+  const slug = taskProjectSlug({}, cfg);
+  if (!slug) return null;
+  const found = prLandingSetting(slug, cfg.cwd);
+  if (!found) return null;
+  const { setting, repo } = found;
   const baseRef = integrationBaseRef(setting);
-  const repo = dbApi.getProjectRow(slug)?.cwd ?? cfg.cwd ?? null;
-  const derived = integrationBranchName(chantier, { prefix: setting.branch_prefix });
-  const branch = (derived && freeBranch(derived, repo)) ?? `${setting.branch_prefix}<topic>`;
+  const prefix = setting.branch_prefix;
+  const held = seriesBranch(opts.seriesId, slug, repo);
+  let branch: string;
+  let refusal: string | undefined;
+  if (held) {
+    branch = held;
+  } else if (opts.branch && opts.branch.trim()) {
+    const checked = checkPlanBranch(opts.branch, setting, repo);
+    branch = checked.branch;
+    if (!checked.ok) refusal = checked.refusal;
+  } else {
+    const derived = integrationBranchName(chantier, { prefix });
+    branch = (derived && freeBranch(derived, repo)) ?? `${prefix}<topic>`;
+  }
   const named = branch.endsWith('<topic>')
     ? `Replace \`${branch}\` with a short English topic (letters, digits, dashes, no id) in every command. `
     : '';
@@ -61,6 +162,10 @@ export function planLanding(agentName: string, chantier: string): PlanLanding | 
     branch,
     chantier,
     baseRef,
+    project: slug,
+    prefix,
+    locked: held !== null,
+    ...(refusal ? { refusal } : {}),
     note:
       `Project ${slug} lands through a pull request into ${baseRef}. ${named}Every task of this job starts ` +
       `from the integration branch \`${branch}\`, which the daemon cuts from ${baseRef}: never from ` +

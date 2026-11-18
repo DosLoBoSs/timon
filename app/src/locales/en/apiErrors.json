@@ -300,6 +300,8 @@
     "task_still_running": "The task is still running: wait for it to finish before marking it merged.",
     "integration_not_found": "Timon has no record of the integration branch {branch}: dispatch the job first.",
     "integration_already_landed": "{branch} has already landed.",
+    "plan_branch_refused": "This branch name cannot be used: {detail}",
+    "plan_branch_unavailable": "This project does not land through pull requests.",
     "task_mark_merged_failed": "The task could not be marked merged.",
     "crash_loop": "This task cannot be put back in the queue yet: {detail}",
     "todo_status_filter_invalid": "Choose open, done, promoted or all.",

@@ -155,3 +155,80 @@ test('a project that lands through pull requests: the plan gives the job branch 
   assert.equal(local.integration, undefined);
   assert.deepEqual(local.commands, seriesPlanCommands({ mode: 'kanban-full', roles: {} }, [{ title: 'Front' }]));
 });
+
+/* The planner's branch field: the agent proposes, the person may change it,
+   the daemon checks both and fixes the name once the job has its branch. */
+test('the branch field: proposal, typed name, refusal and lock', async () => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const { agentDir } = await import('./paths.js');
+  const { updateProjectIntegration } = await import('./project-integration.js');
+  const { resolvePermission } = await import('./permissions.js');
+  const repo = mkdtempSync(join(tmpdir(), 'timon-plan-branch-'));
+  mkdirSync(agentDir('branch-pr.main'), { recursive: true });
+  writeFileSync(join(agentDir('branch-pr.main'), 'config.json'), JSON.stringify({ cwd: repo, role: 'orchestrator', project: 'branch-pr' }));
+  writeFileSync(join(agentDir('branch-pr.main'), 'system-prompt.md'), 'Test');
+  dbApi.upsertProject('branch-pr', { cwd: repo });
+  updateProjectIntegration('branch-pr', { mode: 'pr', account: 'octocat' });
+
+  const branchOf = (d: { behavior: string; updatedInput?: unknown }) =>
+    (d.updatedInput as { integration?: { branch: string } } | undefined)?.integration?.branch;
+  type Landing = { project: string; prefix: string; branch: string; base_ref: string; locked: boolean; refusal?: string };
+  let opened = 0;
+  const open = (mission: string, branch?: string) => {
+    if (!dbApi.getMission(mission)) dbApi.createMission(mission, 'branch-pr.main', 'job');
+    const form = { form: { kind: 'series_plan', chantier: 'Branch field', volets: [{ title: 'Front' }], ...(branch ? { branch } : {}) } };
+    const pending = requestPermission({ mission_id: mission, agent: 'branch-pr.main', tool_name: 'ask_user', input: form, tool_use_id: `tu-${mission}-${++opened}` });
+    const card = listPending(mission)[0]!;
+    const landing = (card.input as { form: { landing?: Landing } }).form.landing;
+    const answer = async (plan: Record<string, unknown>) => {
+      resolvePermission(card.id, { behavior: 'allow', updatedInput: { plan: { mode: 'kanban-full', roles: {}, ...plan } } });
+      return pending;
+    };
+    return { landing, answer };
+  };
+
+  // The agent's proposal is shown, prefixed, and reaches every command.
+  const proposed = open('branch-1', 'planner-branch');
+  assert.deepEqual(proposed.landing, {
+    project: 'branch-pr', prefix: 'feat/', branch: 'feat/planner-branch', base_ref: 'origin/main', locked: false,
+  });
+  const kept = await proposed.answer({});
+  assert.equal(kept.behavior, 'allow');
+  const cmds = (kept.behavior === 'allow' ? kept.updatedInput : {}) as { commands: string[]; integration: { branch: string } };
+  assert.equal(cmds.integration.branch, 'feat/planner-branch');
+  assert.ok(cmds.commands.every((c) => c.includes('--base feat/planner-branch')));
+
+  // A refused proposal opens the form with its reason under the field.
+  const bad = open('branch-2', 'fix-bfd1c111de16');
+  assert.match(bad.landing!.refusal!, /carries an id/);
+  // A name typed in the form wins over the proposal; a refused one is a deny.
+  const typed = await bad.answer({ branch: 'typed-topic' });
+  assert.equal(typed.behavior, 'allow');
+  assert.equal(branchOf(typed), 'feat/typed-topic');
+  const denied = await open('branch-3').answer({ branch: 'timon/task/x' });
+  assert.equal(denied.behavior, 'deny');
+  assert.match(denied.behavior === 'deny' ? denied.message : '', /reserved for Timon/);
+
+  // Once the series holds its integration branch, the field is locked on it:
+  // no `-2` for the job's own branch, and another name is refused.
+  dbApi.recordIntegration({ repo, branch: 'feat/locked-job', remote: 'origin', target: 'main', mode: 'pr', project: 'branch-pr', seriesId: 'branch-4' });
+  const locked = open('branch-4', 'something-else');
+  assert.equal(locked.landing!.branch, 'feat/locked-job');
+  assert.equal(locked.landing!.locked, true);
+  const renamed = await locked.answer({ branch: 'other' });
+  assert.equal(renamed.behavior, 'deny');
+  const again = open('branch-4');
+  const same = await again.answer({ branch: 'feat/locked-job' });
+  assert.equal(same.behavior, 'allow');
+  assert.equal(branchOf(same), 'feat/locked-job');
+});
+
+test('a project without the setting gets no branch field', async () => {
+  dbApi.createMission('nofield-1', 'acme.coder', 'job');
+  const pending = requestPermission({ mission_id: 'nofield-1', agent: 'acme.coder', tool_name: 'ask_user', input: plan, tool_use_id: 'tu-nofield' });
+  const card = listPending('nofield-1')[0]!;
+  assert.equal((card.input as { form: { landing?: unknown } }).form.landing, undefined);
+  const { resolvePermission } = await import('./permissions.js');
+  resolvePermission(card.id, { behavior: 'deny', message: 'x' });
+  await pending;
+});
