@@ -72,7 +72,7 @@ async function mount(opts: { gate?: Promise<void>; first?: unknown; list?: () =>
   const { ChatRailProvider } = await import('@/components/chat/chat-rails');
   const root = createRoot(document.getElementById('root')!);
   await React.act(async () => {
-    const card = React.createElement(AgentInjectionsCard, { poignee: null } as never);
+    const card = React.createElement(AgentInjectionsCard, { handle: null } as never);
     root.render(opts.inChat
       ? React.createElement(ChatRailProvider, { value: { agent: { name: 'timon.coder' } }, info: {} } as never, card)
       : card);

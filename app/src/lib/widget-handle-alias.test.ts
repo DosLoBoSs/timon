@@ -28,7 +28,7 @@ test('a frame-less widget gets the layout controls under handle and under poigne
       const catalog = useWidgetCatalog();
       return React.createElement(React.Fragment, null,
         [...catalog.byId.values()].map((entry) => React.createElement(React.Fragment, { key: entry.id },
-          entry.render({ poignee: controls, className: 'h-full' }))));
+          entry.render({ handle: controls, className: 'h-full' }))));
     }
     const html = renderToStaticMarkup(React.createElement(Paint));
     assert.match(html, /<div data-reads="handle"><button type="button">grip<\/button><\/div>/);

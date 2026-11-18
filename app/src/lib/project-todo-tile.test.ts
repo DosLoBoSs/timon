@@ -65,7 +65,7 @@ async function mountTile(scope: unknown, calls: string[], realtime: ClientRealti
   const root = createRoot(document.getElementById('root')!);
   await React.act(async () => {
     root.render(React.createElement(ProjectTodoTile, {
-      scope, titre: 'Project TO DO', poignee: null, realtime, editing: opts.editing ?? false,
+      scope, titre: 'Project TO DO', handle: null, realtime, editing: opts.editing ?? false,
     } as never));
   });
   return { React, root, dom };
