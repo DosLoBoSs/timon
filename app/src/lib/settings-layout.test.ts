@@ -8,6 +8,9 @@ import {
   parseSettingsParam,
   placeSetting,
   resolveSettingsTarget,
+  SETTINGS_CATEGORY_IDS,
+  SETTINGS_NAV_GROUPS,
+  STATIC_TABS,
   type SettingsLayoutInput,
   type SettingsRowLike,
 } from './settings-layout';
@@ -274,4 +277,19 @@ test('the Updates pane sits under System, after Installation, for every account'
   // The module off: its pane goes, and its rows with it.
   const off = buildSettingsLayout(input({ rows: [row, notices], plugins: [], pluginStates: new Map([['@timon/updates', 'disabled']]) }));
   assert.equal(off.some((c) => c.id === 'system'), false);
+});
+
+test('every category with tabs sits in exactly one nav group', () => {
+  const grouped = SETTINGS_NAV_GROUPS.flatMap((group) => group.categories);
+  assert.equal(new Set(grouped).size, grouped.length);
+  assert.deepEqual(new Set(grouped), new Set(Object.keys(STATIC_TABS)));
+});
+
+test('the categories read workspace, agents, this computer, plugins', () => {
+  assert.deepEqual([...SETTINGS_CATEGORY_IDS], [
+    'interface',
+    'models', 'instructions', 'memory', 'missions', 'resources',
+    'network', 'secrets', 'system',
+    'plugins',
+  ]);
 });

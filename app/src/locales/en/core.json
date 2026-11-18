@@ -1306,6 +1306,10 @@
   },
   "settingsDialog": {
     "backToSettings": "Back to settings",
+    "navGroup": {
+      "agents": "Agents",
+      "machine": "This computer"
+    },
     "close": "Close",
     "unsavedKept": "Your last change is not saved yet. Save it, or close with × or Escape to discard it.",
     "category": {
