@@ -437,6 +437,14 @@
     "gpt_live_rate_limited": "OpenAI is limiting requests: try again in a moment.",
     "gpt_live_refused": "OpenAI refused the voice session (HTTP {status}).",
     "gpt_live_no_answer": "OpenAI returned no answer to the voice session.",
-    "gpt_live_transcript_invalid": "A spoken turn needs a role and a text of at most 4000 characters."
+    "gpt_live_transcript_invalid": "A spoken turn needs a role and a text of at most 4000 characters.",
+    "mission_refused": "Connecting an app is your gesture, not an agent's.",
+    "mcp_app_unknown": "This connector is not in the catalogue.",
+    "mcp_app_id_taken": "An MCP server named {id} already exists and was not added from the connectors.",
+    "mcp_app_key_required": "This connector needs a key.",
+    "mcp_app_takes_no_key": "This connector takes no key.",
+    "mcp_app_vault_off": "The key is kept in the secrets vault, which is switched off.",
+    "mcp_app_connect_failed": "The connector could not be connected: {detail}",
+    "mcp_app_not_connected": "This connector is not connected."
   }
 }
