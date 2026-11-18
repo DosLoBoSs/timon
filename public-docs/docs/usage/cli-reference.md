@@ -184,6 +184,13 @@ Projects (agent roles per project):
   timon project roles <slug>                   shows the role→agent mapping
   timon project set-role <slug> <role> <agent> [--model SLUG] [--permission-mode MODE]
                                              sets the agent + model/permission for a role
+  timon project get-integration <slug> [--check]
+                                             how the project's Kanban jobs land (local merge or pull request);
+                                             --check asks gh which account the configured folder signs in as
+  timon project set-integration <slug> [--mode local|pr] [--remote NAME] [--target BRANCH] [--forge github]
+                       [--account LOGIN] [--gh-config-dir ABSOLUTE_PATH] [--branch-prefix PREFIX/] | --reset
+                                             changes what you pass (needs projects:manage); an empty
+                                             --account or --gh-config-dir clears it
   timon project create <slug> [--name TEXT] [--cwd PATH] [--workspace NAME] [--create-workspace]
                        [--color #RRGGBB] [--icon TEXT] [--speech TEXT] [--kind TEXT] [--status TEXT]
                                              registers a project; the cwd must already exist on the host
@@ -836,16 +843,22 @@ usage: timon project set-role <slug> <code|review|merge|research|doc|chore> <age
        timon project set-role <slug> <role> ""   (to clear)
 ```
 
+### timon project get-integration slug [--check]
+
+```text
+usage: timon project get-integration <slug> [--check]
+```
+
 ### timon workspace list [--json]
 
 ```text
 usage: timon workspace list [--json]
 ```
 
-### timon project list|roles|set-role|create|update|demo …
+### timon project list|roles|set-role|get-integration|set-integration|create|update|demo …
 
 ```text
-usage: timon project <list|roles|set-role|create|update|demo> …
+usage: timon project <list|roles|set-role|get-integration|set-integration|create|update|demo> …
 ```
 
 ### timon msg send to_agent payload...

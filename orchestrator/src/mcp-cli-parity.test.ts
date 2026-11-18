@@ -77,6 +77,10 @@ const CASES: Array<[string, Record<string, unknown>, string, Record<string, unkn
   ['project_list', {}, 'GET /api/projects'],
   ['project_roles', { slug: 'p' }, 'GET /api/projects/p/roles'],
   ['project_set_role', { slug: 'p', role: 'code', agent: 'a', model: 'm' }, 'PATCH /api/projects/p/roles/code', { agent: 'a', model: 'm' }],
+  ['project_integration_get', { slug: 'p' }, 'GET /api/projects/p/integration'],
+  ['project_integration_get', { slug: 'p', check: true }, 'POST /api/projects/p/integration/check'],
+  ['project_integration_set', { slug: 'p', mode: 'pr', account: 'bot', gh_config_dir: null }, 'PUT /api/projects/p/integration', { mode: 'pr', account: 'bot', gh_config_dir: null }],
+  ['project_integration_set', { slug: 'p', reset: true }, 'DELETE /api/projects/p/integration'],
   ['memory_rule_rm', { id: 4 }, 'DELETE /api/memory/rules/4'],
   ['memory_search', { query: 'a b' }, 'GET /api/memory/search?q=a%20b'],
   ['memory_overview', {}, 'GET /api/memory/overview'],
@@ -240,6 +244,31 @@ test('nav, onboarding profile, demo project: the MCP tools and the CLI take the 
     seen.length = 0;
     assert.equal((await cli(base, ['project', 'demo'])).code, 0);
     assert.ok(seen.some((x) => x.method === 'POST' && x.url === '/api/projects/demo'));
+  });
+});
+
+test('project get/set-integration: the CLI takes the routes of the MCP tools, with the same body', async () => {
+  await withDaemon(async (base, seen) => {
+    const path = '/api/projects/acme/integration';
+    await session(base, [{ method: 'tools/call', params: { name: 'project_integration_set', arguments: { slug: 'acme', mode: 'pr', account: 'bot', gh_config_dir: null, branch_prefix: 'sec/' } } }], true);
+    const viaMcp = seen.find((x) => x.method === 'PUT' && x.url === path);
+    seen.length = 0;
+    assert.equal((await cli(base, ['project', 'set-integration', 'acme', '--mode', 'pr', '--account', 'bot', '--gh-config-dir', '', '--branch-prefix', 'sec/'])).code, 0);
+    assert.deepEqual(seen.find((x) => x.method === 'PUT' && x.url === path)?.body, viaMcp?.body);
+    assert.deepEqual(viaMcp?.body, { mode: 'pr', account: 'bot', gh_config_dir: null, branch_prefix: 'sec/' });
+    seen.length = 0;
+    assert.equal((await cli(base, ['project', 'set-integration', 'acme', '--reset'])).code, 0);
+    assert.ok(seen.some((x) => x.method === 'DELETE' && x.url === path));
+    seen.length = 0;
+    assert.equal((await cli(base, ['project', 'get-integration', 'acme', '--check'])).code, 0);
+    assert.ok(seen.some((x) => x.method === 'GET' && x.url === path));
+    assert.ok(seen.some((x) => x.method === 'POST' && x.url === `${path}/check`));
+    seen.length = 0;
+    // No field, a field with --reset, or no slug: a usage error, never a request.
+    assert.equal((await cli(base, ['project', 'set-integration', 'acme'])).code, 64);
+    assert.equal((await cli(base, ['project', 'set-integration', 'acme', '--reset', '--mode', 'pr'])).code, 64);
+    assert.equal((await cli(base, ['project', 'get-integration'])).code, 64);
+    assert.equal(seen.length, 0);
   });
 });
 
