@@ -74,7 +74,7 @@ a daemon running in portable mode stops with the app.
 
 **Forgot password** on the sign-in screen sends a 6-digit code to the e-mail address of your account. Type the code, then your new password twice. Resetting a password signs that account out everywhere. It needs an internet connection, and works only if your address was confirmed; if no code arrives within a few minutes, use one of the ways below.
 
-An address made without a code stays unconfirmed: an account invited or created by an administrator, a first account created from a terminal, or a sign-in email you changed. Confirm it while you can still sign in: in **Profile**, under **Sign-in email**, **Confirm your address** › **Send the code**, then type the 6 digits you receive. The screen of **Forgot password** recalls it under the code.
+An address made without a code stays unconfirmed: an account invited or created by an administrator, a first account created from a terminal, or a sign-in email you changed. Confirm it while you can still sign in: in **Profile**, under **Sign-in email**, **Confirm your address** › **Send the code**, then type the 6 digits you receive. Until you do, a **Confirm your email address** card at the bottom left of the app takes you there. The screen of **Forgot password** recalls it under the code.
 
 Codes are limited to a few per address and per network in a quarter of an hour. If Timon answers that too many codes were requested, wait the time it shows before asking again.
 
