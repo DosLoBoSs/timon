@@ -61,10 +61,10 @@ export function registerRoutes(app: Router, preference: () => TelemetryPreferenc
     }
     if (rejectIfDenied(req, res, 'settings:write')) return;
     const body = PreferenceBody.safeParse(req.body);
-    if (!body.success) { res.status(400).json({ error: 'enabled must be a boolean' }); return; }
+    if (!body.success) { res.status(400).json(apiError('enabled_required', 'enabled must be a boolean')); return; }
     const before = preference();
     if (!preferenceEditable(before)) {
-      res.status(409).json({ error: 'forced', source: before.source });
+      res.status(409).json({ ...apiError('telemetry_preference_forced', 'the statistics preference is set outside Timon (environment or configuration file)'), source: before.source });
       return;
     }
     writePreference(body.data.enabled);
@@ -80,7 +80,7 @@ export function registerRoutes(app: Router, preference: () => TelemetryPreferenc
       return;
     }
     const body = UiEventBody.safeParse(req.body);
-    if (!body.success) { res.status(400).json({ error: 'invalid event' }); return; }
+    if (!body.success) { res.status(400).json(apiError('telemetry_event_invalid', 'invalid event')); return; }
     telemetry().trackUi(body.data, { userId: auth.user?.id ?? null });
     res.json({ ok: true });
   });

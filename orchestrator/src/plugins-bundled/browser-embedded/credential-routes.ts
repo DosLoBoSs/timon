@@ -3,6 +3,7 @@ import type { BrowserProfile } from '../../browser-profiles.js';
 import { deleteBrowserCredential, listBrowserCredentials, upsertBrowserCredential } from '../../browser-credentials.js';
 import { NativeBrowserError } from '../../native-browser-provider.js';
 import { requireAuth, isPersonAuth } from '../../users/identity.js';
+import { apiError } from '../../api-error.js';
 
 /** The parent resolver applies the fixed mission profile and current grants.
  * These routes never accept provider endpoints, plaintext reads, or fill scripts. */
@@ -26,8 +27,8 @@ export function registerBrowserCredentialRoutes(app: Router, deps: {
     res.setHeader('Cache-Control', 'no-store');
     try { res.json(operation(req)); }
     catch (error) {
-      if (error instanceof NativeBrowserError) res.status(error.status).json({ error: error.message });
-      else res.status(500).json({ error: 'The browser credential operation failed.' });
+      if (error instanceof NativeBrowserError) res.status(error.status).json(apiError('browser_refused', error.message, { detail: error.message }));
+      else res.status(500).json(apiError('browser_credential_failed', 'The browser credential operation failed.'));
     }
   };
   app.get('/api/native-browser/:profileId/credentials', handle((req) => ({ credentials: listBrowserCredentials(profile(req)) })));

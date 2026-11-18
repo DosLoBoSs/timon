@@ -169,7 +169,7 @@ test('pairing posts the address (https added to a bare host), the code and the n
 
 test('a refused code is said in words, and the form stays open', async () => {
   const realFetch = globalThis.fetch;
-  installFetch([], (url) => (url === '/api/ui/machines/pair' ? json(422, { error: 'invalid_code' }) : undefined));
+  installFetch([], (url) => (url === '/api/ui/machines/pair' ? json(422, { error: 'the machine refused this pairing code: wrong, expired or already used', code: 'invalid_code' }) : undefined));
   try {
     await withDom(async ({ React, render }) => {
       const { MachinesSettings } = await import('./settings');

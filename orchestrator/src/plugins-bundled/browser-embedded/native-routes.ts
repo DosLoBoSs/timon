@@ -17,6 +17,7 @@ import { registerBrowserCredentialRoutes } from './credential-routes.js';
 import { conversionBrowserCommand, conversionBrowserRefusal, conversionMissionOf } from '../../users/conversion-mission.js';
 import { noteCollectedBrowserRecording, saveBrowserRecording, stopBrowserRecording, type BrowserRecordingMetadata, type BrowserRecordingOrigin } from '../../browser-recordings.js';
 import { annotationStateOf, picksOf, saveBrowserAnnotations, type BrowserAnnotationOrigin } from '../../browser-annotations.js';
+import { apiError } from '../../api-error.js';
 
 // `annotateHighlight` shows a stored selector again: a rectangle comes back, never the page's words.
 // `annotateUnpin` drops the desktop bubble's pins of annotations sent or deleted elsewhere (TODO #481).
@@ -245,7 +246,7 @@ export function registerNativeBrowserRoutes(app: Router, deps: {
     res.setHeader('Cache-Control', 'no-store');
     try { res.json(await operation(req)); }
     catch (error) {
-      res.status(error instanceof NativeBrowserError ? error.status : 400).json({ error: (error as Error).message });
+      res.status(error instanceof NativeBrowserError ? error.status : 400).json(apiError('browser_refused', (error as Error).message, { detail: (error as Error).message }));
     }
   };
   app.get('/api/native-browser/capabilities', handle(async () => (deps.capabilities ?? nativeBrowserCapabilities)(detectChrome)));

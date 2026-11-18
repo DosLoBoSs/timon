@@ -33,6 +33,7 @@ import {
 } from '../../browser-annotations.js';
 import { ANNOTATION_COMMENT_MAX } from '../../browser-annotation-rules.js';
 import { formatBrowserAnnotations, type AgentAnnotationView } from '../../browser-annotation-format.js';
+import { apiError } from '../../api-error.js';
 
 const ProfileParam = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
 const AnnotationParam = z.string().regex(/^ba-[0-9a-f-]{36}$/);
@@ -210,9 +211,9 @@ export function registerBrowserAnnotationRoutes(app: Router, deps: BrowserAnnota
     res.setHeader('Cache-Control', 'no-store');
     try { res.json(await operation(req)); }
     catch (error) {
-      if (error instanceof z.ZodError) { res.status(400).json({ error: error.issues[0]?.message ?? 'Invalid request.' }); return; }
+      if (error instanceof z.ZodError) { const detail = error.issues[0]?.message ?? 'Invalid request.'; res.status(400).json(apiError('invalid_detail', detail, { detail })); return; }
       if (error instanceof PostRefusal) { res.status(error.status).json(error.body); return; }
-      res.status(error instanceof NativeBrowserError ? error.status : 400).json({ error: (error as Error).message });
+      res.status(error instanceof NativeBrowserError ? error.status : 400).json(apiError('browser_refused', (error as Error).message, { detail: (error as Error).message }));
     }
   };
   /** What the desktop handed back goes to the sealed store; the answer holds metadata only. */
@@ -356,7 +357,7 @@ export function registerBrowserAnnotationRoutes(app: Router, deps: BrowserAnnota
     const message = body.message ?? '';
     const origin = userOrigin(userId);
     const noConversation = () => new PostRefusal('This browser is not the one of that conversation.', 409,
-      { error: 'This browser is not the one of that conversation.', code: 'no_linked_conversation' });
+      { ...apiError('no_linked_conversation', 'This browser is not the one of that conversation.') });
 
     let mission: MissionRow | null = null;
     if (body.missionId) {
@@ -417,7 +418,7 @@ export function registerBrowserAnnotationRoutes(app: Router, deps: BrowserAnnota
         if (error instanceof BackendExhaustedError) {
           return { status: 429, body: { error: (error as Error).message, code: 'backend_exhausted', backend: error.backend } };
         }
-        return { status: 500, body: { error: (error as Error).message } };
+        return { status: 500, body: { ...apiError('conversation_start_failed', (error as Error).message, { detail: (error as Error).message }) } };
       }
     });
     return answer(missionId, delivered, true);
