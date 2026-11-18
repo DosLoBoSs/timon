@@ -67,7 +67,8 @@ async function tool(name: string, args: unknown, caller = main): Promise<Reply> 
     env: { ...systemRoot, PATH: '', TIMON_HOME: process.env.TIMON_HOME, TIMON_API_TOKEN: caller.bearer, TIMON_ORCH_URL: base, TIMON_MISSION_ID: caller.id, TIMON_AGENT: dbApi.getMission(caller.id)!.agent_name }, stdio: ['pipe', 'pipe', 'pipe'],
   });
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { child.kill(); reject(new Error('MCP timeout')); }, 5000);
+    // A cold Node start of the MCP server takes seconds on a loaded Windows machine.
+    const timer = setTimeout(() => { child.kill(); reject(new Error('MCP timeout')); }, 30_000);
     const lines = readline.createInterface({ input: child.stdout });
     lines.on('line', (line) => { clearTimeout(timer); child.kill(); lines.close(); resolve(JSON.parse(line)); });
     child.on('error', (err) => { clearTimeout(timer); reject(err); });
