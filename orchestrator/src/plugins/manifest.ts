@@ -99,8 +99,14 @@ import { reservedRouteSegment } from './reserved-routes.js';
  * `useUpdateDialog`, the update window (§116). A manifest naming one of the
  * new slots must declare 17 (`SLOT_API_VERSIONS`). No member of the host's
  * `PluginContext` changes.
+ *
+ * 18 — the `kanban.todo.landing` slot: the badge that says where the branch
+ * of a TO DO idea's jobs stands (pull request not created, open, merged,
+ * closed), read from `useTodoItem().landing`; `PluginTodo.landing` and the
+ * `landing` filter of `ctx.kanban.todos.list`. API 17 shipped in 0.1.9, so a
+ * new slot opens a new wave. No member of the host's `PluginContext` changes.
  */
-export const PLUGIN_API_VERSION = 17;
+export const PLUGIN_API_VERSION = 18;
 
 /** First contract that knows `kind: dictation` and its manifest block. */
 export const DICTATION_API_VERSION = 14;
@@ -121,6 +127,7 @@ export const SLOT_API_VERSIONS: Readonly<Record<string, number>> = Object.freeze
   notices: 17,
   'notices.card': 17,
   'updates.dialog': 17,
+  'kanban.todo.landing': 18,
 });
 
 /** A public path relative to the plugin prefix: lowercase segments or `:name` parameters, never a wildcard. */
