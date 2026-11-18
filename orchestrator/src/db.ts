@@ -1,4 +1,5 @@
 import { migrateTodoOutcomeColumns } from './todo-outcome-migration.js';
+import { landingRankSql, TODO_LANDING_RANK, type TodoIntegrationRow, type TodoLandingState } from './todo-landing.js';
 import { permissionsFromSource } from './users/permission-source.js';
 import { emitAccountChange } from './users/account-changes.js';
 import Database from 'better-sqlite3';
@@ -4236,6 +4237,8 @@ export interface ProjectTodoFilter {
   urgencies?: readonly ProjectTodoUrgencyKey[];
   progress?: TodoProgress;
   ids?: readonly number[];
+  /** Ideas whose badge (`todo-landing.ts`, worst job) is this state. */
+  landing?: TodoLandingState;
   viewer?: DbViewer | null;
 }
 
@@ -4839,6 +4842,18 @@ function urgencySelection(f: ProjectTodoFilter): Set<ProjectTodoUrgencyKey> | nu
   return keep;
 }
 
+/**
+ * Tasks (`t`) of an idea joined to the integration row (`i`) of their branch.
+ * Matched on the branch within the task's project, as `chain-landing.ts` does
+ * when it cannot read the agent's repository: the agent's config is a file,
+ * and a list must stay one query. A task in local mode has no row, even if its
+ * base happens to bear an integration branch's name.
+ */
+const TODO_INTEGRATION_JOIN = `tasks t JOIN integrations i
+  ON i.branch = t.base_branch
+  AND t.integration_mode IN ('branch', 'pr')
+  AND (i.project IS NULL OR t.project IS NULL OR i.project = t.project)`;
+
 function projectTodoWhere(f: ProjectTodoFilter): { sql: string[]; args: unknown[] } {
   const sql: string[] = [];
   const args: unknown[] = [];
@@ -4858,6 +4873,15 @@ function projectTodoWhere(f: ProjectTodoFilter): { sql: string[]; args: unknown[
   if (f.ids) {
     sql.push(f.ids.length ? `id IN (${f.ids.map(() => '?').join(', ')})` : '0');
     args.push(...f.ids);
+  }
+  if (f.landing) {
+    // Grouped like the badge: the idea's worst job decides, through the
+    // tasks the caller may see, so the filter never reveals a job the badge hides.
+    const tasksOwner = ownerSql(f.viewer, 'tasks', 't.owner_user_id');
+    sql.push(`id IN (SELECT t.todo_id FROM ${TODO_INTEGRATION_JOIN}
+      WHERE t.todo_id IS NOT NULL AND ${tasksOwner.sql}
+      GROUP BY t.todo_id HAVING MAX(${landingRankSql('i')}) = ?)`);
+    args.push(...tasksOwner.params, TODO_LANDING_RANK[f.landing]);
   }
   const owner = ownerSql(f.viewer, 'project_todo');
   if (owner.sql !== '1=1') { sql.push(owner.sql); args.push(...owner.params); }
@@ -5644,6 +5668,21 @@ export const dbApi = {
   /** Every task based on `branch`, oldest first. */
   listTasksByBaseBranch(branch: string): TaskRow[] {
     return listTasksByBaseBranchStmt.all(branch) as TaskRow[];
+  },
+  /**
+   * The integration rows of the ideas `todoIds`, reached through the tasks
+   * `viewer` may see: one query for a whole list. A row per (idea, task):
+   * `aggregateTodoLandings` counts a job once.
+   */
+  listTodoIntegrations(todoIds: readonly number[], viewer?: DbViewer | null): TodoIntegrationRow[] {
+    if (!todoIds.length) return [];
+    const owner = ownerSql(viewer, 'tasks', 't.owner_user_id');
+    return db.prepare(
+      `SELECT t.todo_id AS todo_id, i.id AS id, i.mode AS mode, i.state AS state, i.branch AS branch,
+              i.pr_number AS pr_number, i.pr_url AS pr_url, i.created_at AS created_at
+       FROM ${TODO_INTEGRATION_JOIN}
+       WHERE t.todo_id IN (${todoIds.map(() => '?').join(', ')}) AND ${owner.sql}`,
+    ).all(...todoIds, ...owner.params) as TodoIntegrationRow[];
   },
   listIntegrationsBySeries(seriesId: string): IntegrationRow[] {
     return listIntegrationsBySeriesStmt.all(seriesId) as IntegrationRow[];
