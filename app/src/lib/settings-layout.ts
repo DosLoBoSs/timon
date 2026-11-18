@@ -29,9 +29,23 @@ export type SettingsCategoryId =
   | 'secrets'
   | 'plugins';
 
-export const SETTINGS_CATEGORY_IDS: readonly SettingsCategoryId[] = [
-  'interface', 'models', 'instructions', 'missions', 'resources', 'memory', 'network', 'system', 'secrets', 'plugins',
+export type SettingsNavGroupId = 'workspace' | 'agents' | 'machine' | 'extensions';
+
+/**
+ * The nav, in reading order: the person's own workspace, what shapes the
+ * agents, what runs the machine, then plugins. Only the two middle groups are
+ * named; the first and the last are one category each and the spacing around
+ * them says enough. Grouping is display only: a URL names the category,
+ * never its group.
+ */
+export const SETTINGS_NAV_GROUPS: readonly { id: SettingsNavGroupId; titled: boolean; categories: readonly SettingsCategoryId[] }[] = [
+  { id: 'workspace', titled: false, categories: ['interface'] },
+  { id: 'agents', titled: true, categories: ['models', 'instructions', 'memory', 'missions', 'resources'] },
+  { id: 'machine', titled: true, categories: ['network', 'secrets', 'system'] },
+  { id: 'extensions', titled: false, categories: ['plugins'] },
 ];
+
+export const SETTINGS_CATEGORY_IDS: readonly SettingsCategoryId[] = SETTINGS_NAV_GROUPS.flatMap((group) => group.categories);
 
 /** Device-local panes: no row in the settings table. */
 export type NativePaneId = 'language' | 'push' | 'voice' | 'webui' | 'desktop' | 'installation' | 'instructions' | 'preamble' | 'fallback' | 'secrets' | 'connections' | 'devices' | 'developer' | 'isolation' | 'privacy';
@@ -49,9 +63,11 @@ type StaticTab =
 
 /** Static tabs, in display order. Plugin-owned tabs are appended at runtime. */
 export const STATIC_TABS: Readonly<Record<SettingsCategoryId, readonly StaticTab[]>> = {
+  // The instructions a person writes first; the preamble Timon writes is
+  // there to be read, not edited.
   instructions: [
-    { id: 'preamble', kind: 'native', pane: 'preamble' },
     { id: 'global', kind: 'native', pane: 'instructions' },
+    { id: 'preamble', kind: 'native', pane: 'preamble' },
   ],
   interface: [
     { id: 'appearance', kind: 'plugin', pluginId: '@timon/ui-theme' },
@@ -77,14 +93,17 @@ export const STATIC_TABS: Readonly<Record<SettingsCategoryId, readonly StaticTab
     { id: 'confinement', kind: 'rows' },
     { id: 'schedule', kind: 'rows' },
   ],
+  // In the order memory lives: what reaches a prompt (and the switch for all
+  // of it), what is captured, how it is digested, kept, scored and dreamt;
+  // the notes vault, a place more than a behaviour, comes last.
   memory: [
-    { id: 'obsidian', kind: 'rows' },
     { id: 'injection', kind: 'rows' },
     { id: 'capture', kind: 'rows' },
     { id: 'synthesis', kind: 'rows' },
     { id: 'promotion', kind: 'rows' },
-    { id: 'dreaming', kind: 'rows' },
     { id: 'scoring', kind: 'rows' },
+    { id: 'dreaming', kind: 'rows' },
+    { id: 'obsidian', kind: 'rows' },
   ],
   network: [
     { id: 'webui', kind: 'native', pane: 'webui' },

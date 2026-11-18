@@ -1286,12 +1286,10 @@
     "categories": "Categorieën",
     "selectCategory": "Categorie",
     "modified": "gewijzigd",
+    "defaultValue": "Standaard: {value}",
     "definedInConfig": "ingesteld in timon.config.json",
     "forcedByEnv": "afgedwongen door de omgeving",
-    "default": "standaard",
     "empty": "(leeg)",
-    "enabled": "Ingeschakeld",
-    "disabled": "Uitgeschakeld",
     "save": "Opslaan",
     "defaultBtn": "Standaard",
     "outOfRange": "Tussen {min} en {max}",
@@ -1532,6 +1530,10 @@
   },
   "settingsDialog": {
     "backToSettings": "Terug naar instellingen",
+    "navGroup": {
+      "agents": "Agents",
+      "machine": "Deze computer"
+    },
     "close": "Sluiten",
     "unsavedKept": "Je laatste wijziging is nog niet opgeslagen. Sla haar op, of sluit met × of Escape om haar te verwerpen.",
     "category": {

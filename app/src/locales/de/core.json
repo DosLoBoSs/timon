@@ -1286,12 +1286,10 @@
     "categories": "Kategorien",
     "selectCategory": "Kategorie",
     "modified": "geändert",
+    "defaultValue": "Standard: {value}",
     "definedInConfig": "in timon.config.json festgelegt",
     "forcedByEnv": "durch Umgebung erzwungen",
-    "default": "Standard",
     "empty": "(leer)",
-    "enabled": "Aktiviert",
-    "disabled": "Deaktiviert",
     "save": "Speichern",
     "defaultBtn": "Standard",
     "outOfRange": "Zwischen {min} und {max}",
@@ -1532,6 +1530,10 @@
   },
   "settingsDialog": {
     "backToSettings": "Zurück zu den Einstellungen",
+    "navGroup": {
+      "agents": "Agenten",
+      "machine": "Dieser Computer"
+    },
     "close": "Schließen",
     "unsavedKept": "Deine letzte Änderung ist noch nicht gespeichert. Speichere sie oder schließe mit × oder Escape, um sie zu verwerfen.",
     "category": {

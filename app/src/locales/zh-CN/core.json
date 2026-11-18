@@ -1316,12 +1316,10 @@
     "categories": "类别",
     "selectCategory": "类别",
     "modified": "已修改",
+    "defaultValue": "默认值：{value}",
     "definedInConfig": "由 timon.config.json 指定",
     "forcedByEnv": "由环境变量强制指定",
-    "default": "默认值",
     "empty": "（空）",
-    "enabled": "已启用",
-    "disabled": "已停用",
     "save": "保存",
     "defaultBtn": "默认值",
     "outOfRange": "应介于 {min} 和 {max} 之间",
@@ -1562,6 +1560,10 @@
   },
   "settingsDialog": {
     "backToSettings": "返回设置",
+    "navGroup": {
+      "agents": "智能体",
+      "machine": "这台电脑"
+    },
     "close": "关闭",
     "unsavedKept": "上次更改尚未保存。请保存，或点击 × 或按 Esc 关闭并放弃更改。",
     "category": {

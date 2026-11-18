@@ -281,6 +281,9 @@ export function setupBackends(
     const signIn = cli.signInCommand ?? name;
     // The vendor's line starts with the program: it is replaced by the path the daemon resolved.
     const [program = name, ...rest] = signIn.split(' ');
+    // A line may name a sibling of the card's binary (`hermes setup` beside `hermes-acp`): that
+    // program is resolved on its own, since the card's path would run the wrong one (TIM-0159).
+    const programPath = program === name ? path : locate(program);
     const version = versions(name, path);
     // A generation the provider does not support: its installer would replace it, so none is offered.
     const plan = cli.installer && !version.unsupportedVersion ? installBackendPlanFor(name, platform) : null;
@@ -295,7 +298,7 @@ export function setupBackends(
       installable: plan !== null,
       installCommand: plan?.display ?? null,
       installDocs: cli.installDocs ?? null,
-      signInCommand: signInLine([invocation(path, program, platform), ...rest].join(' '), cli.signInEnv, platform),
+      signInCommand: signInLine([invocation(programPath, program, platform), ...rest].join(' '), cli.signInEnv, platform),
       signInThen: cli.signInThen ?? null,
       seedsMainAgent: cli.seedsMainAgent,
       ...version,

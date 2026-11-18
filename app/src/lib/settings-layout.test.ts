@@ -8,6 +8,9 @@ import {
   parseSettingsParam,
   placeSetting,
   resolveSettingsTarget,
+  SETTINGS_CATEGORY_IDS,
+  SETTINGS_NAV_GROUPS,
+  STATIC_TABS,
   type SettingsLayoutInput,
   type SettingsRowLike,
 } from './settings-layout';
@@ -69,12 +72,13 @@ test('Wake and Missions share one tab; the digest joins memory injection', () =>
   const execution = missions.tabs.find((t) => t.id === 'execution');
   assert.ok(execution && execution.kind === 'rows');
   assert.deepEqual(execution.keys, ['TIMON_MAX_LIVE_MISSIONS', 'TIMON_WAKE_SWEEP_MS']);
-  assert.deepEqual(tabIds(layout, 'memory'), ['obsidian', 'injection']);
+  assert.deepEqual(tabIds(layout, 'memory'), ['injection', 'obsidian']);
 });
 
-test('Memory opens on the Obsidian tab', () => {
+test('Memory opens on Injection, where its master switch is; the vault comes last', () => {
   const layout = buildSettingsLayout(input());
-  assert.equal(resolveSettingsTarget({ category: 'memory', tab: null }, layout)?.tab.id, 'obsidian');
+  assert.equal(resolveSettingsTarget({ category: 'memory', tab: null }, layout)?.tab.id, 'injection');
+  assert.equal(tabIds(layout, 'memory').at(-1), 'obsidian');
 });
 
 test('advanced rows are always listed, except under a preset that hides the zone', () => {
@@ -254,8 +258,8 @@ test('the GPT-Live switch lives in the Voice pane, not in a tab of its own under
 test('the instructions have a category of their own, third in the list', () => {
   const layout = buildSettingsLayout(input());
   assert.equal(layout[2]!.id, 'instructions');
-  assert.deepEqual(layout[2]!.tabs.map((t) => [t.id, t.kind]), [['preamble', 'native'], ['global', 'native']]);
-  assert.equal(resolveSettingsTarget({ category: 'instructions', tab: null }, layout)?.tab.id, 'preamble');
+  assert.deepEqual(layout[2]!.tabs.map((t) => [t.id, t.kind]), [['global', 'native'], ['preamble', 'native']]);
+  assert.equal(resolveSettingsTarget({ category: 'instructions', tab: null }, layout)?.tab.id, 'global');
   assert.equal(parseSettingsParam('instructions')?.category, 'instructions');
 });
 
@@ -274,4 +278,19 @@ test('the Updates pane sits under System, after Installation, for every account'
   // The module off: its pane goes, and its rows with it.
   const off = buildSettingsLayout(input({ rows: [row, notices], plugins: [], pluginStates: new Map([['@timon/updates', 'disabled']]) }));
   assert.equal(off.some((c) => c.id === 'system'), false);
+});
+
+test('every category with tabs sits in exactly one nav group', () => {
+  const grouped = SETTINGS_NAV_GROUPS.flatMap((group) => group.categories);
+  assert.equal(new Set(grouped).size, grouped.length);
+  assert.deepEqual(new Set(grouped), new Set(Object.keys(STATIC_TABS)));
+});
+
+test('the categories read workspace, agents, this computer, plugins', () => {
+  assert.deepEqual([...SETTINGS_CATEGORY_IDS], [
+    'interface',
+    'models', 'instructions', 'memory', 'missions', 'resources',
+    'network', 'secrets', 'system',
+    'plugins',
+  ]);
 });
