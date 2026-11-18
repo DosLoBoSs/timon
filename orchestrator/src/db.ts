@@ -2042,6 +2042,31 @@ if (!integrationCols.includes('notified_state')) {
   db.exec(`ALTER TABLE integrations ADD COLUMN notified_state TEXT`);
   db.exec(`UPDATE integrations SET notified_state = state WHERE state IN ('merged', 'closed')`);
 }
+// The relecture of a contributor's pull request (`external-pr-review.ts`): one
+// row per pull request, the latest one. 'draft' holds the brief the person
+// reads before sending it; 'running' names the reviewer's mission; 'done' or
+// 'failed' keep the verdict it came back with.
+db.exec(`
+CREATE TABLE IF NOT EXISTS external_pr_reviews (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  repo TEXT NOT NULL,
+  pr_number INTEGER NOT NULL,
+  state TEXT NOT NULL,
+  agent TEXT NOT NULL,
+  brief TEXT NOT NULL,
+  diff_path TEXT,
+  head_sha TEXT,
+  pr_updated_at TEXT,
+  mission_id TEXT,
+  verdict TEXT,
+  report TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (project, repo, pr_number)
+);
+CREATE INDEX IF NOT EXISTS external_pr_reviews_mission ON external_pr_reviews(mission_id);
+`);
 if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
 // A writer that changes the reason without naming its code (an agent's own
 // reason, a statement written before the column) must not leave

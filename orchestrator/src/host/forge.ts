@@ -2,7 +2,9 @@
  * The forge, as the daemon reaches it to open a pull request
  * (`docs/KANBAN-PR-PIPELINE.md` §2.5, §7.2): the account `gh` signs in as, the
  * pull request it creates or reads back, and the three git gestures that talk
- * to the remote (read a remote branch, fetch, push).
+ * to the remote (read a remote branch, fetch, push). It also reads, and only
+ * reads, the open pull requests of a repository, contributors' ones included:
+ * their metadata and their diff as text, never their branch.
  *
  * This is the only place `gh` and the network side of `git` are called for a
  * pull request. Every command goes through a runner the tests replace: nothing
@@ -79,11 +81,63 @@ export type PullRequestStateOutcome =
   | { ok: true; state: PullRequestState; mergeSha: string | null }
   | { ok: false; code: 'gh_missing' | 'gh_failed' | 'timed_out' | 'unexpected_answer'; reason: string };
 
-/** What the forge says of a pull request already opened. Metadata only: the
- *  poller decides a merge from git, and asks this when git cannot tell. */
-export interface ForgeReader {
+type ForgeReadFailure = { ok: false; code: 'gh_missing' | 'gh_failed' | 'timed_out' | 'unexpected_answer'; reason: string };
+
+/** One open pull request of a repository, as a list shows it. Every text in
+ *  it was written by whoever opened the pull request: data, never an order. */
+export type PullRequestSummary = {
+  number: number;
+  title: string;
+  /** Login of the author, null for a deleted account. */
+  author: string | null;
+  url: string;
+  isDraft: boolean;
+  /** ISO date of the last change GitHub saw. */
+  updatedAt: string;
+  /** Owner of the repository the branch comes from: another one is a fork. */
+  headOwner: string | null;
+};
+
+export type PullRequestListOutcome = { ok: true; pulls: PullRequestSummary[] } | ForgeReadFailure;
+
+export type PullRequestComment = { author: string | null; body: string };
+
+/** What a relecture brief needs of a pull request, as the forge answers it. */
+export type PullRequestDetails = PullRequestSummary & {
+  body: string;
+  baseRef: string;
+  headRef: string;
+  headSha: string | null;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  comments: PullRequestComment[];
+};
+
+export type PullRequestDetailsOutcome = { ok: true; pull: PullRequestDetails } | ForgeReadFailure;
+
+export type PullRequestDiffOutcome = { ok: true; diff: string; truncated: boolean } | ForgeReadFailure;
+
+/**
+ * What the forge says of a pull request, read only. The poller decides a merge
+ * from git and asks `pullRequest` when git cannot tell; the list, the details
+ * and the diff serve the relecture of a contributor's pull request, whose code
+ * is never fetched, checked out or run here: the diff is text.
+ */
+export interface ForgeStateReader {
   pullRequest(repo: string, number: number): Promise<PullRequestStateOutcome>;
 }
+
+export interface ForgeReader extends ForgeStateReader {
+  listOpenPullRequests(repo: string): Promise<PullRequestListOutcome>;
+  pullRequestDetails(repo: string, number: number): Promise<PullRequestDetailsOutcome>;
+  pullRequestDiff(repo: string, number: number): Promise<PullRequestDiffOutcome>;
+}
+
+/** Most pull requests a list asks for: a page, not the whole history. */
+export const PULL_LIST_LIMIT = 100;
+/** Most bytes of a diff kept: past it the text is cut and said so. */
+export const PULL_DIFF_LIMIT = 2 * 1024 * 1024;
 
 const GITHUB_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const COMMIT_SHA = /^[0-9a-f]{40,64}$/;
@@ -102,6 +156,69 @@ export function parsePullRequestView(stdout: string): { state: PullRequestState;
   return { state: known, mergeSha: typeof oid === 'string' && COMMIT_SHA.test(oid) ? oid : null };
 }
 
+function text(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function login(value: unknown): string | null {
+  const l = typeof value === 'object' && value !== null ? (value as { login?: unknown }).login : null;
+  return typeof l === 'string' && l.length > 0 ? l : null;
+}
+
+function count(value: unknown): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+/** One pull request of `gh pr list|view --json`, or null when the entry is
+ *  not one: a number and an address are the least it must carry. */
+function summaryFrom(entry: unknown): PullRequestSummary | null {
+  if (typeof entry !== 'object' || entry === null) return null;
+  const e = entry as Record<string, unknown>;
+  if (typeof e.number !== 'number' || !Number.isSafeInteger(e.number) || e.number <= 0) return null;
+  if (typeof e.url !== 'string' || !/^https:\/\//.test(e.url)) return null;
+  return {
+    number: e.number,
+    title: text(e.title),
+    author: login(e.author),
+    url: e.url,
+    isDraft: e.isDraft === true,
+    updatedAt: text(e.updatedAt),
+    headOwner: login(e.headRepositoryOwner),
+  };
+}
+
+/** The open pull requests `gh pr list --json` answers, or null. */
+export function parsePullRequestList(stdout: string): PullRequestSummary[] | null {
+  let parsed: unknown;
+  try { parsed = JSON.parse(stdout); } catch { return null; }
+  if (!Array.isArray(parsed)) return null;
+  return parsed.map(summaryFrom).filter((p): p is PullRequestSummary => p !== null);
+}
+
+/** The details `gh pr view --json` answers, or null. */
+export function parsePullRequestDetails(stdout: string): PullRequestDetails | null {
+  let parsed: unknown;
+  try { parsed = JSON.parse(stdout); } catch { return null; }
+  const summary = summaryFrom(parsed);
+  if (!summary) return null;
+  const e = parsed as Record<string, unknown>;
+  const comments = Array.isArray(e.comments) ? e.comments : [];
+  const oid = text(e.headRefOid);
+  return {
+    ...summary,
+    body: text(e.body),
+    baseRef: text(e.baseRefName),
+    headRef: text(e.headRefName),
+    headSha: COMMIT_SHA.test(oid) ? oid : null,
+    additions: count(e.additions),
+    deletions: count(e.deletions),
+    changedFiles: count(e.changedFiles),
+    comments: comments
+      .filter((c): c is Record<string, unknown> => typeof c === 'object' && c !== null)
+      .map((c) => ({ author: login(c.author), body: text(c.body) })),
+  };
+}
+
 const PULL_URL = /https:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/(\d+)/;
 
 function pullRequestFrom(text: string): PullRequestRef | null {
@@ -113,8 +230,68 @@ function pullRequestFrom(text: string): PullRequestRef | null {
 /** GitHub through `gh`, signed in with the project's config folder. */
 export function githubForge(configDir: string | null, runners: ForgeRunners = {}): Forge & ForgeReader {
   const gh = runners.gh ?? hostGh;
+  // Read-only `gh` calls: one shape for every failure, nothing secret in it.
+  const read = async (args: string[], maxBuffer?: number): Promise<{ ok: true; result: ExecResult } | ForgeReadFailure> => {
+    let result: ExecResult;
+    try {
+      result = await gh(args, { env: ghEnv(configDir), timeout: GH_TIMEOUT_MS, windowsHide: true, ...(maxBuffer ? { maxBuffer } : {}) });
+    } catch {
+      return { ok: false, code: 'gh_missing', reason: 'the GitHub CLI (gh) was not found on this machine' };
+    }
+    if (result.timedOut) return { ok: false, code: 'timed_out', reason: 'gh did not answer in time' };
+    return { ok: true, result };
+  };
+  const failed = (result: ExecResult): ForgeReadFailure => ({
+    ok: false, code: 'gh_failed', reason: redactedOutput(result.stderr || result.stdout) || `gh exited with code ${result.code}`,
+  });
+  const badTarget = (repo: string, number?: number): ForgeReadFailure | null =>
+    !GITHUB_REPO.test(repo) || (number !== undefined && (!Number.isSafeInteger(number) || number <= 0))
+      ? { ok: false, code: 'unexpected_answer', reason: 'not a pull request of a GitHub repository' }
+      : null;
   return {
     login: () => ghLogin(configDir, gh),
+    async listOpenPullRequests(repo) {
+      const bad = badTarget(repo);
+      if (bad) return bad;
+      const out = await read([
+        'pr', 'list', `--repo=${repo}`, '--state=open', `--limit=${PULL_LIST_LIMIT}`,
+        '--json=number,title,author,url,isDraft,updatedAt,headRepositoryOwner',
+      ]);
+      if (!out.ok) return out;
+      if (out.result.code !== 0) return failed(out.result);
+      const pulls = parsePullRequestList(out.result.stdout);
+      return pulls
+        ? { ok: true, pulls }
+        : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer a list of pull requests' };
+    },
+    async pullRequestDetails(repo, number) {
+      const bad = badTarget(repo, number);
+      if (bad) return bad;
+      const out = await read([
+        'pr', 'view', String(number), `--repo=${repo}`,
+        '--json=number,title,author,url,isDraft,updatedAt,headRepositoryOwner,body,baseRefName,headRefName,headRefOid,additions,deletions,changedFiles,comments',
+      ]);
+      if (!out.ok) return out;
+      if (out.result.code !== 0) return failed(out.result);
+      const pull = parsePullRequestDetails(out.result.stdout);
+      return pull
+        ? { ok: true, pull }
+        : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer the details of a pull request' };
+    },
+    async pullRequestDiff(repo, number) {
+      const bad = badTarget(repo, number);
+      if (bad) return bad;
+      // Text from the forge's API: the contributor's branch never reaches this
+      // machine's git, so nothing of it can run here.
+      const out = await read(['pr', 'diff', String(number), `--repo=${repo}`, '--color=never'], PULL_DIFF_LIMIT + 1024);
+      if (!out.ok) return out;
+      const { result } = out;
+      // Past the buffer the command is stopped with what it printed so far.
+      const overran = result.code !== 0 && /maxBuffer/i.test(result.stderr) && result.stdout.length > 0;
+      if (result.code !== 0 && !overran) return failed(result);
+      const truncated = overran || result.stdout.length > PULL_DIFF_LIMIT;
+      return { ok: true, diff: truncated ? result.stdout.slice(0, PULL_DIFF_LIMIT) : result.stdout, truncated };
+    },
     async pullRequest(repo, number) {
       if (!GITHUB_REPO.test(repo) || !Number.isSafeInteger(number) || number <= 0) {
         return { ok: false, code: 'unexpected_answer', reason: 'not a pull request of a GitHub repository' };

@@ -25,6 +25,8 @@ import { todoApi, type TodoApi } from './todo-api.js';
 import { registerAttachmentRoutes } from './attachment-routes.js';
 import { registerIntegrationRoutes } from './integration-routes.js';
 import { registerPrRoutes } from './pr-routes.js';
+import { registerExternalPrRoutes } from './external-pr-routes.js';
+import { watchReviewMissions } from '../../external-pr-review.js';
 import { dbApi } from '../../db.js';
 import {
   purgeOrphanTaskAttachments, purgeOrphanTodoAttachments, watchTaskDeletions, watchTodoDeletions,
@@ -54,6 +56,7 @@ export function apply(ctx: Context): void {
   registerAttachmentRoutes(ctx.http.router());
   registerIntegrationRoutes(ctx.http.router());
   registerPrRoutes(ctx.http.router());
+  registerExternalPrRoutes(ctx.http.router());
 
   // `kanban` service: ordering token for the modules that create tasks
   // (`routines`) or extend the pipeline (`kanban-code`). It will carry the
@@ -74,6 +77,8 @@ export function apply(ctx: Context): void {
   // Learns when the pull request of a job is merged or closed; reaches the
   // network only while one is open.
   ctx.effect(() => startIntegrationPoller());
+  // Brings the verdict of a pull request's relecture back to its row.
+  ctx.effect(() => watchReviewMissions());
 
   // A card's files live as long as the card. The sweep catches the cards
   // deleted while this module was off.
