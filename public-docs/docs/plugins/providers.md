@@ -372,6 +372,13 @@ program for your operating system can be installed; those that need a package
 runner (`npx`, `uvx`) or an archive format Timon cannot open are listed with
 the reason.
 
+The installed agent carries the logo the registry publishes for it, in the list
+of providers and in the model picker. Timon downloads the logo once, at install,
+and checks it like any provider logo; a single-colour logo takes the colour of
+the surrounding text, so it stays readable in the light and the dark theme. An
+agent whose logo cannot be downloaded or is refused installs anyway, with its
+initial instead.
+
 Each agent of the catalog reads in one line: what is installed on this
 computer and what the registry offers, for example *Installed 1.4.1 without a
 published checksum · verified 1.5.0 available to replace it*.
