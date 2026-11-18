@@ -11,6 +11,7 @@
  * holds it until it is unloaded.
  */
 import type { Response } from 'express';
+import { bus } from '../bus.js';
 import { dbApi } from '../db.js';
 import { DuplicateEmailError } from '../users/errors.js';
 import { assertAccountWrite, LicenseCapabilityError } from '../license/capabilities.js';
@@ -115,6 +116,11 @@ export function createAccountProviderFacade(opts: {
         });
       } catch (err) {
         if (err instanceof DuplicateEmailError) throw new AccountProviderError('duplicate', 'an account already uses this e-mail');
+        // The licence funnel counts it here, where every account provider's
+        // creation is refused, whatever route of the plugin asked.
+        if (err instanceof LicenseCapabilityError && (err.code === 'user_limit' || err.code === 'single_superadmin_required')) {
+          bus.publish({ kind: 'account_limit_reached', userId: opts.callerUserId?.() ?? null });
+        }
         // The licence quota and the composition refusals carry their own message.
         throw new AccountProviderError('refused', (err as Error).message);
       }
