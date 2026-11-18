@@ -59,11 +59,15 @@ export function integrationBranchRefusal(name: string): string | null {
 }
 
 /**
- * The default integration branch of a job: `feat/<slug>` from its title, or
- * `sec/<slug>` for a fix under embargo. Ids and accents are dropped; null when
- * nothing usable is left, in which case the caller names the branch itself.
+ * The default integration branch of a job: `feat/<slug>` from its title (or
+ * the project's own `prefix`), or `sec/<slug>` for a fix under embargo, whatever
+ * the prefix. Ids and accents are dropped; null when nothing usable is left, in
+ * which case the caller names the branch itself.
  */
-export function integrationBranchName(title: string, opts: { embargo?: boolean } = {}): string | null {
+export function integrationBranchName(
+  title: string,
+  opts: { embargo?: boolean; prefix?: string } = {},
+): string | null {
   const words = title
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
@@ -78,7 +82,7 @@ export function integrationBranchName(title: string, opts: { embargo?: boolean }
     slug = next;
   }
   if (!slug) return null;
-  const name = `${opts.embargo ? 'sec' : 'feat'}/${slug}`;
+  const name = `${opts.embargo ? 'sec/' : opts.prefix ?? 'feat/'}${slug}`;
   return integrationBranchRefusal(name) ? null : name;
 }
 

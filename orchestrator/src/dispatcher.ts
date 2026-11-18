@@ -46,7 +46,10 @@ import {
 import { MissionFenceRefusedError, profileLimits } from './resources.js';
 import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal } from './code-gate.js';
 import { GIT_MISSING_MESSAGE, GIT_MISSING_REASON, gitTaskRefusal } from './task-git.js';
-import { ensureIntegrationBranch, usesIntegrationBranch } from './git-integration.js';
+import {
+  ensureIntegrationBranch, integrationBranchName, integrationBranchRefusal, usesIntegrationBranch, type IntegrationMode,
+} from './git-integration.js';
+import { integrationBaseRef, readProjectIntegration } from './project-integration.js';
 import { chainLanding } from './chain-landing.js';
 import { spawnWideningRefusal } from './users/privileged-overrides.js';
 import { isMirrorTask } from './task-mirror.js';
@@ -878,6 +881,60 @@ export function inheritedIntegration(task: TaskRow): { mode: string | null; base
   return null;
 }
 
+/** How a root task lands, read from its project's setting. */
+export type ProjectLanding =
+  | { kind: 'local' }
+  | { kind: 'integration'; mode: Extract<IntegrationMode, 'branch' | 'pr'>; baseRef: string; branch: string }
+  | { kind: 'refused'; branch: string; baseRef: string; detail: string };
+
+/**
+ * The project's integration setting (`project-integration.ts`) applied to a
+ * task that starts a chain. No setting, a project Timon does not know or mode
+ * `local`: `local`, and nothing is written, as before the setting existed.
+ *
+ * Mode `pr`: the chain is cut from `<remote>/<target>` on the task's own base
+ * when it names one (the series plan gives every volet the branch of the job),
+ * else on `<prefix><slug of its title>`. A base under embargo (`sec/`) lands by
+ * hand (`branch`), never through a pull request. Refused, never guessed: a
+ * setting that no longer validates, a base that is the target itself, a name
+ * that is not a valid public branch.
+ */
+export function projectLanding(task: Pick<TaskRow, 'project' | 'agent_name' | 'base_branch' | 'title'>): ProjectLanding {
+  let cfg: AgentConfig | null = null;
+  try { cfg = loadConfig(task.agent_name); } catch { /* unknown agent: no project from it */ }
+  const slug = taskProjectSlug(task, cfg);
+  if (!slug) return { kind: 'local' };
+  let read: ReturnType<typeof readProjectIntegration>;
+  try { read = readProjectIntegration(slug); } catch { return { kind: 'local' }; }
+  const branchShown = task.base_branch ?? 'none';
+  if (read.invalid) {
+    return {
+      kind: 'refused', branch: branchShown, baseRef: 'none',
+      detail: `the integration setting of project ${slug} is invalid (${read.invalid}); fix it with \`timon project set-integration\``,
+    };
+  }
+  const setting = read.integration;
+  if (setting.mode !== 'pr') return { kind: 'local' };
+  const baseRef = integrationBaseRef(setting);
+  const branch = task.base_branch ?? integrationBranchName(task.title, { prefix: setting.branch_prefix });
+  if (!branch) {
+    return {
+      kind: 'refused', branch: 'none', baseRef,
+      detail: 'no branch name can be drawn from the task title; give the task a base (--base <prefix><topic>)',
+    };
+  }
+  if (branch === setting.target || branch === baseRef) {
+    return {
+      kind: 'refused', branch, baseRef,
+      detail: `project ${slug} lands through a pull request into ${setting.target}, so its jobs start from an ` +
+        `integration branch, never from ${setting.target} itself; remove the base or name a topic branch`,
+    };
+  }
+  const refusal = integrationBranchRefusal(branch);
+  if (refusal) return { kind: 'refused', branch, baseRef, detail: refusal };
+  return { kind: 'integration', mode: branch.startsWith('sec/') ? 'branch' : 'pr', baseRef, branch };
+}
+
 /**
  * Makes sure the base a `code` or `merge` task starts from exists, and BLOCKS
  * the task when it cannot (true = blocked). Before this, a missing base made
@@ -885,8 +942,9 @@ export function inheritedIntegration(task: TaskRow): { mode: string | null; base
  * in the shared checkout (`docs/KANBAN-PR-PIPELINE.md` §3.4).
  *
  * - The chain's `integration_mode` / `base_ref` are frozen on the task first,
- *   from the task itself or the chain it belongs to. A later step reads the
- *   project's setting here for a root task that carries neither.
+ *   from the task itself or the chain it belongs to. A task that starts a chain
+ *   (no ancestor carries a base) takes them from its project's setting
+ *   (`projectLanding`); a project in `local` mode writes nothing.
  * - An integration branch (`branch`, `pr`) is created from the remote ref,
  *   without a checkout; no remote, an unreachable one or a missing target
  *   blocks the task with the reason — never a fallback on the local base.
@@ -905,6 +963,29 @@ export async function blockIfBaseUnavailable(task: TaskRow): Promise<boolean> {
       dbApi.setTaskIntegration(task.id, inherited.mode, inherited.baseRef);
       task.integration_mode = inherited.mode;
       task.base_ref = inherited.baseRef;
+    } else if (!inheritedBase(task)) {
+      // A chain already under way (an ancestor has a base) keeps the mode it
+      // started with: a setting changed mid-way never splits a chain.
+      const landing = projectLanding(task);
+      if (landing.kind === 'refused') {
+        const reason =
+          `Integration branch ${landing.branch} is unavailable: ${landing.detail}. The task was not started, ` +
+          `and the branch is never cut from the local base instead of ${landing.baseRef}. Fix the remote or ` +
+          `the branch name, then retry the task.`;
+        blockTask(task, reason, daemonMessage('integration_branch_unavailable', {
+          branch: landing.branch, baseRef: landing.baseRef, detail: landing.detail,
+        }));
+        return true;
+      }
+      if (landing.kind === 'integration') {
+        dbApi.setTaskIntegration(task.id, landing.mode, landing.baseRef);
+        task.integration_mode = landing.mode;
+        task.base_ref = landing.baseRef;
+        if (!task.base_branch) {
+          dbApi.setTaskBaseBranch(task.id, landing.branch);
+          task.base_branch = landing.branch;
+        }
+      }
     }
   }
   const base = task.base_branch ?? inheritedBase(task);
