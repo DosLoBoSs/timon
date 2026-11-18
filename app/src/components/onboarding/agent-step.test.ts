@@ -153,7 +153,7 @@ async function renderStep(profile: string | null, run: (r: Rendered) => Promise<
     const nav = {
       step: 'agent' as const, direction: 1 as const,
       next: () => { nexts += 1; }, back: () => undefined, goTo: () => undefined,
-      setLanguage: async (tag: string) => tag, setBackHandler: () => undefined,
+      setLanguage: async (tag: string) => tag, setBackHandler: () => undefined, skip: () => undefined, setOutcome: () => undefined,
     };
     const host = document.getElementById('root');
     assert.ok(host);

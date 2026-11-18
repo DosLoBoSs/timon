@@ -13,7 +13,7 @@ import { getLocale, setLocale, t } from '@/lib/i18n';
 import type { InstallJob, ProviderCli } from '@/lib/provider-clis';
 import { waitUntil } from '@/lib/test-wait';
 import { formatList } from '@/lib/intl';
-import { LEGAL_LINKS, llmBack, planStatus, readyNames, splitAtSlots, subscriptionProviders } from './llm-choice';
+import { LEGAL_LINKS, llmBack, llmOutcome, planStatus, readyNames, splitAtSlots, subscriptionProviders } from './llm-choice';
 
 function cli(name: string, over: Partial<ProviderCli> = {}): ProviderCli {
   return {
@@ -39,6 +39,24 @@ test('the status line and "Continue" follow the provider list', () => {
     cli('codex', { label: 'Codex', path: '/bin/codex', signedIn: false }),
   ]);
   assert.deepEqual(ready, { canContinue: true, anyway: false, line: { kind: 'ready', names: ['Claude Code'] } }, '"Continue anyway" goes once an AI is there');
+});
+
+test('the funnel hears the choice, the CLI the chat would start on, or why there is none', () => {
+  assert.deepEqual(llmOutcome('local', undefined), { llmChoice: 'local', connection: 'unknown' });
+  assert.deepEqual(llmOutcome('plan', null), { llmChoice: 'plan', connection: 'failed', failureCode: 'unreachable' });
+  assert.deepEqual(llmOutcome('plan', [
+    cli('codex', { path: '/bin/codex', signedIn: null }),
+    cli('claude', { path: '/bin/claude', signedIn: true }),
+  ]), { llmChoice: 'plan', connection: 'ok', backend: 'claude' }, 'a signed-in CLI first');
+  assert.deepEqual(llmOutcome('plan', [cli('claude'), cli('codex', { path: '/bin/codex', signedIn: false })]),
+    { llmChoice: 'plan', connection: 'failed', failureCode: 'signed_out', backend: 'codex' });
+  assert.deepEqual(llmOutcome('plan', [cli('claude'), cli('codex')]),
+    { llmChoice: 'plan', connection: 'failed', failureCode: 'not_installed' });
+  // A name outside the shape the daemon accepts is left out, so the event is not refused whole.
+  assert.deepEqual(llmOutcome('plan', [cli('My CLI', { path: '/opt/x', signedIn: true })]), { llmChoice: 'plan', connection: 'ok' });
+  for (const detail of [llmOutcome('plan', [cli('claude', { path: '/home/someone/.local/bin/claude', signedIn: true })])]) {
+    assert.equal(JSON.stringify(detail).includes('/'), false, 'never a path');
+  }
 });
 
 test('"Ready with …" names only what "Continue" counts, signed-in ones first', () => {

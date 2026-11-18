@@ -68,6 +68,7 @@ type Harness = {
   click: (el: Element | null | undefined) => Promise<void>;
   key: (name: string) => Promise<void>;
   nexts: () => number;
+  skips: () => number;
 };
 
 async function renderDiscover(run: (h: Harness) => Promise<void>, agent: MainAgentState = AGENT): Promise<void> {
@@ -76,9 +77,11 @@ async function renderDiscover(run: (h: Harness) => Promise<void>, agent: MainAge
     const { OnboardingProvider } = await import('./onboarding-context');
     const { DiscoverStep } = await import('./steps/discover');
     let nexts = 0;
+    let skips = 0;
     const nav = {
       step: 'discover' as const, direction: 1 as const,
       next: () => { nexts += 1; }, back: () => {}, goTo: () => {},
+      skip: () => { skips += 1; }, setOutcome: () => {},
       setLanguage: async (tag: string) => tag, setBackHandler: () => {},
     };
     const host = document.getElementById('root');
@@ -96,7 +99,7 @@ async function renderDiscover(run: (h: Harness) => Promise<void>, agent: MainAge
       await React.act(async () => {
         root.render(React.createElement(OnboardingProvider, { value: nav }, React.createElement(DiscoverStep, { loadAgent })));
       });
-      await run({ host, click, key, nexts: () => nexts });
+      await run({ host, click, key, nexts: () => nexts, skips: () => skips });
     } finally {
       await React.act(async () => { root.unmount(); });
     }
@@ -129,13 +132,14 @@ test('"Next" walks the slides; the last one leaves for the welcome, named after 
 });
 
 test('"Skip all" leaves from the first slide; a progress bar jumps to its slide', async () => {
-  await renderDiscover(async ({ host, click, nexts }) => {
+  await renderDiscover(async ({ host, click, nexts, skips }) => {
     await click(host.querySelectorAll('[data-segment]')[2]);
     assert.equal(slideOf(host), 'projects', 'the third bar opens the third slide');
     await click(host.querySelectorAll('[data-segment]')[0]);
     assert.equal(slideOf(host), 'autonomous');
     await click(host.querySelector('[data-discover-skip]'));
-    assert.equal(nexts(), 1);
+    assert.equal(skips(), 1, 'the funnel counts it skipped, not completed');
+    assert.equal(nexts(), 0);
   });
 });
 

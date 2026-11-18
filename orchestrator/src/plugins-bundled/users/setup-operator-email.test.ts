@@ -19,6 +19,8 @@ process.env.TIMON_RESOURCE_GUARD_ENABLED = '0';
 const { createDaemonAuthMiddleware } = await import('../http/auth.js');
 const { registerRoutes } = await import('./routes.js');
 const { dbApi } = await import('../../db.js');
+const { bus } = await import('../../bus.js');
+type BusEvent = import('../../bus.js').BusEvent;
 
 const TOKEN = 'witness-daemon-token';
 const daemon = express();
@@ -31,6 +33,9 @@ const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 test.after(() => { server.close(); });
 
 test('the operator\'s setup keeps the address unconfirmed', async () => {
+  const heard: BusEvent[] = [];
+  const listen = (ev: BusEvent): void => { if (ev.kind === 'onboarding_step') heard.push(ev); };
+  bus.on('event', listen);
   const res = await fetch(`${base}/api/auth/setup`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${TOKEN}` },
@@ -40,4 +45,7 @@ test('the operator\'s setup keeps the address unconfirmed', async () => {
   const user = dbApi.getUserByEmail('owner@example.com');
   assert.ok(user);
   assert.equal(dbApi.userEmailUnverified(user.id), true);
+  bus.off('event', listen);
+  // The funnel tells this account from one whose address was confirmed by its code.
+  assert.deepEqual(heard, [{ kind: 'onboarding_step', step: 'account', action: 'completed', via: 'operator' }]);
 });

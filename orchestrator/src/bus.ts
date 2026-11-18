@@ -8,7 +8,7 @@ import { ASSISTANT_DELTA } from './backends/types.js';
 import { redactDeep } from './secrets/redact.js';
 import { dropRedactStream, flushRedactStream, redactStreamChunk } from './secrets/redact-stream.js';
 import type { ProjectEventOrigin } from './plugins/contract/origin.js';
-import type { OnboardingStepAction, OnboardingStepName } from './onboarding-events.js';
+import type { OnboardingStepAction, OnboardingStepDetail, OnboardingStepName } from './onboarding-events.js';
 import type { UsageKind } from './onboarding-usage-kind.js';
 export type { ProjectEventOrigin } from './plugins/contract/origin.js';
 
@@ -116,10 +116,10 @@ export type BusEvent =
   // the same turn (a protocol driver confirms the launch turn): a listener
   // counting turns keys on the mission and ignores a start while one is open.
   | { kind: 'turn_started'; missionId: string; at: number }
-  // A first-run wizard step answered (`onboarding-events.ts`): step and outcome
-  // from closed lists, nothing the person typed. No `missionId`, so the
-  // browser stream never relays it.
-  | { kind: 'onboarding_step'; step: OnboardingStepName; action: OnboardingStepAction }
+  // A first-run wizard step answered (`onboarding-events.ts`): step, outcome
+  // and detail from closed lists, nothing the person typed. No `missionId`, so
+  // the browser stream never relays it.
+  | ({ kind: 'onboarding_step'; step: OnboardingStepName; action: OnboardingStepAction } & OnboardingStepDetail)
   // An account answered, or changed, who it uses Timon for
   // (`onboarding-usage-kind.ts`). No `missionId`: never relayed to a browser.
   | { kind: 'usage_kind_set'; usageKind: UsageKind; userId: string }
