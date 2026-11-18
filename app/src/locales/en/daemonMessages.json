@@ -273,6 +273,22 @@
     "command_to_decide": {
       "title": "Command to decide: {agent}"
     },
-    "task_auto_close_refused": "The mission ended without closing its task, and the automatic close was refused. {refusal}"
+    "task_auto_close_refused": "The mission ended without closing its task, and the automatic close was refused. {refusal}",
+    "telegram_worker_stopped": {
+      "title": "The Telegram worker {worker} stopped starting",
+      "body": "{restarts} restarts without staying up {seconds}s ({why}). Telegram messages are no longer picked up; check the bot tokens (`~/.timon/secrets.env`) and the daemon logs."
+    },
+    "web_app_port_occupied": {
+      "title": "The web app stopped starting",
+      "body": "{why}. Another listener is using the web app port. Timon keeps checking and starts the web app as soon as the port is free; close the previous Timon instance or change app.listen.port. No process was killed."
+    },
+    "web_app_clean_exit": {
+      "title": "The web app stopped starting",
+      "body": "{why}. The web app exited successfully but is no longer supervised. Check the daemon logs. Once fixed, `timon app restart` or reopening the desktop app starts it again."
+    },
+    "web_app_stopped": {
+      "title": "The web app stopped starting",
+      "body": "{why}. The web app could not stay running. Check the daemon logs for the startup error, exit code and signal. Once fixed, `timon app restart` or reopening the desktop app starts it again."
+    }
   }
 }

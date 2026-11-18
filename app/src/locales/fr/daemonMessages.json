@@ -273,6 +273,22 @@
     "command_to_decide": {
       "title": "Commande à décider : {agent}"
     },
-    "task_auto_close_refused": "La mission s’est terminée sans clore sa task, et la clôture automatique a été refusée. {refusal}"
+    "task_auto_close_refused": "La mission s’est terminée sans clore sa task, et la clôture automatique a été refusée. {refusal}",
+    "telegram_worker_stopped": {
+      "title": "Le worker Telegram {worker} ne démarre plus",
+      "body": "{restarts} redémarrages sans tenir {seconds} s ({why}). Les messages Telegram ne sont plus relevés : vérifiez les jetons des bots (`~/.timon/secrets.env`) et les journaux du daemon."
+    },
+    "web_app_port_occupied": {
+      "title": "L'app web ne démarre plus",
+      "body": "{why}. Un autre programme écoute sur le port de l'app web. Timon continue de vérifier et démarre l'app web dès que le port se libère ; fermez l'instance précédente de Timon ou changez app.listen.port. Aucun processus n'a été tué."
+    },
+    "web_app_clean_exit": {
+      "title": "L'app web ne démarre plus",
+      "body": "{why}. L'app web s'est arrêtée normalement mais n'est plus supervisée. Consultez les journaux du daemon. Une fois corrigé, `timon app restart` ou la réouverture de l'app desktop la relance."
+    },
+    "web_app_stopped": {
+      "title": "L'app web ne démarre plus",
+      "body": "{why}. L'app web n'a pas pu rester lancée. Cherchez dans les journaux du daemon l'erreur de démarrage, le code de sortie et le signal. Une fois corrigé, `timon app restart` ou la réouverture de l'app desktop la relance."
+    }
   }
 }
