@@ -72,7 +72,10 @@
       },
       "legal": "En continuant, vous acceptez les {terms} et prenez connaissance de la {privacy}.",
       "terms": "Conditions d’utilisation",
-      "privacy": "Politique de confidentialité"
+      "privacy": "Politique de confidentialité",
+      "telemetry": "Timon envoie des statistiques d’usage anonymes. {turnOff}",
+      "telemetryTurnOff": "Les désactiver",
+      "telemetryOff": "Statistiques d’usage désactivées. Réactivez-les dans {settingsPath}."
     },
     "profile": {
       "title": "Qu’est-ce qui vous amène ?",
