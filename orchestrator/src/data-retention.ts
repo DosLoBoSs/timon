@@ -62,7 +62,14 @@ function pruneLearningsFile(path: string, cutoff: number): number {
     rmSync(tmp, { force: true });
     return 0;
   }
-  renameSync(tmp, path);
+  try {
+    renameSync(tmp, path);
+  } catch (e) {
+    // Windows refuses to replace a file another process holds open: the
+    // agent's own append. The next pass tries again; no copy is left behind.
+    rmSync(tmp, { force: true });
+    throw e;
+  }
   return removed;
 }
 
