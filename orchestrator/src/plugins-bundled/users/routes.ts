@@ -41,6 +41,7 @@ import {
   forbidden,
   requireAuth,
   requestHasPermission,
+  requireSuperadmin,
   toPublicUser,
   viewerFromRequest,
   type PublicUser,
@@ -970,6 +971,18 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
   // provider. Administering accounts belongs to that provider plugin, not to the core.
   app.get('/api/users', operatorOnly, (_req, res) => {
     res.json({ users: dbApi.listUsers().map(toPublicUser) });
+  });
+
+  /**
+   * Who a superadmin can name on a shared subscription account (owner, people it
+   * is shared with): a signed-in superadmin, or the daemon token. Id and display
+   * name only, never an e-mail, a status or a date: the core owns the accounts
+   * table whatever plugin serves the accounts, and a Free install lists its one
+   * account without needing that plugin.
+   */
+  app.get('/api/users/directory', (req, res) => {
+    if (!requireSuperadmin(req, res)) return;
+    res.json({ users: dbApi.listUsers().map((user) => ({ id: user.id, name: user.name })) });
   });
 
   app.post('/api/users/:id/reset-password', operatorOnly, async (req, res) => {
