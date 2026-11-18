@@ -2029,6 +2029,14 @@ CREATE TABLE IF NOT EXISTS integrations (
 // replays it. NULL = not replayed yet.
 const integrationCols = (db.prepare(`PRAGMA table_info(integrations)`).all() as { name: string }[]).map((c) => c.name);
 if (!integrationCols.includes('landed_at')) db.exec(`ALTER TABLE integrations ADD COLUMN landed_at INTEGER`);
+// The last outcome of the pull request ('merged' or 'closed') its series pilot
+// was told about (`integration-poller.ts`): one notice per outcome, across
+// restarts. Rows already concluded when the column appears count as told, so
+// adding it never replays old news. NULL = nothing told yet.
+if (!integrationCols.includes('notified_state')) {
+  db.exec(`ALTER TABLE integrations ADD COLUMN notified_state TEXT`);
+  db.exec(`UPDATE integrations SET notified_state = state WHERE state IN ('merged', 'closed')`);
+}
 if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
 // A writer that changes the reason without naming its code (an agent's own
 // reason, a statement written before the column) must not leave
@@ -2367,6 +2375,8 @@ export type IntegrationRow = {
   last_polled_at: number | null;
   /** Landing replayed on the chains (see the `landed_at` migration). */
   landed_at: number | null;
+  /** Outcome the series pilot was told about (see the `notified_state` migration). */
+  notified_state?: string | null;
   created_at: number;
   updated_at: number;
 };
@@ -3039,6 +3049,27 @@ const listIntegrationsBySeriesStmt = db.prepare(
 const markIntegrationOpenStmt = db.prepare(`
   UPDATE integrations SET state = 'open', pr_number = ?, pr_url = ?, head_sha = ?, updated_at = ?
   WHERE id = ? AND state = 'branch'
+`);
+const listOpenIntegrationsStmt = db.prepare(
+  `SELECT * FROM integrations WHERE state = 'open' ORDER BY repo ASC, created_at ASC`,
+);
+// Only from 'open': a pull request merged is never taken back by a stale poll,
+// and a branch never opened has no pull request to close.
+const markIntegrationClosedStmt = db.prepare(
+  `UPDATE integrations SET state = 'closed', updated_at = ? WHERE id = ? AND state = 'open'`,
+);
+const touchIntegrationPolledStmt = db.prepare(`UPDATE integrations SET last_polled_at = ? WHERE id = ?`);
+const claimIntegrationNoticeStmt = db.prepare(`
+  UPDATE integrations SET notified_state = ?, updated_at = ?
+  WHERE id = ? AND state = ? AND (notified_state IS NULL OR notified_state != ?)
+`);
+const releaseIntegrationNoticeStmt = db.prepare(
+  `UPDATE integrations SET notified_state = NULL, updated_at = ? WHERE id = ? AND notified_state = ?`,
+);
+const listUnnotifiedIntegrationsStmt = db.prepare(`
+  SELECT * FROM integrations
+  WHERE state IN ('merged', 'closed') AND (notified_state IS NULL OR notified_state != state)
+  ORDER BY updated_at ASC
 `);
 const setTaskTodoIdStmt = db.prepare(
   `UPDATE tasks SET todo_id = ?, updated_at = ? WHERE id = ?`,
@@ -5603,6 +5634,30 @@ export const dbApi = {
    *  the row is gone or already past the 'branch' state. */
   markIntegrationOpen(id: string, pr: { number: number; url: string; headSha: string }): boolean {
     return markIntegrationOpenStmt.run(pr.number, pr.url, pr.headSha, Date.now(), id).changes > 0;
+  },
+  /** Integrations whose pull request is open: what the landing poller reads. */
+  listOpenIntegrations(): IntegrationRow[] {
+    return listOpenIntegrationsStmt.all() as IntegrationRow[];
+  },
+  /** The pull request was closed without a merge; false unless it was open. */
+  markIntegrationClosed(id: string): boolean {
+    return markIntegrationClosedStmt.run(Date.now(), id).changes === 1;
+  },
+  touchIntegrationPolled(id: string): void {
+    touchIntegrationPolledStmt.run(Date.now(), id);
+  },
+  /** Claims the notice of `state` ('merged' | 'closed'): true for one caller
+   *  only, and only while the row is in that state. */
+  claimIntegrationNotice(id: string, state: 'merged' | 'closed'): boolean {
+    return claimIntegrationNoticeStmt.run(state, Date.now(), id, state, state).changes === 1;
+  },
+  /** Hands back a notice that could not be sent. */
+  releaseIntegrationNotice(id: string, state: 'merged' | 'closed'): void {
+    releaseIntegrationNoticeStmt.run(Date.now(), id, state);
+  },
+  /** Concluded integrations whose pilot was not told yet. */
+  listUnnotifiedIntegrations(): IntegrationRow[] {
+    return listUnnotifiedIntegrationsStmt.all() as IntegrationRow[];
   },
   /** Repoint ONE requeued task at another backend and release it now. Unlike
    *  `updateTask`, a null model is written as null: COALESCE would keep the slug

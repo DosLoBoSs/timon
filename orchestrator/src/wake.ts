@@ -70,7 +70,7 @@ import { composePrompt } from './prompt-presentation.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { bus, type BusEvent } from './bus.js';
-import { CRASH_LOOP_HARD_CEILING, MAX_SYSTEM_REQUEUES, dbApi, type TaskRow, type AgentMessageRow, type MissionRow } from './db.js';
+import { CRASH_LOOP_HARD_CEILING, MAX_SYSTEM_REQUEUES, dbApi, type TaskRow, type AgentMessageRow, type MissionRow, type IntegrationRow } from './db.js';
 import { diedOfSystemCause } from './crash-loop.js';
 import { isRequeueableInterruption, requeueBackoffMs, toInterruptionReason } from './interruption.js';
 import { presentInboxDigest, isUrgentReturn, returnPayloadOf, type ReturnPayload } from './wake-digest.js';
@@ -104,6 +104,8 @@ import { mainAgentName, mainAgentNameOrSeed } from './main-agent.js';
 import { settingNum } from './settings.js';
 import { admitAgentMessage, clearAgentPairs, isHumanInput, resetAgentPairs } from './agent-pair-breaker.js';
 import { isMirrorTask } from './task-mirror.js';
+import { integrationOfTask } from './chain-landing.js';
+import { usesIntegrationBranch } from './git-integration.js';
 
 /** Aggregation window before a wake — absorbs bursts of task completions.
  *  Short (1 s) to keep the SLA "every inbox processed within a minute" while
@@ -1520,6 +1522,73 @@ export function evaluateGroupCompleteForTask(taskId: string): void {
   enqueueRecap(agent, task.mission_id, `Group complete: ${done.length}/${tasks.length} done`, lines.join('\n'), null,
     tasks.find((t) => t.owner_user_id)?.owner_user_id);
   scheduleWake(agent);
+}
+
+/** The tasks whose chain merges into `row`'s branch, newest first. */
+function tasksOfIntegration(row: IntegrationRow): TaskRow[] {
+  return dbApi.listTasksByBaseBranch(row.branch)
+    .filter((t) => usesIntegrationBranch(t.integration_mode) && integrationOfTask(t)?.id === row.id)
+    .reverse();
+}
+
+/**
+ * Tells the pilot of a job that its pull request was merged or closed
+ * (`docs/KANBAN-PR-PIPELINE.md` §2.6): once per outcome, whoever learnt it
+ * (the landing poller, a `mark-merged` by hand) and across restarts
+ * (`integrations.notified_state`, claimed before the message, handed back if
+ * it cannot be queued).
+ *
+ * The recap leaves from the mission of a task of the job, so routing by
+ * series delivers it to the series' current pilot, the mission that holds the
+ * plan, like a task return. `lines` adds what the caller knows (the landing
+ * replay). Returns false when there was nothing to tell. `wake` is injectable
+ * so a test can drive it without the wake loop.
+ */
+export function notifyIntegrationOutcome(
+  integrationId: string,
+  outcome: 'merged' | 'closed',
+  lines: readonly string[] = [],
+  wake: (agent: string) => void = scheduleWake,
+): boolean {
+  const row = dbApi.getIntegrationById(integrationId);
+  if (!row || row.state !== outcome) return false;
+  if (!dbApi.claimIntegrationNotice(row.id, outcome)) return false;
+  try {
+    const tasks = tasksOfIntegration(row);
+    const anchor = tasks.find((t) => t.mission_id && t.series_id) ?? tasks.find((t) => t.mission_id) ?? tasks[0];
+    const agent = anchor ? orchestratorForTask(anchor) : managerAgent();
+    const pr = row.pr_url ?? (row.pr_number ? `#${row.pr_number}` : null);
+    // A branch under embargo lands by hand, without a pull request.
+    const what = pr ? 'Pull request' : 'Integration branch';
+    const body = outcome === 'merged'
+      ? [
+          pr ? `Pull request merged: ${pr}` : `Integration branch landed by hand: ${row.branch}`,
+          `Branch \`${row.branch}\` landed in \`${row.remote}/${row.target}\`${row.merge_sha ? ` (merge commit \`${row.merge_sha}\`)` : ''}.`,
+          ...lines,
+          ``,
+          `The job's TO DO ideas and doc tasks follow on their own. Nothing to decide unless the plan goes on.`,
+        ]
+      : [
+          `Pull request closed without a merge: ${pr ?? row.branch}`,
+          `Branch \`${row.branch}\` did not land in \`${row.remote}/${row.target}\`: no TO DO idea closes, no doc task is created, the branches are kept.`,
+          ...lines,
+          ``,
+          `Decide what comes next: reopen it on the forge, plan a new pull request, or abandon the job.`,
+        ];
+    enqueueRecap(
+      agent,
+      anchor?.mission_id ?? null,
+      outcome === 'merged' ? `${what} merged: ${row.branch}` : `${what} closed: ${row.branch}`,
+      body.join('\n'),
+      anchor?.id ?? null,
+      tasks.find((t) => t.owner_user_id)?.owner_user_id,
+    );
+    wake(agent);
+    return true;
+  } catch (err) {
+    dbApi.releaseIntegrationNotice(row.id, outcome);
+    throw err;
+  }
 }
 
 function handleMissionComplete(missionId: string, status: 'completed' | 'failed' | 'terminated'): void {

@@ -1,8 +1,8 @@
 /**
  * The forge, as the daemon reaches it to open a pull request
  * (`docs/KANBAN-PR-PIPELINE.md` §2.5, §7.2): the account `gh` signs in as, the
- * pull request it creates, and the three git gestures that talk to the remote
- * (read a remote branch, fetch, push).
+ * pull request it creates or reads back, and the three git gestures that talk
+ * to the remote (read a remote branch, fetch, push).
  *
  * This is the only place `gh` and the network side of `git` are called for a
  * pull request. Every command goes through a runner the tests replace: nothing
@@ -73,6 +73,35 @@ export interface Forge {
   createPullRequest(input: PullRequestInput): Promise<CreatePullRequestOutcome>;
 }
 
+export type PullRequestState = 'open' | 'closed' | 'merged';
+
+export type PullRequestStateOutcome =
+  | { ok: true; state: PullRequestState; mergeSha: string | null }
+  | { ok: false; code: 'gh_missing' | 'gh_failed' | 'timed_out' | 'unexpected_answer'; reason: string };
+
+/** What the forge says of a pull request already opened. Metadata only: the
+ *  poller decides a merge from git, and asks this when git cannot tell. */
+export interface ForgeReader {
+  pullRequest(repo: string, number: number): Promise<PullRequestStateOutcome>;
+}
+
+const GITHUB_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const COMMIT_SHA = /^[0-9a-f]{40,64}$/;
+
+/** The state and merge commit `gh pr view --json` answers, or null when the
+ *  answer is not what gh prints. */
+export function parsePullRequestView(stdout: string): { state: PullRequestState; mergeSha: string | null } | null {
+  let parsed: unknown;
+  try { parsed = JSON.parse(stdout); } catch { return null; }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const { state, mergeCommit } = parsed as { state?: unknown; mergeCommit?: unknown };
+  const states: Record<string, PullRequestState> = { OPEN: 'open', CLOSED: 'closed', MERGED: 'merged' };
+  const known = typeof state === 'string' ? states[state] : undefined;
+  if (!known) return null;
+  const oid = typeof mergeCommit === 'object' && mergeCommit !== null ? (mergeCommit as { oid?: unknown }).oid : null;
+  return { state: known, mergeSha: typeof oid === 'string' && COMMIT_SHA.test(oid) ? oid : null };
+}
+
 const PULL_URL = /https:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/(\d+)/;
 
 function pullRequestFrom(text: string): PullRequestRef | null {
@@ -82,10 +111,32 @@ function pullRequestFrom(text: string): PullRequestRef | null {
 }
 
 /** GitHub through `gh`, signed in with the project's config folder. */
-export function githubForge(configDir: string | null, runners: ForgeRunners = {}): Forge {
+export function githubForge(configDir: string | null, runners: ForgeRunners = {}): Forge & ForgeReader {
   const gh = runners.gh ?? hostGh;
   return {
     login: () => ghLogin(configDir, gh),
+    async pullRequest(repo, number) {
+      if (!GITHUB_REPO.test(repo) || !Number.isSafeInteger(number) || number <= 0) {
+        return { ok: false, code: 'unexpected_answer', reason: 'not a pull request of a GitHub repository' };
+      }
+      let result: ExecResult;
+      try {
+        result = await gh(
+          ['pr', 'view', String(number), `--repo=${repo}`, '--json=state,mergeCommit'],
+          { env: ghEnv(configDir), timeout: GH_TIMEOUT_MS, windowsHide: true },
+        );
+      } catch {
+        return { ok: false, code: 'gh_missing', reason: 'the GitHub CLI (gh) was not found on this machine' };
+      }
+      if (result.timedOut) return { ok: false, code: 'timed_out', reason: 'gh did not answer in time' };
+      if (result.code !== 0) {
+        return { ok: false, code: 'gh_failed', reason: redactedOutput(result.stderr || result.stdout) || `gh exited with code ${result.code}` };
+      }
+      const view = parsePullRequestView(result.stdout);
+      return view
+        ? { ok: true, ...view }
+        : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer the state of a pull request' };
+    },
     async createPullRequest(input) {
       // `--flag=value`: a title or a body starting with "-" stays a value.
       const args = [
