@@ -981,6 +981,18 @@ export async function blockIfSharedCheckout(
   return true;
 }
 
+/**
+ * The MCP servers a task's mission gets: zero by default from the task. Only
+ * the MCPs listed in the role's config and in the task's own extras are
+ * enabled; the union replaces the agent's `mcp_servers`. A malformed stored
+ * list is read as none.
+ */
+export function taskMcpServers(roleMcpServers: readonly string[], task: Pick<TaskRow, 'extra_mcp_servers'>): string[] {
+  let taskExtraMcp: string[] = [];
+  try { if (task.extra_mcp_servers) taskExtraMcp = JSON.parse(task.extra_mcp_servers); } catch { /* */ }
+  return [...new Set([...roleMcpServers, ...taskExtraMcp])];
+}
+
 /** The dispatcher gives every task this skill itself: naming it in the extras grants nothing. */
 const DISPATCHER_TASK_SKILL = 'timon-task';
 
@@ -1226,10 +1238,8 @@ async function dispatch(): Promise<void> {
 
     try {
       let taskExtraSkills: string[] = [];
-      let taskExtraMcp: string[] = [];
       let taskExtraAllowed: string[] = [];
       try { if (task.extra_skills) taskExtraSkills = JSON.parse(task.extra_skills); } catch { /* */ }
-      try { if (task.extra_mcp_servers) taskExtraMcp = JSON.parse(task.extra_mcp_servers); } catch { /* */ }
       try { if (task.extra_allowed_tools) taskExtraAllowed = JSON.parse(task.extra_allowed_tools); } catch { /* */ }
       // Before the worktree is created: a refusal after it would leave the
       // worktree and its branch behind.
@@ -1314,10 +1324,7 @@ async function dispatch(): Promise<void> {
         );
       }
 
-      // MCP override: zero MCP by default from the task. Only the MCPs
-      // listed in the role's config (roleMcpServers) AND in the task
-      // (taskExtraMcp) are enabled — the union replaces cfg.mcp_servers.
-      const mcpServersOverride = [...new Set([...roleMcpServers, ...taskExtraMcp])];
+      const mcpServersOverride = taskMcpServers(roleMcpServers, task);
 
       const prompt = composeTaskPrompt(
         taskId,

@@ -1698,6 +1698,15 @@ if (!triggerLaterCols.includes('approved_at')) db.exec(`ALTER TABLE triggers ADD
 // person saved or re-approved it (JSON, `triggers/store.ts`). A run whose files
 // no longer match is refused; NULL (every row saved before) runs nothing.
 if (!triggerLaterCols.includes('script_pins')) db.exec(`ALTER TABLE triggers ADD COLUMN script_pins TEXT`);
+// A routine's extras (JSON arrays of ids, NULL = none), read on routine rows
+// only: the skills, MCP servers and pre-allowed tools copied onto every task it
+// opens. A task starts with zero MCP server by default, so an agent outside
+// any project role had none of its tools at each run without them. Columns
+// rather than fields of the stored `task` action, whose schema is the public
+// trigger contract.
+for (const col of ['extra_skills', 'extra_mcp_servers', 'extra_allowed_tools']) {
+  if (!triggerLaterCols.includes(col)) db.exec(`ALTER TABLE triggers ADD COLUMN ${col} TEXT`);
+}
 // Pipelines and their runs gain an owner for `ctx.pipelines` (a plugin sees what
 // it created, a user what is theirs). Earlier pipelines stay NULL: shared system
 // rows, readable and runnable by every account, changed by a superadmin only
@@ -2812,11 +2821,23 @@ export type RoutineRow = {
    *  and so do the missions of those tasks (a remote backend picks its
    *  per-user connection from it). Null = created by the daemon itself. */
   owner_user_id: string | null;
+  /** JSON arrays copied onto every task the routine opens (`tasks.extra_*`),
+   *  NULL = none: the task route's extras, set once for every run. */
+  extra_skills: string | null;
+  extra_mcp_servers: string | null;
+  extra_allowed_tools: string | null;
   last_run_at: number | null;
   next_run_at: number | null;
   created_at: number;
   updated_at: number;
 };
+
+/** The extras of a routine as stored: a list, or NULL when there is none. */
+export type RoutineExtras = { extra_skills?: string[] | null; extra_mcp_servers?: string[] | null; extra_allowed_tools?: string[] | null };
+
+function storedList(list: readonly string[] | null | undefined): string | null {
+  return list?.length ? JSON.stringify(list) : null;
+}
 
 /** The one action a routine carries, as stored on its trigger row (TODO #216). */
 function routineAction(r: { agent_name: string; prompt: string; task_type: string; project: string | null }) {
@@ -2832,6 +2853,7 @@ const ROUTINE_VIEW = `SELECT id, name,
   enabled,
   json_extract(actions, '$[0].project') AS project,
   owner_user_id,
+  extra_skills, extra_mcp_servers, extra_allowed_tools,
   last_run_at, next_run_at, created_at, updated_at
   FROM triggers WHERE created_by = 'routine'`;
 
@@ -7570,19 +7592,23 @@ export const dbApi = {
   // every reader (graph, backup, workflows import, /api/routines) is unchanged.
   // Update semantics are the historical COALESCE ones: a null keeps the value.
   createRoutine(
-    r: Omit<RoutineRow, 'created_at' | 'updated_at' | 'last_run_at' | 'owner_user_id'>
-      & { last_run_at?: number | null; owner_user_id?: string | null },
+    r: Omit<RoutineRow, 'created_at' | 'updated_at' | 'last_run_at' | 'owner_user_id' | keyof RoutineExtras>
+      & { last_run_at?: number | null; owner_user_id?: string | null } & RoutineExtras,
   ): void {
     const now = Date.now();
     db.prepare(
-      `INSERT INTO triggers (id, name, source, enabled, config, actions, created_by, owner_user_id, last_run_at, next_run_at, created_at, updated_at)
-       VALUES (?, ?, 'schedule', ?, ?, ?, 'routine', ?, ?, ?, ?, ?)`,
+      `INSERT INTO triggers (id, name, source, enabled, config, actions, created_by, owner_user_id,
+         extra_skills, extra_mcp_servers, extra_allowed_tools, last_run_at, next_run_at, created_at, updated_at)
+       VALUES (?, ?, 'schedule', ?, ?, ?, 'routine', ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       r.id, r.name,
       r.enabled ? 1 : 0,
       JSON.stringify({ cron: r.cron_expr }),
       JSON.stringify([routineAction(r)]),
       r.owner_user_id ?? null,
+      storedList(r.extra_skills),
+      storedList(r.extra_mcp_servers),
+      storedList(r.extra_allowed_tools),
       r.last_run_at ?? null,
       r.next_run_at ?? null,
       now, now,
@@ -7611,7 +7637,7 @@ export const dbApi = {
       enabled?: boolean;
       project?: string | null;
       next_run_at?: number | null;
-    },
+    } & RoutineExtras,
   ): void {
     const current = this.getRoutine(id);
     if (!current) return;
@@ -7621,6 +7647,9 @@ export const dbApi = {
       task_type: fields.task_type ?? current.task_type,
       project: fields.project ?? current.project,
     };
+    // An extra left undefined keeps its value; null or an empty list clears it.
+    const extra = (key: keyof RoutineExtras): string | null =>
+      fields[key] === undefined ? current[key] : storedList(fields[key]);
     db.prepare(
       `UPDATE triggers SET
          name = COALESCE(?, name),
@@ -7628,6 +7657,9 @@ export const dbApi = {
          actions = ?,
          enabled = COALESCE(?, enabled),
          next_run_at = COALESCE(?, next_run_at),
+         extra_skills = ?,
+         extra_mcp_servers = ?,
+         extra_allowed_tools = ?,
          updated_at = ?
        WHERE id = ? AND created_by = 'routine'`,
     ).run(
@@ -7636,6 +7668,9 @@ export const dbApi = {
       JSON.stringify([routineAction(merged)]),
       fields.enabled === undefined ? null : (fields.enabled ? 1 : 0),
       fields.next_run_at === undefined ? null : fields.next_run_at,
+      extra('extra_skills'),
+      extra('extra_mcp_servers'),
+      extra('extra_allowed_tools'),
       Date.now(),
       id,
     );
