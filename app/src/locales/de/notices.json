@@ -6,6 +6,11 @@
       "title": "Ein Stern auf GitHub?",
       "action": "Auf GitHub einen Stern geben"
     },
+    "confirmEmail": {
+      "title": "Bestätige deine E-Mail-Adresse",
+      "body": "Damit kannst du dein Passwort per E-Mail zurücksetzen.",
+      "action": "Bestätigen"
+    },
     "feed": {
       "open": "Mehr erfahren"
     },

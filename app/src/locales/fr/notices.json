@@ -6,6 +6,11 @@
       "title": "Une étoile sur GitHub ?",
       "action": "Mettre une étoile sur GitHub"
     },
+    "confirmEmail": {
+      "title": "Confirmez votre adresse e-mail",
+      "body": "Elle permet de réinitialiser votre mot de passe par e-mail.",
+      "action": "Confirmer"
+    },
     "feed": {
       "open": "En savoir plus"
     },

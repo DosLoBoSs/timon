@@ -7,14 +7,15 @@
  * for the life of the page, closings ignored, nothing written
  * (`startNoticesPreview`). Like every card, nothing without a session.
  *
- * Their actions open a public page or close the card in this page; none
- * starts a download or changes a setting.
+ * Their actions open a public page, the Profile, or close the card in this
+ * page; none starts a download or changes a setting.
  */
 
 import { t } from '@/lib/i18n';
 import { formatDate } from '@/lib/intl';
 import type { NoticeInput } from '@/lib/notices';
 import { GITHUB_REPOSITORY_URL, GITHUB_STAR_NOTICE_ID } from './github-star-notice';
+import { CONFIRM_EMAIL_HREF } from './confirm-email-notice';
 
 export const NOTICES_PREVIEW_PARAM = 'notices-preview';
 export const DISCORD_INVITE_URL = 'https://discord.gg/ZQGARNcpZ3';
@@ -43,6 +44,13 @@ export function previewNotices(now: number = Date.now()): (NoticeInput & { plugi
       title: t('notices.preview.discord.title'),
       body: t('notices.preview.discord.body'),
       actions: [{ label: t('notices.preview.discord.action'), href: DISCORD_INVITE_URL, dismiss: true }],
+    },
+    {
+      pluginId: '@timon/settings',
+      id: 'confirm-email-preview',
+      title: t('notices.confirmEmail.title'),
+      body: t('notices.confirmEmail.body'),
+      actions: [{ label: t('notices.confirmEmail.action'), href: CONFIRM_EMAIL_HREF }],
     },
     {
       pluginId: '@timon/updates',
