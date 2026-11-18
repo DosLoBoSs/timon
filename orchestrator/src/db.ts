@@ -2016,6 +2016,13 @@ CREATE TABLE IF NOT EXISTS integrations (
   UNIQUE (repo, branch)
 );
 `);
+// When the landing of a merged integration branch was replayed on its chains
+// (`integration-landing.ts`): TO DO ideas closed, doc tasks created. Separate
+// from `state`, which the forge poller owns: a daemon stopped between the two
+// writes finds the row 'merged' with no landing, and the reconciliation
+// replays it. NULL = not replayed yet.
+const integrationCols = (db.prepare(`PRAGMA table_info(integrations)`).all() as { name: string }[]).map((c) => c.name);
+if (!integrationCols.includes('landed_at')) db.exec(`ALTER TABLE integrations ADD COLUMN landed_at INTEGER`);
 if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
 // A writer that changes the reason without naming its code (an agent's own
 // reason, a statement written before the column) must not leave
@@ -2352,6 +2359,8 @@ export type IntegrationRow = {
   pr_url: string | null;
   checks: string | null;
   last_polled_at: number | null;
+  /** Landing replayed on the chains (see the `landed_at` migration). */
+  landed_at: number | null;
   created_at: number;
   updated_at: number;
 };
@@ -2998,6 +3007,23 @@ const upsertIntegrationStmt = db.prepare(`
     updated_at = excluded.updated_at
 `);
 const getIntegrationStmt = db.prepare(`SELECT * FROM integrations WHERE repo = ? AND branch = ?`);
+const listIntegrationsByBranchStmt = db.prepare(`SELECT * FROM integrations WHERE branch = ? ORDER BY created_at ASC`);
+const getIntegrationByIdStmt = db.prepare(`SELECT * FROM integrations WHERE id = ?`);
+// 'merged' is final: a later 'closed' from a stale poll never takes it back.
+const markIntegrationMergedStmt = db.prepare(`
+  UPDATE integrations SET state = 'merged', merge_sha = COALESCE(?, merge_sha), updated_at = ?
+  WHERE id = ? AND state != 'merged'
+`);
+const claimIntegrationLandingStmt = db.prepare(
+  `UPDATE integrations SET landed_at = ?, updated_at = ? WHERE id = ? AND state = 'merged' AND landed_at IS NULL`,
+);
+const releaseIntegrationLandingStmt = db.prepare(`UPDATE integrations SET landed_at = NULL, updated_at = ? WHERE id = ?`);
+const listUnlandedIntegrationsStmt = db.prepare(
+  `SELECT * FROM integrations WHERE state = 'merged' AND landed_at IS NULL ORDER BY updated_at ASC`,
+);
+const listTasksByBaseBranchStmt = db.prepare(
+  `SELECT * FROM tasks WHERE base_branch = ? ORDER BY created_at ASC`,
+);
 const setTaskTodoIdStmt = db.prepare(
   `UPDATE tasks SET todo_id = ?, updated_at = ? WHERE id = ?`,
 );
@@ -5524,6 +5550,35 @@ export const dbApi = {
   },
   getIntegration(repo: string, branch: string): IntegrationRow | undefined {
     return getIntegrationStmt.get(repo, branch) as IntegrationRow | undefined;
+  },
+  getIntegrationById(id: string): IntegrationRow | undefined {
+    return getIntegrationByIdStmt.get(id) as IntegrationRow | undefined;
+  },
+  /** Every integration row named `branch`, whatever its repository. */
+  listIntegrationsByBranch(branch: string): IntegrationRow[] {
+    return listIntegrationsByBranchStmt.all(branch) as IntegrationRow[];
+  },
+  /** Moves an integration to 'merged' (its work is in the target). False when
+   *  it already was, or the row is gone. */
+  markIntegrationMerged(id: string, mergeSha: string | null): boolean {
+    return markIntegrationMergedStmt.run(mergeSha, Date.now(), id).changes === 1;
+  },
+  /** Claims the landing replay of a merged integration: true for one caller only. */
+  claimIntegrationLanding(id: string): boolean {
+    const now = Date.now();
+    return claimIntegrationLandingStmt.run(now, now, id).changes === 1;
+  },
+  /** Hands a failed landing replay back to the reconciliation. */
+  releaseIntegrationLanding(id: string): void {
+    releaseIntegrationLandingStmt.run(Date.now(), id);
+  },
+  /** Merged integrations whose landing was never replayed. */
+  listUnlandedIntegrations(): IntegrationRow[] {
+    return listUnlandedIntegrationsStmt.all() as IntegrationRow[];
+  },
+  /** Every task based on `branch`, oldest first. */
+  listTasksByBaseBranch(branch: string): TaskRow[] {
+    return listTasksByBaseBranchStmt.all(branch) as TaskRow[];
   },
   /** Repoint ONE requeued task at another backend and release it now. Unlike
    *  `updateTask`, a null model is written as null: COALESCE would keep the slug
