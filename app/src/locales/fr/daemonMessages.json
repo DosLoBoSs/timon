@@ -81,6 +81,54 @@
     "resource_pressure_high": {
       "title": "Forte pression mémoire (missions)",
       "body": "Les missions passent {pressure} % de leur temps bloquées à attendre de la mémoire (utilisation {usage} / max {max}). Au-delà de {limit} pendant 20 s, systemd-oomd tuera une mission."
+    },
+    "merge_repair_by_hand": {
+      "title": "Merge à réparer à la main : {title}",
+      "body": "La task `{taskId}` a effacé {count, plural, one {# fichier} other {# fichiers}} qu’elle n’aurait pas dû toucher, et {max} tentatives de réparation automatique n’y ont rien changé. Elle reste DONE — le contrôle n’y touche plus, pour ne pas empiler les demi-réparations.\n\nMerge concerné : `{sha}`\nFichiers : {files}{more, plural, =0 {} other {\n… et # de plus}}"
+    },
+    "chain_abandoned": {
+      "title": "Chaîne abandonnée : {title}",
+      "body": "La chaîne de suite de la task {taskId} ({type}, « {title} ») a échoué {attempts} fois d’affilée : sa review, son merge et sa doc n’ont pas été créés et ne le seront plus automatiquement.\n\nUn échec qui se répète aussi souvent est structurel (worktree nettoyé, rôle de projet introuvable, erreur dans une étape de la chaîne) — les journaux `[task-chain]` de cette task en donnent la cause.\n\nPour rejouer : relancer la task remet le compteur à zéro."
+    },
+    "sandbox_cascade_ahead": {
+      "title": "Une task {type} tournera sur `{target}`, dont le bac à sable vient d’échouer : {title}",
+      "body": "Échec du bac à sable sur `{target}` alors que le code de cette chaîne a tourné sur `{coder}`. La review et le merge ne suivent pas le coder : ils restent sur `{target}` et bloqueront de la même façon. Déplacez-les aussi :\n  timon series role set --scope review --backend {coder} --series {series}\n  timon series role set --scope merge --backend {coder} --series {series}\npuis remettez en file la task bloquée.\n(Bloquée sur son bac à sable dans cette série : task {evidenceId} — {evidenceTitle}.)"
+    },
+    "ask_user_form_looping": {
+      "title": "Formulaire d’agent en boucle : {agent}",
+      "body": "{attempts} formulaires invalides d’affilée sur la mission {mission} — dernier défaut : {defect}. Aucune carte n’a pu être créée, vous n’avez donc rien vu passer. Le canal des formulaires est fermé pour cette mission : l’agent a pour consigne de décider seul en énonçant son hypothèse, ou de clore par `timon task block`. La décision qu’il voulait vous soumettre reste en suspens."
+    },
+    "late_answer_not_replayed": {
+      "title": "Réponse tardive impossible à rejouer : {tool}",
+      "body": "Vous avez répondu à `{tool}` pour la mission {mission}, mais elle n’a pas pu être relancée (processus mort, aucune session reprenable). {taskId, select, none {Relancez la mission si l’action est toujours nécessaire.} other {Task associée : {taskId} ({taskTitle}). Relancez-la si besoin.}}"
+    },
+    "agent_pair_loop_stopped": {
+      "title": "Boucle d’agents arrêtée : {a} ↔ {b}",
+      "body": "`{a}` et `{b}` ont échangé {count} messages en {minutes} min sans intervention humaine. Leurs messages sont désormais retenus dans la boîte de réception (statut « held ») et aucun des deux ne réveille plus l’autre.\n\nÉcrivez à l’un des deux dans le chat pour les relancer. Les messages retenus ne sont pas redistribués. Plafond : TIMON_WAKE_PAIR_MAX_MESSAGES ({max}), fenêtre : TIMON_WAKE_PAIR_WINDOW_MS."
+    },
+    "memory_proposals_to_review": {
+      "title": "Mémoire {slug} : {count, plural, one {# fait récurrent} other {# faits récurrents}} à examiner",
+      "body": "Ces faits reviennent au moins {threshold} fois et sont proposés à la promotion (proposals.md du projet `{slug}`). Approuvez-les en les copiant dans le fichier conservé suggéré, depuis l’interface ou l’API de mémoire du projet.\n\n{top}"
+    },
+    "deploy_rebuild_failed": {
+      "title": "Échec de la reconstruction automatique : {service}",
+      "body": "La reconstruction Docker du service `{service}` après le merge {sha} (« {title} ») a échoué.\n\n{output}\n\nReconstruction manuelle : `docker compose up -d --build {service}` (dans {dir})."
+    },
+    "deploy_rebuilt": {
+      "title": "Déploiement automatique : `{service}` reconstruit ✅",
+      "body": "Le merge {sha} (« {title} ») a modifié `{service}/` → conteneur reconstruit et redémarré automatiquement. Le changement est en ligne."
+    },
+    "orchestrator_restart_required": {
+      "title": "Redémarrage de l’orchestrateur nécessaire",
+      "body": "Le merge {sha} (« {title} ») a modifié `{dirs}/` — non déployé tant que l’orchestrateur n’a pas redémarré.\n\nQuand vous le pouvez (cela arrête les missions en cours) :\n{commands}"
+    },
+    "backend_no_credit": {
+      "title": "Backend {backend} : plus de crédit",
+      "body": "`{backend}` répond par une erreur de paiement (HTTP 402 / solde épuisé) : le compte n’a plus de crédit.\n\nContrairement à une limite d’usage, **cela ne se rouvre pas tout seul** — il faut recharger le compte.\n\n- Backend écarté jusqu’au {until, date, medium} {until, time, short} (ou jusqu’à ce qu’un tour y réussisse de nouveau).\n- Les missions et les tasks qui en dépendent basculent sur leur plan de repli."
+    },
+    "series_fallback_applied": {
+      "title": "{outcome, select, rule {Règle de repli appliquée — série déplacée (portée {scope})} switched {Quota épuisé — série basculée sur son plan de repli} stuck {Quota épuisé — tasks basculées, orchestrateur NON déplacé} other {Quota épuisé — tasks basculées sur leur plan de repli}}",
+      "body": "Série `{series}` ({tasks, plural, one {# task} other {# tasks}}) — {pilot, select, failed {ses tasks redémarrent} stuck {ses tasks redémarrent} other {elle redémarre}} sur des backends de secours.\n\n- Orchestrateur : {pilot, select, none {aucun identifié} repointed {repointé vers `{backend}` (mission arrêtée — pas relancée ici)} swapped {permuté vers `{backend}` sans changer d’id (contexte conservé)} failed {NON déplacé — la bascule a échoué ({failure}) ; il reste arrêté} stuck {NON déplacé — aucun repli utilisable ; il reste arrêté jusqu’au retour de son backend ou à la pose d’un repli} other {inchangé (son backend n’est pas celui à court de quota)}}\n- Tasks repointées par type : {moved, select, none {aucune} other {{moved}}}\n- Tasks remises en file (bloquées par le backend, pas par le travail) : {requeued}{trigger, select, none {} other {\n- Déclencheur : {trigger}}}"
     }
   }
 }

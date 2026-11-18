@@ -81,6 +81,54 @@
     "resource_pressure_high": {
       "title": "High memory pressure (missions)",
       "body": "Missions spend {pressure} % of their time stalled waiting for memory (usage {usage} / max {max}). Above {limit} for 20 s, systemd-oomd will kill a mission."
+    },
+    "merge_repair_by_hand": {
+      "title": "Merge to repair by hand: {title}",
+      "body": "Task `{taskId}` erased {count, plural, one {# file} other {# files}} it should not have touched, and {max} automatic repair attempts changed nothing. It stays DONE — the check touches nothing more, so as not to pile up half-repairs.\n\nMerge concerned: `{sha}`\nFiles: {files}{more, plural, =0 {} other {\n… and # more}}"
+    },
+    "chain_abandoned": {
+      "title": "Chain abandoned: {title}",
+      "body": "The follow-up chain of task {taskId} ({type}, \"{title}\") failed {attempts} times in a row: its review / merge / doc were not created and will no longer be created automatically.\n\nA failure that repeats this often is structural (worktree cleaned up, project role that cannot be resolved, error in a step of the chain) — the `[task-chain]` logs of this task carry the cause.\n\nTo replay: dispatching the task again resets the counter."
+    },
+    "sandbox_cascade_ahead": {
+      "title": "{type} will run on `{target}`, whose sandbox just failed: {title}",
+      "body": "Sandbox failure on `{target}` while the code of this chain ran on `{coder}`. Review and merge do not follow the coder: they stay on `{target}` and block the same way. Move them too:\n  timon series role set --scope review --backend {coder} --series {series}\n  timon series role set --scope merge --backend {coder} --series {series}\nthen requeue the blocked task.\n(Blocked on its sandbox in this series: task {evidenceId} — {evidenceTitle}.)"
+    },
+    "ask_user_form_looping": {
+      "title": "Agent form looping: {agent}",
+      "body": "{attempts} invalid form payloads in a row on mission {mission} — last defect: {defect}. No card could be created, so you saw nothing go by. The form channel is closed for this mission: the agent was instructed to decide for itself while stating its assumption, or to close out via `timon task block`. The decision it wanted to submit to you is still pending."
+    },
+    "late_answer_not_replayed": {
+      "title": "Late answer could not be replayed: {tool}",
+      "body": "You answered `{tool}` for mission {mission} but it could not be relaunched (process dead, no resumable session). {taskId, select, none {Relaunch the mission if the action is still needed.} other {Associated task: {taskId} ({taskTitle}). Relaunch it if needed.}}"
+    },
+    "agent_pair_loop_stopped": {
+      "title": "Agent loop stopped: {a} ↔ {b}",
+      "body": "`{a}` and `{b}` exchanged {count} messages within {minutes} min with no human input. Their messages are now held in the inbox (status \"held\") and neither agent wakes the other any more.\n\nWrite to either agent in the chat to resume them. Held messages are not redelivered. Ceiling: TIMON_WAKE_PAIR_MAX_MESSAGES ({max}), window: TIMON_WAKE_PAIR_WINDOW_MS."
+    },
+    "memory_proposals_to_review": {
+      "title": "Memory {slug}: {count, plural, one {# recurring fact} other {# recurring facts}} to review",
+      "body": "These facts recur ≥{threshold}× and are proposed for promotion (proposals.md of project `{slug}`). Approve them by copying them into the suggested curated file through the project memory UI/API.\n\n{top}"
+    },
+    "deploy_rebuild_failed": {
+      "title": "Automatic rebuild failed: {service}",
+      "body": "The Docker rebuild of service `{service}` after merge {sha} (\"{title}\") failed.\n\n{output}\n\nManual rebuild: `docker compose up -d --build {service}` (in {dir})."
+    },
+    "deploy_rebuilt": {
+      "title": "Automatic deploy: `{service}` rebuilt ✅",
+      "body": "Merge {sha} (\"{title}\") changed `{service}/` → container rebuilt and restarted automatically. The change is live."
+    },
+    "orchestrator_restart_required": {
+      "title": "Orchestrator restart required",
+      "body": "Merge {sha} (\"{title}\") changed `{dirs}/` — not deployed until the orchestrator restarts.\n\nWhen you can (it stops the missions in flight):\n{commands}"
+    },
+    "backend_no_credit": {
+      "title": "Backend {backend}: no credit left",
+      "body": "`{backend}` answers with a payment error (HTTP 402 / balance exhausted): the account has no credit left.\n\nUnlike a usage limit, **this does not reopen on its own** — the account has to be topped up.\n\n- Backend sidelined until {until, date, medium} {until, time, short} (or until a turn succeeds on it again).\n- Missions and tasks that depend on it switch onto their fallback plan."
+    },
+    "series_fallback_applied": {
+      "title": "{outcome, select, rule {Fallback rule applied — series moved (scope {scope})} switched {Quota exhausted — series switched to its fallback plan} stuck {Quota exhausted — tasks switched, orchestrator NOT moved} other {Quota exhausted — tasks switched to their fallback plan}}",
+      "body": "Series `{series}` ({tasks, plural, one {# task} other {# tasks}}) — {pilot, select, failed {its tasks are} stuck {its tasks are} other {it is}} restarting on backup backends.\n\n- Orchestrator: {pilot, select, none {none identified} repointed {repointed to `{backend}` (mission not running — not respawned here)} swapped {swapped to `{backend}` without changing id (context preserved)} failed {NOT moved — the switch failed ({failure}); it stays stopped} stuck {NOT moved — no usable fallback; it stays stopped until its backend is back or a fallback is set} other {unchanged (its backend is not the one out of quota)}}\n- Tasks repointed by type: {moved, select, none {none} other {{moved}}}\n- Tasks requeued (blocked by the backend, not by the work): {requeued}{trigger, select, none {} other {\n- Trigger: {trigger}}}"
     }
   }
 }
