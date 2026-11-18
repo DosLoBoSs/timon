@@ -141,3 +141,22 @@ test('a mission killed for memory reads its process, its ceiling and its advice'
   assert.match(fr.body ?? '', /Votre processus `node` \(pid 4242\) a été tué par le noyau : il utilisait plus de 4\.0 GB de mémoire, le plafond de cette mission\. Relancer/);
   assert.match(fr.body ?? '', /npm test -- <file>/);
 });
+
+test('system cards read their branches and counts in French', () => {
+  const fr = (code: string, params: Record<string, string | number>) =>
+    inLocale('fr', () => daemonNotificationText(JSON.stringify({ code, params }), { title: 'English', body: 'English' }));
+  const seat = fr('main_seat_empty', { candidates: 'none' });
+  assert.equal(seat.title, 'Aucun orchestrateur principal');
+  assert.match(seat.body ?? '', /Aucun orchestrateur sans projet n’existe/);
+  const hosts = fr('egress_new_hosts', { count: 3, scopeKind: 'project', scopeName: 'timon', agent: 'p.coder', hosts: 'a.io, b.io', more: 1, missionId: 'm1' });
+  assert.equal(hosts.title, '3 nouveaux hôtes sortants pour le projet timon');
+  assert.match(hosts.body ?? '', /a\.io, b\.io et 1 autre\(s\)/);
+  const permission = fr('permission_required', { tool: 'Bash', agent: 'p.coder', minutes: 0 });
+  assert.equal(permission.body, 'L’agent p.coder demande l’autorisation d’utiliser `Bash`.');
+  const series = fr('series_fallback_applied', {
+    outcome: 'stuck', scope: 'none', series: 'abcd1234', tasks: 2, pilot: 'stuck', backend: 'none',
+    failure: 'none', moved: 'none', requeued: 0, trigger: 'none',
+  });
+  assert.equal(series.title, 'Quota épuisé — tasks basculées, orchestrateur NON déplacé');
+  assert.match(series.body ?? '', /ses tasks redémarrent sur des backends de secours/);
+});
