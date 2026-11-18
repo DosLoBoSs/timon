@@ -575,7 +575,7 @@ export const SETTINGS: SettingDef[] = [
   { key: 'TIMON_EVENTS_RETENTION_DAYS', type: 'int', default: 0, group: 'Infra', unit: 'days',
     min: 0, max: 36_500,
     label: 'Mission history retention',
-    description: "Messages, tool calls and outputs of missions older than this are deleted for good, archived ones included, once a day. A running mission keeps its whole history. 0 keeps everything." },
+    description: "The messages, tool calls and outputs of a mission idle for longer than this are deleted for good, archived ones included, once a day. The mission stays in the list with its title. A running mission, or one an open task still needs, keeps its whole history. 0 keeps everything." },
   { key: 'TIMON_LEARNINGS_RETENTION_DAYS', type: 'int', default: 0, group: 'Infra', unit: 'days',
     min: 0, max: 36_500,
     label: 'Raw memory facts retention',

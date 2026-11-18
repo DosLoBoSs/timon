@@ -40,72 +40,165 @@ beforeEach(() => {
 });
 
 const count = (sql: string, ...args: unknown[]) => (db.prepare(sql).get(...args) as { n: number }).n;
+const eventsOf = (id: string) => count('SELECT COUNT(*) n FROM events WHERE mission_id = ?', id);
+const prune = (now = NOW) => pruneOldEvents({ now, pauseMs: 0 });
 
-/** A mission with one old and one recent event, each indexed by the history search. */
-function missionWithHistory(running: boolean): { id: string; oldEvent: number; newEvent: number } {
+/**
+ * A mission with one event `ageDays` old and one `lastDays` old, each indexed
+ * by the history search; over unless `running`, ended at its last event.
+ */
+function missionWithHistory(opts: { running?: boolean; ageDays?: number; lastDays?: number } = {}): { id: string; oldEvent: number; newEvent: number } {
+  const { running = false, ageDays = 40, lastDays = 40 } = opts;
   const id = randomUUID();
   dbApi.createMission(id, 'retention-witness', 'retention witness mission');
   const oldEvent = dbApi.insertEvent(id, 'assistant', { text: 'old' }).id;
   const newEvent = dbApi.insertEvent(id, 'assistant', { text: 'new' }).id;
-  db.prepare('UPDATE events SET timestamp = ? WHERE id = ?').run(OLD, oldEvent);
+  const first = NOW - ageDays * DAY;
+  const last = NOW - lastDays * DAY;
+  db.prepare('UPDATE events SET timestamp = ? WHERE id = ?').run(first, oldEvent);
+  db.prepare('UPDATE events SET timestamp = ? WHERE id = ?').run(last, newEvent);
+  db.prepare('UPDATE mission_stats SET last_event_at = ? WHERE mission_id = ?').run(last, id);
   const index = db.prepare(`INSERT INTO mission_search (mission_id, event_id, seq, role, ts, text) VALUES (?, ?, 0, 'assistant', ?, ?)`);
-  index.run(id, oldEvent, OLD, `old text ${id}`);
-  index.run(id, newEvent, NOW, `new text ${id}`);
-  if (!running) dbApi.finishMission(id, 'completed', 0);
+  index.run(id, oldEvent, first, `old text ${id}`);
+  index.run(id, newEvent, last, `new text ${id}`);
+  if (running) {
+    db.prepare('UPDATE missions SET started_at = ? WHERE id = ?').run(first, id);
+  } else {
+    dbApi.finishMission(id, 'completed', 0);
+    db.prepare('UPDATE missions SET started_at = ?, ended_at = ? WHERE id = ?').run(first, last, id);
+  }
   return { id, oldEvent, newEvent };
 }
 
-test('both retentions are off by default: nothing is deleted', async () => {
-  const done = missionWithHistory(false);
+test('both retentions are off when set to 0: nothing is deleted', async () => {
+  const done = missionWithHistory();
   dbApi.insertLearning({ agent: 'retention-witness', kind: 'pitfall', text: 'old fact', ts: OLD });
+  setDays(0, 0);
 
   const outcome = await runDataRetention({ now: NOW, pauseMs: 0 });
 
   assert.deepEqual(outcome, { events: 0, learnings: 0, learningLines: 0 });
-  assert.equal(count('SELECT COUNT(*) n FROM events WHERE mission_id = ?', done.id), 2);
+  assert.equal(eventsOf(done.id), 2);
   assert.equal(count('SELECT COUNT(*) n FROM learnings'), 1);
 });
 
-test('events past the retention go with their search text; a running mission keeps everything', () => {
-  const done = missionWithHistory(false);
-  const live = missionWithHistory(true);
+test('a mission idle past the retention loses its whole history, search text included', async () => {
+  const done = missionWithHistory();
   setDays(30, null);
 
-  assert.equal(pruneOldEvents(NOW), 1);
+  assert.equal(await prune(), 2);
 
-  assert.deepEqual((db.prepare('SELECT id FROM events WHERE mission_id = ?').all(done.id) as { id: number }[]).map((r) => r.id), [done.newEvent]);
-  assert.equal(count('SELECT COUNT(*) n FROM mission_search WHERE event_id = ?', done.oldEvent), 0);
-  assert.equal(count('SELECT COUNT(*) n FROM mission_search WHERE event_id = ?', done.newEvent), 1);
+  assert.equal(eventsOf(done.id), 0);
+  assert.equal(count('SELECT COUNT(*) n FROM mission_search WHERE mission_id = ? AND event_id IS NOT NULL', done.id), 0);
   assert.equal(count('SELECT COUNT(*) n FROM mission_search_fts WHERE mission_search_fts MATCH ?', `"old text ${done.id}"`), 0);
-  assert.equal(count('SELECT COUNT(*) n FROM events WHERE mission_id = ?', live.id), 2, 'a running mission is never pruned');
+  assert.ok(dbApi.getMission(done.id), 'the mission itself stays in the list');
 });
 
-test('archived events past the retention are deleted too', () => {
+test('a conversation active within the retention keeps its oldest messages too', async () => {
+  // Resumed after months: cutting by event date would leave it without its start.
+  const resumed = missionWithHistory({ ageDays: 200, lastDays: 5 });
+  setDays(30, null);
+
+  assert.equal(await prune(), 0);
+  assert.equal(eventsOf(resumed.id), 2);
+});
+
+test('a running mission keeps everything, however old', async () => {
+  const live = missionWithHistory({ running: true });
+  setDays(30, null);
+
+  assert.equal(await prune(), 0);
+  assert.equal(eventsOf(live.id), 2);
+  assert.equal(dbApi.pruneMissionEventsBatch('events', live.id, NOW, false, 100), 0, 'checked again at deletion');
+});
+
+test('a mission an open task still needs keeps its history until the task is done', async () => {
+  const blocked = missionWithHistory();
+  const taskId = randomUUID();
+  db.prepare(`INSERT INTO tasks (id, title, status, agent_name, mission_id, created_at, updated_at)
+              VALUES (?, 'retention witness task', 'BLOCKED', 'retention-witness', ?, ?, ?)`)
+    .run(taskId, blocked.id, OLD, OLD);
+  setDays(30, null);
+
+  assert.equal(await prune(), 0);
+  assert.equal(eventsOf(blocked.id), 2);
+
+  db.prepare(`UPDATE tasks SET status = 'DONE' WHERE id = ?`).run(taskId);
+  assert.equal(await prune(), 2);
+  assert.equal(eventsOf(blocked.id), 0);
+});
+
+test('archived events of an idle mission are deleted too; a recent hot event protects the archived ones', async () => {
   mkdirSync(join(process.env.TIMON_HOME!, 'archive'), { recursive: true });
   attachEventsArchive(join(process.env.TIMON_HOME!, 'archive', 'events.db'));
-  const id = randomUUID();
-  dbApi.createMission(id, 'retention-witness', 'archived mission');
-  dbApi.finishMission(id, 'completed', 0);
-  db.prepare(`INSERT INTO archive.events (id, mission_id, type, timestamp, payload) VALUES (?, ?, 'assistant', ?, '{}')`)
-    .run(9_000_001, id, OLD);
-  db.prepare(`INSERT INTO archive.events (id, mission_id, type, timestamp, payload) VALUES (?, ?, 'assistant', ?, '{}')`)
-    .run(9_000_002, id, NOW);
+  db.exec('DELETE FROM archive.events');
+  const archived = (lastDays: number) => {
+    const id = randomUUID();
+    dbApi.createMission(id, 'retention-witness', 'archived mission');
+    dbApi.finishMission(id, 'completed', 0);
+    db.prepare('UPDATE missions SET started_at = ?, ended_at = ? WHERE id = ?').run(OLD, NOW - lastDays * DAY, id);
+    db.prepare(`INSERT INTO archive.events (mission_id, type, timestamp, payload) VALUES (?, 'assistant', ?, '{}')`).run(id, OLD);
+    return id;
+  };
+  const idle = archived(40);
+  const resumed = archived(2);
+  const hot = dbApi.insertEvent(resumed, 'assistant', { text: 'back' }).id;
   setDays(30, null);
 
-  assert.equal(pruneOldEvents(NOW), 1);
-  assert.deepEqual((db.prepare('SELECT id FROM archive.events WHERE mission_id = ?').all(id) as { id: number }[]).map((r) => r.id), [9_000_002]);
+  assert.equal(await prune(), 1);
+  assert.equal(count('SELECT COUNT(*) n FROM archive.events WHERE mission_id = ?', idle), 0);
+  assert.equal(count('SELECT COUNT(*) n FROM archive.events WHERE mission_id = ?', resumed), 1);
+  assert.equal(count('SELECT COUNT(*) n FROM events WHERE id = ?', hot), 1);
 });
 
-test('a large backlog is deleted in slices until nothing is left', async () => {
-  const done = missionWithHistory(false);
-  const extra = db.prepare(`INSERT INTO events (mission_id, type, timestamp, payload) VALUES (?, 'assistant', ?, '{}')`);
-  for (let i = 0; i < 25; i++) extra.run(done.id, OLD);
+test('a large backlog goes in slices, handing the event loop back between two', async () => {
+  // A generated history: 120 idle missions of 250 events, and one big one.
+  const insert = db.prepare(`INSERT INTO events (mission_id, type, timestamp, payload) VALUES (?, 'assistant', ?, ?)`);
+  const payload = JSON.stringify({ text: 'x'.repeat(400) });
+  const ids: string[] = [];
+  db.transaction(() => {
+    for (let m = 0; m < 121; m++) {
+      const id = randomUUID();
+      dbApi.createMission(id, 'retention-witness', 'generated mission');
+      dbApi.finishMission(id, 'completed', 0);
+      db.prepare('UPDATE missions SET started_at = ?, ended_at = ? WHERE id = ?').run(OLD, OLD, id);
+      for (let e = 0; e < (m === 0 ? 20_000 : 250); e++) insert.run(id, OLD, payload);
+      ids.push(id);
+    }
+  })();
+  db.prepare('UPDATE mission_stats SET last_event_at = ?').run(OLD);
+  const total = 20_000 + 120 * 250;
   setDays(30, null);
 
-  const outcome = await runDataRetention({ now: NOW, sliceRows: 10, pauseMs: 0 });
+  let turns = 0;
+  const ticker = setInterval(() => { turns++; }, 0);
+  let longest = 0;
+  let last = performance.now();
+  const watch = setInterval(() => {
+    const at = performance.now();
+    longest = Math.max(longest, at - last);
+    last = at;
+  }, 0);
+  try {
+    const outcome = await runDataRetention({ now: NOW, sliceRows: 1_000, pauseMs: 1 });
+    assert.equal(outcome.events, total);
+  } finally {
+    clearInterval(ticker);
+    clearInterval(watch);
+  }
 
-  assert.equal(outcome.events, 26);
-  assert.equal(count('SELECT COUNT(*) n FROM events WHERE mission_id = ?', done.id), 1);
+  assert.equal(count('SELECT COUNT(*) n FROM events'), 0);
+  assert.ok(turns >= total / 1_000 - 1, `the event loop ran between slices (${turns} turns for ${total / 1_000} slices)`);
+  assert.ok(longest < 2_000, `no slice held the daemon for long (${Math.round(longest)} ms)`);
+});
+
+test('a pass asked to stop leaves the rest for the next one', async () => {
+  missionWithHistory();
+  missionWithHistory();
+  setDays(30, null);
+
+  assert.equal(await pruneOldEvents({ now: NOW, pauseMs: 0, stopped: () => true }), 0);
+  assert.equal(await prune(), 4);
 });
 
 test('raw facts past the retention go, from the database and from the agents\' files', () => {
@@ -134,10 +227,10 @@ test('raw facts past the retention go, from the database and from the agents\' f
   assert.equal(readFileSync(stale, 'utf8'), '');
 });
 
-test('a zero setting keeps everything', () => {
+test('a zero setting keeps everything', async () => {
   dbApi.insertLearning({ agent: 'retention-witness', kind: 'pitfall', text: 'old fact', ts: OLD });
   setDays(0, 0);
-  assert.equal(pruneOldEvents(NOW), 0);
+  assert.equal(await pruneOldEvents({ now: NOW, pauseMs: 0 }), 0);
   assert.deepEqual(pruneOldLearnings(NOW), { rows: 0, lines: 0 });
   assert.equal(count('SELECT COUNT(*) n FROM learnings'), 1);
 });
