@@ -118,6 +118,11 @@ export function createAccountProviderFacade(opts: {
         // The licence quota and the composition refusals carry their own message.
         throw new AccountProviderError('refused', (err as Error).message);
       }
+      // Nobody proved they read this address: an admin typed it, or an
+      // invitation link was handed over by hand. The relay mails a reset code
+      // only to an address it saw confirmed, so the owner is offered the
+      // mailed code from their profile (`docs/EMAIL-CODES.md`).
+      dbApi.setUserEmailUnverified(user.id, true);
       dbApi.insertAuditLog({ userId: null, actor: `plugin:${pluginId}`, action: 'user.create', target: `user:${user.id}`, ip: null });
       return { id: user.id, email: user.email, name: user.name, status };
     },

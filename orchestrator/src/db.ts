@@ -1534,13 +1534,19 @@ CREATE INDEX IF NOT EXISTS idx_mcp_tokens_mission ON mcp_tokens(mission_id);
 // An address nobody has confirmed with a mailed code: the first account made
 // from a terminal (`timon user create-admin`, `timon init`) on a machine that
 // may be offline. `1` until the owner confirms it from a signed-in session;
-// the relay only resets the password of an address it saw confirmed. Every
-// account that exists when the column appears was confirmed or predates the
-// codes, so the default leaves it alone.
+// the relay only resets the password of an address it saw confirmed. The
+// accounts made by the account provider (members invited or created by an
+// admin) and every login moved by an email change get it too. When the column
+// appears, a superadmin was confirmed at setup or predates the codes and is
+// left alone; any other account came from the account provider, whose
+// addresses never received a code, so it starts unconfirmed.
 {
   const userCols = (db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]).map((c) => c.name);
   if (!userCols.includes('email_unverified')) {
-    db.exec(`ALTER TABLE users ADD COLUMN email_unverified INTEGER NOT NULL DEFAULT 0`);
+    db.transaction(() => {
+      db.exec(`ALTER TABLE users ADD COLUMN email_unverified INTEGER NOT NULL DEFAULT 0`);
+      db.exec(`UPDATE users SET email_unverified = 1 WHERE is_superadmin = 0`);
+    })();
   }
 }
 

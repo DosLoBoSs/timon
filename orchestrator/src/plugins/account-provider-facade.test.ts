@@ -66,6 +66,7 @@ test('the core creates the account: hashed password, never a superadmin, audited
   const row = dbApi.getUserById(account.id)!;
   assert.equal(row.is_superadmin, false);
   assert.ok(await verifyPassword('ada-password', row.password_hash), 'hashed by the core');
+  assert.equal(dbApi.userEmailUnverified(account.id), true, 'nobody proved the address: its owner confirms it with a code');
   assert.ok(dbApi.listAuditLog(20).some((a) => a.actor === 'plugin:team-plugin' && a.action === 'user.create' && a.target === `user:${account.id}`));
   assert.throws(() => provider.provision({ email: 'ada@example.com', name: 'Ada again', password: 'ada-password' }),
     (err: unknown) => err instanceof AccountProviderError && err.code === 'duplicate');

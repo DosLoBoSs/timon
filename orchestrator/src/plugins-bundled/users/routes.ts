@@ -911,6 +911,10 @@ export function registerRoutes(app: Router, options: UserRoutesOptions = {}): vo
       throw err;
     }
     dbApi.markEmailChangeConfirmed(tokenHash);
+    // The link proves a session asked for the move, not that anyone reads the
+    // new address (it is handed over by hand): the owner confirms it with a
+    // mailed code from their profile, or a reset by email stays refused.
+    if (emailVerification) dbApi.setUserEmailUnverified(user.id, true);
     audit(req, 'user.change_email', `user:${user.id}`);
     notifySuperadmins(
       'Email change confirmed',
