@@ -244,7 +244,9 @@ test('a memory leak dies on the heap ceiling instead of growing unbounded', asyn
 // Buffers live outside the V8 heap: the heap ceiling alone let a jsdom test
 // reach 12.4 GB of RSS and the mission's cgroup OOM-kill the agent. The loop
 // is synchronous, like that runaway, and capped at 3 GB so a broken guard
-// fails this test instead of eating the machine.
+// fails this test instead of eating the machine. Its pace is bounded (about
+// 500 MB/s, the main thread still held): unpaced, a Mac fills 2 GB between
+// two readings of the guard, and the bound below would measure the machine.
 test('memory outside the heap is stopped by the RSS limit, not the heap ceiling', async () => {
   const dir = fixture('buffers.test.mjs', `
     import { test } from 'node:test';
@@ -252,7 +254,11 @@ test('memory outside the heap is stopped by the RSS limit, not the heap ceiling'
     test('hoards buffers', () => {
       writeFileSync('PIDFILE', String(process.pid));
       const hoard = [];
-      for (let i = 0; i < 300; i++) hoard.push(Buffer.alloc(10 * 1024 * 1024, 1));
+      const pace = new Int32Array(new SharedArrayBuffer(4));
+      for (let i = 0; i < 300; i++) {
+        hoard.push(Buffer.alloc(10 * 1024 * 1024, 1));
+        Atomics.wait(pace, 0, 0, 20);
+      }
       for (;;) { /* 3 GB reached: the guard failed, wait for the clock */ }
     });
   `);
