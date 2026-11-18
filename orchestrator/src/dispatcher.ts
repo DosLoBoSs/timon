@@ -23,7 +23,7 @@ import {
 import { whenProvidersLoaded } from './backends/registry.js';
 import {
   createWorktree, isGitRepo, currentBranch, refreshWorktreeBase, prepareWorktreeDependencies,
-  refreshMergeMessage, integrateMergeMessage,
+  refreshMergeMessage, integrateMergeMessage, branchExists,
   type WorktreeInfo, type RefreshOutcome,
 } from './worktree.js';
 import { agentDir } from './paths.js';
@@ -46,6 +46,8 @@ import {
 import { MissionFenceRefusedError, profileLimits } from './resources.js';
 import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal } from './code-gate.js';
 import { GIT_MISSING_MESSAGE, GIT_MISSING_REASON, gitTaskRefusal } from './task-git.js';
+import { ensureIntegrationBranch, usesIntegrationBranch } from './git-integration.js';
+import { chainLanding } from './chain-landing.js';
 import { spawnWideningRefusal } from './users/privileged-overrides.js';
 import { isMirrorTask } from './task-mirror.js';
 import {
@@ -257,13 +259,18 @@ function fallbackOrchestratorMission(orchestratorName: string | null): string | 
 /** Evaluates a task's deps (all DONE, + `pass` verdict required on a
  *  `merge` task's `review` deps, agreement across the WHOLE verification
  *  chain, and a `code` dep of a `full` pipeline only counts once its chain's
- *  merge is DONE). Logic lives in merge-gate.ts. */
+ *  merge is DONE, and one integrated into another base only once that base
+ *  landed). Logic lives in merge-gate.ts. */
 function depsGate(task: TaskRow): DepGate {
   return evaluateDeps(
     task,
     (id) => dbApi.getTask(id),
     (rootId) => dbApi.listTasksByVerificationRoot(rootId),
     (rootId) => dbApi.listVerificationChain(rootId),
+    (dep) => {
+      const row = dbApi.getTask(dep.id);
+      return row ? chainLanding(row) : 'local';
+    },
   );
 }
 
@@ -326,6 +333,62 @@ function recordRefresh(taskId: string, base: string, outcome: RefreshOutcome): v
 }
 
 /**
+ * How a task moves its base to `source` (the merger's branch, or `HEAD` of a
+ * `code-self` coder's worktree) without writing to the shared checkout.
+ *
+ * By reference (`push .`) unless the main repo stands ON the base: `push .`
+ * only accepts a fast-forward and git refuses it for a branch checked out
+ * anywhere, so it can never move another worktree's files. A detached or
+ * unreadable HEAD is no exception: a `merge --ff-only` there moves the user's
+ * own position and leaves the base where it was (#1018). Only when the user's
+ * checkout IS the base does the fast-forward go through it, the working
+ * directory following its branch. Either way the agent reads the base back
+ * and compares it with its own tip before reporting a sha.
+ */
+export function baseAdvanceInstructions(
+  repo: string,
+  base: string,
+  source: string,
+  activeBranch: string | null,
+): string {
+  // `HEAD` named in `git -C <repo>` would be the MAIN repo's HEAD: resolve it in
+  // the agent's worktree first, and give the destination as a full ref (git
+  // needs one when the source is a bare sha).
+  const from = source === 'HEAD' ? '$(git rev-parse HEAD)' : source;
+  const to = source === 'HEAD' ? `refs/heads/${base}` : base;
+  const check =
+    `Check the move before reporting anything — both shas must be equal:\n\n` +
+    `\`\`\`bash\ngit -C ${repo} rev-parse ${base}\ngit rev-parse ${source}\n\`\`\`\n\n` +
+    `If they differ, the base did not move: do not close as merged.`;
+  if (activeBranch != null && activeBranch === base) {
+    return (
+      `The main repo is checked out ON \`${base}\`: the fast-forward goes through ` +
+      `the user's checkout, which follows its branch. ONE command, and only one:\n\n` +
+      `\`\`\`bash\ngit -C ${repo} merge --ff-only ${from}\n\`\`\`\n\n` +
+      `If it refuses (\`${base}\` moved while you were working), bring it into ` +
+      `YOUR worktree (\`git merge --no-edit -m "${refreshMergeMessage(base)}" ${base}\`), ` +
+      `resolve, then retry. Never force.\n\n${check}`
+    );
+  }
+  const where = activeBranch
+    ? `The main repo is on \`${activeBranch}\`, NOT on the base \`${base}\``
+    : `The main repo has a detached HEAD (or its branch could not be read)`;
+  return (
+    `${where}: a fast-forward done IN that repo would move the user's position, ` +
+    `not the base. Move the base **by reference**, without touching the ` +
+    `working directory, with ONE command:\n\n` +
+    `\`\`\`bash\ngit -C ${repo} push . ${from}:${to}\n\`\`\`\n\n` +
+    `\`push .\` only accepts a fast-forward. If it refuses (\`${base}\` moved ` +
+    `while you were working), go back to YOUR worktree, ` +
+    `\`git merge --no-edit -m "${refreshMergeMessage(base)}" ${base}\`, ` +
+    `resolve, then try again. If it refuses because \`${base}\` is checked out ` +
+    `in another worktree, do not work around it: \`timon task block\` with the reason. ` +
+    `Never force, never \`git checkout ${base}\` or \`git merge\` in the main ` +
+    `repo.\n\n${check}`
+  );
+}
+
+/**
  * What the agent needs to know about ITS worktree when it starts.
  *
  * Two things it can't guess: that its base was refreshed under its feet
@@ -336,7 +399,8 @@ function recordRefresh(taskId: string, base: string, outcome: RefreshOutcome): v
 export function worktreeDirective(
   task: TaskRow,
   wt: WorktreeInfo | null,
-  /** Branch checked out in `wt.sourceRepo`, read by the caller (merge only). */
+  /** Branch checked out in `wt.sourceRepo`, read by the caller (merge only);
+   *  null for a detached HEAD, which never takes the fast-forward. */
   activeBranch?: string | null,
 ): string {
   if (!wt) return '';
@@ -386,28 +450,7 @@ export function worktreeDirective(
     );
   }
   if (task.type === 'merge') {
-    // Base ≠ active branch: the final fast-forward must not move the branch the
-    // user is standing on. `activeBranch` unknown (detached HEAD, git error) is
-    // treated like "same": the historical ff-only.
-    const offActive = activeBranch != null && activeBranch !== wt.base && wt.base !== 'HEAD';
-    const finish = offActive
-      ? `The main repo is on \`${activeBranch}\`, NOT on the base \`${wt.base}\` of ` +
-        `this task: a fast-forward done IN that repo would move the user's branch and ` +
-        `pour the work into it. Move the base **by reference**, without touching the ` +
-        `working directory, with ONE command:\n\n` +
-        `\`\`\`bash\n` +
-        `git -C ${wt.sourceRepo} push . ${wt.branch}:${wt.base}\n` +
-        `\`\`\`\n\n` +
-        `\`push .\` only accepts a fast-forward. If it refuses (\`${wt.base}\` moved ` +
-        `while you were working), go back to YOUR worktree, ` +
-        `\`git merge --no-edit -m "${refreshMergeMessage(wt.base)}" ${wt.base}\`, ` +
-        `resolve, then try again. If it refuses because \`${wt.base}\` is checked out ` +
-        `in another worktree, do not work around it: \`timon task block\` with the reason. ` +
-        `Never force, and do NOT run \`git checkout ${wt.base}\` in the main ` +
-        `repo.\n\n` +
-        `Then get the FULL sha with \`git -C ${wt.sourceRepo} rev-parse ${wt.base}\` ` +
-        `(40 hex) for \`timon task done --merged-sha\`.`
-      : `git -C ${wt.sourceRepo} merge --ff-only ${wt.branch}`;
+    const finish = baseAdvanceInstructions(wt.sourceRepo, wt.base, wt.branch, activeBranch ?? null);
     parts.push(
       `\n\n## Where you merge — hard rule\n\n` +
       `You have YOUR worktree: \`${wt.path}\` (branch \`${wt.branch}\`). Do all ` +
@@ -427,19 +470,10 @@ export function worktreeDirective(
       `internal ids otherwise. Integrate each source branch with:\n\n` +
       `\`\`\`bash\ngit merge --no-ff -m "${integrateMergeMessage(wt.base)}" <source-branch>\n\`\`\`\n\n` +
       `After resolving a conflict, conclude with \`git commit --no-edit\`: the ` +
-      `message given with \`-m\` is kept. The final fast-forward below creates ` +
+      `message given with \`-m\` is kept. Moving the base below creates ` +
       `no commit.\n\n` +
-      (offActive
-        ? `When your worktree is green, the final merge:\n\n${finish}`
-        : `When your worktree is green, the final merge is ONE command, and only ` +
-          `one:\n\n` +
-          `\`\`\`bash\n${finish}\n\`\`\`\n\n` +
-          `If it refuses (\`${wt.base}\` moved while you were working), go back to ` +
-          `YOUR worktree, \`git merge --no-edit -m "${refreshMergeMessage(wt.base)}" ${wt.base}\`, ` +
-          `resolve, then retry the fast-forward. ` +
-          `Never force.\n\n` +
-          `Then get the FULL sha (\`git -C ${wt.sourceRepo} rev-parse HEAD\`, ` +
-          `40 hex) for \`timon task done --merged-sha\`.`),
+      `When your worktree is green, the final move:\n\n${finish}\n\n` +
+      `Then use that FULL sha (40 hex) for \`timon task done --merged-sha\`.`,
     );
   }
   return parts.join('');
@@ -471,6 +505,14 @@ export function inheritedBase(task: TaskRow): string | null {
     level = next;
   }
   return null;
+}
+
+/** Why the last worktree creation of a task failed, for its blocked reason. */
+const worktreeFailures = new Map<string, string>();
+
+function worktreeFailure(err: unknown): string {
+  const e = err as Error & { stderr?: string };
+  return ((e.stderr ?? '').trim() || e.message || 'git worktree add failed').slice(-300);
 }
 
 export async function resolveWorktree(task: TaskRow): Promise<WorktreeInfo | null> {
@@ -521,6 +563,7 @@ export async function resolveWorktree(task: TaskRow): Promise<WorktreeInfo | nul
       return info;
     } catch (err) {
       console.warn(`[dispatcher] worktree create failed for ${task.id}: ${(err as Error).message}`);
+      worktreeFailures.set(task.id, worktreeFailure(err));
       return null;
     }
   }
@@ -552,6 +595,7 @@ export async function resolveWorktree(task: TaskRow): Promise<WorktreeInfo | nul
       return info;
     } catch (err) {
       console.warn(`[dispatcher] worktree merge failed for ${task.id}: ${(err as Error).message}`);
+      worktreeFailures.set(task.id, worktreeFailure(err));
       return null;
     }
   }
@@ -795,6 +839,160 @@ export function blockIfGitMissing(task: TaskRow, capabilities?: readonly string[
   return true;
 }
 
+function agentCwd(agentName: string): string | null {
+  try { return loadConfig(agentName).cwd ?? null; } catch { return null; }
+}
+
+function blockTask(task: TaskRow, reason: string, message: DaemonMessage): void {
+  console.warn(`[dispatcher] task ${task.id} → BLOCKED: ${reason}`);
+  dbApi.updateTaskStatus(task.id, 'BLOCKED', { blockedReason: reason, blockedReasonCode: message });
+}
+
+/**
+ * How the chain lands, read up the `deps` like `inheritedBase`: the first task
+ * that carries an `integration_mode` or a `base_ref`. A `code-group` final merge
+ * finds it on its volets, a review or a merge on the code task of its chain.
+ */
+export function inheritedIntegration(task: TaskRow): { mode: string | null; baseRef: string | null } | null {
+  const seen = new Set<string>([task.id]);
+  let level: TaskRow[] = [task];
+  for (let depth = 0; depth < 6 && level.length > 0; depth++) {
+    const next: TaskRow[] = [];
+    for (const t of level) {
+      let ids: unknown;
+      try { ids = JSON.parse(t.deps); } catch { continue; }
+      if (!Array.isArray(ids)) continue;
+      for (const id of ids) {
+        if (typeof id !== 'string' || seen.has(id)) continue;
+        seen.add(id);
+        const dep = dbApi.getTask(id);
+        if (!dep) continue;
+        if (dep.integration_mode || dep.base_ref) {
+          return { mode: dep.integration_mode ?? null, baseRef: dep.base_ref ?? null };
+        }
+        next.push(dep);
+      }
+    }
+    level = next;
+  }
+  return null;
+}
+
+/**
+ * Makes sure the base a `code` or `merge` task starts from exists, and BLOCKS
+ * the task when it cannot (true = blocked). Before this, a missing base made
+ * `createWorktree` fail, `resolveWorktree` return null, and the mission start
+ * in the shared checkout (`docs/KANBAN-PR-PIPELINE.md` §3.4).
+ *
+ * - The chain's `integration_mode` / `base_ref` are frozen on the task first,
+ *   from the task itself or the chain it belongs to. A later step reads the
+ *   project's setting here for a root task that carries neither.
+ * - An integration branch (`branch`, `pr`) is created from the remote ref,
+ *   without a checkout; no remote, an unreachable one or a missing target
+ *   blocks the task with the reason — never a fallback on the local base.
+ * - Any other named base must resolve in the repository.
+ *
+ * What it freezes is written to the row and to `task`, which the caller goes on
+ * using for the worktree.
+ */
+export async function blockIfBaseUnavailable(task: TaskRow): Promise<boolean> {
+  if (task.type !== 'code' && task.type !== 'merge') return false;
+  const cwd = agentCwd(task.agent_name);
+  if (!cwd || !(await isGitRepo(cwd))) return false;
+  if (!task.integration_mode && !task.base_ref) {
+    const inherited = inheritedIntegration(task);
+    if (inherited) {
+      dbApi.setTaskIntegration(task.id, inherited.mode, inherited.baseRef);
+      task.integration_mode = inherited.mode;
+      task.base_ref = inherited.baseRef;
+    }
+  }
+  const base = task.base_branch ?? inheritedBase(task);
+  if (usesIntegrationBranch(task.integration_mode)) {
+    const baseRef = task.base_ref ?? null;
+    if (!base || !baseRef) {
+      const reason =
+        `Integration mode "${task.integration_mode}" needs an integration branch and the remote ref to ` +
+        `cut it from (base "${base ?? 'none'}", remote ref "${baseRef ?? 'none'}"). The task was not ` +
+        `started: set both on the task, then retry it.`;
+      blockTask(task, reason, daemonMessage('integration_branch_unset', {
+        mode: task.integration_mode ?? '', branch: base ?? 'none', baseRef: baseRef ?? 'none',
+      }));
+      return true;
+    }
+    const out = await ensureIntegrationBranch(cwd, { branch: base, baseRef });
+    if (!out.ok) {
+      const reason =
+        `Integration branch ${base} is unavailable: ${out.reason}. The task was not started, and the ` +
+        `branch is never cut from the local base instead of ${baseRef}. Fix the remote or the branch ` +
+        `name, then retry the task.`;
+      blockTask(task, reason, daemonMessage('integration_branch_unavailable', {
+        branch: base, baseRef, detail: out.reason,
+      }));
+      return true;
+    }
+    dbApi.recordIntegration({
+      repo: cwd,
+      branch: base,
+      remote: out.remote,
+      target: out.target,
+      mode: task.integration_mode ?? 'branch',
+      project: task.project,
+      seriesId: task.series_id,
+      baseSha: out.created ? out.sha : null,
+    });
+    if (out.created) console.log(`[dispatcher] integration branch ${base} created from ${baseRef} for task ${task.id}`);
+    if (!task.base_branch) {
+      dbApi.setTaskBaseBranch(task.id, base);
+      task.base_branch = base;
+    }
+    return false;
+  }
+  if (!base || (await branchExists(cwd, base))) return false;
+  const reason =
+    `Base ${base} does not exist in the repository. The task was not started: a ${task.type} task ` +
+    `never runs without its base. Create the branch or change the task's base, then retry it.`;
+  blockTask(task, reason, daemonMessage('task_base_missing', { base, type: task.type }));
+  return true;
+}
+
+/**
+ * A `code` or `merge` task of a git repository that got no worktree is BLOCKED
+ * (true), never spawned: without `cwdOverride` its mission would run in the
+ * agent's folder, the checkout every other agent shares. Both the assigned
+ * agent's folder and the one of the agent that will really run it count.
+ */
+export async function blockIfSharedCheckout(
+  task: TaskRow,
+  wt: WorktreeInfo | null,
+  runningAgent: string,
+): Promise<boolean> {
+  if (wt || (task.type !== 'code' && task.type !== 'merge')) return false;
+  const cwds = [...new Set([agentCwd(task.agent_name), agentCwd(runningAgent)])];
+  let inRepository = false;
+  for (const cwd of cwds) if (cwd && (await isGitRepo(cwd))) inRepository = true;
+  if (!inRepository) return false;
+  const cause = worktreeFailures.get(task.id) ?? 'no worktree could be prepared';
+  worktreeFailures.delete(task.id);
+  const reason =
+    `No worktree for this ${task.type} task (${cause}). It was not started: in the agent's own ` +
+    `folder it would write to the checkout every agent shares. Fix the cause, then retry the task.`;
+  blockTask(task, reason, daemonMessage('task_worktree_unavailable', { type: task.type, cause }));
+  return true;
+}
+
+/**
+ * The MCP servers a task's mission gets: zero by default from the task. Only
+ * the MCPs listed in the role's config and in the task's own extras are
+ * enabled; the union replaces the agent's `mcp_servers`. A malformed stored
+ * list is read as none.
+ */
+export function taskMcpServers(roleMcpServers: readonly string[], task: Pick<TaskRow, 'extra_mcp_servers'>): string[] {
+  let taskExtraMcp: string[] = [];
+  try { if (task.extra_mcp_servers) taskExtraMcp = JSON.parse(task.extra_mcp_servers); } catch { /* */ }
+  return [...new Set([...roleMcpServers, ...taskExtraMcp])];
+}
+
 /** The dispatcher gives every task this skill itself: naming it in the extras grants nothing. */
 const DISPATCHER_TASK_SKILL = 'timon-task';
 
@@ -891,17 +1089,34 @@ export function composeTaskPrompt(
  * auto review) lives in verification-loop; this one just prevents the
  * agent from creating the tasks by hand out of habit.
  */
-export function pipelineDirective(task: TaskRow): string {
+export function pipelineDirective(
+  task: TaskRow,
+  /** The main repo and the branch it stands on, read by the caller at spawn. */
+  place?: { sourceRepo: string; activeBranch: string | null },
+): string {
   if (task.type !== 'code') return '';
   if (task.pipeline === 'code-self') {
+    const base = task.base_branch ?? '<base>';
+    const branch = task.branch_name ?? '<your-branch>';
+    const repo = place?.sourceRepo ?? '<main-repository>';
+    // The integration happens on a DETACHED copy of the base inside the
+    // coder's own worktree: the merge commit has the base as first parent, as
+    // a merger's has, and neither the base branch nor the shared checkout is
+    // ever checked out or written.
     return (
       `\n\n---\nPIPELINE: \`code-self\`. Create NO \`review\` or \`merge\` task — ` +
-      `the user chose the fast mode. When your code is ready: merge your ` +
-      `branch into its base YOURSELF with an explicit message that carries no ` +
-      `task id (\`git merge --no-ff -m "${integrateMergeMessage(task.base_branch ?? '<base>')}" ` +
-      `${task.branch_name ?? '<your-branch>'}\`; git's default message names ` +
-      `the task id, which a public repository's hook refuses), then close with ` +
-      `\`timon task done <TASK_ID> --comment "..." --merged-sha <SHA of the merge commit>\`. ` +
+      `the user chose the fast mode. When your code is ready and committed, ` +
+      `integrate your branch into its base YOURSELF, from YOUR worktree only:\n\n` +
+      `\`\`\`bash\n` +
+      `git checkout --detach ${base}\n` +
+      `git merge --no-ff -m "${integrateMergeMessage(base)}" ${branch}\n` +
+      `\`\`\`\n\n` +
+      `The message is explicit and carries no task id: git's default names the ` +
+      `task id, which a public repository's hook refuses. After resolving a ` +
+      `conflict, conclude with \`git commit --no-edit\`. Then move the base:\n\n` +
+      `${baseAdvanceInstructions(repo, base, 'HEAD', place?.activeBranch ?? null)}\n\n` +
+      `Finally \`git checkout ${branch}\` to leave your worktree on its branch, and ` +
+      `close with \`timon task done <TASK_ID> --comment "..." --merged-sha <the base's FULL sha>\`. ` +
       `The sha is REQUIRED: without it the task goes back to BLOCKED (guard against ` +
       `never-merged branches). On a conflict you cannot resolve cleanly, ` +
       `do not force: \`timon task block\` with the reason.`
@@ -1023,10 +1238,8 @@ async function dispatch(): Promise<void> {
 
     try {
       let taskExtraSkills: string[] = [];
-      let taskExtraMcp: string[] = [];
       let taskExtraAllowed: string[] = [];
       try { if (task.extra_skills) taskExtraSkills = JSON.parse(task.extra_skills); } catch { /* */ }
-      try { if (task.extra_mcp_servers) taskExtraMcp = JSON.parse(task.extra_mcp_servers); } catch { /* */ }
       try { if (task.extra_allowed_tools) taskExtraAllowed = JSON.parse(task.extra_allowed_tools); } catch { /* */ }
       // Before the worktree is created: a refusal after it would leave the
       // worktree and its branch behind.
@@ -1074,12 +1287,23 @@ async function dispatch(): Promise<void> {
       // Same moment, same reason: without git, `resolveWorktree` finds no
       // repository and the mission would start in the shared checkout.
       if (blockIfGitMissing(task)) continue;
+      // The base a code or merge task starts from must exist before its
+      // worktree does: an integration branch is created from the remote here,
+      // fail closed, and a missing base is a refusal, not the shared checkout.
+      if (await blockIfBaseUnavailable(task)) continue;
 
       // Worktree handling: before the spawn, for code/review/merge
       // types, we resolve the worktree to use. If the agent runs in a
       // worktree, we also inject the timon-worktree skill so it knows
       // where it is and how to commit/cleanup properly.
       const wt = await resolveWorktree(task);
+      // A git task the dispatcher could not give a worktree would start in the
+      // agent's own folder: the shared checkout every other agent writes to.
+      if (await blockIfSharedCheckout(task, wt, effectiveAgentName)) continue;
+      // Only the tasks that move a base read it: a detached HEAD reads as null.
+      const activeBranch = wt && (task.type === 'merge' || (task.type === 'code' && task.pipeline === 'code-self'))
+        ? await currentBranch(wt.sourceRepo)
+        : null;
       const baseSkills = ['timon-task', ...taskExtraSkills];
       if (wt) baseSkills.push('timon-worktree');
 
@@ -1100,20 +1324,14 @@ async function dispatch(): Promise<void> {
         );
       }
 
-      // MCP override: zero MCP by default from the task. Only the MCPs
-      // listed in the role's config (roleMcpServers) AND in the task
-      // (taskExtraMcp) are enabled — the union replaces cfg.mcp_servers.
-      const mcpServersOverride = [...new Set([...roleMcpServers, ...taskExtraMcp])];
+      const mcpServersOverride = taskMcpServers(roleMcpServers, task);
 
       const prompt = composeTaskPrompt(
         taskId,
         brief,
         attachments,
-        pipelineDirective(task) + worktreeDirective(
-          task,
-          wt,
-          wt && task.type === 'merge' ? await currentBranch(wt.sourceRepo) : null,
-        ),
+        pipelineDirective(task, wt ? { sourceRepo: wt.sourceRepo, activeBranch } : undefined) +
+          worktreeDirective(task, wt, activeBranch),
       );
       const missionId = await spawnAgent(
         effectiveAgentName,
@@ -1536,6 +1754,7 @@ function autoCloseTask(task: TaskRow, missionId: string): 'DONE' | 'BLOCKED' {
   if (refusal) {
     dbApi.updateTaskStatus(task.id, 'BLOCKED', {
       blockedReason: `The mission ended without closing its task, and the automatic close was refused. ${refusal}`,
+      blockedReasonCode: daemonMessage('task_auto_close_refused', { refusal }),
       // Kept as the agent left it: updateTaskStatus writes the column whole.
       doneComment: task.done_comment,
     });
@@ -1543,6 +1762,25 @@ function autoCloseTask(task: TaskRow, missionId: string): 'DONE' | 'BLOCKED' {
   }
   dbApi.setTaskStatusOnly(task.id, 'DONE', autoCloseComment(task, missionId));
   return 'DONE';
+}
+
+/**
+ * The idle reap of a task mission that had already finished (TIM-0149): its
+ * last turn ended cleanly, every closure question reached it and it still left
+ * its task open (`missions.closure_ignored`, set by the wake loop), then the
+ * reaper killed the idle process. Nothing failed there: replaying the task
+ * would only run the same work again (6 reviews for 4 requeues at a tester's).
+ * The task is closed like a mission that exited cleanly — `AUTO_CLOSED_COMMENT`,
+ * so a review parses as `unknown` and escalates — and `requeue_count` is left
+ * alone. Any other cause (crash, OOM, a turn cut short, a reap with no clean
+ * turn) stays a system death, and so does any other `killed`: a manual kill, a
+ * scope stop, a plugin's `missions.kill` or a config reload stop the work
+ * someone may still want, so only the mark the reaper confirms (2) counts.
+ * The agent's prose is never read for a verdict.
+ */
+function endedAfterIgnoredClosure(missionId: string, reason: InterruptionReason | null | undefined): boolean {
+  if (reason !== 'killed') return false;
+  return dbApi.getMission(missionId)?.closure_ignored === 2;
 }
 
 /** Wire the mission_complete bus event → task status update. Exported so
@@ -1571,6 +1809,11 @@ export function watchMissionComplete(): () => void {
     // If it died passively, we qualify the cause instead of posting a
     // silent BLOCKED (indistinguishable from a business block — incident
     // of 2026-07-30, cf. interruption.ts).
+    if (newStatus === 'BLOCKED' && endedAfterIgnoredClosure(ev.missionId, ev.reason)) {
+      const closed = autoCloseTask(task, ev.missionId);
+      console.log(`[dispatcher] task ${task.id} → ${closed}: mission ${ev.missionId} reaped idle after ignoring its closure questions`);
+      return;
+    }
     if (newStatus === 'BLOCKED') {
       // `crash` by default: a failed/terminated mission_complete with no
       // qualified cause remains a system death, never an agent decision.
@@ -1664,7 +1907,13 @@ export async function reconcileOrphanedTasks(graceMs = 0): Promise<void> {
     // blocks it (`ev.reason`), so must this one — DONE would lie.
     const diedCompleted = m.status === 'completed'
       && (toInterruptionReason(m.interrupted_reason) ?? dbApi.detectMissionDeathSignal(t.mission_id)?.reason) != null;
-    if (m.status === 'failed' || m.status === 'terminated' || diedCompleted) {
+    if (m.status === 'terminated' && !dbApi.detectMissionDeathSignal(t.mission_id)
+      && endedAfterIgnoredClosure(t.mission_id, toInterruptionReason(m.interrupted_reason))) {
+      // Same reading as the live path, for a reap whose event died with the daemon.
+      const closed = autoCloseTask(t, t.mission_id);
+      console.log(`[dispatcher] reconcile: task ${t.id} IN_PROGRESS→${closed} (mission ${t.mission_id.slice(0, 8)} reaped idle after ignoring its closure questions)`);
+      fixed++;
+    } else if (m.status === 'failed' || m.status === 'terminated' || diedCompleted) {
       // `failed` = a real problem; `terminated` = mission interrupted
       // (reaper / restart) BEFORE the agent closed its task. Either way
       // the task stayed IN_PROGRESS → we BLOCK it to resurface it

@@ -1,3 +1,4 @@
+import { daemonMessage } from '../daemon-message.js';
 import { randomUUID } from 'node:crypto';
 import { db, dbApi, type WorkflowRow, type WorkflowRunNodeRow } from '../db.js';
 import { bus } from '../bus.js';
@@ -63,6 +64,7 @@ function alertUnapprovedScript(workflow: WorkflowRow, runId: string, nodeId: str
     const run = dbApi.getWorkflowRun(runId);
     createNotification({
       type: 'alert', title: `Script not run: ${workflow.name}`, body: `${nodeId}: ${reason}`,
+      message: daemonMessage('workflow_script_not_run', { name: workflow.name }),
       ownerUserId: run?.owner_user_id ?? workflow.owner_user_id, source: `workflow:${workflow.slug}`, anchor: runPageAnchor(runId),
     });
   } catch (err) {

@@ -38,7 +38,7 @@ test('any type is persisted verbatim and announced by its absolute path', () => 
   assert.equal(readFileSync(files[1]!.path, 'utf8'), '# titre');
   // The mission owns the folder — that is what lets the cleanup know whose
   // files these are instead of guessing from their age.
-  assert.match(files[0]!.path, /\/uploads\/chat\/m-1\/[0-9a-f-]{36}\/deck\.pptx$/);
+  assert.match(files[0]!.path, /[\\/]uploads[\\/]chat[\\/]m-1[\\/][0-9a-f-]{36}[\\/]deck\.pptx$/);
   // No whitelist: an unknown mime keeps its bytes, it does not lose the file.
   assert.equal(files[1]!.mime, 'application/octet-stream');
 });
@@ -87,7 +87,7 @@ test('the composed turn re-concatenates into its own text, sections included', (
 
 test('a long paste travels inside the message, only its presentation folds', async () => {
   const { pastedParts, MAX_PASTED_CHARS } = await import('./chat-attachments.js');
-  const turn = composeChatTurn({ expanded: 'Regarde ça' }, [], [
+  const turn = composeChatTurn({ expanded: 'Regarde ça' }, [], [ // french-ok: free-text sample data
     { name: 'Pasted', text: 'ligne\n'.repeat(3) },
     { name: '../evil', text: 'x' },
     { text: '' },
@@ -97,7 +97,7 @@ test('a long paste travels inside the message, only its presentation folds', asy
   assert.equal(parts.map((p) => p.text).join(''), turn.text);
   // The text itself is in the sent message: an agent must never have to open
   // a file to read what the human believes they said.
-  assert.match(turn.text, /Regarde ça[\s\S]*<pasted name="Pasted">/);
+  assert.match(turn.text, /Regarde ça[\s\S]*<pasted name="Pasted">/); // french-ok: free-text sample data
   // Two pastes fold as ONE block: composePrompt merges adjacent instructions,
   // so a title naming only the first would lie about what is inside.
   const fold = parts.find((p) => p.label === 'pastedTexts')!;

@@ -77,7 +77,7 @@ test('importCommands: the home is named explicitly and quoted for the shell of t
     "timon import ARCHIVE.tar.gz --to '/home/o'\\''neil/.timon' --force",
     'timon service install',
   ]);
-  assert.deepEqual(importCommands('win32', 'C:\\Users\\Zoé\\.timon', false), [
-    'timon import ARCHIVE.tar.gz --to "C:\\Users\\Zoé\\.timon" --force',
+  assert.deepEqual(importCommands('win32', 'C:\\Users\\Zoé\\.timon', false), [ // french-ok: an accented user folder
+    'timon import ARCHIVE.tar.gz --to "C:\\Users\\Zoé\\.timon" --force', // french-ok: an accented user folder
   ]);
 });

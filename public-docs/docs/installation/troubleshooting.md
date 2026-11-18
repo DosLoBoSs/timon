@@ -16,6 +16,7 @@ sidebar_position: 10
 | Feature or model missing | Host capabilities, enabled plugins and backend catalogue | Inspect `timon doctor`, `timon module list` and `timon backends` |
 | Scheduled task did not run overnight | Whether the computer slept, and `timon service status` | Turn off automatic sleep; see [Running in the background](background.md) |
 | Timon takes a minute to open on a work PC, or shows "Checking the installation…" | Antivirus scanning every file Timon reads | Exclude the Timon folders from real-time scanning; see [Slow start behind an antivirus](#slow-start-behind-an-antivirus) |
+| Windows installer ends with code -1073741819 | Whether it was started from a PowerShell window opened with **Run as administrator** | Run the command again in a normal PowerShell window, or open the installer from File Explorer; see [The installer ends with code -1073741819](#windows-the-installer-ends-with-code--1073741819) |
 | Windows installer says Timon cannot be closed | Whether you allowed the permission prompt when the installer opened | Choose **Quit and stop the background service** in the tray icon menu before installing; or, in an administrator PowerShell, run `schtasks /End /TN TimonOrchestrator; Stop-Process -Name Timon -Force`, then choose Retry |
 | Windows installer says Timon is still running in the background or that its check did not run, or Timon says the running daemon is not the installed version | Whether you allowed the permission prompt | Choose **Retry** and allow the prompt, or restart the computer and install again; see [Updating while the background service runs](#windows-updating-while-the-background-service-runs) |
 | Quota state unavailable | Whether the backend has a working usage probe | Treat unknown as unknown, not as zero usage |
@@ -59,6 +60,20 @@ role denies that permission on purpose (agent-to-agent messages, for one): only
 an administrator can lift it. A message between two agents of different teams
 is refused with `out_of_scope` and names both agents.
 
+## Windows: the installer ends with code -1073741819
+
+`-1073741819` is `0xC0000005` written as a signed number. A tester's Timon installer returned it when it started from an administrator session, and nothing was installed; the same command in a normal PowerShell window worked. (TIM-0160)
+
+The one-line install avoids it: from an administrator window, File Explorer opens the installer, as a double-click would. The installer starts from the administrator window itself only with `-Silent`, with User Account Control turned off, or when the window was elevated with another account's password. If you still see this code:
+
+- run the command again in a normal PowerShell window, opened from the Start menu without **Run as administrator**:
+
+  ```powershell
+  irm https://timon-ai.com/install.ps1 | iex
+  ```
+
+- or add `-DownloadOnly`, which downloads and checks the installer and prints its path, then open that file from File Explorer.
+
 ## Windows blocks the installer (Smart App Control)
 
 The installer is not signed yet, so Windows **Smart App Control** can block it. Workaround: turn Smart App Control off in **Windows Security**, then run the installer. (TIM-0034)
@@ -72,7 +87,9 @@ a daemon running in portable mode stops with the app.
 
 ## Forgot your password
 
-**Forgot password** on the sign-in screen sends a 6-digit code to the e-mail address of your account. Type the code, then your new password twice. Resetting a password signs that account out everywhere. It needs an internet connection, and works only if your address was confirmed when the account was created; if no code arrives within a few minutes, use one of the ways below.
+**Forgot password** on the sign-in screen sends a 6-digit code to the e-mail address of your account. Type the code, then your new password twice. Resetting a password signs that account out everywhere. It needs an internet connection, and works only if your address was confirmed; if no code arrives within a few minutes, use one of the ways below.
+
+An address made without a code stays unconfirmed: an account invited or created by an administrator, a first account created from a terminal, or a sign-in email you changed. Confirm it while you can still sign in: in **Profile**, under **Sign-in email**, **Confirm your address** › **Send the code**, then type the 6 digits you receive. Until you do, a **Confirm your email address** card at the bottom left of the app takes you there. The screen of **Forgot password** recalls it under the code.
 
 Codes are limited to a few per address and per network in a quarter of an hour. If Timon answers that too many codes were requested, wait the time it shows before asking again.
 

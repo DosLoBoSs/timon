@@ -1949,7 +1949,7 @@ export function apply(ctx) {
 
 ## Usage without fabricated zeroes {#quota-monitor}
 
-Source: `examples/plugin-quota-monitor`. Manifest ID: `quota-monitor`. Minimum API: **6**.
+Source: `examples/plugin-quota-monitor`. Manifest ID: `quota-monitor`. Minimum API: **17**.
 
 The monitor combines host storage/settings with topbar, widget and settings surfaces. This function computes risk only from known finite measurements. Unknown usage remains null. The full template also preserves the last known reading during transient failures. Timon ships this package built in and enabled, so an installed copy with the same manifest ID is ignored: to experiment, copy the folder and change `timon.id` first.
 

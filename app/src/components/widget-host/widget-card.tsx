@@ -258,7 +258,7 @@ export function WidgetCard({ entry, members = [entry], part, orientation = 'vert
       showTools ? 'opacity-100' : 'pointer-events-none opacity-0 focus-within:pointer-events-auto focus-within:opacity-100')}>{grip}{gear}</div>}
     {leadingGrip}
     <div id={panelId} role={tabbed ? 'tabpanel' : undefined} aria-labelledby={tabbed ? `tab-${entry.id}` : undefined} className={cn('widget-content flex', horizontal ? 'h-full items-center gap-0.5' : bare ? 'min-w-0 flex-col items-start' : 'min-h-0 min-w-0 flex-1 flex-col', tabbed && 'overflow-hidden', host.dragging && !bare && '[&_*]:!pointer-events-none pointer-events-none')}>
-      {widget.render({ editing: host.editing || hintShown, className: mobile || bare ? undefined : 'h-full', poignee: inline ?? undefined, onReplace: (id) => host.onReplace(entry.id, id), orientation, compact: bare })}
+      {widget.render({ editing: host.editing || hintShown, className: mobile || bare ? undefined : 'h-full', handle: inline ?? undefined, onReplace: (id) => host.onReplace(entry.id, id), orientation, compact: bare })}
     </div>
     {grouped && members.filter((member) => member.id !== entry.id).map((member) => (
       <div key={member.id} id={`panel-${member.id}`} role="tabpanel" aria-labelledby={`tab-${member.id}`} hidden />
