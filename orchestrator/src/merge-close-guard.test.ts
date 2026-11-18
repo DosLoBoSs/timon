@@ -36,13 +36,15 @@ await once(server, 'listening');
 after(() => server.close());
 const api = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
-async function call(method: string, path: string, body: unknown): Promise<{ status: number; json: { error?: string; code?: string } }> {
+type ErrorJson = { error?: string; code?: string; params?: Record<string, unknown> };
+
+async function call(method: string, path: string, body: unknown): Promise<{ status: number; json: ErrorJson }> {
   const r = await fetch(`${api}${path}`, {
     method,
     headers: { 'content-type': 'application/json', Authorization: 'Bearer guard-test' },
     body: JSON.stringify(body),
   });
-  return { status: r.status, json: await r.json() as { error?: string; code?: string } };
+  return { status: r.status, json: await r.json() as ErrorJson };
 }
 
 const closeDone = (id: string, extra: Record<string, unknown> = {}) =>
@@ -113,6 +115,8 @@ test('the CLI path (sha recorded first) is refused the same way', async () => {
   const r = await call('POST', `/api/tasks/${merge.id}/merged-sha`, { sha: mainHead });
   assert.equal(r.status, 409);
   assert.equal(r.json.code, 'merge_not_proven');
+  // The board translates the code with `{detail}`: without it, the template shows its braces.
+  assert.deepEqual(r.json.params, { detail: r.json.error });
   assert.equal(dbApi.getTask(merge.id)!.merged_commit_sha, null);
 });
 
