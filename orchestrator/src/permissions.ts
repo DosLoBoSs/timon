@@ -1005,6 +1005,9 @@ export function requestPermission(input: RequestInput): Promise<PermissionDecisi
           // to promise a window we could not yet guarantee.
           ? ` Autonomous mission: with no answer within ${Math.round(timeoutMs / 60_000)} min, automatic refusal.`
           : ''),
+      message: daemonMessage('permission_required', {
+        tool: input.tool_name, agent: input.agent, minutes: timeoutMs > 0 ? Math.round(timeoutMs / 60_000) : 0,
+      }),
       missionId: input.mission_id,
       taskId: task?.id ?? null,
       anchor: id,

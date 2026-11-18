@@ -1,3 +1,4 @@
+import { daemonMessage } from './daemon-message.js';
 import { assertFreeAccountAccess } from './users/free-access.js';
 import { noteProviderSignedIn, noteProviderSignedOut } from './backends/sign-in-state.js';
 import { assertLicensedExecution } from './license/capabilities.js';
@@ -5250,6 +5251,9 @@ function notifyRenamedTriggers(oldName: string, newName: string, triggers: reado
           : `Check ${own.length} triggers: agent ${oldName} is now ${newName}`,
         body: `The filter of these event triggers matches the agent's name by pattern or substring and no longer reads it the same way. They were left unchanged: review each one on the Triggers page.\n${own.map((t) => `- ${t.name}`).join('\n')}`,
         ownerUserId: owner,
+        message: daemonMessage('triggers_check_after_rename', {
+          count: own.length, oldName, newName, list: own.map((t) => `- ${t.name}`).join('\n'),
+        }),
       });
     } catch (err) {
       console.warn(`[agent] rename ${oldName}→${newName}: could not notify about ${own.length} trigger(s): ${(err as Error).message}`);
