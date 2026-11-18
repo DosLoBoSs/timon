@@ -103,7 +103,7 @@ async function render(step: 'signin' | 'mascot', me: Me, run: (host: HTMLElement
     const nav = {
       step, direction: 1 as const,
       next: () => undefined, back: () => undefined, goTo: () => undefined,
-      setLanguage: async (tag: string) => tag, setBackHandler: () => undefined,
+      setLanguage: async (tag: string) => tag, setBackHandler: () => undefined, skip: () => undefined, setOutcome: () => undefined,
     };
     const host = document.getElementById('root');
     assert.ok(host);
@@ -154,7 +154,8 @@ test('the mascot step offers the main agent\'s configurator and keeps the look',
     assert.ok(keep);
     await React.act(async () => { keep.click(); });
     await settle(React);
-    assert.deepEqual(sent(calls), ['PATCH /api/ui/agents/nova/config', `POST ${WELCOME_DONE_PATH}`]);
+    assert.deepEqual(sent(calls), ['PATCH /api/ui/agents/nova/config', 'POST /api/ui/telemetry/event', `POST ${WELCOME_DONE_PATH}`]);
+    assert.deepEqual(calls.find((c) => c.url === '/api/ui/telemetry/event')?.body, { name: 'onboarding_screen', surface: 'web', screen: 'mascot', action: 'completed' });
     assert.equal((calls.find((c) => c.method === 'PATCH')?.body as { avatar?: string }).avatar, 'mascot');
   });
 });
@@ -165,7 +166,8 @@ test('"Not now" saves nothing and closes the welcome', async () => {
     assert.ok(skip);
     await React.act(async () => { skip.click(); });
     await settle(React);
-    assert.deepEqual(sent(calls), [`POST ${WELCOME_DONE_PATH}`]);
+    assert.deepEqual(sent(calls), ['POST /api/ui/telemetry/event', `POST ${WELCOME_DONE_PATH}`]);
+    assert.deepEqual(calls.find((c) => c.url === '/api/ui/telemetry/event')?.body, { name: 'onboarding_screen', surface: 'web', screen: 'mascot', action: 'skipped' });
   });
 });
 
