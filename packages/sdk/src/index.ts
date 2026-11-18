@@ -424,7 +424,20 @@ export type ClientComponent = (props: Record<string, never> | WidgetChromeProps)
 export type WidgetChromeProps = {
   /** True while the user rests on the widget's title or a layout gesture is under way; hide optional configuration controls otherwise. */
   editing?: boolean;
-  /** Render these host controls in the custom widget header. */
+  /**
+   * The host's layout controls (grip and settings gear): render them in the
+   * custom widget header, on the actions side. Given from apiVersion 17;
+   * declare 17 in the manifest to read it, since an older host only passes
+   * `poignee`. Optional in the type so that an object built before this
+   * name existed still type-checks; the host always passes it.
+   */
+  handle?: unknown;
+  /**
+   * The same object as `handle`, under its former name. The host keeps
+   * passing it, so a widget written for an earlier apiVersion keeps its
+   * controls.
+   * @deprecated Read `handle` instead.
+   */
   poignee: unknown;
   /** Forward host layout classes to the widget root. */
   className?: string;

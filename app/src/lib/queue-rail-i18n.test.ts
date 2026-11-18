@@ -54,7 +54,7 @@ async function renderRail(locale: string, feed: Feed): Promise<Rendered> {
     await React.act(async () => {
       root.render(
         React.createElement(AppRouterContext.Provider, { value: router as never },
-          React.createElement(QueueRail, { poignee: null })),
+          React.createElement(QueueRail, { handle: null })),
       );
     });
     await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
