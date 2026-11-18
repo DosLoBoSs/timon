@@ -66,9 +66,11 @@ type MountOptions = {
 
 async function mount(status: UpdateStatus | null, { dismissed = [], shell = null, buildExpiresAt = OFFER_STATUS.buildExpiresAt, withLicenseBanner = false }: MountOptions = {}) {
   const { JSDOM } = await import('jsdom');
-  // The desktop app on Linux; jsdom's typings omit `userAgent`, its constructor reads it.
-  const options = { url: 'http://localhost/', pretendToBeVisual: true, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130 Timon/0.1.6' };
-  const dom = new JSDOM('<html><body><div id="root"></div></body></html>', options as ConstructorParameters<typeof JSDOM>[1]);
+  const dom = new JSDOM('<html><body><div id="root"></div></body></html>', { url: 'http://localhost/', pretendToBeVisual: true });
+  // The desktop app on Linux. Set on the navigator: jsdom ignores a `userAgent`
+  // option, and its own names the host (`(darwin)`, `(win32)`), so the system
+  // the card offers an installer for would be the machine running the test.
+  Object.defineProperty(dom.window.navigator, 'userAgent', { value: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130 Timon/0.1.6', configurable: true });
   const saved = new Map<string, PropertyDescriptor | undefined>();
   const install = (key: string, value: unknown) => {
     if (!saved.has(key)) saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
