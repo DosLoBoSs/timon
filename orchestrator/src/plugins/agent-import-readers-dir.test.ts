@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { foldsCase } from '../../tests/helpers/case-folding.js';
 // Not through the readers' index: it pulls the zip reader, hence `fflate`, which this file does not need.
 import { readDirSource } from '../../../plugins/agent-import/src/readers/dir.js';
 import { DEFAULT_READER_LIMITS, resolveLimits } from '../../../plugins/agent-import/src/readers/limits.js';
@@ -193,7 +194,8 @@ test('the walk does not descend where no wants pattern can match', async () => {
   }
 });
 
-test('two names equal but for case are both left out', async () => {
+// A volume that folds case cannot hold both names: the zip reader covers the case everywhere.
+test('two names equal but for case are both left out', { skip: foldsCase(tmpdir()) && 'this volume folds case' }, async () => {
   const root = tree({ 'skills/a/SKILL.md': 'a', 'skills/a/README.md': 'upper', 'skills/a/readme.md': 'lower' });
   try {
     const out = await readDirSource(root, ['skills/**']);
