@@ -921,6 +921,9 @@ user can then pick models per group, the general settings staying the default â€
 It returns \`{plan, commands, note?}\`: run \`commands\` as they are, filling the \`<...>\` templates;
 read \`note\`, it can contradict the ticked boxes. Models and fallbacks are set before the first
 task and apply to the series only, including the tasks the dispatcher creates itself.
+In a project that lands through pull requests it also returns \`integration\`: every task starts from
+its \`branch\` (\`--base\`), the last command creates the \`--landing pr\` task that opens the pull
+request, and you never merge the job into the target branch yourself: a person merges the pull request.
 
 | \`plan.mode\` | what you do |
 |---------------|-------------|

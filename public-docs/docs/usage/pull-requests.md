@@ -23,6 +23,24 @@ timon project get-integration my-app --check
 
 `--check` asks `gh` which account it signs in as, so you can confirm the setting before any job runs.
 
+## How the project's jobs run
+
+Once the project is in `pr` mode, its jobs land through a pull request and nothing of them is merged into the target branch on your machine:
+
+- When you plan a job with an agent (the Kanban planner), Timon names the job's integration branch after the job's title, `feat/add-csv-export` for "Add CSV export" (with `-2`, `-3`… when an earlier job already used the name), and every task of the job starts from it.
+- When the first task starts, Timon creates that branch from the remote's target branch (`origin/main`), without touching your checkout. If the remote cannot be reached, the task is blocked with the reason instead of starting from your local `main`.
+- Reviews and merges run as usual, into the integration branch.
+- The plan ends with a final task, **Pull request — <job title>**. It starts once every part of the job is merged into the branch: an agent brings the target branch in if it has moved, writes the title and the description, and opens the pull request as described below. The task is done as soon as the pull request is open; you review and merge it on the forge.
+
+A task you create by hand in such a project without a base branch gets an integration branch named after its own title. A task whose base is the target branch itself (`main`) is blocked: in this mode no work starts from it. To add the final task by hand:
+
+```bash
+timon task create --type merge --landing pr --agent my-app.merger --base feat/add-csv-export \
+  --deps <ids of the code tasks> --title "Pull request — Add CSV export"
+```
+
+Jobs already under way keep the mode they started with: changing the setting, or going back to the local merge with `timon project set-integration my-app --reset`, applies to the next jobs.
+
 ## Open the pull request
 
 When the job's work is merged into its integration branch, the agent (or you) asks Timon to open the pull request:

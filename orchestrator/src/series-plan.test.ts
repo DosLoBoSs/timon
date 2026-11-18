@@ -133,6 +133,37 @@ test('commands: the grouped merge adds its consolidation task', () => {
   assert.ok(cmds.every((c) => c.includes('--group-id')));
 });
 
+test('commands, pull request: every task on the job branch, then the task that opens the pull request', () => {
+  const landing = { branch: 'feat/big-feature', chantier: 'Big feature' };
+  const full = seriesPlanCommands({ mode: 'kanban-full', roles: {} }, [{ title: 'front' }, { title: 'back' }], landing);
+  assert.deepEqual(full, [
+    "timon task create --type code --pipeline full --base feat/big-feature --title front --description '<part brief>'",
+    "timon task create --type code --pipeline full --base feat/big-feature --title back --description '<part brief>'",
+    'timon task create --type merge --landing pr --base feat/big-feature --deps <IDS of the code tasks> '
+      + "--title 'Pull request — Big feature' --description '<what the pull request carries>'",
+  ]);
+  const self = seriesPlanCommands({ mode: 'kanban-code-self', roles: {} }, [{ title: 'a' }], landing);
+  assert.match(self.at(-1)!, /--landing pr --base feat\/big-feature --deps <IDS of the code tasks>/);
+
+  // The grouped merge stays the job's own merge; the pull request waits for it.
+  const grouped = seriesPlanCommands({ mode: 'kanban-code-group', roles: {} }, [{ title: 'a' }], landing);
+  assert.equal(grouped.length, 3);
+  assert.match(grouped[1]!, /^timon task create --type merge --group-id <GROUP> --base feat\/big-feature --deps <IDS of the code tasks>/);
+  assert.match(grouped[2]!, /^timon task create --type merge --landing pr --group-id <GROUP> --base feat\/big-feature --deps <ID of the grouped merge>/);
+  assert.ok(grouped.every((c) => c.includes('--base feat/big-feature')));
+
+  // A sequential mode creates no task, pull request or not.
+  assert.deepEqual(seriesPlanCommands({ mode: 'sequential-here', roles: {} }, [{ title: 'a' }], landing), []);
+});
+
+test('non-regression: without a landing the commands are byte for byte the previous ones', () => {
+  for (const mode of ['kanban-full', 'kanban-code-self', 'kanban-code-group'] as const) {
+    const before = seriesPlanCommands({ mode, roles: {} }, [{ title: 'a' }]);
+    assert.deepEqual(seriesPlanCommands({ mode, roles: {} }, [{ title: 'a' }], null), before);
+    assert.ok(before.every((c) => !c.includes('--base') && !c.includes('--landing')), mode);
+  }
+});
+
 test('commands: a sequential mode creates no task', () => {
   assert.deepEqual(seriesPlanCommands({ mode: 'sequential-here', roles: {} }, [{ title: 'a' }]), []);
 });

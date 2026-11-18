@@ -103,3 +103,55 @@ test('a group the form never showed is refused; a known one yields --group comma
   assert.match(resumed, /- code: \? \/ opus — fallback global TIMON fallback/);
   assert.match(resumed, /- group `easy`, code: \? \/ haiku — fallback codex/);
 });
+
+/* Kanban → pull request, step 8: the planner reads the project of the agent that opened it. */
+test('a project that lands through pull requests: the plan gives the job branch and the pull request task', async () => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const { agentDir } = await import('./paths.js');
+  const { updateProjectIntegration } = await import('./project-integration.js');
+  const { resolvePermission, buildContinuation } = await import('./permissions.js');
+  const { seriesPlanCommands } = await import('./series-plan.js');
+  const repo = mkdtempSync(join(tmpdir(), 'timon-plan-pr-'));
+  const mkAgent = (name: string, project: string) => {
+    mkdirSync(agentDir(name), { recursive: true });
+    writeFileSync(join(agentDir(name), 'config.json'), JSON.stringify({ cwd: repo, role: 'orchestrator', project }));
+    writeFileSync(join(agentDir(name), 'system-prompt.md'), 'Test');
+  };
+  dbApi.upsertProject('plan-pr', { cwd: repo });
+  updateProjectIntegration('plan-pr', { mode: 'pr', account: 'octocat' });
+  dbApi.upsertProject('plan-local', { cwd: repo });
+  mkAgent('plan-pr.main', 'plan-pr');
+  mkAgent('plan-local.main', 'plan-local');
+  // An earlier job of the repository already holds the plain name.
+  dbApi.recordIntegration({ repo, branch: 'feat/big-feature', remote: 'origin', target: 'main', mode: 'pr', project: 'plan-pr' });
+
+  const form = { form: { kind: 'series_plan', chantier: 'Big feature', volets: [{ title: 'Front' }] } };
+  const answer = async (mission: string, agent: string, mode: string) => {
+    dbApi.createMission(mission, agent, 'job');
+    const pending = requestPermission({ mission_id: mission, agent, tool_name: 'ask_user', input: form, tool_use_id: `tu-${mission}` });
+    resolvePermission(listPending(mission)[0]!.id, { behavior: 'allow', updatedInput: { plan: { mode, roles: {} } } });
+    const decision = await pending;
+    assert.equal(decision.behavior, 'allow');
+    return (decision.behavior === 'allow' ? decision.updatedInput : {}) as {
+      commands: string[]; integration?: { mode: string; branch: string; base_ref: string; note: string };
+    };
+  };
+
+  const pr = await answer('plan-pr-1', 'plan-pr.main', 'kanban-full');
+  assert.deepEqual(pr.integration && { mode: pr.integration.mode, branch: pr.integration.branch, base_ref: pr.integration.base_ref }, {
+    mode: 'pr', branch: 'feat/big-feature-2', base_ref: 'origin/main',
+  });
+  assert.match(pr.integration!.note, /never from main/);
+  assert.ok(pr.commands.slice(0, -1).every((c) => c.includes('--base feat/big-feature-2')));
+  assert.match(pr.commands.at(-1)!, /--type merge --landing pr --base feat\/big-feature-2/);
+  const resumed = buildContinuation({ tool_name: 'ask_user', mission_id: 'plan-pr-1' } as never, { behavior: 'allow', updatedInput: pr });
+  assert.match(resumed, /Pull request: Project plan-pr lands through a pull request/);
+
+  // A sequential mode creates no task: nothing about a pull request either.
+  assert.equal((await answer('plan-pr-2', 'plan-pr.main', 'sequential-here')).integration, undefined);
+
+  // Non-regression: a project without the setting gets the previous answer.
+  const local = await answer('plan-local-1', 'plan-local.main', 'kanban-full');
+  assert.equal(local.integration, undefined);
+  assert.deepEqual(local.commands, seriesPlanCommands({ mode: 'kanban-full', roles: {} }, [{ title: 'Front' }]));
+});

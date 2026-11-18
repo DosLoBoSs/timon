@@ -290,6 +290,17 @@ function roleSetCommand(scope: TaskType, cfg: SeriesPlanRoleConfig, group?: stri
 }
 
 /**
+ * A job whose project lands through a pull request (`plan-landing.ts`): every
+ * task of the plan starts from `branch`, and a last task opens the pull request.
+ */
+export type SeriesPlanLanding = {
+  /** The job's integration branch, `feat/<topic>`. */
+  branch: string;
+  /** Title of the job, for the pull request task's title. */
+  chantier: string;
+};
+
+/**
  * Translates the plan into `timon` commands ready to run, in order.
  *
  * The model choices per role become `timon series role set`, set
@@ -307,8 +318,17 @@ function roleSetCommand(scope: TaskType, cfg: SeriesPlanRoleConfig, group?: stri
  * `--group '<name>'` (`series role set`, `series fallback set`); the code task
  * of a grouped slice carries `--plan-group '<name>'`, which review, merge, doc and
  * iterations inherit. Without a group, the output is the previous one, to the byte.
+ *
+ * With `landing` (the project lands through a pull request), every task created
+ * carries `--base <branch>`, and a last `merge` task with `--landing pr`, which
+ * depends on the code tasks (or on the grouped merge), opens the pull request.
+ * Without it, the output is the previous one, to the byte.
  */
-export function seriesPlanCommands(answer: SeriesPlanAnswer, volets: SeriesPlanVolet[] = []): string[] {
+export function seriesPlanCommands(
+  answer: SeriesPlanAnswer,
+  volets: SeriesPlanVolet[] = [],
+  landing: SeriesPlanLanding | null = null,
+): string[] {
   const cmds: string[] = [];
   for (const role of ROLES_BY_MODE[answer.mode]) {
     const cfg = answer.roles[role];
@@ -342,19 +362,27 @@ export function seriesPlanCommands(answer: SeriesPlanAnswer, volets: SeriesPlanV
   const pipeline = PIPELINE_BY_MODE[answer.mode];
   if (pipeline) {
     const group = answer.mode === 'kanban-code-group' ? ' --group-id <GROUP>' : '';
+    const base = landing ? ` --base ${shellQuote(landing.branch)}` : '';
     const count = volets.length || 1;
     for (let i = 0; i < count; i++) {
       const title = volets[i]?.title ?? '<part title>';
       const planGroup = volets[i]?.group ? ` --plan-group ${shellQuote(volets[i]!.group!)}` : '';
       cmds.push(
-        `timon task create --type code --pipeline ${pipeline}${group}${planGroup} `
+        `timon task create --type code --pipeline ${pipeline}${group}${planGroup}${base} `
         + `--title ${shellQuote(title)} --description '<part brief>'`,
       );
     }
     if (answer.mode === 'kanban-code-group') {
       cmds.push(
-        'timon task create --type merge --group-id <GROUP> --deps <IDS of the code tasks> '
+        `timon task create --type merge --group-id <GROUP>${base} --deps <IDS of the code tasks> `
         + `--title ${shellQuote(`Grouped merge — <chantier>`)} --description '<consolidation>'`,
+      );
+    }
+    if (landing) {
+      const deps = answer.mode === 'kanban-code-group' ? '<ID of the grouped merge>' : '<IDS of the code tasks>';
+      cmds.push(
+        `timon task create --type merge --landing pr${group}${base} --deps ${deps} `
+        + `--title ${shellQuote(`Pull request — ${landing.chantier}`)} --description '<what the pull request carries>'`,
       );
     }
   }

@@ -175,7 +175,9 @@ timon task create --title "merge"  --type merge --agent <merger> --group-id "$GR
 - \`review\` — audit of the diff of a \`code\` task (put it in \`--deps\`).
   Inherits the same worktree. Read-only.
 - \`merge\` — integrates the approved branch into its base. Local only; a push
-  needs an explicit authorisation in the project's instructions.
+  needs an explicit authorisation in the project's instructions. With
+  \`--landing pr\`, the last task of a job that lands through a pull request:
+  it opens the pull request instead (see below).
 - \`research\`, \`doc\` — no worktree, free work in the agent's cwd.
 - \`chore\` — miscellaneous ops and cleanup.
 
@@ -303,6 +305,27 @@ restore them.
 Your branch may have been **brought up to date** on its base before you
 started. If conflicts are open, your brief says so first: resolve and commit
 them BEFORE anything else.
+
+### Projects that land through a pull request
+
+A project can be set to land its jobs through pull requests
+(\`timon project set-integration <slug> --mode pr …\`). Its jobs then never
+merge into the target branch (\`main\`) on this machine:
+
+- every task of the job starts from the job's **integration branch**
+  (\`feat/<topic>\`), which the daemon cuts from the remote's target
+  (\`origin/main\`) at the first dispatch. The series planner (\`kanban_plan\`)
+  names it and gives it to every task with \`--base\`; a task created without a
+  base gets one named after its title;
+- reviews and merges run as usual, into that branch;
+- the job ends on a \`merge\` task created with \`--landing pr\`, in deps on the
+  job's code tasks (or on the grouped merge in \`code-group\`). It opens the
+  pull request with \`timon pr open\` (MCP \`pr_open\`): the daemon checks the
+  account, the remote, the commits and the public tree, pushes the branch and
+  opens it. A person merges it on the forge; Timon notices it afterwards.
+
+Never \`git push\`, never \`gh\`, never a merge into the target yourself. A
+task based on the target itself is refused at dispatch.
 
 ### Series fallback plan (quota exhausted)
 
@@ -482,6 +505,7 @@ You have YOUR worktree (branch \`timon/merge/<TASK_ID>\`). You integrate
    test "$MERGED_SHA" = "$(git rev-parse HEAD)"   # the base really moved
    \`\`\`
 5. **Only if a push is authorised**: \`git push\`. Say so in the close comment.
+   A job that lands through a pull request never pushes from here: see below.
 6. Close with the sha:
    \`\`\`bash
    timon task done <TASK_ID> --merged-sha "$MERGED_SHA" --comment "merged into <base>, push=<yes|no>"
@@ -489,6 +513,26 @@ You have YOUR worktree (branch \`timon/merge/<TASK_ID>\`). You integrate
 7. Cleanup, last: \`timon worktree dispose <TASK_ID>\` removes the worktree and
    the local branch. Your \`cwd\` no longer exists afterwards: finish
    everything else before.
+
+### \`type=merge\` with \`landing: pr\` (the job's pull request)
+
+You merge no task branch: the job's work is already in its integration branch
+(your base, \`feat/<topic>\`), and it reaches the target through a pull
+request. Your brief gives the exact commands:
+
+1. In your worktree, bring the target in if it moved
+   (\`git fetch --no-tags <remote> <target>\`, then
+   \`git merge --no-edit -m "merge: bring <remote>/<target> into the task branch" <remote>/<target>\`),
+   resolve, run the checks of the packages the job touched.
+2. If that created a commit, move the integration branch by reference
+   (\`git -C <main-repository> push . <your-branch>:<base>\`).
+3. Write the title and the description in English: what changes, why, how it
+   was checked. No task or mission id, no TODO number, no attribution line, no
+   \`Fixes #n\` for now.
+4. \`timon pr open <TASK_ID> --title "…" --body-file <file>\`. The daemon checks,
+   pushes and opens; a refusal lists the failed checks. Fix what you can with
+   new commits (never rewrite one), or block the task with the checks.
+5. \`timon task done <TASK_ID> --merged-sha <full sha of the base> --comment "pull request <url> opened"\`.
 
 ## Hard rules
 

@@ -67,6 +67,9 @@ test('integration branch names: derived from the title, without ids', () => {
     integrationBranchName('merge 1fc78347-4d3f-4a23-be2d-e1520d82ef8f and 4943a04e'),
     'feat/merge-and',
   );
+  // A project's own prefix; an embargo keeps `sec/` whatever the prefix says.
+  assert.equal(integrationBranchName('Add the PR task', { prefix: 'feature/' }), 'feature/add-the-pr-task');
+  assert.equal(integrationBranchName('Fix token leak', { prefix: 'feature/', embargo: true }), 'sec/fix-token-leak');
   assert.equal(integrationBranchName('—'), null);
   assert.ok(integrationBranchName('a '.repeat(80))!.length <= 'feat/'.length + 48);
   assert.equal(integrationBranchRefusal('feat/kanban-pr'), null);
