@@ -184,16 +184,18 @@ test('the official codex provider launches the CLI exactly as the dialect of the
 /**
  * The golden file was written on Linux. On Windows the provider adds its own
  * `[windows]` table (the unelevated sandbox, TIM-0062) and opens no git root
- * (the Windows sandbox refuses a writable folder under a read-only one, TIM-0121).
+ * (the Windows sandbox refuses a writable folder under a read-only one,
+ * TIM-0121), and a path passed as an argument (`--image`) has its own separators.
  */
 function onThisPlatform(expected: Described): Described {
   if (process.platform !== 'win32') return expected;
+  const args = expected.args.map((a) => a.replace(/^(<[A-Z_]+>)(\/.*)$/, (_m, tag: string, rest: string) => tag + rest.replaceAll('/', '\\')));
   const config: Record<string, string[]> = {};
   for (const [table, lines] of Object.entries(expected.config)) {
     config[table] = table === 'sandbox_workspace_write' ? lines.filter((l) => !l.startsWith('writable_roots')) : lines;
   }
   config.windows = ['sandbox = "unelevated"'];
-  return { ...expected, config };
+  return { ...expected, args, config };
 }
 
 test('the mission token never reaches config.toml', async () => {
