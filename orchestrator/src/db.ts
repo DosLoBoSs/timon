@@ -1891,6 +1891,10 @@ if (!cols.includes('browser_profile_resolved')) db.exec(`ALTER TABLE missions AD
 // (a `wake` that resumed their session): the origin then reads `user`, even on
 // a mission the machine started (`mission-origin.ts`).
 if (!cols.includes('user_engaged')) db.exec(`ALTER TABLE missions ADD COLUMN user_engaged INTEGER NOT NULL DEFAULT 0`);
+// The task mission ended a clean turn with its task still open after every
+// closure question was delivered, and no turn has started since. Read when it
+// is killed idle: that death is the end of its work, not a system death.
+if (!cols.includes('closure_ignored')) db.exec(`ALTER TABLE missions ADD COLUMN closure_ignored INTEGER NOT NULL DEFAULT 0`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_missions_trace ON missions(trace_id)`);
 // The run view reads the missions of one run on every refresh (listSpansByRun).
 // Partial: outside workflows the column stays NULL, which is almost every row.
@@ -2458,6 +2462,8 @@ export type MissionRow = {
   /** Workflow node that spawned the mission. NULL outside a workflow run. */
   workflow_run_id: string | null;
   workflow_node_id: string | null;
+  /** 1 while the mission sits idle after ignoring every closure question (see the column). */
+  closure_ignored: number;
 };
 
 /** MissionRow + joins for UI listings: title/type of the Kanban task that spawned
@@ -6528,6 +6534,11 @@ export const dbApi = {
   /** See the `user_engaged` column. Never cleared: a conversation a person took part in stays theirs. */
   markMissionUserEngaged(id: string): void {
     db.prepare(`UPDATE missions SET user_engaged = 1 WHERE id = ? AND user_engaged = 0`).run(id);
+  },
+  /** See the `closure_ignored` column: set after the last ignored question, cleared when a turn starts. */
+  setMissionClosureIgnored(id: string, ignored: boolean): void {
+    db.prepare(`UPDATE missions SET closure_ignored = ? WHERE id = ? AND closure_ignored != ?`)
+      .run(ignored ? 1 : 0, id, ignored ? 1 : 0);
   },
   getLatestSessionForAgent(agentName: string, ownerUserId?: string | null): string | null {
     const row = (ownerUserId === undefined ? latestSessionStmt.get(agentName)
