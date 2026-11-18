@@ -30,6 +30,7 @@ import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
+// french-ok-file: the French samples and patterns this guard tests
 const SRC = dirname(fileURLToPath(import.meta.url));
 const BIN = join(SRC, '..', 'bin');
 
@@ -151,7 +152,7 @@ test('no comment of the daemon or its CLI is a French sentence without accents',
 test('every comment exception still matches a comment', () => {
   for (const e of COMMENT_EXCEPTIONS) {
     const file = e.file.split('/').join(sep);
-    assert.ok(comments(file).some(({ text }) => text.includes(e.fragment)), `${e.file}: « ${e.fragment} » no longer exists, drop the exception`);
+    assert.ok(comments(file).some(({ text }) => text.includes(e.fragment)), `${e.file}: "${e.fragment}" no longer exists, drop the exception`);
   }
 });
 
