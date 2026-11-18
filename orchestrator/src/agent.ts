@@ -636,6 +636,7 @@ export function evictIdleMission(now = Date.now(), graceMs = EVICT_IDLE_GRACE_MS
     `(${oldest.agentName}, idle ${Math.round((now - lastActivityAt(oldest)) / 1000)} s)`,
   );
   oldest.terminationIntent = 'idle';
+  dbApi.confirmClosureIgnoredReap(oldest.missionId);
   try { oldest.handle.kill('SIGTERM'); } catch { /* already dead */ }
   return oldest.missionId;
 }
@@ -4539,6 +4540,7 @@ export function reapStaleMissions(processTable?: readonly ProcessEntry[], now = 
         if (!isAutonomousMission(m)) continue;
         const lastActivity = dbApi.lastEventAt(m.id) ?? m.started_at;
         if (now - lastActivity < REAP_IDLE_MS()) continue;
+        dbApi.confirmClosureIgnoredReap(m.id);
         const reason = dbApi.finishMission(m.id, 'terminated', 0, 'killed');
         bus.publish({ kind: 'mission_complete', missionId: m.id, status: 'terminated', exitCode: 0, reason });
         notifyParentOnComplete(m.id, 'terminated');
@@ -4636,6 +4638,8 @@ export function reapStaleMissions(processTable?: readonly ProcessEntry[], now = 
         (background.length > 0 ? ' (background ceiling reached)' : ''),
       );
       live.terminationIntent = 'idle'; // turn finished, only free the process → terminal `completed`
+      // The one death that ends the task of a mission that ignored its closure questions.
+      dbApi.confirmClosureIgnoredReap(m.id);
       try { live.handle.kill('SIGTERM'); } catch { /* already dead */ }
       idled++;
       continue;

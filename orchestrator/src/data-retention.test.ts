@@ -6,6 +6,9 @@
 import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { once } from 'node:events';
+import type { AddressInfo } from 'node:net';
+import express from 'express';
 
 // A home of its own: the test counts rows in `events` and attaches a database,
 // which another file sharing the suite's home would skew.
@@ -128,6 +131,84 @@ test('a mission idle past the retention loses its whole history, search text inc
   assert.ok(dbApi.getMission(done.id), 'the mission itself stays in the list');
 });
 
+const statsOf = (id: string) => db.prepare('SELECT event_count, ready, last_event_at FROM mission_stats WHERE mission_id = ?')
+  .get(id) as { event_count: number; ready: number; last_event_at: number | null };
+const listed = (id: string) => dbApi.listMissions(500).find((m) => m.id === id);
+
+test('a purged mission is marked and the mission list counts no event left', async () => {
+  const done = missionWithHistory();
+  const kept = missionWithHistory({ lastDays: 5 });
+  assert.equal(listed(done.id)?.event_count, 2);
+  setDays(30, null);
+
+  assert.equal(await prune(), 2);
+
+  assert.equal(statsOf(done.id).event_count, 0);
+  assert.equal(listed(done.id)?.event_count, 0, 'the list reads the stats row, now zero');
+  assert.ok(statsOf(done.id).last_event_at, 'the last activity date stays: it is still true');
+  assert.equal(dbApi.getMission(done.id)?.history_purged_days, 30, 'marked with the retention that applied');
+  assert.equal(dbApi.getMission(kept.id)?.history_purged_days, null, 'a mission kept whole is not marked');
+  assert.equal(statsOf(kept.id).event_count, 2);
+});
+
+test('the mission detail says the history was purged, and a mission never purged says nothing', async () => {
+  const { registerRoutes } = await import('./plugins-bundled/missions/routes.js');
+  const done = missionWithHistory();
+  const empty = randomUUID();
+  dbApi.createMission(empty, 'retention-witness', 'never had a message');
+  dbApi.finishMission(empty, 'completed', 0);
+  setDays(30, null);
+  await prune();
+
+  const app = express();
+  registerRoutes(app);
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const { port } = server.address() as AddressInfo;
+  const detail = async (id: string) =>
+    (await fetch(`http://127.0.0.1:${port}/api/missions/${id}?tail=50`)).json() as Promise<{ history_purged_days: number | null; events: unknown[] }>;
+  try {
+    const purged = await detail(done.id);
+    assert.equal(purged.history_purged_days, 30);
+    assert.deepEqual(purged.events, []);
+    const never = await detail(empty);
+    assert.equal(never.history_purged_days, null);
+    assert.deepEqual(never.events, []);
+  } finally {
+    server.close();
+  }
+});
+
+test('a purge in slices takes each slice out of the count, and the last one leaves zero', () => {
+  const done = missionWithHistory();
+  dbApi.insertEvent(done.id, 'assistant', { text: 'third' });
+  db.prepare('UPDATE events SET timestamp = ? WHERE mission_id = ?').run(OLD, done.id);
+  db.prepare('UPDATE mission_stats SET last_event_at = ? WHERE mission_id = ?').run(OLD, done.id);
+  assert.equal(statsOf(done.id).event_count, 3);
+  const cutoff = NOW - 30 * DAY;
+
+  assert.equal(dbApi.pruneMissionEventsBatch('events', done.id, cutoff, false, 2, 30), 2);
+  assert.equal(statsOf(done.id).event_count, 1);
+  assert.equal(dbApi.getMission(done.id)?.history_purged_days, 30, 'marked from the first slice on');
+
+  // A count that drifted above the rows (a row the stats counted twice) still ends at zero.
+  db.prepare('UPDATE mission_stats SET event_count = 9 WHERE mission_id = ?').run(done.id);
+  assert.equal(dbApi.pruneMissionEventsBatch('events', done.id, cutoff, false, 2, 30), 1);
+  assert.equal(statsOf(done.id).event_count, 0);
+});
+
+test('a purged mission whose stats await their backfill is left ready at zero', () => {
+  const done = missionWithHistory();
+  db.prepare('UPDATE mission_stats SET ready = 0, event_count = 0, backfill_cursor = 0, backfill_upto = ? WHERE mission_id = ?')
+    .run(done.newEvent, done.id);
+
+  assert.equal(dbApi.pruneMissionEventsBatch('events', done.id, NOW - 30 * DAY, false, 100, 30), 2);
+
+  const stats = statsOf(done.id);
+  assert.equal(stats.ready, 1, 'nothing left to fold in');
+  assert.equal(stats.event_count, 0);
+});
+
 test('a conversation active within the retention keeps its oldest messages too', async () => {
   // Resumed after months: cutting by event date would leave it without its start.
   const resumed = missionWithHistory({ ageDays: 200, lastDays: 5 });
@@ -143,7 +224,7 @@ test('a running mission keeps everything, however old', async () => {
 
   assert.equal(await prune(), 0);
   assert.equal(eventsOf(live.id), 2);
-  assert.equal(dbApi.pruneMissionEventsBatch('events', live.id, NOW, false, 100), 0, 'checked again at deletion');
+  assert.equal(dbApi.pruneMissionEventsBatch('events', live.id, NOW, false, 100, 30), 0, 'checked again at deletion');
 });
 
 test('a mission an open task still needs keeps its history until the task is done', async () => {

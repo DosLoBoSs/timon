@@ -1760,11 +1760,14 @@ function autoCloseTask(task: TaskRow, missionId: string): 'DONE' | 'BLOCKED' {
  * The task is closed like a mission that exited cleanly — `AUTO_CLOSED_COMMENT`,
  * so a review parses as `unknown` and escalates — and `requeue_count` is left
  * alone. Any other cause (crash, OOM, a turn cut short, a reap with no clean
- * turn) stays a system death. The agent's prose is never read for a verdict.
+ * turn) stays a system death, and so does any other `killed`: a manual kill, a
+ * scope stop, a plugin's `missions.kill` or a config reload stop the work
+ * someone may still want, so only the mark the reaper confirms (2) counts.
+ * The agent's prose is never read for a verdict.
  */
 function endedAfterIgnoredClosure(missionId: string, reason: InterruptionReason | null | undefined): boolean {
   if (reason !== 'killed') return false;
-  return dbApi.getMission(missionId)?.closure_ignored === 1;
+  return dbApi.getMission(missionId)?.closure_ignored === 2;
 }
 
 /** Wire the mission_complete bus event → task status update. Exported so
