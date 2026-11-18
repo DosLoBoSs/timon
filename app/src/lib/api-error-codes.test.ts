@@ -1,6 +1,6 @@
 /**
  * The daemon and English agree on route error codes (TODO #829,
- * docs/I18N.md « Erreurs d'API »).
+ * docs/I18N.md "Erreurs d'API").
  *
  * The daemon names a code (`apiError('mission_not_found', …)`); the webview
  * shows `apiErrors.<code>`. A code with no English message would fall back to

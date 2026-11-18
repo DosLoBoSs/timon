@@ -1,6 +1,8 @@
 /**
  * Stored daemon sentences on screen (TODO #845): a code the dictionary knows
  * reads in the reader's language; anything else keeps the stored English.
+  *
+  * french-ok-file: the French locale of the stored sentences under test
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

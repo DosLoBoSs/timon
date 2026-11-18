@@ -1,3 +1,4 @@
+// french-ok-file: the French locale of the update dialogs under test
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';

@@ -1,3 +1,4 @@
+// french-ok-file: the French briefs and closing comments agents really send
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { promptParts, renderPromptSegments, renderPromptText } from './prompt-presentation';

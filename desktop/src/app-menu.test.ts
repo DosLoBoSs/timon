@@ -1,3 +1,4 @@
+// french-ok-file: the localised menu labels under test
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -20,11 +21,11 @@ function flatten(items: Item[]): Item[] {
 
 function aboutEntry(items: Item[], label: string): Item {
   const entry = flatten(items).find((item) => item.label === label);
-  assert.ok(entry, `no « ${label} » entry`);
+  assert.ok(entry, `no "${label}" entry`);
   return entry;
 }
 
-test('app menu: on macOS no entry keeps the native About panel, and « About Timon » calls Timon\'s window', () => {
+test('app menu: on macOS no entry keeps the native About panel, and "About Timon" calls Timon\'s window', () => {
   let opened = 0;
   const items = template('en-US', () => { opened += 1; });
   assert.equal(flatten(items).filter((item) => item.role === 'about').length, 0);

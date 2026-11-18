@@ -1,3 +1,4 @@
+// french-ok-file: the French alternatives the card reads in either locale
 /**
  * The injections card, mounted: the list comes in the daemon's order, an
  * edit goes to the source the block names and the list is read again, and a

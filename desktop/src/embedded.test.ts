@@ -74,7 +74,7 @@ test('the daemon runs on the Electron binary, as plain Node', () => {
   assert.equal(h.children[0]?.killed, true, 'stopping the shell kills the daemon');
 });
 
-test('macOS quitte tout le groupe du daemon, pas seulement son process parent', () => {
+test('macOS ends the whole process group of the daemon, not only its parent process', () => {
   const child = new FakeChild() as unknown as ChildProcess;
   const signals: Array<[number, NodeJS.Signals]> = [];
   assert.equal(terminateProcessTree(child, 'darwin', (pid, signal) => { signals.push([pid, signal]); }), true);
@@ -393,8 +393,8 @@ test('DEV identity and injection overrides are both stripped with Windows casing
 
 // After `taskkill /T` on the daemon, the terminal host (started by an
 // intermediate that exits at once) and a mission's browser helper whose CLI
-// went first were still there, and the next installer looped on « Timon
-// cannot be closed » (tester report, 22/10/2026).
+// went first were still there, and the next installer looped on "Timon
+// cannot be closed" (tester report, 22/10/2026).
 test('Windows portable: quitting also ends the daemon\'s orphans — never the window nor Electron\'s helpers', async () => {
   const installDir = 'C:\\Users\\Robin\\AppData\\Local\\Programs\\Timon\\resources\\orchestrator';
   const needles = orphanNeedles(installDir);
