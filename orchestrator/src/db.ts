@@ -4074,6 +4074,8 @@ export type MemoryAuditRow = {
   candidate_text: string | null;
   rationale: string | null;
   reverted: number;
+  /** 1 when the rule this row speaks of no longer exists (`listMemoryAudit`). */
+  rule_deleted?: number;
 };
 
 export type MemoryProposalRow = {
@@ -8223,7 +8225,13 @@ export const dbApi = {
     const args: unknown[] = [];
     if (opts.runId) { where.push('run_id=?'); args.push(opts.runId); }
     if (opts.project !== undefined) { where.push('project IS ?'); args.push(opts.project); }
-    const sql = `SELECT * FROM memory_audit ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY ts DESC LIMIT ?`;
+    // `rule_deleted`: the rule the row speaks of (the target of a merge) is
+    // gone, so an empty text is the deletion's doing, not a missing record.
+    const sql = `SELECT a.*, CASE WHEN COALESCE(CASE WHEN a.action = 'merge' THEN a.target_rule_id END, a.rule_id) IS NOT NULL
+                   AND NOT EXISTS (SELECT 1 FROM memory_rules r
+                                    WHERE r.id = COALESCE(CASE WHEN a.action = 'merge' THEN a.target_rule_id END, a.rule_id))
+                 THEN 1 ELSE 0 END AS rule_deleted
+                 FROM memory_audit a ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY a.ts DESC LIMIT ?`;
     return db.prepare(sql).all(...args, opts.limit ?? 100) as MemoryAuditRow[];
   },
   listRules(opts: { scope?: string; project?: string | null; agent?: string | null; source?: string } = {}): MemoryRuleRow[] {
