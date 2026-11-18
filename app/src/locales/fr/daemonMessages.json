@@ -57,6 +57,10 @@
     "blocking_loop_detected": {
       "title": "Boucle de blocage détectée, intervention nécessaire : {title}",
       "body": "La task {taskId} (groupe {group, select, none {aucun} other {{group}}}) a été bloquée {wakes} fois de suite. La boucle de réveil a cessé de réveiller l’orchestrateur pour casser la boucle. Raison du dernier blocage : {reason, select, none {(non précisée)} other {{reason}}}.\n\nDébloquez-la à la main après examen (Kanban → task {taskId})."
+    },
+    "task_stopped_by_scope": "Arrêtée par {by} (timon stop {kind} {name})",
+    "task_blocked": {
+      "title": "{title, select, none {Task bloquée ({taskId})} other {Task bloquée : {title}}}"
     }
   }
 }

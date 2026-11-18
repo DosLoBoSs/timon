@@ -104,3 +104,29 @@ test('parseDaemonMessage accepts the column and the object, refuses a bad code',
   assert.equal(parseDaemonMessage({ code: 'Bad-Code' }), null);
   assert.equal(parseDaemonMessage(null), null);
 });
+
+test('a blocked-task card reads its title and the coded reason that is its body', () => {
+  const stored = JSON.stringify({
+    code: 'task_blocked', params: { title: 'Export', taskId: 'abcd1234' },
+    body: { code: 'task_stopped_by_scope', params: { by: 'rom', kind: 'agent', name: 'worker' } },
+  });
+  const fr = inLocale('fr', () => daemonNotificationText(stored, { title: 'Task blocked: Export', body: 'English reason' }));
+  assert.equal(fr.title, 'Task bloquée : Export');
+  assert.equal(fr.body, 'Arrêtée par rom (timon stop agent worker)');
+  const plain = JSON.stringify({ code: 'task_blocked', params: { title: 'none', taskId: 'abcd1234' } });
+  const own = inLocale('fr', () => daemonNotificationText(plain, { title: 'Task blocked (abcd1234)', body: 'I need the key.' }));
+  assert.deepEqual(own, { title: 'Task bloquée (abcd1234)', body: 'I need the key.' });
+});
+
+test('a task return on the Messages page reads its coded reason, without the code as a field', () => {
+  const payload = JSON.stringify({
+    kind: 'task_closed', task_id: 't1', task_status: 'BLOCKED',
+    blocked_reason: 'Stopped by rom (timon stop agent worker)',
+    blocked_reason_code: { code: 'task_stopped_by_scope', params: { by: 'rom', kind: 'agent', name: 'worker' } },
+  });
+  const shown = JSON.parse(inLocale('fr', () => localizedNoticePayload(payload))) as Record<string, unknown>;
+  assert.equal(shown.blocked_reason, 'Arrêtée par rom (timon stop agent worker)');
+  assert.equal('blocked_reason_code' in shown, false);
+  const agentReason = JSON.stringify({ kind: 'task_closed', blocked_reason: 'I need the key.', blocked_reason_code: null });
+  assert.equal((JSON.parse(localizedNoticePayload(agentReason)) as Record<string, unknown>).blocked_reason, 'I need the key.');
+});

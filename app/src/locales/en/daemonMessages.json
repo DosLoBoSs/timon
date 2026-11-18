@@ -57,6 +57,10 @@
     "blocking_loop_detected": {
       "title": "Blocking loop detected; intervention required: {title}",
       "body": "Task {taskId} (group {group, select, none {none} other {{group}}}) has been blocked {wakes} times in a row. The wake loop stopped waking the orchestrator to break the loop. Reason for the last blockage: {reason, select, none {(unspecified)} other {{reason}}}.\n\nUnblock it manually after review (UI Kanban → task {taskId})."
+    },
+    "task_stopped_by_scope": "Stopped by {by} (timon stop {kind} {name})",
+    "task_blocked": {
+      "title": "{title, select, none {Task blocked ({taskId})} other {Task blocked: {title}}}"
     }
   }
 }
