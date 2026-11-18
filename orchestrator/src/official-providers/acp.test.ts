@@ -26,6 +26,8 @@ const FAKE = join(HERE, '..', 'backends', 'acp', '__fixtures__', 'fake-acp-agent
 const { mountOfficialProviders, stubCliBinaries, buildUnderSeal } = await import('../../tests/helpers/official-providers.js');
 await stubCliBinaries('opencode', 'hermes-acp', 'pi', 'agy');
 assert.ok((await mountOfficialProviders()).includes('provider-acp'));
+// Antigravity ships off (Google's terms): these tests switch it on, as a person does from its provider page.
+(await import('../backends/overlays.js')).saveBackendOverlay('antigravity', { disabled: false });
 const { getDialect, installedProfiles, profileDeclarations, registeredBackendOwners } = await import('../backends/registry.js');
 const { getBackend } = await import('../backends/index.js');
 const { BUILTIN_DECLARATIONS } = await import('../backends/builtin-declarations.js');
@@ -174,6 +176,24 @@ test('Antigravity keeps its sign-in where a fenced mission reads it: on Linux ev
   for (const id of ['opencode', 'hermes'] as const) {
     assert.equal((await buildUnderSeal(id, opts())).env?.DBUS_SESSION_BUS_ADDRESS, undefined, `${id} keeps its own bus`);
   }
+});
+
+test('Antigravity ships off: no backend, no model listing, until a person switches it on', async () => {
+  const { activeProfiles, inactiveProfiles } = await import('../backends/registry.js');
+  const { saveBackendOverlay } = await import('../backends/overlays.js');
+  const { db } = await import('../db.js');
+  assert.equal(installedProfiles().find((candidate) => candidate.id === 'antigravity')?.disabled, true);
+  for (const id of ['opencode', 'hermes']) assert.notEqual(installedProfiles().find((candidate) => candidate.id === id)?.disabled, true, id);
+  db.prepare(`DELETE FROM backend_overlays WHERE id = 'antigravity'`).run();
+  try {
+    assert.equal(inactiveProfiles().find((entry) => entry.id === 'antigravity')?.reason, 'disabled in settings');
+    // The model discovery and the quota gauge read the active set only: nothing starts `agy`.
+    assert.ok(!activeProfiles().some((entry) => entry.profile.id === 'antigravity'));
+    assert.throws(() => getBackend('antigravity'), /disabled in settings/);
+  } finally {
+    saveBackendOverlay('antigravity', { disabled: false });
+  }
+  assert.ok(activeProfiles().some((entry) => entry.profile.id === 'antigravity'), 'the switch on the provider page wins');
 });
 
 test('the Antigravity profile names its binary, invents no model and passes no variable of its own', () => {
