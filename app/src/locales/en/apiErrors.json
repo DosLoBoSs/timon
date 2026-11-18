@@ -488,6 +488,11 @@
     "command_request_session_required": "A command request is answered from your signed-in browser.",
     "command_request_invalid": "This answer to the command request is invalid.",
     "command_request_decided": "This command request was already answered.",
-    "command_request_not_offered": "This choice is not offered for this command."
+    "command_request_not_offered": "This choice is not offered for this command.",
+    "sound_session_required": "A notification sound belongs to a signed-in account.",
+    "sound_too_large": "A sound is at most {max} KiB.",
+    "sound_unreadable": "The sound could not be read.",
+    "sound_empty": "Choose a sound file.",
+    "sound_format_unsupported": "This is not a known audio file: use WAV, MP3, OGG, FLAC, AAC/M4A or WebM."
   }
 }

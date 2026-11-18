@@ -488,6 +488,11 @@
     "command_request_session_required": "Une demande de commande se traite depuis votre navigateur connecté.",
     "command_request_invalid": "Cette réponse à la demande de commande est invalide.",
     "command_request_decided": "Cette demande de commande a déjà reçu une réponse.",
-    "command_request_not_offered": "Ce choix n'est pas proposé pour cette commande."
+    "command_request_not_offered": "Ce choix n'est pas proposé pour cette commande.",
+    "sound_session_required": "Un son de notification appartient à un compte connecté.",
+    "sound_too_large": "Un son pèse au plus {max} Kio.",
+    "sound_unreadable": "Le son n'a pas pu être lu.",
+    "sound_empty": "Choisissez un fichier son.",
+    "sound_format_unsupported": "Ce n'est pas un fichier audio reconnu : utilisez WAV, MP3, OGG, FLAC, AAC/M4A ou WebM."
   }
 }
