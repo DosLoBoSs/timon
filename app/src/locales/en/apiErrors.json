@@ -372,6 +372,26 @@
     "git_remote_update_failed": "The remote could not be changed: {detail}",
     "git_remote_remove_failed": "The remote could not be removed: {detail}",
     "git_push_failed": "The push failed: {detail}",
-    "git_fetch_failed": "The fetch failed: {detail}"
+    "git_fetch_failed": "The fetch failed: {detail}",
+    "project_scoring_failed": "The projects could not be scored: {detail}",
+    "dreams_read_failed": "The dream proposals could not be read: {detail}",
+    "dream_status_invalid": "A dream proposal is accepted, rejected or snoozed.",
+    "dream_not_found": "This dream proposal no longer exists.",
+    "dream_run_failed": "The dream pass failed: {detail}",
+    "dream_instructions_save_failed": "The dream instructions could not be saved: {detail}",
+    "enabled_required": "Say whether to turn it on or off.",
+    "dream_config_save_failed": "The dream setting could not be saved: {detail}",
+    "project_scores_read_failed": "The project scores could not be read: {detail}",
+    "docker_status_failed": "The container state could not be read: {detail}",
+    "docker_rebuild_failed": "The rebuild could not start: {detail}",
+    "docker_action_invalid": "A container is started, stopped or restarted.",
+    "docker_action_failed": "The container action failed: {detail}",
+    "grepai_status_failed": "The semantic index state could not be read: {detail}",
+    "grepai_start_failed": "The index watcher could not start: {detail}",
+    "grepai_init_failed": "The semantic index could not be set up: {detail}",
+    "grepai_rebuild_failed": "The semantic index could not be rebuilt: {detail}",
+    "grepai_stop_failed": "The index watcher could not stop: {detail}",
+    "vault_note_id_required": "Choose a note to open.",
+    "vault_note_not_found": "This note is not in your vault."
   }
 }

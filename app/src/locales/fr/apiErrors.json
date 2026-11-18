@@ -372,6 +372,26 @@
     "git_remote_update_failed": "Le dépôt distant n'a pas pu être modifié : {detail}",
     "git_remote_remove_failed": "Le dépôt distant n'a pas pu être retiré : {detail}",
     "git_push_failed": "Le push a échoué : {detail}",
-    "git_fetch_failed": "La récupération (fetch) a échoué : {detail}"
+    "git_fetch_failed": "La récupération (fetch) a échoué : {detail}",
+    "project_scoring_failed": "Les projets n'ont pas pu être notés : {detail}",
+    "dreams_read_failed": "Les propositions de rêve n'ont pas pu être lues : {detail}",
+    "dream_status_invalid": "Une proposition de rêve est acceptée, refusée ou reportée.",
+    "dream_not_found": "Cette proposition de rêve n'existe plus.",
+    "dream_run_failed": "Le passage de rêve a échoué : {detail}",
+    "dream_instructions_save_failed": "Les consignes de rêve n'ont pas pu être enregistrées : {detail}",
+    "enabled_required": "Indiquez s'il faut l'activer ou le désactiver.",
+    "dream_config_save_failed": "Le réglage des rêves n'a pas pu être enregistré : {detail}",
+    "project_scores_read_failed": "Les scores des projets n'ont pas pu être lus : {detail}",
+    "docker_status_failed": "L'état des conteneurs n'a pas pu être lu : {detail}",
+    "docker_rebuild_failed": "La reconstruction n'a pas pu démarrer : {detail}",
+    "docker_action_invalid": "Un conteneur se démarre, s'arrête ou se redémarre.",
+    "docker_action_failed": "L'action sur le conteneur a échoué : {detail}",
+    "grepai_status_failed": "L'état de l'index sémantique n'a pas pu être lu : {detail}",
+    "grepai_start_failed": "La surveillance de l'index n'a pas pu démarrer : {detail}",
+    "grepai_init_failed": "L'index sémantique n'a pas pu être initialisé : {detail}",
+    "grepai_rebuild_failed": "L'index sémantique n'a pas pu être reconstruit : {detail}",
+    "grepai_stop_failed": "La surveillance de l'index n'a pas pu s'arrêter : {detail}",
+    "vault_note_id_required": "Choisissez une note à ouvrir.",
+    "vault_note_not_found": "Cette note n'est pas dans votre vault."
   }
 }
