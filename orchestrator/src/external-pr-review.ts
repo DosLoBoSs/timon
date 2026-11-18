@@ -20,8 +20,8 @@
  * kept on the pull request's row, which the widget shows.
  */
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { previewRoleAgent } from './agent-seed.js';
 import { bus, type BusEvent } from './bus.js';
 import { db, dbApi } from './db.js';
@@ -43,6 +43,10 @@ export const UNTRUSTED_EXCERPT_CHARS = 200;
 export const UNTRUSTED_COMMENT_COUNT = 10;
 /** Most characters of the reviewer's report kept on the row. */
 const REPORT_CHARS = 8000;
+/** Age past which a diff file is removed, whatever its pull request. */
+export const DIFF_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+/** The only files the diff folder holds: the id of a review, `.diff`. */
+const DIFF_FILE_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.diff$/;
 
 export const REVIEW_VERDICTS = ['mergeable', 'changes_requested', 'reject', 'product_decision'] as const;
 export type ReviewVerdict = (typeof REVIEW_VERDICTS)[number];
@@ -156,6 +160,9 @@ function forgeFor(value: ProjectRepository, deps: ExternalPrDeps): ForgeReader {
 const getReviewStmt = db.prepare(`SELECT * FROM external_pr_reviews WHERE project = ? AND repo = ? AND pr_number = ?`);
 const getReviewByIdStmt = db.prepare(`SELECT * FROM external_pr_reviews WHERE id = ?`);
 const listReviewsStmt = db.prepare(`SELECT * FROM external_pr_reviews WHERE project = ? AND repo = ?`);
+const projectReviewsStmt = db.prepare(`SELECT * FROM external_pr_reviews WHERE project = ?`);
+const reviewProjectsStmt = db.prepare(`SELECT DISTINCT project FROM external_pr_reviews`);
+const clearDiffStmt = db.prepare(`UPDATE external_pr_reviews SET diff_path = NULL WHERE id = ? AND state != 'running'`);
 const runningReviewsStmt = db.prepare(`SELECT * FROM external_pr_reviews WHERE state = 'running'`);
 const reviewByMissionStmt = db.prepare(`SELECT * FROM external_pr_reviews WHERE mission_id = ? AND state = 'running'`);
 const upsertDraftStmt = db.prepare(`
@@ -353,6 +360,11 @@ export async function listPullRequests(slug: string, deps: ExternalPrDeps = {}):
   const out = await forgeFor(value, deps).listOpenPullRequests(value.repo);
   if (!out.ok) return refuse(502, 'forge_read_failed', out.reason);
   reconcileRunningReviews();
+  try {
+    purgeReviewDiffs(slug, { repo: value.repo, open: new Set(out.pulls.map((p) => p.number)) });
+  } catch (err) {
+    console.error(`[pr-review] could not purge the diffs of ${slug}: ${(err as Error).message}`);
+  }
   const reviews = new Map(
     (listReviewsStmt.all(slug, value.repo) as ExternalPrReviewRow[]).map((r) => [r.pr_number, shownView(r)]),
   );
@@ -392,13 +404,93 @@ function skillAvailable(): boolean {
   try { return getSkill(EXTERNAL_PR_REVIEW_SKILL) !== null; } catch { return false; }
 }
 
-function diffFile(slug: string, id: string): string {
-  return join(projectDir(slug), 'pr-reviews', `${id}.diff`);
+function diffDir(slug: string): string {
+  return join(projectDir(slug), 'pr-reviews');
 }
 
-function removeFile(path: string | null): void {
-  if (!path) return;
-  try { rmSync(path, { force: true }); } catch { /* a leftover file is harmless */ }
+function diffFile(slug: string, id: string): string {
+  return join(diffDir(slug), `${id}.diff`);
+}
+
+/**
+ * `path` resolved, when it names a diff file right inside the project's diff
+ * folder; null otherwise. A path read back from the database is never
+ * trusted further than that: nothing outside the folder is ever removed.
+ */
+export function ownedDiffPath(slug: string, path: string | null): string | null {
+  if (!path) return null;
+  const target = resolve(path);
+  if (dirname(target) !== resolve(diffDir(slug))) return null;
+  return DIFF_FILE_NAME.test(basename(target)) ? target : null;
+}
+
+function removeDiff(slug: string, path: string | null): boolean {
+  const owned = ownedDiffPath(slug, path);
+  if (!owned) return false;
+  try { rmSync(owned, { force: true }); return true; } catch { return false; /* a leftover file is harmless */ }
+}
+
+/** Last change of a regular file, links not followed; null for anything else. */
+function fileMtime(path: string): number | null {
+  try {
+    const st = lstatSync(path);
+    return st.isFile() ? st.mtimeMs : null;
+  } catch { return null; }
+}
+
+export type PurgeScope = {
+  /** The repository the project's pull requests live in now. */
+  repo: string;
+  /** Its open pull requests: a diff of any other one is removed. */
+  open: ReadonlySet<number>;
+};
+
+/**
+ * Removes the diff files nobody will read again: those of a pull request no
+ * longer open (when `scope` says which are), those older than
+ * `DIFF_MAX_AGE_MS`, and the files of the folder no review names. A running
+ * review keeps its diff, its mission reads it. Only files of the project's
+ * `pr-reviews` folder are ever touched. Returns how many were removed.
+ */
+export function purgeReviewDiffs(slug: string, scope: PurgeScope | null, now = Date.now()): number {
+  let removed = 0;
+  const stale = (path: string): boolean => {
+    const mtime = fileMtime(path);
+    return mtime !== null && now - mtime > DIFF_MAX_AGE_MS;
+  };
+  const named = new Set<string>();
+  for (const row of projectReviewsStmt.all(slug) as ExternalPrReviewRow[]) {
+    const owned = ownedDiffPath(slug, row.diff_path);
+    if (!owned) continue;
+    named.add(owned);
+    if (row.state === 'running') continue;
+    const closed = scope !== null && (row.repo !== scope.repo || !scope.open.has(row.pr_number));
+    if (!closed && !stale(owned)) continue;
+    if (clearDiffStmt.run(row.id).changes === 0) continue;
+    named.delete(owned);
+    if (removeDiff(slug, owned)) removed += 1;
+  }
+  let entries: string[];
+  try { entries = readdirSync(diffDir(slug)); } catch { return removed; }
+  for (const name of entries) {
+    const path = join(diffDir(slug), name);
+    // A file no row names yet may be a preparation between its write and its
+    // row: only an old one is an orphan.
+    if (!DIFF_FILE_NAME.test(name) || named.has(resolve(path)) || !stale(path)) continue;
+    if (removeDiff(slug, path)) removed += 1;
+  }
+  return removed;
+}
+
+/** `purgeReviewDiffs` by age, for every project that has reviews. */
+export function purgeStaleReviewDiffs(now = Date.now()): number {
+  let removed = 0;
+  for (const { project } of reviewProjectsStmt.all() as { project: string }[]) {
+    try { removed += purgeReviewDiffs(project, null, now); } catch (err) {
+      console.error(`[pr-review] could not purge the diffs of ${project}: ${(err as Error).message}`);
+    }
+  }
+  return removed;
 }
 
 export type PrepareOutcome = { ok: true; review: ReviewView; brief: string } | ExternalPrRefusal;
@@ -426,7 +518,7 @@ export async function prepareReview(slug: string, number: number, deps: External
 
   const id = randomUUID();
   const path = diffFile(slug, id);
-  mkdirSync(join(projectDir(slug), 'pr-reviews'), { recursive: true });
+  mkdirSync(diffDir(slug), { recursive: true });
   writeFileSync(path, diff.diff, { mode: 0o600 });
   const brief = buildReviewBrief({
     repo: value.repo,
@@ -444,10 +536,10 @@ export async function prepareReview(slug: string, number: number, deps: External
   );
   if (written.changes === 0) {
     // A send landed between the read above and this write.
-    removeFile(path);
+    removeDiff(slug, path);
     return refuse(409, 'pr_review_running', `pull request #${number} is already being reviewed`);
   }
-  if (previous && previous.diff_path !== path) removeFile(previous.diff_path);
+  if (previous && previous.diff_path !== path) removeDiff(slug, previous.diff_path);
   const row = getReviewByIdStmt.get(id) as ExternalPrReviewRow;
   return { ok: true, review: viewOf(row), brief };
 }
@@ -470,7 +562,9 @@ export async function sendReview(
     return refuse(404, 'pr_review_not_found', 'no relecture of this pull request waits to be sent: prepare it again');
   }
   if (row.state === 'running') return refuse(409, 'pr_review_running', `pull request #${number} is already being reviewed`);
-  if (row.state !== 'draft') {
+  // A draft whose diff was purged would send the reviewer to a missing file.
+  const diff = ownedDiffPath(slug, row.diff_path);
+  if (row.state !== 'draft' || !diff || fileMtime(diff) === null) {
     return refuse(404, 'pr_review_not_found', 'no relecture of this pull request waits to be sent: prepare it again');
   }
   let agent: string | null;
@@ -556,6 +650,9 @@ export function watchReviewMissions(): () => void {
   bus.on('event', onEvent);
   try { reconcileRunningReviews(); } catch (err) {
     console.error(`[pr-review] reconciliation failed: ${(err as Error).message}`);
+  }
+  try { purgeStaleReviewDiffs(); } catch (err) {
+    console.error(`[pr-review] diff purge failed: ${(err as Error).message}`);
   }
   return () => { bus.off('event', onEvent); };
 }
