@@ -1000,7 +1000,7 @@ plugin's, from its page in the app):
   timon user create-admin [--email ADDRESS] [--name NAME] [--password-stdin]
                                              the first account, without the emailed code (offline
                                              machine); the password is typed hidden or piped, never
-                                             an argument; the email is confirmed later from the app
+                                             an argument; the email is kept unconfirmed
 
 Paired devices (another Timon that drives this machine — a headless server has no screen to click):
   timon device pair [--user EMAIL-OR-ID] [--json]
@@ -4989,7 +4989,7 @@ async function cmdUserResetPassword(argv) {
  * does not answer. Daemon token only (`POST /api/users/first-admin`). The
  * password is typed hidden or piped with --password-stdin, never an argument,
  * which would stay in the shell history and be readable by any process. The
- * address is confirmed later, from the app, once the machine is online.
+ * address stays unconfirmed until its owner confirms it from a signed-in session.
  */
 async function cmdUserCreateAdmin(argv) {
   const usage = 'usage: timon user create-admin [--email ADDRESS] [--name NAME] [--password-stdin]\n';
@@ -5069,7 +5069,7 @@ async function cmdUserCreateAdmin(argv) {
   }
   process.stdout.write(`Account created for ${email}. Sign in to Timon with it.\n`);
   if (r.body?.emailUnverified === true) {
-    process.stdout.write('The email address is not confirmed yet: once this machine is online, Timon offers to confirm it. Password reset by email works only after that.\n');
+    process.stdout.write('The email address is not confirmed yet, so a forgotten password cannot be reset by email; timon user reset-password still works.\n');
   }
 }
 
