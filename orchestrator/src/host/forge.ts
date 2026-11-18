@@ -87,13 +87,14 @@ export function githubForge(configDir: string | null, runners: ForgeRunners = {}
   return {
     login: () => ghLogin(configDir, gh),
     async createPullRequest(input) {
+      // `--flag=value`: a title or a body starting with "-" stays a value.
       const args = [
         'pr', 'create',
-        '--repo', input.repo,
-        '--base', input.base,
-        '--head', input.head,
-        '--title', input.title,
-        '--body', input.body,
+        `--repo=${input.repo}`,
+        `--base=${input.base}`,
+        `--head=${input.head}`,
+        `--title=${input.title}`,
+        `--body=${input.body}`,
       ];
       let result: ExecResult;
       try {

@@ -82,8 +82,11 @@ test('gh pr create gets the branches, title and body, with the project folder an
   const out = await forge.createPullRequest({ repo: 'acme/app', base: 'main', head: 'feat/x', title: 'Add x', body: 'Why x.' });
   assert.deepEqual(out, { ok: true, pr: { number: 42, url: 'https://github.com/acme/app/pull/42' }, existing: false });
   assert.deepEqual(run.calls[0]?.args, [
-    'pr', 'create', '--repo', 'acme/app', '--base', 'main', '--head', 'feat/x', '--title', 'Add x', '--body', 'Why x.',
+    'pr', 'create', '--repo=acme/app', '--base=main', '--head=feat/x', '--title=Add x', '--body=Why x.',
   ]);
+  const dashed = recorder({ stdout: 'https://github.com/acme/app/pull/43\n' });
+  await githubForge(null, { gh: dashed.run }).createPullRequest({ repo: 'acme/app', base: 'main', head: 'feat/x', title: '--admin', body: '-f' });
+  assert.ok(dashed.calls[0]?.args.includes('--title=--admin') && !dashed.calls[0]?.args.includes('--admin'), 'a value never becomes a flag');
   assert.equal(run.calls[0]?.opts.env?.GH_CONFIG_DIR, '/home/u/.config/gh-work');
   assert.ok(!run.calls[0]?.args.includes('--admin'));
 });
