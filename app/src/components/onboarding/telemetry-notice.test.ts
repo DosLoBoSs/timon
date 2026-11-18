@@ -63,11 +63,11 @@ test('while statistics are sent: one line, and "Turn them off" switches them off
 test('nothing to say when nothing is sent, and no button when the switch is not the one that decides', async () => {
   for (const pref of [{ ...ON, enabled: false, source: 'settings' as const }, { ...ON, active: false }]) {
     const { React, root } = await mount(pref);
-    assert.equal(document.querySelector('[data-telemetry-notice]'), null, JSON.stringify(pref));
+    assert.ok(!document.querySelector('[data-telemetry-notice]'), JSON.stringify(pref));
     await React.act(async () => { root.unmount(); });
   }
   const { React, root } = await mount({ ...ON, source: 'env', editable: false });
   assert.ok(document.querySelector('[data-telemetry-notice]'), 'statistics are still sent: say so');
-  assert.equal(document.querySelector('[data-telemetry-turn-off]'), null, 'the environment decides: no button that would be refused');
+  assert.ok(!document.querySelector('[data-telemetry-turn-off]'), 'the environment decides: no button that would be refused');
   await React.act(async () => { root.unmount(); });
 });

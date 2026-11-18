@@ -83,7 +83,7 @@ test('the row: one "Turn off" at the right, and the forced refusal rendered as w
   assert.match(row.textContent ?? '', new RegExp(t('telemetrySettings.statusOn').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.equal(toggle()!.textContent, t('telemetrySettings.turnOff'));
   assert.equal(row.querySelectorAll('button').length, 2, 'one action and the "…" menu, nothing else');
-  assert.equal(document.querySelector('[data-telemetry-settings] p:not([role="alert"])'), null, 'no paragraph on the page');
+  assert.ok(!document.querySelector('[data-telemetry-settings] p:not([role="alert"])'), 'no paragraph on the page');
 
   await React.act(async () => { toggle()!.click(); });
   await waitUntil(React.act, () => document.querySelector('[role="alert"]') !== null, 'the refusal');
