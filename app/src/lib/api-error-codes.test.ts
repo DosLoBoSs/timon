@@ -156,3 +156,28 @@ test('a hand-written error body sends every param its message reads', () => {
   }
   assert.deepEqual(missing, [], 'send them in `params`, or better, answer with apiError()');
 });
+
+test('every message renders whole once given the params the daemon sends, in English and French', async () => {
+  // A message that kept a `{name}` would show the raw template: the lot of
+  // codes with params is checked through the reader itself.
+  await import('./i18n-test-locales');
+  const { getLocale, setLocale } = await import('./i18n');
+  const { apiErrorMessage } = await import('./api-error');
+  const before = getLocale();
+  const raw: string[] = [];
+  try {
+    for (const tag of ['en', 'fr']) {
+      setLocale(tag);
+      for (const use of uses) {
+        if (!use.params || use.params.length === 0) continue;
+        const params = Object.fromEntries(use.params.map((name) => [name, 2]));
+        const shown = apiErrorMessage({ error: 'daemon english', code: use.code, params });
+        if (shown === 'daemon english' || /[{}]/.test(shown)) raw.push(`${tag} ${use.where} apiErrors.${use.code} → ${shown}`);
+      }
+    }
+    setLocale('fr');
+    // The French dictionary is the one read, not an English fallback.
+    assert.equal(apiErrorMessage({ error: 'push failed', code: 'git_push_failed', params: { detail: 'rejected' } }), 'Le push a échoué : rejected'); // french-ok: the French dictionary under test
+  } finally { setLocale(before); }
+  assert.deepEqual(raw, []);
+});
