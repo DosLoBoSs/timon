@@ -94,13 +94,13 @@ import { performUninstall, prepareCleanup, stopInstalledService, verifyStopped }
 import { runUninstallHelper } from './uninstall-helper.js';
 import { BROWSER_ATTACH_CHANNEL, BROWSER_DETACH_CHANNEL, trustedBrowserSender } from './native-browser-protocol.js';
 
-import { DaemonStartTimeoutError, updateOffer, finishUpdate, updateCopy, updateFailureDialog, unmanagedDaemon, type UpdateStage } from './data-update.js';
+import { DaemonStartTimeoutError, updateOffer, finishUpdate, updateCopy, updateFailureDialog, unmanagedDaemon, type UpdateOffer, type UpdateStage } from './data-update.js';
 import { UpdateWindow } from './update-window.js';
 import { consentApproves, grantUpdateConsent, revokeUpdateConsent, takeUpdateConsent } from './update-consent.js';
 import { UpdateDownloader } from './update-download.js';
 import { UPDATE_CHANNELS, UpdateController, localDaemonGet, registerUpdateIpc } from './update-ipc.js';
 import { checkLocalUpdatesIfStale } from './update-freshness.js';
-import { missionsAtStake, readMissionCount, removeAppImageBackup } from './update-install.js';
+import { missionsAtStake, previousAppImage, readMissionCount, removeAppImageBackup, rollBackAppImage } from './update-install.js';
 import { nodeInstallerSystem, silentInstall } from './update-installer.js';
 import { aboutCopy, readThirdPartyNotices, registerAboutIpc, thirdPartyNoticesPath } from './about.js';
 import { showAboutWindow } from './about-window.js';
@@ -1334,6 +1334,25 @@ function installMachineHeader(): void {
   });
 }
 
+/**
+ * "Go back to x.y.z" on a refused AppImage update: the previous AppImage takes
+ * its name back and starts once this process has quit. The refused update
+ * moved no service and changed no data, so nothing else is undone.
+ */
+async function returnToPreviousAppImage(offer: UpdateOffer): Promise<void> {
+  const result = await rollBackAppImage(process.env.APPIMAGE,
+    (appImage) => queueAppImageRelaunch(appImage, relaunchOptions(process.platform, process.env, process.argv).args, desktopHome));
+  console.log(`[desktop] update declined, going back to ${offer.from}: ${result.status}${'message' in result ? ` (${result.message})` : ''}`);
+  if (result.status !== 'relaunched') {
+    const copy = updateCopy(uiLocale());
+    updateWindow?.close();
+    await dialog.showMessageBox(result.status === 'restored'
+      ? { type: 'info', message: copy.rolledBack(offer), detail: copy.rolledBackDetail }
+      : { type: 'error', message: copy.rollbackFailed(offer), detail: copy.rollbackFailedDetail });
+  }
+  app.quit();
+}
+
 async function main(): Promise<void> {
   // Also here: whether `session-created` reports the default session is not documented.
   keepDictionariesLocal(session.defaultSession, process.platform);
@@ -1385,12 +1404,17 @@ async function main(): Promise<void> {
     if (consent) console.log(`[desktop] update consent ${consent.from} -> ${consent.to}: ${preApproved ? 'approves this update' : 'does not match, asking'}`);
     // Asked to the daemon that runs now, the installed version's: approving moves its service.
     const installedDaemon = localDaemonGet(originOf(cfg.daemon.listen), cfg.home);
+    // The AppImage this update replaced waits beside it until approval: refusing can put it back.
+    const previous = process.platform === 'linux' && !preApproved ? await previousAppImage(process.env.APPIMAGE) : null;
     updateWindow = new UpdateWindow(offer,
       join(process.resourcesPath, 'orchestrator', 'scripts', 'release-notes.json'), uiLocale(),
       windowScheme(desktopHome),
       preApproved ? undefined : () => readMissionCount(installedDaemon).then(missionsAtStake),
-      preApproved);
-    if (!await updateWindow.choice) { console.log('[desktop] update declined: quitting'); app.quit(); return; }
+      preApproved, previous !== null);
+    if (!await updateWindow.choice) {
+      if (updateWindow.rollbackChosen) { await returnToPreviousAppImage(offer); return; }
+      console.log('[desktop] update declined: quitting'); app.quit(); return;
+    }
     updateApproved = true;
   } else if (consent) console.log(`[desktop] update consent ${consent.from} -> ${consent.to}: no update to approve, dropped`);
   // Past the approval, the new AppImage has started: the one it replaced is no longer needed.
