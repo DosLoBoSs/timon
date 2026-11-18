@@ -245,6 +245,27 @@ test('no public file outside the translations is written in French', (t) => {
   assert.deepEqual(offenders, [], 'translate these lines, or justify each with `french-ok: <reason>`');
 });
 
+test('the comments of the web client and of the plugin templates are in scope', () => {
+  // AGENTS.md wants every code comment in English: this guard is the one that
+  // reads them outside the daemon, so its scope must not lose these two trees.
+  for (const file of [
+    'app/src/components/chat/composer.tsx',
+    'app/src/plugins-client/kanban/kanban-page.tsx',
+    'app/src/lib/i18n.ts',
+    'app/src/vendor/vault-graph/page.js',
+    'examples/plugin-hello/lib/client.js',
+    'examples/plugin-provider/lib/index.mjs',
+  ]) assert.ok(inScope(file), `${file} must be read by the language guard`);
+  // Translations and tests stay out: their data is French on purpose.
+  for (const file of [
+    'app/src/locales/fr/core.json',
+    'app/src/locales/fr/notes.ts',
+    'app/src/components/chat/composer.test.tsx',
+    'examples/plugin-provider-cursor/test/conformance.test.mjs',
+    'examples/plugin-hello/test/helpers.mjs',
+  ]) assert.ok(!inScope(file), `${file} must stay out of the language guard`);
+});
+
 test('the language guard sees French and spares what is justified', () => {
   assert.equal(frenchIn('a.ts', '// le garde ne voit pas les mots sans accent\nconst a = 1;\n').length, 1);
   assert.equal(frenchIn('a.ts', '/** Libellé du bouton. */\nconst a = 1;\n').length, 1);

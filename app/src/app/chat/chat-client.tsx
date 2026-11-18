@@ -1783,7 +1783,7 @@ export function ChatClient({
 
   /** request_id of a permission card we should scroll into view + highlight
    *  once the conversation is bound and rendered. Set when the user clicks
-   *  a mission card flagged "action requise"; consumed (and cleared) by the
+   *  a mission card flagged "action required"; consumed (and cleared) by the
    *  effect that watches `messages` length below. */
   // A notification's link (`&highlight=<card id>`) is a deep-link too.
   const pendingDeepLinkPermId = useRef<string | null>(params.get('highlight'));

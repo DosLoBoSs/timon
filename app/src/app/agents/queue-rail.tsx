@@ -95,7 +95,7 @@ export function QueueRail({ poignee, className }: WidgetProps) {
         const mj = (await mr.json()) as { missions: Mission[] };
         const tj = (await tr.json()) as { tasks: Task[] };
         if (cancelled) return;
-        // Exclude internal wake-loop missions ("Tu as N notifications…") —
+        // Exclude internal wake-loop missions ("You have N message(s) waiting…") —
         // system plumbing, not user-facing work.
         setRunning(
           (mj.missions ?? [])
