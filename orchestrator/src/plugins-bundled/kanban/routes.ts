@@ -29,6 +29,8 @@ import { readRoles, type RoleSpec, type TaskRole } from '../../projects.js';
 import { isTemplateBackend, llmOfMission, previewRoleAgent, roleForTaskType } from '../../agent-seed.js';
 import { taskProjectSlug } from '../../task-project.js';
 import { codeAwaitsMerge } from '../../merge-gate.js';
+import { usesIntegrationBranch } from '../../git-integration.js';
+import { chainLanding } from '../../chain-landing.js';
 import { applyTodoClosure } from '../../todo-closure.js';
 import { checkScheduledAtPlausibility, validateScheduledAt } from '../../task-guards.js';
 import { delegatingAgent, delegationRefusal } from '../../delegation-guard.js';
@@ -1023,6 +1025,9 @@ export function registerRoutes(app: Router): void {
         attachment_count: attachmentCounts.get(t.id) ?? 0,
         ...(runner ? { run_by: runner } : {}),
         ...(codeAwaitsMerge(t, listChain) ? { awaiting_merge: true } : {}),
+        // Only on a chain merged into an integration branch: 'integrated'
+        // until that branch lands, then 'landed' (or 'closed').
+        ...(usesIntegrationBranch(t.integration_mode) ? { landing: chainLanding(t) } : {}),
       };
     });
     res.json({
