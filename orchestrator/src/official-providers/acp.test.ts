@@ -33,7 +33,7 @@ const { openLaunchSeal, closeLaunchSeal } = await import('../backends/launch-sea
 
 const { spawnOverrideRefusal } = await import('../users/privileged-overrides.js');
 const { acpInitEvent } = await import('../backends/acp/events.js');
-const { antigravityKeychainEnv, antigravitySignIn, antigravitySignInCommand } = await import('../../official-providers/provider-acp/lib/agents.js');
+const { ACP_AGENTS, antigravityKeychainEnv, antigravitySignIn, antigravitySignInCommand } = await import('../../official-providers/provider-acp/lib/agents.js');
 /** The sign-in sentence of THIS platform, as a pattern: on Linux the command switches the keychain off. */
 const AGY_SIGN_IN = new RegExp(antigravitySignIn(process.platform).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 type BuildSpawnOpts = import('../backends/types.js').BuildSpawnOpts;
@@ -353,8 +353,18 @@ test('through the backend: Hermes asks, TIMON answers; opencode is declared as d
   }
 });
 
+test('Hermes names the commands that sign in: `hermes setup`, `hermes portal` for Nous, never `--setup` (TIM-0159)', () => {
+  // `hermes --setup` is refused by Hermes 0.22 (`unrecognized arguments`).
+  assert.equal(BUILTIN_DECLARATIONS.hermes?.signInCommand, 'hermes setup');
+  const signIn = ACP_AGENTS.find((agent) => agent.id === 'hermes')?.signIn;
+  assert.match(signIn?.byMethod?.nous ?? '', /`hermes portal`/);
+  assert.match(signIn?.byMethod?.['hermes-setup'] ?? '', /`hermes setup`/);
+  assert.match(signIn?.fallback ?? '', /`hermes setup`/);
+  assert.doesNotMatch(JSON.stringify(signIn), /--setup/);
+});
+
 test('a refused sign-in names the login step of the agent\'s own row', async () => {
-  const cases = [['opencode', /run `opencode auth login`/], ['hermes', /run `hermes --setup`/], ['antigravity', AGY_SIGN_IN]] as const;
+  const cases = [['opencode', /run `opencode auth login`/], ['hermes', /run `hermes setup`/], ['antigravity', AGY_SIGN_IN]] as const;
   for (const [id, expected] of cases) {
     const previous = process.env.FAKE_ACP_AUTH;
     process.env.FAKE_ACP_AUTH = '1';
@@ -446,7 +456,7 @@ function acpScript(id: string, sessionId: string, authMethod: string): import('.
 
 const SESSION_CASES = [
   { id: 'opencode', cmd: 'opencode', args: ['acp'], authMethod: 'opencode-login', signIn: /run `opencode auth login` in a terminal on this machine, then retry/ },
-  { id: 'hermes', cmd: 'hermes-acp', args: [], authMethod: 'hermes-setup', signIn: /run `hermes --setup` in a terminal on this machine, then retry/ },
+  { id: 'hermes', cmd: 'hermes-acp', args: [], authMethod: 'hermes-setup', signIn: /run `hermes setup` in a terminal on this machine, then retry/ },
   { id: 'antigravity', cmd: 'agy', args: ['acp'], authMethod: 'oauth-personal', signIn: AGY_SIGN_IN },
 ] as const;
 
