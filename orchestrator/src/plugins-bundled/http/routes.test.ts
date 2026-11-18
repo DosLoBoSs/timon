@@ -20,6 +20,8 @@ const express = (await import('express')).default;
 const { registerRoutes } = await import('./routes.js');
 const { instanceId } = await import('../../host/packaged-service.js');
 const { BRAND } = await import('../../brand.js');
+const { installPlanFor } = await import('../../host/machine.js');
+const { machineFromEnvironment } = await import('../../onboarding.js');
 
 test('/api/health names the service that answers', async () => {
   const app = express();
@@ -125,7 +127,11 @@ test("onboarding: refusé dès qu'une config existe, sans conseiller un CLI abse
   }
 });
 
-test('onboarding: un prérequis privilégié rend la commande à coller', async () => {
+// Where the install needs no administrator rights (Homebrew on macOS) the
+// route really runs it: a test must not install git on the machine it runs on.
+const gitPlan = installPlanFor('git', machineFromEnvironment());
+const installsForReal = gitPlan !== null && !gitPlan.elevated;
+test('onboarding: un prérequis privilégié rend la commande à coller', { skip: installsForReal && 'this machine installs git without privileges' }, async () => {
   const { base, server } = await listening();
   try {
     const res = await fetch(`${base}/api/onboarding`, {
