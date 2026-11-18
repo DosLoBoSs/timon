@@ -2998,6 +2998,14 @@ const upsertIntegrationStmt = db.prepare(`
     updated_at = excluded.updated_at
 `);
 const getIntegrationStmt = db.prepare(`SELECT * FROM integrations WHERE repo = ? AND branch = ?`);
+const listIntegrationsBySeriesStmt = db.prepare(
+  `SELECT * FROM integrations WHERE series_id = ? ORDER BY created_at ASC`,
+);
+// Only from 'branch': a pull request recorded once is never replaced by another.
+const markIntegrationOpenStmt = db.prepare(`
+  UPDATE integrations SET state = 'open', pr_number = ?, pr_url = ?, head_sha = ?, updated_at = ?
+  WHERE id = ? AND state = 'branch'
+`);
 const setTaskTodoIdStmt = db.prepare(
   `UPDATE tasks SET todo_id = ?, updated_at = ? WHERE id = ?`,
 );
@@ -5524,6 +5532,14 @@ export const dbApi = {
   },
   getIntegration(repo: string, branch: string): IntegrationRow | undefined {
     return getIntegrationStmt.get(repo, branch) as IntegrationRow | undefined;
+  },
+  listIntegrationsBySeries(seriesId: string): IntegrationRow[] {
+    return listIntegrationsBySeriesStmt.all(seriesId) as IntegrationRow[];
+  },
+  /** Records the pull request opened for an integration branch; false when
+   *  the row is gone or already past the 'branch' state. */
+  markIntegrationOpen(id: string, pr: { number: number; url: string; headSha: string }): boolean {
+    return markIntegrationOpenStmt.run(pr.number, pr.url, pr.headSha, Date.now(), id).changes > 0;
   },
   /** Repoint ONE requeued task at another backend and release it now. Unlike
    *  `updateTask`, a null model is written as null: COALESCE would keep the slug
