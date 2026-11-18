@@ -62,7 +62,9 @@ export type ReturnPayload = {
   todo_closed?: number[];
   /** Ideas it moves without closing (`analyzed`; `partial` with the count of
    *  root chains landed while sibling tasks of the idea are still open). */
-  todo_progress?: { id: number; progress: string; landed?: number; total?: number }[];
+  /** `integrating`: the integration branch the idea waits in (it closes when
+   *  that branch lands). */
+  todo_progress?: { id: number; progress: string; landed?: number; total?: number; integrating?: string }[];
   /** Landed ideas whose coder reported an OS test still owed (A-TESTER-MULTI-OS.md). */
   todo_os_test?: number[];
   /** Final report of a mission WITHOUT a task (`mission_spawn` delegation):
@@ -219,9 +221,12 @@ function returnBody(p: ReturnPayload, share = Infinity, missionId: string | null
     instruction(`TO DO closed automatically: ${p.todo_closed.map((id) => `#${id}`).join(', ')}`);
   }
   for (const t of p.todo_progress ?? []) {
-    instruction(t.total
+    const counted = t.total
       ? `TO DO #${t.id}: ${t.landed ?? 0}/${t.total} chains landed (stays open, ${t.progress})`
-      : `TO DO #${t.id} → ${t.progress} (stays open)`);
+      : `TO DO #${t.id} → ${t.progress} (stays open)`;
+    instruction(t.integrating
+      ? `${counted}; integrated into ${t.integrating}, it closes when that branch lands`
+      : counted);
   }
   if (p.todo_os_test?.length) {
     instruction(`Win/Mac test to run (docs/A-TESTER-MULTI-OS.md): ${p.todo_os_test.map((id) => `#${id}`).join(', ')}`);
