@@ -881,6 +881,7 @@ async function markIntegrationMerged(
     : `Marked as merged outside Timon: ${row.branch} landed as ${sha} (not found in the local ${target}: not verified, fetch to check).`;
   const trimmed = comment?.trim();
   const report = trimmed ? `${note}\n\n${trimmed}` : note;
+  const scope = scopedDb(viewerFromRequest(req));
   if (task.status === 'BLOCKED') {
     dbApi.setTaskMergedSha(task.id, sha);
     task.merged_commit_sha = sha;
@@ -891,7 +892,7 @@ async function markIntegrationMerged(
     if (!task.merged_commit_sha) dbApi.setTaskMergedSha(task.id, sha);
     dbApi.appendTaskDoneComment(task.id, report);
     try {
-      applyTodoClosure(dbApi.getTask(task.id) ?? task);
+      applyTodoClosure(scope.getTask(task.id) ?? task);
     } catch (err) {
       console.error(`[kanban] TO DO closure failed for ${task.id}: ${(err as Error).message}`);
     }
@@ -899,7 +900,7 @@ async function markIntegrationMerged(
   auditRequest(req, 'task.mark_merged', `${task.id} ${sha} ${row.branch}`);
   const landed = dbApi.getIntegrationById(row.id);
   res.json({
-    task: scopedDb(viewerFromRequest(req)).getTask(task.id),
+    task: scope.getTask(task.id),
     verified: found === 'contained',
     integration: { id: row.id, branch: row.branch, state: landed?.state ?? row.state, merge_sha: landed?.merge_sha ?? sha },
   });
