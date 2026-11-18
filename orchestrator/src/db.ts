@@ -1994,6 +1994,11 @@ if (!taskCols.includes('blocked_reason_code')) db.exec(`ALTER TABLE tasks ADD CO
 // project setting changed mid-way never splits one chain across two modes.
 if (!taskCols.includes('integration_mode')) db.exec(`ALTER TABLE tasks ADD COLUMN integration_mode TEXT`);
 if (!taskCols.includes('base_ref')) db.exec(`ALTER TABLE tasks ADD COLUMN base_ref TEXT`);
+// 'pr' marks the final task of a job that lands through a pull request: a
+// `merge` task that publishes the integration branch (`timon pr open`) instead
+// of merging a task branch into it (`docs/KANBAN-PR-PIPELINE.md` §2.4). Set at
+// creation, never inherited by another task. NULL = an ordinary task.
+if (!taskCols.includes('landing')) db.exec(`ALTER TABLE tasks ADD COLUMN landing TEXT`);
 // One row per integration branch of a repository. The branch is created here
 // (state 'branch'); the later steps of the pull request pipeline fill the PR
 // columns and move the state to 'open', 'merged' or 'closed'. Keyed by the
@@ -2251,6 +2256,10 @@ export function isTaskType(v: unknown): v is TaskType {
  *  review. */
 export const PIPELINES = ['full', 'code-self', 'code-group'] as const;
 
+/** Accepted values for `tasks.landing` (null = an ordinary task). Only a
+ *  `merge` task carries one. */
+export const TASK_LANDINGS = ['pr'] as const;
+
 export type TaskRow = {
   id: string;
   title: string;
@@ -2345,6 +2354,8 @@ export type TaskRow = {
   integration_mode?: string | null;
   /** Remote-tracking ref the integration branch was cut from (`origin/main`). */
   base_ref?: string | null;
+  /** see migration: 'pr' = the `merge` task that opens the job's pull request. */
+  landing?: string | null;
 };
 
 /** One integration branch (see the `integrations` migration). */
@@ -3002,6 +3013,9 @@ const setTaskBaseBranchStmt = db.prepare(
 );
 const setTaskIntegrationStmt = db.prepare(
   `UPDATE tasks SET integration_mode = ?, base_ref = ?, updated_at = ? WHERE id = ?`,
+);
+const setTaskLandingStmt = db.prepare(
+  `UPDATE tasks SET landing = ?, updated_at = ? WHERE id = ?`,
 );
 // A row already there keeps its id, state and PR columns: recording the branch
 // again on a later dispatch must not reset what the PR steps wrote.
@@ -4999,6 +5013,9 @@ export const dbApi = {
        *  pass their root's. */
       integrationMode?: string | null;
       baseRef?: string | null;
+      /** 'pr' for the task that opens the job's pull request (see the `landing`
+       *  migration). Never passed to the chain's children. */
+      landing?: string | null;
     } = {},
   ): void {
     const now = Date.now();
@@ -5038,6 +5055,7 @@ export const dbApi = {
     if (opts.integrationMode || opts.baseRef) {
       setTaskIntegrationStmt.run(opts.integrationMode ?? null, opts.baseRef ?? null, now, id);
     }
+    if (opts.landing) setTaskLandingStmt.run(opts.landing, now, id);
     if (opts.parentTaskId) setTaskParentStmt.run(opts.parentTaskId, id);
     bus.publish({ kind: 'task_created', taskId: id });
   },

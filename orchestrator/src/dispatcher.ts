@@ -392,6 +392,58 @@ export function baseAdvanceInstructions(
 }
 
 /**
+ * The brief of the task that opens a job's pull request (`landing = 'pr'`,
+ * `docs/KANBAN-PR-PIPELINE.md` §2.4). It merges no task branch: it brings the
+ * target in if it moved, moves the integration branch by reference, writes the
+ * title and the description, and hands the rest to the daemon (`timon pr
+ * open`), whose checks an agent cannot skip. The agent never pushes and never
+ * runs `gh`.
+ */
+export function pullRequestDirective(task: TaskRow, wt: WorktreeInfo, activeBranch: string | null): string {
+  const baseRef = task.base_ref ?? '<remote>/<target>';
+  const slash = baseRef.indexOf('/');
+  const remote = slash > 0 ? baseRef.slice(0, slash) : '<remote>';
+  const target = slash > 0 ? baseRef.slice(slash + 1) : '<target>';
+  const repo = wt.sourceRepo;
+  const branch = wt.base;
+  const move = baseAdvanceInstructions(repo, branch, wt.branch, activeBranch);
+  return (
+    `\n\n## Your task: open the job's pull request\n\n` +
+    `This \`merge\` task merges no task branch. The job's work is already in its ` +
+    `integration branch \`${branch}\`, which reaches \`${baseRef}\` through a pull ` +
+    `request. The daemon pushes the branch and opens the pull request; you never ` +
+    `\`git push\`, never run \`gh\`, never merge into \`${target}\`, never force.\n\n` +
+    `You have YOUR worktree: \`${wt.path}\` (branch \`${wt.branch}\`, on \`${branch}\`). ` +
+    `The main repo (\`${repo}\`) has ONE working directory shared by every agent: ` +
+    `run no command that writes there except the single move of step 2.\n\n` +
+    `1. **Bring the target in**, if it moved, in your worktree:\n\n` +
+    `\`\`\`bash\ngit fetch --no-tags ${remote} ${target}\n` +
+    `git merge --no-edit -m "${refreshMergeMessage(baseRef)}" ${baseRef}\n\`\`\`\n\n` +
+    `   If the fetch fails, go on with the ref as it is: the daemon fetches it again ` +
+    `before opening. Resolve a conflict here (\`git commit --no-edit\` keeps the ` +
+    `message), then run the checks of the packages the job touched.\n\n` +
+    `2. **If step 1 created a commit**, move \`${branch}\` to it. ${move}\n\n` +
+    `3. **Write the pull request**: a title and a description in English, for a ` +
+    `reviewer who knows the project but not this job (what changes, why, how it was ` +
+    `checked). No task or mission id, no TODO number, no attribution line ` +
+    `(\`Co-Authored-By\`, "Generated with"), and no closing keyword (\`Fixes #n\`) ` +
+    `for now. Put the description in a file.\n\n` +
+    `4. **Open it** (MCP tool \`pr_open\` with \`id\` = your TASK_ID does the same):\n\n` +
+    `\`\`\`bash\ntimon pr open <TASK_ID> --title "<title>" --body-file <file>\n\`\`\`\n\n` +
+    `   The daemon checks the account, the remote, the identity and the messages of ` +
+    `every commit, the private paths and the public tree, then pushes \`${branch}\` ` +
+    `and opens the pull request. A refusal lists the failed checks: fix what your ` +
+    `worktree can fix with NEW commits (a commit is never rewritten), repeat step 2, ` +
+    `retry. A check you cannot fix (an earlier commit's identity or message, the ` +
+    `account) → \`timon task block <TASK_ID> --reason "<the failed checks>"\`.\n\n` +
+    `5. **Close** with the tip you published and the pull request's address:\n\n` +
+    `\`\`\`bash\ntimon task done <TASK_ID> --merged-sha "$(git -C ${repo} rev-parse ${branch})" ` +
+    `--comment "pull request <url> opened for ${branch}"\n\`\`\`\n\n` +
+    `A person merges the pull request on the forge; Timon notices it afterwards.`
+  );
+}
+
+/**
  * What the agent needs to know about ITS worktree when it starts.
  *
  * Two things it can't guess: that its base was refreshed under its feet
@@ -452,7 +504,9 @@ export function worktreeDirective(
       `state._`,
     );
   }
-  if (task.type === 'merge') {
+  if (task.type === 'merge' && task.landing === 'pr') {
+    parts.push(pullRequestDirective(task, wt, activeBranch ?? null));
+  } else if (task.type === 'merge') {
     const finish = baseAdvanceInstructions(wt.sourceRepo, wt.base, wt.branch, activeBranch ?? null);
     parts.push(
       `\n\n## Where you merge — hard rule\n\n` +
@@ -989,6 +1043,21 @@ export async function blockIfBaseUnavailable(task: TaskRow): Promise<boolean> {
     }
   }
   const base = task.base_branch ?? inheritedBase(task);
+  // The task that opens a pull request has nothing to publish in a job that
+  // merges locally, or that lands by hand under embargo.
+  if (task.landing === 'pr' && task.integration_mode !== 'pr') {
+    const detail =
+      `this task opens the job's pull request, but the job does not land through one ` +
+      `(integration mode "${task.integration_mode ?? 'local'}"); set the project to mode pr or delete the task`;
+    const reason =
+      `Integration branch ${base ?? 'none'} is unavailable: ${detail}. The task was not started, and the ` +
+      `branch is never cut from the local base instead of ${task.base_ref ?? 'none'}. Fix the remote or the ` +
+      `branch name, then retry the task.`;
+    blockTask(task, reason, daemonMessage('integration_branch_unavailable', {
+      branch: base ?? 'none', baseRef: task.base_ref ?? 'none', detail,
+    }));
+    return true;
+  }
   if (usesIntegrationBranch(task.integration_mode)) {
     const baseRef = task.base_ref ?? null;
     if (!base || !baseRef) {

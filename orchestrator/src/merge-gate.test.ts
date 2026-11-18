@@ -363,6 +363,18 @@ test('non-regression: the chain itself does not wait on itself (review, merge, d
   }
 });
 
+test('the merge that opens a pull request waits for the merges of its code deps', () => {
+  const c1 = codeDep('c1');
+  const r1 = chainReview('r1', 'c1', 1, PASS_COMMENT);
+  const pr = { type: 'merge' as const, deps: '["c1"]', landing: 'pr' };
+  assert.match(waiting(evaluateDeps(pr, lookup(c1), wholeChain(c1, r1))), /merge/);
+  assert.match(waiting(evaluateDeps(pr, lookup(c1), wholeChain(c1, r1, mergeOf('m1', 'r1', 'IN_PROGRESS')))), /m1/);
+  assert.deepEqual(evaluateDeps(pr, lookup(c1), wholeChain(c1, r1, mergeOf('m1', 'r1'))), { ok: true });
+  // code-self volets integrate themselves: DONE is enough, as for any dependent.
+  const self = codeDep('c2', { pipeline: 'code-self' });
+  assert.deepEqual(evaluateDeps({ ...pr, deps: '["c2"]' }, lookup(self), wholeChain(self)), { ok: true });
+});
+
 test('non-regression: code dep without a branch or worktree (agent outside git) → DONE is enough', () => {
   const c1 = codeDep('c1', { branch_name: null, worktree_path: null });
   assert.deepEqual(evaluateDeps(DEPENDENT, lookup(c1), wholeChain(c1)), { ok: true });

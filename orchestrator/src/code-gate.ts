@@ -370,6 +370,10 @@ export function effectiveMergeSha(task: TaskRow, sha: string | null | undefined,
  * show, and no single branch head contains the others. Once git proves every
  * branch in the base and inside the sha, a sha another task carries (the
  * base's head, typically) is accepted: the proof is the ancestry, not the sha.
+ *
+ * The task that opens a job's pull request (`landing = 'pr'`) merges nothing of
+ * its own: it closes with the tip of the integration branch it published, the
+ * very sha the job's last merge may carry. Ancestry is checked all the same.
  */
 export function mergeCloseRefusal(task: TaskRow, sha: string | null): string | null {
   if (task.type !== 'merge') return null;
@@ -383,7 +387,7 @@ export function mergeCloseRefusal(task: TaskRow, sha: string | null): string | n
   if (sources.length === 0) verdict.undecided.push('no source branch found in its dependencies');
   const owner = sha ? mergedShaOwner(task, sha) : null;
   const allSourcesProven = sources.length > 1 && verdict.refusal === null && verdict.undecided.length === 0;
-  if (sha && owner && !allSourcesProven) {
+  if (sha && owner && !allSourcesProven && task.landing !== 'pr') {
     // Another user's task is not named: its id and title are theirs.
     const which = owner.sameOwner ? `task ${owner.id} ("${owner.title}")` : 'another task';
     return `Merge guard: commit ${sha} is already the merge of ${which}, ` +

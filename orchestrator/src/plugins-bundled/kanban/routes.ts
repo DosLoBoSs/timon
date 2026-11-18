@@ -46,7 +46,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { gitTaskRefusal, isPlausibleGitRef } from '../../task-git.js';
 import { taskOriginFromRequest, withTaskOrigin } from '../../task-origin.js';
-import { backendRefusal, pipelineRefusal, planGroupRefusal, projectRefusal } from './task-field-guards.js';
+import { backendRefusal, landingRefusal, pipelineRefusal, planGroupRefusal, projectRefusal } from './task-field-guards.js';
 import { isClosingOnly, parseTaskUpdateBody } from './task-update-body.js';
 import { parseAttachSeriesBody, parseMarkMergedBody, parseTaskCloseBody } from './task-write-bodies.js';
 import { parsePipelineCreateBody, parsePipelineRunBody, parsePipelineUpdateBody } from './pipeline-body.js';
@@ -716,6 +716,8 @@ export function createTaskFromBody(
     }
     type = body.type;
   }
+  const landing = landingRefusal(body.landing, type);
+  if (landing) return { status: 400, json: { ...apiError('task_field_invalid', landing, { detail: landing }) } };
   // Refused here rather than BLOCKED at dispatch: the caller learns at once
   // that this host cannot run it (TODO #275).
   const gitRefusal = gitTaskRefusal(type, { cwd: agentCwd(body.agent_name) });
@@ -790,6 +792,7 @@ export function createTaskFromBody(
     pipeline: body.pipeline ?? null,
     project: body.project || null,
     traceId: typeof body.trace_id === 'string' ? body.trace_id : null,
+    landing: body.landing || null,
   });
   if (base) dbApi.setTaskBaseBranch(id, base);
   if (todo.value) dbApi.setTaskTodoId(id, todo.value);
