@@ -21,7 +21,8 @@ import {
   type DiffLineKind, type Landing, type LandingPreview, type Precheck, type PreviewFile,
 } from './landing-api';
 
-const LINE: Record<DiffLineKind, string> = {
+/** How each kind of diff line is painted, here and in the open pull requests' dialog. */
+export const DIFF_LINE_CLASS: Record<DiffLineKind, string> = {
   add: 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-200',
   del: 'bg-red-500/10 text-red-800 dark:text-red-200',
   hunk: 'text-sky-700 dark:text-sky-300',
@@ -62,7 +63,7 @@ function FileDiff({ file, open, onToggle }: { file: PreviewFile; open: boolean; 
               // code-font: a diff
               <pre className="scrollbar-thin overflow-x-auto rounded-md bg-background/70 py-1.5 font-mono text-[11px] leading-[1.5]">
                 {patchBody(file.patch).map((line, i) => (
-                  <div key={i} className={cn('whitespace-pre px-2', LINE[diffLineKind(line)])} data-kind={diffLineKind(line)}>{line || ' '}</div>
+                  <div key={i} className={cn('whitespace-pre px-2', DIFF_LINE_CLASS[diffLineKind(line)])} data-kind={diffLineKind(line)}>{line || ' '}</div>
                 ))}
               </pre>
             )}

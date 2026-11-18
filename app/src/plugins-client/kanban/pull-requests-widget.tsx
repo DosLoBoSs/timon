@@ -2,29 +2,31 @@
 
 /**
  * "Open pull requests": the pull requests open on the repository of ONE
- * project in `pr` mode, contributors' ones included, and their read-only
+ * project in `pr` mode, contributors' ones included, and the brief of their
  * relecture.
  *
- * One group, one filter (the author), one main action per row: "Review". It
- * prepares the reviewer's brief, which the person reads in a dialog and sends
- * with a click; nothing starts before, and nothing is ever posted on the
- * forge. The verdict comes back on the row. Opening the pull request on the
- * forge, or the reviewer's report, sit in the row's menu.
+ * One group, one filter (the author), one main action per row: "Prepare the
+ * review". It prepares the reviewer's brief and shows it beside the diff, with
+ * a way to copy it; Timon starts no mission from here, since its reviewer
+ * would not be confined, and nothing is ever posted on the forge. Opening the
+ * pull request on the forge, or a past report, sit in the row's menu.
  *
  * The project comes from the chat rail when there is one, else from a picker
  * remembered per browser, like the project's TO DO widget.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, FileText, GitPullRequest, MoreHorizontal, ScanSearch } from 'lucide-react';
+import { Copy, ExternalLink, FileText, GitPullRequest, MoreHorizontal, ScanSearch } from 'lucide-react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
 import { Tile } from '@/components/tile';
 import { WIDGET_SELECT, WidgetButton, widgetButtonClass } from '@/components/widget-toolbar';
 import { HUD_SURFACE } from '@/components/cockpit/hud-surface';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useChatRail } from '@/components/chat/chat-rails';
 import { apiErrorMessage } from '@/lib/api-error';
+import { copyToClipboard } from '@/lib/clipboard';
 import { t } from '@/lib/i18n';
 import { sharedGet } from '@/lib/shared-read';
 import { machineScopedStorage } from '@/lib/machines/machine-storage';
@@ -35,11 +37,15 @@ import {
   anyReviewRunning, filterByAuthor, pullAuthors, reviewBadge,
   type PullRequestItem, type PullRequestList, type ReviewBadge,
 } from './pull-requests-model';
+import { diffLineKind } from './landing-api';
+import { DIFF_LINE_CLASS } from './landing-preview-dialog';
 
 /** The project picked by hand, per browser and per machine. */
 const PROJECT_KEY = 'timon.pull-requests.project';
 /** How often a running review is asked for its verdict. */
 const RUNNING_POLL_MS = 15_000;
+/** Most diff lines painted: a 2 MB diff would freeze the dialog. */
+const DIFF_LINES_SHOWN = 3000;
 
 type Project = { slug: string; name?: string | null };
 
@@ -49,7 +55,14 @@ type Load =
   | { kind: 'error'; message: string }
   | { kind: 'ready'; list: PullRequestList };
 
-type Draft = { number: number; reviewId: string; agent: string; brief: string };
+type Draft = { number: number; title: string; brief: string };
+
+/** The diff of pull request `number`: an answer for an earlier dialog is dropped. */
+type DiffLoad = { number: number } & (
+  | { kind: 'loading' }
+  | { kind: 'error'; message: string }
+  | { kind: 'ready'; diff: string; truncated: boolean }
+);
 
 function storedProject(): string | null {
   if (typeof window === 'undefined') return null;
@@ -66,7 +79,7 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
   const [author, setAuthor] = useState<string | null>(null);
   const [preparing, setPreparing] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [sending, setSending] = useState(false);
+  const [diff, setDiff] = useState<DiffLoad>({ number: 0, kind: 'loading' });
   const [report, setReport] = useState<PullRequestItem | null>(null);
 
   useEffect(() => { setPicked(storedProject()); }, []);
@@ -121,12 +134,14 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
       const res = await fetch(`${projectPath(slug)}/${pull.number}/review`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
       });
-      const json = await res.json().catch(() => ({})) as { brief?: string; review?: { id: string; agent: string } };
-      if (!res.ok || !json.brief || !json.review) {
+      const json = await res.json().catch(() => ({})) as { brief?: string };
+      if (!res.ok || !json.brief) {
         toast.error(t('pullRequests.prepareError'), { description: apiErrorMessage(json, { status: res.status }) });
         return;
       }
-      setDraft({ number: pull.number, reviewId: json.review.id, agent: json.review.agent, brief: json.brief });
+      setDiff({ number: pull.number, kind: 'loading' });
+      setDraft({ number: pull.number, title: pull.title, brief: json.brief });
+      void readDiff(slug, pull.number);
     } catch (err) {
       toast.error(t('pullRequests.prepareError'), { description: (err as Error).message });
     } finally {
@@ -134,26 +149,25 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
     }
   };
 
-  const send = async () => {
-    if (!slug || !draft) return;
-    setSending(true);
+  const readDiff = async (project: string, number: number) => {
+    const show = (next: DiffLoad) => setDiff((current) => (current.number === number ? next : current));
     try {
-      const res = await fetch(`${projectPath(slug)}/${draft.number}/review/send`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ review_id: draft.reviewId }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(t('pullRequests.sendError'), { description: apiErrorMessage(json, { status: res.status }) });
+      const res = await fetch(`${projectPath(project)}/${number}/diff`, { cache: 'no-store' });
+      const json = await res.json().catch(() => ({})) as { diff?: string; truncated?: boolean };
+      if (!res.ok || typeof json.diff !== 'string') {
+        show({ number, kind: 'error', message: apiErrorMessage(json, { status: res.status }) });
         return;
       }
-      toast.success(t('pullRequests.sent', { agent: draft.agent }));
-      setDraft(null);
-      void reload(true);
+      show({ number, kind: 'ready', diff: json.diff, truncated: json.truncated === true });
     } catch (err) {
-      toast.error(t('pullRequests.sendError'), { description: (err as Error).message });
-    } finally {
-      setSending(false);
+      show({ number, kind: 'error', message: (err as Error).message });
     }
+  };
+
+  const copyBrief = async () => {
+    if (!draft) return;
+    if (await copyToClipboard(draft.brief)) toast.success(t('pullRequests.dialog.copied'));
+    else toast.error(t('pullRequests.dialog.copyFailed'));
   };
 
   const projectPicker = context ? null : (
@@ -218,18 +232,27 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
       )}
 
       {draft && (
-        <Dialog open onOpenChange={(open) => { if (!open && !sending) setDraft(null); }}>
-          <DialogContent className="max-w-2xl">
+        <Dialog open onOpenChange={(open) => { if (!open) setDraft(null); }}>
+          <DialogContent className="max-w-3xl">
             <DialogTitle className="text-sm">{t('pullRequests.dialog.title', { number: draft.number })}</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              {t('pullRequests.dialog.reviewer', { agent: draft.agent })}
-            </DialogDescription>
-            <div data-pull-brief="" className="scrollbar-thin max-h-[55vh] overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-muted/40 p-3 text-[12px] leading-relaxed text-foreground">
-              {draft.brief}
-            </div>
+            <DialogDescription className="sr-only">{draft.title}</DialogDescription>
+            <Tabs defaultValue="brief" className="flex min-h-0 flex-col gap-2">
+              <TabsList className="h-8 self-start">
+                <TabsTrigger value="brief" className="text-xs">{t('pullRequests.dialog.tabBrief')}</TabsTrigger>
+                <TabsTrigger value="diff" data-pull-diff-tab="" className="text-xs">{t('pullRequests.dialog.tabDiff')}</TabsTrigger>
+              </TabsList>
+              <TabsContent value="brief" className="mt-0">
+                <div data-pull-brief="" className="scrollbar-thin max-h-[55vh] overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-muted/40 p-3 text-[12px] leading-relaxed text-foreground">
+                  {draft.brief}
+                </div>
+              </TabsContent>
+              <TabsContent value="diff" className="mt-0">
+                <DiffView load={diff} />
+              </TabsContent>
+            </Tabs>
             <div className="flex justify-end gap-2">
-              <WidgetButton onClick={() => setDraft(null)} disabled={sending} label={t('pullRequests.dialog.cancel')} />
-              <WidgetButton primary data-pull-send="" onClick={() => void send()} disabled={sending} label={sending ? t('pullRequests.dialog.sending') : t('pullRequests.dialog.send')} />
+              <WidgetButton onClick={() => setDraft(null)} label={t('pullRequests.dialog.close')} />
+              <WidgetButton primary data-pull-copy="" onClick={() => void copyBrief()} icon={<Copy className="size-3" />} label={t('pullRequests.dialog.copy')} />
             </div>
           </DialogContent>
         </Dialog>
@@ -247,6 +270,25 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
         </Dialog>
       )}
     </Tile>
+  );
+}
+
+function DiffView({ load }: { load: DiffLoad }) {
+  if (load.kind === 'loading') return <p className="text-xs text-muted-foreground">{t('pullRequests.loading')}</p>;
+  if (load.kind === 'error') return <p className="text-xs text-red-600 dark:text-red-400">{load.message}</p>;
+  if (!load.diff.trim()) return <p className="text-xs text-muted-foreground">{t('pullRequests.dialog.diffEmpty')}</p>;
+  const lines = load.diff.split('\n');
+  const cut = load.truncated || lines.length > DIFF_LINES_SHOWN;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {/* code-font: a diff */}
+      <pre data-pull-diff="" className="scrollbar-thin max-h-[55vh] overflow-auto rounded-lg bg-muted/40 py-1.5 font-mono text-[11px] leading-[1.5]">
+        {lines.slice(0, DIFF_LINES_SHOWN).map((line, i) => (
+          <div key={i} className={cn('whitespace-pre px-2', DIFF_LINE_CLASS[diffLineKind(line)])}>{line || ' '}</div>
+        ))}
+      </pre>
+      {cut && <p className="text-[11px] text-muted-foreground">{t('pullRequests.dialog.diffCut')}</p>}
+    </div>
   );
 }
 

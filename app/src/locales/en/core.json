@@ -2332,7 +2332,7 @@
     },
     "pullRequests": {
       "title": "Open pull requests",
-      "description": "The pull requests open on one project's repository, and their read-only review by the project's reviewer."
+      "description": "The pull requests open on one project's repository, their diff and the brief of their review."
     },
     "workflowRuns": {
       "title": "Workflow runs",
@@ -2946,7 +2946,7 @@
     "allAuthors": "All authors",
     "deletedAuthor": "deleted account",
     "draft": "draft",
-    "review": "Review",
+    "review": "Prepare the review",
     "preparing": "Preparing…",
     "reviewing": "Reviewing…",
     "more": "More actions",
@@ -2954,8 +2954,6 @@
     "showReport": "Show the report",
     "outdated": "The pull request changed after this review",
     "prepareError": "The review could not be prepared",
-    "sendError": "The review could not be sent",
-    "sent": "Review sent to {agent}",
     "verdict": {
       "mergeable": "Mergeable",
       "changes_requested": "Changes requested",
@@ -2965,11 +2963,15 @@
       "failed": "Review failed"
     },
     "dialog": {
-      "title": "Review pull request #{number}",
-      "reviewer": "Sent to {agent}, who reads and writes nothing on GitHub.",
-      "cancel": "Cancel",
-      "send": "Send",
-      "sending": "Sending…"
+      "title": "Review brief for pull request #{number}",
+      "tabBrief": "Brief",
+      "tabDiff": "Diff",
+      "diffEmpty": "This pull request changes nothing.",
+      "diffCut": "The diff is cut here: the rest is on GitHub.",
+      "copy": "Copy the brief",
+      "copied": "Brief copied",
+      "copyFailed": "The brief could not be copied",
+      "close": "Close"
     },
     "report": {
       "title": "Review of pull request #{number}"

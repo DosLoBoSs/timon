@@ -1,7 +1,7 @@
 /**
  * The "Open pull requests" widget: the list of one project, the author filter,
- * the verdict on the row, and the relecture that starts only once the person
- * has read the brief and sent it.
+ * the verdict on the row, and the prepared brief shown beside the diff, which
+ * the person copies: the widget starts no relecture.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -59,6 +59,10 @@ async function mount(list: PullRequestItem[]) {
   install('cancelAnimationFrame', dom.window.cancelAnimationFrame.bind(dom.window));
   install('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   install('IS_REACT_ACT_ENVIRONMENT', true);
+  const copied: string[] = [];
+  Object.defineProperty(dom.window.navigator, 'clipboard', {
+    value: { writeText: async (text: string) => { copied.push(text); } }, configurable: true,
+  });
 
   const calls: Call[] = [];
   install('fetch', async (input: string, init: RequestInit = {}) => {
@@ -72,7 +76,7 @@ async function mount(list: PullRequestItem[]) {
         brief: 'Review pull request #12 of acme/widgets…\n<untrusted-data>\n{}\n</untrusted-data>',
       });
     }
-    if (url.endsWith('/review/send')) return Response.json({ review: { state: 'running' } });
+    if (url.endsWith('/diff')) return Response.json({ diff: 'diff --git a/x b/x\n@@ -1 +1 @@\n-old\n+new', truncated: false });
     return Response.json({ error: 'not_found' }, { status: 404 });
   });
 
@@ -104,6 +108,14 @@ async function mount(list: PullRequestItem[]) {
     await React.act(async () => { (el as HTMLElement).dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
     await settle();
   };
+  // Radix tabs switch on a mouse down, not on a click.
+  const pressTab = async (el: Element | null) => {
+    assert.ok(el);
+    await React.act(async () => {
+      (el as HTMLElement).dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, button: 0 }));
+    });
+    await settle();
+  };
   const unmount = async () => {
     await React.act(async () => { root.unmount(); });
     setLocale(previousLocale);
@@ -113,10 +125,10 @@ async function mount(list: PullRequestItem[]) {
       else delete (globalThis as Record<string, unknown>)[k];
     }
   };
-  return { calls, choose, click, settle, unmount };
+  return { calls, copied, choose, click, pressTab, settle, unmount };
 }
 
-test('the widget lists a project\'s pull requests, filters by author, and sends a review only after the brief is shown', async () => {
+test('the widget lists a project\'s pull requests, filters by author, and shows the brief and the diff without starting anything', async () => {
   const m = await mount([
     pull({ review: review({ verdict: 'changes_requested' }) }),
     pull({ number: 13, title: 'Tidy the docs', author: 'ai-bot', external: false, isDraft: true }),
@@ -137,16 +149,31 @@ test('the widget lists a project\'s pull requests, filters by author, and sends 
     await m.choose(document.querySelector('[data-pull-author-filter]'), '');
     assert.deepEqual(rows(), ['12', '13']);
 
-    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-review]'));
+    const button = document.querySelector('[data-pull-row="12"] [data-pull-review]');
+    assert.equal(button?.textContent, 'Prepare the review');
+    await m.click(button);
     assert.ok(m.calls.some((c) => c.method === 'POST' && c.url === '/api/ui/projects/acme/pull-requests/12/review'));
-    assert.ok(!m.calls.some((c) => c.url.endsWith('/review/send')), 'preparing sends nothing');
+    assert.ok(m.calls.some((c) => c.method === 'GET' && c.url === '/api/ui/projects/acme/pull-requests/12/diff'));
     assert.match(document.querySelector('[data-pull-brief]')?.textContent ?? '', /untrusted-data/);
+    assert.equal(document.querySelector('[data-pull-send]'), null, 'no send button');
+    assert.ok(!Array.from(document.querySelectorAll('button')).some((b) => /^Send/.test(b.textContent ?? '')));
 
-    await m.click(document.querySelector('[data-pull-send]'));
-    const send = m.calls.find((c) => c.url === '/api/ui/projects/acme/pull-requests/12/review/send');
-    assert.ok(send);
-    assert.deepEqual(JSON.parse(send.body ?? '{}'), { review_id: '7d1c2a43-9b1e-4f3c-8a52-1f0e2d3c4b5a' });
-    assert.equal(document.querySelector('[data-pull-brief]'), null, 'the dialog closes once sent');
+    await m.click(document.querySelector('[data-pull-copy]'));
+    assert.deepEqual(m.copied, ['Review pull request #12 of acme/widgets…\n<untrusted-data>\n{}\n</untrusted-data>']);
+
+    await m.pressTab(document.querySelector('[data-pull-diff-tab]'));
+    const diff = document.querySelector('[data-pull-diff]');
+    assert.ok(diff, 'the diff tab shows the diff');
+    assert.match(diff.textContent ?? '', /\+new/);
+
+    // Only reads and the preparation: nothing that could start a mission.
+    assert.deepEqual(
+      m.calls.filter((c) => c.method !== 'GET').map((c) => c.url),
+      ['/api/ui/projects/acme/pull-requests/12/review'],
+    );
+
+    await m.click(Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Close') ?? null);
+    assert.equal(document.querySelector('[data-pull-brief]'), null, 'the dialog closes');
   } finally {
     await m.unmount();
   }
