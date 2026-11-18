@@ -23,6 +23,21 @@
       "feed": {
         "title": "목요일 라이브 데모",
         "body": "에이전트와 플러그인, 한 시간."
+      },
+      "update": {
+        "highlight1": "업데이트를 앱에서 다운로드, 확인, 설치합니다.",
+        "highlight2": "미션은 재시작 후 멈춘 곳에서 이어집니다.",
+        "highlight3": "긴 대화의 스크롤이 더 빨라졌습니다.",
+        "highlight4": "플러그인이 자체 설정 페이지를 추가할 수 있습니다.",
+        "states": "미리보기",
+        "state": {
+          "downloading": "다운로드",
+          "verified": "확인됨",
+          "missions": "미션",
+          "network": "네트워크 오류",
+          "cancelled": "비밀번호 취소"
+        },
+        "done": "미리보기: 아무것도 설치되지 않았습니다."
       }
     },
     "license": {
