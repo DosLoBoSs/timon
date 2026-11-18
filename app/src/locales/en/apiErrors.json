@@ -445,6 +445,22 @@
     "mcp_app_takes_no_key": "This connector takes no key.",
     "mcp_app_vault_off": "The key is kept in the secrets vault, which is switched off.",
     "mcp_app_connect_failed": "The connector could not be connected: {detail}",
-    "mcp_app_not_connected": "This connector is not connected."
+    "mcp_app_not_connected": "This connector is not connected.",
+    "machine_unknown": "This machine is no longer in your fleet.",
+    "blocked_address": "This address never points to a Timon machine.",
+    "invalid_url": "This address cannot be used: give the machine's address alone, with no login, query or fragment.",
+    "https_required": "The machine must be reached over HTTPS. Plain HTTP is only accepted on this computer itself.",
+    "credentials_in_url": "A machine's address carries no login: give the address alone.",
+    "query_in_url": "A machine's address carries no query or fragment: give the address alone.",
+    "machine_bad_response": "The machine answered something unexpected.",
+    "machine_tls_error": "The machine's certificate was refused.",
+    "machine_redirect": "The machine answered with a redirect: give its final address.",
+    "machine_unreachable": "The machine cannot be reached right now.",
+    "too_many_machines": "A fleet holds at most {max} machines.",
+    "invalid_code": "The machine refused this code: wrong, expired or already used. Ask it for a new one.",
+    "machine_throttled": "Too many attempts. Wait a few minutes before trying again.",
+    "machine_requires_tls": "The machine does not see this connection as HTTPS: check the HTTPS settings of its reverse proxy.",
+    "not_a_timon_machine": "No Timon machine answers at this address.",
+    "machine_not_saved": "The machine could not be saved."
   }
 }

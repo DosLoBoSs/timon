@@ -445,6 +445,22 @@
     "mcp_app_takes_no_key": "Ce connecteur ne prend pas de clé.",
     "mcp_app_vault_off": "La clé est gardée dans le coffre de secrets, qui est désactivé.",
     "mcp_app_connect_failed": "Le connecteur n'a pas pu être connecté : {detail}",
-    "mcp_app_not_connected": "Ce connecteur n'est pas connecté."
+    "mcp_app_not_connected": "Ce connecteur n'est pas connecté.",
+    "machine_unknown": "Cette machine ne fait plus partie de votre parc.",
+    "blocked_address": "Cette adresse ne désigne jamais une machine Timon.",
+    "invalid_url": "Cette adresse ne convient pas : donnez l'adresse de la machine seule, sans identifiants, paramètres ni fragment.",
+    "https_required": "La machine doit être jointe en HTTPS. Le HTTP simple n'est accepté que sur cet ordinateur lui-même.",
+    "credentials_in_url": "L'adresse d'une machine ne porte pas d'identifiants : donnez l'adresse seule.",
+    "query_in_url": "L'adresse d'une machine ne porte ni paramètres ni fragment : donnez l'adresse seule.",
+    "machine_bad_response": "La machine a répondu quelque chose d'inattendu.",
+    "machine_tls_error": "Le certificat de la machine a été refusé.",
+    "machine_redirect": "La machine a répondu par une redirection : donnez son adresse finale.",
+    "machine_unreachable": "La machine est injoignable pour le moment.",
+    "too_many_machines": "Un parc compte au plus {max} machines.",
+    "invalid_code": "La machine a refusé ce code : erroné, expiré ou déjà utilisé. Demandez-lui-en un nouveau.",
+    "machine_throttled": "Trop de tentatives. Patientez quelques minutes avant de réessayer.",
+    "machine_requires_tls": "La machine ne voit pas cette connexion comme du HTTPS : vérifiez les réglages HTTPS de son reverse proxy.",
+    "not_a_timon_machine": "Aucune machine Timon ne répond à cette adresse.",
+    "machine_not_saved": "La machine n'a pas pu être enregistrée."
   }
 }
