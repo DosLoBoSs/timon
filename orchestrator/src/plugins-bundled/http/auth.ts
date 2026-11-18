@@ -157,7 +157,7 @@ function authenticateDevice(req: Request, res: Response, given: string): boolean
     return false;
   }
   if (!freeAccountAllowed(found.user.id)) {
-    res.status(403).json({ error: 'free_account_restricted', message: FREE_ACCOUNT_RESTRICTED_MESSAGE });
+    res.status(403).json(apiError('free_account_restricted', FREE_ACCOUNT_RESTRICTED_MESSAGE));
     return false;
   }
   // The relay is the first CSRF barrier; when it forwards the browser's
@@ -265,7 +265,7 @@ export function createDaemonAuthMiddleware(opts: {
       const live = dbApi.getLiveApiToken(hashSessionToken(given));
       if (live) {
         if (live.user && !freeAccountAllowed(live.user.id)) {
-          res.status(403).json({ error: 'free_account_restricted', message: FREE_ACCOUNT_RESTRICTED_MESSAGE });
+          res.status(403).json(apiError('free_account_restricted', FREE_ACCOUNT_RESTRICTED_MESSAGE));
           return;
         }
         req.auth = {
@@ -304,7 +304,7 @@ export function createDaemonAuthMiddleware(opts: {
       const live = dbApi.getLiveSession(hashSessionToken(raw));
       if (live) {
         if (!freeAccountAllowed(live.user.id) && req.path !== '/api/auth/logout') {
-          res.status(403).json({ error: 'free_account_restricted', message: FREE_ACCOUNT_RESTRICTED_MESSAGE });
+          res.status(403).json(apiError('free_account_restricted', FREE_ACCOUNT_RESTRICTED_MESSAGE));
           return;
         }
         // A cookie is sent by the browser on its own: a mutation must come

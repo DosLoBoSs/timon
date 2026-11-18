@@ -573,6 +573,7 @@
     "setup_team_preset_locked": "La création a déjà commencé. Reprenez l’équipe sélectionnée.",
     "setup_team_instance_not_empty": "Timon contient déjà des agents ou du travail à vous. Choisissez Partir de zéro pour tout conserver et terminer.",
     "setup_team_failed": "La création de votre équipe est incomplète. Réessayez pour reprendre là où elle s’est arrêtée.",
+    "free_account_restricted": "Seul le premier superadmin peut se connecter tant que cette installation n'a pas de licence pro et le plugin Multi-utilisateur. Votre compte et vos données sont conservés : demandez à cet administrateur de rétablir votre accès.",
     "setup_already_complete": "La configuration est déjà terminée.",
     "setup_nothing_to_resume": "Cette installation n'a rien à reprendre.",
     "setup_resume_failed": "L'installation existante n'a pas pu être reprise. Réessayez.",

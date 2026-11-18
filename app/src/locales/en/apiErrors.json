@@ -573,6 +573,7 @@
     "setup_team_preset_locked": "Team creation has already started. Resume the selected team.",
     "setup_team_instance_not_empty": "Timon already holds agents or work of your own. Choose Start from scratch to keep everything as it is and finish setup.",
     "setup_team_failed": "Your team could not be fully created. Try again to continue where it stopped.",
+    "free_account_restricted": "Only the first superadmin can sign in until this installation has a pro license and the Multi-user plugin. Your account and data are preserved: ask that administrator to restore your access.",
     "setup_already_complete": "Setup is already complete.",
     "setup_nothing_to_resume": "This installation holds nothing to resume.",
     "setup_resume_failed": "The existing installation could not be resumed. Try again.",
