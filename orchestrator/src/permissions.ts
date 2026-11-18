@@ -40,11 +40,13 @@ import {
   validateSeriesPlanAnswer,
   seriesPlanCommands,
   planGroupNames,
+  PIPELINE_BY_MODE,
   type SeriesPlanAnswer,
   type SeriesPlanRoleConfig,
   type SeriesPlanVolet,
 } from './series-plan.js';
 import { seriesPlanDefaults } from './series-plan-defaults.js';
+import { planLanding } from './plan-landing.js';
 import type { ApprovalScope } from './backends/types.js';
 import { approvalMotif, findApproval, motifLabel, rememberApproval, rememberableScopes, shellCommandOfTool } from './approval-rules.js';
 import { loadConfig } from './agent-config.js';
@@ -1248,9 +1250,20 @@ function withSeriesPlan(p: Omit<Pending, 'resolve'>, final: PermissionDecision):
     };
   }
   const plan = updated.plan as SeriesPlanAnswer;
+  // A project that lands through pull requests: every task on the job's
+  // integration branch, and a last task that opens the pull request. Nothing
+  // added for any other project, so its answer stays what it was.
+  const chantier = typeof form.chantier === 'string' ? form.chantier : '';
+  const landing = PIPELINE_BY_MODE[plan.mode] ? planLanding(p.agent, chantier) : null;
+  const commands = seriesPlanCommands(plan, volets, landing);
   return {
     behavior: 'allow',
-    updatedInput: { ...updated, plan, commands: seriesPlanCommands(plan, volets) },
+    updatedInput: landing
+      ? {
+        ...updated, plan, commands,
+        integration: { mode: 'pr', branch: landing.branch, base_ref: landing.baseRef, note: landing.note },
+      }
+      : { ...updated, plan, commands },
   };
 }
 
@@ -1385,7 +1398,10 @@ export function formatAskAnswer(a: unknown): string {
 export function buildContinuation(p: Omit<Pending, 'resolve'>, final: PermissionDecision): string {
   if (p.tool_name === 'ask_user' && final.behavior === 'allow') {
     const updated = final.updatedInput as
-      | { answers?: Record<string, unknown>; note?: string; plan?: SeriesPlanAnswer; commands?: string[] }
+      | {
+        answers?: Record<string, unknown>; note?: string; plan?: SeriesPlanAnswer; commands?: string[];
+        integration?: { note?: string };
+      }
       | undefined;
     // Typed form: the plan has no "questions" to replay, it has a mode and
     // commands. Rendering them as-is is better than the empty Q/A list the
@@ -1410,6 +1426,7 @@ export function buildContinuation(p: Omit<Pending, 'resolve'>, final: Permission
         `[series plan] The user chose mode \`${updated.plan.mode}\`.\n`
         + `${roles || '- (no explicit setting: everything inherits)'}\n`
         + (note ? `Note: ${note}\n` : '')
+        + (updated.integration?.note ? `Pull request: ${updated.integration.note}\n` : '')
         + (cmds ? `Commands to run, in this order:\n${cmds}\n` : '')
         + `Apply this plan as-is, then resume the project.`
       );
