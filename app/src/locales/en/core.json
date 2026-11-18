@@ -644,14 +644,6 @@
     "doneBody": "You now sign in with {email}.",
     "signIn": "Sign in"
   },
-  "license": {
-    "pastDue": "Payment overdue — renew your subscription",
-    "pastDueUntil": "Payment overdue — subscription ends on {date}",
-    "activate": "Activate",
-    "offlineSince": "License server unreachable since {date} — paid rights remain available during the offline tolerance, then Timon returns to Free.",
-    "licenseEndsSoon": "Your licence ends on {date}. Enter a new key before then.",
-    "licenseEndsUrgent": "Your licence ends on {date}. Enter a new key now."
-  },
   "betaLock": {
     "eyebrow": "Beta",
     "build_expired_title": "This build has expired",

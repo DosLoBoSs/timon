@@ -61,10 +61,10 @@ type MountOptions = {
   dismissed?: string[];
   shell?: ReturnType<typeof fakeShell> | null;
   buildExpiresAt?: string | null;
-  withLicenseBanner?: boolean;
+  withLicenseNotices?: boolean;
 };
 
-async function mount(status: UpdateStatus | null, { dismissed = [], shell = null, buildExpiresAt = OFFER_STATUS.buildExpiresAt, withLicenseBanner = false }: MountOptions = {}) {
+async function mount(status: UpdateStatus | null, { dismissed = [], shell = null, buildExpiresAt = OFFER_STATUS.buildExpiresAt, withLicenseNotices = false }: MountOptions = {}) {
   const { JSDOM } = await import('jsdom');
   const dom = new JSDOM('<html><body><div id="root"></div></body></html>', { url: 'http://localhost/', pretendToBeVisual: true });
   // The desktop app on Linux. Set on the navigator: jsdom ignores a `userAgent`
@@ -129,15 +129,15 @@ async function mount(status: UpdateStatus | null, { dismissed = [], shell = null
   dialog.resetUpdateDialogForTests();
   const { NoticesHost } = await import('@/components/notices/notices-host');
   const { UpdateNotice } = await import('./update-notice');
-  const { LicenseBanner } = await import('@/components/license-banner');
+  const { LicenseNotices } = await import('@/components/notices/license-notices');
   const root = createRoot(document.getElementById('root')!);
   await React.act(async () => {
-    root.render(React.createElement(React.Fragment, null,
-      React.createElement(NoticesHost),
-      withLicenseBanner ? React.createElement(LicenseBanner) : null));
+    root.render(React.createElement(NoticesHost));
   });
   // As the client half of `@timon/updates` registers it.
   await React.act(async () => { slots.register({ slot: 'notices', key: 'update', pluginId: '@timon/updates' }, UpdateNotice); });
+  // As the client half of `@timon/settings` registers it: the licence's cards beside the update's.
+  if (withLicenseNotices) await React.act(async () => { slots.register({ slot: 'notices', key: 'license', pluginId: '@timon/settings' }, LicenseNotices); });
   const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);
   const click = async (el: Element | null | undefined) => {
     assert.ok(el, 'element to click');
@@ -273,7 +273,7 @@ test('closing is later for that version, per account: the same version stays clo
 
 test('a build about to stop makes the card a warning that says when; alone, it is a card of its own; the top banner no longer says it', async () => {
   const ending = new Date(NOW + 5 * DAY).toISOString();
-  const m = await mount(OFFER_STATUS, { buildExpiresAt: ending, withLicenseBanner: true });
+  const m = await mount(OFFER_STATUS, { buildExpiresAt: ending, withLicenseNotices: true });
   try {
     await m.until(() => /This build stops running on/.test(text()), 'the end in the update card');
     assert.equal(card()?.querySelector('[data-notice-card]')?.getAttribute('data-notice-card'), 'warning');

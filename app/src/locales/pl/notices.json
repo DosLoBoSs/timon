@@ -19,6 +19,28 @@
         "title": "Pokaz na żywo w czwartek",
         "body": "Agenci i wtyczki, jedna godzina."
       }
+    },
+    "license": {
+      "enterKey": "Wpisz mój klucz",
+      "paused": {
+        "title": "Płatne funkcje wstrzymane",
+        "body": "Wrócą, gdy tylko {brand} połączy się z serwerem licencji.",
+        "action": "Dowiedz się więcej"
+      },
+      "refused": {
+        "title": "Twoja licencja nie jest już aktywna",
+        "body": "{brand} działa dalej w wersji Free. Wpisz klucz, aby odzyskać płatne funkcje."
+      },
+      "pastDue": {
+        "title": "Zaległa płatność",
+        "body": "Odnów subskrypcję, aby zachować płatne funkcje.",
+        "bodyUntil": "Odnów subskrypcję przed {date}, aby zachować płatne funkcje.",
+        "action": "Zobacz moją licencję"
+      },
+      "ends": {
+        "title": "Twoja licencja kończy się {date}",
+        "body": "Wpisz nowy klucz przed tym dniem, aby zachować płatne funkcje."
+      }
     }
   }
 }

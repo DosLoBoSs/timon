@@ -19,6 +19,28 @@
         "title": "Demo en directo el jueves",
         "body": "Agentes y plugins, una hora."
       }
+    },
+    "license": {
+      "enterKey": "Introducir mi clave",
+      "paused": {
+        "title": "Funciones de pago en pausa",
+        "body": "Vuelven en cuanto {brand} contacte con el servidor de licencias.",
+        "action": "Más información"
+      },
+      "refused": {
+        "title": "Tu licencia ya no está activa",
+        "body": "{brand} sigue en Free. Introduce una clave para recuperar las funciones de pago."
+      },
+      "pastDue": {
+        "title": "Pago atrasado",
+        "body": "Renueva tu suscripción para conservar las funciones de pago.",
+        "bodyUntil": "Renueva tu suscripción antes del {date} para conservar las funciones de pago.",
+        "action": "Ver mi licencia"
+      },
+      "ends": {
+        "title": "Tu licencia termina el {date}",
+        "body": "Introduce una clave nueva antes de esa fecha para conservar las funciones de pago."
+      }
     }
   }
 }

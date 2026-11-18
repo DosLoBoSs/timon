@@ -875,14 +875,6 @@
     "doneBody": "现在请使用 {email} 登录。",
     "signIn": "登录"
   },
-  "license": {
-    "pastDue": "付款已逾期，请续订",
-    "pastDueUntil": "付款已逾期，订阅将于 {date} 到期",
-    "activate": "激活",
-    "offlineSince": "自 {date} 起无法连接许可证服务器。离线宽限期内仍可使用付费权益，宽限期结束后 Timon 将恢复为免费版。",
-    "licenseEndsSoon": "你的许可证将于 {date} 到期。请在此之前输入新密钥。",
-    "licenseEndsUrgent": "你的许可证将于 {date} 到期。请立即输入新密钥。"
-  },
   "betaLock": {
     "eyebrow": "测试版",
     "build_expired_title": "此版本已过期",

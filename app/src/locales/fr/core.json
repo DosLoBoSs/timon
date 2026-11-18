@@ -644,14 +644,6 @@
     "doneBody": "Vous vous connectez désormais avec {email}.",
     "signIn": "Se connecter"
   },
-  "license": {
-    "pastDue": "Paiement en retard — renouvelez votre abonnement",
-    "pastDueUntil": "Paiement en retard — abonnement jusqu'au {date}",
-    "activate": "Activer",
-    "offlineSince": "Serveur de licences injoignable depuis le {date} — les droits payants restent disponibles pendant la tolérance hors ligne, puis Timon revient à Free.",
-    "licenseEndsSoon": "Votre licence prend fin le {date}. Saisissez une nouvelle clé avant cette date.",
-    "licenseEndsUrgent": "Votre licence prend fin le {date}. Saisissez une nouvelle clé dès maintenant."
-  },
   "betaLock": {
     "eyebrow": "Bêta",
     "build_expired_title": "Ce build a expiré",

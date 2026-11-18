@@ -845,14 +845,6 @@
     "doneBody": "이제 {email}(으)로 로그인합니다.",
     "signIn": "로그인"
   },
-  "license": {
-    "pastDue": "결제 연체 — 구독을 갱신하세요",
-    "pastDueUntil": "결제 연체 — 구독이 {date}에 종료됩니다",
-    "activate": "활성화",
-    "offlineSince": "{date}부터 라이선스 서버에 연결할 수 없습니다 — 오프라인 유예 기간 동안은 유료 권한을 계속 쓸 수 있으며, 그 후 Timon은 Free로 돌아갑니다.",
-    "licenseEndsSoon": "라이선스가 {date}에 종료됩니다. 그 전에 새 키를 입력하세요.",
-    "licenseEndsUrgent": "라이선스가 {date}에 종료됩니다. 지금 새 키를 입력하세요."
-  },
   "betaLock": {
     "eyebrow": "베타",
     "build_expired_title": "이 빌드는 만료되었습니다",

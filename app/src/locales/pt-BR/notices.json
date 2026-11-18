@@ -19,6 +19,28 @@
         "title": "Demo ao vivo na quinta",
         "body": "Agentes e plugins, uma hora."
       }
+    },
+    "license": {
+      "enterKey": "Inserir minha chave",
+      "paused": {
+        "title": "Recursos pagos em pausa",
+        "body": "Eles voltam assim que o {brand} alcançar o servidor de licenças.",
+        "action": "Saiba mais"
+      },
+      "refused": {
+        "title": "Sua licença não está mais ativa",
+        "body": "O {brand} continua no Free. Insira uma chave para recuperar os recursos pagos."
+      },
+      "pastDue": {
+        "title": "Pagamento atrasado",
+        "body": "Renove sua assinatura para manter os recursos pagos.",
+        "bodyUntil": "Renove sua assinatura antes de {date} para manter os recursos pagos.",
+        "action": "Ver minha licença"
+      },
+      "ends": {
+        "title": "Sua licença termina em {date}",
+        "body": "Insira uma nova chave até lá para manter os recursos pagos."
+      }
     }
   }
 }

@@ -845,14 +845,6 @@
     "doneBody": "Agora você entra com {email}.",
     "signIn": "Entrar"
   },
-  "license": {
-    "pastDue": "Pagamento em atraso — renove sua assinatura",
-    "pastDueUntil": "Pagamento em atraso — a assinatura termina em {date}",
-    "activate": "Ativar",
-    "offlineSince": "Servidor de licenças inacessível desde {date} — os direitos pagos continuam disponíveis durante a tolerância offline; depois disso, o Timon volta ao Free.",
-    "licenseEndsSoon": "Sua licença termina em {date}. Informe uma nova chave antes disso.",
-    "licenseEndsUrgent": "Sua licença termina em {date}. Informe uma nova chave agora."
-  },
   "betaLock": {
     "eyebrow": "Beta",
     "build_expired_title": "Esta versão expirou",

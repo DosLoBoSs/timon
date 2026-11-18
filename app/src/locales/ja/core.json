@@ -845,14 +845,6 @@
     "doneBody": "今後は {email} でサインインします。",
     "signIn": "サインイン"
   },
-  "license": {
-    "pastDue": "支払い期限超過 — サブスクリプションを更新してください",
-    "pastDueUntil": "支払い期限超過 — サブスクリプションは {date} に終了します",
-    "activate": "有効化",
-    "offlineSince": "{date} からライセンスサーバーに接続できません — オフライン猶予期間中は有料の権利を引き続き利用できますが、その後 Timon は Free に戻ります。",
-    "licenseEndsSoon": "ライセンスは {date} に終了します。それまでに新しいキーを入力してください。",
-    "licenseEndsUrgent": "ライセンスは {date} に終了します。今すぐ新しいキーを入力してください。"
-  },
   "betaLock": {
     "eyebrow": "ベータ",
     "build_expired_title": "このビルドは期限切れです",
