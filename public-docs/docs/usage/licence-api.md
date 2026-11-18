@@ -52,11 +52,17 @@ the network is not ready yet as Timon starts, it tries again three times, 30
 seconds, 1 minute and 2 minutes apart, before going back to its usual pace.
 
 A licence that ends (expired, revoked or released) does not stop Timon: it
-continues on Free and stops asking for renewals. If the licence ends while
-Timon runs, one alert in the Notification center says why; found ended when
-Timon starts, it falls back to Free without a word, and no banner stays on
-screen. Additional accounts keep their data but cannot sign in until a licence
-is back. To get your paid licence back, enter its key again from your profile.
+continues on Free. If the licence ends while Timon runs, one alert in the
+Notification center says why; found ended when Timon starts, it falls back to
+Free without a word, and no banner stays on screen. Additional accounts keep
+their data but cannot sign in until a licence is back.
+
+A paid licence that only expired while the computer was off, for longer than
+the time it tolerates without a connection, comes back on its own: Timon keeps
+trying to renew it, at start and then at its usual pace, and its accounts
+return as soon as a renewal goes through. If the licence was revoked or
+released, Timon stops trying and says so once; enter a key again from your
+profile to get a paid licence back.
 
 ## Activation endpoint for custom clients
 

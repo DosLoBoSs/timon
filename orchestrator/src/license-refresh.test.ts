@@ -10,6 +10,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import type { DaemonMessage } from './daemon-message.js';
 
 process.env.TIMON_HOME = mkdtempSync(join(tmpdir(), 'timon-license-refresh-test-'));
 const { bootLicenseState, describeRenewFailure, forgetLicenseKey, recordServerContact, startLicenseRefresh, writeLicenseKey } = await import('./license/refresh.js');
@@ -60,6 +61,7 @@ function server(replies: Reply[]) {
 }
 
 const notices: { title: string; urgent: boolean }[] = [];
+const messages: DaemonMessage[] = [];
 const events: unknown[] = [];
 bus.on('event', (ev: { kind: string }) => { if (ev.kind === 'license_changed') events.push(ev); });
 
@@ -71,7 +73,7 @@ function loop(replies: Reply[], recomposed?: { n: number }) {
     verify: { keys, device: DEVICE },
     now: nowMs,
     recompose: recomposed ? async () => { recomposed.n += 1; } : undefined,
-    notify: (n) => { notices.push({ title: n.title, urgent: n.urgent }); },
+    notify: (n) => { notices.push({ title: n.title, urgent: n.urgent }); if (n.message) messages.push(n.message); },
     manual: true,
   });
   return { ...s, refresh };
@@ -293,25 +295,83 @@ test('bootLicenseState: a damaged store gets its clock anchors back from the tok
 });
 
 /**
- * No licence is Free (the maintainer's decision, 17/11/2026): whatever is left
- * on disk, an expired paid token and its activation key included, the loop
- * asks the licence server nothing and tells nobody anything.
+ * No licence is Free (the maintainer's decision, 17/11/2026), so nothing is
+ * asked of the server for it. A paid licence that expired while the daemon was
+ * off is not "no licence" though: with its activation key on disk, it is
+ * renewed, silently, and its rights come back (decision of 18/11/2026).
  */
-test('without a licence in force, no request reaches the licence server and no alert is raised', async () => {
+function expiredWhileOff(): void {
+  activated();
+  clock += 25 * 3600; // past the 24 h offline tolerance
+  const boot = bootLicenseState({ keys, now: new Date(nowMs()) });
+  assert.equal(boot.reason, 'expired');
+  setLicenseState(boot);
+  assert.equal(licenseState().localFree, true, 'the expired licence falls back to Free');
+  notices.length = 0;
+  messages.length = 0;
+}
+
+test('a paid licence that expired while the daemon was off is renewed with its key, without a word', async () => {
   for (const build of ['stable', 'beta'] as const) {
     overrideBuildInfo({ channel: build, builtAt: new Date((clock - 86_400) * 1000).toISOString(), expiresAt: null });
     try {
-      activated();
-      clock += 25 * 3600;
-      const boot = bootLicenseState({ keys, now: new Date(nowMs()) });
-      assert.equal(boot.reason, 'expired', build);
-      setLicenseState(boot);
-      assert.equal(licenseState().localFree, true, `${build}: the expired licence falls back to Free`);
+      expiredWhileOff();
+      const { refresh, calls } = loop(['down', { status: 200, body: { token: token(clock), refresh: { every: 300, offlineHours: 24 } } }]);
+      await refresh.tick();
+      assert.deepEqual(calls, ['/api/v1/license/renew'], `${build}: the renewal is attempted`);
+      assert.equal(licenseState().localFree, true, `${build}: still Free while the server is out of reach`);
+      assert.equal(licenseState().offlineSince, null, `${build}: no offline banner for a licence not in force`);
+      await refresh.tick();
+      assert.equal(calls.length, 2);
+      assert.equal(licenseState().status, 'valid', `${build}: the licence is back`);
+      assert.equal(licenseState().planId, base.plan);
+      assert.equal(licenseState().users, base.users ?? null);
+      assert.deepEqual(notices, [], `${build}: nobody is told anything`);
+    } finally { overrideBuildInfo(undefined); }
+  }
+});
+
+test('a definitive refusal of the expired licence alerts once, then nothing more is asked', async () => {
+  const refusals: [number, string][] = [[403, 'revoked'], [403, 'unknown_key'], [403, 'expired'], [409, 'device_mismatch']];
+  for (const [status, code] of refusals) {
+    expiredWhileOff();
+    const { refresh, calls } = loop([{ status, body: { error: code } }, { status: 200, body: { token: token(clock) } }]);
+    await refresh.tick();
+    assert.equal(calls.length, 1, code);
+    assert.deepEqual(notices, [{ title: 'Licence not renewed', urgent: true }], `${code}: one alert`);
+    assert.equal(messages[0]?.code, 'license_renewal_refused', 'not the alert that promises another try');
+    assert.equal(licenseState().localFree, true, `${code}: Free goes on`);
+    await refresh.tick(); await refresh.localTick(); await refresh.tick();
+    assert.equal(calls.length, 1, `${code}: no request after the refusal`);
+    assert.equal(notices.length, 1, `${code}: the alert is not repeated`);
+
+    // The refusal is persisted: a restart does not ask again either.
+    setLicenseState(bootLicenseState({ keys, now: new Date(nowMs()) }));
+    const after = loop([{ status: 200, body: { token: token(clock) } }]);
+    await after.refresh.tick();
+    assert.deepEqual(after.calls, [], `${code}: nothing asked after a restart`);
+    assert.equal(notices.length, 1);
+  }
+});
+
+test('without an activation key, or with a retired Free token, nothing reaches the licence server', async () => {
+  for (const build of ['stable', 'beta'] as const) {
+    overrideBuildInfo({ channel: build, builtAt: new Date((clock - 86_400) * 1000).toISOString(), expiresAt: null });
+    try {
+      expiredWhileOff();
+      forgetLicenseKey();
       const { refresh, calls } = loop([{ status: 200, body: { token: token(clock) } }]);
       await refresh.tick(); await refresh.localTick(); await refresh.tick();
-      assert.deepEqual(calls, [], `${build}: no renewal`);
-      assert.deepEqual(notices, [], `${build}: no alert`);
+      assert.deepEqual(calls, [], `${build}: no key, no renewal`);
       assert.equal(licenseState().localFree, true);
+
+      // A Free token the server once issued, with its key: read as no licence.
+      writeLicenseKey('TMN-REFRESH');
+      writeFileSync(LICENSE_FILE, token(clock, { plan: 'free' }) + '\n');
+      setLicenseState(bootLicenseState({ keys, now: new Date(nowMs()) }));
+      assert.equal(licenseState().reason, 'missing');
+      await refresh.tick(); await refresh.localTick();
+      assert.deepEqual(calls, [], `${build}: a Free token has nothing to renew`);
 
       forgetLicenseKey();
       rmSync(LICENSE_FILE, { force: true });
@@ -319,7 +379,7 @@ test('without a licence in force, no request reaches the licence server and no a
       assert.equal(licenseState().reason, 'missing');
       await refresh.tick(); await refresh.localTick();
       assert.deepEqual(calls, [], `${build}: nothing to ask without a token either`);
-      assert.deepEqual(notices, []);
+      assert.deepEqual(notices, [], `${build}: no alert`);
     } finally { overrideBuildInfo(undefined); }
   }
 });
@@ -388,7 +448,7 @@ test('TIM-0024: an unreadable machine id does not switch the licence off; a diff
   assert.equal(licenseState().status, 'valid');
   const run = (readable: boolean) => startLicenseRefresh({
     app: null, verify: { keys, device: DEVICE, fingerprint: 'machine-b' }, now: nowMs,
-    notify: (n) => { notices.push({ title: n.title, urgent: n.urgent }); },
+    notify: (n) => { notices.push({ title: n.title, urgent: n.urgent }); if (n.message) messages.push(n.message); },
     manual: true, fingerprintReadable: () => readable,
   });
   await run(false).localTick();
@@ -507,6 +567,16 @@ test('a boot renewal without network is retried quickly until it goes through', 
       assert.equal(calls.length, 3, 'two quick retries, then nothing once renewed');
       assert.equal(licenseState().status, 'valid');
     });
+  });
+});
+
+test('an expired paid licence is retried quickly at boot too, and comes back', async () => {
+  expiredWhileOff();
+  await bootLoop(['down', 'down', { status: 200, body: { token: token(clock), refresh: { every: 300, offlineHours: 24 } } }, 'down'], async ({ calls }) => {
+    await settle(calls, 3);
+    assert.equal(calls.length, 3, 'the boot renewal, two quick retries, then nothing');
+    assert.equal(licenseState().status, 'valid');
+    assert.deepEqual(notices, []);
   });
 });
 
