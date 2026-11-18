@@ -933,6 +933,7 @@ Projects (agent roles per project):
 Routines (cron → creates a Kanban task on each due tick):
   timon routine list
   timon routine create --name TEXT --agent NAME --cron EXPR --prompt TEXT [--type ...] [--project SLUG]
+                       [--extra-mcp m1,m2] [--extra-skills s1,s2] [--allow t1,t2]   copied onto every task it opens
   timon routine update <id> [--cron ...] [--enabled true|false] ...
   timon routine delete <id>
 
@@ -2899,6 +2900,19 @@ async function cmdPipeline(argv) {
 }
 
 /* ─── routines ─── */
+/**
+ * `--extra-mcp`, `--extra-skills` and `--allow` of a routine: copied onto every
+ * task it opens. An empty value (`--extra-mcp ''`) clears the list on update.
+ */
+function routineExtras(argv) {
+  const extras = {};
+  for (const [flag, key] of [['extra-mcp', 'extra_mcp_servers'], ['extra-skills', 'extra_skills'], ['allow', 'extra_allowed_tools']]) {
+    const raw = takeFlag(argv, flag);
+    if (raw !== undefined) extras[key] = raw.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  return extras;
+}
+
 async function cmdRoutineList() {
   const j = await http('GET', '/api/routines');
   process.stdout.write(JSON.stringify(j.routines, null, 2) + '\n');
@@ -2912,10 +2926,12 @@ async function cmdRoutineCreate(argv) {
   const taskType = takeFlag(argv, 'type');
   const project = takeFlag(argv, 'project');
   const enabledFlag = takeFlag(argv, 'enabled');
+  const extras = routineExtras(argv);
   if (!name || !agent || !cron || !prompt) {
     process.stderr.write(
       'usage: timon routine create --name TEXT --agent NAME --cron EXPR --prompt TEXT\n' +
-      '       [--type code|review|merge|research|doc|chore] [--project SLUG] [--enabled true|false]\n',
+      '       [--type code|review|merge|research|doc|chore] [--project SLUG] [--enabled true|false]\n' +
+      '       [--extra-mcp m1,m2] [--extra-skills s1,s2] [--allow t1,t2]\n',
     );
     process.exit(64);
   }
@@ -2924,6 +2940,7 @@ async function cmdRoutineCreate(argv) {
     task_type: taskType || undefined,
     project: project || undefined,
     enabled: enabledFlag === undefined ? true : enabledFlag !== 'false',
+    ...extras,
   };
   const j = await http('POST', '/api/routines', body);
   process.stdout.write(JSON.stringify(j.routine, null, 2) + '\n');
@@ -2949,6 +2966,7 @@ async function cmdRoutineUpdate(argv) {
   if (taskType) fields.task_type = taskType;
   if (project !== undefined) fields.project = project || null;
   if (enabledFlag !== undefined) fields.enabled = enabledFlag !== 'false';
+  Object.assign(fields, routineExtras(argv));
   const j = await http('PUT', `/api/routines/${id}`, fields);
   process.stdout.write(JSON.stringify(j.routine, null, 2) + '\n');
   if (j.needs_activation) process.stdout.write(`\n${j.message}\n`);
