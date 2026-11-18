@@ -21,6 +21,9 @@ export type SeriesPlanAnswer = {
   /** Free text typed below the form. It may qualify or contradict the
    *  choices: the agent must read it. */
   note?: string;
+  /** The job's integration branch, for a project that lands through pull
+   *  requests: the daemon checks it again and may number it (`-2`). */
+  branch?: string;
 };
 
 /** Settings of a group of volets: per role, the same fields as a global row.

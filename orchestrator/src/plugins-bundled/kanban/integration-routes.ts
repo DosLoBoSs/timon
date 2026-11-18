@@ -6,10 +6,17 @@
  * included: the setting names a folder of this machine and the account the
  * daemon will push as. The daemon token passes, as for every project setting
  * the CLI and the agents write.
+ *
+ * One exception, `POST …/integration/branch`: the Kanban planner checks the
+ * branch name of a new job while the person types it. It needs `kanban:write`
+ * (the plan creates Kanban tasks) and answers nothing of the setting beyond
+ * the name the job would get.
  */
 import type { Request, Response, Router } from 'express';
+import { z } from 'zod';
 import { apiError } from '../../api-error.js';
 import { ghLogin, type GhLoginOutcome } from '../../host/gh.js';
+import { checkPlanBranch, MAX_PLAN_BRANCH_CHARS, prLandingSetting } from '../../plan-landing.js';
 import { announceProjectUpdated } from '../../project-service.js';
 import {
   clearProjectIntegration, ProjectIntegrationError, readProjectIntegration, updateProjectIntegration,
@@ -56,6 +63,26 @@ function answerError(res: Response, err: unknown): void {
   res.status(500).json(apiError('project_request_failed', 'the integration setting could not be handled', {
     detail: 'the integration setting could not be handled',
   }));
+}
+
+const PlanBranchBody = z.object({
+  branch: z.string().max(MAX_PLAN_BRANCH_CHARS),
+}).strict();
+
+/** Auth, permission and a valid slug for the planner's branch check. */
+function plannerProject(req: Request, res: Response): string | null {
+  if (!requireAuth(req, res)) return null;
+  if (rejectIfDenied(req, res, 'kanban:write')) return null;
+  const slug = req.params.slug;
+  if (typeof slug !== 'string') {
+    res.status(400).json(apiError('project_refused', 'invalid project slug', { detail: 'invalid project slug' }));
+    return null;
+  }
+  try { readMeta(slug); } catch {
+    res.status(400).json(apiError('project_refused', 'invalid project slug', { detail: 'invalid project slug' }));
+    return null;
+  }
+  return slug;
 }
 
 export function registerIntegrationRoutes(app: Router, deps: IntegrationRouteDeps = {}): void {
@@ -108,5 +135,32 @@ export function registerIntegrationRoutes(app: Router, deps: IntegrationRouteDep
     // GitHub logins ignore case.
     const matches = account !== null && out.login.toLowerCase() === account.toLowerCase();
     res.json({ ok: matches, login: out.login, expected: account, matches });
+  });
+
+  // The planner's check: the same rules and numbering as the plan's answer
+  // (`checkPlanBranch`), so the field never accepts a name the daemon refuses.
+  app.post('/api/projects/:slug/integration/branch', (req, res) => {
+    const slug = plannerProject(req, res);
+    if (!slug) return;
+    const parsed = PlanBranchBody.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      const detail = parsed.error.issues.map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message)).join('; ');
+      res.status(400).json(apiError('plan_branch_refused', detail, { detail }));
+      return;
+    }
+    const found = prLandingSetting(slug);
+    if (!found) {
+      res.status(409).json(apiError('plan_branch_unavailable', `project ${slug} does not land through pull requests`));
+      return;
+    }
+    const out = checkPlanBranch(parsed.data.branch, found.setting, found.repo);
+    if (!out.ok) {
+      res.status(400).json({
+        ...apiError('plan_branch_refused', out.refusal, { detail: out.refusal }),
+        ok: false, branch: out.branch, refusal: out.refusal,
+      });
+      return;
+    }
+    res.json({ ok: true, branch: out.branch });
   });
 }

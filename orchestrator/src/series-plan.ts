@@ -109,7 +109,26 @@ export type SeriesPlanForm = {
   chantier: string;
   /** Proposed split. One Kanban task per slice in the Kanban modes. */
   volets: SeriesPlanVolet[];
+  /** The job's integration branch the agent proposes (`feat/topic` or
+   *  `topic`), for a project that lands through pull requests. Ignored by any
+   *  other project; the person answering may change it. */
+  branch?: string;
 };
+
+/** A proposed branch name is a ref, not a paragraph (`plan-landing.ts`). */
+export const MAX_PLAN_BRANCH_FIELD_CHARS = 200;
+
+/** Defect of a branch field (form or answer), or null. Whether the name is a
+ *  usable branch depends on the project, so it is checked where it is read. */
+function branchFieldDefect(value: unknown): string | null {
+  if (value === undefined) return null;
+  if (typeof value !== 'string') return 'field `branch` is not a string';
+  if (value.length > MAX_PLAN_BRANCH_FIELD_CHARS) {
+    return `field \`branch\` of ${value.length} characters (maximum ${MAX_PLAN_BRANCH_FIELD_CHARS})`;
+  }
+  if (GROUP_NAME_CONTROL_CHARS.test(value)) return 'field `branch` holds a control character';
+  return null;
+}
 
 const MAX_VOLETS = 12;
 /** A group name is a tab label and a command flag: short. */
@@ -168,7 +187,7 @@ export function validateSeriesPlanForm(form: unknown): string | null {
   }
   const groups = planGroupNames(volets as SeriesPlanVolet[]);
   if (groups.length > MAX_GROUPS) return `${groups.length} part groups (maximum ${MAX_GROUPS})`;
-  return null;
+  return branchFieldDefect(form.branch);
 }
 
 /** Distinct group names, in the order of first appearance of the slices.
@@ -246,7 +265,7 @@ export function validateSeriesPlanAnswer(answer: unknown, knownGroups: Iterable<
   if (answer.note !== undefined && typeof answer.note !== 'string') {
     return 'field `note` is not a string';
   }
-  return null;
+  return branchFieldDefect(answer.branch);
 }
 
 /** Roles of the form whose main model is set for the series: those that

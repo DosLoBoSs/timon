@@ -300,6 +300,8 @@
     "task_still_running": "La tâche est encore en cours : attends qu’elle se termine avant de la marquer comme mergée.",
     "integration_not_found": "Timon ne connaît pas la branche d’intégration {branch} : lance d’abord le chantier.",
     "integration_already_landed": "{branch} a déjà atterri.",
+    "plan_branch_refused": "Ce nom de branche ne peut pas servir : {detail}",
+    "plan_branch_unavailable": "Ce projet ne passe pas par des pull requests.",
     "task_mark_merged_failed": "La tâche n’a pas pu être marquée comme mergée.",
     "crash_loop": "Cette tâche ne peut pas encore être remise en file : {detail}",
     "todo_status_filter_invalid": "Choisissez open, done, promoted ou all.",

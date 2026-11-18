@@ -30,6 +30,7 @@ app.use((req, _res, next) => {
   const who = req.header('x-test-who');
   if (who === 'manager') req.auth = { kind: 'api-token', user: null, isSuperadmin: false, permissions: ['projects:manage'] };
   else if (who === 'reader') req.auth = { kind: 'api-token', user: null, isSuperadmin: false, permissions: ['projects:read', 'kanban:write'] };
+  else if (who === 'viewer') req.auth = { kind: 'api-token', user: null, isSuperadmin: false, permissions: ['projects:read'] };
   next();
 });
 registerIntegrationRoutes(app, {
@@ -41,7 +42,7 @@ await once(server, 'listening');
 after(() => server.close());
 const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
-function call(method: string, path: string, who: 'anonymous' | 'reader' | 'manager', body?: unknown) {
+function call(method: string, path: string, who: 'anonymous' | 'viewer' | 'reader' | 'manager', body?: unknown) {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (who !== 'anonymous') headers['x-test-who'] = who;
   return fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -128,4 +129,57 @@ test('the check asks gh with the configured folder and compares the login, case 
   const missing = await (await call('POST', `${URL_}/check`, 'manager')).json() as { ok: boolean; code: string };
   assert.deepEqual([missing.ok, missing.code], [false, 'gh_missing']);
   await call('DELETE', URL_, 'manager');
+});
+
+/* The Kanban planner's branch field: the daemon is the only judge of the name. */
+const planRepo = join(home, 'code', 'plan');
+mkdirSync(planRepo, { recursive: true });
+dbApi.upsertProject('plan-pr', { cwd: planRepo });
+dbApi.upsertProject('plan-release', { cwd: planRepo });
+dbApi.upsertProject('plan-local', { cwd: planRepo });
+const { updateProjectIntegration } = await import('../../project-integration.js');
+updateProjectIntegration('plan-pr', { mode: 'pr', account: 'ai-bot' }, { home });
+updateProjectIntegration('plan-release', { mode: 'pr', account: 'ai-bot', target: 'release/main', branch_prefix: 'release/' }, { home });
+const BRANCH = '/api/projects/plan-pr/integration/branch';
+
+test('the branch check refuses an anonymous caller (401) and one without kanban:write (403)', async () => {
+  assert.equal((await call('POST', BRANCH, 'anonymous', { branch: 'topic' })).status, 401);
+  assert.equal((await call('POST', BRANCH, 'viewer', { branch: 'topic' })).status, 403);
+});
+
+test('the branch check accepts a topic, adds the prefix once, and numbers a taken name', async () => {
+  const plain = await call('POST', BRANCH, 'reader', { branch: 'kanban-branch-field' });
+  assert.equal(plain.status, 200);
+  assert.deepEqual(await plain.json(), { ok: true, branch: 'feat/kanban-branch-field' });
+  const prefixed = await (await call('POST', BRANCH, 'reader', { branch: 'feat/kanban-branch-field' })).json();
+  assert.deepEqual(prefixed, { ok: true, branch: 'feat/kanban-branch-field' });
+  dbApi.recordIntegration({ repo: planRepo, branch: 'feat/taken', remote: 'origin', target: 'main', mode: 'pr', project: 'plan-pr' });
+  assert.deepEqual(await (await call('POST', BRANCH, 'reader', { branch: 'taken' })).json(), { ok: true, branch: 'feat/taken-2' });
+});
+
+test('the branch check refuses an id, timon/, the target and an invalid ref with a reason', async () => {
+  const refused = async (slug: string, branch: string, reason: RegExp) => {
+    const res = await call('POST', `/api/projects/${slug}/integration/branch`, 'reader', { branch });
+    assert.equal(res.status, 400, branch);
+    const body = await res.json() as { ok: boolean; refusal: string; code: string };
+    assert.equal(body.ok, false);
+    assert.equal(body.code, 'plan_branch_refused');
+    assert.match(body.refusal, reason, branch);
+  };
+  await refused('plan-pr', 'fix-bfd1c111de16', /carries an id/);
+  await refused('plan-pr', 'timon/task/x', /reserved/);
+  await refused('plan-pr', 'two..dots', /not a valid branch name/);
+  await refused('plan-pr', '  ', /topic/);
+  await refused('plan-release', 'main', /targets release\/main/);
+});
+
+test('the branch check of a project that does not land through pull requests is 409', async () => {
+  const res = await call('POST', '/api/projects/plan-local/integration/branch', 'reader', { branch: 'topic' });
+  assert.equal(res.status, 409);
+  assert.equal((await res.json() as { code: string }).code, 'plan_branch_unavailable');
+});
+
+test('the branch check takes a strict body', async () => {
+  assert.equal((await call('POST', BRANCH, 'reader', { branch: 'topic', extra: 1 })).status, 400);
+  assert.equal((await call('POST', BRANCH, 'reader', {})).status, 400);
 });

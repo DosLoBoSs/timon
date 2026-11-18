@@ -308,3 +308,13 @@ test('commands: a group name with a space or a quote is quoted', () => {
   // The final merge task consolidates the whole batch: it belongs to no group.
   assert.ok(!cmds.find((c) => c.includes('--type merge'))!.includes('--plan-group'));
 });
+
+test('the branch field: a short string on the form and on the answer, nothing else', () => {
+  const form = { kind: 'series_plan', chantier: 'Job', volets: [{ title: 'a' }] };
+  assert.equal(validateSeriesPlanForm({ ...form, branch: 'feat/topic' }), null);
+  assert.match(validateSeriesPlanForm({ ...form, branch: 3 }) ?? '', /`branch` is not a string/);
+  assert.match(validateSeriesPlanForm({ ...form, branch: 'a\nb' }) ?? '', /control character/);
+  assert.match(validateSeriesPlanForm({ ...form, branch: 'x'.repeat(201) }) ?? '', /maximum 200/);
+  assert.equal(validateSeriesPlanAnswer({ mode: 'kanban-full', roles: {}, branch: 'topic' }), null);
+  assert.match(validateSeriesPlanAnswer({ mode: 'kanban-full', roles: {}, branch: ['x'] }) ?? '', /`branch` is not a string/);
+});
