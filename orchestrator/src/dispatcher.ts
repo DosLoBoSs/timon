@@ -1750,6 +1750,22 @@ function autoCloseTask(task: TaskRow, missionId: string): 'DONE' | 'BLOCKED' {
   return 'DONE';
 }
 
+/**
+ * The idle reap of a task mission that had already finished (TIM-0149): its
+ * last turn ended cleanly, every closure question reached it and it still left
+ * its task open (`missions.closure_ignored`, set by the wake loop), then the
+ * reaper killed the idle process. Nothing failed there: replaying the task
+ * would only run the same work again (6 reviews for 4 requeues at a tester's).
+ * The task is closed like a mission that exited cleanly — `AUTO_CLOSED_COMMENT`,
+ * so a review parses as `unknown` and escalates — and `requeue_count` is left
+ * alone. Any other cause (crash, OOM, a turn cut short, a reap with no clean
+ * turn) stays a system death. The agent's prose is never read for a verdict.
+ */
+function endedAfterIgnoredClosure(missionId: string, reason: InterruptionReason | null | undefined): boolean {
+  if (reason !== 'killed') return false;
+  return dbApi.getMission(missionId)?.closure_ignored === 1;
+}
+
 /** Wire the mission_complete bus event → task status update. Exported so
  *  tests can wire the watcher without starting the dispatch loop. */
 export function watchMissionComplete(): () => void {
@@ -1776,6 +1792,11 @@ export function watchMissionComplete(): () => void {
     // If it died passively, we qualify the cause instead of posting a
     // silent BLOCKED (indistinguishable from a business block — incident
     // of 2026-07-30, cf. interruption.ts).
+    if (newStatus === 'BLOCKED' && endedAfterIgnoredClosure(ev.missionId, ev.reason)) {
+      const closed = autoCloseTask(task, ev.missionId);
+      console.log(`[dispatcher] task ${task.id} → ${closed}: mission ${ev.missionId} reaped idle after ignoring its closure questions`);
+      return;
+    }
     if (newStatus === 'BLOCKED') {
       // `crash` by default: a failed/terminated mission_complete with no
       // qualified cause remains a system death, never an agent decision.
@@ -1869,7 +1890,13 @@ export async function reconcileOrphanedTasks(graceMs = 0): Promise<void> {
     // blocks it (`ev.reason`), so must this one — DONE would lie.
     const diedCompleted = m.status === 'completed'
       && (toInterruptionReason(m.interrupted_reason) ?? dbApi.detectMissionDeathSignal(t.mission_id)?.reason) != null;
-    if (m.status === 'failed' || m.status === 'terminated' || diedCompleted) {
+    if (m.status === 'terminated' && !dbApi.detectMissionDeathSignal(t.mission_id)
+      && endedAfterIgnoredClosure(t.mission_id, toInterruptionReason(m.interrupted_reason))) {
+      // Same reading as the live path, for a reap whose event died with the daemon.
+      const closed = autoCloseTask(t, t.mission_id);
+      console.log(`[dispatcher] reconcile: task ${t.id} IN_PROGRESS→${closed} (mission ${t.mission_id.slice(0, 8)} reaped idle after ignoring its closure questions)`);
+      fixed++;
+    } else if (m.status === 'failed' || m.status === 'terminated' || diedCompleted) {
       // `failed` = a real problem; `terminated` = mission interrupted
       // (reaper / restart) BEFORE the agent closed its task. Either way
       // the task stayed IN_PROGRESS → we BLOCK it to resurface it

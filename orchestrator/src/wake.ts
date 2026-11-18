@@ -1378,10 +1378,11 @@ export function handleMissionTurnComplete(missionId: string): void {
 }
 
 /** Max times a task mission is asked whether it is finished. Past it the
- *  reaper/requeue path takes over: asking forever would loop on an agent that
- *  answers in prose every time. */
+ *  reaper takes over: asking forever would loop on an agent that answers in
+ *  prose every time. */
 const MAX_CLOSURE_QUESTIONS = 2;
-const closureQuestions = new Map<string, number>();
+/** Per mission: questions attempted, and those the agent actually received. */
+const closureQuestions = new Map<string, { asked: number; delivered: number }>();
 
 export const CLOSURE_QUESTION =
   'Your turn ended but your Kanban task is still open. Is the mission finished?\n' +
@@ -1393,6 +1394,13 @@ export const CLOSURE_QUESTION =
  * is the one that knows, instead of deciding for it (TIM-0092). Without this,
  * a coder that committed and narrated "done" was reaped and its task requeued,
  * spawning a duplicate mission on an already-committed branch.
+ *
+ * Once every question was received and the agent still ends a clean turn with
+ * its task open, the mission is marked `closure_ignored` (TIM-0149): the idle
+ * reap that follows then closes the task instead of replaying it as a system
+ * death (dispatcher `watchMissionComplete`). The mark is dropped as soon as a
+ * turn starts again (`handleTurnStarted`), so only a mission killed idle right
+ * after that clean turn qualifies.
  *
  * Exported with an injectable `send` so a test needs no live process.
  */
@@ -1407,15 +1415,29 @@ export async function askUnclosedTaskMission(
   // Only a task this very mission still holds: a requeued task now belongs to
   // another mission, and a DONE/BLOCKED one already carries its verdict.
   if (!task || task.status !== 'IN_PROGRESS' || task.mission_id !== missionId) return false;
-  const asked = closureQuestions.get(missionId) ?? 0;
-  if (asked >= MAX_CLOSURE_QUESTIONS) return false;
-  closureQuestions.set(missionId, asked + 1);
+  const count = closureQuestions.get(missionId) ?? { asked: 0, delivered: 0 };
+  if (count.asked >= MAX_CLOSURE_QUESTIONS) {
+    // A question lost on the way is not one the agent ignored.
+    if (count.delivered >= MAX_CLOSURE_QUESTIONS) dbApi.setMissionClosureIgnored(missionId, true);
+    return false;
+  }
+  closureQuestions.set(missionId, { ...count, asked: count.asked + 1 });
   try {
-    return (await send(missionId, CLOSURE_QUESTION)) === 'delivered';
+    const delivered = (await send(missionId, CLOSURE_QUESTION)) === 'delivered';
+    if (delivered) {
+      const now = closureQuestions.get(missionId);
+      if (now) now.delivered += 1;
+    }
+    return delivered;
   } catch (err) {
     console.error(`[wake] closure question failed ${missionId}: ${(err as Error).message}`);
     return false;
   }
+}
+
+/** A turn started: the mission is working again, whatever it ignored before. */
+export function handleTurnStarted(missionId: string): void {
+  if (dbApi.getMission(missionId)?.closure_ignored) dbApi.setMissionClosureIgnored(missionId, false);
 }
 
 /** Delay before evaluating group completion on the `mission_complete` path.
@@ -1579,6 +1601,12 @@ export function startWake(): () => void {
         if (agent) scheduleWake(agent);
       } catch (err) {
         console.error(`[wake] request reply failed ${ev.missionId}: ${(err as Error).message}`);
+      }
+    } else if (ev.kind === 'turn_started') {
+      try {
+        handleTurnStarted(ev.missionId);
+      } catch (err) {
+        console.error(`[wake] turn_started handler error ${ev.missionId}: ${(err as Error).message}`);
       }
     } else if (ev.kind === 'task_blocked') {
       try {
