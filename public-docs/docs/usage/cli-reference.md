@@ -210,6 +210,7 @@ Projects (agent roles per project):
 Routines (cron → creates a Kanban task on each due tick):
   timon routine list
   timon routine create --name TEXT --agent NAME --cron EXPR --prompt TEXT [--type ...] [--project SLUG]
+                       [--extra-mcp m1,m2] [--extra-skills s1,s2] [--allow t1,t2]   copied onto every task it opens
   timon routine update <id> [--cron ...] [--enabled true|false] ...
   timon routine delete <id>
 
@@ -941,6 +942,7 @@ usage: timon pipeline <list|get|create|run|run-status|delete> …
 ```text
 usage: timon routine create --name TEXT --agent NAME --cron EXPR --prompt TEXT
        [--type code|review|merge|research|doc|chore] [--project SLUG] [--enabled true|false]
+       [--extra-mcp m1,m2] [--extra-skills s1,s2] [--allow t1,t2]
 ```
 
 ### timon routine update id [--name ...] [--cron ...] [--enabled true|false] ...
