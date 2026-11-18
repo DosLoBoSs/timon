@@ -26,6 +26,7 @@ import { canonicalAgentName } from '../../agent-config.js';
 import { isValidAgentName, normalizeAgentName } from '../../agent-name.js';
 import { agentDir } from '../../paths.js';
 import { mainAgentName } from '../../main-agent.js';
+import { apiError } from '../../api-error.js';
 
 /** The bundled skill the conversion mission applies (task 5 of #461 ships it). */
 export const LEARN_BROWSER_RECORDING_SKILL = 'learn-browser-recording';
@@ -105,8 +106,8 @@ export function registerBrowserRecordingRoutes(app: Router, deps: BrowserRecordi
     res.setHeader('Cache-Control', 'no-store');
     try { res.json(await operation(req)); }
     catch (error) {
-      if (error instanceof z.ZodError) { res.status(400).json({ error: error.issues[0]?.message ?? 'Invalid request.' }); return; }
-      res.status(error instanceof NativeBrowserError ? error.status : 400).json({ error: (error as Error).message });
+      if (error instanceof z.ZodError) { const detail = error.issues[0]?.message ?? 'Invalid request.'; res.status(400).json(apiError('invalid_detail', detail, { detail })); return; }
+      res.status(error instanceof NativeBrowserError ? error.status : 400).json(apiError('browser_refused', (error as Error).message, { detail: (error as Error).message }));
     }
   };
 

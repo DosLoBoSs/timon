@@ -419,6 +419,15 @@
     "telemetry_event_invalid": "Cet événement d'usage est invalide.",
     "worktree_busy": "La task tourne dans ce worktree. Arrêtez-la d'abord.",
     "worktree_invalid": "Le worktree ne peut pas être préparé : {detail}",
-    "worktree_failed": "L'opération sur le worktree a échoué : {detail}"
+    "worktree_failed": "L'opération sur le worktree a échoué : {detail}",
+    "browser_refused": "Le navigateur a refusé : {detail}",
+    "no_linked_conversation": "Ce navigateur n'est pas celui de cette conversation.",
+    "conversation_start_failed": "La conversation n'a pas pu démarrer : {detail}",
+    "browser_credential_failed": "L'opération sur les identifiants du navigateur a échoué.",
+    "browser_profile_bound": "Cette mission ne peut utiliser que le profil de navigateur qui lui est attribué.",
+    "browser_sessions_failed": "Les sessions du navigateur n'ont pas pu être lues : {detail}",
+    "browser_session_failed": "La session du navigateur n'a pas pu être lue : {detail}",
+    "browser_start_failed": "Le navigateur n'a pas pu démarrer : {detail}",
+    "browser_stop_failed": "Le navigateur n'a pas pu s'arrêter : {detail}"
   }
 }

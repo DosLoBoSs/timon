@@ -419,6 +419,15 @@
     "telemetry_event_invalid": "This usage event is invalid.",
     "worktree_busy": "The task is running in this worktree. Stop it first.",
     "worktree_invalid": "The worktree cannot be prepared: {detail}",
-    "worktree_failed": "The worktree operation failed: {detail}"
+    "worktree_failed": "The worktree operation failed: {detail}",
+    "browser_refused": "The browser refused this: {detail}",
+    "no_linked_conversation": "This browser is not the one of that conversation.",
+    "conversation_start_failed": "The conversation could not start: {detail}",
+    "browser_credential_failed": "The browser credential operation failed.",
+    "browser_profile_bound": "This mission may only use its assigned browser profile.",
+    "browser_sessions_failed": "The browser sessions could not be read: {detail}",
+    "browser_session_failed": "The browser session could not be read: {detail}",
+    "browser_start_failed": "The browser could not start: {detail}",
+    "browser_stop_failed": "The browser could not stop: {detail}"
   }
 }
