@@ -635,6 +635,17 @@ test('onboarding_step: the email code and the account\'s origin are closed words
   assert.equal(validateEvent('onboarding_step', { step: 'account', action: 'code_sent', resend: 'yes' }), null);
 });
 
+test('onboarding_screen: a screen and how it was left, from closed lists only', () => {
+  assert.deepEqual(validateEvent('onboarding_screen', { screen: 'splash', action: 'viewed' }), { screen: 'splash', action: 'viewed' });
+  const llm = { screen: 'llm', action: 'completed', llm_choice: 'plan', backend: 'claude', connection: 'failed', failure_code: 'signed_out' };
+  assert.deepEqual(validateEvent('onboarding_screen', llm), llm);
+  assert.equal(validateEvent('onboarding_screen', { screen: 'settings', action: 'viewed' }), null);
+  assert.equal(validateEvent('onboarding_screen', { screen: 'llm', action: 'closed' }), null);
+  assert.equal(validateEvent('onboarding_screen', { ...llm, backend: 'https://my-proxy.example' }), null);
+  assert.equal(validateEvent('onboarding_screen', { ...llm, failure_code: 'sk-ant-api-key-rejected' }), null);
+  assert.equal(validateEvent('onboarding_screen', { ...llm, api_key: 'sk-1' }), null);
+});
+
 test('collector: the code\'s outcome and the account\'s origin reach analytics as published', async () => {
   const { TelemetryCollector } = await import('./collector.js');
   const emitted: [string, Record<string, unknown>][] = [];
@@ -648,4 +659,39 @@ test('collector: the code\'s outcome and the account\'s origin reach analytics a
     ['onboarding_step', { step: 'account', action: 'completed', via: 'code' }],
   ]);
   for (const [name, props] of emitted) assert.ok(validateEvent(name, props), `${name} passes the catalogue`);
+});
+
+test('trackUi: an onboarding screen leaves with its LLM outcome; a CLI that is not a product backend is other', async () => {
+  const { rt, sent } = start();
+  rt.trackUi({ name: 'onboarding_screen', surface: 'web', screen: 'account', action: 'viewed' }, { userId: null });
+  rt.trackUi({
+    name: 'onboarding_screen', surface: 'desktop', screen: 'llm', action: 'completed',
+    llmChoice: 'plan', backend: 'claude', connection: 'ok',
+  }, { userId: owner.id });
+  rt.trackUi({
+    name: 'onboarding_screen', surface: 'web', screen: 'llm', action: 'completed',
+    llmChoice: 'plan', backend: 'acme-cli', connection: 'failed', failureCode: 'not_installed',
+  }, { userId: owner.id });
+  await rt.flushNow();
+  await rt.dispose();
+  const screens = sent.filter((p) => p.name === 'onboarding_screen').map((p) => Object.fromEntries(
+    Object.entries(p.properties).filter(([key]) => !GLOBAL_KEYS.has(key)),
+  ));
+  assert.deepEqual(screens, [
+    { screen: 'account', action: 'viewed' },
+    { screen: 'llm', action: 'completed', llm_choice: 'plan', backend: 'claude', connection: 'ok' },
+    { screen: 'llm', action: 'completed', llm_choice: 'plan', backend: 'other', connection: 'failed', failure_code: 'not_installed' },
+  ]);
+});
+
+test('every screen of the app\'s onboarding is on the closed list, and nothing else', async () => {
+  const { ONBOARDING_SCREENS } = await import('../../onboarding-events.js');
+  const flow = readFileSync(new URL('../../../../app/src/components/onboarding/onboarding-flow.ts', import.meta.url), 'utf8');
+  const ids = (name: string): string[] => {
+    const list = new RegExp(`export const ${name} = \\[([^\\]]*)\\]`).exec(flow)?.[1] ?? '';
+    return [...list.matchAll(/'([a-z]+)'/g)].map((m) => m[1]!);
+  };
+  const app = [...ids('ONBOARDING_STEP_IDS'), ...ids('RETURNING_STEP_IDS')];
+  assert.ok(app.length >= 7, 'the app\'s lists were read');
+  assert.deepEqual([...app].sort(), [...ONBOARDING_SCREENS].sort());
 });

@@ -73,3 +73,22 @@ export function onboardingStep(step: OnboardingStepName, action: OnboardingStepA
   }
 }
 
+/**
+ * The onboarding's screens as the web app shows them (`app/src/components/
+ * onboarding/onboarding-flow.ts`, `ONBOARDING_STEP_IDS` then
+ * `RETURNING_STEP_IDS`; `telemetry-v2.test.ts` holds the two lists together).
+ * They are not the wizard routes above: a screen may call none, or several.
+ */
+export const ONBOARDING_SCREENS = ['splash', 'background', 'account', 'llm', 'profile', 'agent', 'discover', 'signin', 'mascot'] as const;
+export type OnboardingScreen = (typeof ONBOARDING_SCREENS)[number];
+
+/** `viewed` once per display; then how the person left it. */
+export const ONBOARDING_SCREEN_ACTIONS = ['viewed', 'completed', 'skipped', 'back'] as const;
+export type OnboardingScreenAction = (typeof ONBOARDING_SCREEN_ACTIONS)[number];
+
+/** "Choose your LLM": the subscription the person pays for, or local models. */
+export const ONBOARDING_LLM_CHOICES = ['plan', 'local'] as const;
+/** Whether an AI the chat can start on was found when the person went on. */
+export const ONBOARDING_LLM_CONNECTIONS = ['ok', 'failed', 'unknown'] as const;
+/** Why none was: not downloaded, known to be signed out, or the list could not be read. */
+export const ONBOARDING_LLM_FAILURES = ['not_installed', 'signed_out', 'unreachable'] as const;
