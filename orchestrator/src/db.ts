@@ -1531,6 +1531,19 @@ CREATE INDEX IF NOT EXISTS idx_mcp_tokens_mission ON mcp_tokens(mission_id);
   }
 }
 
+// An address nobody has confirmed with a mailed code: the first account made
+// from a terminal (`timon user create-admin`, `timon init`) on a machine that
+// may be offline. `1` until the owner confirms it from a signed-in session;
+// the relay only resets the password of an address it saw confirmed. Every
+// account that exists when the column appears was confirmed or predates the
+// codes, so the default leaves it alone.
+{
+  const userCols = (db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]).map((c) => c.name);
+  if (!userCols.includes('email_unverified')) {
+    db.exec(`ALTER TABLE users ADD COLUMN email_unverified INTEGER NOT NULL DEFAULT 0`);
+  }
+}
+
 // Self-service email change. The new address is only written onto the account
 // once the owner has proved they can read it, so the request lives here in the
 // meantime. Same hashing rule as sessions and invitations: the plaintext token
@@ -9524,6 +9537,16 @@ export const dbApi = {
     if (!current) throw new Error(`user not found: ${id}`);
     db.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).run(passwordHash, id);
     return this.getUserById(id)!;
+  },
+
+  /** Whether the account's address still waits for its mailed code (`email_unverified`). */
+  userEmailUnverified(id: string): boolean {
+    const row = db.prepare(`SELECT email_unverified FROM users WHERE id = ?`).get(id) as { email_unverified: number } | undefined;
+    return row?.email_unverified === 1;
+  },
+
+  setUserEmailUnverified(id: string, unverified: boolean): void {
+    db.prepare(`UPDATE users SET email_unverified = ? WHERE id = ?`).run(unverified ? 1 : 0, id);
   },
 
   setUserName(id: string, name: string): UserRow {

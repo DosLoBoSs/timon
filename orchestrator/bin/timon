@@ -997,6 +997,10 @@ plugin's, from its page in the app):
   timon setup-token                          one-time token the first-run form asks for on an exposed install
   timon user list                            accounts (json)
   timon user reset-password <email-or-id>    temporary password, printed once
+  timon user create-admin [--email ADDRESS] [--name NAME] [--password-stdin]
+                                             the first account, without the emailed code (offline
+                                             machine); the password is typed hidden or piped, never
+                                             an argument; the email is kept unconfirmed
 
 Paired devices (another Timon that drives this machine — a headless server has no screen to click):
   timon device pair [--user EMAIL-OR-ID] [--json]
@@ -4979,6 +4983,96 @@ async function cmdUserResetPassword(argv) {
   );
 }
 
+/**
+ * `timon user create-admin` — the first account, made on this machine without
+ * the mailed code: the way in when the machine is offline or the mail relay
+ * does not answer. Daemon token only (`POST /api/users/first-admin`). The
+ * password is typed hidden or piped with --password-stdin, never an argument,
+ * which would stay in the shell history and be readable by any process. The
+ * address stays unconfirmed until its owner confirms it from a signed-in session.
+ */
+async function cmdUserCreateAdmin(argv) {
+  const usage = 'usage: timon user create-admin [--email ADDRESS] [--name NAME] [--password-stdin]\n';
+  if (argv.some((a) => a === '--password' || a.startsWith('--password='))) {
+    process.stderr.write('timon user create-admin: the password is never an argument; type it at the prompt or pipe it with --password-stdin.\n');
+    process.exit(64);
+  }
+  const email0 = takeFlag(argv, 'email');
+  const name0 = takeFlag(argv, 'name');
+  const passwordStdin = argv.includes('--password-stdin');
+  const unknown = argv.filter((a) => a !== '--password-stdin');
+  if (unknown.length) { process.stderr.write(`timon user create-admin: unknown argument ${unknown[0]}\n${usage}`); process.exit(64); }
+  const interactive = Boolean(process.stdin.isTTY) && !passwordStdin;
+  if (!interactive && !passwordStdin) {
+    process.stderr.write(`timon user create-admin: no terminal to type the password in. Pipe it with --password-stdin and give --email.\n${usage}`);
+    process.exit(64);
+  }
+
+  let me;
+  try {
+    me = await httpRaw('GET', '/api/auth/me', undefined, 5000);
+  } catch {
+    const local = isLocalDaemonUrl(timonHome(), API, { packaged: packagedCli() });
+    process.stderr.write(unreachableLines({ api: API, local, serviceInstalled: local && serviceInstalledMarker() }).join('\n') + '\n');
+    process.exit(1);
+  }
+  if (me.ok && me.body?.needsSetup === false) {
+    process.stderr.write('timon user create-admin: this Timon already has an account. Recover it with: timon user reset-password <email>\n');
+    process.exit(1);
+  }
+
+  let email = (email0 ?? '').trim().toLowerCase();
+  let name = (name0 ?? '').trim();
+  let password = '';
+  if (passwordStdin) {
+    if (!email) { process.stderr.write(`timon user create-admin: --password-stdin needs --email\n${usage}`); process.exit(64); }
+    password = (await readAllStdin()).replace(/\r?\n$/, '');
+  } else {
+    if (!name0) name = await askLine('First name (Enter to skip): ');
+    while (!EMAIL_SHAPE.test(email)) {
+      if (email) process.stderr.write('  That is not an email address.\n');
+      email = (await askLine('Email: ')).toLowerCase();
+    }
+    for (let attempt = 0; attempt < 3 && !password; attempt++) {
+      let first;
+      let again;
+      try {
+        first = await readHiddenLine(`Password (at least ${MIN_PASSWORD} characters): `);
+        if (first.length < MIN_PASSWORD) { process.stderr.write(`  At least ${MIN_PASSWORD} characters.\n`); continue; }
+        again = await readHiddenLine('Password again: ');
+      } catch (err) {
+        if (err?.code === PROMPT_CANCELLED) { process.stderr.write('Nothing was created.\n'); process.exit(130); }
+        throw err;
+      }
+      if (again !== first) { process.stderr.write('  The two passwords differ.\n'); continue; }
+      password = first;
+    }
+    if (!password) { process.stderr.write('timon user create-admin: no password set; nothing was created.\n'); process.exit(1); }
+  }
+  if (!EMAIL_SHAPE.test(email)) { process.stderr.write('timon user create-admin: that is not an email address.\n'); process.exit(64); }
+  if (password.length < MIN_PASSWORD) { process.stderr.write(`timon user create-admin: the password needs at least ${MIN_PASSWORD} characters.\n`); process.exit(64); }
+  if (!name) name = email.split('@')[0];
+
+  const r = await httpRaw('POST', '/api/users/first-admin', { email, name, password }, 30_000);
+  if (r.status !== 201) {
+    const error = typeof r.body?.code === 'string' ? r.body.code : r.body?.error;
+    const why = {
+      already_set_up: 'this Timon already has an account. Recover it with: timon user reset-password <email>',
+      build_expired: 'this build has expired: install the current version of Timon first.',
+      setup_in_progress: 'another account creation is running; try again in a moment.',
+      license_required: 'this build needs a licence key with the first account: run timon init.',
+      unauthorized: "it needs Timon's daemon token: run it on the machine where Timon is installed, as the account that owns its data.",
+      not_found: "it needs Timon's daemon token: run it on the machine where Timon is installed, as the account that owns its data.",
+    }[error] ?? (typeof error === 'string' ? error : `the daemon answered ${r.status}.`);
+    process.stderr.write(`timon user create-admin: the account was not created: ${why}\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`Account created for ${email}. Sign in to Timon with it.\n`);
+  if (r.body?.emailUnverified === true) {
+    process.stdout.write('The email address is not confirmed yet, so a forgotten password cannot be reset by email; timon user reset-password still works.\n');
+  }
+}
+
 /* ─── subscription accounts (TODO #330) ─── */
 
 async function findBackendAccount(spec) {
@@ -5061,8 +5155,10 @@ async function cmdUser(argv) {
       return cmdUserList();
     case 'reset-password':
       return cmdUserResetPassword(rest);
+    case 'create-admin':
+      return cmdUserCreateAdmin(rest);
     default:
-      process.stderr.write('usage: timon user list|reset-password …\n');
+      process.stderr.write('usage: timon user list|reset-password|create-admin …\n');
       process.exit(64);
   }
 }
