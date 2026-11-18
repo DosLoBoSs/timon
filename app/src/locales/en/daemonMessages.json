@@ -209,21 +209,13 @@
       "title": "Licence not renewed",
       "body": "Timon could not renew its licence ({cause}); the modules your licence covers stay off until it goes through. It tries again every {minutes} min."
     },
-    "license_renewal_refused": {
-      "title": "Licence not renewed",
-      "body": "Timon could not renew its licence ({cause}) and will not try again. It continues without a licence: every feature stays available, accounts beyond the first superadmin are suspended. Enter a licence key on the licence page to restore it."
-    },
     "license_off": {
       "title": "Licence is no longer valid",
-      "body": "{detail}. {free, select, yes {Timon continues without a licence: every feature and plugin stays available, accounts beyond the first superadmin are suspended; all data is preserved.} other {This beta has no Free tier: Timon is locked until a valid licence is activated; all data is preserved.}}"
+      "body": "{detail}. This beta has no Free tier: Timon is locked until a valid licence is activated; all data is preserved."
     },
     "license_change_refused": {
       "title": "Licence change refused",
       "body": "{error}"
-    },
-    "license_server_unreachable": {
-      "title": "Licence server unreachable",
-      "body": "No contact since {since, date, medium} {since, time, short}. The licence stays valid for about {hours} h more."
     },
     "dreams_to_review": {
       "title": "Dreaming: {total, plural, one {# track} other {# tracks}} to review",

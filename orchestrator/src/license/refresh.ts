@@ -25,9 +25,16 @@ import { createHash } from 'node:crypto';
  *      the server) after the last successful contact.
  *
  * Every state change is published on the bus (`license_changed`) so the UI,
- * the bundled reconciler and the plugin loader follow without a restart; the
- * superadmin is notified once per offline episode at half the tolerance, and
- * once when the licence goes off.
+ * the bundled reconciler and the plugin loader follow without a restart.
+ *
+ * What the person is told (the maintainer's decision, 18/11/2026): nothing
+ * while the server is only unreachable and the paid rights hold — an outage
+ * that is not theirs is not worth a word, so it stays in this log. Once paid
+ * rights are really lost on a build that falls back to Free (tolerance run
+ * out, or a refusal the server made), the state says so (`paidRightsLapse`)
+ * and the web app shows ONE bottom-left card; no notification doubles it. A
+ * beta build has no Free to fall back on: it locks, and that still raises one
+ * alert, since nothing else works until a key is entered.
  *
  * Logs carry the `status` and the reason, NEVER the token nor the key.
  */
@@ -226,7 +233,6 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
   const now = deps.now ?? (() => Date.now());
   const notify = deps.notify ?? defaultNotify;
   let offlineSince: number | null = null;
-  let warnedOffline = false;
   let alertedStillOff = false;
   /** The server refused to renew the expired paid licence: no more asking until a restart. */
   let renewalAbandoned = false;
@@ -307,16 +313,16 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
     return state.localFree === true && state.reason === 'expired' && !renewalAbandoned && !installedTokenRefused();
   };
 
-  /** The expired paid licence will not come back on its own: said once, then no more requests. */
+  /**
+   * The expired paid licence will not come back on its own: no more requests.
+   * The state was already off, so `apply` saw no change; the refusal is now
+   * persisted, which turns the lapse from "paused" into "refused": publish,
+   * so the card that said "until Timon reaches the server" is replaced.
+   */
   const abandonRenewal = (cause: string): void => {
     renewalAbandoned = true;
     console.warn(`[license] the expired licence was not renewed and will not be retried: ${cause}`);
-    notify({
-      title: 'Licence not renewed',
-      body: `Timon could not renew its licence (${cause}) and will not try again. It continues without a licence: every feature stays available, accounts beyond the first superadmin are suspended. Enter a licence key on the licence page to restore it.`,
-      urgent: true,
-      message: daemonMessage('license_renewal_refused', { cause }),
-    });
+    publish(licenseState());
   };
 
   const goOff = async (reason: LicenseReason, detail: string): Promise<void> => {
@@ -324,12 +330,13 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
     await apply(unlicensed(reason));
     if (was.status === 'valid') {
       console.warn(`[license] licence is now off: ${reason} (${detail})`);
-      const body = licenseState().localFree
-        ? `${detail}. Timon continues without a licence: every feature and plugin stays available, accounts beyond the first superadmin are suspended; all data is preserved.`
-        : `${detail}. This beta has no Free tier: Timon is locked until a valid licence is activated; all data is preserved.`;
+      // Fallen back to Free: the bottom-left card says it, once (`paidRightsLapse`).
+      if (licenseState().localFree) return;
       notify({
-        title: 'Licence is no longer valid', body, urgent: true,
-        message: daemonMessage('license_off', { detail, free: licenseState().localFree ? 'yes' : 'no' }),
+        title: 'Licence is no longer valid',
+        body: `${detail}. This beta has no Free tier: Timon is locked until a valid licence is activated; all data is preserved.`,
+        urgent: true,
+        message: daemonMessage('license_off', { detail }),
       });
     }
   };
@@ -390,7 +397,6 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
       }
       recordServerContact(response.refresh, now());
       offlineSince = null;
-      warnedOffline = false;
       await apply(state);
     } catch (err) {
       if (revision !== licenseRevision() || key !== readLicenseKey()) return;
@@ -433,18 +439,11 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
       if (current.status === 'valid') {
         await apply({ ...current, offlineSince: new Date(offlineSince).toISOString() });
       }
-      const { hours, until } = tolerance();
-      if (!warnedOffline && until !== null && now() >= offlineSince + (hours * 3_600_000) / 2) {
-        warnedOffline = true;
-        const left = Math.max(0, Math.round((until - now()) / 3_600_000));
-        notify({
-          title: 'Licence server unreachable',
-          body: `No contact since ${new Date(offlineSince).toISOString()}. The licence stays valid for about ${left} h more.`,
-          urgent: false,
-          message: daemonMessage('license_server_unreachable', { since: offlineSince, hours: left }),
-        });
-      }
-      console.warn(`[license] renew failed: ${cause}; offline since ${new Date(offlineSince).toISOString()}`);
+      // A passing outage: the paid rights hold for the tolerance, nobody is
+      // told. The log keeps the trace.
+      const { until } = tolerance();
+      const left = until === null ? null : Math.max(0, Math.round((until - now()) / 3_600_000));
+      console.warn(`[license] renew failed: ${cause}; offline since ${new Date(offlineSince).toISOString()}${left === null ? '' : `, about ${left} h of tolerance left`}`);
       alertStillOff(cause);
     }
   };
@@ -517,6 +516,32 @@ export function startLicenseRefresh(deps: RefreshDeps): LicenseRefresh {
       bootRetry = null;
     },
   };
+}
+
+/**
+ * Paid rights a build that falls back to Free has really lost, as the web app
+ * must say it: `offline` when the tolerance ran out without an answer from the
+ * server (a renewal brings them back), `refused` when the server refused the
+ * licence for good (revoked, expired, deactivated, unknown key) or the token
+ * is for another device. `null` for everything else: a licence in force (an
+ * outage within the tolerance included), a beta build (its lock screen
+ * speaks), and Free — no activation key on disk, whatever happened before.
+ *
+ * `since` is the last successful contact with the server, the episode's
+ * mark: a renewal moves it, so a later lapse is a new card, while a restart
+ * keeps the same one (closed stays closed).
+ */
+export type PaidRightsLapse = { cause: 'offline' | 'refused'; since: string | null };
+
+export function paidRightsLapse(state: LicenseState): PaidRightsLapse | null {
+  if (state.status === 'valid' || state.localFree !== true) return null;
+  if (readLicenseKey() === null || !existsSync(LICENSE_FILE)) return null;
+  const lastContact = readLicenseStore().lastContact;
+  const since = lastContact === undefined ? null : new Date(lastContact * 1000).toISOString();
+  if (installedTokenRefused()) return { cause: 'refused', since };
+  if (state.reason === 'expired') return { cause: 'offline', since };
+  if (state.reason === 'invalid:machine' || state.reason === 'invalid:fingerprint') return { cause: 'refused', since };
+  return null;
 }
 
 /** Whether the server already refused the token on disk (persisted by `rememberRefusal`). */
