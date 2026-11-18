@@ -155,7 +155,7 @@ test('the widget lists a project\'s pull requests, filters by author, and shows 
     assert.ok(m.calls.some((c) => c.method === 'POST' && c.url === '/api/ui/projects/acme/pull-requests/12/review'));
     assert.ok(m.calls.some((c) => c.method === 'GET' && c.url === '/api/ui/projects/acme/pull-requests/12/diff'));
     assert.match(document.querySelector('[data-pull-brief]')?.textContent ?? '', /untrusted-data/);
-    assert.equal(document.querySelector('[data-pull-send]'), null, 'no send button');
+    assert.ok(!document.querySelector('[data-pull-send]'), 'no send button');
     assert.ok(!Array.from(document.querySelectorAll('button')).some((b) => /^Send/.test(b.textContent ?? '')));
 
     await m.click(document.querySelector('[data-pull-copy]'));
@@ -173,7 +173,7 @@ test('the widget lists a project\'s pull requests, filters by author, and shows 
     );
 
     await m.click(Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Close') ?? null);
-    assert.equal(document.querySelector('[data-pull-brief]'), null, 'the dialog closes');
+    assert.ok(!document.querySelector('[data-pull-brief]'), 'the dialog closes');
   } finally {
     await m.unmount();
   }
