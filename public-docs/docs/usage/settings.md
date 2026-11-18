@@ -219,6 +219,8 @@ Two settings bound what Timon keeps about finished missions. They are independen
 
 `TIMON_EVENTS_RETENTION_DAYS` (180 by default) deletes for good, once a day, the history of a mission idle for that many days; past it, **Rebuild the timeline** has nothing left to rebuild from. `TIMON_LEARNINGS_RETENTION_DAYS` (0 by default, off) does the same for raw memory facts. Both are set in **Settings → System → Privacy**; see [Keeping less](privacy.md#keeping-less).
 
+The same tab holds **Share anonymous usage statistics**: its row says whether statistics are sent, **Turn off** stops them at once without a restart, and its **…** menu shows what is sent and opens the privacy notice. When `TIMON_TELEMETRY` or `timon.config.json` decides, the row says which one and offers no button. See [Usage statistics](privacy.md#usage-statistics).
+
 ## Stopping stuck missions (Cleanup)
 
 **Settings → Missions → Cleanup** decides when Timon frees a mission that no longer needs its process, or stops one that is stuck. Two settings govern a turn that is still running:
