@@ -17,6 +17,7 @@ export const WIDGET_PICTOS: Readonly<Record<string, string>> = Object.freeze({
   allTodo: '<path d="M3.8 6.5l1.5 1.5 2.7-2.8M3.8 12.5l1.5 1.5 2.7-2.8M3.8 18.5l1.5 1.5 2.7-2.8"/><path d="M11 7h9M11 13h9M11 19h9"/>',
   projectTodo: '<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M9 13.3l2.2 2.2 4-4.2"/>',
   pullRequests: '<circle cx="6" cy="5.5" r="2"/><circle cx="6" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/><path d="M6 7.5v9M18 16.5V10a3 3 0 0 0-3-3h-4M13 4.5 10.5 7l2.5 2.5"/>',
+  jobPullRequests: '<circle cx="6" cy="5.5" r="2"/><circle cx="6" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/><path d="M6 7.5v9"/><path d="M18 16.5V10a3 3 0 0 0-3-3h-4.5"/><path d="M12.5 4.8L10.5 7l2 2.2"/>',
   workflowRuns: '<circle cx="12" cy="12" r="8.5"/><path d="M10.2 8.6v6.8l5.3-3.4z"/>',
   projects: '<path d="M3.5 9a2 2 0 0 1 2-2H9l2 2h7.5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M6.5 7V5.5a1.5 1.5 0 0 1 1.5-1.5h3l1.5 1.5H18a1.5 1.5 0 0 1 1.5 1.5V9"/>',
   workingAgents: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V5.5"/><circle cx="12" cy="4.2" r="1.2"/><circle cx="9.5" cy="12.8" r=".9"/><circle cx="14.5" cy="12.8" r=".9"/><path d="M10 16h4"/><path d="M3 12.5v2.5M21 12.5v2.5"/>',

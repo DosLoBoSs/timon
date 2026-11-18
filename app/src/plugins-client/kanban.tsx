@@ -16,6 +16,7 @@ const KanbanTodoColumn = dynamic(() => import('./kanban/kanban-todo-column').the
 const ProjectTodoTile = dynamic(() => import('./kanban/project-todo-tile').then((m) => m.ProjectTodoTile), { ssr: false });
 const ProjectTodoWidget = dynamic(() => import('./kanban/project-todo-project-widget').then((m) => m.ProjectTodoWidget), { ssr: false });
 const PullRequestsWidget = dynamic(() => import('./kanban/pull-requests-widget').then((m) => m.PullRequestsWidget), { ssr: false });
+const LandingWidget = dynamic(() => import('./kanban/landing-widget').then((m) => m.LandingWidget), { ssr: false });
 
 // Loaded on demand: statically imported, it weighed on every page of the app.
 const KanbanPage = dynamic(() => import('./kanban/page').then((m) => m.KanbanPage), { ssr: false });
@@ -115,6 +116,21 @@ export const kanbanClient: BundledClientPlugin = {
         frame: 'none',
       },
       Component: PullRequestsWidget,
+    });
+
+    // The jobs that land through a pull request: their state, the forge's
+    // checks and a preview of the diff before the push. In a chat's rail it
+    // narrows to the conversation's project.
+    registerWidget(ctx, {
+      key: 'landings',
+      widget: {
+        title: t('widgetCatalog.jobPullRequests.title'), icon: widgetPicto('jobPullRequests'), description: t('widgetCatalog.jobPullRequests.description'),
+        zone: 'droite',
+        height: 320,
+        minHeight: 160,
+        frame: 'none',
+      },
+      Component: LandingWidget,
     });
   },
 };

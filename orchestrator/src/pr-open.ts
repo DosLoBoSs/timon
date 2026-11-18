@@ -319,13 +319,22 @@ async function checkPublicTree(
  *  then only moves it forward. A remote that moved on its own is never
  *  overwritten; it is merged into the local branch first, by hand. */
 async function checkRemoteBranch(
-  repo: string, transport: GitTransport, url: string, remote: string, branch: string, head: string,
+  repo: string, transport: GitTransport, url: string, remote: string, branch: string, head: string, dryRun = false,
 ): Promise<PrCheck> {
   const read = await transport.remoteBranchSha(url, branch);
   if (!read.ok) return { name: 'remote_branch', ok: false, detail: `cannot read ${branch} on the remote: ${read.reason}` };
   if (read.sha === null) return { name: 'remote_branch', ok: true, detail: `${branch} is not on the remote yet` };
   if (read.sha === head) return { name: 'remote_branch', ok: true, detail: `${branch} is already pushed at this commit` };
   if (!(await refSha(repo, read.sha))) {
+    // Every ancestor of the local head is in the repository: a remote commit
+    // it lacks cannot be one, so the preview knows the answer without a fetch.
+    if (dryRun) {
+      return {
+        name: 'remote_branch',
+        ok: false,
+        detail: `${branch} moved on the remote: merge it into the local branch first (it is never overwritten)`,
+      };
+    }
     const fetched = await transport.fetchBranch(url, branch, `refs/remotes/${remote}/${branch}`);
     if (!fetched.ok) return { name: 'remote_branch', ok: false, detail: `cannot fetch ${branch} from the remote: ${fetched.reason}` };
   }
@@ -336,6 +345,85 @@ async function checkRemoteBranch(
         ok: false,
         detail: `${branch} moved on the remote: merge it into the local branch first (it is never overwritten)`,
       };
+}
+
+export type PrChecksInput = {
+  row: IntegrationRow;
+  /** Ids whose short form must not appear in a message (`leakProblems`). */
+  chainIds: readonly string[];
+  remoteUrl: string;
+  account: string;
+  forge: Forge;
+  transport: GitTransport;
+  title: string;
+  body: string;
+  publicTree: (repo: string, branch: string) => Promise<PublicTreeOutcome>;
+  /**
+   * The preview's run (`integration-preview.ts`): it writes nothing, not even
+   * a remote-tracking ref, and runs no code of the repository. The target is
+   * compared as last fetched, a remote branch git does not have is reported
+   * without being fetched, the public tree check (a script of the repository)
+   * is left to the opening, and an absent title is not a failure.
+   */
+  dryRun?: boolean;
+};
+
+/** Runs every pre-check of a pull request, in order; nothing is pushed here. */
+export async function runPrChecks(input: PrChecksInput): Promise<{ checks: PrCheck[]; head: string | null }> {
+  const { row, chainIds, remoteUrl, account, forge, transport } = input;
+  const repo = row.repo;
+  const branch = row.branch;
+  const checks: PrCheck[] = [];
+
+  const nameProblem = integrationBranchRefusal(branch);
+  checks.push(nameProblem
+    ? { name: 'branch_name', ok: false, detail: nameProblem }
+    : { name: 'branch_name', ok: true, detail: `${branch} is a public branch name` });
+  checks.push(await checkAccount(forge, account));
+  checks.push(await checkRemoteUrl(repo, row.remote, remoteUrl));
+
+  const head = await refSha(repo, `refs/heads/${branch}`);
+  const tracking = `refs/remotes/${row.remote}/${row.target}`;
+  let target: string | null;
+  if (input.dryRun) {
+    target = await refSha(repo, tracking);
+    checks.push(target
+      ? { name: 'target', ok: true, detail: `compared with ${row.remote}/${row.target} as last fetched (the preview fetches nothing)` }
+      : { name: 'target', ok: false, detail: `${row.remote}/${row.target} was never fetched into the repository` });
+  } else {
+    const fetched = await transport.fetchBranch(remoteUrl, row.target, tracking);
+    checks.push(fetched.ok
+      ? { name: 'target', ok: true, detail: `${row.remote}/${row.target} is up to date` }
+      : { name: 'target', ok: false, detail: `cannot fetch ${row.target} from the remote: ${fetched.reason}` });
+    target = fetched.ok ? await refSha(repo, tracking) : null;
+  }
+  const text = (): PrCheck => (input.dryRun && input.title.trim() === ''
+    ? { name: 'pr_text', ok: true, skipped: true, detail: 'no title yet: the text is checked when the pull request is opened' }
+    : checkText(input.title, input.body, chainIds));
+
+  if (!head || !target) {
+    const why = !head ? `${branch} does not exist in the repository` : `${row.remote}/${row.target} could not be read`;
+    for (const name of ['commits', 'commit_identity', 'commit_messages', 'private_paths', 'public_tree', 'remote_branch'] as const) {
+      checks.push({ name, ok: false, detail: `not checked: ${why}` });
+    }
+    checks.push(text());
+  } else {
+    const range = `${target}..${head}`;
+    const count = await gitRead(repo, ['rev-list', '--count', range]);
+    const commits = count.code === 0 ? Number(count.stdout.trim()) : NaN;
+    checks.push(Number.isFinite(commits) && commits > 0
+      ? { name: 'commits', ok: true, detail: `${commits} commit(s) beyond ${row.remote}/${row.target}` }
+      : { name: 'commits', ok: false, detail: Number.isFinite(commits) ? `${branch} brings nothing beyond ${row.remote}/${row.target}` : 'cannot count the commits of the branch' });
+    checks.push(await checkIdentity(repo, range));
+    checks.push(await checkMessages(repo, range, chainIds));
+    checks.push(text());
+    checks.push(await checkPrivatePaths(repo, `${target}...${head}`));
+    checks.push(input.dryRun
+      ? { name: 'public_tree', ok: true, skipped: true, detail: 'runs a script of the repository: checked only when the pull request is opened' }
+      : await checkPublicTree(repo, branch, input.publicTree));
+    checks.push(await checkRemoteBranch(repo, transport, remoteUrl, row.remote, branch, head, input.dryRun === true));
+  }
+  return { checks, head };
 }
 
 // ─── The action ─────────────────────────────────────────────────────────────
@@ -351,6 +439,32 @@ function settingRefusal(setting: ProjectIntegration, row: IntegrationRow): strin
     return `the branch was cut from ${row.remote}/${row.target}, the project now targets ${setting.remote}/${setting.target}`;
   }
   return null;
+}
+
+export type PullRequestSetting = {
+  setting: ProjectIntegration;
+  remoteUrl: string;
+  account: string;
+  /** `owner/name` on the forge. */
+  repository: string;
+};
+
+/** The project's setting, read again and held against the branch's row. */
+export function pullRequestSetting(row: IntegrationRow, project: string | null): PullRequestSetting | { refusal: string } {
+  if (!project) return { refusal: 'the job belongs to no project, so no integration setting applies' };
+  let read;
+  try { read = readProjectIntegration(project); } catch (err) {
+    return { refusal: (err as Error).message };
+  }
+  if (read.invalid) return { refusal: `the project's integration setting is invalid: ${read.invalid}` };
+  const setting = read.integration;
+  const settingProblem = settingRefusal(setting, row);
+  if (settingProblem) return { refusal: settingProblem };
+  const remoteUrl = setting.remote_url!;
+  const account = setting.account!;
+  const repository = githubRepoFromUrl(remoteUrl);
+  if (!repository) return { refusal: 'the push URL names no GitHub repository (owner/name)' };
+  return { setting, remoteUrl, account, repository };
 }
 
 /**
@@ -378,20 +492,9 @@ export async function openPullRequest(request: PrOpenRequest, deps: PrOpenDeps =
     return refuse(409, 'pr_refused', `a pull request is already open for ${row.branch}${row.pr_url ? `: ${row.pr_url}` : ''}`);
   }
   if (row.state !== 'branch') return refuse(409, 'pr_refused', `the pull request of ${row.branch} is already ${row.state}`);
-  if (!project) return refuse(409, 'pr_refused', 'the job belongs to no project, so no integration setting applies');
-
-  let read;
-  try { read = readProjectIntegration(project); } catch (err) {
-    return refuse(409, 'pr_refused', (err as Error).message);
-  }
-  if (read.invalid) return refuse(409, 'pr_refused', `the project's integration setting is invalid: ${read.invalid}`);
-  const setting = read.integration;
-  const settingProblem = settingRefusal(setting, row);
-  if (settingProblem) return refuse(409, 'pr_refused', settingProblem);
-  const remoteUrl = setting.remote_url!;
-  const account = setting.account!;
-  const repository = githubRepoFromUrl(remoteUrl);
-  if (!repository) return refuse(409, 'pr_refused', 'the push URL names no GitHub repository (owner/name)');
+  const resolvedSetting = pullRequestSetting(row, project);
+  if ('refusal' in resolvedSetting) return refuse(409, 'pr_refused', resolvedSetting.refusal);
+  const { setting, remoteUrl, account, repository } = resolvedSetting;
 
   const key = `${row.repo}\0${row.branch}`;
   if (busy.has(key)) return refuse(409, 'pr_open_busy', `a pull request is already being opened for ${row.branch}`);
@@ -401,43 +504,10 @@ export async function openPullRequest(request: PrOpenRequest, deps: PrOpenDeps =
     const branch = row.branch;
     const forge = (deps.forge ?? ((dir) => githubForge(dir, deps.runners)))(setting.gh_config_dir);
     const transport = (deps.transport ?? ((r) => gitTransport(r, deps.runners)))(repo);
-    const checks: PrCheck[] = [];
-
-    const nameProblem = integrationBranchRefusal(branch);
-    checks.push(nameProblem
-      ? { name: 'branch_name', ok: false, detail: nameProblem }
-      : { name: 'branch_name', ok: true, detail: `${branch} is a public branch name` });
-    checks.push(await checkAccount(forge, account));
-    checks.push(await checkRemoteUrl(repo, setting.remote, remoteUrl));
-
-    const head = await refSha(repo, `refs/heads/${branch}`);
-    const tracking = `refs/remotes/${row.remote}/${row.target}`;
-    const fetched = await transport.fetchBranch(remoteUrl, row.target, tracking);
-    checks.push(fetched.ok
-      ? { name: 'target', ok: true, detail: `${row.remote}/${row.target} is up to date` }
-      : { name: 'target', ok: false, detail: `cannot fetch ${row.target} from the remote: ${fetched.reason}` });
-    const target = fetched.ok ? await refSha(repo, tracking) : null;
-
-    if (!head || !target) {
-      const why = !head ? `${branch} does not exist in the repository` : `${row.remote}/${row.target} could not be read`;
-      for (const name of ['commits', 'commit_identity', 'commit_messages', 'private_paths', 'public_tree', 'remote_branch'] as const) {
-        checks.push({ name, ok: false, detail: `not checked: ${why}` });
-      }
-      checks.push(checkText(request.title, request.body, chainIds));
-    } else {
-      const range = `${target}..${head}`;
-      const count = await gitRead(repo, ['rev-list', '--count', range]);
-      const commits = count.code === 0 ? Number(count.stdout.trim()) : NaN;
-      checks.push(Number.isFinite(commits) && commits > 0
-        ? { name: 'commits', ok: true, detail: `${commits} commit(s) beyond ${row.remote}/${row.target}` }
-        : { name: 'commits', ok: false, detail: Number.isFinite(commits) ? `${branch} brings nothing beyond ${row.remote}/${row.target}` : 'cannot count the commits of the branch' });
-      checks.push(await checkIdentity(repo, range));
-      checks.push(await checkMessages(repo, range, chainIds));
-      checks.push(checkText(request.title, request.body, chainIds));
-      checks.push(await checkPrivatePaths(repo, `${target}...${head}`));
-      checks.push(await checkPublicTree(repo, branch, deps.publicTree ?? runPublicTree));
-      checks.push(await checkRemoteBranch(repo, transport, remoteUrl, row.remote, branch, head));
-    }
+    const { checks, head } = await runPrChecks({
+      row, chainIds, remoteUrl, account, forge, transport,
+      title: request.title, body: request.body, publicTree: deps.publicTree ?? runPublicTree,
+    });
 
     const failed = checks.filter((c) => !c.ok);
     if (failed.length > 0 || !head) {
