@@ -276,8 +276,8 @@ test('the gallery reads the manifest: kind, label, cover and slots survive unplu
     const off = await (await fetch(d.url('/api/plugins/fixture-ok'))).json() as PluginPublic;
     assert.equal(off.state, 'disabled');
     assert.equal(off.client, null, 'a disabled plugin is not mounted');
-    assert.equal(off.cover, active.cover, 'sa cover reste servie : la galerie doit dessiner sa carte');
-    assert.equal(off.icon, active.icon, 'son picto aussi');
+    assert.equal(off.cover, active.cover, 'its cover stays served: the gallery must draw its card');
+    assert.equal(off.icon, active.icon, 'its icon too');
     assert.deepEqual(off.slots, ['nav.item'], 'where it would slot in stays readable');
     assert.equal((await fetch(d.url(off.cover!))).status, 200);
 
@@ -330,7 +330,7 @@ test('plugins_changed is emitted on add, disable, enable, remove, and only then'
 
       // idempotent: no event
       await loader.update();
-      assert.equal(cap.events.length, 1, 'sans changement, pas de recomposition');
+      assert.equal(cap.events.length, 1, 'without a change, no recomposition');
 
       // disable
       plugins = { 'fixture-ok': false };
@@ -542,7 +542,7 @@ test('a module with a namespaced name (`@timon/projects`) toggles and really tur
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ enabled: false }),
     });
-    assert.equal(off.status, 200, 'le `/` de l\'id ne doit pas casser le routage');
+    assert.equal(off.status, 200, 'the `/` of the id must not break the routing');
     assert.deepEqual(await off.json(), { ok: true, id, enabled: false });
 
     const written = JSON.parse(readFileSync(CONFIG_FILE, 'utf8')) as { modules: Record<string, unknown> };
@@ -553,7 +553,7 @@ test('a module with a namespaced name (`@timon/projects`) toggles and really tur
     const decision = planEntries(CATALOG, { config: loadConfig(CONFIG_FILE), capabilities: [] })
       .find((e) => e.id === id);
     assert.equal(decision?.tier, 'std');
-    assert.equal(decision?.disabled, true, 'hors noyau, la config a le dernier mot');
+    assert.equal(decision?.disabled, true, 'outside the kernel, the config has the last word');
   });
 });
 
@@ -566,13 +566,13 @@ test('the platform segment `-/usage` serves the quotas only to the plugin that d
     const granted = await fetch(d.url('/api/plugins/fixture-usage/-/usage'));
     assert.equal(granted.status, 200);
     const body = await granted.json() as { entries: { backend: string; available: boolean; usage: unknown }[] };
-    assert.ok(Array.isArray(body.entries) && body.entries.length > 0, 'au moins un backend actif');
+    assert.ok(Array.isArray(body.entries) && body.entries.length > 0, 'at least one active backend');
     for (const entry of body.entries) {
       assert.equal(typeof entry.backend, 'string');
       // Nothing used to obtain the measure goes out: no token, no path.
       const keys = Object.keys(entry);
       for (const leaked of ['token', 'auth', 'path', 'file', 'home', 'env']) {
-        assert.ok(!keys.includes(leaked), `\`${leaked}\` ne doit jamais sortir`);
+        assert.ok(!keys.includes(leaked), `\`${leaked}\` must never go out`);
       }
     }
 

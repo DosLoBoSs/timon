@@ -240,7 +240,7 @@ test('a missing `kind` is inferred from the slots: the Phase P manifests stay va
 
   const headless = readManifest(pkg({}));
   assert.ok(headless.ok, headless.ok ? '' : headless.message);
-  assert.deepEqual(headless.manifest.kind, ['behavior'], 'un plugin sans UI est un comportement, pas une erreur');
+  assert.deepEqual(headless.manifest.kind, ['behavior'], 'a plugin without UI is a behavior, not an error');
 });
 
 test('a bundle installs `contains` and occupies nothing', () => {
@@ -344,7 +344,7 @@ test('the `examples/plugin-*` templates are accepted by the schema', async () =>
   for (const dir of dirs) {
     const json = JSON.parse(readFileSync(join(examples, dir, 'package.json'), 'utf8')) as unknown;
     const res = readManifest(json);
-    assert.ok(res.ok, `${dir} : ${res.ok ? '' : res.message}`);
+    assert.ok(res.ok, `${dir}: ${res.ok ? '' : res.message}`);
   }
 });
 

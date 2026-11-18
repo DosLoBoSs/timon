@@ -125,7 +125,7 @@ test('adding a bundle installs and enables the missing children', async () => {
   const ids = inventory(f.root, f.config, []);
   for (const id of ['example-bundle', 'example-page', 'example-widget']) {
     const entry = ids.find((p) => p.id === id);
-    assert.equal(entry?.refused ?? null, null, `${id} : ${entry?.message}`);
+    assert.equal(entry?.refused ?? null, null, `${id}: ${entry?.message}`);
     assert.equal(entry?.enabled, true, `${id} should be enabled`);
   }
 
@@ -833,7 +833,7 @@ test('npm is called with --ignore-scripts, the children included', async () => {
   const installs = f.calls.filter((args) => args[0] === 'install');
   assert.ok(installs.length >= 3, `expected bundle + 2 children, got ${installs.length}`);
   for (const args of installs) {
-    assert.ok(args.includes('--ignore-scripts'), `sans --ignore-scripts : ${args.join(' ')}`);
+    assert.ok(args.includes('--ignore-scripts'), `without --ignore-scripts: ${args.join(' ')}`);
   }
   cleanup(f);
 });

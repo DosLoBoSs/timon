@@ -165,7 +165,7 @@ test('plugin-quota-monitor: the whole product fits in the SDK', { concurrency: f
         entries: { backend: string; state: string; risk: number | null }[];
         thresholds: { warning: number; critical: number };
       };
-      assert.ok(all.entries.length > 0, 'au moins un backend actif');
+      assert.ok(all.entries.length > 0, 'at least one active backend');
       assert.deepEqual(all.thresholds, { warning: 70, critical: 90 });
       const states = ['available', 'unsupported', 'unavailable', 'disconnected'];
       for (const entry of all.entries) {
@@ -174,7 +174,7 @@ test('plugin-quota-monitor: the whole product fits in the SDK', { concurrency: f
         if (entry.state !== 'available') assert.equal(entry.risk, null);
       }
       const claude = all.entries.find((entry) => entry.backend === 'claude');
-      assert.ok(claude, 'claude reste au catalogue');
+      assert.ok(claude, 'claude stays in the catalogue');
       assert.equal(claude.state, 'disconnected');
       assert.equal(claude.risk, null);
 
@@ -368,7 +368,7 @@ test('plugin-remote-backend: a backend without a process loads without an allowl
     };
     assert.equal(gallery.state, 'active');
     assert.deepEqual(gallery.kind, ['provider']);
-    assert.ok(backendNames().includes('memory-remote'), 'le profil distant est dispatchable');
+    assert.ok(backendNames().includes('memory-remote'), 'the remote profile is dispatchable');
     assert.equal(typeof getBackend('memory-remote').openRemoteSession, 'function');
   });
   // Removed on unload, like everything a plugin brought.

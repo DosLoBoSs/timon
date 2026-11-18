@@ -51,7 +51,7 @@ type PluginHost = ReturnType<typeof daemonHost>;
  *  not be able to make a manifest the loader would refuse. */
 function manifestOf(id: string, permissions: string[], extra: Record<string, unknown> = {}) {
   const res = readManifest({ timon: { id, apiVersion: PLUGIN_API_VERSION, permissions, ...extra } });
-  assert.equal(res.ok, true, `manifeste de test invalide pour ${id}`);
+  assert.equal(res.ok, true, `invalid test manifest for ${id}`);
   if (!res.ok) throw new Error('unreachable');
   return res.manifest;
 }
@@ -122,8 +122,8 @@ test('a plugin receives its facade, and nothing of the daemon', async () => {
   for (const forbidden of ['db', 'dbApi', 'bus', 'env', 'process', 'loader', 'dispatcher']) {
     assert.equal(surface.has(forbidden), false, `${forbidden} must not be exposed`);
   }
-  assert.equal('publish' in plugin.events, false, 'le bus est en lecture seule : pas de publish');
-  assert.deepEqual(plugin.config, {}, 'la config du plugin est la sienne, pas process.env');
+  assert.equal('publish' in plugin.events, false, 'the bus is read-only: no publish');
+  assert.deepEqual(plugin.config, {}, 'the plugin config is its own, not process.env');
   await root.fiber.dispose();
 });
 
@@ -330,7 +330,7 @@ test('the routes of a plugin live under /api/plugins/<id> and fall with it', asy
 
   assert.equal((await fetch(url)).status, 200);
   await dispose();
-  assert.equal((await fetch(url)).status, 404, 'la route doit tomber avec le plugin');
+  assert.equal((await fetch(url)).status, 404, 'the route must fall with the plugin');
   server.close();
   await root.fiber.dispose();
 });
@@ -372,9 +372,9 @@ test('the layout surface does not open the plugin API, only plugin:<id> does', a
   const url = `http://127.0.0.1:${port}${PLUGIN_ROUTE_PREFIX}/hybrid-behavior/ping`;
 
   permissions = ['layout:hybrid-behavior'];
-  assert.equal((await fetch(url)).status, 404, 'le chrome ne donne pas l API');
+  assert.equal((await fetch(url)).status, 404, 'the chrome does not give the API');
   permissions = ['widget:hybrid-behavior'];
-  assert.equal((await fetch(url)).status, 404, 'ni une autre surface');
+  assert.equal((await fetch(url)).status, 404, 'nor another surface');
   permissions = ['plugin:hybrid-behavior'];
   assert.equal((await fetch(url)).status, 200, 'plugin:<id> ouvre le paquet');
 
@@ -386,16 +386,16 @@ test('the layout surface does not open the plugin API, only plugin:<id> does', a
 test('the isolated context resolves no internal service', async () => {
   const root = new Context();
   await root.plugin({ name: 'core-db-ish', apply(ctx: Context) { ctx.provide('db', dbApi); } });
-  assert.notEqual(root.get('db'), undefined, 'le daemon, lui, voit sa base');
+  assert.notEqual(root.get('db'), undefined, 'the daemon, for its part, sees its database');
 
   const isolated = isolateForPlugin(root);
-  assert.equal(isolated.get('db'), undefined, 'un plugin ne doit pas atteindre db');
+  assert.equal(isolated.get('db'), undefined, 'a plugin must not reach db');
 
   // Even through the back door: a plugin declaring `inject: ['db']`
   // would stay PENDING rather than receive the database.
   let applied = false;
   await isolated.plugin({ name: 'sournois', inject: ['db'], apply() { applied = true; } });
-  assert.equal(applied, false, 'inject: [db] ne doit jamais activer un plugin sous l isolat');
+  assert.equal(applied, false, 'inject: [db] must never activate a plugin under the isolate');
   await root.fiber.dispose();
 });
 
@@ -408,7 +408,7 @@ test('a UI token is signed, dated and bound to its plugin', async () => {
   const claims = verifyToken(plugin.ui.token(), host.tokenKey());
   assert.equal(claims?.aud, 'plugin:ui-plugin');
   assert.ok(typeof claims?.exp === 'number' && claims.exp * 1000 > Date.now());
-  assert.ok((claims.exp as number) - (claims.iat as number) <= 600, 'jeton court : 10 min au plus');
+  assert.ok((claims.exp as number) - (claims.iat as number) <= 600, 'short token: 10 min at most');
 
   // Signed by another key, expired, or malformed: refused without throwing.
   assert.equal(verifyToken(plugin.ui.token(), Buffer.alloc(32, 9)), null);
@@ -528,7 +528,7 @@ test('an iterable effect registers each disposer, torn down in reverse order', a
   });
 
   await dispose();
-  assert.deepEqual(trace, ['deux', 'un'], 'ordre inverse d’enregistrement');
+  assert.deepEqual(trace, ['deux', 'un'], 'reverse order of registration');
   await root.fiber.dispose();
 });
 

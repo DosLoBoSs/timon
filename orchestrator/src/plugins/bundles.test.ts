@@ -209,7 +209,7 @@ test('layout:<short> on a package that is not a layout: 404', async () => {
     registry.register('fixture-ok', OK_DIR, pkg());
     const s = await serve(registry, { permissions: ['layout:fixture-ok'], kinds });
     const res = await fetch(s.url(`${BUNDLE_ROUTE_PREFIX}/fixture-ok/client.js`));
-    assert.equal(res.status, 404, `kind ${JSON.stringify(kinds)} ne doit rien servir`);
+    assert.equal(res.status, 404, `kind ${JSON.stringify(kinds)} must serve nothing`);
     await res.arrayBuffer();
     await s.close();
   }

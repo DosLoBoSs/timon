@@ -66,7 +66,7 @@ test('toPublicBundled sets the real kind, plus Timon as the author', () => {
   assert.deepEqual(agentChat.kind, ['widget']);
   assert.deepEqual(agentChat.slots, ['cockpit.widget']);
   assert.equal(agentChat.author, BUNDLED_AUTHOR);
-  assert.equal(agentChat.signed, null, 'un bundled n\'a pas de signature : le catalogue est la confiance');
+  assert.equal(agentChat.signed, null, 'a bundled module has no signature: the catalogue is the trust');
   assert.equal(agentChat.label, null, 'the translated label lives in the front end, not here');
   assert.deepEqual(agentChat.screenshots, []);
 

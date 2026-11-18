@@ -422,7 +422,7 @@ test('an invalid manifest is refused without importing the package code', async 
 
   const [record] = await loader.update();
   assert.equal(record?.reason, 'skipped:manifest');
-  assert.equal(record?.id, '@fixtures/plugin-bad-manifest', 'sans manifeste lisible, le nom npm fait foi');
+  assert.equal(record?.id, '@fixtures/plugin-bad-manifest', 'without a readable manifest, the npm name prevails');
   assert.ok(!trace().includes('bad-manifest:imported'));
 
   await loader.dispose();
@@ -579,7 +579,7 @@ test('activation is read from the DISK, never memoised', () => {
   const dir = mkdtempSync(join(tmpdir(), 'timon-cfg-'));
   const file = join(dir, 'timon.config.json');
 
-  assert.deepEqual(configuredPlugins(file), {}, 'fichier absent : aucune activation');
+  assert.deepEqual(configuredPlugins(file), {}, 'missing file: no activation');
 
   writeFileSync(file, JSON.stringify({ plugins: { 'fixture-ok': false } }));
   assert.deepEqual(configuredPlugins(file), { 'fixture-ok': false });
@@ -612,7 +612,7 @@ test('watch() recomposes on its own when the disk changes', async () => {
     await new Promise((r) => setTimeout(r, 50));
     code = await status(ping);
   }
-  assert.equal(code, 200, 'le loader doit remonter le plugin sans qu\'on le lui demande');
+  assert.equal(code, 200, 'the loader must remount the plugin without being asked');
 
   stop();
   await loader.dispose();
