@@ -30,7 +30,7 @@ export function registerRoutes(app: Router): void {
     if (!requireAuth(req, res)) return;
     if (rejectIfDenied(req, res, 'kanban:write')) return;
     const parsed = parseWorktreeCreateBody(req.body);
-    if (!parsed.ok) { res.status(400).json({ error: parsed.error, code: 'task_body_invalid' }); return; }
+    if (!parsed.ok) { res.status(400).json(apiError('task_body_invalid', parsed.error, { detail: parsed.error })); return; }
     const task = scopedDb(viewerFromRequest(req)).getTask(req.params.id);
     if (!task) { res.status(404).json(apiError('not_found', 'not found')); return; }
     const base = parsed.value.base;
@@ -59,7 +59,7 @@ export function registerRoutes(app: Router): void {
     if (!requireAuth(req, res)) return;
     if (rejectIfDenied(req, res, 'kanban:write')) return;
     const parsed = parseEmptyBody(req.body);
-    if (!parsed.ok) { res.status(400).json({ error: parsed.error, code: 'task_body_invalid' }); return; }
+    if (!parsed.ok) { res.status(400).json(apiError('task_body_invalid', parsed.error, { detail: parsed.error })); return; }
     const task = scopedDb(viewerFromRequest(req)).getTask(req.params.id);
     if (!task) { res.status(404).json(apiError('task_not_found', 'Task not found.')); return; }
     try {
@@ -73,7 +73,7 @@ export function registerRoutes(app: Router): void {
     // PUT: a mission may do it on the task it runs, like the closing itself.
     if (!isOwnMissionTask(req, req.params.id) && rejectIfDenied(req, res, 'kanban:write')) return;
     const parsed = parseMergedShaBody(req.body);
-    if (!parsed.ok) { res.status(400).json({ error: parsed.error, code: 'task_body_invalid' }); return; }
+    if (!parsed.ok) { res.status(400).json(apiError('task_body_invalid', parsed.error, { detail: parsed.error })); return; }
     const scope = scopedDb(viewerFromRequest(req));
     const task = scope.getTask(req.params.id);
     if (!task) { res.status(404).json(apiError('not_found', 'not found')); return; }
@@ -85,7 +85,7 @@ export function registerRoutes(app: Router): void {
     // `timon task done --merged-sha` records here first: a merge that is not
     // proven is refused before a wrong sha lands on the task (TODO #1012).
     const refusal = mergeCloseRefusal(task, sha);
-    if (refusal) { res.status(409).json({ error: refusal, code: 'merge_not_proven' }); return; }
+    if (refusal) { res.status(409).json(apiError('merge_not_proven', refusal, { detail: refusal })); return; }
     dbApi.setTaskMergedSha(task.id, sha);
     res.json({ task: scope.getTask(task.id) });
   });

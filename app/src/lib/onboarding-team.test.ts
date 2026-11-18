@@ -61,7 +61,7 @@ test('team onboarding requires a choice, previews roles, and creates only on cli
   }
 });
 
-test('the activation banner stays hidden in beta and returns with the free policy', async () => {
+test('without a licence no activation banner shows, in beta or under the free policy', async () => {
   const { JSDOM } = await import('jsdom');
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
   const saved = new Map<string, PropertyDescriptor | undefined>();
@@ -87,9 +87,12 @@ test('the activation banner stays hidden in beta and returns with the free polic
   try {
     await React.act(async () => { root.render(React.createElement(LicenseBanner)); });
     assert.equal(document.getElementById('root')!.textContent, '');
+    // No licence means Free: nothing to warn about once the beta is over
+    // either. Entering a pro key stays a deliberate gesture on the licence page.
     beta = false;
     await React.act(async () => { await fetchCapabilities(true); });
-    assert.ok(document.querySelector('a[href="/license"]'), 'activation remains available after beta');
+    assert.equal(document.getElementById('root')!.textContent, '');
+    assert.ok(!document.querySelector('a[href="/license"]'), 'no activation link either');
     beta = true;
     await React.act(async () => { await fetchCapabilities(true); });
     assert.equal(document.getElementById('root')!.textContent, '');

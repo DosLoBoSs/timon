@@ -48,7 +48,9 @@ export function apiErrorKey(code: string): string {
  */
 export function apiErrorMessage(body: unknown, fallback?: string | { status: number }): string {
   const parsed = parseApiError(body);
-  if (parsed?.code && hasKey(apiErrorKey(parsed.code))) return t(apiErrorKey(parsed.code), parsed.params);
+  // A body that lacks a param of its message (an older daemon, a route that
+  // forgot it) would show the raw `{name}`: the daemon's English says it whole.
+  if (parsed?.code && speaks(apiErrorKey(parsed.code), parsed.params)) return t(apiErrorKey(parsed.code), parsed.params);
   if (parsed?.message) return parsed.message;
   if (typeof fallback === 'string' && fallback) return fallback;
   if (fallback && typeof fallback === 'object') return t('apiErrors.http_status', { status: fallback.status });
@@ -106,10 +108,11 @@ export function daemonMessageKey(code: string): string {
 const ARGUMENTS = new Map<string, readonly string[] | null>();
 
 /**
- * Whether `key` can say what the daemon stored: a message exists, and the
- * params name every argument of its English (the languages name the same,
- * `locale-parity.test.ts`). A row written by another daemon version may lack
- * one, and the formatter would then show the raw ICU text: the English wins.
+ * Whether `key` can say what the daemon sent or stored: a message exists, and
+ * the params name every argument of its English (the languages name the same,
+ * `locale-parity.test.ts`). A row or a route error from another daemon version
+ * may lack one, and the formatter would then show the raw ICU text: the
+ * English wins.
  */
 function speaks(key: string, params: Record<string, string | number>): boolean {
   const english = sourceText(key);
