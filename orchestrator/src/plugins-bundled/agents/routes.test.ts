@@ -439,7 +439,7 @@ test('a file outside the agent folder opens only with files:external, as an abso
 });
 
 test('skill creation persists markdown and rejects anonymous callers', async () => {
-  const body = { id: 'contract-skill', content: '# Contract\n\nInstructions é\r\n' };
+  const body = { id: 'contract-skill', content: '# Contract\n\nInstructions é\r\n' }; // french-ok: a non-ASCII byte the skill round-trips
   assert.equal((await call('POST', '/api/skills', { body })).status, 401);
   const created = await call('POST', '/api/skills', { cookie: adminCookie, body });
   assert.equal(created.status, 200);
