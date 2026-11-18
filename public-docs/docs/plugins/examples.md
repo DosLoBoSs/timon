@@ -3,7 +3,7 @@ title: Example cookbook
 sidebar_position: 18
 ---
 
-41 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
+42 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
 
 Obtain the example tree with your developer distribution. There is no public repository link. Use a licensed test instance and follow [Testing](testing.md) before installing third-party code.
 
@@ -1333,6 +1333,39 @@ function CompactLookStyler() {
 
 export function apply(ctx) {
   return ctx.slots.register({ slot: 'agent.lookstyler' }, CompactLookStyler)
+}
+```
+
+## Replace the pull request badge of an idea {#todo-landing}
+
+Source: `examples/plugin-todo-landing`. Manifest ID: `example-todo-landing`. Minimum API: **18**.
+
+API 18. One registration in the single kanban.todo.landing slot replaces the badge that says where the branch of a TO DO idea stands, on the lines of the TO DO widgets, in the Kanban TO DO column and in the idea's detail, with a plain line of text. The component reads the idea from useTodoItem(): its landing is null when no job of the idea has an integration branch, else the state (branch, pending, open, merged or closed), the branch, the pull request's number and address, and every job in jobs, the one furthest from landing first. The field is read-only. Remove the plugin and Timon's own badge comes back.
+
+Permissions: none. Read the [related guide](slots.md).
+
+`timon plugin add ./examples/plugin-todo-landing` installs this package on the target instance.
+
+From `examples/plugin-todo-landing/lib/client.js`, line 40 (excerpt):
+
+```js
+function PlainLanding() {
+  const item = useTodoItem()
+  const landing = item && item.landing
+  if (!landing) return null
+  const href = safeUrl(landing.prUrl)
+  const text = describe(landing)
+  const others = landing.jobs.length - 1
+  return React.createElement('span', { 'data-plain-landing': landing.state, className: 'text-[11px] text-muted-foreground' },
+    href
+      ? React.createElement('a', { href, target: '_blank', rel: 'noopener noreferrer', className: 'underline-offset-2 hover:underline' }, text)
+      : text,
+    others > 0 ? ` ${t('more', { count: others })}` : null)
+}
+
+/** @param {import('@timon-ai/sdk').ClientContext} ctx */
+export function apply(ctx) {
+  return ctx.slots.register({ slot: 'kanban.todo.landing' }, PlainLanding)
 }
 ```
 

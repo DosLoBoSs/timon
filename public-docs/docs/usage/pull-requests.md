@@ -65,6 +65,20 @@ Before anything leaves your machine, Timon checks the branch. If one check fails
 
 Then Timon pushes the integration branch and opens the pull request. The push is never forced: a branch already on the remote only moves forward, and one that moved on its own is never overwritten. Merge it into your local branch, then run the command again.
 
+## Follow it from the TO DO notebook
+
+An idea whose job lands through a pull request shows where it stands, beside its progress, on its line in the TO DO widgets, its Kanban card and its detail:
+
+| Badge | Meaning |
+| --- | --- |
+| **PR not created** | the job has its integration branch, its pull request is not open yet |
+| **PR #12** | the pull request is open: click the badge to open it in your browser |
+| **PR #12 merged** | the pull request was merged: the work landed in the target branch |
+| **PR #12 closed** | the pull request was closed without a merge: nothing landed |
+| **Branch** | an embargoed branch (`sec/<topic>`), which lands by hand without a pull request |
+
+The progress says how far the work went; this badge says how far its branch went. When the idea has several jobs, the badge shows the one furthest from landing (a closed pull request first, then one not created, a branch, an open one, a merged one) and its tooltip lists them all. The TO DO widgets filter on **PR open** and **PR not created**.
+
 A branch under embargo (`sec/<topic>`, for a security fix) is never pushed by this command, whatever the setting says: it lands by hand once the advisory is published.
 
 If the push succeeds but the pull request cannot be created, run the command again: the branch is already there and only the pull request is opened.
