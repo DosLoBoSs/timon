@@ -433,3 +433,49 @@ test('a plugin that takes agent.mascot still wins over a pack\'s head', async (t
   await w.act(() => { dispose(); fallback(); });
   assert.ok(w.document.querySelector('[data-flame]'), 'the pack\'s head comes back');
 });
+
+test('the examples/plugin-mascot-head template draws its ember for the agents that wear it, with the SDK alone', async (t) => {
+  const { readFileSync, mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join, resolve } = await import('node:path');
+  const { pathToFileURL } = await import('node:url');
+  const { register, resetSlotsForTests } = await import('@/lib/plugin-host/slots');
+  const { recordMascotDeclarations, resetMascotDeclarationsForTests } = await import('@/lib/mascot/parts-declarations');
+  resetSlotsForTests();
+  resetMascotDeclarationsForTests();
+  t.after(() => React.act(async () => { resetSlotsForTests(); resetMascotDeclarationsForTests(); }));
+  const root = resolve(process.cwd(), '..', 'examples', 'plugin-mascot-head');
+  const manifest = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { timon: { id: string; label: string; mascot: unknown } }).timon;
+  recordMascotDeclarations([{ id: manifest.id, label: manifest.label, mascot: manifest.mascot }]);
+  const source = readFileSync(join(root, 'lib', 'client.js'), 'utf8');
+  const platform = source
+    .replace(/import React from 'react'\n/, 'const React = globalThis.__mascotTestReact\n')
+    .replace(/import \{([^}]*)\} from '@timon\/ui'\n/, 'const {$1} = globalThis.__mascotTestUi\n');
+  assert.notEqual(platform, source, 'the client still imports react and @timon/ui');
+  const { UI_KIT } = await import('@/lib/plugin-host/ui-kit');
+  Object.assign(globalThis, { __mascotTestReact: React, __mascotTestUi: UI_KIT });
+  const dir = mkdtempSync(join(tmpdir(), 'mascot-head-example-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, 'client.mjs');
+  writeFileSync(file, platform);
+  const mod = await import(pathToFileURL(file).href) as { apply: (ctx: unknown) => () => void };
+  const { AgentMascotHost } = await import('./agent-mascot');
+  const w = await mount(t, true);
+  let dispose = (): void => undefined;
+  await w.act(() => { dispose = mod.apply({ slots: { register: (options: { slot: string }) => register({ ...options, pluginId: manifest.id }) } }); });
+  const base = defaultLookFor('code');
+  await w.render(React.createElement(React.Fragment, null,
+    React.createElement(AgentMascotHost, { look: { shape: 'example-mascot-head:ember', color: '#3fa9ff' }, base, size: 48, state: 'sleeping', label: 'Ember' }),
+    React.createElement(AgentMascotHost, { look: { shape: 'gem' }, size: 48 }),
+  ));
+  const ember = w.document.querySelector('svg[data-ember]');
+  assert.equal(ember?.getAttribute('data-ember'), 'sleeping');
+  assert.equal(ember?.getAttribute('width'), '48');
+  assert.equal(ember?.getAttribute('aria-label'), 'Ember');
+  assert.ok(ember?.querySelector('path[fill="#3fa9ff"]'), 'the flame is the agent\'s colour');
+  assert.ok(!ember?.querySelector('animateTransform'), 'still under reduced motion');
+  assert.deepEqual(Array.from(w.document.querySelectorAll('svg[data-mascot]')).map((svg) => svg.getAttribute('data-shape')), ['gem']);
+  await w.act(() => { dispose(); });
+  assert.ok(!w.document.querySelector('svg[data-ember]'));
+  assert.deepEqual(Array.from(w.document.querySelectorAll('svg[data-mascot]')).map((svg) => svg.getAttribute('data-shape')), [base.shape, 'gem'], 'the role\'s default skull meanwhile');
+});
