@@ -272,6 +272,7 @@
     },
     "command_to_decide": {
       "title": "Command to decide: {agent}"
-    }
+    },
+    "task_auto_close_refused": "The mission ended without closing its task, and the automatic close was refused. {refusal}"
   }
 }

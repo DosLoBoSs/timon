@@ -272,6 +272,7 @@
     },
     "command_to_decide": {
       "title": "Commande à décider : {agent}"
-    }
+    },
+    "task_auto_close_refused": "La mission s’est terminée sans clore sa task, et la clôture automatique a été refusée. {refusal}"
   }
 }
