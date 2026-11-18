@@ -177,3 +177,13 @@ test('a stored sentence that sends to Settings reads the path the dialog shows n
     JSON.stringify({ code: 'integration_gave_up', params: { transport: 'telegram' } }), english));
   assert.match(replay.body ?? '', /Replay it from Settings → Secrets → Connections\.$/);
 });
+
+test('a layout proposal card names its kind in French, with its project and note only when present', () => {
+  const english = { title: 'Island layout to review: tim', body: 'Plan (site)' };
+  const full = { code: 'layout_proposal_to_review', params: { kind: 'island_arrangement', agent: 'tim', mission: 'Plan', project: 'site', note: 'calmer' } };
+  assert.deepEqual(inLocale('fr', () => daemonNotificationText(full, english)),
+    { title: "Agencement d'îlots à examiner : tim", body: 'Plan (site) — calmer' });
+  const bare = { code: 'layout_proposal_to_review', params: { kind: 'widgets', agent: 'plugin:demo', mission: 'Plan', project: 'none', note: 'none' } };
+  assert.deepEqual(inLocale('en', () => daemonNotificationText(bare, english)),
+    { title: 'Widget arrangement to review: plugin:demo', body: 'Plan' });
+});
