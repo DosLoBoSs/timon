@@ -23,6 +23,21 @@
       "feed": {
         "title": "Demo ao vivo na quinta",
         "body": "Agentes e plugins, uma hora."
+      },
+      "update": {
+        "highlight1": "As atualizações são baixadas, verificadas e instaladas pelo app.",
+        "highlight2": "As missões continuam de onde pararam após uma reinicialização.",
+        "highlight3": "Conversas longas rolam mais rápido.",
+        "highlight4": "Plugins podem adicionar sua própria página de configurações.",
+        "states": "Prévia",
+        "state": {
+          "downloading": "Download",
+          "verified": "Verificado",
+          "missions": "Missões",
+          "network": "Erro de rede",
+          "cancelled": "Senha cancelada"
+        },
+        "done": "Prévia: nada foi instalado."
       }
     },
     "license": {

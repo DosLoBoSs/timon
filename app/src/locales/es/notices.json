@@ -23,6 +23,21 @@
       "feed": {
         "title": "Demo en directo el jueves",
         "body": "Agentes y plugins, una hora."
+      },
+      "update": {
+        "highlight1": "Las actualizaciones se descargan, verifican e instalan desde la app.",
+        "highlight2": "Las misiones continúan donde se detuvieron tras un reinicio.",
+        "highlight3": "Las conversaciones largas se desplazan más rápido.",
+        "highlight4": "Los plugins pueden añadir su propia página de ajustes.",
+        "states": "Vista previa",
+        "state": {
+          "downloading": "Descarga",
+          "verified": "Verificado",
+          "missions": "Misiones",
+          "network": "Error de red",
+          "cancelled": "Contraseña cancelada"
+        },
+        "done": "Vista previa: no se ha instalado nada."
       }
     },
     "license": {
