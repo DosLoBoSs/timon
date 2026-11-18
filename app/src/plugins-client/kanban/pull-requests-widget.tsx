@@ -355,7 +355,7 @@ function PullRow({ pull, preparing, onReview, onReport }: {
         icon={<ScanSearch className="size-3" />}
         label={preparing ? t('pullRequests.preparing') : t('pullRequests.review')}
       />
-      <Dropdown.Root>
+      <Dropdown.Root modal={false}>
         <Dropdown.Trigger asChild>
           <button type="button" title={t('pullRequests.more')} aria-label={t('pullRequests.more')} className={widgetButtonClass({ iconOnly: true })}>
             <MoreHorizontal className="size-3.5" />
