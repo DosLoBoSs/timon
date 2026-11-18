@@ -51,18 +51,39 @@ apart. A short loss of connection, or a restart, does not turn it off. When
 the network is not ready yet as Timon starts, it tries again three times, 30
 seconds, 1 minute and 2 minutes apart, before going back to its usual pace.
 
-A licence that ends (expired, revoked or released) does not stop Timon: it
-continues on Free. If the licence ends while Timon runs, one alert in the
-Notification center says why; found ended when Timon starts, it falls back to
-Free without a word, and no banner stays on screen. Additional accounts keep
-their data but cannot sign in until a licence is back.
+### When Timon cannot check your licence online
 
-A paid licence that only expired while the computer was off, for longer than
-the time it tolerates without a connection, comes back on its own: Timon keeps
-trying to renew it, at start and then at its usual pace, and its accounts
-return as soon as a renewal goes through. If the licence was revoked or
-released, Timon stops trying and says so once; enter a key again from your
-profile to get a paid licence back.
+A paid licence works without a connection for a while: the time it tolerates
+offline is set by your plan. During that time Timon shows nothing at all. An
+outage of the licensing service, or of your network, is not something you have
+to deal with, and Timon keeps trying in the background.
+
+### When paid features are paused
+
+A licence that ends does not stop Timon: it continues on Free, and additional
+accounts keep their data but cannot sign in until a licence is back. Timon then
+shows one card at the bottom left of the interface, and only in two cases:
+
+- **Paid features are paused**: the time tolerated offline ran out before Timon
+  could check the licence online. They come back on their own as soon as a
+  renewal goes through, and the card goes away with them. Timon keeps trying,
+  at start and then at its usual pace, including after the computer was off
+  for a long time.
+- **Your license is no longer active**: the licensing service refused it for good
+  (revoked, expired, released, unknown key, or a key bound to another
+  computer). Timon stops asking. **Enter my key** opens the **License key**
+  block of your profile, where you enter a key to get a paid licence back.
+
+A card you close stays closed, on every device of your account, until the
+situation changes. Timon raises no notification for these cases, on screen,
+by push or by Telegram. Without a licence at all, Timon is Free and shows
+nothing.
+
+A late payment on your subscription, and the end of your licence fourteen
+days ahead (three days ahead, as a warning), are cards too.
+
+A beta build has no Free tier: when its licence ends it shows a full-screen
+notice instead of the app, and the Notification center says why once.
 
 ## Activation endpoint for custom clients
 
