@@ -62,6 +62,10 @@ import { daemonMessage } from './daemon-message.js';
 import { applyTodoClosure } from './todo-closure.js';
 import { isMirrorTask } from './task-mirror.js';
 
+// The landing replay of an integration branch is the second half of a chain's
+// closure; re-exported so `reconcile.ts` keeps its three imports.
+export { reconcileLandedIntegrations } from './integration-landing.js';
+
 /**
  * Chaining attempts before explicitly giving up.
  *

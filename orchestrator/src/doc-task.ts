@@ -26,6 +26,7 @@ import { listAgents, loadConfig } from './agent.js';
 import { taskProjectSlug } from './task-project.js';
 import { agentDir } from './paths.js';
 import { apiBaseUrl } from './api-url.js';
+import { pendingLanding } from './chain-landing.js';
 
 /** The name the librarian used to be REQUIRED to carry. Kept as a last
  *  resort for installs whose librarian predates roles. */
@@ -152,6 +153,15 @@ export async function maybeCreateDocTask(task: TaskRow): Promise<void> {
   // Only create a doc if the task is terminal: no non-doc task depends on it.
   // Covers every pipeline: code→review→merge, code→review (without git), code only, chore, research.
   if (hasDownstreamNonDocTask(task.id)) return;
+
+  // Integrated into an integration branch is not landed: a pull request can
+  // still be refused, and a refused one is not documented. The landing replay
+  // (`integration-landing.ts`) calls this again once the branch is merged.
+  const waits = pendingLanding(task);
+  if (waits) {
+    console.log(`[doc-task] skip ${task.id}: integrated into ${waits}, documented when it lands`);
+    return;
+  }
 
   // Idempotency: skip if a doc task already exists for this task.
   if (hasDocTask(task.id)) {

@@ -1255,9 +1255,12 @@ function todoReturnFields(task: TaskRow): Pick<ReturnPayload, 'todo_closed' | 't
     const plan = planTodoClosure(task);
     const closed = plan.filter((c) => c.progress === 'done').map((c) => c.todoId);
     // `partial`: sibling chains of the idea are still open (TODO #462).
+    // `integrating`: merged into an integration branch only, the idea waits
+    // for that branch to land.
     const progress = plan.filter((c) => c.progress !== 'done').map((c) => ({
       id: c.todoId, progress: c.progress,
       ...(c.total ? { landed: c.landed ?? 0, total: c.total } : {}),
+      ...(c.integrating ? { integrating: c.integrating } : {}),
     }));
     const osTest = plan.filter((c) => c.osTest).map((c) => c.todoId);
     return {

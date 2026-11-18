@@ -47,6 +47,7 @@ import { MissionFenceRefusedError, profileLimits } from './resources.js';
 import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal } from './code-gate.js';
 import { GIT_MISSING_MESSAGE, GIT_MISSING_REASON, gitTaskRefusal } from './task-git.js';
 import { ensureIntegrationBranch, usesIntegrationBranch } from './git-integration.js';
+import { chainLanding } from './chain-landing.js';
 import { spawnWideningRefusal } from './users/privileged-overrides.js';
 import { isMirrorTask } from './task-mirror.js';
 import {
@@ -258,13 +259,18 @@ function fallbackOrchestratorMission(orchestratorName: string | null): string | 
 /** Evaluates a task's deps (all DONE, + `pass` verdict required on a
  *  `merge` task's `review` deps, agreement across the WHOLE verification
  *  chain, and a `code` dep of a `full` pipeline only counts once its chain's
- *  merge is DONE). Logic lives in merge-gate.ts. */
+ *  merge is DONE, and one integrated into another base only once that base
+ *  landed). Logic lives in merge-gate.ts. */
 function depsGate(task: TaskRow): DepGate {
   return evaluateDeps(
     task,
     (id) => dbApi.getTask(id),
     (rootId) => dbApi.listTasksByVerificationRoot(rootId),
     (rootId) => dbApi.listVerificationChain(rootId),
+    (dep) => {
+      const row = dbApi.getTask(dep.id);
+      return row ? chainLanding(row) : 'local';
+    },
   );
 }
 
