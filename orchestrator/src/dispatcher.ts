@@ -44,7 +44,7 @@ import {
   type InterruptionReason,
 } from './interruption.js';
 import { MissionFenceRefusedError, profileLimits } from './resources.js';
-import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal } from './code-gate.js';
+import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal, pullRequestCloseRefusal } from './code-gate.js';
 import { GIT_MISSING_MESSAGE, GIT_MISSING_REASON, gitTaskRefusal } from './task-git.js';
 import {
   ensureIntegrationBranch, integrationBranchName, integrationBranchRefusal, usesIntegrationBranch, type IntegrationMode,
@@ -436,7 +436,8 @@ export function pullRequestDirective(task: TaskRow, wt: WorktreeInfo, activeBran
     `worktree can fix with NEW commits (a commit is never rewritten), repeat step 2, ` +
     `retry. A check you cannot fix (an earlier commit's identity or message, the ` +
     `account) → \`timon task block <TASK_ID> --reason "<the failed checks>"\`.\n\n` +
-    `5. **Close** with the tip you published and the pull request's address:\n\n` +
+    `5. **Close** with the tip you published and the pull request's address. The daemon ` +
+    `refuses DONE (\`pr_not_opened\`) until step 4 opened the pull request:\n\n` +
     `\`\`\`bash\ntimon task done <TASK_ID> --merged-sha "$(git -C ${repo} rev-parse ${branch})" ` +
     `--comment "pull request <url> opened for ${branch}"\n\`\`\`\n\n` +
     `A person merges the pull request on the forge; Timon notices it afterwards.`
@@ -1889,11 +1890,13 @@ function autoCloseComment(task: { type?: string | null; agent_name: string }, mi
  * The DONE of a task whose mission ended without the agent closing it, unless
  * the checks every close route applies refuse it (TODO #1053): a `merge` must
  * prove its source branches in the base, a `full` code task already in its base
- * must still be reviewable. A refused close goes BLOCKED with the reason, so the
- * chain never starts on a merge that did not happen or a review of nothing.
+ * must still be reviewable, the task that opens a job's pull request must have
+ * opened it. A refused close goes BLOCKED with the reason, so the chain never
+ * starts on a merge that did not happen or a review of nothing.
  */
 function autoCloseTask(task: TaskRow, missionId: string): 'DONE' | 'BLOCKED' {
-  const refusal = mergeCloseRefusal(task, effectiveMergeSha(task, null, null)) ?? codeCloseRefusal(task);
+  const refusal = pullRequestCloseRefusal(task)
+    ?? mergeCloseRefusal(task, effectiveMergeSha(task, null, null)) ?? codeCloseRefusal(task);
   if (refusal) {
     dbApi.updateTaskStatus(task.id, 'BLOCKED', {
       blockedReason: `The mission ended without closing its task, and the automatic close was refused. ${refusal}`,

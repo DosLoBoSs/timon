@@ -272,6 +272,7 @@
     "todo_link_not_found": "Idea #{id} does not exist.",
     "merge_not_proven": "This task cannot be marked done yet: {detail}",
     "branch_unreviewable": "This task cannot be marked done: {detail}",
+    "pr_not_opened": "This task cannot be marked done before its pull request is open: {detail}",
     "task_fields_required": "A task needs a title and an agent.",
     "orchestration_denied": "This agent may not hand this work over: {detail}",
     "task_field_invalid": "This task was refused: {detail}",

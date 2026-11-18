@@ -58,7 +58,7 @@ import {
   canonicalizePermissionMode, RESTRICTED, taskOverrideRefusal,
 } from '../users/privileged-overrides.js';
 import { scopedDb } from '../users/scoped-db.js';
-import { closeTask, codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal, mergedShaRefusal } from '../plugins-bundled/kanban/routes.js';
+import { closeTask, codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal, mergedShaRefusal, pullRequestCloseRefusal } from '../plugins-bundled/kanban/routes.js';
 import {
   backendRefusal, isPlausibleGitRef, pipelineRefusal, planGroupRefusal, projectRefusal,
 } from '../plugins-bundled/kanban/task-field-guards.js';
@@ -516,6 +516,8 @@ export function tasksFor(scope: TaskCallerScope): ScopedTasks {
       }
       const shaRefusal = input.mergedSha ? mergedShaRefusal(task, input.mergedSha) : null;
       if (shaRefusal) throw new PluginTaskError('invalid', shaRefusal);
+      const prRefusal = pullRequestCloseRefusal(task);
+      if (prRefusal) throw new PluginTaskError('conflict', prRefusal, 'pr_not_opened');
       const mergeRefusal = mergeCloseRefusal(task, effectiveMergeSha(task, input.mergedSha, input.comment));
       if (mergeRefusal) throw new PluginTaskError('conflict', mergeRefusal, 'merge_not_proven');
       const codeRefusal = codeCloseRefusal(task);

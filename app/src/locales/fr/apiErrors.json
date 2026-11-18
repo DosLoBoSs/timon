@@ -272,6 +272,7 @@
     "todo_link_not_found": "L'idée n° {id} n'existe pas.",
     "merge_not_proven": "Cette tâche ne peut pas encore être marquée terminée : {detail}",
     "branch_unreviewable": "Cette tâche ne peut pas être marquée terminée : {detail}",
+    "pr_not_opened": "Cette tâche ne peut pas être marquée terminée avant que sa pull request soit ouverte : {detail}",
     "task_fields_required": "Une tâche a besoin d'un titre et d'un agent.",
     "orchestration_denied": "Cet agent ne peut pas confier ce travail : {detail}",
     "task_field_invalid": "Cette tâche a été refusée : {detail}",
