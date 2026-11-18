@@ -16,14 +16,14 @@ import './test-home.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db, dbApi } from './db.js';
 import { writeRoles } from './projects.js';
-import { resolveRoleSpec } from './dispatcher.js';
+import { resolveRoleSpec, resolveTaskRouting } from './dispatcher.js';
 import { agentDir } from './paths.js';
 import {
-  agentConfigWarnings, inertShellPreallows, reportInertShellPreallow,
+  agentConfigWarnings, inertShellPreallows, lostShellPreallows, reportInertShellPreallow, reportReroutedShellPreallow,
   resetInertShellPreallowReportsForTests, wholeShellPreallows,
 } from './auto-mode-preallow.js';
 
@@ -142,4 +142,57 @@ test('saving an agent in auto with Bash answers with a warning that names the wa
   assert.match(warning, /acceptEdits/);
   assert.deepEqual(agentConfigWarnings(CODER, { backend: 'claude', permission_mode: 'acceptEdits', allowed_tools: ['Bash'] }), []);
   assert.deepEqual(agentConfigWarnings(CODER, { backend: 'no-such-backend', permission_mode: 'auto', allowed_tools: ['Bash'] }), []);
+});
+
+/* ── The other road: the task does not run on the agent that holds Bash ──── */
+
+const ROUTED_PROJECT = 'preallowroute';
+const OWN = 'preallowroute-own';
+const ROLE = 'preallowroute.coder';
+function agent(name: string, cfg: Record<string, unknown>): void {
+  mkdirSync(agentDir(name), { recursive: true });
+  writeFileSync(join(agentDir(name), 'config.json'), JSON.stringify({ project: ROUTED_PROJECT, cwd: process.cwd(), backend: 'claude', ...cfg }));
+  writeFileSync(join(agentDir(name), 'system-prompt.md'), name);
+}
+// The reporter's agent: created in acceptEdits, given Bash, holding no role.
+agent(OWN, { permission_mode: 'acceptEdits', allowed_tools: ['Bash'] });
+agent(ROLE, { role: 'coder', permission_mode: 'auto' });
+
+function taskFor(named: string, creatorMission: string | null = null) {
+  const id = randomUUID();
+  dbApi.createTask(id, 'code witness', named, { type: 'code', project: ROUTED_PROJECT, creatorMissionId: creatorMission });
+  return dbApi.getTask(id)!;
+}
+
+test('reproduction: a task naming the Bash agent runs on it, in its mode, unless something reroutes it', () => {
+  writeRoles(ROUTED_PROJECT, {});
+  const kept = taskFor(OWN);
+  assert.equal(resolveTaskRouting(kept).agent, OWN);
+  assert.equal(resolveRoleSpec(kept).permissionMode, null, 'no role mode: the agent\'s acceptEdits applies');
+
+  // A pinned role sends the same task to the role's agent, seeded in auto, without Bash.
+  writeRoles(ROUTED_PROJECT, { code: { agent: ROLE } });
+  const pinned = resolveTaskRouting(taskFor(OWN));
+  assert.equal(pinned.agent, ROLE);
+  assert.equal(pinned.refusal, 'pinned');
+
+  // So does a task the agent created for itself: the dispatcher never hands a pilot its own work.
+  writeRoles(ROUTED_PROJECT, {});
+  const creator = randomUUID();
+  dbApi.createMission(creator, OWN, 'pilot', { channel: 'ui' });
+  assert.equal(resolveTaskRouting(taskFor(OWN, creator)).agent, ROLE);
+});
+
+test('a rerouted task that loses the shell pre-allow is reported once per named agent', () => {
+  resetInertShellPreallowReportsForTests();
+  const before = notifications(OWN).length;
+  const lost = { taskId: randomUUID(), named: OWN, routed: ROLE, why: 'the coder role is pinned', namedAllowed: ['Bash'], routedAllowed: ['Read'] };
+  assert.deepEqual(reportReroutedShellPreallow(lost), ['Bash']);
+  assert.deepEqual(reportReroutedShellPreallow({ ...lost, taskId: randomUUID() }), ['Bash']);
+  assert.equal(notifications(OWN).length - before, 1);
+  // The routed agent already holds it, or the task's own extras give it: nothing lost, nothing said.
+  assert.deepEqual(lostShellPreallows(['Bash'], ['Read', 'Bash']), []);
+  assert.deepEqual(lostShellPreallows(['Bash(git:*)'], []), [], 'a narrow pattern is the CLI\'s to keep');
+  // Reporting changes no one's tools.
+  assert.deepEqual(JSON.parse(readFileSync(join(agentDir(ROLE), 'config.json'), 'utf8')).allowed_tools, undefined);
 });

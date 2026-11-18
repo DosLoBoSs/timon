@@ -15,7 +15,9 @@
  * so instead, where the person who set it can read it: in the answer of the
  * call that sets it, and once per agent in the notification centre when a
  * mission runs into it (the agent can be in `acceptEdits` while its task's
- * project role launches it in `auto`).
+ * project role launches it in `auto`). A task the dispatcher runs on another
+ * agent than the one it names (a pinned role, its own creator) loses the named
+ * agent's rule the same silent way, and is reported the same way.
  */
 import { notifyUser } from './notify.js';
 import { daemonMessage } from './daemon-message.js';
@@ -125,7 +127,56 @@ export function reportInertShellPreallow(opts: {
   return rules;
 }
 
+/** Named agents whose lost pre-allow this process already reported. */
+const reportedReroutes = new Set<string>();
+
+/**
+ * The whole-shell pre-allows of `named` that `routed` does not hold: what a task
+ * that names one agent loses when the dispatcher runs it on another (a pinned
+ * role, the task's own creator, an agent of another project).
+ */
+export function lostShellPreallows(
+  named: readonly string[] | null | undefined,
+  routed: readonly string[] | null | undefined,
+): string[] {
+  const kept = new Set(wholeShellPreallows(routed));
+  return wholeShellPreallows(named).filter((rule) => !kept.has(rule));
+}
+
+/**
+ * Logs, and notifies once per named agent and process, a task rerouted away
+ * from the agent that pre-allows the shell: its card would otherwise read as if
+ * that agent's own rule had failed. Information only: nothing is granted to the
+ * agent that runs the task. Returns the lost rules.
+ */
+export function reportReroutedShellPreallow(opts: {
+  taskId: string;
+  named: string;
+  routed: string;
+  why: string;
+  namedAllowed: readonly string[] | null | undefined;
+  routedAllowed: readonly string[] | null | undefined;
+}): string[] {
+  const rules = lostShellPreallows(opts.namedAllowed, opts.routedAllowed);
+  if (!rules.length) return rules;
+  const body = `Task ${opts.taskId.slice(0, 8)} names ${opts.named}, which pre-allows ${rules.join(', ')}, but runs on `
+    + `${opts.routed}, which does not (${opts.why}). Its shell commands go to the classifier, and one it cannot judge `
+    + `waits for an approval. Give ${opts.routed} the same allowed tools, or let the task run on ${opts.named}.`;
+  console.warn(`[dispatcher] ${body}`);
+  if (reportedReroutes.has(opts.named)) return rules;
+  reportedReroutes.add(opts.named);
+  notifyUser(`Shell pre-allow not used: ${opts.named}`, body, {
+    type: 'alert',
+    taskId: opts.taskId,
+    message: daemonMessage('shell_preallow_rerouted', {
+      task: opts.taskId.slice(0, 8), named: opts.named, routed: opts.routed, rules: rules.join(', '), why: opts.why,
+    }),
+  });
+  return rules;
+}
+
 /** Test seam: forget which agents were reported. */
 export function resetInertShellPreallowReportsForTests(): void {
   reported.clear();
+  reportedReroutes.clear();
 }
