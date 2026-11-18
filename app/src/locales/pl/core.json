@@ -845,14 +845,6 @@
     "doneBody": "Logujesz się teraz jako {email}.",
     "signIn": "Zaloguj się"
   },
-  "license": {
-    "pastDue": "Zaległa płatność — odnów subskrypcję",
-    "pastDueUntil": "Zaległa płatność — subskrypcja kończy się {date}",
-    "activate": "Aktywuj",
-    "offlineSince": "Serwer licencji nieosiągalny od {date} — płatne uprawnienia pozostają dostępne w okresie tolerancji offline, potem Timon wraca do Free.",
-    "licenseEndsSoon": "Twoja licencja kończy się {date}. Wpisz wcześniej nowy klucz.",
-    "licenseEndsUrgent": "Twoja licencja kończy się {date}. Wpisz teraz nowy klucz."
-  },
   "betaLock": {
     "eyebrow": "Beta",
     "build_expired_title": "Ta kompilacja wygasła",

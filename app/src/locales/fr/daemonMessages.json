@@ -209,21 +209,13 @@
       "title": "Licence non renouvelée",
       "body": "Timon n’a pas pu renouveler sa licence ({cause}) ; les modules que couvre votre licence restent coupés jusqu’à ce qu’elle passe. Il réessaie toutes les {minutes} min."
     },
-    "license_renewal_refused": {
-      "title": "Licence non renouvelée",
-      "body": "Timon n’a pas pu renouveler sa licence ({cause}) et ne réessaiera pas. Il continue sans licence : toutes les fonctionnalités restent disponibles, les comptes au-delà du premier superadmin sont suspendus. Saisissez une clé de licence sur la page Licence pour la rétablir."
-    },
     "license_off": {
       "title": "La licence n’est plus valide",
-      "body": "{detail}. {free, select, yes {Timon continue sans licence : toutes les fonctionnalités et tous les plugins restent disponibles, les comptes au-delà du premier superadmin sont suspendus ; toutes les données sont conservées.} other {Cette bêta n’a pas d’offre Free : Timon est verrouillé jusqu’à l’activation d’une licence valide ; toutes les données sont conservées.}}"
+      "body": "{detail}. Cette bêta n’a pas d’offre Free : Timon est verrouillé jusqu’à l’activation d’une licence valide ; toutes les données sont conservées."
     },
     "license_change_refused": {
       "title": "Changement de licence refusé",
       "body": "{error}"
-    },
-    "license_server_unreachable": {
-      "title": "Serveur de licences injoignable",
-      "body": "Aucun contact depuis le {since, date, medium} {since, time, short}. La licence reste valide encore environ {hours} h."
     },
     "dreams_to_review": {
       "title": "Rêverie : {total, plural, one {# piste} other {# pistes}} à examiner",

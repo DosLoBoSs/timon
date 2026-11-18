@@ -845,14 +845,6 @@
     "doneBody": "Ahora inicias sesión con {email}.",
     "signIn": "Iniciar sesión"
   },
-  "license": {
-    "pastDue": "Pago vencido: renueva tu suscripción",
-    "pastDueUntil": "Pago vencido: la suscripción termina el {date}",
-    "activate": "Activar",
-    "offlineSince": "Servidor de licencias inaccesible desde el {date}: los derechos de pago siguen disponibles durante la tolerancia sin conexión; después Timon vuelve a Free.",
-    "licenseEndsSoon": "Tu licencia termina el {date}. Introduce una clave nueva antes de esa fecha.",
-    "licenseEndsUrgent": "Tu licencia termina el {date}. Introduce ya una clave nueva."
-  },
   "betaLock": {
     "eyebrow": "Beta",
     "build_expired_title": "Esta versión ha caducado",

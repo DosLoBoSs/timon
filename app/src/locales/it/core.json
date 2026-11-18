@@ -845,14 +845,6 @@
     "doneBody": "Ora accedi con {email}.",
     "signIn": "Accedi"
   },
-  "license": {
-    "pastDue": "Pagamento scaduto — rinnova il tuo abbonamento",
-    "pastDueUntil": "Pagamento scaduto — l’abbonamento termina il {date}",
-    "activate": "Attiva",
-    "offlineSince": "Server delle licenze non raggiungibile dal {date} — i diritti a pagamento restano disponibili durante la tolleranza offline, poi Timon torna a Free.",
-    "licenseEndsSoon": "La tua licenza termina il {date}. Inserisci una nuova chiave prima di allora.",
-    "licenseEndsUrgent": "La tua licenza termina il {date}. Inserisci subito una nuova chiave."
-  },
   "betaLock": {
     "eyebrow": "Beta",
     "build_expired_title": "Questa build è scaduta",

@@ -845,14 +845,6 @@
     "doneBody": "Du meldest dich jetzt mit {email} an.",
     "signIn": "Anmelden"
   },
-  "license": {
-    "pastDue": "Zahlung überfällig — verlängere dein Abonnement",
-    "pastDueUntil": "Zahlung überfällig — das Abonnement endet am {date}",
-    "activate": "Aktivieren",
-    "offlineSince": "Lizenzserver seit {date} nicht erreichbar — bezahlte Rechte bleiben während der Offline-Toleranz verfügbar, danach kehrt Timon zu Free zurück.",
-    "licenseEndsSoon": "Deine Lizenz endet am {date}. Gib vorher einen neuen Schlüssel ein.",
-    "licenseEndsUrgent": "Deine Lizenz endet am {date}. Gib jetzt einen neuen Schlüssel ein."
-  },
   "betaLock": {
     "eyebrow": "Beta",
     "build_expired_title": "Dieser Build ist abgelaufen",

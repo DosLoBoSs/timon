@@ -845,14 +845,6 @@
     "doneBody": "Je meldt je nu aan met {email}.",
     "signIn": "Aanmelden"
   },
-  "license": {
-    "pastDue": "Betaling achterstallig — verleng je abonnement",
-    "pastDueUntil": "Betaling achterstallig — het abonnement eindigt op {date}",
-    "activate": "Activeren",
-    "offlineSince": "Licentieserver onbereikbaar sinds {date} — betaalde rechten blijven beschikbaar tijdens de offlinetolerantie, daarna keert Timon terug naar Free.",
-    "licenseEndsSoon": "Je licentie eindigt op {date}. Voer vóór die tijd een nieuwe sleutel in.",
-    "licenseEndsUrgent": "Je licentie eindigt op {date}. Voer nu een nieuwe sleutel in."
-  },
   "betaLock": {
     "eyebrow": "Bèta",
     "build_expired_title": "Deze build is verlopen",

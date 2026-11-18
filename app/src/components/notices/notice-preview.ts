@@ -7,8 +7,8 @@
  * for the life of the page, closings ignored, nothing written
  * (`startNoticesPreview`). Like every card, nothing without a session.
  *
- * Their actions open a public page, the Profile, or close the card in this
- * page; none starts a download or changes a setting.
+ * Their actions open a page (public, or the Profile's licence block) or close
+ * the card in this page; none starts a download or changes a setting.
  */
 
 import { t } from '@/lib/i18n';
@@ -16,6 +16,7 @@ import { formatDate } from '@/lib/intl';
 import type { NoticeInput } from '@/lib/notices';
 import { GITHUB_REPOSITORY_URL, GITHUB_STAR_NOTICE_ID } from './github-star-notice';
 import { CONFIRM_EMAIL_HREF } from './confirm-email-notice';
+import { licenseNoticeInput } from './license-notices';
 
 export const NOTICES_PREVIEW_PARAM = 'notices-preview';
 export const DISCORD_INVITE_URL = 'https://discord.gg/ZQGARNcpZ3';
@@ -65,6 +66,10 @@ export function previewNotices(now: number = Date.now()): (NoticeInput & { plugi
       tone: 'warning',
       title: t('updates.notice.buildEnds', { date: ends }),
     },
+    // The licence's two definitive cards (docs/NOTICES.md): paid features
+    // paused once the offline tolerance ran out, and a licence refused for good.
+    { pluginId: '@timon/settings', ...licenseNoticeInput({ kind: 'paused', id: 'license-paused-preview' }, { canEnterKey: true }) },
+    { pluginId: '@timon/settings', ...licenseNoticeInput({ kind: 'refused', id: 'license-refused-preview' }, { canEnterKey: true }) },
     {
       pluginId: '@timon/updates',
       id: 'feed.preview',
