@@ -2332,7 +2332,7 @@
     },
     "pullRequests": {
       "title": "PR ouvertes",
-      "description": "Les pull requests ouvertes sur le dépôt d'un projet, et leur relecture en lecture seule par le relecteur du projet."
+      "description": "Les pull requests ouvertes sur le dépôt d'un projet, leur diff et le brief de leur relecture."
     },
     "workflowRuns": {
       "title": "Exécutions de workflows",
@@ -2946,7 +2946,7 @@
     "allAuthors": "Tous les auteurs",
     "deletedAuthor": "compte supprimé",
     "draft": "brouillon",
-    "review": "Relire",
+    "review": "Préparer la relecture",
     "preparing": "Préparation…",
     "reviewing": "En relecture…",
     "more": "Plus d'actions",
@@ -2954,8 +2954,6 @@
     "showReport": "Voir le rapport",
     "outdated": "La pull request a changé depuis cette relecture",
     "prepareError": "La relecture n'a pas pu être préparée",
-    "sendError": "La relecture n'a pas pu être envoyée",
-    "sent": "Relecture envoyée à {agent}",
     "verdict": {
       "mergeable": "Mergeable",
       "changes_requested": "Changements à demander",
@@ -2965,11 +2963,15 @@
       "failed": "Relecture échouée"
     },
     "dialog": {
-      "title": "Relire la pull request #{number}",
-      "reviewer": "Envoyé à {agent}, qui lit et n'écrit rien sur GitHub.",
-      "cancel": "Annuler",
-      "send": "Envoyer",
-      "sending": "Envoi…"
+      "title": "Brief de relecture de la pull request #{number}",
+      "tabBrief": "Brief",
+      "tabDiff": "Diff",
+      "diffEmpty": "Cette pull request ne change rien.",
+      "diffCut": "Le diff s'arrête ici : la suite est sur GitHub.",
+      "copy": "Copier le brief",
+      "copied": "Brief copié",
+      "copyFailed": "Le brief n'a pas pu être copié",
+      "close": "Fermer"
     },
     "report": {
       "title": "Relecture de la pull request #{number}"

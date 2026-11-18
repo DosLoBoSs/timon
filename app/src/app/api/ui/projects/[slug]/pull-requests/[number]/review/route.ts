@@ -3,7 +3,7 @@ import { proxyJson } from '@/lib/ui/proxy';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** Prepares the brief of a relecture: nothing starts until it is sent. */
+/** Prepares the brief of a relecture: nothing starts. */
 export async function POST(
   req: Request,
   { params }: { params: { slug: string; number: string } },

@@ -1,30 +1,26 @@
 /**
- * The open pull requests of a project and their read-only relecture
+ * The open pull requests of a project and the brief of their relecture
  * (`external-pr-review.ts`):
  *
- *   GET  /api/projects/:slug/pull-requests                      the list, with each one's review
- *   GET  /api/projects/:slug/pull-requests/:number/diff         the diff, as text
- *   POST /api/projects/:slug/pull-requests/:number/review       prepares the brief (starts nothing)
- *   POST /api/projects/:slug/pull-requests/:number/review/send  starts the brief the person read
+ *   GET  /api/projects/:slug/pull-requests                 the list, with each one's review
+ *   GET  /api/projects/:slug/pull-requests/:number/diff    the diff, as text
+ *   POST /api/projects/:slug/pull-requests/:number/review  prepares the brief (starts nothing)
+ *
+ * No route starts a relecture: its mission would run unconfined.
  *
  * Every verb needs a signed-in caller holding `projects:manage`: they run `gh`
  * with the account and the config folder of the project's integration setting,
- * the same right that names them. The daemon token passes on the reads and the
- * preparation, as for every project setting the CLI and the agents use.
- * Sending is a person's click and nobody else's: an agent, a mission token or
- * the daemon token cannot start a relecture, so a contributor's text that
- * talked an agent into it would still wait for the person. It also needs
- * `missions:spawn`.
+ * the same right that names them. The daemon token passes, as for every
+ * project setting the CLI and the agents use.
  */
 import type { Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { apiError } from '../../api-error.js';
 import {
-  listPullRequests, prepareReview, readPullRequestDiff, sendReview,
+  listPullRequests, prepareReview, readPullRequestDiff,
   type ExternalPrDeps, type ExternalPrRefusal,
 } from '../../external-pr-review.js';
-import { auditRequest } from '../../users/audit-actor.js';
-import { isPersonAuth, rejectIfDenied, requireAuth } from '../../users/identity.js';
+import { rejectIfDenied, requireAuth } from '../../users/identity.js';
 
 const Params = z.object({
   slug: z.string().min(1).max(100).regex(/^[a-z0-9][a-z0-9._-]*$/i, 'a project slug'),
@@ -32,7 +28,6 @@ const Params = z.object({
 });
 
 const PrepareBody = z.object({}).strict();
-const SendBody = z.object({ review_id: z.string().uuid() }).strict();
 
 function zodDetail(err: z.ZodError): string {
   return err.issues.map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message)).join('; ');
@@ -48,9 +43,6 @@ function refusalBody(out: ExternalPrRefusal) {
     case 'pr_repository_unknown': return apiError('pr_repository_unknown', out.reason);
     case 'forge_read_failed': return apiError('forge_read_failed', out.reason, params);
     case 'pr_review_running': return apiError('pr_review_running', out.reason);
-    case 'pr_review_not_found': return apiError('pr_review_not_found', out.reason);
-    case 'pr_reviewer_unavailable': return apiError('pr_reviewer_unavailable', out.reason);
-    case 'pr_review_send_failed': return apiError('pr_review_send_failed', out.reason, params);
   }
 }
 
@@ -112,24 +104,6 @@ export function registerExternalPrRoutes(app: Router, deps: ExternalPrDeps = {})
       const out = await prepareReview(p.slug, p.number, deps);
       if (!out.ok) { res.status(out.status).json(refusalBody(out)); return; }
       res.json({ review: out.review, brief: out.brief });
-    } catch (err) { failed(res, err); }
-  });
-
-  app.post('/api/projects/:slug/pull-requests/:number/review/send', async (req, res) => {
-    if (!requireAuth(req, res)) return;
-    if (!isPersonAuth(req.auth)) {
-      res.status(403).json(apiError('person_required', 'a relecture is sent by a signed-in person'));
-      return;
-    }
-    if (rejectIfDenied(req, res, 'missions:spawn')) return;
-    const p = guard(req, res, SendBody);
-    if (!p || p.number === undefined) return;
-    const { review_id: reviewId } = SendBody.parse(req.body);
-    try {
-      const out = await sendReview(p.slug, p.number, reviewId, req.auth?.user?.id ?? null, deps);
-      if (!out.ok) { res.status(out.status).json(refusalBody(out)); return; }
-      auditRequest(req, 'integration.pr_review_sent', `${p.slug}#${p.number}`);
-      res.json({ review: out.review });
     } catch (err) { failed(res, err); }
   });
 }

@@ -606,9 +606,6 @@
     "pr_repository_unknown": "The project's integration names no GitHub push URL for its remote.",
     "forge_read_failed": "GitHub could not be read: {detail}",
     "pr_read_failed": "The pull request could not be read.",
-    "pr_review_running": "This pull request is already being reviewed.",
-    "pr_review_not_found": "No review of this pull request waits to be sent: prepare it again.",
-    "pr_reviewer_unavailable": "The project has no reviewer agent, and none could be created.",
-    "pr_review_send_failed": "The review could not be started: {detail}"
+    "pr_review_running": "This pull request is already being reviewed."
   }
 }

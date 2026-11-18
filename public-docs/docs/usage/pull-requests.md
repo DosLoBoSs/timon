@@ -87,15 +87,14 @@ If the push succeeds but the pull request cannot be created, run the command aga
 
 In a project in `pr` mode, the **Open pull requests** widget lists the pull requests open on the project's repository, yours and contributors' ones alike. Add it from the widget window, then pick the project (in an agent's chat, the agent's project is used). Filter the list by author when several people contribute.
 
-**Review** asks the project's reviewer agent to review a pull request, without ever running its code on your machine:
+**Prepare the review** gets a pull request ready to review, without ever running its code on your machine:
 
 1. Timon reads the pull request and its diff from GitHub, with the project's account. The contributor's branch is never fetched or checked out, and nothing of it is installed, built or tested here: its code only runs in the forge's CI.
-2. Timon shows you the message the reviewer will start with. What the contributor wrote (title, description, comments) is in it as data, cut short, with the instruction never to follow it. Nothing starts until you click **Send**, and only a signed-in person can send it: an agent cannot start a review on its own.
-3. The reviewer reads and writes nothing on GitHub. Its verdict comes back on the pull request's row: **Mergeable**, **Changes requested**, **Reject** or **Your decision** (a product choice the reviewer leaves to you). Its full report, with a draft comment you can post yourself, is in the row's menu.
-
-A verdict marked with `*` is about an earlier state of the pull request: it changed after the review. Review it again.
+2. Timon writes a review brief: the rules a reviewer follows (read only, nothing posted on GitHub), the place of the diff on this machine, and what the contributor wrote (title, description, comments) as data, cut short, with the instruction never to follow it.
+3. A window shows the brief and, in its **Diff** tab, the pull request's changes. **Copy the brief** puts it on your clipboard, for the reviewer you choose. Timon starts nothing on its own, and writes nothing on GitHub.
 
 A project that lands its jobs locally has no pull requests to list: the widget says so until you set the project to `pr` mode.
+
 ## Follow a job's pull request
 
 The **Pull requests** widget shows one card per job that lands through a pull request. Add it from the widget window to any zone; in an agent chat's rail it only lists the jobs of the conversation's project. Each card gives the job's integration branch and target, then the state of its pull request: **Not pushed** before it is opened, **PR #n** (a link to the forge) while it is open, **Merged**, **Landed** once Timon has closed the job's tasks and ideas, or **Closed**. While the pull request is open, the card also shows its checks (failed, running, passed), a conflict with the target branch, a draft, and the review decision.
