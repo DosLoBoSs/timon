@@ -117,28 +117,44 @@ test('install.ps1 keeps to the syntax of Windows PowerShell 5.1', () => {
   }
 });
 
-test('install.ps1 refuses an administrator session before it reads or downloads anything', () => {
-  // TIM-0160: the per-user installer fails with 0xC0000005 under an elevated PowerShell.
+test('install.ps1 opens the installer through File Explorer from an administrator session', () => {
+  // TIM-0160: the installer started from an elevated PowerShell failed with
+  // 0xC0000005, while a double-click on the same file worked.
   assert.match(TEXT, /IsInRole\(\[Security\.Principal\.WindowsBuiltInRole\]::Administrator\)/);
-  const refusal = TEXT.indexOf('if (-not $DownloadOnly -and (Test-Elevated))');
-  assert.ok(refusal > 0, 'the elevated check exists and spares only -DownloadOnly, not -Silent nor -DryRun');
-  assert.ok(refusal < TEXT.indexOf('Get-Remote $installManifestUrl'), 'the elevated check runs before the manifest is read');
-  assert.match(TEXT, /\$process\.ExitCode -eq -1073741819/, 'the access-violation exit code names the administrator session');
+  assert.doesNotMatch(TEXT, /runs as administrator, and the Timon installer fails there/, 'an administrator session is no longer refused');
+  assert.match(TEXT, /\$throughShell = \$elevated -and -not \$Silent -and -not \$DownloadOnly -and \(Test-DesktopShell\)/);
+  assert.match(TEXT, /EnableLUA/, 'with UAC off, Explorer is elevated too: no detour');
+  assert.match(TEXT, /\$_\.SessionId -eq \$session -and \$_\.UserName -eq \$me/, 'only an Explorer of this account, in this session');
+  assert.match(TEXT, /Start-Process -FilePath \(Join-Path \$env:SystemRoot 'explorer\.exe'\) -ArgumentList "`"\$package`""/);
+  // Found by name, not by path: the temporary folder may be an 8.3 path.
+  assert.match(TEXT, /Win32_Process -Filter "Name = '\$name'"/);
+  assert.match(TEXT, /\$null = \$process\.Handle/, 'the exit code of a process it did not start stays readable');
+  assert.match(TEXT, /Get-InstalledVersion/, 'an unreadable exit code falls back on the uninstall entry');
+  // The package stays on disk while the installer may still read it.
+  const notFound = TEXT.indexOf('if (-not $seen) {');
+  assert.ok(notFound > 0 && TEXT.slice(notFound, notFound + 120).includes('$work = $null'), 'an installer never seen keeps its package');
+  assert.match(TEXT, /\$exitCode -eq -1073741819/, 'the access-violation exit code still names the administrator session');
 });
 
 const ELEVATED = { TIMON_INSTALL_ELEVATED: '1' };
 
-test('an administrator session is refused, with or without -DryRun and -Silent', { skip: needsShell }, () => {
+test('an administrator session goes on, through File Explorer unless -Silent or none is there', { skip: needsShell }, () => {
   const ctx = setup({ stable: channel('0.2.0', httpsArtifact('0.2.0')) });
   try {
-    for (const args of [[], ['-DryRun'], ['-Silent']]) {
-      const r = run(ctx, args, ELEVATED);
-      assert.notEqual(r.code, 0, args.join(' '));
-      // PowerShell wraps a long error at the console width: match the start only.
-      assert.match(r.err + r.out, /runs as administrator/, args.join(' '));
-      assert.doesNotMatch(r.out, /package:|Downloading/, args.join(' '));
+    const cases = [
+      [[], ELEVATED, /install: +the Timon installer window, opened by File Explorer \(this PowerShell runs as administrator\)/],
+      [['-Silent'], ELEVATED, /install: +silent installer \(\/S\)/],
+      [[], { ...ELEVATED, TIMON_INSTALL_SHELL: '0' }, /install: +the Timon installer window\r?$/m],
+      [[], { TIMON_INSTALL_ELEVATED: '0' }, /install: +the Timon installer window\r?$/m],
+    ];
+    for (const [args, env, expected] of cases) {
+      const label = `${args.join(' ')} ${JSON.stringify(env)}`;
+      const r = run(ctx, ['-DryRun', ...args], env);
+      assert.equal(r.code, 0, `${label}: ${r.err}`);
+      assert.match(r.out, expected, label);
+      assert.doesNotMatch(r.err + r.out, /runs as administrator, and/, label);
+      assert.match(r.out, /Dry run: nothing was downloaded or installed\./, label);
     }
-    assert.equal(run(ctx, ['-DryRun'], { TIMON_INSTALL_ELEVATED: '0' }).code, 0, 'a normal session goes on');
   } finally {
     rmSync(ctx.dir, { recursive: true, force: true });
   }
@@ -244,7 +260,7 @@ test('-DownloadOnly keeps a matching installer and refuses one that does not mat
 
     const ok = setup({ stable: channel('0.2.0', artifact) });
     try {
-      // -DownloadOnly runs nothing, so an administrator session may use it.
+      // -DownloadOnly runs nothing, from an administrator session too.
       for (const env of [{}, ELEVATED]) {
         const r = run(ok, ['-DownloadOnly'], env);
         assert.equal(r.code, 0, r.err);
