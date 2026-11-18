@@ -272,6 +272,26 @@ test('project get/set-integration: the CLI takes the routes of the MCP tools, wi
   });
 });
 
+test('pr open: the CLI takes the route of the MCP tool, with the same body, a file body included', async () => {
+  await withDaemon(async (base, seen) => {
+    const body = 'Adds x.\n\nWhy: y needed it.\n';
+    await session(base, [{ method: 'tools/call', params: { name: 'pr_open', arguments: { id: 't1', title: 'Add x', body } } }], true);
+    const viaMcp = seen.find((x) => x.method === 'POST' && x.url === '/api/pull-requests');
+    assert.deepEqual(viaMcp?.body, { id: 't1', title: 'Add x', body });
+    seen.length = 0;
+    const file = join(mkdtempSync(join(tmpdir(), 'timon-pr-body-')), 'body.md');
+    writeFileSync(file, body);
+    assert.equal((await cli(base, ['pr', 'open', 't1', '--title', 'Add x', '--body-file', file])).code, 0);
+    assert.deepEqual(seen.find((x) => x.method === 'POST' && x.url === '/api/pull-requests')?.body, viaMcp?.body);
+    seen.length = 0;
+    // No title, two bodies, or no id: a usage error, never a request.
+    assert.equal((await cli(base, ['pr', 'open', 't1'])).code, 64);
+    assert.equal((await cli(base, ['pr', 'open', 't1', '--title', 'x', '--body', 'a', '--body-file', file])).code, 64);
+    assert.equal((await cli(base, ['pr', 'open', '--title', 'x'])).code, 64);
+    assert.equal(seen.length, 0);
+  });
+});
+
 test('project create/update and workspace list: the MCP tools and the CLI take the same routes, with the same body', async () => {
   await withDaemon(async (base, seen) => {
     const flags = ['--name', 'Acme', '--cwd', '/srv/acme', '--workspace', 'Design Studio', '--speech', 'pitch'];

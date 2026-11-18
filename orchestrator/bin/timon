@@ -902,6 +902,12 @@ Worktrees (git isolation per code task):
   timon worktree create <task-id> [--base B]   force-create (dispatcher does it automatically for type=code)
   timon worktree dispose <task-id> [--force]   unmounts worktree + local branch (post-merge)
 
+Pull requests (projects whose jobs land through one, see set-integration):
+  timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]
+                                             checks the job's integration branch (account, remote URL,
+                                             identity, messages, ignored files, public tree), pushes it
+                                             without force and opens its pull request; sec/ is refused
+
 Projects (agent roles per project):
   timon project list                           lists configured projects
   timon project roles <slug>                   shows the role→agent mapping
@@ -2530,6 +2536,34 @@ async function cmdWorktree(argv) {
     case 'rm':      return cmdWorktreeDispose(rest);
     default:
       process.stderr.write('usage: timon worktree <info|create|dispose> <task-id> …\n');
+      process.exit(64);
+  }
+}
+
+/* ─── pull requests (a job landing through one) ─── */
+const PR_OPEN_USAGE =
+  'usage: timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]\n';
+
+async function cmdPrOpen(argv) {
+  const title = takeFlag(argv, 'title');
+  let body = takeFlag(argv, 'body');
+  const bodyFile = takeFlag(argv, 'body-file');
+  const id = argv[0];
+  if (!id || argv.length > 1 || !title || (body !== undefined && bodyFile !== undefined)) {
+    process.stderr.write(PR_OPEN_USAGE);
+    process.exit(64);
+  }
+  if (bodyFile !== undefined) body = fs.readFileSync(bodyFile, 'utf8');
+  const j = await http('POST', '/api/pull-requests', { id, title, body: body ?? '' });
+  process.stdout.write(JSON.stringify(j, null, 2) + '\n');
+}
+
+async function cmdPr(argv) {
+  const [sub, ...rest] = argv;
+  switch (sub) {
+    case 'open': return cmdPrOpen(rest);
+    default:
+      process.stderr.write('usage: timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]\n');
       process.exit(64);
   }
 }
@@ -5773,6 +5807,9 @@ async function main() {
         break;
       case 'worktree':
         await cmdWorktree(rest);
+        break;
+      case 'pr':
+        await cmdPr(rest);
         break;
       case 'project':
         await cmdProject(rest);

@@ -1,6 +1,6 @@
 /**
  * MCP tools mirroring the CLI commands around the Kanban: `task get`,
- * `task attach`, `series … clear`, `worktree`, `pipeline`, `routine`.
+ * `task attach`, `series … clear`, `worktree`, `pr open`, `pipeline`, `routine`.
  */
 
 const enc = encodeURIComponent;
@@ -79,6 +79,27 @@ export const tools = [
       type: 'object',
       properties: { task_id: id('Task'), force: { type: 'boolean' } },
       required: ['task_id'],
+    },
+  },
+  {
+    name: 'pr_open',
+    title: 'Open a job\'s pull request',
+    description:
+      'Opens the pull request of a Kanban job whose project lands through pull requests (CLI `timon pr open`). ' +
+      'The daemon checks first, and pushes nothing if one check fails: gh signs in as the project\'s account, the remote ' +
+      'pushes to the expected URL, every commit has the repository\'s identity, no task id or TODO number in a commit ' +
+      'message, the title or the body, no ignored file (docs/) in the diff, the repository\'s public tree check passes, ' +
+      'and a branch already pushed only moves forward (never forced). Then it pushes the integration branch and opens ' +
+      'the pull request. A sec/ branch (embargo) is always refused. Title and body in English, without attribution. ' +
+      'Needs projects:manage.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'A task of the job, or its series id.' },
+        title: { type: 'string', description: 'Title of the pull request.' },
+        body: { type: 'string', description: 'Description of the pull request (markdown).' },
+      },
+      required: ['id', 'title'],
     },
   },
   { name: 'pipeline_list', title: 'List pipelines', description: 'Lists the multi-agent pipeline templates (CLI `timon pipeline list`).', inputSchema: { type: 'object', properties: {} } },
@@ -198,6 +219,9 @@ export const handlers = {
   async worktree_create(args, { call }) {
     const r = await call('POST', `/api/tasks/${enc(args.task_id)}/worktree`, args.base ? { base: args.base } : {});
     return r.worktree;
+  },
+  async pr_open(args, { call }) {
+    return await call('POST', '/api/pull-requests', { id: args.id, title: args.title, body: args.body ?? '' });
   },
   async worktree_dispose(args, { call }) {
     const r = await call('DELETE', `/api/tasks/${enc(args.task_id)}/worktree${args.force ? '?force=1' : ''}`);
