@@ -6,13 +6,15 @@
  */
 import '../test-home.js';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { BASE_URL, checkout, forgeFixture, FORK_URL } from '../../tests/helpers/forge-git-fixture.js';
 import {
   gitVersionAtLeast, openScratchRepo, parseGitVersion, reopenScratchRepo, parseMergeTree, parseObjectsSize, parseSshHostName, scratchConfig, scratchEnv,
+  sshHostResolver,
   type ScratchRepo,
 } from './forge-scratch.js';
 
@@ -52,6 +54,29 @@ test('git version, object size', () => {
 test('ssh -G: the host an alias connects to', () => {
   assert.equal(parseSshHostName('user git\nhostname GitHub.com\nport 22\n'), 'github.com');
   assert.equal(parseSshHostName('user git\nport 22\n'), null);
+});
+
+const hasSsh = (): boolean => spawnSync('ssh', ['-V'], { stdio: 'ignore' }).status === 0;
+
+// `Match exec` runs its command through a POSIX shell.
+test('ssh -G is given the user and the port the push uses', { skip: (process.platform === 'win32' || !hasSsh()) && 'no POSIX ssh' }, async () => {
+  const config = join(mkdtempSync(join(tmpdir(), 'ssh-config-')), 'config');
+  writeFileSync(config, [
+    'Match host gh-alias exec "test %p = 2222"',
+    '  HostName evil.example',
+    'Match host gh-alias user mallory',
+    '  HostName evil-user.example',
+    'Host gh-alias',
+    '  HostName github.com',
+    '',
+  ].join('\n'));
+  const resolve = sshHostResolver(config);
+  assert.equal(await resolve('gh-alias', 'git', null), 'github.com');
+  assert.equal(await resolve('gh-alias', 'git', '2222'), 'evil.example', 'a block testing the port sees the one git passes');
+  assert.equal(await resolve('gh-alias', 'git', '443'), 'github.com');
+  assert.equal(await resolve('gh-alias', 'mallory', null), 'evil-user.example', 'a block testing the user sees the one git logs in as');
+  for (const port of ['0', '65536', '-p1', '22 x', '']) assert.equal(await resolve('gh-alias', 'git', port), null, port);
+  assert.equal(await resolve('-oProxyCommand=x', 'git', null), null);
 });
 
 test('the environment: no system or user configuration, no git variable of the daemon but SSH, no token', () => {

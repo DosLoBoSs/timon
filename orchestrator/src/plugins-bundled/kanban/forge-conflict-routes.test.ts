@@ -52,7 +52,7 @@ const posted: Array<{ number: number; body: string }> = [];
 const suggestions: Array<{ system: string; user: string }> = [];
 /** What `ssh -G` would answer for an alias of the remote. */
 const sshAliases = new Map<string, string>([['github-acme', 'github.com'], ['github-evil', 'evil.example']]);
-const sshLogins: Array<[string, string | undefined]> = [];
+const sshLogins: Array<[string, string | undefined, string | null | undefined]> = [];
 let suggestAnswer = '<resolved>\none\nTWO and 2\nthree\n</resolved>';
 
 function branchNow(): PullRequestBranch {
@@ -93,7 +93,7 @@ const deps: ConflictDeps = {
       : f.runner(args, opts));
   },
   suggest: async (input) => { suggestions.push(input); return suggestAnswer; },
-  sshHostName: async (alias, user) => { sshLogins.push([alias, user]); return sshAliases.get(alias) ?? null; },
+  sshHostName: async (alias, user, port) => { sshLogins.push([alias, user, port]); return sshAliases.get(alias) ?? null; },
 };
 
 const app = express();
@@ -285,6 +285,7 @@ test('the remote must lead to the forge gh reads the pull request from: refused 
   assert.equal(await host(at('git@github.com:acme/widgets.git')), 'github.com');
   assert.equal(await host(at('https://GitHub.com/acme/widgets')), 'github.com');
   assert.equal(await host(at('ssh://git@ssh.github.com:443/acme/widgets.git')), 'ssh.github.com');
+  assert.equal(await host(at('https://ssh.github.com/acme/widgets')), 'conflict_unsupported', 'ssh.github.com serves ssh only');
   assert.equal(await host(at('git@github-acme:acme/widgets.git')), 'github.com', 'an SSH alias of github.com');
   assert.equal(await host(at('https://github-acme/acme/widgets')), 'conflict_unsupported', 'an alias is an SSH name only');
   assert.equal(await host(at('https://github.com:443/acme/widgets')), 'github.com');
@@ -306,7 +307,19 @@ test('the remote must lead to the forge gh reads the pull request from: refused 
     ['ssh://git@ssh.github.com:443/acme/widgets.git', 'ssh://git@ssh.github.com:443/contrib/widgets.git', null]);
   assert.deepEqual(await urls(at('GitHub-Acme:acme/widgets.git')),
     ['ssh://git@github-acme/acme/widgets.git', 'ssh://git@github-acme/contrib/widgets.git', null], 'an alias, its user git');
-  assert.deepEqual(sshLogins.at(-1), ['github-acme', 'git'], 'the alias is resolved for the user that pushes');
+  assert.deepEqual(sshLogins.at(-1), ['github-acme', 'git', null], 'the alias is resolved for the user that pushes');
+  assert.equal(await host(at('ssh://git@github-acme:2222/acme/widgets.git')), 'github.com');
+  assert.deepEqual(sshLogins.at(-1), ['github-acme', 'git', '2222'], 'and for the port git passes ssh');
+  assert.equal(await host(at('ssh://git@github-acme:22/acme/widgets.git')), 'github.com');
+  assert.deepEqual(sshLogins.at(-1), ['github-acme', 'git', null], 'the default port is not passed: git passes none');
+  // A forge host is resolved as well: the user's configuration may send it elsewhere.
+  assert.deepEqual(sshLogins.filter(([alias]) => alias === 'github.com').at(-1), ['github.com', 'git', null]);
+  sshAliases.set('github.com', 'evil.example');
+  assert.equal(await host(at('git@github.com:acme/widgets.git')), 'conflict_unsupported', 'Host github.com + HostName evil.example');
+  assert.equal(await host(at('https://github.com/acme/widgets')), 'github.com', 'https does not go through ssh');
+  sshAliases.set('github.com', 'ssh.github.com');
+  assert.equal(await host(at('git@github.com:acme/widgets.git')), 'ssh.github.com', 'the host shown is the one ssh reaches');
+  sshAliases.delete('github.com');
   assert.equal(await host(at('ssh://-x@github.com/acme/widgets.git')), 'conflict_unsupported');
   assert.equal(await host(at('ssh://git@[::1]/acme/widgets.git')), 'conflict_unsupported', 'an IPv6 literal is never a forge host');
   // A gh folder signed in to one Enterprise host only: that host, and it alone.
