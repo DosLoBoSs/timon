@@ -7,8 +7,9 @@ import { ABOUT_CHANNEL } from './about.js';
 import { OPEN_LOGS_CHANNEL } from './diagnostic-dialog.js';
 import {
   canRestartFromSetup, handoverKeptMessage, handoverRoute, relaunchOptions, serviceHandover, serviceHandoverNeeded, setupRestarter,
-  setupRestartPending, SETUP_HANDOVER_CHANNEL, SETUP_RESTART_CHANNEL, SETUP_RESTART_STATUS_CHANNEL,
+  setupRestartPending, SETUP_HANDOVER_CHANNEL, SETUP_RESTART_CHANNEL, SETUP_RESTART_STATUS_CHANNEL, waitWhileBooting, type WaitClock,
 } from './restart.js';
+import type { HealthResult } from './health.js';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -407,6 +408,95 @@ test('a double click hands over once, and a later call finds nothing left to do'
   assert.equal(await first, 'handed-over');
   assert.equal(await run('/setup/agent'), 'not-needed');
   assert.equal(calls.filter((c) => c === 'stop').length, 1);
+});
+
+test('a service that answers too late is let go before the embedded daemon serves again', async () => {
+  const late = handover({
+    waitService: async () => { late.calls.push('wait'); return false; },
+    releaseService: async () => { late.calls.push('release'); },
+  });
+  assert.equal(await late.run('/setup/agent'), 'kept-embedded');
+  assert.deepEqual(late.calls, ['needed', 'waiting /setup/agent', 'stop', 'kick', 'wait', 'release', 'embedded again', 'kept']);
+  // A release that fails never keeps the setup from going on.
+  const failing = handover({
+    waitService: async () => false,
+    releaseService: async () => { throw new Error('taskkill refused'); },
+  });
+  assert.equal(await failing.run('/'), 'kept-embedded');
+  assert.deepEqual(failing.calls.slice(-2), ['embedded again', 'kept']);
+});
+
+/** A clock that only moves when the wait sleeps: no real timer in these tests. */
+function fakeClock(): WaitClock & { slept: number } {
+  let t = 0;
+  const clock = { slept: 0, now: () => t, sleep: async (ms: number) => { t += ms; clock.slept += ms; } };
+  return clock;
+}
+const down: HealthResult = { ok: false, status: null, error: 'connection refused: nothing listens on the port' };
+const up: HealthResult = { ok: true, status: 200, identity: 'timon', instance: 'abc' };
+
+test('the handover wait ends at its first budget when the service\'s process is gone', async () => {
+  const clock = fakeClock();
+  let asked = 0;
+  const result = await waitWhileBooting({
+    probe: async () => down, stillBooting: async () => { asked += 1; return false; },
+    baseMs: 90_000, maxMs: 300_000, intervalMs: 1_000, clock,
+  });
+  assert.equal(result.health, down);
+  assert.equal(result.extended, false);
+  assert.ok(result.waitedMs >= 89_000 && result.waitedMs <= 90_000, String(result.waitedMs));
+  assert.equal(asked, 1, 'asked once, at the end of the first budget');
+});
+
+test('the handover wait goes on while the task runs, and sees a service answering after 90 s (TIM-0158)', async () => {
+  const clock = fakeClock();
+  let asked = 0;
+  const result = await waitWhileBooting({
+    probe: async () => (clock.now() >= 150_000 ? up : down),
+    stillBooting: async () => { asked += 1; return true; },
+    baseMs: 90_000, maxMs: 300_000, intervalMs: 1_000, recheckMs: 10_000, clock,
+  });
+  assert.equal(result.health, up);
+  assert.equal(result.extended, true);
+  assert.equal(result.waitedMs, 150_000);
+  // One query every ten seconds past the budget, never one per probe.
+  assert.ok(asked >= 6 && asked <= 7, String(asked));
+});
+
+test('the handover wait never passes its cap, even with a task that keeps running', async () => {
+  const clock = fakeClock();
+  const result = await waitWhileBooting({
+    probe: async () => down, stillBooting: async () => true,
+    baseMs: 90_000, maxMs: 300_000, intervalMs: 1_000, clock,
+  });
+  assert.equal(result.health, down);
+  assert.equal(result.extended, true);
+  assert.ok(result.waitedMs < 300_000 && result.waitedMs >= 299_000, String(result.waitedMs));
+});
+
+test('the handover wait stops extending once the task ends, and a failed query counts as ended', async () => {
+  const clock = fakeClock();
+  const ended = await waitWhileBooting({
+    probe: async () => down, stillBooting: async () => clock.now() < 120_000,
+    baseMs: 90_000, maxMs: 300_000, intervalMs: 1_000, recheckMs: 10_000, clock,
+  });
+  assert.ok(ended.waitedMs >= 120_000 && ended.waitedMs < 131_000, String(ended.waitedMs));
+  const unreadable = await waitWhileBooting({
+    probe: async () => down, stillBooting: async () => { throw new Error('powershell missing'); },
+    baseMs: 10_000, maxMs: 300_000, intervalMs: 1_000, clock: fakeClock(),
+  });
+  assert.equal(unreadable.extended, false);
+  assert.ok(unreadable.waitedMs < 10_000);
+});
+
+test('the handover wait returns at once on an answer, foreign ones included', async () => {
+  const foreign: HealthResult = { ok: true, status: 404, identity: 'foreign' };
+  const clock = fakeClock();
+  const result = await waitWhileBooting({
+    probe: async () => foreign, stillBooting: async () => true, baseMs: 90_000, maxMs: 300_000, clock,
+  });
+  assert.equal(result.health, foreign);
+  assert.equal(clock.slept, 0);
 });
 
 test('the kept-embedded notice names the home and the reason, in the user\'s language', () => {

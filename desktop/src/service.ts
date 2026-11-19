@@ -477,6 +477,33 @@ export async function startDesktopService(
   return 'started';
 }
 
+const TASK_STATE_QUERY = ['-NoProfile', '-NonInteractive', '-Command',
+  `'State=' + (Get-ScheduledTask -TaskName '${WINDOWS_TASK}' -TaskPath '\\' -ErrorAction Stop).State`];
+
+/**
+ * Is the task's launcher still running? Read past the handover's first wait:
+ * a daemon still booting under its launcher is worth waiting for, a launcher
+ * that ended will not answer. Unreadable is "no": the wait ends as before.
+ */
+export async function windowsTaskRunning(query: ServiceExec = execPowershell): Promise<boolean> {
+  try {
+    const { stdout } = await query(TASK_STATE_QUERY);
+    return /^State=Running\s*$/m.test(stdout);
+  } catch { return false; }
+}
+
+/**
+ * Ends the task's launcher and the daemon under it, the way the host
+ * adapter's `stopLauncherStep` does, without elevation: the launcher runs as
+ * this account. Only when the handover gives up on a launcher still running,
+ * so the embedded daemon that takes over is not refused the home.
+ */
+export async function endWindowsLauncher(home: string, run: ServiceExec = execPowershell): Promise<void> {
+  const needle = windowsLauncher(home).toLowerCase().replace(/'/g, "''");
+  await run(['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
+    `Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'cmd.exe' -and $_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains('${needle}') } | ForEach-Object { & taskkill.exe /F /T /PID $_.ProcessId | Out-Null }; exit 0`]);
+}
+
 /**
  * Restarts the installed service so it reads the configuration the first-run
  * wizard just wrote. Unlike `start`, this replaces a daemon that is already

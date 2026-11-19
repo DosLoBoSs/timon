@@ -9,7 +9,7 @@ import {
   repairSessionWitness, restartDesktopService, sealSessionWitnessArgs, serviceStoppedByUser, serviceStoppedMarkerFile, startDesktopService,
   startStoppedServiceFailureMessage, stopServiceCopy, stopServiceFailureMessage,
   WINDOWS_SERVICE_REVISION, WINDOWS_TASK, windowsLauncher, windowsRepairDeclinedFile, windowsRestartRunner, windowsTaskNeverRan,
-  windowsRestartSeams, windowsServiceRevisionFile, windowsSessionWitnessFile, windowsTaskState,
+  windowsRestartSeams, windowsServiceRevisionFile, windowsSessionWitnessFile, windowsTaskState, windowsTaskRunning, endWindowsLauncher,
 } from './service.js';
 import type { DesktopConfig } from './config.js';
 
@@ -205,6 +205,8 @@ test('windows: a task Windows never starts is reported as never-ran, not waited 
   assert.equal(windowsTaskNeverRan('LastTaskResult=267011\r\nLastRunTime=\r\n'), true);
   assert.equal(windowsTaskNeverRan('LastTaskResult=267011\r\nLastRunTime=2026-10-14T09:12:00\r\n'), false, 'both signals are required');
   assert.equal(windowsTaskNeverRan('LastTaskResult=267009\r\nLastRunTime=1999-11-30T00:00:00\r\n'), false);
+  // 0x800710e0: Task Scheduler refused a second instance while one ran (TIM-0158). Started, not failed.
+  assert.equal(windowsTaskNeverRan('LastTaskResult=2147946720\r\nLastRunTime=2026-11-18T19:05:05\r\n'), false);
   assert.equal(windowsTaskNeverRan(''), false, 'unreadable is not "never"');
   assert.equal(windowsTaskNeverRan('LastTaskResult=\r\n'), false);
 
@@ -232,6 +234,33 @@ test('windows: a task Windows never starts is reported as never-ran, not waited 
   assert.equal(await startDesktopService('/tmp/timon-home', false, run, 'win32', 0, {}, {
     query: async () => { throw new Error('powershell not found'); },
   }), 'started');
+});
+
+test('windows: a /Run refused because an instance already runs (0x800710e0) is a started service (TIM-0158)', async () => {
+  const run = async () => ({ stdout: '' });
+  assert.equal(await startDesktopService('/tmp/timon-home', false, run, 'win32', 0, {}, {
+    query: async () => ({ stdout: 'LastTaskResult=2147946720\r\nLastRunTime=2026-11-18T19:05:05\r\n' }),
+    pause: async () => undefined,
+  }), 'started');
+});
+
+test('windows: the handover reads whether the task still runs, and unreadable is not running', async () => {
+  const asked: string[][] = [];
+  assert.equal(await windowsTaskRunning(async (args) => { asked.push(args); return { stdout: 'State=Running\r\n' }; }), true);
+  assert.match(asked[0]!.at(-1)!, new RegExp(`Get-ScheduledTask -TaskName '${WINDOWS_TASK}' -TaskPath '\\\\'`));
+  assert.equal(await windowsTaskRunning(async () => ({ stdout: 'State=Ready\r\n' })), false);
+  assert.equal(await windowsTaskRunning(async () => ({ stdout: 'State=Queued\r\n' })), false);
+  assert.equal(await windowsTaskRunning(async () => { throw new Error('no ScheduledTasks module'); }), false);
+});
+
+test('windows: the handover ends only the launcher of this home, and its tree', async () => {
+  const commands: string[] = [];
+  await endWindowsLauncher("C:\\Users\\O'Neil\\.timon", async (args) => { commands.push(args.at(-1)!); return { stdout: '' }; });
+  assert.equal(commands.length, 1);
+  assert.ok(commands[0]!.includes("c:\\users\\o''neil\\.timon"), commands[0]);
+  assert.ok(commands[0]!.includes('timon-service.cmd'));
+  assert.match(commands[0]!, /\$_.Name -eq 'cmd\.exe'/);
+  assert.match(commands[0]!, /taskkill\.exe \/F \/T \/PID/);
 });
 
 test('windows: the boot task is detected by its revision, started, and restarted by its launcher tree', async () => {

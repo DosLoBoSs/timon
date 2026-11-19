@@ -1,4 +1,5 @@
 import { isAbsolute } from 'node:path';
+import type { HealthResult } from './health.js';
 import { shellText } from './shell-i18n.js';
 
 export const SETUP_RESTART_CHANNEL = 'timon:restart-after-setup';
@@ -123,6 +124,12 @@ export function serviceHandover(actions: {
   waitService: () => Promise<boolean>;
   /** The service answers: the pages load the interface again. */
   resume: () => void;
+  /**
+   * The service's process may outlive the wait: ended before the embedded
+   * daemon starts again. Left alone, the embedded child is refused the home
+   * it holds, and on Windows the sweep after that refusal ends it by accident.
+   */
+  releaseService?: () => Promise<void>;
   /** It does not: the embedded daemon serves again, and the pages follow it. */
   resumeEmbedded: () => Promise<void>;
   reportKept: (why: string | null) => void;
@@ -148,12 +155,59 @@ export function serviceHandover(actions: {
         actions.resume();
         return 'handed-over';
       }
+      await actions.releaseService?.().catch(() => undefined);
       await actions.resumeEmbedded();
       actions.reportKept(why);
       return 'kept-embedded';
     })().finally(() => { pending = undefined; });
     return pending;
   };
+}
+
+/** Clock seams of the handover waits: tests run them on a fake clock. */
+export type WaitClock = { now: () => number; sleep: (ms: number) => Promise<void> };
+const realClock: WaitClock = { now: () => Date.now(), sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)) };
+
+/**
+ * Waits for the service the way `waitForHealth` does, `baseMs` first, then
+ * on for as long as `stillBooting` says its process lives, `maxMs` at most.
+ * A flat 90 s gave up on a Windows 10 PC whose service answered a minute
+ * later (TIM-0158): a first boot there verifies its release and loads its
+ * plugins under the antivirus' eye, and nothing was wrong with it.
+ */
+export async function waitWhileBooting(opts: {
+  probe: () => Promise<HealthResult>;
+  /** Asked past `baseMs`, every `recheckMs`: never at each probe, a query can take a second. */
+  stillBooting: () => Promise<boolean>;
+  baseMs: number;
+  maxMs: number;
+  intervalMs?: number;
+  recheckMs?: number;
+  clock?: WaitClock;
+}): Promise<{ health: HealthResult; waitedMs: number; extended: boolean }> {
+  const clock = opts.clock ?? realClock;
+  const interval = opts.intervalMs ?? 300;
+  const recheck = opts.recheckMs ?? 10_000;
+  const start = clock.now();
+  let checkedAt = Number.NEGATIVE_INFINITY;
+  let booting = false;
+  let extended = false;
+  for (;;) {
+    const health = await opts.probe();
+    const waitedMs = clock.now() - start;
+    // A foreign server answering here will not become Timon by waiting.
+    if (health.ok) return { health, waitedMs, extended };
+    if (waitedMs + interval >= opts.maxMs) return { health, waitedMs, extended };
+    if (waitedMs + interval >= opts.baseMs) {
+      if (clock.now() - checkedAt >= recheck) {
+        booting = await opts.stillBooting().catch(() => false);
+        checkedAt = clock.now();
+        extended ||= booting;
+      }
+      if (!booting) return { health, waitedMs, extended };
+    }
+    await clock.sleep(interval);
+  }
 }
 
 /** Said when the service did not take over: the setup goes on, on the embedded daemon. */
