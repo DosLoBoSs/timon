@@ -2,10 +2,12 @@
  * Publications proposed on the forge (`docs/FORGE-FLOW-PLAN.md` §0.4, §5): the
  * only way Timon writes on GitHub besides opening its own pull request.
  *
- * A proposal is prepared by the daemon (after a landing, a resolved idea) or
- * by a person's click, never by an agent: no MCP tool, no CLI verb and no
- * plugin facade creates or publishes one. A signed-in person reads it, edits
- * it and publishes it; the daemon then runs `gh` with the account and the
+ * A proposal is prepared by the daemon (after a landing, a resolved idea), by
+ * a person's click, or by a plugin holding `forge:propose` (`ctx.forge.propose`,
+ * API 19, outside a request or in one a signed-in person made), never by an
+ * agent: no MCP tool and no CLI verb creates one, and nothing but a person's
+ * route publishes one. A signed-in person reads it, edits it and publishes it;
+ * the daemon then runs `gh` with the account and the
  * config folder of the project's integration setting, after `gh api user`
  * answered that very account. Any other answer is a refusal, and nothing is
  * written.
@@ -40,7 +42,7 @@ export const FORGE_PROPOSAL_STATES = ['draft', 'publishing', 'published', 'faile
 export type ForgeProposalState = (typeof FORGE_PROPOSAL_STATES)[number];
 
 /** What made the proposal: shown in the dialog, so the person knows why. */
-export const FORGE_PROPOSAL_TRIGGERS = ['person', 'landing', 'todo_resolved'] as const;
+export const FORGE_PROPOSAL_TRIGGERS = ['person', 'landing', 'todo_resolved', 'plugin'] as const;
 export type ForgeProposalTrigger = (typeof FORGE_PROPOSAL_TRIGGERS)[number];
 
 /** Most characters of a proposal's text: the comment the forge receives. */
@@ -83,6 +85,8 @@ export type ForgeProposalView = {
   body: string;
   state: ForgeProposalState;
   trigger: ForgeProposalTrigger;
+  /** The plugin that proposed it (`trigger: 'plugin'`), else null. */
+  plugin: string | null;
   key: string;
   source_ref: string | null;
   /** The account that published it, once published. */
@@ -164,6 +168,17 @@ function targetUrl(repo: string, type: ForgeProposalTarget, number: number): str
   return `https://github.com/${repo}/${type === 'pull' ? 'pull' : 'issues'}/${number}`;
 }
 
+const PLUGIN_AUTHOR = 'plugin:';
+
+/** What a plugin's proposal records as its author. */
+export function pluginAuthor(pluginId: string): string {
+  return `${PLUGIN_AUTHOR}${pluginId}`;
+}
+
+function pluginOf(row: ForgeProposalRow): string | null {
+  return row.trigger === 'plugin' && row.created_by?.startsWith(PLUGIN_AUTHOR) ? row.created_by.slice(PLUGIN_AUTHOR.length) : null;
+}
+
 export function viewOf(row: ForgeProposalRow): ForgeProposalView {
   return {
     id: row.id,
@@ -174,6 +189,7 @@ export function viewOf(row: ForgeProposalRow): ForgeProposalView {
     body: row.body,
     state: row.state,
     trigger: row.trigger,
+    plugin: pluginOf(row),
     key: row.idem_key,
     source_ref: row.source_ref,
     account: row.account,
@@ -189,6 +205,12 @@ const getStmt = db.prepare(`SELECT * FROM forge_proposals WHERE id = ?`);
 const getByKeyStmt = db.prepare(`SELECT * FROM forge_proposals WHERE project = ? AND idem_key = ?`);
 const listStmt = db.prepare(`SELECT * FROM forge_proposals WHERE project = ? ORDER BY created_at DESC, id LIMIT 200`);
 const listByStateStmt = db.prepare(`SELECT * FROM forge_proposals WHERE project = ? AND state = ? ORDER BY created_at DESC, id LIMIT 200`);
+const byAuthorStmt = db.prepare(`
+  SELECT * FROM forge_proposals WHERE project = ? AND created_by = ? AND trigger = 'plugin' ORDER BY created_at DESC, id LIMIT 200
+`);
+const openByAuthorStmt = db.prepare(`
+  SELECT COUNT(*) AS n FROM forge_proposals WHERE created_by = ? AND trigger = 'plugin' AND state IN ('draft', 'failed')
+`);
 const openPersonDraftStmt = db.prepare(`
   SELECT * FROM forge_proposals
   WHERE project = ? AND repo = ? AND kind = ? AND target_type = ? AND target_number = ? AND trigger = 'person' AND state IN ('draft', 'failed')
@@ -237,6 +259,21 @@ export function listForgeProposals(project: string, state?: ForgeProposalState):
   return (state ? listByStateStmt.all(project, state) : listStmt.all(project)) as ForgeProposalRow[];
 }
 
+/** The proposal a trigger already made under `key`, if any. */
+export function getForgeProposalByKey(project: string, key: string): ForgeProposalRow | undefined {
+  return getByKeyStmt.get(project, key) as ForgeProposalRow | undefined;
+}
+
+/** The proposals a plugin made on a project, newest first. */
+export function listPluginForgeProposals(project: string, pluginId: string): ForgeProposalRow[] {
+  return byAuthorStmt.all(project, pluginAuthor(pluginId)) as ForgeProposalRow[];
+}
+
+/** How many of a plugin's proposals still wait for a person, all projects together. */
+export function openPluginForgeProposals(pluginId: string): number {
+  return (openByAuthorStmt.get(pluginAuthor(pluginId)) as { n: number }).n;
+}
+
 /** Why a text cannot be published, or null. */
 export function bodyProblem(body: string): string | null {
   if (body.trim().length === 0) return 'the text is empty';
@@ -262,7 +299,7 @@ export type ProposeInput = {
    *  person's proposal gets one per target instead. */
   key?: string;
   sourceRef?: string | null;
-  /** The person's user id, or null for the daemon. */
+  /** The person's user id, `pluginAuthor(id)` for a plugin, or null for the daemon. */
   createdBy: string | null;
 };
 
@@ -270,8 +307,8 @@ export type ProposeOutcome = { ok: true; proposal: ForgeProposalRow; created: bo
 
 /**
  * Prepares a write on the forge and tells the people who validate it. Called
- * by the daemon's own producers and by a person's route, never on an agent's
- * request. Nothing reaches the forge here.
+ * by the daemon's own producers, by a person's route and by `ctx.forge.propose`,
+ * never on an agent's request. Nothing reaches the forge here.
  */
 export function proposeForgeWrite(input: ProposeInput, deps: ForgeProposalDeps = {}): ProposeOutcome {
   const now = (deps.now ?? Date.now)();
