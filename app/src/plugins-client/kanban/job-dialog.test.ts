@@ -186,8 +186,8 @@ test('a job\'s row reaches its ideas and its pilot from its menu', async () => {
     await m.until(() => document.querySelectorAll('[role="menuitem"]').length === 0, 'the menu closed');
 
     await openMenu('job-bare');
-    assert.equal(document.querySelector('[data-menu-todo]'), null, 'no links, no entry');
-    assert.equal(document.querySelector('[data-menu-pilot]'), null);
+    assert.ok(!document.querySelector('[data-menu-todo]'), 'no links, no entry');
+    assert.ok(!document.querySelector('[data-menu-pilot]'));
   } finally {
     await m.unmount();
   }
@@ -206,7 +206,7 @@ test('a plugin that takes kanban.job.dialog paints the dialog from useJobDialog'
     await m.render(m.React.createElement(JobDialog, { landing: JOB, onClose: () => {} }));
     await m.until(() => !!document.querySelector('[data-acme-job]'), 'the plugin\'s dialog');
     assert.equal(document.querySelector('[data-acme-job]')?.getAttribute('data-acme-job'), 'job-51');
-    assert.equal(document.querySelector('[data-job-links]'), null, 'the product\'s is not painted under it');
+    assert.ok(!document.querySelector('[data-job-links]'), 'the product\'s is not painted under it');
   } finally {
     await m.unmount();
   }

@@ -289,7 +289,7 @@ test('an idea shows its GitHub issues and whether a connector wrote it', async (
     const meta = document.querySelector('[data-zone="meta"]')?.textContent ?? '';
     assert.ok(!meta.includes('github'), 'the issue is not named twice on the card');
     assert.ok(meta.includes('discord'), 'other links stay in the meta line');
-    assert.equal(document.querySelector('[data-zone="meta"] a'), null, 'a javascript: link is never an href');
+    assert.ok(!document.querySelector('[data-zone="meta"] a'), 'a javascript: link is never an href');
   } finally {
     await m.unmount();
   }
