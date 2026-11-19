@@ -41,13 +41,16 @@ export type ForgeRunners = { gh?: GhRunner; git?: GitRunner };
 const GH_TIMEOUT_MS = 60_000;
 const NETWORK_TIMEOUT_MS = 120_000;
 
-/** What a command said, short, without anything shaped like a credential. */
-export function redactedOutput(text: string): string {
+/** `text` with every token-shaped string and URL credential masked. */
+export function maskedSecrets(text: string): string {
   return text
     .replace(/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g, '[redacted]')
-    .replace(/(https?:\/\/)[^\s/@]+@/g, '$1[redacted]@')
-    .trim()
-    .slice(0, 400);
+    .replace(/(https?:\/\/)[^\s/@]+@/g, '$1[redacted]@');
+}
+
+/** What a command said, short, without anything shaped like a credential. */
+export function redactedOutput(text: string): string {
+  return maskedSecrets(text).trim().slice(0, 400);
 }
 
 /** `owner/name` of a GitHub push URL (ssh, scp-like or https, an ssh host
@@ -221,6 +224,25 @@ export interface ForgeThreadsReader {
   pullRequestReviewThreads(repo: string, number: number): Promise<ReviewThreadsOutcome>;
 }
 
+/** The end of the log of a failed check, as the forge's CI printed it. */
+export type FailedCheckLog = {
+  /** The last lines, at most `CHECK_LOG_TAIL_LINES` and `CHECK_LOG_TAIL_CHARS`. */
+  tail: string;
+  /** Lines were dropped before the tail. */
+  truncated: boolean;
+};
+
+export type FailedCheckLogOutcome =
+  | { ok: true; log: FailedCheckLog }
+  /** `not_actions`: the check is not a job of the repository's own CI, whose log gh can read. */
+  | ForgeReadFailure
+  | { ok: false; code: 'not_actions'; reason: string };
+
+/** The failed steps of a CI job, read when someone asks to fix the checks. */
+export interface ForgeCheckLogReader {
+  failedCheckLog(repo: string, checkUrl: string): Promise<FailedCheckLogOutcome>;
+}
+
 export type IssueState = 'open' | 'closed';
 export const ISSUE_STATE_REASONS = ['completed', 'not_planned', 'reopened', 'duplicate'] as const;
 export type IssueStateReason = (typeof ISSUE_STATE_REASONS)[number];
@@ -342,6 +364,49 @@ const LABEL_FILTER_LIMIT = 50;
 
 const GITHUB_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const COMMIT_SHA = /^[0-9a-f]{40,64}$/;
+
+/** Lines and characters kept of a failed check's log: its end, where the error is. */
+export const CHECK_LOG_TAIL_LINES = 150;
+export const CHECK_LOG_TAIL_CHARS = 12_000;
+/** Bytes gh may print for one job's failed steps before the read is cut. */
+const CHECK_LOG_BUFFER = 16 * 1024 * 1024;
+
+/**
+ * The job a check's address names in the repository's own CI
+ * (`https://<host>/<owner>/<name>/actions/runs/<run>/job/<job>`), or null: an
+ * external status, another repository's run, anything else.
+ */
+export function actionsJobOf(repo: string, checkUrl: string): string | null {
+  let url: URL;
+  try { url = new URL(checkUrl); } catch { return null; }
+  if (url.protocol !== 'https:' || url.username || url.password) return null;
+  const m = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/actions\/runs\/\d{1,20}\/job\/(\d{1,20})\/?$/.exec(url.pathname);
+  if (!m || `${m[1]}/${m[2]}`.toLowerCase() !== repo.toLowerCase()) return null;
+  return m[3] ?? null;
+}
+
+/**
+ * The end of a CI log, as text a brief can carry: colour codes, control and
+ * direction characters removed, credentials masked, then the last lines kept
+ * within both bounds.
+ */
+export function checkLogTail(text: string): FailedCheckLog {
+  const clean = maskedSecrets(text)
+    // eslint-disable-next-line no-control-regex
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, '')
+    .replace(/\s+$/, '');
+  const lines = clean.split('\n');
+  let kept = lines.slice(-CHECK_LOG_TAIL_LINES);
+  let tail = kept.join('\n');
+  while (tail.length > CHECK_LOG_TAIL_CHARS && kept.length > 1) {
+    kept = kept.slice(1);
+    tail = kept.join('\n');
+  }
+  if (tail.length > CHECK_LOG_TAIL_CHARS) tail = tail.slice(-CHECK_LOG_TAIL_CHARS);
+  return { tail, truncated: kept.length < lines.length || tail.length < kept.join('\n').length };
+}
 
 /** The state and merge commit `gh pr view --json` answers, or null when the
  *  answer is not what gh prints. */
@@ -765,7 +830,7 @@ function pullRequestFrom(text: string): PullRequestRef | null {
 /** GitHub through `gh`, signed in with the project's config folder. */
 export function githubForge(
   configDir: string | null, runners: ForgeRunners = {},
-): Forge & ForgeReader & ForgeChecksReader & ForgeIssueReader & ForgeCommentWriter & ForgeBranchWriter {
+): Forge & ForgeReader & ForgeChecksReader & ForgeCheckLogReader & ForgeIssueReader & ForgeCommentWriter & ForgeBranchWriter {
   const gh = runners.gh ?? hostGh;
   // Read-only `gh` calls: one shape for every failure, nothing secret in it.
   const read = async (args: string[], maxBuffer?: number): Promise<{ ok: true; result: ExecResult } | ForgeReadFailure> => {
@@ -899,6 +964,21 @@ export function githubForge(
       return view
         ? { ok: true, view }
         : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer the checks of a pull request' };
+    },
+    async failedCheckLog(repo, checkUrl) {
+      const bad = badTarget(repo);
+      if (bad) return bad;
+      const job = actionsJobOf(repo, checkUrl);
+      if (!job) return { ok: false, code: 'not_actions', reason: 'the check is not a job of the repository\'s own CI' };
+      const out = await read(['run', 'view', `--repo=${repo}`, `--job=${job}`, '--log-failed'], CHECK_LOG_BUFFER);
+      if (!out.ok) return out;
+      const { result } = out;
+      // Past the buffer the command is stopped with what it printed so far:
+      // the start of the log, so its end is unknown and said to be cut.
+      const overran = result.code !== 0 && /maxBuffer/i.test(result.stderr) && result.stdout.length > 0;
+      if (result.code !== 0 && !overran) return failed(result);
+      const log = checkLogTail(result.stdout);
+      return { ok: true, log: overran ? { ...log, truncated: true } : log };
     },
     async pullRequest(repo, number) {
       if (!GITHUB_REPO.test(repo) || !Number.isSafeInteger(number) || number <= 0) {
