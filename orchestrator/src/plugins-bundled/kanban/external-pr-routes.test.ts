@@ -148,7 +148,10 @@ test('the list comes from gh pr list, external ones marked, nothing but reads', 
   ]);
   const list = calls.at(-1)!;
   assert.ok(list.args.includes('--repo=acme/widgets'));
-  assert.ok(list.args.includes('--json=number,title,author,url,isDraft,updatedAt,headRepositoryOwner'));
+  const json = list.args.find((a) => a.startsWith('--json='))?.slice('--json='.length).split(',') ?? [];
+  for (const field of ['number', 'title', 'author', 'url', 'isDraft', 'headRepositoryOwner', 'mergeStateStatus', 'maintainerCanModify', 'labels', 'closingIssuesReferences']) {
+    assert.ok(json.includes(field), field);
+  }
   assertOnlyReads();
 });
 
@@ -377,8 +380,8 @@ test('the verdict line is read in English or French, decorations aside', () => {
 test('a brief without a diff says so, and still fences the data', () => {
   const pull: PullRequestDetails = {
     number: 3, title: 't', author: null, url: 'https://github.com/a/b/pull/3', isDraft: false, updatedAt: '',
-    headOwner: null, body: '<script>', baseRef: 'main', headRef: 'x', headSha: null, additions: 0, deletions: 0,
-    changedFiles: 0, comments: [],
+    headOwner: null, headRepository: null, maintainerCanModify: false, mergeStateStatus: 'unknown', labels: [], closingIssues: [],
+    body: '<script>', baseRef: 'main', headRef: 'x', headSha: null, additions: 0, deletions: 0, changedFiles: 0, comments: [],
   };
   const brief = buildReviewBrief({ repo: 'a/b', pull, diffPath: null, diffTruncated: false, projectCwd: null, target: 'main', withSkill: false });
   assert.match(brief, /No diff could be read/);

@@ -4,7 +4,8 @@
  * pull request it creates or reads back, and the three git gestures that talk
  * to the remote (read a remote branch, fetch, push). It also reads, and only
  * reads, the open pull requests of a repository, contributors' ones included:
- * their metadata and their diff as text, never their branch.
+ * their metadata and their diff as text, never their branch; and the issues
+ * of a repository, a list filtered by label and one issue's text.
  *
  * This is the only place `gh` and the network side of `git` are called for a
  * pull request. Every command goes through a runner the tests replace: nothing
@@ -19,6 +20,7 @@
  * - **No secret in an answer.** What `gh` or `git` print is shortened and every
  *   token-shaped string masked before it reaches a caller, a log or an error.
  */
+import { z } from 'zod';
 import { ghEnv, ghLogin, type GhLoginOutcome, type GhRunner } from './gh.js';
 import { getHost } from './index.js';
 import type { ExecOpts, ExecResult } from './types.js';
@@ -96,6 +98,16 @@ export type PullRequestSummary = {
   updatedAt: string;
   /** Owner of the repository the branch comes from: another one is a fork. */
   headOwner: string | null;
+  /** `owner/name` of the repository the branch comes from, null when the
+   *  fork was deleted. */
+  headRepository: string | null;
+  /** Whether the maintainers may push to the contributor's branch. */
+  maintainerCanModify: boolean;
+  mergeStateStatus: MergeStateStatus;
+  labels: ForgeLabel[];
+  /** The issues the forge will close when the pull request is merged: it
+   *  reads them from the description, so they are the author's claim. */
+  closingIssues: IssueReference[];
 };
 
 export type PullRequestListOutcome = { ok: true; pulls: PullRequestSummary[] } | ForgeReadFailure;
@@ -128,7 +140,7 @@ export interface ForgeStateReader {
   pullRequest(repo: string, number: number): Promise<PullRequestStateOutcome>;
 }
 
-export interface ForgeReader extends ForgeStateReader {
+export interface ForgeReader extends ForgeStateReader, ForgeThreadsReader {
   listOpenPullRequests(repo: string): Promise<PullRequestListOutcome>;
   pullRequestDetails(repo: string, number: number): Promise<PullRequestDetailsOutcome>;
   pullRequestDiff(repo: string, number: number): Promise<PullRequestDiffOutcome>;
@@ -150,9 +162,12 @@ export type PullRequestChecks = {
   draft: boolean;
   mergeable: 'mergeable' | 'conflicting' | 'unknown';
   review: 'approved' | 'changes_requested' | 'review_required' | null;
+  mergeStateStatus: MergeStateStatus;
   title: string;
   body: string;
   checks: PullRequestCheck[];
+  labels: ForgeLabel[];
+  closingIssues: IssueReference[];
 };
 
 export type PullRequestChecksOutcome =
@@ -164,6 +179,92 @@ export type PullRequestChecksOutcome =
 export interface ForgeChecksReader {
   pullRequestChecks(repo: string, number: number): Promise<PullRequestChecksOutcome>;
 }
+
+/** How the forge sees a pull request against its base, beyond a conflict:
+ *  `behind` asks for a branch update, `dirty` is a conflict, `blocked` waits
+ *  for a review or a required check, `unknown` while GitHub computes it. */
+export const MERGE_STATE_STATUSES = ['behind', 'blocked', 'clean', 'dirty', 'draft', 'has_hooks', 'unstable', 'unknown'] as const;
+export type MergeStateStatus = (typeof MERGE_STATE_STATUSES)[number];
+
+/** A label as the forge shows it. Its name was chosen by whoever can triage
+ *  the repository: data, bounded. */
+export type ForgeLabel = { name: string; color: string | null };
+
+/** An issue named by its repository and number. */
+export type IssueReference = { repo: string | null; number: number; url: string | null };
+
+/** One unresolved review thread, told by the comment that opened it. */
+export type ReviewThread = {
+  path: string | null;
+  line: number | null;
+  /** The lines it was written on have changed since. */
+  outdated: boolean;
+  author: string | null;
+  body: string;
+  url: string | null;
+  /** Comments in the thread, the first one included. */
+  comments: number;
+};
+
+export type ReviewThreadsOutcome =
+  | { ok: true; threads: ReviewThread[]; unresolved: number; truncated: boolean }
+  | ForgeReadFailure;
+
+/** The review threads of a pull request nobody has resolved yet. */
+export interface ForgeThreadsReader {
+  pullRequestReviewThreads(repo: string, number: number): Promise<ReviewThreadsOutcome>;
+}
+
+export type IssueState = 'open' | 'closed';
+export const ISSUE_STATE_REASONS = ['completed', 'not_planned', 'reopened', 'duplicate'] as const;
+export type IssueStateReason = (typeof ISSUE_STATE_REASONS)[number];
+
+/** One issue as a list shows it. Every text in it was written by whoever
+ *  opened the issue: data, never an order. */
+export type IssueSummary = {
+  number: number;
+  title: string;
+  author: string | null;
+  url: string;
+  state: IssueState;
+  labels: ForgeLabel[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type IssueDetails = IssueSummary & {
+  body: string;
+  /** The body was longer than `FORGE_BODY_LIMIT` and was cut. */
+  bodyTruncated: boolean;
+  stateReason: IssueStateReason | null;
+};
+
+export type IssueListOutcome = { ok: true; issues: IssueSummary[] } | ForgeReadFailure;
+export type IssueDetailsOutcome = { ok: true; issue: IssueDetails } | ForgeReadFailure;
+
+/** The issues of a repository, read only: the open ones carrying a label,
+ *  and the text of one. */
+export interface ForgeIssueReader {
+  listIssues(repo: string, label: string): Promise<IssueListOutcome>;
+  issueDetails(repo: string, number: number): Promise<IssueDetailsOutcome>;
+}
+
+/** Most issues a list asks for, the most recent first. */
+export const ISSUE_LIST_LIMIT = 50;
+/** Most characters kept of a title written on the forge. */
+export const FORGE_TITLE_LIMIT = 500;
+/** Most characters kept of a description written on the forge. */
+export const FORGE_BODY_LIMIT = 8_000;
+/** Most unresolved review threads kept, and characters of each one's text. */
+export const REVIEW_THREAD_LIMIT = 20;
+export const REVIEW_THREAD_BODY_LIMIT = 1_000;
+/** Most review threads asked of the forge in one call. */
+const REVIEW_THREAD_PAGE = 100;
+const LABEL_LIMIT = 20;
+const LABEL_NAME_LIMIT = 100;
+const CLOSING_ISSUE_LIMIT = 20;
+/** GitHub caps a label name at 50 characters. */
+const LABEL_FILTER_LIMIT = 50;
 
 const GITHUB_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const COMMIT_SHA = /^[0-9a-f]{40,64}$/;
@@ -204,12 +305,17 @@ function summaryFrom(entry: unknown): PullRequestSummary | null {
   if (typeof e.url !== 'string' || !/^https:\/\//.test(e.url)) return null;
   return {
     number: e.number,
-    title: text(e.title),
+    title: boundedText(e.title, FORGE_TITLE_LIMIT),
     author: login(e.author),
     url: e.url,
     isDraft: e.isDraft === true,
     updatedAt: text(e.updatedAt),
     headOwner: login(e.headRepositoryOwner),
+    headRepository: headRepositoryOf(e.headRepositoryOwner, e.headRepository),
+    maintainerCanModify: e.maintainerCanModify === true,
+    mergeStateStatus: MergeStateSchema.parse(e.mergeStateStatus),
+    labels: itemsOf(e.labels, LabelSchema, LABEL_LIMIT),
+    closingIssues: itemsOf(e.closingIssuesReferences, IssueReferenceSchema, CLOSING_ISSUE_LIMIT),
   };
 }
 
@@ -247,7 +353,6 @@ export function parsePullRequestDetails(stdout: string): PullRequestDetails | nu
 
 export const MAX_FORGE_CHECKS = 100;
 const MAX_TITLE = 256;
-const MAX_BODY = 8_000;
 
 function boundedText(value: unknown, max: number): string {
   if (typeof value !== 'string') return '';
@@ -287,7 +392,8 @@ function checkOf(item: unknown): PullRequestCheck | null {
 }
 
 /** The answer of `gh pr view --json state,isDraft,mergeable,reviewDecision,
- *  title,body,statusCheckRollup`, or null when it is not what gh prints. */
+ *  mergeStateStatus,title,body,statusCheckRollup,labels,
+ *  closingIssuesReferences`, or null when it is not what gh prints. */
 export function parsePullRequestChecks(stdout: string): PullRequestChecks | null {
   let parsed: unknown;
   try { parsed = JSON.parse(stdout); } catch { return null; }
@@ -309,10 +415,202 @@ export function parsePullRequestChecks(stdout: string): PullRequestChecks | null
     mergeable,
     review,
     title: boundedText(o.title, MAX_TITLE),
-    body: boundedText(o.body, MAX_BODY),
+    body: boundedText(o.body, FORGE_BODY_LIMIT),
     checks,
+    mergeStateStatus: MergeStateSchema.parse(o.mergeStateStatus),
+    labels: itemsOf(o.labels, LabelSchema, LABEL_LIMIT),
+    closingIssues: itemsOf(o.closingIssuesReferences, IssueReferenceSchema, CLOSING_ISSUE_LIMIT),
   };
 }
+
+// ─── Answers of the forge, through zod ─────────────────────────────────────
+// Unknown fields are dropped and an odd entry of a list costs only itself:
+// GitHub adds fields and `gh` reshapes some, the reader keeps what it knows.
+
+const LoginSchema = z.object({ login: z.string().min(1).max(100) }).transform((o) => o.login);
+
+const MergeStateSchema = z.string()
+  .transform((s) => s.toLowerCase())
+  .pipe(z.enum(MERGE_STATE_STATUSES))
+  .catch('unknown');
+
+const LabelSchema = z.object({ name: z.string().min(1), color: z.string().nullish() })
+  .transform((l): ForgeLabel => ({
+    name: boundedText(l.name, LABEL_NAME_LIMIT),
+    color: l.color && /^[0-9a-fA-F]{6}$/.test(l.color) ? l.color.toLowerCase() : null,
+  }));
+
+const IssueReferenceSchema = z.object({
+  number: z.int().positive(),
+  url: z.string().nullish(),
+  repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }).nullish(),
+}).transform((r): IssueReference => {
+  const repo = r.repository ? `${r.repository.owner.login}/${r.repository.name}` : null;
+  return { repo: repo ? repoName(repo) : null, number: r.number, url: httpsUrl(r.url) };
+});
+
+/** `owner/name` when it names a GitHub repository, dot segments refused. */
+function repoName(full: string): string | null {
+  return GITHUB_REPO.test(full) && !full.split('/').some((part) => part === '.' || part === '..') ? full : null;
+}
+
+/** The entries of a list `gh` printed, as an array or a GraphQL connection,
+ *  that `schema` accepts, at most `max`. */
+function itemsOf<T>(value: unknown, schema: z.ZodType<T>, max: number): T[] {
+  const nodes = typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as { nodes?: unknown }).nodes
+    : value;
+  if (!Array.isArray(nodes)) return [];
+  const out: T[] = [];
+  for (const node of nodes) {
+    if (out.length >= max) break;
+    const parsed = schema.safeParse(node);
+    if (parsed.success) out.push(parsed.data);
+  }
+  return out;
+}
+
+/** `owner/name` of the repository a pull request's branch comes from. */
+function headRepositoryOf(owner: unknown, repository: unknown): string | null {
+  const login = LoginSchema.safeParse(owner);
+  const name = z.object({ name: z.string().min(1) }).safeParse(repository);
+  if (!login.success || !name.success) return null;
+  return repoName(`${login.data}/${name.data.name}`);
+}
+
+function jsonOf(stdout: string): unknown {
+  try { return JSON.parse(stdout); } catch { return undefined; }
+}
+
+const IssueSchema = z.object({
+  number: z.int().positive(),
+  url: z.string().refine((u) => httpsUrl(u) !== null),
+  state: z.enum(['OPEN', 'CLOSED']),
+  title: z.string().catch(''),
+  author: LoginSchema.nullable().catch(null),
+  labels: z.unknown(),
+  createdAt: z.string().catch(''),
+  updatedAt: z.string().catch(''),
+});
+
+function issueSummaryOf(i: z.infer<typeof IssueSchema>): IssueSummary {
+  return {
+    number: i.number,
+    title: boundedText(i.title, FORGE_TITLE_LIMIT),
+    author: i.author,
+    url: i.url,
+    state: i.state === 'OPEN' ? 'open' : 'closed',
+    labels: itemsOf(i.labels, LabelSchema, LABEL_LIMIT),
+    createdAt: boundedText(i.createdAt, 40),
+    updatedAt: boundedText(i.updatedAt, 40),
+  };
+}
+
+/** The issues `gh issue list --json` answers, or null when it printed no
+ *  list. */
+export function parseIssueList(stdout: string): IssueSummary[] | null {
+  const parsed = jsonOf(stdout);
+  if (!Array.isArray(parsed)) return null;
+  return itemsOf(parsed, IssueSchema, ISSUE_LIST_LIMIT).map(issueSummaryOf);
+}
+
+const IssueDetailsSchema = IssueSchema.extend({
+  body: z.string().catch(''),
+  stateReason: z.string()
+    .transform((s) => s.toLowerCase())
+    .pipe(z.enum(ISSUE_STATE_REASONS))
+    .nullable()
+    .catch(null),
+});
+
+/** The issue `gh issue view --json` answers, or null. */
+export function parseIssueDetails(stdout: string): IssueDetails | null {
+  const parsed = IssueDetailsSchema.safeParse(jsonOf(stdout));
+  if (!parsed.success) return null;
+  const clean = boundedText(parsed.data.body, Number.POSITIVE_INFINITY);
+  return {
+    ...issueSummaryOf(parsed.data),
+    body: clean.slice(0, FORGE_BODY_LIMIT),
+    bodyTruncated: clean.length > FORGE_BODY_LIMIT,
+    stateReason: parsed.data.stateReason,
+  };
+}
+
+const ThreadCommentSchema = z.object({
+  author: LoginSchema.nullable().catch(null),
+  body: z.string().catch(''),
+  url: z.string().catch(''),
+});
+
+const ThreadSchema = z.object({
+  isResolved: z.boolean(),
+  isOutdated: z.boolean().catch(false),
+  path: z.string().nullable().catch(null),
+  line: z.int().positive().nullable().catch(null),
+  comments: z.object({
+    totalCount: z.int().nonnegative().catch(0),
+    nodes: z.array(z.unknown()).catch([]),
+  }).catch({ totalCount: 0, nodes: [] }),
+});
+
+const ThreadsAnswerSchema = z.object({
+  data: z.object({
+    repository: z.object({
+      pullRequest: z.object({
+        reviewThreads: z.object({ totalCount: z.int().nonnegative(), nodes: z.array(z.unknown()) }),
+      }),
+    }),
+  }),
+});
+
+/** The unresolved review threads a GraphQL answer holds, or null when the
+ *  answer is not one. `unresolved` counts the threads read, `truncated` says
+ *  the forge holds more than were read or kept. */
+export function parseReviewThreads(stdout: string): { threads: ReviewThread[]; unresolved: number; truncated: boolean } | null {
+  const parsed = ThreadsAnswerSchema.safeParse(jsonOf(stdout));
+  if (!parsed.success) return null;
+  const connection = parsed.data.data.repository.pullRequest.reviewThreads;
+  const open = itemsOf(connection.nodes, ThreadSchema, connection.nodes.length).filter((t) => !t.isResolved);
+  const threads = open.slice(0, REVIEW_THREAD_LIMIT).map((t): ReviewThread => {
+    const first = ThreadCommentSchema.safeParse(t.comments.nodes[0]);
+    return {
+      path: t.path === null ? null : boundedText(t.path, 300) || null,
+      line: t.line,
+      outdated: t.isOutdated,
+      author: first.success ? first.data.author : null,
+      body: first.success ? boundedText(first.data.body, REVIEW_THREAD_BODY_LIMIT) : '',
+      url: first.success ? httpsUrl(first.data.url) : null,
+      comments: t.comments.totalCount,
+    };
+  });
+  return {
+    threads,
+    unresolved: open.length,
+    truncated: connection.totalCount > connection.nodes.length || open.length > threads.length,
+  };
+}
+
+const REVIEW_THREADS_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: ${REVIEW_THREAD_PAGE}) {
+        totalCount
+        nodes { isResolved isOutdated path line comments(first: 1) { totalCount nodes { author { login } body url } } }
+      }
+    }
+  }
+}`;
+
+/** A label `gh issue list --label` takes as one label: `gh` splits on commas. */
+function plainLabel(label: string): boolean {
+  return label.length > 0 && label.length <= LABEL_FILTER_LIMIT && label === label.trim()
+    // eslint-disable-next-line no-control-regex
+    && !/[,\u0000-\u001f\u007f]/.test(label);
+}
+
+/** What `gh pr list|view --json` is asked for a pull request's summary. */
+const PULL_SUMMARY_FIELDS = 'number,title,author,url,isDraft,updatedAt,headRepositoryOwner,headRepository,'
+  + 'maintainerCanModify,mergeStateStatus,labels,closingIssuesReferences';
 
 const PULL_URL = /https:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/(\d+)/;
 
@@ -323,7 +621,9 @@ function pullRequestFrom(text: string): PullRequestRef | null {
 }
 
 /** GitHub through `gh`, signed in with the project's config folder. */
-export function githubForge(configDir: string | null, runners: ForgeRunners = {}): Forge & ForgeReader & ForgeChecksReader {
+export function githubForge(
+  configDir: string | null, runners: ForgeRunners = {},
+): Forge & ForgeReader & ForgeChecksReader & ForgeIssueReader {
   const gh = runners.gh ?? hostGh;
   // Read-only `gh` calls: one shape for every failure, nothing secret in it.
   const read = async (args: string[], maxBuffer?: number): Promise<{ ok: true; result: ExecResult } | ForgeReadFailure> => {
@@ -350,7 +650,7 @@ export function githubForge(configDir: string | null, runners: ForgeRunners = {}
       if (bad) return bad;
       const out = await read([
         'pr', 'list', `--repo=${repo}`, '--state=open', `--limit=${PULL_LIST_LIMIT}`,
-        '--json=number,title,author,url,isDraft,updatedAt,headRepositoryOwner',
+        `--json=${PULL_SUMMARY_FIELDS}`,
       ]);
       if (!out.ok) return out;
       if (out.result.code !== 0) return failed(out.result);
@@ -364,7 +664,7 @@ export function githubForge(configDir: string | null, runners: ForgeRunners = {}
       if (bad) return bad;
       const out = await read([
         'pr', 'view', String(number), `--repo=${repo}`,
-        '--json=number,title,author,url,isDraft,updatedAt,headRepositoryOwner,body,baseRefName,headRefName,headRefOid,additions,deletions,changedFiles,comments',
+        `--json=${PULL_SUMMARY_FIELDS},body,baseRefName,headRefName,headRefOid,additions,deletions,changedFiles,comments`,
       ]);
       if (!out.ok) return out;
       if (out.result.code !== 0) return failed(out.result);
@@ -387,6 +687,55 @@ export function githubForge(configDir: string | null, runners: ForgeRunners = {}
       const truncated = overran || result.stdout.length > PULL_DIFF_LIMIT;
       return { ok: true, diff: truncated ? result.stdout.slice(0, PULL_DIFF_LIMIT) : result.stdout, truncated };
     },
+    async pullRequestReviewThreads(repo, number) {
+      const bad = badTarget(repo, number);
+      if (bad) return bad;
+      const [owner = '', name = ''] = repo.split('/');
+      // `--raw-field` keeps each value a string: `-F` would read a value
+      // starting with "@" as a file. The repository was checked above.
+      const out = await read([
+        'api', 'graphql',
+        `--raw-field=query=${REVIEW_THREADS_QUERY}`,
+        `--raw-field=owner=${owner}`,
+        `--raw-field=name=${name}`,
+        `--field=number=${number}`,
+      ], 8 * 1024 * 1024);
+      if (!out.ok) return out;
+      if (out.result.code !== 0) return failed(out.result);
+      const answer = parseReviewThreads(out.result.stdout);
+      return answer
+        ? { ok: true, ...answer }
+        : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer the review threads of a pull request' };
+    },
+    async listIssues(repo, label) {
+      const bad = badTarget(repo);
+      if (bad) return bad;
+      if (!plainLabel(label)) return { ok: false, code: 'unexpected_answer', reason: 'not a label of a GitHub repository' };
+      const out = await read([
+        'issue', 'list', `--repo=${repo}`, '--state=open', `--label=${label}`, `--limit=${ISSUE_LIST_LIMIT}`,
+        '--json=number,title,author,labels,state,url,createdAt,updatedAt',
+      ]);
+      if (!out.ok) return out;
+      if (out.result.code !== 0) return failed(out.result);
+      const issues = parseIssueList(out.result.stdout);
+      return issues
+        ? { ok: true, issues }
+        : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer a list of issues' };
+    },
+    async issueDetails(repo, number) {
+      const bad = badTarget(repo, number);
+      if (bad) return { ...bad, reason: 'not an issue of a GitHub repository' };
+      const out = await read([
+        'issue', 'view', String(number), `--repo=${repo}`,
+        '--json=number,title,body,author,labels,state,stateReason,url,createdAt,updatedAt',
+      ], 4 * 1024 * 1024);
+      if (!out.ok) return out;
+      if (out.result.code !== 0) return failed(out.result);
+      const issue = parseIssueDetails(out.result.stdout);
+      return issue
+        ? { ok: true, issue }
+        : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer the details of an issue' };
+    },
     async pullRequestChecks(repo, number) {
       if (!GITHUB_REPO.test(repo) || !Number.isSafeInteger(number) || number <= 0) {
         return { ok: false, code: 'unexpected_answer', reason: 'not a pull request of a GitHub repository' };
@@ -394,7 +743,7 @@ export function githubForge(configDir: string | null, runners: ForgeRunners = {}
       let result: ExecResult;
       try {
         result = await gh(
-          ['pr', 'view', String(number), `--repo=${repo}`, '--json=state,isDraft,mergeable,reviewDecision,title,body,statusCheckRollup'],
+          ['pr', 'view', String(number), `--repo=${repo}`, '--json=state,isDraft,mergeable,reviewDecision,mergeStateStatus,title,body,statusCheckRollup,labels,closingIssuesReferences'],
           { env: ghEnv(configDir), timeout: GH_TIMEOUT_MS, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
         );
       } catch {

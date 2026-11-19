@@ -2,7 +2,8 @@ import '../test-home.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  assertNoForce, githubForge, githubRepoFromUrl, gitTransport, pushArguments, redactedOutput, type GitRunner,
+  assertNoForce, FORGE_BODY_LIMIT, FORGE_TITLE_LIMIT, githubForge, githubRepoFromUrl, gitTransport, ISSUE_LIST_LIMIT,
+  parsePullRequestChecks, pushArguments, redactedOutput, REVIEW_THREAD_BODY_LIMIT, REVIEW_THREAD_LIMIT, type GitRunner,
 } from './forge.js';
 import type { GhRunner } from './gh.js';
 import type { ExecOpts } from './types.js';
@@ -150,7 +151,10 @@ test('gh pr list reads the open pull requests with the project folder, and drops
   ]) });
   const out = await githubForge('/home/u/.config/gh-work', { gh: run }).listOpenPullRequests('acme/app');
   assert.deepEqual(out, { ok: true, pulls: [
-    { number: 4, title: 'x', author: 'stranger', url: 'https://github.com/acme/app/pull/4', isDraft: true, updatedAt: 'd', headOwner: 'stranger' },
+    {
+      number: 4, title: 'x', author: 'stranger', url: 'https://github.com/acme/app/pull/4', isDraft: true, updatedAt: 'd', headOwner: 'stranger',
+      headRepository: null, maintainerCanModify: false, mergeStateStatus: 'unknown', labels: [], closingIssues: [],
+    },
   ] });
   assert.deepEqual(calls[0]!.args.slice(0, 2), ['pr', 'list']);
   assert.ok(calls[0]!.args.includes('--state=open'));
@@ -166,4 +170,206 @@ test('gh pr diff is text, cut past the limit and said so', async () => {
   const failed = recorder({ code: 1, stderr: 'no pull requests found' });
   assert.equal((await githubForge(null, { gh: failed.run }).pullRequestDiff('acme/app', 4)).ok, false);
   assert.equal((await githubForge(null, { gh: failed.run }).pullRequestDiff('acme/app', 0)).ok, false);
+});
+
+const TOKEN = `ghp_${'x'.repeat(36)}`;
+
+test('a pull request summary carries its merge state, fork, labels and the issues it closes; unknown fields are dropped', async () => {
+  const { run, calls } = recorder({ stdout: JSON.stringify([{
+    number: 51, title: 'Fix the parser', author: { login: 'stranger' }, url: 'https://github.com/acme/app/pull/51',
+    isDraft: false, updatedAt: '2026-11-19T10:00:00Z',
+    headRepositoryOwner: { id: 'U_1', login: 'stranger' }, headRepository: { id: 'R_1', name: 'app-fork' },
+    maintainerCanModify: true, mergeStateStatus: 'BEHIND',
+    labels: [{ id: 'L1', name: 'bug', color: 'D73A4A', description: 'x' }, { name: '' }, 'odd', { name: 'ui', color: 'not a colour' }],
+    closingIssuesReferences: [
+      { id: 'I1', number: 212, url: 'https://github.com/acme/app/issues/212', repository: { id: 'R', name: 'app', owner: { id: 'O', login: 'acme' } } },
+      { number: -1, url: 'https://github.com/acme/app/issues/0' },
+      { number: 7, url: 'javascript:alert(1)', repository: { name: '..', owner: { login: 'x' } } },
+    ],
+    somethingNew: { nested: true },
+  }]) });
+  const out = await githubForge(null, { gh: run }).listOpenPullRequests('acme/app');
+  assert.ok(out.ok);
+  const pull = out.pulls[0]!;
+  assert.equal(pull.headRepository, 'stranger/app-fork');
+  assert.equal(pull.maintainerCanModify, true);
+  assert.equal(pull.mergeStateStatus, 'behind');
+  assert.deepEqual(pull.labels, [{ name: 'bug', color: 'd73a4a' }, { name: 'ui', color: null }]);
+  assert.deepEqual(pull.closingIssues, [
+    { repo: 'acme/app', number: 212, url: 'https://github.com/acme/app/issues/212' },
+    { repo: null, number: 7, url: null },
+  ]);
+  assert.ok(!('somethingNew' in pull), 'an unknown field never reaches a caller');
+  const json = calls[0]!.args.find((a) => a.startsWith('--json='))!;
+  for (const field of ['mergeStateStatus', 'maintainerCanModify', 'headRepository', 'labels', 'closingIssuesReferences']) {
+    assert.ok(json.split(/[=,]/).includes(field), field);
+  }
+});
+
+test('a merge state the reader does not know is "unknown", a title is bounded', async () => {
+  const { run } = recorder({ stdout: JSON.stringify([
+    { number: 1, url: 'https://github.com/a/b/pull/1', mergeStateStatus: 'SOMETHING_NEW', title: 't'.repeat(FORGE_TITLE_LIMIT + 50) },
+    { number: 2, url: 'https://github.com/a/b/pull/2', mergeStateStatus: 42, closingIssuesReferences: { nodes: [{ number: 3 }] } },
+  ]) });
+  const out = await githubForge(null, { gh: run }).listOpenPullRequests('a/b');
+  assert.ok(out.ok);
+  assert.deepEqual(out.pulls.map((p) => p.mergeStateStatus), ['unknown', 'unknown']);
+  assert.equal(out.pulls[0]!.title.length, FORGE_TITLE_LIMIT);
+  assert.deepEqual(out.pulls[1]!.closingIssues, [{ repo: null, number: 3, url: null }], 'a GraphQL connection is read too');
+});
+
+test('the checks of our pull request carry its merge state, labels and closing issues', async () => {
+  const view = parsePullRequestChecks(JSON.stringify({
+    state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', reviewDecision: 'REVIEW_REQUIRED', mergeStateStatus: 'DIRTY',
+    title: 't', body: 'b', statusCheckRollup: [], labels: [{ name: 'accepted', color: '0e8a16' }],
+    closingIssuesReferences: [{ number: 9, url: 'https://github.com/a/b/issues/9', repository: { name: 'b', owner: { login: 'a' } } }],
+  }));
+  assert.equal(view?.mergeStateStatus, 'dirty');
+  assert.deepEqual(view?.labels, [{ name: 'accepted', color: '0e8a16' }]);
+  assert.deepEqual(view?.closingIssues, [{ repo: 'a/b', number: 9, url: 'https://github.com/a/b/issues/9' }]);
+  const { run, calls } = recorder({ stdout: JSON.stringify({ state: 'OPEN' }) });
+  const out = await githubForge(null, { gh: run }).pullRequestChecks('a/b', 9);
+  assert.ok(out.ok);
+  assert.equal(out.view.mergeStateStatus, 'unknown');
+  assert.match(calls[0]!.args.join(' '), /--json=.*mergeStateStatus.*closingIssuesReferences/);
+});
+
+function threadsAnswer(nodes: unknown[], totalCount = nodes.length): string {
+  return JSON.stringify({ data: { repository: { pullRequest: { reviewThreads: { totalCount, nodes } } } } });
+}
+
+function thread(i: number, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    isResolved: false, isOutdated: false, path: `src/f${i}.ts`, line: i + 1,
+    comments: { totalCount: 2, nodes: [{ author: { login: `rev${i}` }, body: `comment ${i}`, url: `https://github.com/a/b/pull/1#discussion_r${i}` }] },
+    ...extra,
+  };
+}
+
+test('review threads: one read-only GraphQL call, unresolved ones only, values kept as strings', async () => {
+  const { run, calls } = recorder({ stdout: threadsAnswer([
+    thread(0),
+    thread(1, { isResolved: true }),
+    thread(2, { isOutdated: true, line: null, comments: { totalCount: 1, nodes: [{ author: null, body: 'x\u0000y'.repeat(REVIEW_THREAD_BODY_LIMIT), url: 'http://plain' }] } }),
+    { isResolved: 'no' },
+  ]) });
+  const out = await githubForge('/home/u/.config/gh-work', { gh: run }).pullRequestReviewThreads('acme/app', 51);
+  assert.ok(out.ok);
+  assert.equal(out.unresolved, 2);
+  assert.equal(out.truncated, false);
+  assert.deepEqual(out.threads[0], {
+    path: 'src/f0.ts', line: 1, outdated: false, author: 'rev0', body: 'comment 0',
+    url: 'https://github.com/a/b/pull/1#discussion_r0', comments: 2,
+  });
+  const second = out.threads[1]!;
+  assert.equal(second.author, null);
+  assert.equal(second.line, null);
+  assert.equal(second.outdated, true);
+  assert.equal(second.url, null, 'only an https address is kept');
+  assert.equal(second.body.length, REVIEW_THREAD_BODY_LIMIT);
+  assert.ok(!second.body.includes('\u0000'));
+
+  const args = calls[0]!.args;
+  assert.deepEqual(args.slice(0, 2), ['api', 'graphql']);
+  assert.ok(args.includes('--raw-field=owner=acme') && args.includes('--raw-field=name=app') && args.includes('--field=number=51'));
+  assert.ok(!args.some((a) => /mutation/i.test(a)), 'a query, never a mutation');
+  assert.equal(calls[0]!.opts.env?.GH_CONFIG_DIR, '/home/u/.config/gh-work');
+});
+
+test('review threads are bounded, and say when the forge holds more', async () => {
+  const many = Array.from({ length: REVIEW_THREAD_LIMIT + 5 }, (_, i) => thread(i));
+  const out = await githubForge(null, { gh: recorder({ stdout: threadsAnswer(many, 140) }).run }).pullRequestReviewThreads('a/b', 1);
+  assert.ok(out.ok);
+  assert.equal(out.threads.length, REVIEW_THREAD_LIMIT);
+  assert.equal(out.unresolved, REVIEW_THREAD_LIMIT + 5);
+  assert.equal(out.truncated, true);
+});
+
+test('review threads: a failure, an odd answer or an odd target is never a list', async () => {
+  const leaked = await githubForge(null, { gh: recorder({ code: 1, stderr: `HTTP 401 ${TOKEN}` }).run }).pullRequestReviewThreads('a/b', 1);
+  assert.ok(!leaked.ok && !leaked.reason.includes('ghp_'));
+  const missing = await githubForge(null, { gh: recorder({ stdout: '{"data":{"repository":null}}' }).run }).pullRequestReviewThreads('a/b', 1);
+  assert.equal(missing.ok ? '' : missing.code, 'unexpected_answer');
+  const odd = recorder({ stdout: '{}' });
+  assert.equal((await githubForge(null, { gh: odd.run }).pullRequestReviewThreads('@etc/passwd', 1)).ok, false);
+  assert.equal((await githubForge(null, { gh: odd.run }).pullRequestReviewThreads('a/b', 0)).ok, false);
+  assert.equal(odd.calls.length, 0, 'an odd repository or number never reaches gh');
+});
+
+const ISSUE = {
+  number: 212, title: 'Parser crash', author: { login: 'reporter' }, url: 'https://github.com/acme/app/issues/212',
+  state: 'OPEN', labels: [{ name: 'accepted', color: '0E8A16' }], createdAt: '2026-11-18T09:00:00Z', updatedAt: '2026-11-19T09:00:00Z',
+};
+
+test('issues: the open ones carrying a label, the most recent first, bounded', async () => {
+  const { run, calls } = recorder({ stdout: JSON.stringify([
+    ISSUE,
+    { ...ISSUE, number: 213, title: 'x'.repeat(FORGE_TITLE_LIMIT + 1), author: null, extra: 'dropped' },
+    { number: 'nope', url: 'https://github.com/acme/app/issues/1', state: 'OPEN' },
+    { ...ISSUE, number: 214, url: 'http://github.com/acme/app/issues/214' },
+    { ...ISSUE, number: 215, state: 'DRAFT' },
+  ]) });
+  const out = await githubForge('/home/u/.config/gh-work', { gh: run }).listIssues('acme/app', 'accepted');
+  assert.ok(out.ok);
+  assert.deepEqual(out.issues[0], {
+    number: 212, title: 'Parser crash', author: 'reporter', url: 'https://github.com/acme/app/issues/212', state: 'open',
+    labels: [{ name: 'accepted', color: '0e8a16' }], createdAt: '2026-11-18T09:00:00Z', updatedAt: '2026-11-19T09:00:00Z',
+  });
+  assert.deepEqual(out.issues.map((i) => i.number), [212, 213]);
+  assert.equal(out.issues[1]!.title.length, FORGE_TITLE_LIMIT);
+  assert.equal(out.issues[1]!.author, null);
+  assert.ok(!('extra' in out.issues[1]!));
+  assert.deepEqual(calls[0]!.args.slice(0, 2), ['issue', 'list']);
+  for (const arg of ['--repo=acme/app', '--state=open', '--label=accepted', `--limit=${ISSUE_LIST_LIMIT}`]) {
+    assert.ok(calls[0]!.args.includes(arg), arg);
+  }
+  assert.equal(calls[0]!.opts.env?.GH_CONFIG_DIR, '/home/u/.config/gh-work');
+});
+
+test('issues: a label gh would split or read as a flag never reaches it', async () => {
+  const odd = recorder({ stdout: '[]' });
+  const forge = githubForge(null, { gh: odd.run });
+  for (const label of ['', 'a,b', ' accepted', 'x'.repeat(51), 'line\nbreak']) {
+    assert.equal((await forge.listIssues('a/b', label)).ok, false, JSON.stringify(label));
+  }
+  assert.equal((await forge.listIssues('not a repo', 'accepted')).ok, false);
+  assert.equal(odd.calls.length, 0);
+  const dashed = recorder({ stdout: '[]' });
+  await githubForge(null, { gh: dashed.run }).listIssues('a/b', '--web');
+  assert.ok(dashed.calls[0]!.args.includes('--label=--web') && !dashed.calls[0]!.args.includes('--web'), 'a label stays a value');
+});
+
+test('issues: a failure or an odd answer is never a list, and carries no token', async () => {
+  const leaked = await githubForge(null, { gh: recorder({ code: 1, stderr: `HTTP 401 ${TOKEN}` }).run }).listIssues('a/b', 'accepted');
+  assert.ok(!leaked.ok && !leaked.reason.includes('ghp_'));
+  assert.equal((await githubForge(null, { gh: recorder({ stdout: '{}' }).run }).listIssues('a/b', 'accepted')).ok, false);
+  assert.equal((await githubForge(null, { gh: recorder('missing').run }).listIssues('a/b', 'accepted')).ok, false);
+});
+
+test('one issue: its text bounded and stripped of control characters, its state and reason', async () => {
+  const body = `Steps\u0007 to reproduce\n${'y'.repeat(FORGE_BODY_LIMIT)}`;
+  const { run, calls } = recorder({ stdout: JSON.stringify({ ...ISSUE, state: 'CLOSED', stateReason: 'NOT_PLANNED', body, comments: [{ body: 'dropped' }] }) });
+  const out = await githubForge(null, { gh: run }).issueDetails('acme/app', 212);
+  assert.ok(out.ok);
+  assert.equal(out.issue.state, 'closed');
+  assert.equal(out.issue.stateReason, 'not_planned');
+  assert.equal(out.issue.body.length, FORGE_BODY_LIMIT);
+  assert.equal(out.issue.bodyTruncated, true);
+  assert.ok(out.issue.body.startsWith('Steps to reproduce\n'));
+  assert.ok(!('comments' in out.issue));
+  assert.deepEqual(calls[0]!.args.slice(0, 4), ['issue', 'view', '212', '--repo=acme/app']);
+
+  const open = await githubForge(null, { gh: recorder({ stdout: JSON.stringify({ ...ISSUE, body: 'short', stateReason: '' }) }).run }).issueDetails('acme/app', 212);
+  assert.ok(open.ok);
+  assert.equal(open.issue.bodyTruncated, false);
+  assert.equal(open.issue.stateReason, null);
+});
+
+test('one issue: an odd number, a failure or an odd answer is never an issue', async () => {
+  const odd = recorder({ stdout: '{}' });
+  assert.equal((await githubForge(null, { gh: odd.run }).issueDetails('a/b', -3)).ok, false);
+  assert.equal(odd.calls.length, 0);
+  assert.equal((await githubForge(null, { gh: odd.run }).issueDetails('a/b', 3)).ok, false);
+  const leaked = await githubForge(null, { gh: recorder({ code: 1, stderr: `could not resolve ${TOKEN}` }).run }).issueDetails('a/b', 3);
+  assert.ok(!leaked.ok && !leaked.reason.includes('ghp_'));
 });
