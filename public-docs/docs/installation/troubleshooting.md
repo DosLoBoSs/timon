@@ -317,7 +317,7 @@ If the window stays empty after that: run the support diagnostic (tray icon). It
 
 ## "The Timon background service is slow to start" at the end of setup (TIM-0158)
 
-At the end of the first setup, the window hands over to the background service that setup installed. The desktop waits 90 seconds for it, and on Windows up to five minutes while its `TimonOrchestrator` task is still running. If the service still does not answer, setup goes on with the daemon built into the window and shows this message. Nothing is lost and there is nothing to do: as soon as the service is ready, the window hands over to it by itself, within 30 minutes, after a short "starting" screen. Otherwise it takes over at the next launch of Timon.
+At the end of the first setup, the window hands over to the background service that setup installed. The desktop waits 90 seconds for it, and on Windows up to five minutes while its `TimonOrchestrator` task is still running. If the service still does not answer, setup goes on with the daemon built into the window and shows this message. Nothing is lost and there is nothing to do: as soon as the service is ready, the window hands over to it by itself, within 30 minutes, showing a starting screen for as long as the service takes to start. Otherwise it takes over at the next launch of Timon.
 
 In the diagnostic report, a last result of `0x800710e0` for the task means "an instance was already running": Windows refused to start the task a second time because it was already running. It is not an error.
 
