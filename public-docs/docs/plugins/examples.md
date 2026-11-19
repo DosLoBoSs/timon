@@ -1594,7 +1594,7 @@ function PlainPublishDialog() {
         })
         : React.createElement('p', { className: 'text-[13px] text-muted-foreground' }, t(proposal.state)),
       (problem && waiting) || error
-        ? React.createElement('p', { role: 'alert', className: 'text-[12px] text-destructive' }, error ?? t(problem))
+        ? React.createElement('p', { role: 'alert', className: 'text-[12px] text-destructive' }, error ?? t(problem ?? ''))
         : null,
       React.createElement('div', { className: 'flex items-center justify-end gap-2' },
         waiting
@@ -2266,7 +2266,7 @@ export function apply(ctx) {
   // The open issues of a project that carry the label of the settings.
   router.get('/candidates', answer(async (request) => {
     const project = String(request.query.project ?? '')
-    const label = ctx.settings.get('label') || 'accepted'
+    const label = String(ctx.settings.get('label') || 'accepted')
     const issues = await ctx.forge.issues.list(project, { label })
     return { issues: issues.map((issue) => ({ number: issue.number, title: issue.title, url: issue.url, brief: asUntrusted(issue) })) }
   }))
