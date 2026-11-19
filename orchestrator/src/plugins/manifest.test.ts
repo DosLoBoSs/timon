@@ -750,7 +750,7 @@ test('a slot opened by API 17 needs a manifest that declares it', () => {
     const res = readManifest(pkg({ apiVersion: 17, client: { slots: [slot] } }));
     assert.ok(res.ok, res.ok ? '' : res.message);
   }
-  assert.equal(SLOT_API_VERSIONS['updates.dialog'], PLUGIN_API_VERSION);
+  assert.equal(SLOT_API_VERSIONS['updates.dialog'], 17);
 });
 
 test('`root` outside a layout is refused, whatever the other kind', () => {
