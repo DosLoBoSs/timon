@@ -209,6 +209,12 @@ export function scratchEnv(emptyConfig: string, ghConfigDir: string | null, base
     GIT_ATTR_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0',
     GIT_OPTIONAL_LOCKS: '0',
+    // A contributor's path handed to `ls-tree -- <path>` is a name, never a
+    // pathspec magic (`:(glob)*`).
+    GIT_LITERAL_PATHSPECS: '1',
+    // A `refs/replace/*` planted in a reopened scratch folder would make an
+    // object read as another one in the preview.
+    GIT_NO_REPLACE_OBJECTS: '1',
     // Messages and conflict types are read: never a translation of them.
     LC_ALL: 'C',
     LANGUAGE: 'C',

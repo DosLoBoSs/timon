@@ -66,6 +66,8 @@ test('the environment: no system or user configuration, no git variable of the d
   assert.equal(env.GIT_CONFIG_NOSYSTEM, '1');
   assert.equal(env.GIT_CONFIG_GLOBAL, '/scratch/empty.gitconfig');
   assert.equal(env.GIT_TERMINAL_PROMPT, '0');
+  assert.equal(env.GIT_LITERAL_PATHSPECS, '1');
+  assert.equal(env.GIT_NO_REPLACE_OBJECTS, '1');
   assert.equal(env.GH_CONFIG_DIR, '/home/u/.config/gh-work');
   assert.equal(env.GH_TOKEN, undefined);
   assert.equal(env.GITHUB_TOKEN, undefined);
@@ -180,6 +182,27 @@ test('paths differing only by case stay two paths of the tree', async () => {
     assert.deepEqual(await repo.changedPaths(tree, next), ['dir/b.txt']);
     assert.equal((await repo.blobAt(next, 'Dir/a.txt'))?.oid, a);
     assert.equal((await repo.blobAt(next, 'dir/b.txt'))?.oid, b);
+  } finally {
+    repo.dispose();
+  }
+});
+
+test('a path is a name, never a pathspec magic, and a planted replacement is not followed', async () => {
+  const f = forgeFixture({ 'a.txt': 'a\n' });
+  const repo = await scratch(f);
+  try {
+    const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+    const a = (await repo.writeBlob('a\n'))!;
+    const b = (await repo.writeBlob('b\n'))!;
+    const magic = ':(glob)*.txt';
+    const tree = (await repo.replaceInTree(EMPTY_TREE, [
+      { path: magic, mode: '100644', oid: a }, { path: 'x.txt', mode: '100644', oid: b },
+    ]))!;
+    assert.equal((await repo.blobAt(tree, magic))?.oid, a, 'the file named like a magic is found');
+    assert.equal(await repo.blobAt(tree, '*.txt'), null, 'a glob matches no file');
+    // A replacement of `a` by `b`, as a mission could write into the folder.
+    f.git(repo.dir, `--git-dir=${join(repo.dir, 'repo.git')}`, 'replace', a, b);
+    assert.equal(await repo.readBlob(a, 1024), 'a\n', 'the object read is the one named');
   } finally {
     repo.dispose();
   }
