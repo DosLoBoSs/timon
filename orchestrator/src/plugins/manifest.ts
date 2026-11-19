@@ -104,7 +104,11 @@ import { reservedRouteSegment } from './reserved-routes.js';
  * of a TO DO idea's jobs stands (pull request not created, open, merged,
  * closed), read from `useTodoItem().landing`; `PluginTodo.landing` and the
  * `landing` filter of `ctx.kanban.todos.list`. API 17 shipped in 0.1.9, so a
- * new slot opens a new wave. No member of the host's `PluginContext` changes.
+ * new slot opens a new wave. The same wave, still unreleased, opens the
+ * `kanban.job.dialog` slot (a job's window, `useJobDialog`) and the
+ * `forge.publish.dialog` slot (the "Publish on GitHub" window,
+ * `usePublishDialog`, whose gestures go through the signed-in person's
+ * session). No member of the host's `PluginContext` changes.
  */
 export const PLUGIN_API_VERSION = 18;
 
@@ -128,6 +132,8 @@ export const SLOT_API_VERSIONS: Readonly<Record<string, number>> = Object.freeze
   'notices.card': 17,
   'updates.dialog': 17,
   'kanban.todo.landing': 18,
+  'kanban.job.dialog': 18,
+  'forge.publish.dialog': 18,
 });
 
 /** A public path relative to the plugin prefix: lowercase segments or `:name` parameters, never a wildcard. */

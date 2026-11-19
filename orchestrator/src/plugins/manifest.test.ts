@@ -763,6 +763,18 @@ test('a slot opened by API 18 needs a manifest that declares it', () => {
   assert.equal(SLOT_API_VERSIONS['kanban.todo.landing'], PLUGIN_API_VERSION);
 });
 
+test('the job and Publish on GitHub dialogs join wave 18', () => {
+  // Their hooks are missing from a host 17: a manifest naming either slot must
+  // declare 18, or its browser half would die there on a missing import.
+  for (const slot of ['kanban.job.dialog', 'forge.publish.dialog']) {
+    const message = refusal(pkg({ apiVersion: 17, client: { slots: [slot] } }));
+    assert.ok(message.includes(`names \`${slot}\`, which needs \`apiVersion: 18\``), message);
+    const res = readManifest(pkg({ apiVersion: 18, client: { slots: [slot] } }));
+    assert.ok(res.ok, res.ok ? '' : res.message);
+    assert.equal(SLOT_API_VERSIONS[slot], 18);
+  }
+});
+
 test('`root` outside a layout is refused, whatever the other kind', () => {
   // `root` is the whole interface: a non-layout naming it would replace the
   // shell for everyone, with no choice in the appearance settings.
