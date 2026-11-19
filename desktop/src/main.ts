@@ -1851,10 +1851,13 @@ if (!app.requestSingleInstanceLock({ build: ownBuild } satisfies LaunchData)) {
       if (process.platform !== 'win32' || !await windowsTaskRunning()) return;
       try {
         await endWindowsLauncher(desktopHome);
-        console.warn('[desktop] handover: the task still ran without answering, its launcher was ended');
       } catch (error) {
         console.warn(`[desktop] handover: could not end the task's launcher: ${(error as Error).message}`);
       }
+      // The script hides taskkill's answer: the task state says what happened.
+      console.warn(await windowsTaskRunning()
+        ? '[desktop] handover: the task still ran without answering, and still runs after the attempt to end its launcher'
+        : '[desktop] handover: the task still ran without answering, its launcher was ended');
     },
     resume: () => {
       const cfg = loadDesktopConfig(desktopHome, { packaged: app.isPackaged });
@@ -1868,6 +1871,12 @@ if (!app.requestSingleInstanceLock({ build: ownBuild } satisfies LaunchData)) {
       // Only a refusal from here on says the service waits for this embedded daemon's home.
       keptSince = Date.now();
       await startEmbeddedDaemon(loadDesktopConfig(desktopHome, { packaged: app.isPackaged }), interfaceUrl);
+      // Its last-moment probe found the service answering and opened the pages on it.
+      if (stopEmbedded === null && daemonUp) {
+        console.log('[desktop] handover: the service answered as the embedded daemon was about to start, it serves');
+        return 'service';
+      }
+      return 'embedded';
     },
     reportKept: (why) => {
       // Said once: a late attempt that falls back again leaves the setup as it was, silently.

@@ -126,12 +126,17 @@ export function serviceHandover(actions: {
   resume: () => void;
   /**
    * The service's process may outlive the wait: ended before the embedded
-   * daemon starts again. Left alone, the embedded child is refused the home
-   * it holds, and on Windows the sweep after that refusal ends it by accident.
+   * daemon starts again. Left alone, a service daemon that took the home
+   * makes each embedded start exit refused, until its supervisor gives up
+   * and reports a crash loop while the service is about to answer.
    */
   releaseService?: () => Promise<void>;
-  /** It does not: the embedded daemon serves again, and the pages follow it. */
-  resumeEmbedded: () => Promise<void>;
+  /**
+   * It does not: the embedded daemon serves again, and the pages follow it.
+   * `'service'` when, starting, it found the service answering after all and
+   * opened the pages on it: the handover happened, late.
+   */
+  resumeEmbedded: () => Promise<'embedded' | 'service' | void>;
   reportKept: (why: string | null) => void;
 }): (route: string) => Promise<HandoverOutcome> {
   let pending: Promise<HandoverOutcome> | undefined;
@@ -156,7 +161,7 @@ export function serviceHandover(actions: {
         return 'handed-over';
       }
       await actions.releaseService?.().catch(() => undefined);
-      await actions.resumeEmbedded();
+      if (await actions.resumeEmbedded() === 'service') return 'handed-over';
       actions.reportKept(why);
       return 'kept-embedded';
     })().finally(() => { pending = undefined; });

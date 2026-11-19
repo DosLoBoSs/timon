@@ -426,6 +426,21 @@ test('a service that answers too late is let go before the embedded daemon serve
   assert.deepEqual(failing.calls.slice(-2), ['embedded again', 'kept']);
 });
 
+test('a service found answering as the embedded daemon restarts is a handover, with no notice and no watch', async () => {
+  const caught = handover({
+    waitService: async () => false,
+    resumeEmbedded: async () => { caught.calls.push('embedded again'); return 'service'; },
+  });
+  assert.equal(await caught.run('/setup/agent'), 'handed-over');
+  assert.deepEqual(caught.calls, ['needed', 'waiting /setup/agent', 'stop', 'kick', 'embedded again']);
+  const kept = handover({
+    waitService: async () => false,
+    resumeEmbedded: async () => { kept.calls.push('embedded again'); return 'embedded'; },
+  });
+  assert.equal(await kept.run('/'), 'kept-embedded');
+  assert.equal(kept.calls.at(-1), 'kept');
+});
+
 /** A clock that only moves when the wait sleeps: no real timer in these tests. */
 function fakeClock(): WaitClock & { slept: number } {
   let t = 0;
