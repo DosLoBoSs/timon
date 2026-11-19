@@ -17,7 +17,8 @@ import { randomUUID } from 'node:crypto';
 import { after, beforeEach, test } from 'node:test';
 import { dbApi } from './db.js';
 import {
-  parsePullRequestChecks, type Forge, type ForgeChecksReader, type GitTransport, type PullRequestChecksOutcome,
+  parsePullRequestChecks, type Forge, type ForgeChecksReader, type ForgeThreadsReader, type GitTransport,
+  type PullRequestChecksOutcome, type ReviewThreadsOutcome,
 } from './host/forge.js';
 import {
   CHECKS_MIN_INTERVAL_MS, PREVIEW_LIMITS, integrationView, previewIntegration, refreshIntegrationChecks, splitPatch,
@@ -80,17 +81,21 @@ function fixture(onBranch: (repo: string) => void, opts: { state?: 'open' } = {}
   return { repo, branch, id: row.id, slug };
 }
 
-type Calls = { login: number; fetch: number; push: number; create: number; remote: number; checks: number };
+type Calls = { login: number; fetch: number; push: number; create: number; remote: number; checks: number; threads: number };
 let calls: Calls;
 let checksAnswer: PullRequestChecksOutcome;
+let threadsAnswer: ReviewThreadsOutcome;
 let now: number;
 
 beforeEach(() => {
-  calls = { login: 0, fetch: 0, push: 0, create: 0, remote: 0, checks: 0 };
+  calls = { login: 0, fetch: 0, push: 0, create: 0, remote: 0, checks: 0, threads: 0 };
+  threadsAnswer = { ok: true, threads: [], unresolved: 3, truncated: false };
   checksAnswer = {
     ok: true,
     view: {
       state: 'open', draft: false, mergeable: 'mergeable', review: null, title: 'Add x', body: 'Why x.',
+      mergeStateStatus: 'behind', labels: [{ name: 'accepted', color: '0e8a16' }],
+      closingIssues: [{ repo: 'acme/app', number: 212, url: 'https://github.com/acme/app/issues/212' }],
       checks: [
         { name: 'build', status: 'pass', url: 'https://github.com/acme/app/actions/runs/1' },
         { name: 'tests', status: 'pending', url: null },
@@ -101,10 +106,11 @@ beforeEach(() => {
 });
 
 function deps(): PreviewDeps {
-  const forge: Forge & ForgeChecksReader = {
+  const forge: Forge & ForgeChecksReader & ForgeThreadsReader = {
     async login() { calls.login += 1; return { ok: true, login: 'ai-bot' }; },
     async createPullRequest() { calls.create += 1; return { ok: false, code: 'gh_failed', reason: 'stub' }; },
     async pullRequestChecks() { calls.checks += 1; return checksAnswer; },
+    async pullRequestReviewThreads() { calls.threads += 1; return threadsAnswer; },
   };
   const transport: GitTransport = {
     async remoteBranchSha() { calls.remote += 1; return { ok: true, sha: null }; },
@@ -137,7 +143,7 @@ test('the preview lists the commits and the diff of the branch against its targe
   assert.equal(out.integration.branch, 'feat/topic');
   assert.ok(!('repo' in out.integration), 'the repository path stays on the daemon');
   // Nothing reached the forge or the remote.
-  assert.deepEqual(calls, { login: 0, fetch: 0, push: 0, create: 0, remote: 0, checks: 0 });
+  assert.deepEqual(calls, { login: 0, fetch: 0, push: 0, create: 0, remote: 0, checks: 0, threads: 0 });
 });
 
 test('a branch that conflicts with its target is reported, with the file', async () => {
@@ -188,7 +194,7 @@ test('the dry pre-checks write nothing and push nothing', async () => {
   assert.equal(byName.get('pr_text')?.ok, true);
   assert.equal(byName.get('commits')?.ok, true);
   // Read-only gestures only: the account and the remote branch.
-  assert.deepEqual(calls, { login: 1, fetch: 0, push: 0, create: 0, remote: 1, checks: 0 });
+  assert.deepEqual(calls, { login: 1, fetch: 0, push: 0, create: 0, remote: 1, checks: 0, threads: 0 });
   assert.deepEqual(dbApi.getIntegrationById(f.id), before);
   assert.equal(git(f.repo, 'for-each-ref'), refsBefore);
   assert.deepEqual(out.pull_request, { title: 'Add x to the app', body: 'Because y.' });
@@ -222,7 +228,12 @@ test('the checks of an open pull request are read at most once a minute', async 
   assert.equal(first.integration.checks_running, true);
   assert.equal(first.integration.conflict, false);
   assert.equal(first.integration.pr_title, 'Add x');
+  assert.equal(first.integration.checks?.merge_state, 'behind');
+  assert.deepEqual(first.integration.checks?.labels, [{ name: 'accepted', color: '0e8a16' }]);
+  assert.deepEqual(first.integration.checks?.closing_issues, [{ repo: 'acme/app', number: 212, url: 'https://github.com/acme/app/issues/212' }]);
+  assert.equal(first.integration.checks?.unresolved_threads, 3);
   assert.equal(calls.checks, 1);
+  assert.equal(calls.threads, 1);
 
   now += CHECKS_MIN_INTERVAL_MS - 1;
   const cached = await refreshIntegrationChecks(dbApi.getIntegrationById(f.id)!, deps());
@@ -232,9 +243,12 @@ test('the checks of an open pull request are read at most once a minute', async 
 
   now += 2;
   checksAnswer = { ok: true, view: { ...(checksAnswer as { ok: true; view: never }).view, mergeable: 'conflicting', checks: [] } };
+  // The threads failing leaves the checks readable, the count unknown.
+  threadsAnswer = { ok: false, code: 'gh_failed', reason: 'HTTP 502' };
   const again = await refreshIntegrationChecks(dbApi.getIntegrationById(f.id)!, deps());
   assert.ok(again.ok);
   assert.equal(calls.checks, 2);
+  assert.equal(again.integration.checks?.unresolved_threads, null);
   assert.equal(again.integration.conflict, true);
   assert.equal(again.integration.checks_running, false);
   // The poller alone concludes: the state did not move.
@@ -297,6 +311,18 @@ test('a patch is cut per file, in order', () => {
   const parts = splitPatch('diff --git a/x b/x\n-a\n+b\ndiff --git a/y b/y\n+c\n');
   assert.deepEqual(parts, ['diff --git a/x b/x\n-a\n+b', 'diff --git a/y b/y\n+c']);
   assert.deepEqual(splitPatch(''), []);
+});
+
+test('a stored copy read before the merge state and threads existed still reads', () => {
+  const f = fixture((repo) => { commitFiles(repo, { 'src/new.ts': 'x\n' }, 'feat(app): add x'); });
+  dbApi.setIntegrationChecks(f.id, JSON.stringify({
+    read_at: 1, state: 'open', draft: false, mergeable: 'unknown', review: null, title: 't', body: '', items: [],
+  }));
+  const view = integrationView(dbApi.getIntegrationById(f.id)!);
+  assert.equal(view.checks?.merge_state, 'unknown');
+  assert.deepEqual(view.checks?.labels, []);
+  assert.deepEqual(view.checks?.closing_issues, []);
+  assert.equal(view.checks?.unresolved_threads, null);
 });
 
 test('the view of a row carries no stored checks it cannot read', () => {

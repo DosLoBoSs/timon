@@ -25,7 +25,8 @@ import { z } from 'zod';
 import { dbApi, type IntegrationRow } from './db.js';
 import {
   githubForge, githubRepoFromUrl, gitTransport,
-  type Forge, type ForgeChecksReader, type ForgeRunners, type GitTransport,
+  MERGE_STATE_STATUSES,
+  type Forge, type ForgeChecksReader, type ForgeRunners, type ForgeThreadsReader, type GitTransport,
   type PullRequestCheck, type PullRequestChecks,
 } from './host/forge.js';
 import { getHost } from './host/index.js';
@@ -65,6 +66,12 @@ const StoredChecksSchema = z.object({
   title: z.string(),
   body: z.string(),
   items: z.array(CheckSchema),
+  // Read since the pull request reader grew: a copy stored before has none.
+  merge_state: z.enum(MERGE_STATE_STATUSES).default('unknown'),
+  labels: z.array(z.object({ name: z.string(), color: z.string().nullable() })).default([]),
+  closing_issues: z.array(z.object({ repo: z.string().nullable(), number: z.number(), url: z.string().nullable() })).default([]),
+  /** Review threads nobody resolved; null when the forge could not say. */
+  unresolved_threads: z.number().nullable().default(null),
 });
 
 export type StoredChecks = z.infer<typeof StoredChecksSchema>;
@@ -88,7 +95,7 @@ function countChecks(items: readonly PullRequestCheck[]): ChecksCounts {
   return counts;
 }
 
-function storedFrom(view: PullRequestChecks, now: number): StoredChecks {
+function storedFrom(view: PullRequestChecks, unresolvedThreads: number | null, now: number): StoredChecks {
   return {
     read_at: now,
     state: view.state,
@@ -98,6 +105,10 @@ function storedFrom(view: PullRequestChecks, now: number): StoredChecks {
     title: view.title,
     body: view.body,
     items: view.checks,
+    merge_state: view.mergeStateStatus,
+    labels: view.labels,
+    closing_issues: view.closingIssues,
+    unresolved_threads: unresolvedThreads,
   };
 }
 
@@ -110,6 +121,12 @@ export type IntegrationChecksView = {
   review: StoredChecks['review'];
   counts: ChecksCounts;
   items: StoredChecks['items'];
+  /** `behind` asks for a branch update, `dirty` is a conflict. */
+  merge_state: StoredChecks['merge_state'];
+  labels: StoredChecks['labels'];
+  /** The issues the forge will close at the merge, as the description says. */
+  closing_issues: StoredChecks['closing_issues'];
+  unresolved_threads: StoredChecks['unresolved_threads'];
 };
 
 /** One job's landing, without the repository's path. */
@@ -148,6 +165,10 @@ export function integrationView(row: IntegrationRow): IntegrationView {
         review: stored.review,
         counts: countChecks(stored.items),
         items: stored.items,
+        merge_state: stored.merge_state,
+        labels: stored.labels,
+        closing_issues: stored.closing_issues,
+        unresolved_threads: stored.unresolved_threads,
       }
     : null;
   const open = row.state === 'open';
@@ -203,7 +224,7 @@ export function listIntegrationViews(filter: IntegrationFilter, viewer: DbViewer
 export type PreviewDeps = {
   /** Stand-ins for gh and git's network side: tests never reach a forge. */
   runners?: ForgeRunners;
-  forge?: (configDir: string | null) => Forge & ForgeChecksReader;
+  forge?: (configDir: string | null) => Forge & ForgeChecksReader & ForgeThreadsReader;
   transport?: (repo: string) => GitTransport;
   now?: () => number;
 };
@@ -249,7 +270,10 @@ async function readChecks(row: IntegrationRow, deps: PreviewDeps): Promise<Check
   const forge = (deps.forge ?? ((dir) => githubForge(dir, deps.runners)))(read.integration.gh_config_dir);
   const out = await forge.pullRequestChecks(repository, row.pr_number);
   if (!out.ok) return { ok: false, code: 'checks_unavailable', reason: out.reason };
-  dbApi.setIntegrationChecks(row.id, JSON.stringify(storedFrom(out.view, now)));
+  // The threads are a second call: their failure leaves the checks readable.
+  const threads = out.view.state === 'open' ? await forge.pullRequestReviewThreads(repository, row.pr_number) : null;
+  const unresolved = threads?.ok ? threads.unresolved : null;
+  dbApi.setIntegrationChecks(row.id, JSON.stringify(storedFrom(out.view, unresolved, now)));
   const fresh = dbApi.getIntegrationById(row.id) ?? row;
   return { ok: true, integration: integrationView(fresh), fresh: true };
 }
