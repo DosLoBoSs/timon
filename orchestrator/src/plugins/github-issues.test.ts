@@ -125,6 +125,7 @@ test('every route refuses an anonymous call, the daemon token and an account tha
   await withPlugin(async (url) => {
     const routes: Array<[string, string, unknown]> = [
       ['GET', '/candidates?project=acme', undefined],
+      ['GET', '/issue?project=acme&issue=7', undefined],
       ['POST', '/import', { project: 'acme', issue: 7 }],
       ['GET', '/project?project=acme', undefined],
       ['PUT', '/project', { project: 'acme', label: 'x' }],
@@ -189,6 +190,31 @@ test('lists the labelled issues and imports one, once, its text kept as outside 
     assert.equal((await send(url('/import'), 'POST', 'person', { project: 'acme', issue: -1 })).status, 400);
     assert.equal((await send(url('/import'), 'POST', 'person', { project: 'local', issue: 7 })).status, 409, 'no GitHub repository');
     assert.equal((await send(url('/import'), 'POST', 'person', { project: 'nope', issue: 7 })).status, 409);
+  });
+});
+
+test('reads one issue for the Issue window, its text cut as the import keeps it', async () => {
+  calls.length = 0;
+  await withPlugin(async (url) => {
+    type Read = { repo: string; number: number; title: string; author: string | null; state: string; body: string; truncated: boolean; todo: { id: number } | null };
+    // Issue 8 was imported by the test above: its idea comes with it.
+    const read = await (await send(url('/issue?project=acme&issue=8'), 'GET', 'person')).json() as Read;
+    assert.deepEqual([read.repo, read.number, read.title, read.author, read.state], ['acme/widgets', 8, INJECTION, 'outsider', 'open']);
+    assert.equal(read.body.length, 4_000);
+    assert.equal(read.truncated, true);
+    assert.ok(read.todo);
+    const fresh = await (await send(url('/issue?project=acme&issue=9'), 'GET', 'person')).json() as Read;
+    assert.equal(fresh.todo, null);
+    const ideas = (db.prepare('SELECT COUNT(*) AS n FROM project_todo').get() as { n: number }).n;
+    const closed = await (await send(url('/issue?project=acme&issue=5'), 'GET', 'person')).json() as Read;
+    assert.equal(closed.state, 'closed', 'a closed issue is read, the import says no');
+    assert.equal((await send(url('/issue?project=acme&issue=404'), 'GET', 'person')).status, 404);
+    assert.equal((await send(url('/issue?project=acme&issue=x'), 'GET', 'person')).status, 400);
+    assert.equal((await send(url('/issue?project=local&issue=7'), 'GET', 'person')).status, 409);
+    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM project_todo').get() as { n: number }).n, ideas, 'reading creates nothing');
+    const made = await (await send(url('/import'), 'POST', 'person', { project: 'acme', issue: 7 })).json() as { todo: { id: number } };
+    const known = await (await send(url('/issue?project=acme&issue=7'), 'GET', 'person')).json() as Read;
+    assert.equal(known.todo?.id, made.todo.id);
   });
 });
 

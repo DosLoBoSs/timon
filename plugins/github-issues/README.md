@@ -10,6 +10,8 @@ nothing is written on GitHub.
 
 - `GET candidates?project=<slug>`: the labelled open issues, each with the
   idea it became (`todo`, and its pull request once there is one).
+- `GET issue?project=<slug>&issue=<n>`: one issue of the repository, labelled
+  or not, with its text cut as the idea will keep it, and the idea it became.
 - `POST import { project, issue }`: one issue, one idea. The idea links to the
   issue (`github`, `owner/repo#n`); a second import answers the same idea.
 - `GET project?project=<slug>`, `PUT project { project, label }`: the

@@ -186,6 +186,32 @@ export function apply(ctx) {
     return { project, repo, url, label, issues: out, hidden: dismissed.length }
   }))
 
+  // One issue as the Issue window shows it before an import: its text cut
+  // like the idea's notes will keep it, and the idea it already became. Any
+  // issue of the repository, so a number typed by hand can be read first.
+  router.get('/issue', answer(async (request) => {
+    const project = slugOf(request.query.project)
+    const number = numberOf(request.query.issue)
+    const { repo } = await repositoryOf(project)
+    const issue = await ctx.forge.issues.get(project, number)
+    if (!issue) throw new RequestError(404, 'issue_not_found')
+    const body = String(issue.body ?? '').replace(CONTROL, '')
+    const cut = body.length > BODY_LIMIT
+    return {
+      project,
+      repo,
+      number: issue.number,
+      title: oneLine(issue.title, TITLE_LIMIT),
+      author: loginOf(issue.author),
+      url: issue.url,
+      state: issue.state,
+      labels: issue.labels.map((l) => ({ name: oneLine(l.name, 50), color: l.color })),
+      body: cut ? body.slice(0, BODY_LIMIT) : body,
+      truncated: cut || issue.bodyTruncated === true,
+      todo: await ideaOf(repo, issue.number),
+    }
+  }))
+
   // One issue becomes one idea. Any open issue of the repository may be
   // imported (a number typed by hand need not carry the label); a second
   // import answers the idea already made.
