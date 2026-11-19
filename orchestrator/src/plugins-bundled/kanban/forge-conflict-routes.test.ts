@@ -8,7 +8,7 @@ import '../../test-home.js';
 import '../../../tests/helpers/paid-license.js';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,8 +18,9 @@ import { createTestAccount } from '../../../tests/helpers/accounts.js';
 import { checkout, forgeFixture, type ForgeFixture } from '../../../tests/helpers/forge-git-fixture.js';
 import { db, dbApi } from '../../db.js';
 import {
-  askContributorComment, forkPushUrl, hasConflictMarkers, resolvedText, sweepConflictScratch, type ConflictDeps,
+  askContributorComment, forkPushUrl, hasConflictMarkers, pinnedRemote, resolvedText, sweepConflictScratch, type ConflictDeps,
 } from '../../forge-conflicts.js';
+import { DEFAULT_PROJECT_INTEGRATION, type ProjectIntegration } from '../../project-integration.js';
 import type { ForgeBranchWriter, ForgeCommentWriter, PullRequestBranch } from '../../host/forge.js';
 import { registerForgeBranchRoutes } from './forge-branch-routes.js';
 import { registerForgeProposalRoutes } from './forge-proposal-routes.js';
@@ -46,6 +47,8 @@ let branchOverride: Partial<PullRequestBranch> = {};
 let commentFails = false;
 const posted: Array<{ number: number; body: string }> = [];
 const suggestions: Array<{ system: string; user: string }> = [];
+/** What `ssh -G` would answer for an alias of the remote. */
+const sshAliases = new Map<string, string>([['github-acme', 'github.com'], ['github-evil', 'evil.example']]);
 let suggestAnswer = '<resolved>\none\nTWO and 2\nthree\n</resolved>';
 
 function branchNow(): PullRequestBranch {
@@ -81,6 +84,7 @@ const deps: ConflictDeps = {
   scratchRoot,
   get scratchGit() { return f.runner; },
   suggest: async (input) => { suggestions.push(input); return suggestAnswer; },
+  sshHostName: async (alias) => sshAliases.get(alias) ?? null,
 };
 
 const app = express();
@@ -206,6 +210,44 @@ test('refused before any fetch: closed, our own branch, not modifiable, deleted 
   setting('resolve', 'file://localhost/acme/widgets.git');
   assert.equal((await prepare()).json.code, 'conflict_unsupported');
   assert.equal(f.calls.length, 0, 'git never ran');
+});
+
+test('the remote must lead to the forge gh reads the pull request from: refused before any fetch', async () => {
+  for (const remote of [
+    'git@evil.example:acme/widgets.git',
+    'https://evil.example/acme/widgets.git',
+    'ssh://git@evil.example/acme/widgets.git',
+    'git@github-evil:acme/widgets.git',
+    'git@unknown-alias:acme/widgets.git',
+    'https://github.com.evil.example/acme/widgets',
+  ]) {
+    setting('resolve', remote);
+    const out = await prepare();
+    assert.equal(out.status, 409, remote);
+    assert.equal(out.json.code, 'conflict_unsupported', remote);
+  }
+  assert.equal(f.calls.length, 0, 'git never ran');
+  assert.deepEqual(scratchLeft(), []);
+
+  const at = (remote_url: string, gh_config_dir: string | null = ghFolder): ProjectIntegration =>
+    ({ ...DEFAULT_PROJECT_INTEGRATION, mode: 'pr', account: 'ai-bot', gh_config_dir, remote_url, contributor_conflicts: 'resolve' });
+  const host = async (integration: ProjectIntegration) => {
+    const out = await pinnedRemote(integration, deps);
+    return out.ok ? out.host : out.code;
+  };
+  assert.equal(await host(at('git@github.com:acme/widgets.git')), 'github.com');
+  assert.equal(await host(at('https://GitHub.com/acme/widgets')), 'github.com');
+  assert.equal(await host(at('ssh://git@ssh.github.com:443/acme/widgets.git')), 'ssh.github.com');
+  assert.equal(await host(at('git@github-acme:acme/widgets.git')), 'github.com', 'an SSH alias of github.com');
+  assert.equal(await host(at('https://github-acme/acme/widgets')), 'conflict_unsupported', 'an alias is an SSH name only');
+  // A gh folder signed in to one Enterprise host only: that host, and it alone.
+  const ghe = join(home, '.config', 'gh-ghe');
+  mkdirSync(ghe, { recursive: true });
+  writeFileSync(join(ghe, 'hosts.yml'), 'ghe.example.com:\n    users:\n        ai-bot:\n    user: ai-bot\n');
+  assert.equal(await host(at('git@ghe.example.com:acme/widgets.git', ghe)), 'ghe.example.com');
+  assert.equal(await host(at('git@github.com:acme/widgets.git', ghe)), 'conflict_unsupported');
+  writeFileSync(join(ghe, 'hosts.yml'), 'ghe.example.com:\n    user: a\ngithub.com:\n    user: b\n');
+  assert.equal(await host(at('git@ghe.example.com:acme/widgets.git', ghe)), 'conflict_unsupported', 'gh reaches github.com');
 });
 
 test('refused after the merge: the head moved, a clean merge, a deletion, a binary, a symbolic link, too many or too large files', async () => {
@@ -387,6 +429,26 @@ test('switched back to "ask", closed or locked before publishing: nothing is pus
   branchOverride = { headRepository: 'other/widgets' };
   assert.equal((await publish(r.proposalId)).json.code, 'forge_conflict_changed');
   assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.head);
+});
+
+test('the publication shows where the commit goes, and goes nowhere else', async () => {
+  const r = await proposedResolution();
+  const view = await call('GET', `/api/projects/acme/forge-proposals/${r.proposalId}`, 'person');
+  assert.equal(view.json.proposal.details.push_url, 'git@github.com:contrib/widgets.git');
+  assert.equal(view.json.proposal.details.push_host, 'github.com');
+  assert.equal(view.json.proposal.details.push_repository, 'contrib/widgets');
+  const pushes = () => f.calls.filter((a) => a.includes('push') || a.includes('fetch')).length;
+  const before = pushes();
+  setting('resolve', 'git@evil.example:acme/widgets.git');
+  assert.equal((await publish(r.proposalId)).json.code, 'conflict_unsupported');
+  // Still github.com, but not the URL the person saw.
+  setting('resolve', 'ssh://git@github.com/acme/widgets.git');
+  assert.equal((await publish(r.proposalId)).json.code, 'forge_conflict_changed');
+  assert.equal(pushes(), before, 'nothing fetched or pushed');
+  assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.head);
+  setting('resolve');
+  assert.equal((await publish(r.proposalId)).json.proposal.state, 'published');
+  assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.commit);
 });
 
 test('a comment lost after the push: publishing again finds the push done and posts the comment once', async () => {

@@ -8,9 +8,12 @@
  * removed whenever a folder is named; prompts are off, since nobody can answer
  * one behind the daemon.
  *
- * The folder's content is never read by Timon, and its path never reaches a
- * log or an error: only `gh` opens it.
+ * The folder's content is never read by Timon beyond the names of the hosts
+ * `hosts.yml` signs in to (`ghForgeHost`), and its path never reaches a log or
+ * an error: only `gh` opens the rest.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ExecOpts, ExecResult } from './types.js';
 import { getHost } from './index.js';
 
@@ -26,6 +29,35 @@ export function ghEnv(configDir: string | null, base: NodeJS.ProcessEnv = proces
     for (const name of TOKEN_VARIABLES) delete env[name];
   }
   return env;
+}
+
+const GITHUB_HOST = 'github.com';
+const HOST_NAME = /^[a-z0-9](?:[a-z0-9-]{0,62})(?:\.[a-z0-9](?:[a-z0-9-]{0,62}))*$/;
+
+/** The top-level keys of a `hosts.yml`: the hosts `gh` signs in to. Nothing
+ *  under them (users, tokens) is read. */
+export function parseGhHosts(text: string): string[] {
+  const hosts: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^(?:"([^"]+)"|'([^']+)'|([^\s#'"][^\s:]*)):\s*(?:#.*)?$/.exec(line);
+    const host = (m?.[1] ?? m?.[2] ?? m?.[3])?.toLowerCase();
+    if (host && HOST_NAME.test(host) && !hosts.includes(host)) hosts.push(host);
+  }
+  return hosts;
+}
+
+/**
+ * The forge host `gh` reaches with `configDir`: github.com, or the one GitHub
+ * Enterprise host its `hosts.yml` signs in to when github.com is not among
+ * them. Null when it signs in to several Enterprise hosts and not github.com:
+ * which one a call reaches is then not the folder's to tell.
+ */
+export function ghForgeHost(configDir: string | null, read: (file: string) => string = (file) => readFileSync(file, 'utf8')): string | null {
+  if (!configDir) return GITHUB_HOST;
+  let hosts: string[];
+  try { hosts = parseGhHosts(read(join(configDir, 'hosts.yml'))); } catch { return GITHUB_HOST; }
+  if (hosts.length === 0 || hosts.includes(GITHUB_HOST)) return GITHUB_HOST;
+  return hosts.length === 1 ? hosts[0]! : null;
 }
 
 export type GhRunner = (args: string[], opts: ExecOpts) => Promise<ExecResult>;

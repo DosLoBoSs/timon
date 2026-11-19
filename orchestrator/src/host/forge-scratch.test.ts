@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { BASE_URL, checkout, forgeFixture, FORK_URL } from '../../tests/helpers/forge-git-fixture.js';
 import {
-  gitVersionAtLeast, openScratchRepo, parseGitVersion, parseMergeTree, parseObjectsSize, scratchConfig, scratchEnv,
+  gitVersionAtLeast, openScratchRepo, parseGitVersion, parseMergeTree, parseObjectsSize, parseSshHostName, scratchConfig, scratchEnv,
   type ScratchRepo,
 } from './forge-scratch.js';
 
@@ -47,6 +47,11 @@ test('git version, object size', () => {
   assert.equal(gitVersionAtLeast([3, 0]), true);
   assert.equal(parseObjectsSize('count: 3\nsize: 2\nin-pack: 9\nsize-pack: 10\nsize-garbage: 0\n'), 12 * 1024);
   assert.equal(parseObjectsSize('hello'), null);
+});
+
+test('ssh -G: the host an alias connects to', () => {
+  assert.equal(parseSshHostName('user git\nhostname GitHub.com\nport 22\n'), 'github.com');
+  assert.equal(parseSshHostName('user git\nport 22\n'), null);
 });
 
 test('the environment: no system or user configuration, no git variable of the daemon but SSH, no token', () => {

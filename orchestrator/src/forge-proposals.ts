@@ -39,6 +39,7 @@ import {
   githubForge, ISSUE_COMMENT_LIMIT, redactedOutput,
   type ForgeBranchWriter, type ForgeCommentWriter, type ForgeRunners, type GitRunner,
 } from './host/forge.js';
+import type { SshHostResolver } from './host/forge-scratch.js';
 import type { ProjectIntegration } from './project-integration.js';
 import { createNotification, resolveAnchor } from './notifications.js';
 
@@ -172,6 +173,8 @@ export type ForgeProposalDeps = {
   branchForge?: (configDir: string | null) => ForgeBranchWriter;
   /** Stands in for git in the scratch repository of a conflict resolution. */
   scratchGit?: GitRunner;
+  /** Stands in for `ssh -G` in tests: the host an SSH alias of the remote connects to. */
+  sshHostName?: SshHostResolver;
   /** Where scratch repositories go; `TIMON_HOME/tmp/forge-conflicts` by default. */
   scratchRoot?: string;
   runners?: ForgeRunners;

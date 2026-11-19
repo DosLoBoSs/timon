@@ -1,7 +1,7 @@
 import '../test-home.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ghEnv, ghLogin, type GhRunner } from './gh.js';
+import { ghEnv, ghForgeHost, ghLogin, parseGhHosts, type GhRunner } from './gh.js';
 import type { ExecOpts } from './types.js';
 
 test('a named config folder wins: the tokens that would override it are removed', () => {
@@ -17,6 +17,19 @@ test('a named config folder wins: the tokens that would override it are removed'
 test('without a folder, gh keeps its own default', () => {
   const env = ghEnv(null, { GH_CONFIG_DIR: '/elsewhere' });
   assert.equal(env.GH_CONFIG_DIR, '/elsewhere');
+});
+
+test('the forge host of a config folder: its hosts, never what is under them', () => {
+  const yml = [
+    'github.com:', '    oauth_token: gho_secret', '    user: a', '"ghe.example.com":', '    user: b', '# comment', 'bad host:', '',
+  ].join('\n');
+  assert.deepEqual(parseGhHosts(yml), ['github.com', 'ghe.example.com']);
+  const read = (text: string) => () => text;
+  assert.equal(ghForgeHost(null), 'github.com');
+  assert.equal(ghForgeHost('/cfg', read(yml)), 'github.com', 'gh reaches github.com when it signs in there');
+  assert.equal(ghForgeHost('/cfg', read('ghe.example.com:\n    user: b\n')), 'ghe.example.com');
+  assert.equal(ghForgeHost('/cfg', read('a.example.com:\nb.example.com:\n')), null);
+  assert.equal(ghForgeHost('/cfg', () => { throw new Error('ENOENT'); }), 'github.com');
 });
 
 function runner(answer: { code?: number; stdout?: string; stderr?: string; timedOut?: boolean } | 'missing') {

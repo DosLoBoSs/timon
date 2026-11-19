@@ -40,6 +40,33 @@ import type { ExecOpts, ExecResult } from './types.js';
 
 const hostGit: GitRunner = (args, opts) => getHost().execAsync('git', args, opts);
 
+/** Resolves the host an SSH alias connects to; null when it cannot tell. */
+export type SshHostResolver = (alias: string) => Promise<string | null>;
+
+const SSH_ALIAS = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+
+/** The `hostname` line of `ssh -G` output, lowercased, or null. */
+export function parseSshHostName(stdout: string): string | null {
+  const m = /^hostname\s+(\S+)\s*$/im.exec(stdout);
+  return m ? m[1]!.toLowerCase() : null;
+}
+
+/**
+ * The host `ssh` connects to for `alias`, as the user's SSH configuration
+ * resolves it (`Host` / `HostName`), read with `ssh -G`, which prints the
+ * configuration without connecting. The push runs the same `ssh` with the same
+ * configuration, so the host it names is the one the push reaches.
+ */
+export const sshHostName: SshHostResolver = async (alias) => {
+  if (!SSH_ALIAS.test(alias)) return null;
+  try {
+    const r = await getHost().execAsync('ssh', ['-G', alias], { timeout: 10_000, windowsHide: true });
+    return r.code === 0 ? parseSshHostName(r.stdout) : null;
+  } catch {
+    return null;
+  }
+};
+
 /** `merge-tree --write-tree` with its `-z` listing of conflicts. */
 export const MIN_GIT_VERSION: readonly [number, number] = [2, 38];
 /** Most bytes the scratch repository may hold once fetched. */
