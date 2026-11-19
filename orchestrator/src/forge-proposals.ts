@@ -146,9 +146,13 @@ const inFlight = new Set<string>();
 
 const NOTIFICATION_ANCHOR = 'forge-proposal:';
 
-/** The anchor of a proposal's notification card, closed once it is dealt with. */
-export function proposalAnchor(id: string): string {
-  return `${NOTIFICATION_ANCHOR}${id}`;
+/**
+ * The anchor of a proposal's notification card, closed once it is dealt with.
+ * It names the project too: the card opens the proposal, and a proposal is
+ * read under its project (a slug never holds a `:`).
+ */
+export function proposalAnchor(project: string, id: string): string {
+  return `${NOTIFICATION_ANCHOR}${project}:${id}`;
 }
 
 /** The hidden line a published comment ends with: how a retry recognises it. */
@@ -304,7 +308,7 @@ export function proposeForgeWrite(input: ProposeInput, deps: ForgeProposalDeps =
     type: 'action_required',
     title: 'A GitHub comment waits for your approval',
     body: `Read and publish, edit or discard the comment proposed on ${target}.`,
-    anchor: proposalAnchor(id),
+    anchor: proposalAnchor(input.project, id),
     message: daemonMessage('forge_proposal_pending', { target }),
   });
   console.log(`[forge-proposals] ${input.kind} proposed on ${target} (${id.slice(0, 8)}, ${input.trigger})`);
@@ -335,7 +339,7 @@ export function discardForgeProposal(project: string, id: string, by: string, de
   if (!row) return refuse(404, 'forge_proposal_not_found', 'no proposal has this id in this project');
   if (row.state === 'discarded') return { ok: true, proposal: row };
   if (discardStmt.run(by, (deps.now ?? Date.now)(), id).changes === 0) return closedRefusal(get(id)!);
-  resolveAnchor(proposalAnchor(id));
+  resolveAnchor(proposalAnchor(row.project, id));
   return { ok: true, proposal: get(id)! };
 }
 
@@ -412,7 +416,7 @@ export async function publishForgeProposal(
       if (!found.ok) return fail(scrub(found.reason, configDir));
       if (found.comment) {
         publishedStmt.run(login.login, by, found.comment.url, now(), now(), id);
-        resolveAnchor(proposalAnchor(id));
+        resolveAnchor(proposalAnchor(row.project, id));
         console.log(`[forge-proposals] ${id.slice(0, 8)} was already on ${previous.repo}#${previous.target_number}`);
         return { ok: true, proposal: get(id)!, already: true };
       }
@@ -420,7 +424,7 @@ export async function publishForgeProposal(
     const posted = await forge.postIssueComment(previous.repo, previous.target_number, `${previous.body}\n\n${marker}`);
     if (!posted.ok) return fail(scrub(posted.reason, configDir));
     publishedStmt.run(login.login, by, posted.comment.url, now(), now(), id);
-    resolveAnchor(proposalAnchor(id));
+    resolveAnchor(proposalAnchor(row.project, id));
     console.log(`[forge-proposals] ${id.slice(0, 8)} published on ${previous.repo}#${previous.target_number} as ${login.login}`);
     return { ok: true, proposal: get(id)!, already: false };
   } catch (err) {
