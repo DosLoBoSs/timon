@@ -89,6 +89,7 @@
         "createdAs": "Created as {branch}",
         "empty": "Name the branch after the job's topic",
         "resolvesIssues": "Resolves its issues entirely",
+        "resolvesIssuesSummary": "resolves its issues",
         "resolvesIssuesHint": "Its pull request closes the GitHub issues of its ideas, even when other jobs work on them too"
       },
       "launch": "Launch", "answered": "answered",
