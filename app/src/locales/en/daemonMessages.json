@@ -289,6 +289,10 @@
     "layout_proposal_to_review": {
       "title": "{kind, select, widgets {Widget arrangement} islands {Island layout} island_arrangement {Island arrangement} nav {Menu} navigate {Navigation} trigger {Trigger} other {Arrangement}} to review: {agent}",
       "body": "{mission}{project, select, none {} other { ({project})}}{note, select, none {} other { — {note}}}"
+    },
+    "forge_proposal_pending": {
+      "title": "A GitHub comment waits for your approval",
+      "body": "Read and publish, edit or discard the comment proposed on {target}."
     }
   }
 }
