@@ -50,7 +50,7 @@ import {
   type AgentSkillsDraft, type AgentSkillsWrite, type ResolvedSkill, type SkillMode, type SkillVia,
 } from './skill-attachments.js';
 import { getMcp, refreshToolsCacheFromInit, listMcp } from './mcp.js';
-import { chatAttachmentsRoot } from './chat-attachments.js';
+import { ensureChatAttachmentsDir } from './chat-attachments.js';
 import { pluginPackageDirs, removeAgentPackageCache, worktreeGitDirs } from './mission-fence-target.js';
 import { forgetMissionFence, missionFenced, recordMissionFence } from './mission-fence-state.js';
 import { setAcpFenceSource } from './backends/acp/provider.js';
@@ -1859,6 +1859,16 @@ const HANDOVER_START_TIMEOUT_MS = 120_000;
 
 type MissionLaunch = { spec: SpawnResult; proc: ChildProcessWithoutNullStreams; procEnv: NodeJS.ProcessEnv; missionToken: string };
 
+/** The mission's attachments folder, made if missing; `null` when the home refuses it, the fence then leaving it closed. */
+function chatAttachmentsFolder(missionId: string): string | null {
+  try {
+    return ensureChatAttachmentsDir(missionId);
+  } catch (error) {
+    console.warn(`[agent] mission ${missionId.slice(0, 8)}: attachments folder not created, the fence leaves it closed: ${(error as Error).message}`);
+    return null;
+  }
+}
+
 /**
  * What the fence of a mission needs beyond its working directory
  * (`host/isolation.ts`, `FenceTarget`): who it is, the subscription account
@@ -1884,7 +1894,8 @@ function missionFenceTarget(input: {
       return []; // an id that is not a server's: the launch leaves it out too
     }
   });
-  const attachments = join(chatAttachmentsRoot(), input.missionId);
+  // Created before the fence is computed, so it is always among the folders it opens.
+  const attachments = chatAttachmentsFolder(input.missionId);
   return {
     agent: input.agentName,
     // Read again from the agent's config file: `cfg.cwd` may by now be a
@@ -1896,7 +1907,7 @@ function missionFenceTarget(input: {
     providerPlugin: backendOwnerPlugin(input.backend) ?? undefined,
     gitDirs: git.dirs,
     pluginDirs: pluginPackageDirs(commandLines, TIMON_HOME),
-    timonRead: existsSync(attachments) ? [attachments] : [],
+    timonRead: attachments ? [attachments] : [],
   };
 }
 
