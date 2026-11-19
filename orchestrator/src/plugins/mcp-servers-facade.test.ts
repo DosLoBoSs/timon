@@ -104,6 +104,18 @@ test('writing back a masked secret keeps the stored one, and is refused if the s
   await dispose();
 });
 
+test('a server read with get is written back as is; a real unknown key still fails', async () => {
+  const { plugin, dispose } = await pluginWith(BOTH);
+  await as(manager, () => plugin.mcpServers.put('echoed', http('https://mcp.acme.test/sse', { Authorization: 'Bearer real' })));
+  const read = (await as(manager, () => plugin.mcpServers.get('echoed')))!;
+  assert.ok('mine' in read && 'createdBy' in read, 'the read shape carries host fields');
+  await as(manager, () => plugin.mcpServers.put('echoed', { ...read, description: 'edited' } as never));
+  assert.equal(getMcp('echoed')!.description, 'edited');
+  assert.deepEqual(await sentHeaders('echoed'), { Authorization: 'Bearer real' }, 'the masked header kept the stored secret');
+  await assert.rejects(as(manager, () => plugin.mcpServers.put('echoed', { ...http('https://mcp.acme.test/sse'), nmae: 'typo' } as never)), code('invalid'));
+  await dispose();
+});
+
 test('a stdio server is a superadmin\'s request, never a job or an ordinary manager, and its binary obeys host:exec', async () => {
   const { plugin, dispose } = await pluginWith(BOTH);
   const stdio = (command: string) => ({ transport: { type: 'stdio' as const, command, args: ['x.js'] } });

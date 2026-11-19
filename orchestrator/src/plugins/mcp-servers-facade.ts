@@ -72,6 +72,30 @@ const InputSchema = z.object({
   ]),
 }).strict();
 
+/**
+ * Fields `get` returns that a write never takes: what the host stamps or
+ * observes, never what a plugin declares. `put` drops these named keys so a
+ * `get` result can be written back; any other unknown key still fails, so a
+ * typo in a real field is not swallowed.
+ */
+const READ_ONLY_KEYS: readonly string[] = [
+  'id', 'mine', 'createdBy', 'created_by', 'source', 'last_status', 'last_seen_at',
+  'tools_cache', 'tools_cached_at', 'public_only', 'app_slug',
+];
+
+/** Without the read-only keys; the OAuth state of an http transport is one too (the host runs that flow). */
+function withoutReadOnly(input: unknown): unknown {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return input;
+  const rest: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) if (!READ_ONLY_KEYS.includes(key)) rest[key] = value;
+  const transport = rest.transport;
+  if (typeof transport === 'object' && transport !== null && (transport as { type?: unknown }).type === 'http') {
+    const { oauth: _oauth, ...http } = transport as Record<string, unknown>;
+    rest.transport = http;
+  }
+  return rest;
+}
+
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const res = schema.safeParse(value);
   if (!res.success) {
@@ -123,7 +147,7 @@ export function mcpServersFor(scope: McpServerCallerScope): ScopedMcpServers {
 
     async put(id, input) {
       const serverId = parse(IdSchema, id);
-      const fields = parse(InputSchema, input);
+      const fields = parse(InputSchema, withoutReadOnly(input));
       const existing = stored(serverId);
       if (existing && scope.job && !mine(existing)) {
         throw new PluginMcpServerError('not_found', `MCP server not found: ${serverId}`);
