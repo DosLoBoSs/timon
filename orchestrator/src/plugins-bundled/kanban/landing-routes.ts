@@ -2,8 +2,8 @@
  * The landing of Kanban jobs, as the island of the board reads it
  * (`integration-preview.ts`):
  *
- * - `GET  /api/kanban/landings[?project=…|series=…]`: the jobs' integration
- *   branches and pull requests;
+ * - `GET  /api/kanban/landings[?project=…|series=…|todo=…]`: the jobs'
+ *   integration branches and pull requests (`todo`: the jobs of one idea);
  * - `GET  /api/kanban/landings/:id`: one of them;
  * - `POST /api/kanban/landings/:id/checks`: reads the checks of its open pull
  *   request from the forge, at most about once a minute;
@@ -18,6 +18,10 @@
  * need `projects:manage`, as opening the pull request does: they ask the
  * forge which account the project's credentials sign in as. The daemon token
  * passes, as on every Kanban read the CLI and the agents make.
+ *
+ * Every job comes with its `links` (`forge-links.ts`): its ideas, their issues
+ * and the ones its pull request closes, its series and pilot mission, each
+ * through the caller's scope.
  */
 import type { Request, Response, Router } from 'express';
 import { z } from 'zod';
@@ -27,6 +31,7 @@ import {
   integrationView, integrationVisibleTo, listIntegrationViews, previewIntegration, refreshIntegrationChecks,
   type PreviewDeps,
 } from '../../integration-preview.js';
+import { withJobLinks } from '../../forge-links.js';
 import { requestHasPermission, requireAuth, viewerFromRequest } from '../../users/identity.js';
 
 const Id = z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/, 'an id');
@@ -34,6 +39,7 @@ const Id = z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/, 'an id');
 const ListQuery = z.object({
   project: z.string().min(1).max(100).regex(/^[a-z0-9][a-z0-9._-]*$/i, 'a project slug').optional(),
   series: Id.optional(),
+  todo: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
 }).strict();
 
 const PreviewBody = z.object({
@@ -77,14 +83,18 @@ export function registerLandingRoutes(app: Router, deps: PreviewDeps = {}): void
     const query = ListQuery.safeParse(req.query);
     if (!query.success) { invalid(res, zodDetail(query.error)); return; }
     try {
-      res.json({ landings: listIntegrationViews(query.data, viewerFromRequest(req)) });
+      const viewer = viewerFromRequest(req);
+      res.json({ landings: withJobLinks(listIntegrationViews(query.data, viewer), viewer) });
     } catch (err) { failed(res, 'listing the landings', err); }
   });
 
   app.get('/api/kanban/landings/:id', (req, res) => {
     const row = landingForRoute(req, res);
     if (!row) return;
-    res.json({ landing: integrationView(row) });
+    try {
+      const [landing] = withJobLinks([integrationView(row)], viewerFromRequest(req));
+      res.json({ landing });
+    } catch (err) { failed(res, 'reading the links of a job', err); }
   });
 
   app.post('/api/kanban/landings/:id/checks', async (req, res) => {
@@ -100,7 +110,8 @@ export function registerLandingRoutes(app: Router, deps: PreviewDeps = {}): void
         res.status(status).json(apiError('landing_checks_unavailable', out.reason, { detail: out.reason }));
         return;
       }
-      res.json({ landing: out.integration, fresh: out.fresh });
+      const [landing] = withJobLinks([out.integration], viewerFromRequest(req));
+      res.json({ landing, fresh: out.fresh });
     } catch (err) { failed(res, 'reading the checks of a pull request', err); }
   });
 

@@ -5751,6 +5751,43 @@ export const dbApi = {
        WHERE t.todo_id IN (${todoIds.map(() => '?').join(', ')}) AND ${owner.sql}`,
     ).all(...todoIds, ...owner.params) as TodoIntegrationRow[];
   },
+  /**
+   * The other way round: the ideas and series of the integrations `ids`,
+   * through the tasks `viewer` may see. Same join as `listTodoIntegrations`,
+   * so a job and its idea always point at each other. A task without an idea
+   * still brings its series.
+   */
+  listIntegrationTaskLinks(ids: readonly string[], viewer?: DbViewer | null): Array<{
+    integration_id: string; todo_id: number | null; series_id: string | null;
+  }> {
+    if (!ids.length) return [];
+    const owner = ownerSql(viewer, 'tasks', 't.owner_user_id');
+    return db.prepare(
+      `SELECT DISTINCT i.id AS integration_id, t.todo_id AS todo_id, t.series_id AS series_id
+       FROM ${TODO_INTEGRATION_JOIN}
+       WHERE i.id IN (${ids.map(() => '?').join(', ')}) AND ${owner.sql}
+       ORDER BY t.created_at ASC`,
+    ).all(...ids, ...owner.params) as Array<{ integration_id: string; todo_id: number | null; series_id: string | null }>;
+  },
+  /**
+   * The links of `provider` whose ref is one of `refs`, ignoring case (a
+   * forge's owner and repository names do), on ideas `viewer` may see.
+   */
+  findTodoExternalRefs(provider: string, refs: readonly string[], viewer?: DbViewer | null): TodoExternalRefRow[] {
+    if (!refs.length) return [];
+    const owner = ownerSql(viewer, 'project_todo', 'p.owner_user_id');
+    return db.prepare(
+      `SELECT r.* FROM todo_external_ref r JOIN project_todo p ON p.id = r.todo_id
+       WHERE r.provider = ? AND lower(r.ref) IN (${refs.map(() => '?').join(', ')}) AND ${owner.sql}
+       ORDER BY r.created_at, r.id`,
+    ).all(provider, ...refs.map((r) => r.toLowerCase()), ...owner.params) as TodoExternalRefRow[];
+  },
+  /** The integrations of `project` whose pull request is `prNumber`, newest first. */
+  listIntegrationsByPullRequest(project: string, prNumber: number): IntegrationRow[] {
+    return db.prepare(
+      `SELECT * FROM integrations WHERE project = ? AND pr_number = ? ORDER BY created_at DESC`,
+    ).all(project, prNumber) as IntegrationRow[];
+  },
   listIntegrationsBySeries(seriesId: string): IntegrationRow[] {
     return listIntegrationsBySeriesStmt.all(seriesId) as IntegrationRow[];
   },
