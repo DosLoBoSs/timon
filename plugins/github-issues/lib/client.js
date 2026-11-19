@@ -1,5 +1,5 @@
 // ../plugins/github-issues/src/client.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as ui from "@timon/ui";
 
 // ../plugins/github-issues/src/messages.json
@@ -204,6 +204,10 @@ function errorKey(code) {
 function safeHref(url) {
   return typeof url === "string" && /^https?:\/\//i.test(url) ? url : null;
 }
+var HIDDEN_LIST_FRESH_MS = 6e4;
+function shouldRead(front, readAt, now) {
+  return front || readAt === null || now - readAt >= HIDDEN_LIST_FRESH_MS;
+}
 
 // ../plugins/github-issues/src/client.tsx
 var t = ui.createTranslator(messages_default);
@@ -301,6 +305,7 @@ function IssueRow({ issue, busy, onImport, onOpenTodo, onRead, onCopy, onDismiss
 function Empty({ text }) {
   return /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-center justify-center gap-2 py-6" }, /* @__PURE__ */ React.createElement(Icon, { d: ICONS.issue, className: "size-4 text-muted-foreground/60" }), /* @__PURE__ */ React.createElement("span", { "data-issues-empty": "", className: "text-center text-[12.5px] text-muted-foreground" }, text));
 }
+var lastRead = /* @__PURE__ */ new Map();
 function IssuesWidget({ api, handle, className }) {
   const { project } = ui.useGitStackProject();
   const { openTodo, todoModal } = ui.useTodoOpener();
@@ -308,6 +313,9 @@ function IssuesWidget({ api, handle, className }) {
   const [busy, setBusy] = useState(null);
   const [notice, setNotice] = useState(null);
   const [opened, setOpened] = useState(null);
+  const front = ui.useWidgetInFront();
+  const frontNow = useRef(front);
+  frontNow.current = front;
   const reload = useCallback(async (quiet = false) => {
     if (!project) {
       setLoad({ kind: "idle" });
@@ -315,12 +323,20 @@ function IssuesWidget({ api, handle, className }) {
     }
     if (!quiet) setLoad({ kind: "loading" });
     const out = await call(api, `candidates?${query(project)}`);
+    if (out.ok) lastRead.set(project, { list: out.value, at: Date.now() });
     setLoad(out.ok ? { kind: "ready", list: out.value } : { kind: "error", code: out.code });
   }, [api, project]);
   useEffect(() => {
     setNotice(null);
-    void reload();
-  }, [reload]);
+    const known = project ? lastRead.get(project) : void 0;
+    if (known) setLoad({ kind: "ready", list: known.list });
+    if (shouldRead(frontNow.current, known?.at ?? null, Date.now())) void reload(!!known);
+  }, [reload, project]);
+  const wasFront = useRef(front);
+  useEffect(() => {
+    if (front && !wasFront.current) void reload(true);
+    wasFront.current = front;
+  }, [front, reload]);
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(null), 4e3);
@@ -349,8 +365,18 @@ function IssuesWidget({ api, handle, className }) {
     setNotice(await copy(url) ? { text: t("notice.copied"), tone: "info" } : { text: t("notice.copyFailed"), tone: "error" });
   };
   const issues = useMemo(() => load.kind === "ready" ? sortCandidates(load.list.issues) : [], [load]);
-  const subtitle = load.kind === "ready" ? String(toImport(load.list.issues)) : void 0;
-  const actions = /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(GitStackProjectPicker2, { none: t("chooseProjectOption"), label: t("selectProject"), className: "max-w-[8rem]" }), project && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", "data-issues-add": "", onClick: () => setOpened({ lookup: true }), title: t("importByNumber"), "aria-label": t("importByNumber"), className: ICON_BUTTON }, /* @__PURE__ */ React.createElement(Icon, { d: ICONS.plus })), /* @__PURE__ */ React.createElement("button", { type: "button", "data-issues-refresh": "", onClick: () => void reload(), disabled: load.kind === "loading", title: t("refresh"), "aria-label": t("refresh"), className: ICON_BUTTON }, /* @__PURE__ */ React.createElement(Icon, { d: ICONS.refresh }))), handle);
+  const left = load.kind === "ready" ? toImport(load.list.issues) : null;
+  const countOnTab = ui.useWidgetCount(left);
+  const subtitle = left !== null && !countOnTab ? String(left) : void 0;
+  const refreshInMenu = ui.useWidgetMenu(useMemo(() => project ? [{
+    key: "refresh",
+    label: t("refresh"),
+    icon: /* @__PURE__ */ React.createElement(Icon, { d: ICONS.refresh }),
+    onSelect: () => {
+      void reload();
+    }
+  }] : [], [project, reload]));
+  const actions = /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(GitStackProjectPicker2, { none: t("chooseProjectOption"), label: t("selectProject"), className: "max-w-[8rem]" }), project && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", "data-issues-add": "", onClick: () => setOpened({ lookup: true }), title: t("importByNumber"), "aria-label": t("importByNumber"), className: ICON_BUTTON }, /* @__PURE__ */ React.createElement(Icon, { d: ICONS.plus })), !refreshInMenu && /* @__PURE__ */ React.createElement("button", { type: "button", "data-issues-refresh": "", onClick: () => void reload(), disabled: load.kind === "loading", title: t("refresh"), "aria-label": t("refresh"), className: ICON_BUTTON }, /* @__PURE__ */ React.createElement(Icon, { d: ICONS.refresh }))), handle);
   return /* @__PURE__ */ React.createElement(
     Tile2,
     {
@@ -557,6 +583,8 @@ function apply(ctx) {
         title: t("widget.title"),
         description: t("widget.description"),
         icon: ISSUES_PICTO,
+        // Its count stays on its tab ("Issues 2") while another tab is in front.
+        liveCount: true,
         zone: "droite",
         frame: "none",
         height: 320,

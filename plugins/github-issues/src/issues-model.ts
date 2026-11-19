@@ -120,3 +120,19 @@ export function errorKey(code: string | null | undefined): string {
 export function safeHref(url: string | null | undefined): string | null {
   return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : null;
 }
+
+/**
+ * How old a hidden tab's list may be before it is read again. Kept mounted
+ * behind the stack's front tab for its count, the widget would otherwise ask
+ * GitHub at every mount for a list nobody sees.
+ */
+export const HIDDEN_LIST_FRESH_MS = 60_000;
+
+/**
+ * Whether the widget reads its list now: always in front; behind another tab
+ * only when the list it has (or the one a widget mounted before left) is
+ * older than `HIDDEN_LIST_FRESH_MS`, or missing.
+ */
+export function shouldRead(front: boolean, readAt: number | null, now: number): boolean {
+  return front || readAt === null || now - readAt >= HIDDEN_LIST_FRESH_MS;
+}
