@@ -14,13 +14,17 @@ import type { Landing } from './landing-api';
 export type ForgeProposalState = 'draft' | 'publishing' | 'published' | 'failed' | 'discarded';
 export type ForgeProposalTrigger = 'person' | 'landing' | 'todo_resolved' | 'plugin';
 export type ForgeTargetType = 'issue' | 'pull';
+/** A comment; GitHub merging the base into a pull request's branch; our
+ *  resolution of a contributor's conflict pushed to their branch, then a comment. */
+export type ForgeProposalKind = 'comment' | 'update_branch' | 'conflict_push';
 
 export type ForgeProposal = {
   id: string;
   project: string;
   repo: string;
-  kind: 'comment';
+  kind: ForgeProposalKind;
   target: { type: ForgeTargetType; number: number; url: string };
+  /** The comment; for `update_branch`, the daemon's own summary, never edited. */
   body: string;
   state: ForgeProposalState;
   trigger: ForgeProposalTrigger;
@@ -28,6 +32,11 @@ export type ForgeProposal = {
   plugin?: string | null;
   key: string;
   source_ref: string | null;
+  /** What a branch update or a conflict push runs with, written by the
+   *  daemon (`BranchUpdateDetails`, `ConflictPushDetails`); absent from an older daemon. */
+  details?: Record<string, unknown> | null;
+  /** Whether the text may change before publishing; absent from an older daemon (a comment). */
+  editable?: boolean;
   /** The account it was published as, once published. */
   account: string | null;
   /** The comment on the forge, once published. */
@@ -49,6 +58,39 @@ export function bodyProblem(body: string): 'empty' | 'tooLong' | 'control' | 'ma
   if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(body)) return 'control';
   if (body.includes('<!-- timon-proposal:')) return 'marker';
   return null;
+}
+
+/** Whether a person may change the proposal's text. */
+export function isEditable(p: ForgeProposal): boolean {
+  return p.editable ?? p.kind === 'comment';
+}
+
+export type BranchUpdateDetails = { expected_head_sha: string; base_ref: string; head_ref: string; head_repository: string | null };
+export type ConflictPushDetails = {
+  commit_sha: string; expected_head_sha: string; head_repository: string; head_ref: string; base_ref: string; files: string[];
+};
+
+const text = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+
+/** The details of a branch update, or null when the daemon wrote none. */
+export function branchUpdateDetails(p: ForgeProposal): BranchUpdateDetails | null {
+  const d = p.kind === 'update_branch' ? p.details : null;
+  if (!d || !text(d.expected_head_sha) || !text(d.base_ref) || !text(d.head_ref)) return null;
+  return {
+    expected_head_sha: d.expected_head_sha, base_ref: d.base_ref, head_ref: d.head_ref,
+    head_repository: text(d.head_repository) ? d.head_repository : null,
+  };
+}
+
+/** The details of a conflict push, or null when the daemon wrote none. */
+export function conflictPushDetails(p: ForgeProposal): ConflictPushDetails | null {
+  const d = p.kind === 'conflict_push' ? p.details : null;
+  if (!d || !text(d.commit_sha) || !text(d.expected_head_sha) || !text(d.head_repository) || !text(d.head_ref) || !text(d.base_ref)) return null;
+  const files = Array.isArray(d.files) ? d.files.filter(text) : [];
+  return {
+    commit_sha: d.commit_sha, expected_head_sha: d.expected_head_sha, head_repository: d.head_repository,
+    head_ref: d.head_ref, base_ref: d.base_ref, files,
+  };
 }
 
 /** Waiting for a person: a draft, or a failed attempt to try again. */

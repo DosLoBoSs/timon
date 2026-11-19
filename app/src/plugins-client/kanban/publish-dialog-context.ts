@@ -20,6 +20,8 @@ export type PublishDialogValue = {
   /** The text as it would leave, edits included. */
   body: string;
   setBody: (body: string) => void;
+  /** False for a branch update: its text is the daemon's, published as is. */
+  editable: boolean;
   /** Why the daemon would refuse the text, before it is sent. */
   problem: ReturnType<typeof bodyProblem>;
   busy: PublishBusy;
