@@ -46,6 +46,8 @@ const AMBER = 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
 const GREEN = 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
 const MUTED = 'bg-foreground/[0.06] text-muted-foreground';
 const ERROR = 'text-[11.5px] text-red-600 dark:text-red-400';
+/** The version a file keeps reads as chosen. */
+const PRESSED = 'aria-pressed:bg-primary/15 aria-pressed:text-foreground';
 
 const LINE_CLASS: Record<Exclude<ShownLine['kind'], 'gap'>, string> = {
   same: DIFF_LINE_CLASS.context,
@@ -202,9 +204,9 @@ function FileBlock({ file, base, open, busy, editing, suggestion, onChoose, onEd
 
       {open && editing === undefined && suggestion === undefined && (
         <div className="flex flex-wrap gap-2">
-          <WidgetButton data-conflict-keep="contributor" aria-pressed={choice === 'contributor'} onClick={() => onChoose({ choice: 'contributor' })}
+          <WidgetButton data-conflict-keep="contributor" aria-pressed={choice === 'contributor'} className={PRESSED} onClick={() => onChoose({ choice: 'contributor' })}
             disabled={working || file.contributor === null} label={t('forgeConflict.file.keepContributor')} />
-          <WidgetButton data-conflict-keep="target" aria-pressed={choice === 'target'} onClick={() => onChoose({ choice: 'target' })}
+          <WidgetButton data-conflict-keep="target" aria-pressed={choice === 'target'} className={PRESSED} onClick={() => onChoose({ choice: 'target' })}
             disabled={working || file.target === null} label={t('forgeConflict.file.keepTarget', { base })} />
           <WidgetButton data-conflict-edit="" onClick={onEdit} disabled={working} label={t('forgeConflict.file.edit')} />
           <WidgetButton data-conflict-suggest="" onClick={onSuggest} disabled={working}
