@@ -301,6 +301,18 @@
     "forge_conflict_push_pending": {
       "title": "A conflict resolution waits for your approval",
       "body": "Read the resolution prepared for {target}, then publish or discard it."
+    },
+    "landing_repair_pushed": {
+      "title": "Repair pushed to {pr}",
+      "body": "The repair of {branch} was pushed to its pull request {pr}; GitHub runs its checks again."
+    },
+    "landing_repair_unchanged": {
+      "title": "Repair of {pr} changed nothing",
+      "body": "The repair of {branch} ended without a new commit: nothing was pushed. Read its task's closing comment."
+    },
+    "landing_repair_failed": {
+      "title": "Repair of {pr} not pushed",
+      "body": "The repair of {branch} was not pushed: {reason}"
     }
   }
 }

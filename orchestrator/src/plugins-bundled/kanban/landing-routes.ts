@@ -8,7 +8,10 @@
  * - `POST /api/kanban/landings/:id/checks`: reads the checks of its open pull
  *   request from the forge, at most about once a minute;
  * - `POST /api/kanban/landings/:id/preview`: commits, diff, conflict and the
- *   pull request's pre-checks run dry, before anything is pushed.
+ *   pull request's pre-checks run dry, before anything is pushed;
+ * - `POST /api/kanban/landings/:id/repairs` (`{ kind }`): a person asks to fix
+ *   the failing checks, the review comments or the conflict of the job's open
+ *   pull request (`landing-repair.ts`): one `code` task, at most three per job.
  *
  * Not under `/api/integrations`: that prefix belongs to the messaging
  * integrations of plugins (`/api/integrations/receipts`…).
@@ -19,9 +22,15 @@
  * forge which account the project's credentials sign in as. The daemon token
  * passes, as on every Kanban read the CLI and the agents make.
  *
+ * Asking for a repair needs a signed-in **person** holding `projects:manage`:
+ * the daemon token, a mission's token and a plugin's are refused
+ * (`person_required`), so no agent ever starts one, and nothing starts one on
+ * its own.
+ *
  * Every job comes with its `links` (`forge-links.ts`): its ideas, their issues
  * and the ones its pull request closes, its series and pilot mission, each
- * through the caller's scope.
+ * through the caller's scope; and its `repairs`: how many were used, the one
+ * under way, what the pull request's last known state calls for.
  */
 import type { Request, Response, Router } from 'express';
 import { z } from 'zod';
@@ -32,7 +41,11 @@ import {
   type PreviewDeps,
 } from '../../integration-preview.js';
 import { withJobLinks } from '../../forge-links.js';
-import { requestHasPermission, requireAuth, viewerFromRequest } from '../../users/identity.js';
+import {
+  REPAIR_KINDS, requestRepair, withRepairs, type RepairDeps, type RepairRefusalCode,
+} from '../../landing-repair.js';
+import { auditRequest } from '../../users/audit-actor.js';
+import { isPersonAuth, rejectIfDenied, requestHasPermission, requireAuth, viewerFromRequest } from '../../users/identity.js';
 
 const Id = z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/, 'an id');
 
@@ -48,6 +61,8 @@ const PreviewBody = z.object({
 }).strict();
 
 const EmptyBody = z.object({}).strict();
+
+const RepairBody = z.object({ kind: z.enum(REPAIR_KINDS) }).strict();
 
 function zodDetail(err: z.ZodError): string {
   return err.issues.map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message)).join('; ');
@@ -71,20 +86,31 @@ function landingForRoute(req: Request, res: Response): IntegrationRow | null {
   return row;
 }
 
+/** One literal per code, so the webview's messages can be checked against them. */
+function repairRefusal(code: RepairRefusalCode, reason: string) {
+  const params = { detail: reason };
+  switch (code) {
+    case 'landing_repair_refused': return apiError('landing_repair_refused', reason, params);
+    case 'landing_repair_cap': return apiError('landing_repair_cap', reason, params);
+    case 'landing_repair_busy': return apiError('landing_repair_busy', reason, params);
+    case 'landing_repair_unavailable': return apiError('landing_repair_unavailable', reason, params);
+  }
+}
+
 function failed(res: Response, what: string, err: unknown): void {
   // Not echoed: an unexpected failure may quote a path of this machine.
   console.error(`[kanban] ${what} failed:`, (err as Error).message);
   res.status(500).json(apiError('landing_request_failed', 'the landing of the job could not be read'));
 }
 
-export function registerLandingRoutes(app: Router, deps: PreviewDeps = {}): void {
+export function registerLandingRoutes(app: Router, deps: PreviewDeps & RepairDeps = {}): void {
   app.get('/api/kanban/landings', (req, res) => {
     if (!requireAuth(req, res)) return;
     const query = ListQuery.safeParse(req.query);
     if (!query.success) { invalid(res, zodDetail(query.error)); return; }
     try {
       const viewer = viewerFromRequest(req);
-      res.json({ landings: withJobLinks(listIntegrationViews(query.data, viewer), viewer) });
+      res.json({ landings: withRepairs(withJobLinks(listIntegrationViews(query.data, viewer), viewer)) });
     } catch (err) { failed(res, 'listing the landings', err); }
   });
 
@@ -92,7 +118,7 @@ export function registerLandingRoutes(app: Router, deps: PreviewDeps = {}): void
     const row = landingForRoute(req, res);
     if (!row) return;
     try {
-      const [landing] = withJobLinks([integrationView(row)], viewerFromRequest(req));
+      const [landing] = withRepairs(withJobLinks([integrationView(row)], viewerFromRequest(req)));
       res.json({ landing });
     } catch (err) { failed(res, 'reading the links of a job', err); }
   });
@@ -110,7 +136,7 @@ export function registerLandingRoutes(app: Router, deps: PreviewDeps = {}): void
         res.status(status).json(apiError('landing_checks_unavailable', out.reason, { detail: out.reason }));
         return;
       }
-      const [landing] = withJobLinks([out.integration], viewerFromRequest(req));
+      const [landing] = withRepairs(withJobLinks([out.integration], viewerFromRequest(req)));
       res.json({ landing, fresh: out.fresh });
     } catch (err) { failed(res, 'reading the checks of a pull request', err); }
   });
@@ -127,5 +153,27 @@ export function registerLandingRoutes(app: Router, deps: PreviewDeps = {}): void
       }, deps);
       res.json(preview);
     } catch (err) { failed(res, 'previewing a pull request', err); }
+  });
+
+  app.post('/api/kanban/landings/:id/repairs', async (req, res) => {
+    const auth = requireAuth(req, res);
+    if (!auth) return;
+    if (!isPersonAuth(auth) || !auth.user) {
+      res.status(403).json(apiError('person_required', 'a repair of a pull request is asked for by a signed-in person'));
+      return;
+    }
+    if (rejectIfDenied(req, res, 'projects:manage')) return;
+    const row = landingForRoute(req, res);
+    if (!row) return;
+    const body = RepairBody.safeParse(req.body ?? {});
+    if (!body.success) { invalid(res, zodDetail(body.error)); return; }
+    try {
+      const out = await requestRepair(row, body.data.kind, auth.user.id, deps);
+      if (!out.ok) { res.status(out.status).json(repairRefusal(out.code, out.reason)); return; }
+      auditRequest(req, 'integration.repair_requested', `${row.branch}:${body.data.kind}`);
+      const fresh = dbApi.getIntegrationById(row.id) ?? row;
+      const [landing] = withRepairs(withJobLinks([integrationView(fresh)], viewerFromRequest(req)));
+      res.status(201).json({ repair: out.repair, task_id: out.task_id, landing });
+    } catch (err) { failed(res, 'asking for a repair', err); }
   });
 }

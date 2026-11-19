@@ -2,7 +2,7 @@ import '../test-home.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  assertNoForce, FORGE_BODY_LIMIT, FORGE_TITLE_LIMIT, githubForge, githubRepoFromUrl, gitTransport, ISSUE_COMMENT_LIMIT, ISSUE_LIST_LIMIT,
+  actionsJobOf, assertNoForce, CHECK_LOG_TAIL_CHARS, CHECK_LOG_TAIL_LINES, checkLogTail, FORGE_BODY_LIMIT, FORGE_TITLE_LIMIT, githubForge, githubRepoFromUrl, gitTransport, ISSUE_COMMENT_LIMIT, ISSUE_LIST_LIMIT,
   parsePullRequestBranch, parsePullRequestChecks, pushArguments, pushCommitArguments, redactedOutput, REVIEW_THREAD_BODY_LIMIT, REVIEW_THREAD_LIMIT, type GitRunner,
 } from './forge.js';
 import type { GhRunner } from './gh.js';
@@ -510,4 +510,53 @@ test('a commit pushed to another repository is a plain refspec, never forced', (
   for (const [sha, branch] of [[HEAD, '+fix'], [HEAD, 'a:b'], [HEAD, '-f'], ['+' + HEAD, 'fix'], ['main', 'fix'], [HEAD, 'a..b']] as const) {
     assert.throws(() => pushCommitArguments('u', sha, branch), /refusing/, `${sha} ${branch}`);
   }
+});
+
+test('the job of a failed check: only a job of the repository\'s own CI, by its https address', () => {
+  assert.equal(actionsJobOf('acme/app', 'https://github.com/acme/app/actions/runs/123/job/456'), '456');
+  assert.equal(actionsJobOf('acme/app', 'https://github.com/Acme/App/actions/runs/123/job/456/'), '456');
+  assert.equal(actionsJobOf('acme/app', 'https://github.com/other/app/actions/runs/123/job/456'), null);
+  assert.equal(actionsJobOf('acme/app', 'http://github.com/acme/app/actions/runs/123/job/456'), null);
+  assert.equal(actionsJobOf('acme/app', 'https://user:pw@github.com/acme/app/actions/runs/1/job/2'), null);
+  assert.equal(actionsJobOf('acme/app', 'https://ci.example.test/acme/app/build/9'), null);
+  assert.equal(actionsJobOf('acme/app', 'https://github.com/acme/app/actions/runs/1/job/2;rm -rf'), null);
+  assert.equal(actionsJobOf('acme/app', 'not a url'), null);
+});
+
+test('the end of a CI log: colours, control and direction marks removed, tokens masked, bounded', () => {
+  const lines = Array.from({ length: 400 }, (_, i) => `line ${i}`);
+  lines.push('\u001b[31merror\u001b[0m: token ghp_abcdefghijklmnopqrstuvwxyz0123 leaked \u202eevil\u0007');
+  const { tail, truncated } = checkLogTail(lines.join('\n'));
+  assert.equal(truncated, true);
+  const kept = tail.split('\n');
+  assert.equal(kept.length, CHECK_LOG_TAIL_LINES);
+  assert.equal(kept.at(-1), 'error: token [redacted] leaked evil');
+  assert.equal(kept[0], `line ${400 - CHECK_LOG_TAIL_LINES + 1}`);
+  const wide = checkLogTail(Array.from({ length: 20 }, () => 'x'.repeat(2_000)).join('\n'));
+  assert.ok(wide.tail.length <= CHECK_LOG_TAIL_CHARS);
+  assert.equal(wide.truncated, true);
+  assert.deepEqual(checkLogTail('short\nlog\n'), { tail: 'short\nlog', truncated: false });
+});
+
+test('the failed log of a check: one read-only gh run view of its job, nothing for another repository', async () => {
+  const { run, calls } = recorder({ stdout: 'build\tstep\tboom\n' });
+  const forge = githubForge('/cfg/gh', { gh: run });
+  const out = await forge.failedCheckLog('acme/app', 'https://github.com/acme/app/actions/runs/7/job/99');
+  assert.deepEqual(out, { ok: true, log: { tail: 'build\tstep\tboom', truncated: false } });
+  assert.deepEqual(calls[0]?.args, ['run', 'view', '--repo=acme/app', '--job=99', '--log-failed']);
+  assert.equal(calls[0]?.opts.env?.GH_CONFIG_DIR, '/cfg/gh');
+  const other = await forge.failedCheckLog('acme/app', 'https://github.com/evil/app/actions/runs/7/job/99');
+  assert.equal(other.ok, false);
+  assert.equal(!other.ok && other.code, 'not_actions');
+  assert.equal(calls.length, 1, 'no gh call for a check of another repository');
+});
+
+test('a failed log larger than the buffer is kept as cut; a failure says why without a token', async () => {
+  const cut = recorder({ code: 1, stdout: 'a\nb', stderr: 'stdout maxBuffer length exceeded' });
+  const out = await githubForge(null, { gh: cut.run }).failedCheckLog('acme/app', 'https://github.com/acme/app/actions/runs/7/job/9');
+  assert.deepEqual(out, { ok: true, log: { tail: 'a\nb', truncated: true } });
+  const refused = recorder({ code: 1, stderr: 'HTTP 404 with ghp_abcdefghijklmnopqrstuvwxyz0123' });
+  const no = await githubForge(null, { gh: refused.run }).failedCheckLog('acme/app', 'https://github.com/acme/app/actions/runs/7/job/9');
+  assert.equal(no.ok, false);
+  assert.ok(!no.ok && !no.reason.includes('ghp_'));
 });
