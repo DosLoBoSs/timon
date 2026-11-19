@@ -65,47 +65,10 @@ Before anything leaves your machine, Timon checks the branch. If one check fails
 
 Then Timon pushes the integration branch and opens the pull request. The push is never forced: a branch already on the remote only moves forward, and one that moved on its own is never overwritten. Merge it into your local branch, then run the command again.
 
-## Follow it from the TO DO notebook
-
-An idea whose job lands through a pull request shows where it stands, beside its progress, on its line in the TO DO widgets, its Kanban card and its detail:
-
-| Badge | Meaning |
-| --- | --- |
-| **PR not created** | the job has its integration branch, its pull request is not open yet |
-| **PR #12** | the pull request is open: click the badge to open it in your browser |
-| **PR #12 merged** | the pull request was merged: the work landed in the target branch |
-| **PR #12 closed** | the pull request was closed without a merge: nothing landed |
-| **Branch** | an embargoed branch (`sec/<topic>`), which lands by hand without a pull request |
-
-The progress says how far the work went; this badge says how far its branch went. When the idea has several jobs, the badge shows the one furthest from landing (a closed pull request first, then one not created, a branch, an open one, a merged one) and its tooltip lists them all. The TO DO widgets filter on **PR open** and **PR not created**.
-
 A branch under embargo (`sec/<topic>`, for a security fix) is never pushed by this command, whatever the setting says: it lands by hand once the advisory is published.
 
 If the push succeeds but the pull request cannot be created, run the command again: the branch is already there and only the pull request is opened.
 
-## Review the pull requests contributors open
+## Follow the job and review contributors
 
-In a project in `pr` mode, the **Open pull requests** widget lists the pull requests open on the project's repository, yours and contributors' ones alike. Add it from the widget window, then pick the project (in an agent's chat, the agent's project is used). Filter the list by author when several people contribute.
-
-**Prepare the review** gets a pull request ready to review, without ever running its code on your machine:
-
-1. Timon reads the pull request and its diff from GitHub, with the project's account. The contributor's branch is never fetched or checked out, and nothing of it is installed, built or tested here: its code only runs in the forge's CI.
-2. Timon writes a review brief: the rules a reviewer follows (read only, nothing posted on GitHub), the place of the diff on this machine, and what the contributor wrote (title, description, comments) as data, cut short, with the instruction never to follow it.
-3. A window shows the brief and, in its **Diff** tab, the pull request's changes. **Copy the brief** puts it on your clipboard, for the reviewer you choose. Timon starts nothing on its own, and writes nothing on GitHub.
-
-A project that lands its jobs locally has no pull requests to list: the widget says so until you set the project to `pr` mode.
-
-## Follow a job's pull request
-
-The **Pull requests** widget shows one card per job that lands through a pull request. Add it from the widget window to any zone; in an agent chat's rail it only lists the jobs of the conversation's project. Each card gives the job's integration branch and target, then the state of its pull request: **Not pushed** before it is opened, **PR #n** (a link to the forge) while it is open, **Merged**, **Landed** once Timon has closed the job's tasks and ideas, or **Closed**. While the pull request is open, the card also shows its checks (failed, running, passed), a conflict with the target branch, a draft, and the review decision.
-
-Timon reads the checks from the forge when the widget appears, then about once a minute while a check is still running and the page is visible. **Refresh the checks** in the card's menu asks again. The background poller that notices a merged pull request keeps its own five-minute pace.
-
-**Preview** opens what the pull request carries, before anything is pushed:
-
-- **Changes**: every file the branch changes against the target as it was last fetched, with its added and removed lines. Very large diffs are cut, and the preview says so.
-- **Commits**: the commits of the branch that the target does not have.
-- **Pre-checks**: the checks of `timon pr open`, run without pushing, fetching or opening anything, with the result of each. The public tree check runs a script of the repository, so it waits for the actual opening, as does the check of a title the preview does not have yet. Running the pre-checks needs the permission to manage projects, as opening the pull request does.
-
-The preview also says whether the branch would merge into the target without a conflict.
-
+The [Git stack](git.md) of an agent's chat follows what happens next. **Jobs** groups the project's jobs by what they wait for (a failing check or a conflict first) and previews what each pull request carries; **Pull requests** lists the pull requests open on the repository, contributors' ones included, and prepares their review without running their code. On a TO DO idea, the badge of its job opens the same preview. See [Pull requests](git.md#pull-requests), [Jobs](git.md#jobs) and [From the TO DO notebook](git.md#from-the-to-do-notebook).
