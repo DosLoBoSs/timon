@@ -9,7 +9,7 @@ import {
   repairSessionWitness, restartDesktopService, sealSessionWitnessArgs, serviceStoppedByUser, serviceStoppedMarkerFile, startDesktopService,
   startStoppedServiceFailureMessage, stopServiceCopy, stopServiceFailureMessage,
   WINDOWS_SERVICE_REVISION, WINDOWS_TASK, windowsLauncher, windowsRepairDeclinedFile, windowsRestartRunner, windowsTaskNeverRan,
-  windowsRestartSeams, windowsServiceRevisionFile, windowsSessionWitnessFile, windowsTaskState, windowsTaskRunning, endWindowsLauncher,
+  windowsRestartSeams, windowsServiceRevisionFile, windowsSessionWitnessFile, windowsTaskState, windowsTaskRunning, endWindowsLauncher, serviceHeldOutFile, serviceHeldOutSince,
 } from './service.js';
 import type { DesktopConfig } from './config.js';
 
@@ -261,6 +261,20 @@ test('windows: the handover ends only the launcher of this home, and its tree', 
   assert.ok(commands[0]!.includes('timon-service.cmd'));
   assert.match(commands[0]!, /\$_.Name -eq 'cmd\.exe'/);
   assert.match(commands[0]!, /taskkill\.exe \/F \/T \/PID/);
+});
+
+test('the service refused the home is read from its marker, only from the time asked', () => {
+  const home = mkdtempSync(join(tmpdir(), 'timon-held-out-'));
+  assert.equal(serviceHeldOutSince(home, 0), false, 'no marker');
+  mkdirSync(join(home, 'run'), { recursive: true });
+  writeFileSync(serviceHeldOutFile(home), '{"at":1000,"pid":7}\n');
+  assert.equal(serviceHeldOutSince(home, 1000), true);
+  assert.equal(serviceHeldOutSince(home, 999), true);
+  assert.equal(serviceHeldOutSince(home, 1001), false, 'a refusal before the fallback says nothing');
+  writeFileSync(serviceHeldOutFile(home), 'not json');
+  assert.equal(serviceHeldOutSince(home, 0), false);
+  writeFileSync(serviceHeldOutFile(home), '{"at":"1000"}');
+  assert.equal(serviceHeldOutSince(home, 0), false);
 });
 
 test('windows: the boot task is detected by its revision, started, and restarted by its launcher tree', async () => {

@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import {
   controlDesktopService, daemonLogHint, forgetMissingWindowsService, forgetServiceStopped, hasDesktopService, repairSessionWitness,
   restartDesktopService, serviceStoppedByUser, startDesktopService, startStoppedServiceFailureMessage, stopServiceCopy, stopServiceFailureMessage,
-  endWindowsLauncher, windowsRestartSeams, windowsServiceRefusedFile, windowsTaskRunning, windowsTaskState,
+  endWindowsLauncher, serviceHeldOutSince, windowsRestartSeams, windowsServiceRefusedFile, windowsTaskRunning, windowsTaskState,
 } from './service.js';
 import { app, BrowserWindow, Menu, Tray, WebContentsView, clipboard, dialog, shell, nativeImage, ipcMain, screen, session, systemPreferences, webContents } from 'electron';
 import { parseWindowSchemeReport, recordMachineScheme, WINDOW_BACKGROUND, WINDOW_SCHEME_CHANNEL, windowScheme, type Scheme } from './appearance.js';
@@ -35,7 +35,7 @@ import { WindowRegistry, type PageOf, type WindowRecord } from './window-registr
 import { ViewPool, type PooledView } from './view-pool.js';
 import {
   canRestartFromSetup, handoverKeptMessage, handoverRoute, relaunchOptions, serviceHandover, serviceHandoverNeeded, setupRestarter, setupRestartPending,
-  waitWhileBooting,
+  lateHandover, waitWhileBooting,
   SETUP_HANDOVER_CHANNEL, SETUP_RESTART_CHANNEL, SETUP_RESTART_STATUS_CHANNEL,
 } from './restart.js';
 import { queueAppImageRelaunch } from './appimage-restart.js';
@@ -1865,12 +1865,29 @@ if (!app.requestSingleInstanceLock({ build: ownBuild } satisfies LaunchData)) {
     },
     resumeEmbedded: async () => {
       console.warn('[desktop] handover: the service did not answer, the embedded daemon serves again');
+      // Only a refusal from here on says the service waits for this embedded daemon's home.
+      keptSince = Date.now();
       await startEmbeddedDaemon(loadDesktopConfig(desktopHome, { packaged: app.isPackaged }), interfaceUrl);
     },
     reportKept: (why) => {
-      void reportProblem({ type: 'warning', ...handoverKeptMessage(uiLocale(), desktopHome, why) });
+      // Said once: a late attempt that falls back again leaves the setup as it was, silently.
+      if (!lateAttempt) void reportProblem({ type: 'warning', ...handoverKeptMessage(uiLocale(), desktopHome, why) });
+      void lateAdoption.start(keptSince)?.then((end) => console.log(`[desktop] late handover: ${end}`));
     },
   });
+  let keptSince = 0;
+  let lateAttempt = false;
+  // The service that answered too late takes over when it shows up, in this window (TIM-0158).
+  const lateAdoption = lateHandover({
+    serviceWaiting: (since) => serviceHeldOutSince(desktopHome, since),
+    handover: async () => {
+      lateAttempt = true;
+      try { return await handOverToService(activeCaller(windows.primary())?.page.view.route ?? '/'); }
+      finally { lateAttempt = false; }
+    },
+    log: (line) => console.log(`[desktop] late handover: ${line}`),
+  });
+  app.once('before-quit', () => lateAdoption.stop());
   ipcMain.handle(SELECT_DIRECTORY_CHANNEL, async (event, defaultPath: unknown) => {
     const parent = senderWindow(event)?.window;
     return selectDirectory(senderOf(event), senderOrigin(event), defaultPath, (options) => dialog.showOpenDialog(parent!, options));

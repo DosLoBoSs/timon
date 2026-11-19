@@ -7,7 +7,7 @@ import { ABOUT_CHANNEL } from './about.js';
 import { OPEN_LOGS_CHANNEL } from './diagnostic-dialog.js';
 import {
   canRestartFromSetup, handoverKeptMessage, handoverRoute, relaunchOptions, serviceHandover, serviceHandoverNeeded, setupRestarter,
-  setupRestartPending, SETUP_HANDOVER_CHANNEL, SETUP_RESTART_CHANNEL, SETUP_RESTART_STATUS_CHANNEL, waitWhileBooting, type WaitClock,
+  setupRestartPending, SETUP_HANDOVER_CHANNEL, SETUP_RESTART_CHANNEL, SETUP_RESTART_STATUS_CHANNEL, waitWhileBooting, lateHandover, type WaitClock,
 } from './restart.js';
 import type { HealthResult } from './health.js';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -497,6 +497,70 @@ test('the handover wait returns at once on an answer, foreign ones included', as
   });
   assert.equal(result.health, foreign);
   assert.equal(clock.slept, 0);
+});
+
+test('a service that shows up after the fallback gets the home, through the same handover (TIM-0158)', async () => {
+  const clock = fakeClock();
+  // The fake service: started by its supervisor 4 minutes after the fallback, refused the home.
+  const refusedAt = 240_000;
+  let embedded = true;
+  const { run, calls } = handover({
+    needed: () => { calls.push('needed'); return embedded; },
+    stopEmbedded: async () => { calls.push('stop'); embedded = false; },
+  });
+  const late = lateHandover({
+    serviceWaiting: (since) => clock.now() >= refusedAt && refusedAt >= since,
+    handover: () => run('/setup/agent'),
+    clock, intervalMs: 30_000, maxMs: 30 * 60_000,
+  });
+  assert.equal(await late.start(0), 'handed-over');
+  assert.deepEqual(calls, ['needed', 'waiting /setup/agent', 'stop', 'kick', 'wait', 'resume']);
+  assert.equal(clock.now(), 240_000);
+});
+
+test('the late watch hands nothing over without a sign of the service, and ends at its cap', async () => {
+  const clock = fakeClock();
+  let handovers = 0;
+  let reads = 0;
+  const late = lateHandover({
+    serviceWaiting: () => { reads += 1; return false; },
+    handover: async () => { handovers += 1; return 'handed-over'; },
+    clock, intervalMs: 30_000, maxMs: 30 * 60_000,
+  });
+  assert.equal(await late.start(0), 'gave-up');
+  assert.equal(handovers, 0);
+  assert.equal(clock.now(), 30 * 60_000);
+  assert.equal(reads, 59);
+});
+
+test('a refusal older than the fallback is not a sign, and a late fallback is retried once more at most', async () => {
+  const clock = fakeClock();
+  const refusals = [10_000, 100_000];
+  const since: number[] = [];
+  let handovers = 0;
+  const late = lateHandover({
+    serviceWaiting: (from) => { since.push(from); return refusals.some((at) => at >= from && at <= clock.now()); },
+    handover: async () => { handovers += 1; refusals.push(clock.now() + 60_000); return 'kept-embedded'; },
+    clock, intervalMs: 30_000, maxMs: 30 * 60_000, attempts: 2,
+  });
+  assert.equal(await late.start(20_000), 'gave-up');
+  assert.equal(handovers, 2, 'two late handovers, then the embedded daemon keeps the home');
+  assert.ok(since.every((from) => from >= 20_000));
+  assert.equal(late.start(0), null, 'no third watch');
+});
+
+test('the late watch stops on quit, runs once, and a failed handover ends it', async () => {
+  const clock = fakeClock();
+  const late = lateHandover({ serviceWaiting: () => false, handover: async () => 'handed-over', clock });
+  const watching = late.start(0);
+  assert.ok(watching);
+  assert.equal(late.start(0), null, 'one watch at a time');
+  late.stop();
+  assert.equal(await watching, 'stopped');
+  const failing = lateHandover({
+    serviceWaiting: () => true, handover: async () => { throw new Error('still running'); }, clock: fakeClock(),
+  });
+  assert.equal(await failing.start(0), 'failed');
 });
 
 test('the kept-embedded notice names the home and the reason, in the user\'s language', () => {
