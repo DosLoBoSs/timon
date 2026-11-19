@@ -109,6 +109,12 @@ test('bodies and paths that do not validate are refused before the database', as
     { remote_url: 'https://[::1]\\@evil.example/acme/app.git' },
     { remote_url: 'ssh://evil.example%2F@github.com/acme/app.git' },
     { remote_url: 'ssh://git@evil.example@github.com/acme/app.git' },
+    // git's host_end() takes a bracket in the user for the host: ssh reaches evil.example.
+    { remote_url: 'ssh://[evil.example]@github.com/acme/app.git' },
+    { remote_url: 'git+ssh://[evil.example]@github.com/acme/app.git' },
+    { remote_url: 'ssh+git://[evil.example]@github.com:22/acme/app.git' },
+    { remote_url: 'ssh://[x]@github.com/acme/app.git' },
+    { remote_url: '[evil.example]@github.com:acme/app.git' },
   ]) {
     const res = await call('PUT', URL_, 'manager', body);
     assert.equal(res.status, 400, JSON.stringify(body));
