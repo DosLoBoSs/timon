@@ -271,10 +271,10 @@ export type PinnedRemote = {
 /**
  * Where the scratch repository may fetch from and push to: the scheme, ssh
  * user, host or SSH alias and port of the project's remote, when that host is
- * the forge `gh` reads the pull request from. An SSH alias passes when the
- * user's SSH configuration sends it to that host. Checked before any fetch: a
- * remote pointing anywhere else would receive the base branch's history and
- * the push.
+ * the forge `gh` reads the pull request from. An ssh host, alias or not,
+ * passes when the user's SSH configuration sends it to that host, which is the
+ * host shown. Checked before any fetch: a remote pointing anywhere else would
+ * receive the base branch's history and the push.
  *
  * The remote URL itself is never handed to git: it only chooses the parts, and
  * `urlOf` writes every URL from them and a repository GitHub named
@@ -291,11 +291,18 @@ export async function pinnedRemote(integration: ProjectIntegration, deps: ForgeP
   const pinned = (host: string): PinnedRemote => ({
     ok: true, endpoint, host, kind: endpoint.scheme, urlOf: (repo) => forgeNetworkUrl(endpoint, repo),
   });
-  if (allowed.has(endpoint.host)) return pinned(endpoint.host);
   if (endpoint.scheme === 'ssh' && SSH_ALIAS_NAME.test(endpoint.host)) {
+    // A forge host is resolved too: a `Host github.com` block may send it elsewhere.
     const resolved = await (deps.sshHostName ?? sshHostName)(endpoint.host, endpoint.user, endpoint.port);
-    if (resolved && allowed.has(resolved)) return pinned(resolved);
+    if (resolved) return allowed.has(resolved) ? pinned(resolved) : notForge(allowed);
+    // ssh cannot tell (no `ssh` on the PATH, a configuration it cannot read): a forge host stays itself.
+    return allowed.has(endpoint.host) ? pinned(endpoint.host) : notForge(allowed);
   }
+  if (allowed.has(endpoint.host)) return pinned(endpoint.host);
+  return notForge(allowed);
+}
+
+function notForge(allowed: ReadonlySet<string>): Refusal {
   return refuse(409, 'conflict_unsupported', `the project's remote does not lead to ${[...allowed][0]}: Timon fetches and pushes a resolution only there`);
 }
 

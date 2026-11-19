@@ -311,6 +311,14 @@ test('the remote must lead to the forge gh reads the pull request from: refused 
   assert.deepEqual(sshLogins.at(-1), ['github-acme', 'git', '2222'], 'and for the port git passes ssh');
   assert.equal(await host(at('ssh://git@github-acme:22/acme/widgets.git')), 'github.com');
   assert.deepEqual(sshLogins.at(-1), ['github-acme', 'git', null], 'the default port is not passed: git passes none');
+  // A forge host is resolved as well: the user's configuration may send it elsewhere.
+  assert.deepEqual(sshLogins.filter(([alias]) => alias === 'github.com').at(-1), ['github.com', 'git', null]);
+  sshAliases.set('github.com', 'evil.example');
+  assert.equal(await host(at('git@github.com:acme/widgets.git')), 'conflict_unsupported', 'Host github.com + HostName evil.example');
+  assert.equal(await host(at('https://github.com/acme/widgets')), 'github.com', 'https does not go through ssh');
+  sshAliases.set('github.com', 'ssh.github.com');
+  assert.equal(await host(at('git@github.com:acme/widgets.git')), 'ssh.github.com', 'the host shown is the one ssh reaches');
+  sshAliases.delete('github.com');
   assert.equal(await host(at('ssh://-x@github.com/acme/widgets.git')), 'conflict_unsupported');
   assert.equal(await host(at('ssh://git@[::1]/acme/widgets.git')), 'conflict_unsupported', 'an IPv6 literal is never a forge host');
   // A gh folder signed in to one Enterprise host only: that host, and it alone.
