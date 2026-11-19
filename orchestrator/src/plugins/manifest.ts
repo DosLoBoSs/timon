@@ -118,7 +118,11 @@ import { reservedRouteSegment } from './reserved-routes.js';
  * declaring either must declare 19. API 18 is not released either, but it
  * ships with an earlier pull request than the forge facade, possibly in an
  * earlier release: the facade opens its own wave rather than change a wave
- * already reviewed (docs/SDK-COMPAT.md §119). The browser half does not change.
+ * already reviewed (docs/SDK-COMPAT.md §119). The same wave, still unreleased,
+ * opens the `project.settings` slot (a plugin's row in a project's settings,
+ * `useProjectSettings`) and gives a widget of the "Git" stack its project
+ * (`useGitStackProject`) and the way to a TO DO idea (`useTodoOpener`), which
+ * the browser half of the built-in `github-issues` plugin reads (§120).
  */
 export const PLUGIN_API_VERSION = 19;
 
@@ -147,6 +151,7 @@ export const SLOT_API_VERSIONS: Readonly<Record<string, number>> = Object.freeze
   'kanban.todo.landing': 18,
   'kanban.job.dialog': 18,
   'forge.publish.dialog': 18,
+  'project.settings': 19,
 });
 
 /** A public path relative to the plugin prefix: lowercase segments or `:name` parameters, never a wildcard. */
