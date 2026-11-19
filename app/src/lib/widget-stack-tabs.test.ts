@@ -8,7 +8,7 @@ import test from 'node:test';
  * that publishes a count stays mounted behind the front tab, so its count
  * stays true; any other is painted only in front.
  */
-const mounts: Record<string, number> = { list: 0, plain: 0 };
+const mounts = { list: 0, plain: 0 };
 let reloads = 0;
 const seenTabbed: boolean[] = [];
 
