@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Copy, ExternalLink, Eye, FileText, GitPullRequest, Loader2, MoreHorizontal, ScanSearch } from 'lucide-react';
+import { Copy, ExternalLink, Eye, FileText, GitPullRequest, Loader2, MessageSquarePlus, MoreHorizontal, ScanSearch } from 'lucide-react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
 import { Tile } from '@/components/tile';
@@ -41,6 +41,10 @@ import { DIFF_LINE_CLASS } from './landing-preview-dialog';
 import { JobDialog } from './job-dialog';
 import { JobLinksMenuItems } from './job-links-menu';
 import { useTodoOpener } from './todo-opener';
+import { proposalsForPull, type ForgeProposal } from './forge-proposals-api';
+import { ProposalChip } from './proposal-chip';
+import { PublishDialog, type PublishTarget } from './publish-dialog';
+import { useForgeProposals } from './use-forge-proposals';
 import { StackProjectPicker, useStackProject } from './git-stack-project';
 
 /** How often a running review is asked for its verdict. */
@@ -77,6 +81,9 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
   const [job, setJob] = useState<Landing | null>(null);
   const { openTodo, todoModal } = useTodoOpener();
   const closeJob = useCallback(() => setJob(null), []);
+  const proposals = useForgeProposals(useMemo(() => (slug ? [slug] : []), [slug]));
+  // A proposal waiting on a row, or a new comment a person writes on a pull request.
+  const [publishing, setPublishing] = useState<{ proposal?: ForgeProposal; target?: PublishTarget } | null>(null);
 
   const openJob = async (id: string) => {
     const out = await getLanding(id);
@@ -199,6 +206,11 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
               onReport={() => setReport(pull)}
               onOpenTodo={openTodo}
               onOpenJob={(id) => { void openJob(id); }}
+              proposals={load.kind === 'ready' ? proposalsForPull(proposals.pending, load.list.repo, pull) : []}
+              onOpenProposal={(proposal) => setPublishing({ proposal })}
+              onComment={() => setPublishing({
+                target: { type: 'pull', number: pull.number, url: pull.url, repo: load.kind === 'ready' ? load.list.repo : null },
+              })}
             />
           ))}
         </ul>
@@ -233,6 +245,16 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
 
       {job && <JobDialog landing={job} onClose={closeJob} openTodo={openTodo} />}
       {todoModal}
+      {publishing && slug && (
+        <PublishDialog
+          key={publishing.proposal?.id ?? `new:${publishing.target?.number}`}
+          project={slug}
+          {...(publishing.proposal ? { proposal: publishing.proposal } : {})}
+          {...(publishing.target ? { target: publishing.target } : {})}
+          onClose={() => setPublishing(null)}
+          onChange={proposals.reload}
+        />
+      )}
 
       {report?.review?.report && (
         <Dialog open onOpenChange={(open) => { if (!open) setReport(null); }}>
@@ -311,13 +333,16 @@ function VerdictChip({ badge }: { badge: ReviewBadge }) {
 
 const MENU_ITEM = 'flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 outline-none focus:bg-muted';
 
-function PullRow({ pull, preparing, onReview, onReport, onOpenTodo, onOpenJob }: {
+function PullRow({ pull, preparing, proposals, onReview, onReport, onOpenTodo, onOpenJob, onOpenProposal, onComment }: {
   pull: PullRequestItem;
   preparing: boolean;
+  proposals: readonly ForgeProposal[];
   onReview: () => void;
   onReport: () => void;
   onOpenTodo: (id: number) => void;
   onOpenJob: (id: string) => void;
+  onOpenProposal: (proposal: ForgeProposal) => void;
+  onComment: () => void;
 }) {
   const jobId = pull.links?.job_id ?? null;
   const badge = reviewBadge(pull);
@@ -331,6 +356,7 @@ function PullRow({ pull, preparing, onReview, onReport, onOpenTodo, onOpenJob }:
         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <span className="truncate tabular-nums">{meta.join(' · ')}</span>
           {badge && <VerdictChip badge={badge} />}
+          <ProposalChip proposals={proposals} onOpen={onOpenProposal} />
         </div>
       </div>
       {/* Icon only: the row's width belongs to the pull request, not to its action. */}
@@ -363,6 +389,9 @@ function PullRow({ pull, preparing, onReview, onReport, onOpenTodo, onOpenJob }:
               </Dropdown.Item>
             )}
             <JobLinksMenuItems links={pull.links} onOpenTodo={onOpenTodo} itemClassName={MENU_ITEM} />
+            <Dropdown.Item data-menu-comment="" onSelect={onComment} className={MENU_ITEM}>
+              <MessageSquarePlus className="size-3.5" />{t('pullRequests.proposeComment')}
+            </Dropdown.Item>
             {pull.review?.report && (
               <Dropdown.Item
                 onSelect={onReport}

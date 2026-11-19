@@ -9,7 +9,7 @@ import { t } from '@/lib/i18n';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
 import type { BundledClientPlugin } from './types';
 import { widgetPicto } from './widget-pictos';
-import { JOB_DIALOG_SLOT, KANBAN_CARD_SLOT, TASK_FORM_SLOT, TODO_FORM_SLOT, TODO_LANDING_SLOT } from '@/lib/plugin-host/slots';
+import { JOB_DIALOG_SLOT, KANBAN_CARD_SLOT, PUBLISH_DIALOG_SLOT, TASK_FORM_SLOT, TODO_FORM_SLOT, TODO_LANDING_SLOT } from '@/lib/plugin-host/slots';
 
 // Loaded on demand (docs/BUNDLE-SIZE.md): statically imported, every page of the app paid for it.
 const KanbanTodoColumn = dynamic(() => import('./kanban/kanban-todo-column').then((m) => m.KanbanTodoColumn), { ssr: false });
@@ -25,6 +25,7 @@ const ProductTodoForm = dynamic(() => import('./kanban/product-todo-form').then(
 const ProductKanbanCard = dynamic(() => import('./kanban/product-kanban-card').then((m) => m.ProductKanbanCard), { ssr: false });
 const ProductTodoLanding = dynamic(() => import('./kanban/product-todo-landing').then((m) => m.ProductTodoLanding), { ssr: false });
 const ProductJobDialog = dynamic(() => import('./kanban/landing-preview-dialog').then((m) => m.ProductJobDialog), { ssr: false });
+const ProductPublishDialog = dynamic(() => import('./kanban/product-publish-dialog').then((m) => m.ProductPublishDialog), { ssr: false });
 
 /**
  * Client half of `@timon/kanban`: the board page, and its "TO DO" column.
@@ -70,6 +71,9 @@ export const kanbanClient: BundledClientPlugin = {
     // commits, pre-checks and links, opened from the Jobs and Pull requests
     // widgets and from an idea's landing badge.
     ctx.register({ slot: JOB_DIALOG_SLOT, fallback: true }, ProductJobDialog);
+    // Default occupant of `forge.publish.dialog` (a boot slot): the one dialog
+    // through which a text of Timon's reaches GitHub, read and approved first.
+    ctx.register({ slot: PUBLISH_DIALOG_SLOT, fallback: true }, ProductPublishDialog);
     registerPage(ctx, { route: '/kanban', Component: KanbanPage });
 
     // First in the list: the ideas column comes before the statuses. A

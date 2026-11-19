@@ -20,6 +20,7 @@ import { PLATFORM_MODULES } from '@/lib/plugin-host/modules';
 import { PlatformGlobals } from '@/lib/plugin-host/platform-globals';
 import { ClientPluginHost } from '@/lib/plugin-host/client-plugin-host';
 import { SettingsDialogHost } from '@/components/settings/settings-dialog-host';
+import { ForgeProposalDialogHost } from '@/plugins-client/kanban/forge-proposal-host';
 import { FirstRunGate } from '@/components/first-run-gate';
 import { FIRST_RUN_ALLOWED, FIRST_RUN_SCHEME_KEY } from '@/lib/first-run-gate';
 import { BetaLockScreen } from '@/components/beta-lock-screen';
@@ -362,6 +363,11 @@ export default async function RootLayout({
               first open, like the agent editor's form. */}
           <Suspense fallback={null}>
             <SettingsDialogHost />
+          </Suspense>
+          {/* "Publish on GitHub", same reason: the notification card of a
+              proposal opens it over any page, by `?forge-proposal=`. */}
+          <Suspense fallback={null}>
+            <ForgeProposalDialogHost />
           </Suspense>
         </BackgroundProvider>
         </ThemeProvider>
