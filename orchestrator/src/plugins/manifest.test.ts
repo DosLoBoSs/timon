@@ -775,6 +775,16 @@ test('the job and Publish on GitHub dialogs join wave 18', () => {
   }
 });
 
+test('the project settings slot joins wave 19', () => {
+  // `useProjectSettings` is missing from a host 18: a manifest naming the slot
+  // must declare 19, or its browser half would die there on a missing import.
+  const message = refusal(pkg({ apiVersion: 18, client: { slots: ['project.settings'] } }));
+  assert.ok(message.includes('names `project.settings`, which needs `apiVersion: 19`'), message);
+  const res = readManifest(pkg({ apiVersion: 19, client: { slots: ['project.settings'] } }));
+  assert.ok(res.ok, res.ok ? '' : res.message);
+  assert.equal(SLOT_API_VERSIONS['project.settings'], 19);
+});
+
 test('`root` outside a layout is refused, whatever the other kind', () => {
   // `root` is the whole interface: a non-layout naming it would replace the
   // shell for everyone, with no choice in the appearance settings.

@@ -1758,6 +1758,52 @@ declare module '@timon/ui' {
   /** The text a `forge.publish.dialog` occupant paints, and the host's gestures (client API 18); `null` outside the slot. */
   export function usePublishDialog(): PublishDialogValue | null;
 
+  /**
+   * The project a widget of the "Git" stack shows (client API 19): in a
+   * chat's rail, the conversation's project, and nothing is asked; elsewhere
+   * the one picked once for the whole stack (Branches, Pull requests, Jobs,
+   * yours), remembered per browser. `project` is `null` while none is picked.
+   */
+  export type GitStackProject = {
+    project: string | null;
+    inChat: boolean;
+  };
+  /** The project the "Git" stack shows; re-renders when it is picked again (client API 19). */
+  export function useGitStackProject(): GitStackProject;
+  /**
+   * The stack's project picker, for a widget's header (client API 19): a
+   * select of the person's projects that sets what `useGitStackProject()`
+   * answers in every widget of the stack. Paints nothing in a chat's rail.
+   * Props: `none` (label of the empty choice), `label` (its accessible name),
+   * `className?`.
+   */
+  export const GitStackProjectPicker: PlatformComponent;
+
+  /**
+   * Opens a TO DO idea by its number in the product's idea form (client API
+   * 19). The idea is read again from the daemon, which answers only what the
+   * reader may see; an idea out of reach says so in a toast. Paint `todoModal`
+   * where it stays mounted (not inside a dialog you close first).
+   */
+  export type TodoOpener = {
+    openTodo(id: number): void;
+    todoModal: unknown;
+  };
+  export function useTodoOpener(): TodoOpener;
+
+  /**
+   * The project a `project.settings` occupant is painted for (client API 19),
+   * in the project's window under "Integrations". Paint ONE row: a title and a
+   * status line on the left, one action on the right, the rest in a "…" menu;
+   * a form opens in a `Dialog`, never in the row.
+   */
+  export type ProjectSettingsValue = {
+    /** Slug of the project whose settings are open. */
+    project: string;
+  };
+  /** The project of a `project.settings` row (client API 19); `null` outside the slot. */
+  export function useProjectSettings(): ProjectSettingsValue | null;
+
   /** A heading of a list page, as the `page.toc` occupant lists it. Client API 15. */
   export type PageTocEntry = {
     /** The heading's `id`, also its anchor. */

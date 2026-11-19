@@ -637,6 +637,15 @@ export const JOB_DIALOG_SLOT = 'kanban.job.dialog';
 export const PUBLISH_DIALOG_SLOT = 'forge.publish.dialog';
 
 /**
+ * Slot of the rows plugins add to a project's settings (client API 19), in the
+ * project's window under "Integrations": one row each, a title and a status on
+ * the left, one action on the right, the rest in a "…" menu. The occupant reads
+ * the project from `useProjectSettings()`. A list: every plugin brings its own
+ * row, and nothing is painted while none does.
+ */
+export const PROJECT_SETTINGS_SLOT = 'project.settings';
+
+/**
  * Slot of the table of contents of a long list page (the Skills and MCP tabs
  * of Capabilities): the sticky column on the left that jumps to a section.
  * Every page that has one paints its occupant, which reads `usePageToc()`. A
@@ -760,6 +769,7 @@ function declareBootSlots(): void {
   declareSlot(JOB_DIALOG_SLOT, 'single');
   declareSlot(PUBLISH_DIALOG_SLOT, 'single');
   declareSlot(PAGE_TOC_SLOT, 'single');
+  declareSlot(PROJECT_SETTINGS_SLOT, 'list');
   declareSlot(CHAT_SECRET_REQUEST_SLOT, 'single');
   // Deprecated, never painted: declared so that its former occupants still load.
   declareSlot(UPDATES_BANNER_SLOT, 'single');

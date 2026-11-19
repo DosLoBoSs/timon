@@ -25,10 +25,12 @@ const [ADD_WIDGET, ADD_WIDGET_2] = ADD_WIDGET_IDS as [string, string];
 
 /**
  * The "Git" stack: one card, one tab per widget, Branches in front. Each
- * widget stays its plugin's own (`@timon/git`, `@timon/kanban`): the stack is
- * an arrangement, not a merge, and any of them can be moved out or removed
- * like any widget. A widget added to this list later (Issues) joins the stack
- * on the views stored before it (`joinedStarterStack`).
+ * widget stays its plugin's own (`@timon/git`, `@timon/kanban`, and Issues,
+ * the browser half of the built-in `github-issues` plugin, which any plugin's
+ * widget could be): the stack is an arrangement, not a merge, and any of them
+ * can be moved out or removed like any widget. A widget added to this list
+ * later joins the stack as its last tab on the views stored before it
+ * (`joinedStarterStack`); one whose plugin is off simply never registers.
  */
 const GIT_STACK = [
   'plugin:@timon/git:branches',
@@ -36,6 +38,7 @@ const GIT_STACK = [
   'plugin:@timon/git:publish',
   'plugin:@timon/kanban:pull-requests',
   'plugin:@timon/kanban:landings',
+  'plugin:github-issues:issues',
 ] as const;
 
 function gitStack(rail: string, from: number): Record<string, Starter> {

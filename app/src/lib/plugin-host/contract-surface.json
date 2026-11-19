@@ -1,5 +1,5 @@
 {
-  "apiVersion": 18,
+  "apiVersion": 19,
   "clientContext": {
     "api": {
       "type": "function",
@@ -687,6 +687,22 @@
       "usePublishDialog": {
         "type": "export",
         "since": 18
+      },
+      "useGitStackProject": {
+        "type": "export",
+        "since": 19
+      },
+      "GitStackProjectPicker": {
+        "type": "export",
+        "since": 19
+      },
+      "useTodoOpener": {
+        "type": "export",
+        "since": 19
+      },
+      "useProjectSettings": {
+        "type": "export",
+        "since": 19
       }
     },
     "api.js": {

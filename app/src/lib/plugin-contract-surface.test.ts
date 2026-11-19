@@ -27,6 +27,9 @@ import { useProviderRow } from '../components/provider-list/provider-row-context
 import { ProviderRow } from '../components/provider-list/provider-row';
 import { useJobDialog } from '../plugins-client/kanban/job-dialog-context';
 import { usePublishDialog } from '../plugins-client/kanban/publish-dialog-context';
+import { GitStackProjectPicker, useGitStackProject } from '../plugins-client/kanban/git-stack-project';
+import { useTodoOpener } from '../plugins-client/kanban/todo-opener';
+import { useProjectSettings } from '../components/project-settings-slot';
 import { platformModuleExports } from './plugin-host/platform-modules';
 import { PLATFORM_MODULES } from './plugin-host/modules';
 
@@ -212,7 +215,7 @@ test('the notice cards and the update window open wave 17, after 0.1.8 shipped A
 test('the job and Publish on GitHub dialogs join wave 18, still unreleased', () => {
   // 0.1.9 shipped API 17: a plugin importing these hooks must declare 18.
   const declarations = readFileSync(join(process.cwd(), '../packages/sdk/src/ui.d.ts'), 'utf8');
-  assert.equal(snapshot.apiVersion, 18);
+  assert.ok(snapshot.apiVersion >= 18);
   assert.equal(UI_KIT.useJobDialog, useJobDialog);
   assert.equal(UI_KIT.usePublishDialog, usePublishDialog);
   for (const name of ['useJobDialog', 'usePublishDialog']) {
@@ -221,6 +224,25 @@ test('the job and Publish on GitHub dialogs join wave 18, still unreleased', () 
   }
   assert.ok(declarations.includes('export function useJobDialog(): JobDialogValue | null;'));
   assert.ok(declarations.includes('export function usePublishDialog(): PublishDialogValue | null;'));
+});
+
+test('the Git stack\'s project, the TO DO opener and the project settings row join wave 19, still unreleased', () => {
+  // A host 18 exports none of them: the github-issues plugin's browser half,
+  // which reads all four, declares 19.
+  const declarations = readFileSync(join(process.cwd(), '../packages/sdk/src/ui.d.ts'), 'utf8');
+  assert.equal(snapshot.apiVersion, 19);
+  assert.equal(UI_KIT.useGitStackProject, useGitStackProject);
+  assert.equal(UI_KIT.GitStackProjectPicker, GitStackProjectPicker);
+  assert.equal(UI_KIT.useTodoOpener, useTodoOpener);
+  assert.equal(UI_KIT.useProjectSettings, useProjectSettings);
+  for (const name of ['useGitStackProject', 'GitStackProjectPicker', 'useTodoOpener', 'useProjectSettings']) {
+    assert.ok(platformModuleExports('ui.js').includes(name), name);
+    assert.equal(snapshot.modules['ui.js']?.[name]?.since, 19, name);
+  }
+  assert.ok(declarations.includes('export function useGitStackProject(): GitStackProject;'));
+  assert.ok(declarations.includes('export const GitStackProjectPicker: PlatformComponent;'));
+  assert.ok(declarations.includes('export function useTodoOpener(): TodoOpener;'));
+  assert.ok(declarations.includes('export function useProjectSettings(): ProjectSettingsValue | null;'));
 });
 
 /** Platform names a client bundle imports, per module file (`ui.js`, …). */
