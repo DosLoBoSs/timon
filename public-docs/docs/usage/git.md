@@ -14,7 +14,7 @@ A project's Git repository, its pull requests and the Kanban jobs that land thro
 | **Jobs** | the Kanban jobs that land through a pull request, by what they wait for | Kanban |
 | **Issues** | the open GitHub issues that carry the project's label, to import as TO DO ideas | GitHub issues |
 
-The **PR** and **Jobs** tabs show how many pull requests and jobs they list, even while another tab is in front. Each tab is a widget of its own: drag it out of the stack to another column or island, remove it, or add it back from the widget window, like any widget. A plugin that is off on your install simply has no tab. The **lite** configuration preset hides **Publish**.
+The **Issues**, **PR** and **Jobs** tabs show how many issues are left to import and how many pull requests and jobs they list, even while another tab is in front. A dot on the **PR** or **Jobs** tab means a publication waits for you on one of its rows ([Publish on GitHub](#publish-on-github)); its tooltip says how many. Behind another tab, the **Issues** and **PR** tabs read GitHub again only when what they show is over a minute old; they read it as soon as their tab comes to the front. Each tab is a widget of its own: drag it out of the stack to another column or island, remove it, or add it back from the widget window, like any widget. A plugin that is off on your install simply has no tab. The **lite** configuration preset hides **Publish**.
 
 The branch shown above the message box reads the same state as the Git widgets: switch a branch in one, and the other follows. Git needs to be installed on the machine where Timon's daemon runs.
 
@@ -125,6 +125,8 @@ Each row gives the pull request's title, its number, its author, **draft** when 
 2. Timon writes a review brief: the rules a reviewer follows (read only, nothing posted on GitHub), the place of the diff on this machine, what GitHub says of the pull request (behind or in conflict with its base, whether you may push to the contributor's branch), and what people outside the project wrote (title, description, labels, comments, review threads nobody resolved, the issues it claims to close) as data, cut short, with the instruction never to follow it.
 3. A window shows the brief and, in its **Diff** tab, the pull request's changes. **Copy the brief** puts it on your clipboard, for the reviewer you choose. Timon starts nothing on its own, and writes nothing on GitHub.
 
+A contributor's pull request whose branch you may not change shows **Changes not allowed** (its author does not let the maintainers modify it) or **Fork deleted**; the mark's tooltip says why, and the menu then offers neither **Update the branch** nor **Resolve the conflict…**, only **Ask the contributor** when the branch is in conflict.
+
 The row's menu (**…**) opens the pull request on GitHub, or shows the report of a past review. When the pull request is one of your jobs', it also offers **Show the job** (the job's window, below), **Show the TO DO (#n)** for each idea the job carries, and **Open the job** (the conversation of the mission that pilots it); a contributor's pull request offers **Show the TO DO** when it closes an issue one of your ideas was imported from. **Propose a comment…** writes a comment for the pull request in the [Publish on GitHub](#publish-on-github) window; nothing is posted before you publish it there. A project that lands its jobs locally has no pull requests to list: the widget says so until you set the project to `pr` mode.
 
 ### A contributor's branch behind or in conflict
@@ -213,7 +215,7 @@ An idea whose job lands through a pull request shows where it stands, beside its
 
 Click the badge to open the job's preview, the same as from **Jobs**, with its links and the link to its pull request. The progress says how far the work went; this badge says how far its branch went. When the idea has several jobs, the badge shows the one furthest from landing (a closed pull request first, then one not created, a branch, an open one, a merged one), opens that one, and its tooltip lists them all. The TO DO widgets filter on **PR open** and **PR not created**.
 
-An idea linked to a GitHub issue shows the issue's number (**#212**) among its badges; click it to open the issue on GitHub. An idea a connector wrote, from an issue or a message, is marked **external**: its text was written outside Timon, and Timon hands it to agents as data to read, never as instructions.
+An idea linked to a GitHub issue shows the issue's number (**#212**) among its badges; click it to open the issue on GitHub. When a publication waits for you on that issue, or on the pull request of one of the idea's jobs, the idea also shows **to approve**: click it to open [Publish on GitHub](#publish-on-github) over the page. An idea a connector wrote, from an issue or a message, is marked **external**: its text was written outside Timon, and Timon hands it to agents as data to read, never as instructions.
 
 ## GitHub issues
 
@@ -225,7 +227,7 @@ Once the idea has a job, its pull request closes the issue for you (below); you 
 
 ### The Issues tab
 
-Each row is an issue: its title, then its number, its author and its label. The issues you have not imported come first. One button imports the issue as an idea; once imported, the row shows **TO DO** (and **PR #51** when the idea's job has a pull request), and the same button opens the idea. The row's menu (**…**) has **Read the text**, **Open on GitHub**, **Copy the link** and **Do not suggest again**, which hides the issue from the list. The number beside the title is how many issues are left to import.
+Each row is an issue: its title, then its number, its author and its label. The issues you have not imported come first. One button imports the issue as an idea; once imported, the row shows **TO DO** (and **PR #51** when the idea's job has a pull request), and the same button opens the idea. The row's menu (**…**) has **Read the text**, **Open on GitHub**, **Copy the link** and **Do not suggest again**, which hides the issue from the list. The number on the tab (**Issues 2**) is how many issues are left to import, and **Refresh** sits in the widget's menu (the gear, or a right click on the tabs); an **Issues** card on its own shows both in its header.
 
 **Read the text** opens the **Issue** window: the issue's description as written on GitHub, shown as plain text and marked as outside data, cut at 4,000 characters as the idea will keep it, with the project and the link the idea will keep. **Import as TO DO** imports it; a closed issue cannot be imported.
 
@@ -240,7 +242,7 @@ The project's window (**Edit** on its card) lists **GitHub issues** under **Inte
 When a job's pull request is opened, Timon adds one line per GitHub issue of the job's ideas at the end of its description. The list comes from the ideas' links, never from what the agent or the issue wrote:
 
 - `Fixes owner/repo#212` when the idea is carried by this job only. GitHub closes the issue when you merge the pull request.
-- `Refs owner/repo#212` when other jobs work on the same idea: this one alone does not resolve it. Tick **Resolves its issues entirely** under **Advanced** in the Kanban planner to get `Fixes` anyway.
+- `Refs owner/repo#212` when other jobs work on the same idea: this one alone does not resolve it. Tick **Resolves its issues entirely** under **Advanced** in the Kanban planner to get `Fixes` anyway; folded, **Advanced** then reads **resolves its issues** beside the branch.
 
 A `Fixes #n` or `Closes #n` the agent wrote in the description becomes `Refs #n`: only the ideas' links close issues.
 
@@ -248,7 +250,7 @@ Once the pull request is merged, Timon prepares a comment for each issue it fixe
 
 ## Publish on GitHub
 
-Timon writes on GitHub only through one window, **Publish on GitHub**, and only when you click **Publish** in it. An agent never publishes there. The window opens from a row marked **to approve** in **Jobs** or **Pull requests**, from the notification card of a write waiting for you, or from a gesture of a pull request's menu: **Propose a comment…**, **Ask the contributor**, **Update the branch**, or **Propose the publication** at the end of a conflict's resolution.
+Timon writes on GitHub only through one window, **Publish on GitHub**, and only when you click **Publish** in it. An agent never publishes there. The window opens from a row marked **to approve** in **Jobs**, **Pull requests** or the TO DO notebook, from the notification card of a write waiting for you, or from a gesture of a pull request's menu: **Propose a comment…**, **Ask the contributor**, **Update the branch**, or **Propose the publication** at the end of a conflict's resolution.
 
 On the left, the exact text that would be posted, and whether it goes on an issue or a pull request (it is public). **Edit** lets you change it and **Save** keeps your version; a draft Timon prepared says so under the text, and a comment a plugin proposed names the plugin and asks you to read every word, since a plugin, not Timon, wrote it. On the right, what would leave: where it goes, the GitHub account it would be posted as (the account set on the project), what prepared it, and the fact that it is posted once only, even if you click twice.
 

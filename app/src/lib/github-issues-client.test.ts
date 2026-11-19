@@ -18,7 +18,7 @@ import { pathToFileURL } from 'node:url';
 import type { ComponentType, ReactElement } from 'react';
 import { waitUntil } from './test-wait';
 import {
-  errorKey, labelProblem, parseIssueInput, sortCandidates, type Candidate,
+  errorKey, labelProblem, parseIssueInput, shouldRead, sortCandidates, type Candidate,
 } from '../../../plugins/github-issues/src/issues-model';
 
 const PLUGIN = 'github-issues';
@@ -247,6 +247,65 @@ test('"+" reads a typed number first, refuses another repository, and imports fr
   });
 });
 
+test('stacked, the count goes to the tab, the reload to the menu, and a hidden tab reads GitHub only past a minute', async () => {
+  const m = await mount();
+  const client = await loadClient();
+  const { clientContext } = await import('@/lib/plugin-host/loader');
+  const { pickStackProject } = await import('@/plugins-client/kanban/git-stack-project');
+  const { WidgetSelfProvider } = await import('@/components/widget-host/widget-self');
+  const dispose = client.apply(clientContext(manifest.timon.id, manifest.timon.client.slots));
+  const realNow = Date.now;
+  try {
+    pickStackProject('acme');
+    const entry = m.slots.slotEntries('cockpit.widget').find((e) => e.pluginId === PLUGIN && e.key === 'issues');
+    assert.equal(entry?.widget?.liveCount, true, 'kept mounted behind the front tab, for its count');
+    const Widget = entry!.Component as ComponentType<{ handle?: unknown }>;
+    const counts: Array<number | null> = [];
+    let menu: ReadonlyArray<{ key: string; label: string; onSelect: () => void }> | null = null;
+    const self = (selected: boolean) => ({
+      id: 'plugin:github-issues:issues', tabbed: true, selected,
+      publishCount: (_id: string, count: number | null) => { counts.push(count); },
+      publishMenu: (_id: string, items: typeof menu) => { menu = items; },
+      publishAttention: () => {},
+    });
+    const stacked = (selected: boolean) => m.React.createElement(WidgetSelfProvider, { value: self(selected) },
+      m.React.createElement(Widget, { handle: null }));
+    const reads = () => m.calls.filter((c) => c.url === `${BASE}candidates?project=acme`).length;
+
+    // In front: read, the count on the tab, the reload in the menu.
+    await m.render(stacked(true));
+    await m.until(() => counts.includes(2), 'the count published for the tab');
+    assert.equal(reads(), 1);
+    assert.ok(!q('[data-issues-refresh]'), 'no reload button left in the header');
+    assert.ok(!(document.querySelector('header')?.textContent ?? '').includes('Issues2'), 'no count by the title');
+    assert.deepEqual(menu!.map((item) => [item.key, item.label]), [['refresh', 'Refresh']]);
+    await m.React.act(async () => { menu![0]!.onSelect(); });
+    await m.until(() => reads() === 2, 'the menu\'s reload reads the list');
+
+    // Behind another tab, mounted again within the minute: the list it has is enough.
+    await m.render(m.React.createElement('div'));
+    await m.render(stacked(false));
+    await m.until(() => counts.at(-1) === 2, 'the count kept from the last read');
+    assert.equal(reads(), 2, 'no call to GitHub for a hidden tab');
+
+    // A minute later, mounted behind again: the count is read anew.
+    await m.render(m.React.createElement('div'));
+    Date.now = () => realNow() + 61_000;
+    await m.render(stacked(false));
+    await m.until(() => reads() === 3, 'a stale count read again');
+
+    // Brought to the front: read again.
+    await m.render(stacked(true));
+    await m.until(() => reads() === 4, 'read when its tab comes forward');
+  } finally {
+    Date.now = realNow;
+    await m.React.act(async () => { dispose(); });
+    pickStackProject(null);
+    client.cleanup();
+    await m.unmount();
+  }
+});
+
 test('the project settings row shows the label and what is left, and changes the label in a dialog', async () => {
   const m = await mount(({ method, url }) => (method === 'PUT' && url === `${BASE}project` ? Response.json({ project: 'acme', label: 'triage' }) : undefined));
   const client = await loadClient();
@@ -307,4 +366,11 @@ test('a typed reference reads as the issue\'s number, in this repository only', 
   assert.equal(labelProblem(' triage '), null);
   assert.equal(errorKey('not_configured'), 'error.notConfigured');
   assert.equal(errorKey('weird'), 'error.generic');
+});
+
+test('a hidden tab reads its list only when none was read, or one over a minute ago', () => {
+  assert.equal(shouldRead(true, 1_000, 1_000), true, 'in front, always');
+  assert.equal(shouldRead(false, null, 1_000), true, 'nothing read yet');
+  assert.equal(shouldRead(false, 1_000, 60_999), false);
+  assert.equal(shouldRead(false, 1_000, 61_000), true);
 });

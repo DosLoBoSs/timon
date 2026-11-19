@@ -243,15 +243,24 @@ test('the list tells which gestures a branch allows, without another call', () =
   const pull = { headRepository: 'contrib/widgets', maintainerCanModify: true, mergeStateStatus: 'behind' as const };
   const ask = { contributor_conflicts: 'ask' as const };
   const resolve = { contributor_conflicts: 'resolve' as const };
-  assert.deepEqual(branchGestures('acme/widgets', pull, ask), { update_branch: true, ask_contributor: false, resolve_conflict: false });
-  assert.deepEqual(branchGestures('acme/widgets', { ...pull, maintainerCanModify: false }, ask).update_branch, false);
+  assert.deepEqual(branchGestures('acme/widgets', pull, ask), { update_branch: true, ask_contributor: false, resolve_conflict: false, locked: null });
+  assert.deepEqual(branchGestures('acme/widgets', { ...pull, maintainerCanModify: false }, ask), {
+    update_branch: false, ask_contributor: false, resolve_conflict: false, locked: 'not_allowed',
+  });
   const dirty = { ...pull, mergeStateStatus: 'dirty' as const };
-  assert.deepEqual(branchGestures('acme/widgets', dirty, ask), { update_branch: false, ask_contributor: true, resolve_conflict: false });
+  assert.deepEqual(branchGestures('acme/widgets', dirty, ask), { update_branch: false, ask_contributor: true, resolve_conflict: false, locked: null });
+  // A locked branch still conflicts: asking its author stays the one gesture.
+  assert.deepEqual(branchGestures('acme/widgets', { ...dirty, maintainerCanModify: false }, resolve), {
+    update_branch: false, ask_contributor: true, resolve_conflict: false, locked: 'not_allowed',
+  });
+  assert.equal(branchGestures('acme/widgets', { ...dirty, headRepository: null }, resolve).locked, 'fork_deleted');
   assert.equal(branchGestures('acme/widgets', dirty, resolve).resolve_conflict, true);
   assert.equal(branchGestures('acme/widgets', { ...dirty, maintainerCanModify: false }, resolve).resolve_conflict, false);
   assert.equal(branchGestures('acme/widgets', { ...dirty, headRepository: null }, resolve).resolve_conflict, false);
   // Our own branch: its conflict is the job's to fix, not a contributor's.
   assert.equal(branchGestures('acme/widgets', { ...dirty, headRepository: 'acme/widgets' }, resolve).resolve_conflict, false);
+  // The flag says nothing of a branch in the repository itself: it is always ours to write.
+  assert.equal(branchGestures('acme/widgets', { ...dirty, headRepository: 'acme/widgets', maintainerCanModify: false }, resolve).locked, null);
 });
 
 test('only a signed-in person lets Timon resolve conflicts; anyone may turn it back off', async () => {

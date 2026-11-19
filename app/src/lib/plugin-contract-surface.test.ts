@@ -30,6 +30,7 @@ import { usePublishDialog } from '../plugins-client/kanban/publish-dialog-contex
 import { GitStackProjectPicker, useGitStackProject } from '../plugins-client/kanban/git-stack-project';
 import { useTodoOpener } from '../plugins-client/kanban/todo-opener';
 import { useProjectSettings } from '../components/project-settings-slot';
+import { useWidgetAttention, useWidgetCount, useWidgetInFront, useWidgetMenu } from '../components/widget-host/widget-self';
 import { platformModuleExports } from './plugin-host/platform-modules';
 import { PLATFORM_MODULES } from './plugin-host/modules';
 
@@ -243,6 +244,24 @@ test('the Git stack\'s project, the TO DO opener and the project settings row jo
   assert.ok(declarations.includes('export const GitStackProjectPicker: PlatformComponent;'));
   assert.ok(declarations.includes('export function useTodoOpener(): TodoOpener;'));
   assert.ok(declarations.includes('export function useProjectSettings(): ProjectSettingsValue | null;'));
+});
+
+test('a widget\'s tab count, dot, menu and front state join wave 19, still unreleased', () => {
+  // The Issues tab of the Git stack is a third party's (github-issues): its
+  // count and its reload button need the hooks the product's own tabs read.
+  assert.equal(UI_KIT.useWidgetCount, useWidgetCount);
+  assert.equal(UI_KIT.useWidgetAttention, useWidgetAttention);
+  assert.equal(UI_KIT.useWidgetMenu, useWidgetMenu);
+  assert.equal(UI_KIT.useWidgetInFront, useWidgetInFront);
+  for (const name of ['useWidgetCount', 'useWidgetAttention', 'useWidgetMenu', 'useWidgetInFront']) {
+    assert.ok(platformModuleExports('ui.js').includes(name), name);
+    assert.equal(snapshot.modules['ui.js']?.[name]?.since, 19, name);
+  }
+  const declarations = readFileSync(join(process.cwd(), '../packages/sdk/src/ui.d.ts'), 'utf8');
+  assert.ok(declarations.includes('export function useWidgetCount(count: number | null | undefined): boolean;'));
+  assert.ok(declarations.includes('export function useWidgetAttention(label: string | null | undefined): boolean;'));
+  assert.ok(declarations.includes('export function useWidgetMenu(items: readonly WidgetMenuItem[]): boolean;'));
+  assert.ok(declarations.includes('export function useWidgetInFront(): boolean;'));
 });
 
 /** Platform names a client bundle imports, per module file (`ui.js`, …). */

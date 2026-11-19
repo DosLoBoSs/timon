@@ -199,3 +199,8 @@ export function proposalsForPull(
       : issues.some((i) => i.number === p.target.number && same(i.repo, p.repo))
   ));
 }
+
+/** How many distinct proposals wait across rows: one on a pull request and on its issue counts once. */
+export function waitingCount(rows: ReadonlyArray<readonly ForgeProposal[]>): number {
+  return new Set(rows.flatMap((row) => row.map((p) => p.id))).size;
+}

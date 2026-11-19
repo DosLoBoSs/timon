@@ -8,13 +8,13 @@
  * window frames the body as outside data. Nothing here writes on GitHub; an
  * import creates one TO DO idea, once.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import * as ui from '@timon/ui';
 import type { ClientContext, WidgetChromeProps } from '@timon-ai/sdk';
 import messages from './messages.json';
 import {
-  errorKey, labelProblem, parseIssueInput, safeHref, sortCandidates, toImport,
+  errorKey, labelProblem, parseIssueInput, safeHref, shouldRead, sortCandidates, toImport,
   type Candidate, type Candidates, type IssueDetails, type IssueLabel, type IssueTodo, type ProjectLabel,
 } from './issues-model.js';
 
@@ -217,6 +217,13 @@ type Load = { kind: 'idle' | 'loading' } | { kind: 'error'; code: string | null 
 /** What the Issue window opens on: an issue of the list, or a number to type. */
 type Opened = { number: number } | { lookup: true };
 
+/**
+ * The last list read for each project, shared by every Issues widget of the
+ * page (one per chat's rail): a tab kept mounted behind the front one shows
+ * it rather than asking GitHub again (`shouldRead`).
+ */
+const lastRead = new Map<string, { list: Candidates; at: number }>();
+
 function IssuesWidget({ api, handle, className }: { api: Api } & Partial<WidgetChromeProps>) {
   const { project } = ui.useGitStackProject();
   const { openTodo, todoModal } = ui.useTodoOpener();
@@ -224,15 +231,32 @@ function IssuesWidget({ api, handle, className }: { api: Api } & Partial<WidgetC
   const [busy, setBusy] = useState<number | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [opened, setOpened] = useState<Opened | null>(null);
+  const front = ui.useWidgetInFront();
+  const frontNow = useRef(front);
+  frontNow.current = front;
 
   const reload = useCallback(async (quiet = false) => {
     if (!project) { setLoad({ kind: 'idle' }); return; }
     if (!quiet) setLoad({ kind: 'loading' });
     const out = await call<Candidates>(api, `candidates?${query(project)}`);
+    if (out.ok) lastRead.set(project, { list: out.value, at: Date.now() });
     setLoad(out.ok ? { kind: 'ready', list: out.value } : { kind: 'error', code: out.code });
   }, [api, project]);
 
-  useEffect(() => { setNotice(null); void reload(); }, [reload]);
+  // Behind another tab, a list read less than a minute ago is enough for the
+  // count; in front, or older, it is read again.
+  useEffect(() => {
+    setNotice(null);
+    const known = project ? lastRead.get(project) : undefined;
+    if (known) setLoad({ kind: 'ready', list: known.list });
+    if (shouldRead(frontNow.current, known?.at ?? null, Date.now())) void reload(!!known);
+  }, [reload, project]);
+  // Brought to the front: what it shows is read again, behind what it had.
+  const wasFront = useRef(front);
+  useEffect(() => {
+    if (front && !wasFront.current) void reload(true);
+    wasFront.current = front;
+  }, [front, reload]);
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(null), 4000);
@@ -265,8 +289,14 @@ function IssuesWidget({ api, handle, className }: { api: Api } & Partial<WidgetC
   };
 
   const issues = useMemo(() => (load.kind === 'ready' ? sortCandidates(load.list.issues) : []), [load]);
-  // What is left to import: the only number shown, by the title (on the tab's line once stacked).
-  const subtitle = load.kind === 'ready' ? String(toImport(load.list.issues)) : undefined;
+  // What is left to import: the only number shown, on the tab once stacked ("Issues 2"), else by the title.
+  const left = load.kind === 'ready' ? toImport(load.list.issues) : null;
+  const countOnTab = ui.useWidgetCount(left);
+  const subtitle = left !== null && !countOnTab ? String(left) : undefined;
+  // Stacked, the reload goes to the widget's menu, like the Jobs tab's: the tab strip has no room for it.
+  const refreshInMenu = ui.useWidgetMenu(useMemo(() => (project ? [{
+    key: 'refresh', label: t('refresh'), icon: <Icon d={ICONS.refresh} />, onSelect: () => { void reload(); },
+  }] : []), [project, reload]));
 
   const actions = (
     <>
@@ -276,9 +306,11 @@ function IssuesWidget({ api, handle, className }: { api: Api } & Partial<WidgetC
           <button type="button" data-issues-add="" onClick={() => setOpened({ lookup: true })} title={t('importByNumber')} aria-label={t('importByNumber')} className={ICON_BUTTON}>
             <Icon d={ICONS.plus} />
           </button>
-          <button type="button" data-issues-refresh="" onClick={() => void reload()} disabled={load.kind === 'loading'} title={t('refresh')} aria-label={t('refresh')} className={ICON_BUTTON}>
-            <Icon d={ICONS.refresh} />
-          </button>
+          {!refreshInMenu && (
+            <button type="button" data-issues-refresh="" onClick={() => void reload()} disabled={load.kind === 'loading'} title={t('refresh')} aria-label={t('refresh')} className={ICON_BUTTON}>
+              <Icon d={ICONS.refresh} />
+            </button>
+          )}
         </>
       )}
       {handle as ReactNode}
@@ -611,6 +643,8 @@ export function apply(ctx: ClientContext): () => void {
         title: t('widget.title'),
         description: t('widget.description'),
         icon: ISSUES_PICTO,
+        // Its count stays on its tab ("Issues 2") while another tab is in front.
+        liveCount: true,
         zone: 'droite',
         frame: 'none',
         height: 320,

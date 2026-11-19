@@ -608,7 +608,13 @@ test('"Resolves its issues entirely" sits under Advanced, off by default, and is
     const box = branchSection()!.querySelector<HTMLInputElement>('[data-testid="plan-resolves-issues"]')!;
     assert.equal(box.checked, false);
     assert.match(box.closest('div')!.textContent!, /Resolves its issues entirely/);
+    const summary = () => branchSection()!.querySelector('[data-testid="plan-resolves-summary"]');
+    assert.equal(summary(), null, 'unticked, the summary says nothing of it');
     await ticked.click(box);
+    // Folded again, the summary still shows the box is ticked.
+    await ticked.click(branchSection()!.querySelector('button')!);
+    assert.equal(branchSection()!.querySelector('[data-testid="plan-resolves-issues"]'), null, 'folded');
+    assert.equal(summary()?.textContent, 'resolves its issues');
     await ticked.launch();
     assert.equal(ticked.answers[0]!.resolves_issues, true);
   } finally { await ticked.unmount(); }

@@ -506,6 +506,18 @@ export type WidgetOptions = {
    */
   formerKeys?: readonly string[];
   /**
+   * Name on the widget's tab when it is stacked, where `title` would not fit
+   * ("PR" for "Pull requests"); the tab's tooltip keeps `title`. Client API 19.
+   */
+  tabTitle?: string;
+  /**
+   * The widget publishes a count or a dot for its tab (`useWidgetCount`,
+   * `useWidgetAttention` from `@timon/ui`): in a stack it stays mounted,
+   * hidden, behind the tab in front, so its tab stays true. Keep it quiet
+   * while hidden: read `useWidgetInFront()` before any costly call. Client API 19.
+   */
+  liveCount?: boolean;
+  /**
    * One sentence on what the widget does, shown under its name in the widget
    * window: what it shows or lets you do, not how it is built.
    */

@@ -1861,6 +1861,43 @@ declare module '@timon/ui' {
   /** The project of a `project.settings` row (client API 19); `null` outside the slot. */
   export function useProjectSettings(): ProjectSettingsValue | null;
 
+  /**
+   * What a widget hands its tab when it is one tab of a stack (client API 19).
+   * Register it with `widget.liveCount` so it stays mounted, hidden, behind
+   * the tab in front, and its tab stays true.
+   *
+   * Publishes the number shown on the widget's tab (nothing for `null` or 0).
+   * Returns whether the host shows it: when it does not (a card alone), paint
+   * it next to your own title.
+   */
+  export function useWidgetCount(count: number | null | undefined): boolean;
+  /**
+   * A dot on the widget's tab while something in it waits for the person;
+   * `label` names it in the tab's tooltip and for a screen reader ("2 to
+   * approve"), `null` clears it. Returns whether the host shows it.
+   */
+  export function useWidgetAttention(label: string | null | undefined): boolean;
+  /** One action a stacked widget hands to its menu (the gear, a right click on the tabs). */
+  export type WidgetMenuItem = {
+    key: string;
+    label: string;
+    /** A React element, 14 px. */
+    icon?: unknown;
+    onSelect(): void;
+  };
+  /**
+   * Hands header actions to the widget's menu while it is a tab of a stack:
+   * at 300 px the tab strip has no room left for them. Returns whether it
+   * did; when it did not (a card alone), keep them in your header.
+   */
+  export function useWidgetMenu(items: readonly WidgetMenuItem[]): boolean;
+  /**
+   * Whether the widget is in view: always for a card alone, only while its
+   * tab is in front for one kept mounted behind (`liveCount`). Wait for it
+   * before a costly read.
+   */
+  export function useWidgetInFront(): boolean;
+
   /** A heading of a list page, as the `page.toc` occupant lists it. Client API 15. */
   export type PageTocEntry = {
     /** The heading's `id`, also its anchor. */

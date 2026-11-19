@@ -16,7 +16,7 @@
  * (`git-stack-project.tsx`): it is chosen once for both.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Copy, ExternalLink, Eye, FileText, GitMerge, GitPullRequest, GitPullRequestArrow, Loader2, MessageSquarePlus, MessageSquareWarning,
   MoreHorizontal, ScanSearch,
@@ -34,9 +34,10 @@ import { t } from '@/lib/i18n';
 import { NativeViewCover } from '@/lib/native-view-cover';
 import { cn } from '@/lib/utils';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
-import { useWidgetCount } from '@/components/widget-host/widget-self';
+import { useWidgetAttention, useWidgetCount, useWidgetInFront } from '@/components/widget-host/widget-self';
+import { sharedGet } from '@/lib/shared-read';
 import {
-  anyReviewRunning, branchChip, filterByAuthor, pullAuthors, reviewBadge,
+  anyReviewRunning, branchChip, branchLock, filterByAuthor, keepPullList, lastPullList, pullAuthors, reviewBadge, shouldReadPulls,
   type PullRequestItem, type PullRequestList, type ReviewBadge,
 } from './pull-requests-model';
 import { diffLineKind, getLanding, type Landing } from './landing-api';
@@ -44,7 +45,7 @@ import { DIFF_LINE_CLASS } from './landing-preview-dialog';
 import { JobDialog } from './job-dialog';
 import { JobLinksMenuItems } from './job-links-menu';
 import { useTodoOpener } from './todo-opener';
-import { proposalsForPull, type ForgeProposal } from './forge-proposals-api';
+import { proposalsForPull, waitingCount, type ForgeProposal } from './forge-proposals-api';
 import { ProposalChip } from './proposal-chip';
 import { PublishDialog, type PublishTarget } from './publish-dialog';
 import { useForgeProposals } from './use-forge-proposals';
@@ -114,29 +115,54 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
     if (!slug) { setLoad({ kind: 'idle' }); return; }
     if (!quiet) setLoad({ kind: 'loading' });
     try {
-      const res = await fetch(projectPath(slug), { cache: 'no-store' });
+      const res = await sharedGet(projectPath(slug));
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { setLoad({ kind: 'error', message: apiErrorMessage(json, { status: res.status }) }); return; }
+      keepPullList(slug, json as PullRequestList);
       setLoad({ kind: 'ready', list: json as PullRequestList });
     } catch (err) {
       setLoad({ kind: 'error', message: (err as Error).message });
     }
   }, [slug]);
 
-  useEffect(() => { setAuthor(null); void reload(); }, [reload]);
+  // The list comes from `gh` on the daemon's side. Behind another tab of the
+  // Git stack (kept mounted for its count), a list read less than a minute
+  // ago is enough; in front, or older, it is read again.
+  const front = useWidgetInFront();
+  const frontNow = useRef(front);
+  frontNow.current = front;
+  useEffect(() => {
+    setAuthor(null);
+    const known = slug ? lastPullList(slug) : undefined;
+    if (known) setLoad({ kind: 'ready', list: known.list });
+    if (shouldReadPulls(frontNow.current, known?.at ?? null, Date.now())) void reload(!!known);
+  }, [reload, slug]);
+  // Brought to the front: read again, behind what it already shows.
+  const wasFront = useRef(front);
+  useEffect(() => {
+    if (front && !wasFront.current) void reload(true);
+    wasFront.current = front;
+  }, [front, reload]);
 
   const pulls = load.kind === 'ready' ? load.list.pulls : [];
   const running = anyReviewRunning(pulls);
   useEffect(() => {
-    if (!running) return;
+    if (!running || !front) return;
     const timer = setInterval(() => { void reload(true); }, RUNNING_POLL_MS);
     return () => clearInterval(timer);
-  }, [running, reload]);
+  }, [running, front, reload]);
 
   const authors = useMemo(() => pullAuthors(pulls), [pulls]);
   const shown = useMemo(() => filterByAuthor(pulls, author), [pulls, author]);
   // In the Git stack the count sits on the tab ("PR 3"); alone, by the title.
   const countOnTab = useWidgetCount(load.kind === 'ready' ? shown.length : null);
+  // A publication waiting on one of the pull requests: a dot on the tab, the chip on its row.
+  const repo = load.kind === 'ready' ? load.list.repo : null;
+  const waiting = useMemo(
+    () => (repo ? waitingCount(pulls.map((pull) => proposalsForPull(proposals.pending, repo, pull))) : 0),
+    [repo, pulls, proposals.pending],
+  );
+  useWidgetAttention(waiting > 0 ? t('forgePublish.tabWaiting', { count: waiting }) : null);
 
   const prepare = async (pull: PullRequestItem) => {
     if (!slug) return;
@@ -399,6 +425,7 @@ function PullRow({
   const jobId = pull.links?.job_id ?? null;
   const gestures = pull.gestures;
   const chip = branchChip(pull);
+  const lock = branchLock(pull);
   const badge = reviewBadge(pull);
   const running = badge?.kind === 'running';
   const meta = [`#${pull.number}`, pull.author ?? t('pullRequests.deletedAuthor')];
@@ -407,11 +434,16 @@ function PullRow({
     <li data-pull-row={pull.number} className="flex items-center gap-1 rounded-lg bg-muted/30 py-2 pl-2.5 pr-1 transition-colors hover:bg-muted/50">
       <div className="min-w-0 flex-1">
         <div className="line-clamp-2 break-words text-[12.5px] font-medium leading-snug text-foreground" title={pull.title}>{pull.title}</div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-muted-foreground">
           <span className="truncate tabular-nums">{meta.join(' · ')}</span>
           {chip && (
             <span data-pull-branch={chip} className={cn('inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10.5px] font-medium', BRANCH_CHIP_TONE[chip])}>
               {t(`pullRequests.branch.${chip}`)}
+            </span>
+          )}
+          {lock && (
+            <span data-pull-locked={lock} title={t(`pullRequests.lockedHint.${lock}`)} className="inline-flex max-w-full items-center rounded-md bg-foreground/[0.06] px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground">
+              {t(`pullRequests.locked.${lock}`)}
             </span>
           )}
           {branchBusy && <Loader2 className="size-3 shrink-0 animate-spin" aria-label={t('pullRequests.branchPreparing')} />}

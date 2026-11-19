@@ -3,8 +3,10 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 
 /**
- * What the host tells a widget about the card that paints it, and the two
- * things a widget may hand back: a count, and the actions of its header.
+ * What the host tells a widget about the card that paints it, and the three
+ * things a widget may hand back: a count, a reason for attention, and the
+ * actions of its header. Open to every plugin (client API 19), not only the
+ * product's own widgets.
  *
  * In a stack, a widget's own title is hidden (its tab names it), so a count
  * painted next to that title stood alone at the top of the body and meant
@@ -28,6 +30,7 @@ export type WidgetSelf = {
   selected: boolean;
   publishCount: (id: string, count: number | null) => void;
   publishMenu: (id: string, items: readonly WidgetMenuItem[] | null) => void;
+  publishAttention: (id: string, label: string | null) => void;
 };
 
 const WidgetSelfContext = createContext<WidgetSelf | null>(null);
@@ -46,6 +49,25 @@ export function useWidgetCount(count: number | null | undefined): boolean {
   const publish = self?.publishCount;
   const id = self?.id;
   const value = count ?? null;
+  useEffect(() => {
+    if (!publish || !id) return;
+    publish(id, value);
+    return () => { publish(id, null); };
+  }, [publish, id, value]);
+  return !!self?.tabbed;
+}
+
+/**
+ * Asks for a dot on the widget's tab while something in it waits for the
+ * person ("2 to approve"): `label` names it for the tooltip and a screen
+ * reader; `null` or an empty text clears it. Returns whether the host shows
+ * it: a card alone has no tab, and the widget's rows already say it.
+ */
+export function useWidgetAttention(label: string | null | undefined): boolean {
+  const self = useContext(WidgetSelfContext);
+  const publish = self?.publishAttention;
+  const id = self?.id;
+  const value = label ? label : null;
   useEffect(() => {
     if (!publish || !id) return;
     publish(id, value);

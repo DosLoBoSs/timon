@@ -61,6 +61,10 @@ export type BranchGestures = {
   /** …and Timon may merge it itself (`forge-conflicts.ts`): a fork whose
    *  author lets the maintainers push, on a project that allows it. */
   resolve_conflict: boolean;
+  /** Why no one here may write the branch, whatever its state: its author
+   *  does not let the maintainers modify it, or its fork was deleted. The
+   *  list says it on the row, so a missing "Update" or "Resolve" has a reason. */
+  locked: 'not_allowed' | 'fork_deleted' | null;
 };
 
 /** Read from the list's summary: no call to the forge. */
@@ -77,6 +81,7 @@ export function branchGestures(
     update_branch: pull.mergeStateStatus === 'behind' && writable,
     ask_contributor: dirty,
     resolve_conflict: dirty && fork && writable && setting.contributor_conflicts === 'resolve',
+    locked: writable ? null : pull.headRepository === null ? 'fork_deleted' : 'not_allowed',
   };
 }
 

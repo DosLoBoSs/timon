@@ -4,11 +4,12 @@ import test from 'node:test';
 
 /**
  * What a stack's tabs carry besides a title: a short name, the count a
- * widget publishes, and the header actions it hands to the menu. A widget
- * that publishes a count stays mounted behind the front tab, so its count
- * stays true; any other is painted only in front.
+ * widget publishes, a dot when something waits in it, and the header actions
+ * it hands to the menu. A widget that publishes a count stays mounted behind
+ * the front tab, so its count stays true; any other is painted only in front.
+ * A third-party plugin has the same hooks as the product's widgets.
  */
-const mounts = { list: 0, plain: 0 };
+const mounts = { list: 0, plain: 0, third: 0 };
 let reloads = 0;
 const seenTabbed: boolean[] = [];
 
@@ -42,7 +43,7 @@ async function mountStack(stored: Array<{ id: string } & Record<string, unknown>
   const { WorkspaceLayoutProvider } = await import('../components/workspace-layout-provider');
   const { WidgetHost } = await import('../components/widget-host/widget-host');
   const { WidgetZone } = await import('../components/widget-host/widget-zone');
-  const { useWidgetCount, useWidgetMenu } = await import('../components/widget-host/widget-self');
+  const { useWidgetAttention, useWidgetCount, useWidgetInFront, useWidgetMenu } = await import('../components/widget-host/widget-self');
   const h = React.createElement;
 
   // A list that counts its rows and hands its reload button to the menu.
@@ -58,13 +59,20 @@ async function mountStack(stored: Array<{ id: string } & Record<string, unknown>
     React.useEffect(() => { mounts.plain += 1; }, []);
     return h('p', { 'data-plain-body': '' }, 'plain');
   }
+  // A third party's widget: a count, and one thing waiting for the person.
+  function Third() {
+    React.useEffect(() => { mounts.third += 1; }, []);
+    useWidgetCount(2);
+    useWidgetAttention('1 to approve');
+    const front = useWidgetInFront();
+    return h('p', { 'data-third-body': '', 'data-front': String(front) }, 'third');
+  }
 
   resetSlotsForTests();
   declareSlot('cockpit.widget', 'list');
   register({ slot: 'cockpit.widget', pluginId: '@timon/fixture', key: 'list', widget: { title: 'Pull requests', tabTitle: 'PR', liveCount: true, frame: 'none' } }, List as never);
   register({ slot: 'cockpit.widget', pluginId: '@timon/fixture', key: 'plain', widget: { title: 'Plain' } }, Plain as never);
-  // A third party cannot use the product's short tab names.
-  register({ slot: 'cockpit.widget', pluginId: 'third', key: 'x', widget: { title: 'Third party', tabTitle: 'T' } as never }, Plain as never);
+  register({ slot: 'cockpit.widget', pluginId: 'third', key: 'x', widget: { title: 'Third party', tabTitle: 'T', liveCount: true } }, Third as never);
 
   const root = createRoot(document.getElementById('root')!);
   const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);
@@ -82,7 +90,7 @@ async function mountStack(stored: Array<{ id: string } & Record<string, unknown>
   return { React, until, cleanup };
 }
 
-const reset = () => { mounts.list = 0; mounts.plain = 0; reloads = 0; seenTabbed.length = 0; };
+const reset = () => { mounts.list = 0; mounts.plain = 0; mounts.third = 0; reloads = 0; seenTabbed.length = 0; };
 const tab = (id: string) => document.querySelector<HTMLElement>(`[id="tab-plugin:${id}"]`);
 const menuEntries = () => Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemcheckbox"]'));
 
@@ -100,7 +108,15 @@ test('a stacked widget shows its short name and its count on its tab, and stays 
     assert.equal(listTab.querySelector('[data-tab-count]')?.textContent, '7');
     assert.equal(listTab.getAttribute('title'), 'Pull requests', 'the full name stays in the tooltip');
     assert.equal(listTab.getAttribute('aria-label'), 'Pull requests 7');
-    assert.equal(tab('third:x')?.querySelector('[data-tab-title]')?.textContent, 'Third party', 'a third party keeps its title');
+    await until(() => !!tab('third:x')?.querySelector('[data-tab-attention]'), 'the third party\'s dot');
+    const thirdTab = tab('third:x')!;
+    assert.equal(thirdTab.querySelector('[data-tab-title]')?.textContent, 'T', 'a third party has its short name too');
+    assert.equal(thirdTab.querySelector('[data-tab-count]')?.textContent, '2');
+    assert.equal(thirdTab.getAttribute('title'), 'Third party · 1 to approve', 'the tooltip names what waits');
+    assert.equal(thirdTab.getAttribute('aria-label'), 'Third party 2 · 1 to approve');
+    assert.equal(mounts.third, 1, 'a third party\'s counting widget stays mounted behind too');
+    assert.equal(document.querySelector('[data-third-body]')?.getAttribute('data-front'), 'false', 'and knows it is not in view');
+    assert.ok(!listTab.querySelector('[data-tab-attention]'), 'no dot where nothing waits');
     assert.equal(mounts.list, 1, 'the counting widget is mounted behind the front tab');
     assert.equal(document.getElementById('panel-plugin:@timon/fixture:list')?.className, 'hidden');
     assert.ok(seenTabbed.every(Boolean), 'it knows it is a tab, so it does not paint its own count');

@@ -174,6 +174,7 @@ async function mount(list: PullRequestItem[]) {
   setLocale('en');
   localStorage.setItem('timon.git-stack.project', 'acme');
   const { PullRequestsWidget } = await import('./pull-requests-widget');
+  (await import('./pull-requests-model')).forgetPullListsForTests();
   const root = createRoot(document.getElementById('root')!);
   await React.act(async () => { root.render(React.createElement(PullRequestsWidget, { handle: null })); });
   const settle = async () => {
@@ -245,6 +246,28 @@ test('the menu offers only what the branch allows, and a branch update opens in 
     assert.match(document.querySelector('[data-publish-send]')?.textContent ?? '', /Update the branch/);
     await m.click(document.querySelector('[data-publish-send]'));
     assert.deepEqual(m.published(), { body: 'Update the branch of #58 on GitHub' }, 'the daemon\'s text leaves as it is');
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('a contributor\'s branch the maintainers may not change says so, with only "Ask the contributor" left', async () => {
+  const locked = { update_branch: false, ask_contributor: true, resolve_conflict: false, locked: 'not_allowed' as const };
+  const m = await mount([
+    pull({ mergeStateStatus: 'dirty', gestures: locked }),
+    pull({ number: 57, gestures: { update_branch: false, ask_contributor: false, resolve_conflict: false, locked: 'fork_deleted' } }),
+    pull({ number: 56 }),
+  ]);
+  try {
+    const chip = document.querySelector('[data-pull-row="58"] [data-pull-locked]');
+    assert.equal(chip?.textContent, 'Changes not allowed');
+    assert.match(chip?.getAttribute('title') ?? '', /does not let the maintainers change this branch/, 'the reason on hover');
+    assert.equal(document.querySelector('[data-pull-row="57"] [data-pull-locked]')?.textContent, 'Fork deleted');
+    assert.equal(document.querySelector('[data-pull-row="56"] [data-pull-locked]'), null, 'a branch we may write says nothing');
+    await m.openMenu(58);
+    assert.ok(document.querySelector('[data-menu-ask-contributor]'));
+    assert.ok(!document.querySelector('[data-menu-update-branch]'));
+    assert.ok(!document.querySelector('[data-menu-resolve-conflict]'));
   } finally {
     await m.unmount();
   }

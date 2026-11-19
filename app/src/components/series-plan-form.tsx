@@ -25,7 +25,7 @@
  */
 
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronRight, GitBranch, GitMerge, Lock, ShieldCheck, Sparkles, Zap } from 'lucide-react';
+import { ChevronDown, ChevronRight, CircleCheck, GitBranch, GitMerge, Lock, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModelPickerPopover, type ModelPick } from '@/components/model-picker';
@@ -858,6 +858,12 @@ function BranchField({
           <GitBranch aria-hidden className="size-3 shrink-0" />
           <span className="truncate" data-testid="plan-branch-summary">{shown}</span>
           {landing.locked && <Lock aria-hidden className="size-3 shrink-0" />}
+          {/* Folded, the ticked box would go unseen: the summary says it. */}
+          {resolvesIssues && (
+            <span className="ml-1 inline-flex shrink-0 items-center gap-1 text-foreground/75" data-testid="plan-resolves-summary" title={t('taskForm.seriesPlan.branch.resolvesIssues')}>
+              <CircleCheck aria-hidden className="size-3" />{t('taskForm.seriesPlan.branch.resolvesIssuesSummary')}
+            </span>
+          )}
         </span>
       </button>
       {open && (
