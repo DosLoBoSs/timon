@@ -2168,6 +2168,30 @@ CREATE TABLE IF NOT EXISTS series_landing (
   updated_at INTEGER NOT NULL
 );
 `);
+// A repair a person asked for on the open pull request of one of our jobs
+// (`landing-repair.ts`): failing checks, review comments or a conflict with
+// the target, each one a `code` task on the job's branch. 'running' until the
+// daemon pushed what its chain integrated ('pushed'), found nothing new
+// ('unchanged') or gave up ('failed'). Every row counts toward the cap, so a
+// job never loops on its pull request.
+db.exec(`
+CREATE TABLE IF NOT EXISTS landing_repairs (
+  id TEXT PRIMARY KEY,
+  integration_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  state TEXT NOT NULL,
+  head_before TEXT,
+  head_after TEXT,
+  error TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS landing_repairs_integration ON landing_repairs(integration_id, created_at);
+CREATE INDEX IF NOT EXISTS landing_repairs_state ON landing_repairs(state);
+`);
 if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
 // A writer that changes the reason without naming its code (an agent's own
 // reason, a statement written before the column) must not leave
@@ -2514,6 +2538,22 @@ export type IntegrationRow = {
   landed_at: number | null;
   /** Outcome the series pilot was told about (see the `notified_state` migration). */
   notified_state?: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
+/** One repair of a job's pull request (see the `landing_repairs` migration). */
+export type LandingRepairRow = {
+  id: string;
+  integration_id: string;
+  kind: 'checks' | 'comments' | 'conflict';
+  task_id: string;
+  state: 'running' | 'pushed' | 'unchanged' | 'failed';
+  head_before: string | null;
+  head_after: string | null;
+  error: string | null;
+  attempts: number;
+  created_by: string | null;
   created_at: number;
   updated_at: number;
 };
@@ -3212,6 +3252,28 @@ const markIntegrationOpenStmt = db.prepare(`
   UPDATE integrations SET state = 'open', pr_number = ?, pr_url = ?, head_sha = ?, updated_at = ?
   WHERE id = ? AND state = 'branch'
 `);
+// A pushed repair moves the head the poller compares with the target; the
+// checks read before it describe a commit the pull request no longer ends on.
+const setIntegrationHeadStmt = db.prepare(`
+  UPDATE integrations SET head_sha = ?, checks = NULL, updated_at = ? WHERE id = ? AND state = 'open'
+`);
+const insertLandingRepairStmt = db.prepare(`
+  INSERT INTO landing_repairs (id, integration_id, kind, task_id, state, head_before, created_by, created_at, updated_at)
+  VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?)
+`);
+const listLandingRepairsStmt = db.prepare(
+  `SELECT * FROM landing_repairs WHERE integration_id = ? ORDER BY created_at ASC, rowid ASC`,
+);
+const listRunningLandingRepairsStmt = db.prepare(
+  `SELECT * FROM landing_repairs WHERE state = 'running' ORDER BY created_at ASC`,
+);
+// Only from 'running': a concluded repair is never concluded again.
+const finishLandingRepairStmt = db.prepare(`
+  UPDATE landing_repairs SET state = ?, head_after = ?, error = ?, updated_at = ? WHERE id = ? AND state = 'running'
+`);
+const failLandingRepairAttemptStmt = db.prepare(
+  `UPDATE landing_repairs SET attempts = attempts + 1, error = ?, updated_at = ? WHERE id = ? AND state = 'running'`,
+);
 const listOpenIntegrationsStmt = db.prepare(
   `SELECT * FROM integrations WHERE state = 'open' ORDER BY repo ASC, created_at ASC`,
 );
@@ -5886,6 +5948,36 @@ export const dbApi = {
    *  the row is gone or already past the 'branch' state. */
   markIntegrationOpen(id: string, pr: { number: number; url: string; headSha: string }): boolean {
     return markIntegrationOpenStmt.run(pr.number, pr.url, pr.headSha, Date.now(), id).changes > 0;
+  },
+  /** Records the head a repair pushed to the open pull request, and forgets
+   *  the checks read before it; false unless the pull request is open. */
+  setIntegrationHead(id: string, headSha: string): boolean {
+    return setIntegrationHeadStmt.run(headSha, Date.now(), id).changes === 1;
+  },
+  /** Records a repair asked for on a job's pull request, as 'running'. */
+  insertLandingRepair(input: {
+    id: string; integrationId: string; kind: LandingRepairRow['kind']; taskId: string;
+    headBefore: string | null; createdBy: string | null;
+  }): void {
+    const now = Date.now();
+    insertLandingRepairStmt.run(input.id, input.integrationId, input.kind, input.taskId, input.headBefore, input.createdBy, now, now);
+  },
+  /** The repairs of one job, oldest first. */
+  listLandingRepairs(integrationId: string): LandingRepairRow[] {
+    return listLandingRepairsStmt.all(integrationId) as LandingRepairRow[];
+  },
+  listRunningLandingRepairs(): LandingRepairRow[] {
+    return listRunningLandingRepairsStmt.all() as LandingRepairRow[];
+  },
+  /** Concludes a running repair; false when it was concluded already. */
+  finishLandingRepair(id: string, state: 'pushed' | 'unchanged' | 'failed', opts: { headAfter?: string | null; error?: string | null } = {}): boolean {
+    return finishLandingRepairStmt.run(state, opts.headAfter ?? null, opts.error ?? null, Date.now(), id).changes === 1;
+  },
+  /** One more failed push of a running repair; the attempts after it. */
+  failLandingRepairAttempt(id: string, error: string): number {
+    failLandingRepairAttemptStmt.run(error, Date.now(), id);
+    const row = db.prepare(`SELECT attempts FROM landing_repairs WHERE id = ?`).get(id) as { attempts: number } | undefined;
+    return row?.attempts ?? 0;
   },
   /** Integrations whose pull request is open: what the landing poller reads. */
   listOpenIntegrations(): IntegrationRow[] {

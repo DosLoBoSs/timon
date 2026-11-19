@@ -226,7 +226,7 @@ export function untrustedExcerpt(value: string | null | undefined, max = UNTRUST
 }
 
 /** JSON that cannot close the block it sits in, whatever the strings hold. */
-function fencedJson(value: unknown): string {
+export function fencedJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
     .replace(/</g, '\\u003c')
     .replace(/>/g, '\\u003e')

@@ -447,7 +447,7 @@ async function readDiff(repo: string, range3: string): Promise<{
 
 /** Would the branch merge into the target? Computed in memory by git
  *  (`merge-tree --write-tree`): no working tree, no ref moved. */
-async function readConflict(repo: string, target: string, head: string): Promise<IntegrationPreview['conflict']> {
+export async function readConflict(repo: string, target: string, head: string): Promise<IntegrationPreview['conflict']> {
   const r = await gitRead(repo, ['merge-tree', '--write-tree', '--name-only', '--no-messages', target, head]);
   if (r.code === 0) return { state: 'clean', files: [] };
   if (r.code !== 1) return { state: 'unknown', files: [] };

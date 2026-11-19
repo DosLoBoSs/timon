@@ -16,6 +16,10 @@
  * pass replayed changes nothing: 'merged' is final, 'closed' only comes from
  * 'open', the landing replay and the pilot's notice each happen once.
  *
+ * Each pass also moves the repairs a person asked for (`landing-repair.ts`):
+ * once a repair's chain integrated its work, the branch is pushed forward to
+ * its pull request.
+ *
  * Every network gesture goes through `host/forge.ts`; the local reads through
  * the host adapter.
  */
@@ -28,6 +32,7 @@ import {
 import { getHost } from './host/index.js';
 import type { ExecResult } from './host/types.js';
 import { landIntegration } from './integration-landing.js';
+import { advanceRepairs, type RepairDeps } from './landing-repair.js';
 import { proposeResolutionCommentsOf } from './issue-resolution.js';
 import { readProjectIntegration } from './project-integration.js';
 import { notifyIntegrationOutcome } from './wake.js';
@@ -45,6 +50,9 @@ export type PollerDeps = {
   transport?: (repo: string) => GitTransport;
   forge?: (configDir: string | null) => ForgeStateReader;
   notify?: Notify;
+  /** What pushing a repair reaches (`landing-repair.ts`); `runners` and
+   *  `transport` above by default. */
+  repairs?: RepairDeps;
 };
 
 /**
@@ -197,6 +205,16 @@ export async function pollOpenIntegrations(deps: PollerDeps = {}): Promise<Map<s
     } catch (err) {
       console.error(`[landing-poller] notice of ${row.branch} failed: ${(err as Error).message}`);
     }
+  }
+
+  // Repairs first: a pushed one moves the head the merge is compared with.
+  try {
+    await advanceRepairs(deps.repairs ?? {
+      ...(deps.runners ? { runners: deps.runners } : {}),
+      ...(deps.transport ? { transport: deps.transport } : {}),
+    });
+  } catch (err) {
+    console.error(`[landing-poller] repairs: ${(err as Error).message}`);
   }
 
   const open = dbApi.listOpenIntegrations();

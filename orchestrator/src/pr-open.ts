@@ -369,6 +369,12 @@ export type PrChecksInput = {
    * is left to the opening, and an absent title is not a failure.
    */
   dryRun?: boolean;
+  /**
+   * The push of an open pull request's branch (`pushIntegrationUpdate`): its
+   * title and description stay what the forge holds, so there is no new text
+   * to check.
+   */
+  keepText?: boolean;
 };
 
 /** Runs every pre-check of a pull request, in order; nothing is pushed here. */
@@ -400,9 +406,11 @@ export async function runPrChecks(input: PrChecksInput): Promise<{ checks: PrChe
       : { name: 'target', ok: false, detail: `cannot fetch ${row.target} from the remote: ${fetched.reason}` });
     target = fetched.ok ? await refSha(repo, tracking) : null;
   }
-  const text = (): PrCheck => (input.dryRun && input.title.trim() === ''
-    ? { name: 'pr_text', ok: true, skipped: true, detail: 'no title yet: the text is checked when the pull request is opened' }
-    : checkText(input.title, input.body, chainIds));
+  const text = (): PrCheck => (input.keepText
+    ? { name: 'pr_text', ok: true, skipped: true, detail: 'the pull request keeps its title and description' }
+    : input.dryRun && input.title.trim() === ''
+      ? { name: 'pr_text', ok: true, skipped: true, detail: 'no title yet: the text is checked when the pull request is opened' }
+      : checkText(input.title, input.body, chainIds));
 
   if (!head || !target) {
     const why = !head ? `${branch} does not exist in the repository` : `${row.remote}/${row.target} could not be read`;
@@ -542,6 +550,73 @@ export async function openPullRequest(request: PrOpenRequest, deps: PrOpenDeps =
       checks,
       issues,
     };
+  } finally {
+    busy.delete(key);
+  }
+}
+
+// ─── Pushing a repair ───────────────────────────────────────────────────────
+
+export type PrUpdateOutcome =
+  | { ok: true; pushed: true; head_sha: string; checks: PrCheck[] }
+  | { ok: true; pushed: false; head_sha: string | null }
+  | {
+      ok: false;
+      /** `precheck`: a check refused, pushing again changes nothing until the
+       *  branch does. `push`: the remote did not take it, which may pass. */
+      stage: 'refused' | 'precheck' | 'push';
+      reason: string;
+      checks?: PrCheck[];
+    };
+
+/**
+ * Pushes the integration branch of an open pull request forward, once a
+ * repair's chain integrated new commits into it (`landing-repair.ts`). The
+ * same checks as the opening run first, the text aside, and nothing is pushed
+ * until every one passed; the push is never forced, so a remote branch that
+ * moved on its own refuses it. The pull request itself is not touched: the
+ * forge shows the new commits on it.
+ */
+export async function pushIntegrationUpdate(row: IntegrationRow, chainIds: readonly string[], deps: PrOpenDeps = {}): Promise<PrUpdateOutcome> {
+  if (row.branch.startsWith('sec/') || row.mode === 'branch') {
+    return { ok: false, stage: 'refused', reason: `${row.branch} is under embargo or lands by hand: Timon never pushes it` };
+  }
+  if (row.state !== 'open' || !row.head_sha) {
+    return { ok: false, stage: 'refused', reason: `the pull request of ${row.branch} is not open` };
+  }
+  const resolved = pullRequestSetting(row, row.project);
+  if ('refusal' in resolved) return { ok: false, stage: 'refused', reason: resolved.refusal };
+  const head = await refSha(row.repo, `refs/heads/${row.branch}`);
+  if (head === row.head_sha) return { ok: true, pushed: false, head_sha: head };
+  if (!head || !(await isAncestor(row.repo, row.head_sha, head))) {
+    return {
+      ok: false, stage: 'refused',
+      reason: head
+        ? `${row.branch} no longer contains the commit its pull request ends on: it is never rewritten`
+        : `${row.branch} does not exist in the repository`,
+    };
+  }
+  const key = `${row.repo}\0${row.branch}`;
+  if (busy.has(key)) return { ok: false, stage: 'push', reason: `${row.branch} is already being pushed` };
+  busy.add(key);
+  try {
+    const forge = (deps.forge ?? ((dir) => githubForge(dir, deps.runners)))(resolved.setting.gh_config_dir);
+    const transport = (deps.transport ?? ((r) => gitTransport(r, deps.runners)))(row.repo);
+    const { checks, head: checked } = await runPrChecks({
+      row, chainIds, remoteUrl: resolved.remoteUrl, account: resolved.account, forge, transport,
+      title: '', body: '', keepText: true, publicTree: deps.publicTree ?? runPublicTree,
+    });
+    const failed = checks.filter((c) => !c.ok);
+    if (failed.length > 0 || checked !== head) {
+      const reason = failed.length > 0
+        ? failed.map((c) => `${c.name}: ${c.detail}`).join('; ')
+        : `${row.branch} moved while it was checked`;
+      return { ok: false, stage: 'precheck', reason, checks };
+    }
+    const pushed = await transport.pushBranch(resolved.remoteUrl, row.branch);
+    if (!pushed.ok) return { ok: false, stage: 'push', reason: `${row.branch} was not pushed: ${pushed.reason}`, checks };
+    dbApi.setIntegrationHead(row.id, head);
+    return { ok: true, pushed: true, head_sha: head, checks };
   } finally {
     busy.delete(key);
   }
