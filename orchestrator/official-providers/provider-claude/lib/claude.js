@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { claudeThinking } from './thinking.js';
 import { claudeAccountEnv } from './token.js';
+import { needsOwnConfigDir } from './profile-config.js';
 import { claudeLoginDriver } from './login.js';
 import { manifestBackend } from './manifest.js';
 
@@ -137,15 +138,16 @@ const legacy = {
         if (opts.memoryDir)
             args.push('--add-dir', opts.memoryDir);
         const account = services.account.of(profile);
+        let env = account ? claudeAccountEnv(account.configDir) : claudeSpawnEnv(profile.env);
+        // Never `~/.claude` for another profile than `claude`: the user's subscription sign-in is there.
+        if (!account && needsOwnConfigDir(profile)) {
+            env = { ...(env ?? {}), CLAUDE_CONFIG_DIR: services.scratch.profile(profile).path };
+        }
         return {
             cmd: profile.cmd,
             args,
             cwd: opts.cfg.cwd,
-
-
-
-
-            env: withThinkingEnv(account ? claudeAccountEnv(account.configDir) : claudeSpawnEnv(profile.env), thinking.env),
+            env: withThinkingEnv(env, thinking.env),
             initialStdin: streamJsonUser(opts.message, opts.images),
         };
     },
