@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { BASE_URL, checkout, forgeFixture, FORK_URL } from '../../tests/helpers/forge-git-fixture.js';
 import {
-  gitVersionAtLeast, openScratchRepo, parseGitVersion, parseMergeTree, parseObjectsSize, scratchConfig, scratchEnv,
+  gitVersionAtLeast, openScratchRepo, parseGitVersion, reopenScratchRepo, parseMergeTree, parseObjectsSize, parseSshHostName, scratchConfig, scratchEnv,
   type ScratchRepo,
 } from './forge-scratch.js';
 
@@ -49,6 +49,11 @@ test('git version, object size', () => {
   assert.equal(parseObjectsSize('hello'), null);
 });
 
+test('ssh -G: the host an alias connects to', () => {
+  assert.equal(parseSshHostName('user git\nhostname GitHub.com\nport 22\n'), 'github.com');
+  assert.equal(parseSshHostName('user git\nport 22\n'), null);
+});
+
 test('the environment: no system or user configuration, no git variable of the daemon but SSH, no token', () => {
   const env = scratchEnv('/scratch/empty.gitconfig', '/home/u/.config/gh-work', {
     PATH: '/usr/bin', GIT_DIR: '/elsewhere', GIT_CONFIG_PARAMETERS: "'core.hooksPath'='/x'", GIT_SSH_COMMAND: 'ssh -i key',
@@ -65,7 +70,8 @@ test('the environment: no system or user configuration, no git variable of the d
   assert.equal(env.GH_TOKEN, undefined);
   assert.equal(env.GITHUB_TOKEN, undefined);
   const config = scratchConfig('/scratch/empty.gitconfig');
-  for (const pair of ['transfer.fsckObjects=true', 'protocol.file.allow=never', 'core.symlinks=false', 'commit.gpgSign=false', 'credential.helper=']) {
+  for (const pair of ['transfer.fsckObjects=true', 'protocol.file.allow=never', 'core.symlinks=false', 'commit.gpgSign=false', 'credential.helper=',
+    'core.ignorecase=false', 'core.precomposeunicode=false']) {
     assert.ok(config.includes(pair), pair);
   }
 });
@@ -130,6 +136,53 @@ test('a conflict merged with objects only: stages, blobs, a rebuilt tree that di
     repo.dispose();
   }
   assert.equal(existsSync(repo.dir), false);
+});
+
+test('texts written at once through separate openings of one folder never share a file', async () => {
+  const f = forgeFixture({ 'a.txt': 'a\n' });
+  const repo = await scratch(f);
+  try {
+    // Every request reopens the folder: each opening is its own instance.
+    const texts = Array.from({ length: 8 }, (_, i) => `text ${i}\n`.repeat(2000));
+    const oids = await Promise.all(texts.map((text) => reopenScratchRepo(repo.dir, { root: '', ghConfigDir: null, git: f.runner })!.writeBlob(text)));
+    for (const [i, oid] of oids.entries()) assert.equal(await repo.readBlob(oid!, 1_000_000), texts[i], `text ${i}`);
+    assert.equal(readdirSync(join(repo.dir, 'incoming')).length, 0);
+  } finally {
+    repo.dispose();
+  }
+});
+
+test('the head of a branch is read at its exact ref, never at one that only ends like it', async () => {
+  const { f, head, contrib } = conflicting();
+  f.git(contrib, 'push', '-q', 'origin', `${head}:refs/heads/decoy/refs/heads/ghost`);
+  // `ls-remote` lists it too: its pattern matches the tail of a ref.
+  const repo = await scratch(f);
+  try {
+    assert.deepEqual(await repo.remoteHead(FORK_URL, 'ghost'), { ok: true, sha: null });
+    assert.deepEqual(await repo.remoteHead(FORK_URL, 'fix/typo'), { ok: true, sha: head });
+  } finally {
+    repo.dispose();
+  }
+});
+
+test('paths differing only by case stay two paths of the tree', async () => {
+  // Built from objects alone: a checkout of such a tree would fold on macOS and Windows.
+  const f = forgeFixture({ 'a.txt': 'a\n' });
+  const repo = await scratch(f);
+  try {
+    const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+    const a = (await repo.writeBlob('a\n'))!;
+    const b = (await repo.writeBlob('b\n'))!;
+    const tree = (await repo.replaceInTree(EMPTY_TREE, [
+      { path: 'Dir/a.txt', mode: '100644', oid: a }, { path: 'dir/b.txt', mode: '100644', oid: a },
+    ]))!;
+    const next = (await repo.replaceInTree(tree, [{ path: 'dir/b.txt', mode: '100644', oid: b }]))!;
+    assert.deepEqual(await repo.changedPaths(tree, next), ['dir/b.txt']);
+    assert.equal((await repo.blobAt(next, 'Dir/a.txt'))?.oid, a);
+    assert.equal((await repo.blobAt(next, 'dir/b.txt'))?.oid, b);
+  } finally {
+    repo.dispose();
+  }
 });
 
 test('a push that is not a fast-forward is refused by git, and the branch is untouched', async () => {

@@ -31,6 +31,7 @@
  * Credentials are those of the project's account: its SSH alias, or `gh` as
  * the credential helper with the project's `GH_CONFIG_DIR` for an https URL.
  */
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ghEnv } from './gh.js';
@@ -39,6 +40,33 @@ import { plainBranch, pushCommitArguments, redactedOutput, type GitNetworkOutcom
 import type { ExecOpts, ExecResult } from './types.js';
 
 const hostGit: GitRunner = (args, opts) => getHost().execAsync('git', args, opts);
+
+/** Resolves the host an SSH alias connects to; null when it cannot tell. */
+export type SshHostResolver = (alias: string) => Promise<string | null>;
+
+const SSH_ALIAS = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+
+/** The `hostname` line of `ssh -G` output, lowercased, or null. */
+export function parseSshHostName(stdout: string): string | null {
+  const m = /^hostname\s+(\S+)\s*$/im.exec(stdout);
+  return m ? m[1]!.toLowerCase() : null;
+}
+
+/**
+ * The host `ssh` connects to for `alias`, as the user's SSH configuration
+ * resolves it (`Host` / `HostName`), read with `ssh -G`, which prints the
+ * configuration without connecting. The push runs the same `ssh` with the same
+ * configuration, so the host it names is the one the push reaches.
+ */
+export const sshHostName: SshHostResolver = async (alias) => {
+  if (!SSH_ALIAS.test(alias)) return null;
+  try {
+    const r = await getHost().execAsync('ssh', ['-G', alias], { timeout: 10_000, windowsHide: true });
+    return r.code === 0 ? parseSshHostName(r.stdout) : null;
+  } catch {
+    return null;
+  }
+};
 
 /** `merge-tree --write-tree` with its `-z` listing of conflicts. */
 export const MIN_GIT_VERSION: readonly [number, number] = [2, 38];
@@ -198,6 +226,10 @@ export function scratchConfig(emptyFile: string): string[] {
     'core.safecrlf=false',
     `core.attributesFile=${emptyFile}`,
     'core.quotePath=false',
+    // `git init` turns these on for a case-insensitive or decomposing file
+    // system (macOS, Windows): the paths of a tree are bytes, never folded.
+    'core.ignorecase=false',
+    'core.precomposeunicode=false',
     'gc.auto=0',
     'maintenance.auto=false',
     'fetch.writeCommitGraph=false',
@@ -250,7 +282,6 @@ function scratchAt(dir: string, options: ScratchOptions): ScratchRepo {
   const index = join(dir, 'index');
   const env = scratchEnv(emptyConfig, options.ghConfigDir);
   const prefix = [`--git-dir=${repo}`, ...scratchConfig(emptyConfig).flatMap((pair) => ['-c', pair])];
-  let counter = 0;
 
   const run = async (args: readonly string[], extra: Partial<ExecOpts> = {}, timeout = LOCAL_TIMEOUT_MS): Promise<ExecResult> => {
     try {
@@ -323,7 +354,9 @@ function scratchAt(dir: string, options: ScratchOptions): ScratchRepo {
       return r.code === 0 && Buffer.byteLength(r.stdout, 'utf8') <= maxBytes ? r.stdout : null;
     },
     async writeBlob(text) {
-      const file = join(incoming, String(++counter));
+      // A name of its own: each request reopens the folder, and two texts
+      // written at once must never share a file.
+      const file = join(incoming, randomUUID());
       writeFileSync(file, text, 'utf8');
       try {
         return sha(await run(['hash-object', '-w', '--no-filters', '--', file]));
@@ -374,8 +407,9 @@ function scratchAt(dir: string, options: ScratchOptions): ScratchRepo {
       if (!plainBranch(branch)) return { ok: false, reason: 'unusual branch name' };
       const r = await run(['ls-remote', '--heads', '--', url, `refs/heads/${branch}`], {}, NETWORK_TIMEOUT_MS);
       if (r.code !== 0) return said(r, 'reading the remote');
-      const line = r.stdout.split('\n').map((l) => l.trim()).find((l) => l.endsWith(`\trefs/heads/${branch}`));
-      const head = line?.split('\t')[0] ?? null;
+      // The exact ref: `ls-remote` also lists a branch `x/refs/heads/<branch>` of the fork.
+      const line = r.stdout.split('\n').map((l) => l.trim().split('\t')).find((f) => f.length === 2 && f[1] === `refs/heads/${branch}`);
+      const head = line?.[0] ?? null;
       if (head !== null && !COMMIT_SHA.test(head)) return { ok: false, reason: 'the remote answered something that is not a commit' };
       return { ok: true, sha: head };
     },

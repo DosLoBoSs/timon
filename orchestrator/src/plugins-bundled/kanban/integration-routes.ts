@@ -10,7 +10,12 @@
  * Letting Timon resolve a contributor's conflict itself (`contributor_conflicts:
  * "resolve"`, `forge-conflicts.ts`) is a person's choice: a write that turns
  * it on from the daemon token, a mission's or a plugin's is refused, whatever
- * else it holds. Turning it off stays open to every caller.
+ * else it holds. Turning it off stays open to every caller. While it is on,
+ * the fields that decide where a resolution is fetched from and pushed to, and
+ * as whom (`PUSH_TARGET_FIELDS`), are a person's too: an agent that could
+ * point `remote_url` elsewhere would choose where the next push a person
+ * validates goes. Refused rather than silently switched back to "ask": the
+ * caller learns why, and a person's choice is never undone behind them.
  *
  * One exception, `POST …/integration/branch`: the Kanban planner checks the
  * branch name of a new job while the person types it. It needs `kanban:write`
@@ -24,7 +29,8 @@ import { ghLogin, type GhLoginOutcome } from '../../host/gh.js';
 import { checkPlanBranch, MAX_PLAN_BRANCH_CHARS, prLandingSetting } from '../../plan-landing.js';
 import { announceProjectUpdated } from '../../project-service.js';
 import {
-  clearProjectIntegration, ProjectIntegrationError, readProjectIntegration, updateProjectIntegration,
+  changedPushTargetFields, clearProjectIntegration, ProjectIntegrationError, readProjectIntegration, updateProjectIntegration,
+  type ProjectIntegration,
 } from '../../project-integration.js';
 import { readMeta } from '../../projects.js';
 import { todoOriginFromRequest } from '../../todo-origin.js';
@@ -57,7 +63,14 @@ function projectForRoute(req: Request, res: Response): string | null {
   return slug;
 }
 
+/** A write only a signed-in person may make (`guard` of the PUT). */
+class PersonRequired extends Error {}
+
 function answerError(res: Response, err: unknown): void {
+  if (err instanceof PersonRequired) {
+    res.status(403).json(apiError('person_required', err.message));
+    return;
+  }
   if (err instanceof ProjectIntegrationError) {
     if (err.code === 'not_found') { res.status(404).json(apiError('project_not_found', err.message)); return; }
     res.status(400).json(apiError('integration_invalid', err.message, { detail: err.message }));
@@ -102,14 +115,21 @@ export function registerIntegrationRoutes(app: Router, deps: IntegrationRouteDep
   app.put('/api/projects/:slug/integration', (req, res) => {
     const slug = projectForRoute(req, res);
     if (!slug) return;
-    try {
-      const asked = (req.body as { contributor_conflicts?: unknown } | undefined)?.contributor_conflicts;
-      if (asked === 'resolve' && readProjectIntegration(slug).integration.contributor_conflicts !== 'resolve'
-        && !(req.auth && isPersonAuth(req.auth))) {
-        res.status(403).json(apiError('person_required', 'only a signed-in person lets Timon resolve a contributor\'s conflict'));
-        return;
+    const person = !!req.auth && isPersonAuth(req.auth);
+    const guard = (current: ProjectIntegration, next: ProjectIntegration): void => {
+      if (person || next.contributor_conflicts !== 'resolve') return;
+      if (current.contributor_conflicts !== 'resolve') {
+        throw new PersonRequired('only a signed-in person lets Timon resolve a contributor\'s conflict');
       }
-      const integration = updateProjectIntegration(slug, req.body, deps.home ? { home: deps.home } : {});
+      const changed = changedPushTargetFields(current, next);
+      if (changed.length > 0) {
+        throw new PersonRequired(
+          `while Timon resolves contributors' conflicts, only a signed-in person changes ${changed.join(', ')}`,
+        );
+      }
+    };
+    try {
+      const integration = updateProjectIntegration(slug, req.body, { ...(deps.home ? { home: deps.home } : {}), guard });
       auditRequest(req, 'project.integration_set', `${slug}:${integration.mode}`);
       announceProjectUpdated(slug, ['integration'], todoOriginFromRequest(req));
       res.json({ integration, configured: true });
