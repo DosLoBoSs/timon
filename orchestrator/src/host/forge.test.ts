@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   assertNoForce, FORGE_BODY_LIMIT, FORGE_TITLE_LIMIT, githubForge, githubRepoFromUrl, gitTransport, ISSUE_COMMENT_LIMIT, ISSUE_LIST_LIMIT,
-  parsePullRequestChecks, pushArguments, redactedOutput, REVIEW_THREAD_BODY_LIMIT, REVIEW_THREAD_LIMIT, type GitRunner,
+  parsePullRequestBranch, parsePullRequestChecks, pushArguments, pushCommitArguments, redactedOutput, REVIEW_THREAD_BODY_LIMIT, REVIEW_THREAD_LIMIT, type GitRunner,
 } from './forge.js';
 import type { GhRunner } from './gh.js';
 import type { ExecOpts } from './types.js';
@@ -422,4 +422,74 @@ test('the lookup of a posted comment filters on the author and the marker, and r
     assert.equal((await githubForge(null, { gh: odd.run }).findIssueComment('acme/app', 7, author, marker)).ok, false);
   }
   assert.equal(odd.calls.length, 0, 'a value that could close the jq string never reaches gh');
+});
+
+const HEAD = 'a'.repeat(40);
+const BRANCH_ANSWER = {
+  state: 'OPEN', isDraft: false, baseRefName: 'main', headRefName: 'fix/typo', headRefOid: HEAD,
+  headRepository: { name: 'app' }, headRepositoryOwner: { login: 'contrib' }, isCrossRepository: true,
+  maintainerCanModify: true, mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY', url: 'https://github.com/acme/app/pull/7',
+  extra: 'dropped',
+};
+
+test('the branch of a pull request: one read-only gh pr view, with the fork, its permission and merge state', async () => {
+  const run = recorder({ stdout: JSON.stringify(BRANCH_ANSWER) });
+  const out = await githubForge('/home/u/.config/gh-work', { gh: run.run }).pullRequestBranch('acme/app', 7);
+  assert.deepEqual(out, { ok: true, branch: {
+    state: 'open', isDraft: false, baseRef: 'main', headRef: 'fix/typo', headSha: HEAD, headRepository: 'contrib/app',
+    isCrossRepository: true, maintainerCanModify: true, mergeable: 'conflicting', mergeStateStatus: 'dirty',
+    url: 'https://github.com/acme/app/pull/7',
+  } });
+  assert.deepEqual(run.calls[0]?.args.slice(0, 4), ['pr', 'view', '7', '--repo=acme/app']);
+  assert.match(run.calls[0]?.args[4] ?? '', /^--json=.*maintainerCanModify.*mergeStateStatus/);
+  assert.equal(run.calls[0]?.opts.env?.GH_CONFIG_DIR, '/home/u/.config/gh-work');
+  assert.equal(parsePullRequestBranch(JSON.stringify({ ...BRANCH_ANSWER, headRefOid: 'zz', headRepository: null }))?.headSha, null);
+  assert.equal(parsePullRequestBranch(JSON.stringify({ ...BRANCH_ANSWER, url: 'http://x' })), null);
+  assert.equal(parsePullRequestBranch('[]'), null);
+  assert.equal((await githubForge(null, { gh: recorder({ stdout: '{}' }).run }).pullRequestBranch('../x', 7)).ok, false);
+});
+
+test('a branch update is one PUT to update-branch with the expected head, a raw string, and nothing else', async () => {
+  const run = recorder({ stdout: '{"message":"Updating pull request branch.","url":"https://github.com/acme/app/pull/7"}' });
+  const forge = githubForge('/home/u/.config/gh-work', { gh: run.run });
+  assert.deepEqual(await forge.updatePullRequestBranch('acme/app', 7, HEAD), { ok: true });
+  assert.deepEqual(run.calls[0]?.args, [
+    'api', '--method=PUT', 'repos/acme/app/pulls/7/update-branch', `--raw-field=expected_head_sha=${HEAD}`,
+  ]);
+  assert.equal(run.calls[0]?.opts.env?.GH_TOKEN, undefined);
+  for (const [repo, n, sha] of [['acme/..', 7, HEAD], ['acme/app', 0, HEAD], ['acme/app', 7, 'main'], ['acme/app', 7, `${HEAD} --x`]] as const) {
+    assert.equal((await forge.updatePullRequestBranch(repo, n, sha)).ok, false, `${repo} ${n} ${sha}`);
+  }
+  assert.equal(run.calls.length, 1, 'an odd target never reaches gh');
+});
+
+test('a refused branch update says why: the head moved, a conflict, no right, without a token', async () => {
+  const cases: Array<[string, string]> = [
+    ['gh: expected head sha didn\'t match current head ref. (HTTP 422)', 'head_moved'],
+    ['gh: merge conflict between base and head (HTTP 422)', 'conflict'],
+    [`gh: Resource not accessible by integration (HTTP 403) ${TOKEN}`, 'forbidden'],
+    ['gh: Server Error (HTTP 500)', 'gh_failed'],
+  ];
+  for (const [stderr, code] of cases) {
+    const out = await githubForge(null, { gh: recorder({ code: 1, stderr }).run }).updatePullRequestBranch('acme/app', 7, HEAD);
+    assert.ok(!out.ok && out.code === code, stderr);
+    assert.ok(!out.ok && !out.reason.includes('ghp_'));
+  }
+});
+
+test('the parents of a commit: one read, every answer a commit', async () => {
+  const P = 'b'.repeat(40);
+  const run = recorder({ stdout: `${HEAD} ${P}\n` });
+  assert.deepEqual(await githubForge(null, { gh: run.run }).commitParents('acme/app', P), { ok: true, parents: [HEAD, P] });
+  assert.deepEqual(run.calls[0]?.args.slice(0, 2), ['api', `repos/acme/app/commits/${P}`]);
+  assert.equal((await githubForge(null, { gh: recorder({ stdout: 'main' }).run }).commitParents('acme/app', P)).ok, false);
+  assert.equal((await githubForge(null, { gh: recorder({}).run }).commitParents('acme/app', 'HEAD')).ok, false);
+});
+
+test('a commit pushed to another repository is a plain refspec, never forced', () => {
+  assert.deepEqual(pushCommitArguments('git@github.com:contrib/app.git', HEAD, 'fix/typo'),
+    ['--', 'git@github.com:contrib/app.git', `${HEAD}:refs/heads/fix/typo`]);
+  for (const [sha, branch] of [[HEAD, '+fix'], [HEAD, 'a:b'], [HEAD, '-f'], ['+' + HEAD, 'fix'], ['main', 'fix'], [HEAD, 'a..b']] as const) {
+    assert.throws(() => pushCommitArguments('u', sha, branch), /refusing/, `${sha} ${branch}`);
+  }
 });
