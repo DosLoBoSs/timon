@@ -226,4 +226,6 @@ test('aggregation: a state the version does not know never reads as landed', () 
   assert.equal(out?.state, 'closed');
   assert.equal(out?.jobs.length, 2);
   assert.equal(out?.jobs[0]?.branch, 'feat/a', 'oldest first');
+  assert.deepEqual(out?.jobs.map((j) => j.jobId), ['a', 'b'], 'each job names its row');
+  assert.equal(out?.jobId, 'b');
 });

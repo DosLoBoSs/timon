@@ -199,8 +199,8 @@ declare module '@timon/ui' {
   /** State of one job's branch: `branch` (embargo, no pull request expected),
    *  `pending` (pull request not created), `open`, `merged`, `closed` (without a merge). */
   export type TodoLandingState = 'branch' | 'pending' | 'open' | 'merged' | 'closed';
-  /** One job (integration branch) of an idea. */
-  export type TodoLandingJob = { state: TodoLandingState; branch: string; prNumber: number | null; prUrl: string | null };
+  /** One job (integration branch) of an idea; `jobId` names it in `/api/kanban/landings/:id`, absent from an older host. */
+  export type TodoLandingJob = { jobId?: string; state: TodoLandingState; branch: string; prNumber: number | null; prUrl: string | null };
   /** An idea's landing: its job furthest from landing on top, every job in `jobs`, oldest first. */
   export type TodoLanding = TodoLandingJob & { jobs: TodoLandingJob[] };
   /**
