@@ -1659,11 +1659,47 @@ declare module '@timon/ui' {
       review: 'approved' | 'changes_requested' | 'review_required' | null;
       counts: Record<'pass' | 'fail' | 'pending' | 'skipped', number>;
       items: Array<{ name: string; status: 'pass' | 'fail' | 'pending' | 'skipped'; url: string | null }>;
+      /** GitHub's `mergeStateStatus`, lower case (`clean`, `dirty`, `behind`…). Client API 19. */
+      merge_state?: string;
+      /** Review threads still open; `null` when they were not read. Client API 19. */
+      unresolved_threads?: number | null;
     } | null;
     conflict: boolean | null;
     checks_running: boolean;
     /** Absent from a daemon that does not compute them. */
     links?: KanbanJobLinks;
+    /** Absent from a daemon that does not compute them. Client API 19. */
+    repairs?: KanbanJobRepairs;
+  };
+  /** What a repair of a Kanban job fixes (client API 19). */
+  export type KanbanJobRepairKind = 'checks' | 'comments' | 'conflict';
+  /**
+   * One repair of a Kanban job (client API 19): a `code` task on the job's
+   * branch, asked by a person. `pushed` once Timon pushed its work to the pull
+   * request, `unchanged` when it brought no commit, `failed` when it was not
+   * pushed (`error`, in English, says why).
+   */
+  export type KanbanJobRepair = {
+    id: string;
+    kind: KanbanJobRepairKind;
+    state: 'running' | 'pushed' | 'unchanged' | 'failed';
+    task_id: string;
+    head_after: string | null;
+    error: string | null;
+    created_at: number;
+    updated_at: number;
+  };
+  /**
+   * The repairs of a Kanban job (client API 19): `used` of `max`, whatever
+   * became of them; the one `running`, during which no other starts; the
+   * `last`; and what the forge last said `needs` a repair.
+   */
+  export type KanbanJobRepairs = {
+    used: number;
+    max: number;
+    running: KanbanJobRepair | null;
+    last: KanbanJobRepair | null;
+    needs: KanbanJobRepairKind[];
   };
   /**
    * The job a `kanban.job.dialog` occupant paints (client API 18), opened from
@@ -1671,12 +1707,21 @@ declare module '@timon/ui' {
    * idea. The occupant draws the whole window (`Dialog` from this module) and
    * calls `close()` when it is dismissed. `openTodo` and `openMission` close
    * the window first; `openTodo` is `null` where the screen cannot show an
-   * idea. Read-only: the job's diff, commits and pre-checks stay the
-   * product's.
+   * idea. The job's diff, commits and pre-checks stay the product's; its
+   * gestures (client API 19) are Timon's: `refresh()` reads the checks again,
+   * `repair(kind)` asks for a repair on behalf of the signed-in person (call
+   * it only from a click), says how it went and resolves `true` once a task
+   * started. Both replace `landing` with the daemon's answer.
    */
   export type JobDialogValue = {
-    /** The job, its `links` included. */
+    /** The job, its `links` and `repairs` included. */
     landing: KanbanJob;
+    /** The gesture under way, if any. Client API 19. */
+    busy: 'refresh' | KanbanJobRepairKind | null;
+    /** Client API 19. */
+    refresh(): Promise<void>;
+    /** Client API 19. */
+    repair(kind: KanbanJobRepairKind): Promise<boolean>;
     close(): void;
     openTodo: ((id: number) => void) | null;
     openMission(missionId: string): void;
