@@ -28,6 +28,8 @@ import { registerPrRoutes } from './pr-routes.js';
 import { registerExternalPrRoutes } from './external-pr-routes.js';
 import { watchReviewMissions } from '../../external-pr-review.js';
 import { registerLandingRoutes } from './landing-routes.js';
+import { registerForgeProposalRoutes } from './forge-proposal-routes.js';
+import { recoverInterruptedPublications } from '../../forge-proposals.js';
 import { dbApi } from '../../db.js';
 import {
   purgeOrphanTaskAttachments, purgeOrphanTodoAttachments, watchTaskDeletions, watchTodoDeletions,
@@ -59,6 +61,7 @@ export function apply(ctx: Context): void {
   registerPrRoutes(ctx.http.router());
   registerExternalPrRoutes(ctx.http.router());
   registerLandingRoutes(ctx.http.router());
+  registerForgeProposalRoutes(ctx.http.router());
 
   // `kanban` service: ordering token for the modules that create tasks
   // (`routines`) or extend the pipeline (`kanban-code`). It will carry the
@@ -81,6 +84,9 @@ export function apply(ctx: Context): void {
   ctx.effect(() => startIntegrationPoller());
   // Brings the verdict of a pull request's relecture back to its row.
   ctx.effect(() => watchReviewMissions());
+  // A publication cut by a stop is failed, and looked for on the forge before
+  // it is written again.
+  recoverInterruptedPublications();
 
   // A card's files live as long as the card. The sweep catches the cards
   // deleted while this module was off.
