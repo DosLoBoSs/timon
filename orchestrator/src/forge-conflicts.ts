@@ -248,13 +248,13 @@ export function remoteHostOf(url: string): string | null {
   return forgeEndpointOf(url)?.host ?? null;
 }
 
-/** The hosts a fetch or a push of a resolution may reach: the forge `gh` reads
- *  the pull request from (github.com and its SSH-over-443 name, or the
- *  Enterprise host of the project's `gh` folder). */
-function forgeHosts(integration: ProjectIntegration): ReadonlySet<string> | null {
+/** The hosts a fetch or a push of a resolution over `scheme` may reach: the
+ *  forge `gh` reads the pull request from (github.com, plus its SSH-over-443
+ *  name over ssh only, or the Enterprise host of the project's `gh` folder). */
+function forgeHosts(integration: ProjectIntegration, scheme: ForgeEndpoint['scheme']): ReadonlySet<string> | null {
   const host = ghForgeHost(integration.gh_config_dir);
   if (!host) return null;
-  return new Set(host === 'github.com' ? ['github.com', 'ssh.github.com'] : [host]);
+  return new Set(host === 'github.com' && scheme === 'ssh' ? ['github.com', 'ssh.github.com'] : [host]);
 }
 
 export type PinnedRemote = {
@@ -286,7 +286,7 @@ export async function pinnedRemote(integration: ProjectIntegration, deps: ForgeP
   if (!endpoint) {
     return refuse(409, 'conflict_unsupported', 'the project\'s remote is not a plain ssh or https URL');
   }
-  const allowed = forgeHosts(integration);
+  const allowed = forgeHosts(integration, endpoint.scheme);
   if (!allowed) return refuse(409, 'conflict_unsupported', 'the forge host of the project could not be told');
   const pinned = (host: string): PinnedRemote => ({
     ok: true, endpoint, host, kind: endpoint.scheme, urlOf: (repo) => forgeNetworkUrl(endpoint, repo),

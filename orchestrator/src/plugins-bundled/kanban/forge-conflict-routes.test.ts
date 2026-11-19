@@ -285,6 +285,7 @@ test('the remote must lead to the forge gh reads the pull request from: refused 
   assert.equal(await host(at('git@github.com:acme/widgets.git')), 'github.com');
   assert.equal(await host(at('https://GitHub.com/acme/widgets')), 'github.com');
   assert.equal(await host(at('ssh://git@ssh.github.com:443/acme/widgets.git')), 'ssh.github.com');
+  assert.equal(await host(at('https://ssh.github.com/acme/widgets')), 'conflict_unsupported', 'ssh.github.com serves ssh only');
   assert.equal(await host(at('git@github-acme:acme/widgets.git')), 'github.com', 'an SSH alias of github.com');
   assert.equal(await host(at('https://github-acme/acme/widgets')), 'conflict_unsupported', 'an alias is an SSH name only');
   assert.equal(await host(at('https://github.com:443/acme/widgets')), 'github.com');

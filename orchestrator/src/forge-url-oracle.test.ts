@@ -168,9 +168,10 @@ test('a resolution\'s fetch and push reach the pinned host on real git, or nothi
       }
     }
     assert.ok(accepted >= 8, `the corpus keeps what people type (${accepted} accepted)`);
-    // Nothing plain is refused: an alias is an SSH name only, an https user a credential.
+    // Nothing plain is refused: an alias and ssh.github.com are SSH names only, an https user a credential.
     for (const remote of refused) {
-      const hostile = remote.includes(EVIL) || remote.includes('github-evil') || /[[\]\\%#?]|^https:\/\/[^/]*@|^https:\/\/github-acme\//.test(remote);
+      const hostile = remote.includes(EVIL) || remote.includes('github-evil')
+        || /[[\]\\%#?]|^https:\/\/[^/]*@|^https:\/\/(?:github-acme|ssh\.github\.com)[:/]/.test(remote);
       assert.ok(hostile, `${remote} was refused`);
     }
     // Every form with a bracket in its user is refused before git runs.
