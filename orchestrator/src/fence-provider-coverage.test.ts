@@ -22,9 +22,10 @@ import '../tests/helpers/paid-license.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // The user's home the fence reasons about: a throwaway one, with the CLIs' own folders in it, so
 // that a backend's grant on its folder resolves on any machine and the real home is never read.
@@ -39,8 +40,16 @@ process.env.KIMI_API_KEY = 'test-only-kimi';
 process.env.OLLAMA_API_KEY = 'test-only-ollama';
 process.env.GROK_AUTH_DIR = join(USER_HOME, '.grok');
 
+const OFFICIAL = fileURLToPath(new URL('../official-providers', import.meta.url));
 const { mountOfficialProviders, stubCliBinaries, stubCodexSignIn, buildUnderSeal } = await import('../tests/helpers/official-providers.js');
-await stubCliBinaries('claude', 'codex', 'grok', 'copilot', 'pi', 'opencode', 'hermes', 'agy');
+// Every name a manifest lets a profile's CLI go by: a profile exists only when its first one is found,
+// and a CLI installed on the machine running the suite must not be what makes it exist.
+await stubCliBinaries(...readdirSync(OFFICIAL).flatMap((dir) => {
+  const manifest = JSON.parse(readFileSync(join(OFFICIAL, dir, 'package.json'), 'utf8')) as {
+    timon?: { provider?: { backends?: Array<{ binary?: { names?: string[] } }> } };
+  };
+  return (manifest.timon?.provider?.backends ?? []).flatMap((backend) => backend.binary?.names ?? []);
+}));
 await stubCodexSignIn();
 const { activeProfiles, getDialect, registerFileProfile, registerPackProfile } = await import('./backends/registry.js');
 const { getBackend } = await import('./backends/index.js');
