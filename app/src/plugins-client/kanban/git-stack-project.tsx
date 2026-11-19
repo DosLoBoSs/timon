@@ -105,3 +105,23 @@ export function StackProjectPicker({ project, none, label, className }: {
     </select>
   );
 }
+
+/** What `useGitStackProject()` gives a plugin's widget of the "Git" stack (client API 19). */
+export type GitStackProject = {
+  /** The project shown: the chat's, else the one picked; null = none. */
+  project: string | null;
+  /** True in a chat's rail, where the project is the conversation's and nothing is asked. */
+  inChat: boolean;
+};
+
+/** The project the "Git" stack talks about, for a widget that is not the product's own. */
+export function useGitStackProject(): GitStackProject {
+  const { context, slug } = useStackProject();
+  return { project: slug, inChat: context !== null };
+}
+
+/** The stack's project picker, for a plugin's widget header: nothing in a chat. */
+export function GitStackProjectPicker({ none, label, className }: { none: string; label: string; className?: string }) {
+  const project = useStackProject();
+  return <StackProjectPicker project={project} none={none} label={label} className={className} />;
+}
