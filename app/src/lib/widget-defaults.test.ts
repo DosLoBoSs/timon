@@ -237,3 +237,42 @@ test('Working agents lands in the middle of the top bar on every view that never
   // Moved by hand: it stays where it was put.
   assert.equal(placeOf([{ id: working, rail: 'sidebar.left.widget', rang: 0, hauteur: 300 }])?.rail, 'sidebar.left.widget');
 });
+
+test('a card split into several widgets hands its place to all of them, as one stack', () => {
+  const card = 'plugin:@acme/tools:card';
+  const parts = ['plugin:@acme/tools:a', 'plugin:@acme/tools:b', 'plugin:@acme/tools:c'];
+  const split: WidgetConstraints[] = [
+    ...constraints,
+    ...parts.map((id, i) => ({ id, defaultHeight: 200, minHeight: 100, defaultZone: 'droite', defaultRank: 10 + i, formerIds: [card] })),
+  ];
+  const docker = 'plugin:@timon/docker-supervision:docker';
+  const stored = [
+    { id: card, rail: 'chat.right.widget', rang: 0, hauteur: 340, heightMode: 'fill', fillPercent: 60 },
+    { id: docker, rail: 'chat.right.widget', rang: 1, hauteur: 260 },
+  ];
+  const merged = mergeWorkspaceWidgets(stored, split, '/chat');
+  const heirs = parts.map((id) => merged.find((w) => w.id === id)!);
+  assert.ok(heirs.every((w) => !w.removed && w.rail === 'chat.right.widget'), 'all three where the card stood');
+  assert.equal(new Set(heirs.map((w) => w.group)).size, 1, 'one stack');
+  assert.ok(heirs[0]!.group, 'a real stack, not three loose cards');
+  assert.deepEqual(heirs.map((w) => w.activeTab === true), [true, false, false], 'the first part in front');
+  assert.ok(heirs.every((w) => w.hauteur === 340 && w.heightMode === 'fill' && w.fillPercent === 60), 'at the card\'s height');
+  const column = merged.filter((w) => !w.removed && w.rail === 'chat.right.widget').sort((a, b) => a.rang - b.rang).map((w) => w.id);
+  assert.deepEqual(column, [...parts, docker], 'above the card that followed it');
+
+  // The card was a background tab of the person's own stack: the parts stay
+  // there, behind the tab that was in front.
+  const stack = 'stack:mine:1';
+  const tabbed = [
+    { ...stored[0]!, group: stack },
+    { ...stored[1]!, group: stack, activeTab: true },
+  ];
+  const kept = mergeWorkspaceWidgets(tabbed, split, '/chat');
+  assert.ok(parts.every((id) => kept.find((w) => w.id === id)?.group === stack));
+  assert.ok(parts.every((id) => !kept.find((w) => w.id === id)?.activeTab), 'Docker stays in front');
+  assert.equal(kept.find((w) => w.id === docker)?.activeTab, true);
+
+  // The card had been taken out: so are its parts, nothing comes back.
+  const away = mergeWorkspaceWidgets([{ ...stored[0]!, removed: true }, stored[1]!], split, '/chat');
+  assert.ok(parts.every((id) => away.find((w) => w.id === id)?.removed === true));
+});
