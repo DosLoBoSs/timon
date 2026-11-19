@@ -327,8 +327,8 @@ test('refused after the merge: the head moved, a clean merge, a deletion, a bina
   assert.deepEqual(scratchLeft(), [], 'a refused merge leaves no objects behind');
 });
 
-test('a file whose name holds a direction mark is refused: it would read otherwise in the dialog', async () => {
-  for (const mark of ['\u202E', '\u2066', '\u200F']) {
+test('a file whose name holds a direction mark or an invisible character is refused: it would read otherwise in the dialog', async () => {
+  for (const mark of ['\u202E', '\u2066', '\u200F', '\u061C', '\u200B', '\u200C', '\u200D', '\u2028', '\u2029', '\uFEFF']) {
     const name = `docs/read${mark}me.txt`;
     conflictingFixture({ [name]: 'x\n' }, { [name]: 'contributor\n' }, { [name]: 'main\n' });
     const out = await prepare();

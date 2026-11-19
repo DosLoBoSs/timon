@@ -83,11 +83,13 @@ const CONFLICT_MARKER = /^(?:<{7}(?: |$)|>{7}(?: |$)|\|{7}(?: |$)|={7}\r?$)/m;
 /**
  * Characters a path in conflict may not hold: controls, the comma that
  * `update-index --cacheinfo` splits on, the replacement character of an
- * undecodable name, and the bidirectional marks (U+200E/F, U+202A–U+202E,
- * U+2066–U+2069) that make a name read otherwise in the dialog and the comment.
+ * undecodable name, the bidirectional marks (U+061C, U+200E/F, U+202A–U+202E,
+ * U+2066–U+2069) that make a name read otherwise in the dialog and the
+ * comment, and the invisible ones that make two names look alike or break a
+ * line (U+200B–U+200D, U+2028/U+2029, U+FEFF).
  */
 // eslint-disable-next-line no-control-regex
-const UNUSUAL_PATH = /[\u0000-\u001f\u007f,\uFFFD\u200E\u200F\u202A-\u202E\u2066-\u2069]/;
+const UNUSUAL_PATH = /[\u0000-\u001f\u007f,\uFFFD\u061C\u200B-\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069\uFEFF]/;
 /** Paths whose change deserves a second look in the dialog: they steer GitHub or git itself. */
 const SENSITIVE_PATH = /^(?:\.github\/|\.gitattributes$|\.gitmodules$|(?:.*\/)?\.gitattributes$)/;
 
