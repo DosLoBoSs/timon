@@ -651,7 +651,7 @@ Pages, by use: \`overview\`, \`quickstart\` (first plugin, start here),
 \`overlay\`, \`theme\`, \`composer\`, \`bundle\`, \`settings\`, \`realtime\`,
 \`secrets\`, \`providers\`, \`dictation\`, \`mascot-pack\`, \`remote-mcp\`,
 \`ui-documents\`, \`questions-notifications\`, \`memory\`, \`projects-series-worktrees\`,
-\`agents\` (shipping skills), \`missions-control\`, \`screen-and-chat\`,
+\`forge\` (a project's GitHub repository), \`agents\` (shipping skills), \`missions-control\`, \`screen-and-chat\`,
 \`browser\`, \`events\`, \`kanban-sync\`, \`webhooks\`, \`integrations\`,
 \`connections\`, \`automations\`, \`administration\`, \`ui-kit\` (translations),
 \`testing\`, \`distribution\` (ship to someone else: the rules and the pre-ship

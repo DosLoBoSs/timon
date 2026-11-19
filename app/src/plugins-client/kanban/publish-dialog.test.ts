@@ -137,6 +137,22 @@ test('the dialog shows the exact text, where it goes, as which account; nothing 
   }
 });
 
+test('a plugin\'s proposal names the plugin and asks for a full read', async () => {
+  const fromPlugin = { ...PROPOSAL, trigger: 'plugin' as const, plugin: 'acme-issues', key: 'plugin:acme-issues:thanks:209' };
+  const m = await mount(({ url }) => (url === `/api/ui/projects/acme/forge-proposals/${ID}` ? Response.json({ proposal: fromPlugin }) : undefined));
+  try {
+    await open(m);
+    await m.until(() => (q('[data-publish-dialog]')?.textContent ?? '').includes('acme-bot'), 'the account');
+    const dialog = q('[data-publish-dialog]')!.textContent ?? '';
+    assert.match(dialog, /Plugin acme-issues/);
+    assert.match(dialog, /Written by a plugin, not by Timon/);
+    assert.doesNotMatch(dialog, /Draft prepared by Timon/);
+    assert.deepEqual(writes(m.calls), [], 'opening writes nothing');
+  } finally {
+    await m.unmount();
+  }
+});
+
 test('an edited text is saved, then published as edited; a refusal keeps the dialog open', async () => {
   let refuse = true;
   const m = await mount(({ method, url, body }) => {

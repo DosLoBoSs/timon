@@ -296,6 +296,19 @@ export type {
 } from '../../../orchestrator/src/plugins/contract/worktrees.js';
 
 /**
+ * The GitHub repository of a project, API 19 — host half. `ctx.forge` reads a
+ * project's issues, open pull requests and checks (`forge:read`) and proposes a
+ * comment that a signed-in person publishes or discards (`forge:propose`); the
+ * plugin never holds `gh` nor the project's account. Both sensitive. Every
+ * text from the forge is data written by someone else. Errors carry a `code`.
+ */
+export type {
+  PluginForgeCheck, PluginForgeChecks, PluginForgeErrorCode, PluginForgeIssue, PluginForgeIssueDetails,
+  PluginForgeIssueRef, PluginForgeLabel, PluginForgeMergeState, PluginForgeProposal, PluginForgeProposalInput,
+  PluginForgeProposalState, PluginForgeProposeResult, PluginForgePull, PluginForgePullDetails, PluginForgeRepository,
+} from '../../../orchestrator/src/plugins/contract/forge.js';
+
+/**
  * The screen and the conversation, API 10 — host half. `ctx.layout`
  * (`layout:read`, `layout:propose`, `layout:presets`) reads the arrangement of
  * the account of the request and asks its owner to change it; `ctx.ui.navigate`

@@ -760,7 +760,7 @@ test('a slot opened by API 18 needs a manifest that declares it', () => {
     /names `kanban\.todo\.landing`, which needs `apiVersion: 18`/);
   const res = readManifest(pkg({ apiVersion: 18, client: { slots: ['kanban.todo.landing'] } }));
   assert.ok(res.ok, res.ok ? '' : res.message);
-  assert.equal(SLOT_API_VERSIONS['kanban.todo.landing'], PLUGIN_API_VERSION);
+  assert.equal(SLOT_API_VERSIONS['kanban.todo.landing'], 18);
 });
 
 test('the job and Publish on GitHub dialogs join wave 18', () => {

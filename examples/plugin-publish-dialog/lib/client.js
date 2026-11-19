@@ -54,7 +54,7 @@ function PlainPublishDialog() {
         })
         : React.createElement('p', { className: 'text-[13px] text-muted-foreground' }, t(proposal.state)),
       (problem && waiting) || error
-        ? React.createElement('p', { role: 'alert', className: 'text-[12px] text-destructive' }, error ?? t(problem))
+        ? React.createElement('p', { role: 'alert', className: 'text-[12px] text-destructive' }, error ?? t(problem ?? ''))
         : null,
       React.createElement('div', { className: 'flex items-center justify-end gap-2' },
         waiting

@@ -12,7 +12,7 @@ import type { Answer } from './landing-api';
 import type { Landing } from './landing-api';
 
 export type ForgeProposalState = 'draft' | 'publishing' | 'published' | 'failed' | 'discarded';
-export type ForgeProposalTrigger = 'person' | 'landing' | 'todo_resolved';
+export type ForgeProposalTrigger = 'person' | 'landing' | 'todo_resolved' | 'plugin';
 export type ForgeTargetType = 'issue' | 'pull';
 
 export type ForgeProposal = {
@@ -24,6 +24,8 @@ export type ForgeProposal = {
   body: string;
   state: ForgeProposalState;
   trigger: ForgeProposalTrigger;
+  /** The plugin that proposed it (`trigger: 'plugin'`, daemon API 19); absent from an older daemon. */
+  plugin?: string | null;
   key: string;
   source_ref: string | null;
   /** The account it was published as, once published. */

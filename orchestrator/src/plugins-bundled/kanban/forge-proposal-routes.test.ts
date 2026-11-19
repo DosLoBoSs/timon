@@ -323,7 +323,7 @@ test('a person edits, then discards: the card goes, the forge never hears of it'
   assert.equal((await call('GET', `/api/projects/solo/forge-proposals/${proposal.id}`, 'person')).status, 404, 'another project never sees it');
 });
 
-test('no agent surface creates or publishes a proposal: no MCP tool, no CLI verb, no plugin facade', () => {
+test('no agent surface creates or publishes a proposal: no MCP tool, no CLI verb; the plugin facade only proposes', () => {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
   const files: string[] = [];
   const walk = (dir: string): void => {
@@ -341,7 +341,11 @@ test('no agent surface creates or publishes a proposal: no MCP tool, no CLI verb
     join(root, 'src', 'plugins-bundled', 'kanban', 'forge-proposal-routes.ts'),
     join(root, 'src', 'plugins-bundled', 'kanban', 'index.ts'),
   ]);
-  const offenders = files.filter((file) => !allowed.has(file)
+  // `ctx.forge.propose` (API 19) stores a proposal for a person to publish:
+  // its facade may create one, never edit, discard or publish one.
+  const facade = join(root, 'src', 'plugins', 'forge-facade.ts');
+  const offenders = files.filter((file) => !allowed.has(file) && file !== facade
     && /\/forge-proposals\b|forge-proposals\.js|proposeForgeWrite|publishForgeProposal/.test(readFileSync(file, 'utf8')));
   assert.deepEqual(offenders.map((f) => f.slice(root.length)), []);
+  assert.doesNotMatch(readFileSync(facade, 'utf8'), /publishForgeProposal|editForgeProposal|discardForgeProposal|recoverInterruptedPublications/);
 });

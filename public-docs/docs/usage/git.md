@@ -180,12 +180,12 @@ An idea linked to a GitHub issue shows the issue's number (**#212**) among its b
 
 Timon writes on GitHub only through one window, **Publish on GitHub**, and only when you click **Publish** in it. An agent never publishes there. The window opens from a row marked **to approve** in **Jobs** or **Pull requests**, from the notification card of a comment waiting for you, or from **Propose a comment…** in a pull request's menu.
 
-On the left, the exact text that would be posted, and whether it goes on an issue or a pull request (it is public). **Edit** lets you change it and **Save** keeps your version; a draft Timon prepared says so under the text. On the right, what would leave: where it goes, the GitHub account it would be posted as (the account set on the project), what prepared it, and the fact that it is posted once only, even if you click twice.
+On the left, the exact text that would be posted, and whether it goes on an issue or a pull request (it is public). **Edit** lets you change it and **Save** keeps your version; a draft Timon prepared says so under the text, and a comment a plugin proposed names the plugin and asks you to read every word, since a plugin, not Timon, wrote it. On the right, what would leave: where it goes, the GitHub account it would be posted as (the account set on the project), what prepared it, and the fact that it is posted once only, even if you click twice.
 
 - **Publish** posts the text as it stands. Timon first checks that `gh` is signed in as the project's account and refuses otherwise, without posting anything. If GitHub refuses, the window stays open with the reason, and you can try again.
 - **Do not publish** closes the proposal: nothing is posted, and its notification goes away.
 
-Without an account set on the project, **Publish** stays off. Proposing, editing and publishing need you to be signed in with the **Create, update and delete projects** permission: an agent, a plugin or the daemon's token cannot do it.
+Without an account set on the project, **Publish** stays off. Proposing, editing and publishing need you to be signed in with the **Create, update and delete projects** permission: an agent or the daemon's token cannot do it. A plugin holding `forge:propose` may propose a comment ([The GitHub repository of a project](../plugins/forge.md)), never edit or publish one: it waits here for you like any other.
 
 ## Who may change a repository
 

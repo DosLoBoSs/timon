@@ -1688,8 +1688,9 @@ declare module '@timon/ui' {
    * A text proposed for publication on a project's forge (client API 18): a
    * comment on an issue or a pull request, waiting for a person. `draft` and
    * `failed` wait; `publishing`, `published` and `discarded` are done.
-   * `trigger` says what prepared it: `person`, `landing` (a job landed) or
-   * `todo_resolved`. `account` and `url` are set once published.
+   * `trigger` says what prepared it: `person`, `landing` (a job landed),
+   * `todo_resolved`, or `plugin` (a plugin's `ctx.forge.propose`, daemon API
+   * 19, which names it in `plugin`). `account` and `url` are set once published.
    */
   export type ForgeProposal = {
     id: string;
@@ -1699,7 +1700,8 @@ declare module '@timon/ui' {
     target: { type: 'issue' | 'pull'; number: number; url: string };
     body: string;
     state: 'draft' | 'publishing' | 'published' | 'failed' | 'discarded';
-    trigger: 'person' | 'landing' | 'todo_resolved';
+    trigger: 'person' | 'landing' | 'todo_resolved' | 'plugin';
+    plugin?: string | null;
     key: string;
     source_ref: string | null;
     account: string | null;
