@@ -8,7 +8,7 @@ import '../../test-home.js';
 import '../../../tests/helpers/paid-license.js';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -240,6 +240,29 @@ test('refused after the merge: the head moved, a clean merge, a deletion, a bina
     assert.match(String(out.json.error), reason);
   }
   assert.deepEqual(scratchLeft(), [], 'a refused merge leaves no objects behind');
+});
+
+test('a symbolic link in conflict is GitHub\'s to resolve', { skip: process.platform === 'win32' }, async () => {
+  f = forgeFixture({ 'a.txt': 'a\n' });
+  const relink = (dir: string, target: string, message: string) => {
+    try { unlinkSync(join(dir, 'link')); } catch { /* first link */ }
+    symlinkSync(target, join(dir, 'link'));
+    f.git(dir, 'add', '-A');
+    f.git(dir, 'commit', '-q', '-m', message);
+  };
+  const seed = checkout(f, f.base, 'main');
+  relink(seed, 'a.txt', 'link');
+  f.git(seed, 'push', '-q', 'origin', 'main');
+  f.git(seed, 'push', '-q', f.fork, 'main');
+  const c = checkout(f, f.fork, 'fix/typo');
+  relink(c, '/etc/passwd', 'contributor');
+  f.git(c, 'push', '-q', 'origin', 'fix/typo');
+  f.publishPull(7, 'fix/typo');
+  relink(seed, 'b.txt', 'main');
+  f.git(seed, 'push', '-q', 'origin', 'main');
+  const out = await prepare();
+  assert.equal(out.json.code, 'conflict_unsupported', JSON.stringify(out.json));
+  assert.deepEqual(scratchLeft(), []);
 });
 
 test('a resolution, end to end: prepare, resolve, suggest, propose, publish a fast-forward push and the comment', async () => {
