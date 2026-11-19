@@ -49,8 +49,8 @@ import {
   type ForgeProposalDeps, type ForgeProposalExecution, type ForgeProposalExecutorResult, type ForgeProposalRefusal,
   type ForgeProposalRefusalCode, type ForgeProposalRow,
 } from './forge-proposals.js';
-import { checkRemoteUrl, urlAuthority } from './git-remote-url.js';
-import { githubRepoFromUrl, plainBranch, type PullRequestBranch } from './host/forge.js';
+import { forgeEndpointOf, forgeNetworkUrl, SSH_ALIAS_NAME, type ForgeEndpoint } from './forge-network-url.js';
+import { plainBranch, type PullRequestBranch } from './host/forge.js';
 import {
   gitVersionAtLeast, MIN_GIT_VERSION, openScratchRepo, reopenScratchRepo, SCRATCH_SIZE_LIMIT, sshHostName,
   type MergeTreeResult, type ScratchRepo,
@@ -237,34 +237,12 @@ function textProblem(text: string): string | null {
 }
 
 /**
- * The push URL of the contributor's fork, written like the project's remote
- * (an SSH alias keeps naming the key of the project's account), or null. Only
- * the `owner/name` part changes: the host stays the remote's, which
- * `pinnedRemote` checked.
- */
-export function forkPushUrl(remoteUrl: string, repo: string, fork: string): string | null {
-  const m = /^(.*[/:])([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(\.git)?\/?$/.exec(remoteUrl.trim());
-  if (!m || m[2]!.toLowerCase() !== repo.toLowerCase()) return null;
-  const url = `${m[1]}${fork}${m[3] ?? ''}`;
-  const check = checkRemoteUrl(url);
-  if (!check.ok || (check.kind !== 'ssh' && check.kind !== 'https')) return null;
-  if (remoteHostOf(url) === null || remoteHostOf(url) !== remoteHostOf(remoteUrl)) return null;
-  return githubRepoFromUrl(url)?.toLowerCase() === fork.toLowerCase() ? url : null;
-}
-
-/**
  * The host an ssh or https remote URL names (an SSH alias as written),
- * lowercased, or null. Cut as git cuts it, never read by a URL parser alone:
- * `urlAuthority` is null when the two would name different hosts.
+ * lowercased, or null when one part of the remote is not plain enough to be
+ * rebuilt (`forgeEndpointOf`).
  */
 export function remoteHostOf(url: string): string | null {
-  const check = checkRemoteUrl(url);
-  if (!check.ok || (check.kind !== 'ssh' && check.kind !== 'https')) return null;
-  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(check.url)) {
-    return urlAuthority(check.url)?.host.replace(/^\[|\]$/g, '') || null;
-  }
-  const m = /^(?:[^@/:[\]]+@)?([^@/:[\]]+):/.exec(check.url);
-  return m ? m[1]!.toLowerCase() : null;
+  return forgeEndpointOf(url)?.host ?? null;
 }
 
 /** The hosts a fetch or a push of a resolution may reach: the forge `gh` reads
@@ -276,28 +254,44 @@ function forgeHosts(integration: ProjectIntegration): ReadonlySet<string> | null
   return new Set(host === 'github.com' ? ['github.com', 'ssh.github.com'] : [host]);
 }
 
-export type PinnedRemote = { ok: true; url: string; host: string; kind: 'ssh' | 'https' };
+export type PinnedRemote = {
+  ok: true;
+  /** The parts every URL git is given is rebuilt from (`forgeNetworkUrl`). */
+  endpoint: ForgeEndpoint;
+  /** The forge host those parts reach: the endpoint's, or the one its SSH alias resolves to. */
+  host: string;
+  kind: 'ssh' | 'https';
+  /** The URL of `repo` (`owner/name`, as GitHub named it) at the pinned host, or null. */
+  urlOf(repo: string): string | null;
+};
 
 /**
- * The project's remote, when the scratch repository may fetch from it and push
- * to a fork beside it: an ssh or https URL whose host is the forge `gh` reads
- * the pull request from. An SSH alias passes when the user's SSH configuration
- * sends it to that host. Checked before any fetch: a remote URL pointing
- * anywhere else would receive the base branch's history and the push.
+ * Where the scratch repository may fetch from and push to: the scheme, ssh
+ * user, host or SSH alias and port of the project's remote, when that host is
+ * the forge `gh` reads the pull request from. An SSH alias passes when the
+ * user's SSH configuration sends it to that host. Checked before any fetch: a
+ * remote pointing anywhere else would receive the base branch's history and
+ * the push.
+ *
+ * The remote URL itself is never handed to git: it only chooses the parts, and
+ * `urlOf` writes every URL from them and a repository GitHub named
+ * (`forge-network-url.ts`).
  */
 export async function pinnedRemote(integration: ProjectIntegration, deps: ForgeProposalDeps = {}): Promise<PinnedRemote | Refusal> {
   if (!integration.remote_url) return refuse(409, 'conflict_unsupported', 'the project names no remote URL (remote_url)');
-  const check = checkRemoteUrl(integration.remote_url);
-  if (!check.ok || (check.kind !== 'ssh' && check.kind !== 'https')) {
-    return refuse(409, 'conflict_unsupported', 'the project\'s remote is not an ssh or https URL');
+  const endpoint = forgeEndpointOf(integration.remote_url);
+  if (!endpoint) {
+    return refuse(409, 'conflict_unsupported', 'the project\'s remote is not a plain ssh or https URL');
   }
-  const host = remoteHostOf(check.url);
   const allowed = forgeHosts(integration);
-  if (!host || !allowed) return refuse(409, 'conflict_unsupported', 'the forge host of the project could not be told');
-  if (allowed.has(host)) return { ok: true, url: check.url, host, kind: check.kind };
-  if (check.kind === 'ssh') {
-    const resolved = await (deps.sshHostName ?? sshHostName)(host);
-    if (resolved && allowed.has(resolved)) return { ok: true, url: check.url, host: resolved, kind: 'ssh' };
+  if (!allowed) return refuse(409, 'conflict_unsupported', 'the forge host of the project could not be told');
+  const pinned = (host: string): PinnedRemote => ({
+    ok: true, endpoint, host, kind: endpoint.scheme, urlOf: (repo) => forgeNetworkUrl(endpoint, repo),
+  });
+  if (allowed.has(endpoint.host)) return pinned(endpoint.host);
+  if (endpoint.scheme === 'ssh' && SSH_ALIAS_NAME.test(endpoint.host)) {
+    const resolved = await (deps.sshHostName ?? sshHostName)(endpoint.host, endpoint.user);
+    if (resolved && allowed.has(resolved)) return pinned(resolved);
   }
   return refuse(409, 'conflict_unsupported', `the project's remote does not lead to ${[...allowed][0]}: Timon fetches and pushes a resolution only there`);
 }
@@ -466,7 +460,8 @@ export async function prepareConflict(project: string, number: number, by: strin
   }
   const pinned = await pinnedRemote(integration, deps);
   if (!pinned.ok) return pinned;
-  const remote = pinned.url;
+  const remote = pinned.urlOf(repo);
+  if (!remote) return refuse(409, 'conflict_unsupported', 'the project\'s repository has no URL Timon can write');
   const read = await branchForge(integration.gh_config_dir, deps).pullRequestBranch(repo, number);
   if (!read.ok) return refuse(502, 'forge_read_failed', `the pull request could not be read: ${read.reason}`);
   const problem = branchProblem(repo, read.branch);
@@ -733,8 +728,8 @@ export async function proposeConflictResolution(
   if (!account) return refuse(409, 'forge_account_unset', 'the project names no GitHub account (account)');
   const pinned = await pinnedRemote(where.value.integration, deps);
   if (!pinned.ok) return pinned;
-  const pushUrl = forkPushUrl(pinned.url, row.repo, row.head_repo);
-  if (!pushUrl) return refuse(409, 'conflict_unsupported', 'the contributor\'s fork has no push URL Timon can derive from the project\'s remote');
+  const pushUrl = pinned.urlOf(row.head_repo);
+  if (!pushUrl) return refuse(409, 'conflict_unsupported', 'the contributor\'s fork has no push URL Timon can write');
   const scratch = attached(row, deps);
   if (!scratch.ok) return scratch;
   const time = Math.floor(now / 1000);
@@ -922,9 +917,9 @@ async function executePush(run: ForgeProposalExecution): Promise<ForgeProposalEx
   }
   const pinned = await pinnedRemote(run.integration, run.deps);
   if (!pinned.ok) return unchanged(pinned.code, pinned.reason, pinned.status);
-  const remote = pinned.url;
-  const pushUrl = forkPushUrl(remote, row.repo, session.head_repo);
-  if (!pushUrl) return unchanged('conflict_unsupported', 'the contributor\'s fork has no push URL Timon can derive from the project\'s remote');
+  const remote = pinned.urlOf(row.repo);
+  const pushUrl = pinned.urlOf(session.head_repo);
+  if (!remote || !pushUrl) return unchanged('conflict_unsupported', 'the contributor\'s fork has no push URL Timon can write');
   if (payload.push_url !== pushUrl) {
     return unchanged('forge_conflict_changed', 'the push URL is no longer the one shown: discard this publication and propose the resolution again');
   }

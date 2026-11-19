@@ -129,6 +129,12 @@ export function urlAuthority(url: string): UrlAuthority | null {
   return { user, host, port };
 }
 
+/** The user (null when none) and host of an scp-like remote (`git@host:path`), as written, or null. */
+export function scpAuthority(url: string): { user: string | null; host: string } | null {
+  const m = SCP.exec(url);
+  return m ? { user: m[1] ?? null, host: m[2]! } : null;
+}
+
 export function checkRemoteUrl(raw: string): RemoteUrlCheck {
   const url = raw.trim();
   if (!url) return { ok: false, reason: 'empty' };

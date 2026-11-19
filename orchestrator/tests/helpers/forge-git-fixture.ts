@@ -15,8 +15,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { GitRunner } from '../../src/host/forge.js';
 
-export const BASE_URL = 'git@github.com:acme/widgets.git';
-export const FORK_URL = 'git@github.com:contrib/widgets.git';
+/** The URLs the daemon writes for the two repositories (`forgeNetworkUrl`). */
+export const BASE_URL = 'ssh://git@github.com/acme/widgets.git';
+export const FORK_URL = 'ssh://git@github.com/contrib/widgets.git';
 
 export type ForgeFixture = {
   root: string;

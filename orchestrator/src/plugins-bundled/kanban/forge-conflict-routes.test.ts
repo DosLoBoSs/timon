@@ -15,10 +15,10 @@ import { join } from 'node:path';
 import { after, beforeEach, test } from 'node:test';
 import express from 'express';
 import { createTestAccount } from '../../../tests/helpers/accounts.js';
-import { checkout, forgeFixture, type ForgeFixture } from '../../../tests/helpers/forge-git-fixture.js';
+import { BASE_URL, checkout, forgeFixture, FORK_URL, type ForgeFixture } from '../../../tests/helpers/forge-git-fixture.js';
 import { db, dbApi } from '../../db.js';
 import {
-  askContributorComment, forkPushUrl, hasConflictMarkers, pinnedRemote, remoteHostOf, resolvedText, suggestConflictResolution, sweepConflictScratch,
+  askContributorComment, hasConflictMarkers, pinnedRemote, remoteHostOf, resolvedText, suggestConflictResolution, sweepConflictScratch,
   type ConflictDeps,
 } from '../../forge-conflicts.js';
 import { DEFAULT_PROJECT_INTEGRATION, type ProjectIntegration } from '../../project-integration.js';
@@ -52,6 +52,7 @@ const posted: Array<{ number: number; body: string }> = [];
 const suggestions: Array<{ system: string; user: string }> = [];
 /** What `ssh -G` would answer for an alias of the remote. */
 const sshAliases = new Map<string, string>([['github-acme', 'github.com'], ['github-evil', 'evil.example']]);
+const sshLogins: Array<[string, string | undefined]> = [];
 let suggestAnswer = '<resolved>\none\nTWO and 2\nthree\n</resolved>';
 
 function branchNow(): PullRequestBranch {
@@ -92,7 +93,7 @@ const deps: ConflictDeps = {
       : f.runner(args, opts));
   },
   suggest: async (input) => { suggestions.push(input); return suggestAnswer; },
-  sshHostName: async (alias) => sshAliases.get(alias) ?? null,
+  sshHostName: async (alias, user) => { sshLogins.push([alias, user]); return sshAliases.get(alias) ?? null; },
 };
 
 const app = express();
@@ -292,6 +293,22 @@ test('the remote must lead to the forge gh reads the pull request from: refused 
     assert.ok(!out.ok && out.status === 409 && out.code === 'conflict_unsupported', remote);
   }
   assert.equal(f.calls.length, 0, 'pinnedRemote fetched nothing');
+  // The remote only chooses the parts: every URL git gets is written from them.
+  const urls = async (integration: ProjectIntegration) => {
+    const out = await pinnedRemote(integration, deps);
+    return out.ok ? [out.urlOf('acme/widgets'), out.urlOf('contrib/widgets'), out.urlOf('../widgets')] : out.code;
+  };
+  assert.deepEqual(await urls(at('git@github.com:acme/widgets.git')),
+    ['ssh://git@github.com/acme/widgets.git', 'ssh://git@github.com/contrib/widgets.git', null]);
+  assert.deepEqual(await urls(at('https://GitHub.com:443/Acme/Widgets')),
+    ['https://github.com/acme/widgets.git', 'https://github.com/contrib/widgets.git', null]);
+  assert.deepEqual(await urls(at('ssh://git@ssh.github.com:443/acme/widgets.git')),
+    ['ssh://git@ssh.github.com:443/acme/widgets.git', 'ssh://git@ssh.github.com:443/contrib/widgets.git', null]);
+  assert.deepEqual(await urls(at('GitHub-Acme:acme/widgets.git')),
+    ['ssh://git@github-acme/acme/widgets.git', 'ssh://git@github-acme/contrib/widgets.git', null], 'an alias, its user git');
+  assert.deepEqual(sshLogins.at(-1), ['github-acme', 'git'], 'the alias is resolved for the user that pushes');
+  assert.equal(await host(at('ssh://-x@github.com/acme/widgets.git')), 'conflict_unsupported');
+  assert.equal(await host(at('ssh://git@[::1]/acme/widgets.git')), 'conflict_unsupported', 'an IPv6 literal is never a forge host');
   // A gh folder signed in to one Enterprise host only: that host, and it alone.
   const ghe = join(home, '.config', 'gh-ghe');
   mkdirSync(ghe, { recursive: true });
@@ -501,7 +518,7 @@ test('switched back to "ask", closed, locked or retargeted before publishing: no
 test('the publication shows where the commit goes, and goes nowhere else', async () => {
   const r = await proposedResolution();
   const view = await call('GET', `/api/projects/acme/forge-proposals/${r.proposalId}`, 'person');
-  assert.equal(view.json.proposal.details.push_url, 'git@github.com:contrib/widgets.git');
+  assert.equal(view.json.proposal.details.push_url, 'ssh://git@github.com/contrib/widgets.git', 'rebuilt, never the remote as written');
   assert.equal(view.json.proposal.details.push_host, 'github.com');
   assert.equal(view.json.proposal.details.push_repository, 'contrib/widgets');
   const pushes = () => f.calls.filter((a) => a.includes('push') || a.includes('fetch')).length;
@@ -509,13 +526,22 @@ test('the publication shows where the commit goes, and goes nowhere else', async
   setting('resolve', 'git@evil.example:acme/widgets.git');
   assert.equal((await publish(r.proposalId)).json.code, 'conflict_unsupported');
   // Still github.com, but not the URL the person saw.
-  setting('resolve', 'ssh://git@github.com/acme/widgets.git');
+  setting('resolve', 'git@github-acme:acme/widgets.git');
+  assert.equal((await publish(r.proposalId)).json.code, 'forge_conflict_changed');
+  setting('resolve', 'https://github.com/acme/widgets');
   assert.equal((await publish(r.proposalId)).json.code, 'forge_conflict_changed');
   assert.equal(pushes(), before, 'nothing fetched or pushed');
   assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.head);
   setting('resolve');
   assert.equal((await publish(r.proposalId)).json.proposal.state, 'published');
   assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.commit);
+  // git was handed the rebuilt URLs and nothing else, never the remote as written.
+  const network = f.calls.filter((a) => a.includes('fetch') || a.includes('push') || a.includes('ls-remote'));
+  assert.ok(network.length >= 3);
+  for (const args of network) {
+    const url = args[args.indexOf('--') + 1];
+    assert.ok(url === BASE_URL || url === FORK_URL, url);
+  }
 });
 
 test('a suggestion whose folder cannot be made releases its lock', async () => {
@@ -568,13 +594,7 @@ test('discarding the publication reopens the resolution; discarding the resoluti
   assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.head);
 });
 
-test('helpers: the fork URL keeps the project remote\'s form, markers, the agent\'s answer, the sweep', async () => {
-  assert.equal(forkPushUrl('git@github-timon:ai-timon/timon.git', 'ai-timon/timon', 'contrib/timon'), 'git@github-timon:contrib/timon.git');
-  assert.equal(forkPushUrl('https://github.com/Acme/App', 'acme/app', 'c/app'), 'https://github.com/c/app');
-  assert.equal(forkPushUrl('ssh://git@github.com/acme/app.git', 'acme/app', 'c/app'), 'ssh://git@github.com/c/app.git');
-  assert.equal(forkPushUrl('git@github.com:acme/app.git', 'other/app', 'c/app'), null);
-  assert.equal(forkPushUrl('git@github.com:acme/app.git', 'acme/app', '../app'), null);
-  assert.equal(forkPushUrl('https://github.com\\@evil.example/acme/app.git', 'acme/app', 'c/app'), null);
+test('helpers: markers, the agent\'s answer, the sweep', async () => {
   assert.equal(hasConflictMarkers('a\n=======\nb'), true);
   assert.equal(hasConflictMarkers('a ======= b\n========\n'), false);
   assert.equal(resolvedText('x <resolved>\nA\n</resolved> y'), 'A\n');
