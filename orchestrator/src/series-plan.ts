@@ -265,6 +265,9 @@ export function validateSeriesPlanAnswer(answer: unknown, knownGroups: Iterable<
   if (answer.note !== undefined && typeof answer.note !== 'string') {
     return 'field `note` is not a string';
   }
+  if (answer.resolves_issues !== undefined && typeof answer.resolves_issues !== 'boolean') {
+    return 'field `resolves_issues` is not a boolean';
+  }
   return branchFieldDefect(answer.branch);
 }
 

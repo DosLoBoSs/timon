@@ -55,6 +55,8 @@ test('answer: a role outside the mode is refused', () => {
 test('answer: a half-filled fallback is refused', () => {
   const answer = { mode: 'kanban-full', roles: { code: { fallbackModel: 'gpt-5.6-sol' } } };
   assert.match(String(validateSeriesPlanAnswer(answer)), /fallbackBackend/);
+  assert.match(String(validateSeriesPlanAnswer({ mode: 'kanban-full', roles: {}, resolves_issues: 'yes' })), /resolves_issues/);
+  assert.equal(validateSeriesPlanAnswer({ mode: 'kanban-full', roles: {}, resolves_issues: false }), null);
 });
 
 test('answer: an unknown mode is refused', () => {

@@ -126,10 +126,10 @@ test('a project that lands through pull requests: the plan gives the job branch 
   dbApi.recordIntegration({ repo, branch: 'feat/big-feature', remote: 'origin', target: 'main', mode: 'pr', project: 'plan-pr' });
 
   const form = { form: { kind: 'series_plan', chantier: 'Big feature', volets: [{ title: 'Front' }] } };
-  const answer = async (mission: string, agent: string, mode: string) => {
+  const answer = async (mission: string, agent: string, mode: string, extra: Record<string, unknown> = {}) => {
     dbApi.createMission(mission, agent, 'job');
     const pending = requestPermission({ mission_id: mission, agent, tool_name: 'ask_user', input: form, tool_use_id: `tu-${mission}` });
-    resolvePermission(listPending(mission)[0]!.id, { behavior: 'allow', updatedInput: { plan: { mode, roles: {} } } });
+    resolvePermission(listPending(mission)[0]!.id, { behavior: 'allow', updatedInput: { plan: { mode, roles: {}, ...extra } } });
     const decision = await pending;
     assert.equal(decision.behavior, 'allow');
     return (decision.behavior === 'allow' ? decision.updatedInput : {}) as {
@@ -137,7 +137,9 @@ test('a project that lands through pull requests: the plan gives the job branch 
     };
   };
 
-  const pr = await answer('plan-pr-1', 'plan-pr.main', 'kanban-full');
+  const pr = await answer('plan-pr-1', 'plan-pr.main', 'kanban-full', { resolves_issues: true });
+  // "Resolves its issue entirely", read again by the pull request's Fixes lines.
+  assert.equal(dbApi.seriesResolvesIssues('plan-pr-1'), true);
   assert.deepEqual(pr.integration && { mode: pr.integration.mode, branch: pr.integration.branch, base_ref: pr.integration.base_ref }, {
     mode: 'pr', branch: 'feat/big-feature-2', base_ref: 'origin/main',
   });
@@ -151,8 +153,9 @@ test('a project that lands through pull requests: the plan gives the job branch 
   assert.equal((await answer('plan-pr-2', 'plan-pr.main', 'sequential-here')).integration, undefined);
 
   // Non-regression: a project without the setting gets the previous answer.
-  const local = await answer('plan-local-1', 'plan-local.main', 'kanban-full');
+  const local = await answer('plan-local-1', 'plan-local.main', 'kanban-full', { resolves_issues: true });
   assert.equal(local.integration, undefined);
+  assert.equal(dbApi.seriesResolvesIssues('plan-local-1'), false, 'no pull request, nothing to close');
   assert.deepEqual(local.commands, seriesPlanCommands({ mode: 'kanban-full', roles: {} }, [{ title: 'Front' }]));
 });
 

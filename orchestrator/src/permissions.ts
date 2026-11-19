@@ -1303,6 +1303,12 @@ function withSeriesPlan(p: Omit<Pending, 'resolve'>, final: PermissionDecision):
     };
   }
   const commands = seriesPlanCommands(plan, volets, landing);
+  // Read again by the pull request's `Fixes`/`Refs` (`issue-closing.ts`).
+  if (landing && typeof plan.resolves_issues === 'boolean') {
+    try { dbApi.setSeriesResolvesIssues(p.mission_id, plan.resolves_issues); } catch (err) {
+      console.error(`[permissions] series plan issue closing not recorded: ${(err as Error).message}`);
+    }
+  }
   return {
     behavior: 'allow',
     updatedInput: landing
