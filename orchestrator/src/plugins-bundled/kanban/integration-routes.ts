@@ -7,6 +7,11 @@
  * daemon will push as. The daemon token passes, as for every project setting
  * the CLI and the agents write.
  *
+ * Letting Timon resolve a contributor's conflict itself (`contributor_conflicts:
+ * "resolve"`, `forge-conflicts.ts`) is a person's choice: a write that turns
+ * it on from the daemon token, a mission's or a plugin's is refused, whatever
+ * else it holds. Turning it off stays open to every caller.
+ *
  * One exception, `POST …/integration/branch`: the Kanban planner checks the
  * branch name of a new job while the person types it. It needs `kanban:write`
  * (the plan creates Kanban tasks) and answers nothing of the setting beyond
@@ -24,7 +29,7 @@ import {
 import { readMeta } from '../../projects.js';
 import { todoOriginFromRequest } from '../../todo-origin.js';
 import { auditRequest } from '../../users/audit-actor.js';
-import { rejectIfDenied, requireAuth } from '../../users/identity.js';
+import { isPersonAuth, rejectIfDenied, requireAuth } from '../../users/identity.js';
 
 export type IntegrationRouteDeps = {
   /** Stands in for `gh api user` in tests: nothing here reaches GitHub. */
@@ -98,6 +103,12 @@ export function registerIntegrationRoutes(app: Router, deps: IntegrationRouteDep
     const slug = projectForRoute(req, res);
     if (!slug) return;
     try {
+      const asked = (req.body as { contributor_conflicts?: unknown } | undefined)?.contributor_conflicts;
+      if (asked === 'resolve' && readProjectIntegration(slug).integration.contributor_conflicts !== 'resolve'
+        && !(req.auth && isPersonAuth(req.auth))) {
+        res.status(403).json(apiError('person_required', 'only a signed-in person lets Timon resolve a contributor\'s conflict'));
+        return;
+      }
       const integration = updateProjectIntegration(slug, req.body, deps.home ? { home: deps.home } : {});
       auditRequest(req, 'project.integration_set', `${slug}:${integration.mode}`);
       announceProjectUpdated(slug, ['integration'], todoOriginFromRequest(req));

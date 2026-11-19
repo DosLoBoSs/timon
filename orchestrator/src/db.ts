@@ -2121,6 +2121,42 @@ CREATE TABLE IF NOT EXISTS forge_proposals (
 );
 CREATE INDEX IF NOT EXISTS forge_proposals_project_state ON forge_proposals(project, state);
 `);
+// What a write other than a comment needs to run as it was shown (the head a
+// branch update expects, the commit a conflict resolution pushes): JSON the
+// daemon writes, never a person's or a plugin's text.
+{
+  const proposalCols = (db.prepare(`PRAGMA table_info(forge_proposals)`).all() as { name: string }[]).map((c) => c.name);
+  if (!proposalCols.includes('payload')) db.exec(`ALTER TABLE forge_proposals ADD COLUMN payload TEXT`);
+}
+// The resolution of a contributor's conflict, prepared without a working tree
+// (`forge-conflicts.ts`): the heads it merged, the merged tree, the files in
+// conflict with each one's resolution, and once proposed the commit to push.
+// `scratch_dir` holds the objects until the resolution is published or dropped.
+db.exec(`
+CREATE TABLE IF NOT EXISTS forge_conflicts (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  repo TEXT NOT NULL,
+  pr_number INTEGER NOT NULL,
+  head_repo TEXT NOT NULL,
+  head_ref TEXT NOT NULL,
+  head_sha TEXT NOT NULL,
+  base_ref TEXT NOT NULL,
+  base_sha TEXT NOT NULL,
+  merged_tree TEXT NOT NULL,
+  files TEXT NOT NULL,
+  state TEXT NOT NULL,
+  scratch_dir TEXT,
+  proposal_id TEXT,
+  resolved_tree TEXT,
+  commit_sha TEXT,
+  commit_time INTEGER,
+  created_by TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS forge_conflicts_pull ON forge_conflicts(project, repo, pr_number, state);
+`);
 // What the person who launched a job said of its issues in the Kanban
 // planner (`kanban_plan`, `resolves_issues`): the job resolves them entirely,
 // so its pull request says `Fixes` even for an idea carried by several jobs

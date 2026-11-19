@@ -346,11 +346,22 @@ test('no agent surface creates or publishes a proposal: no MCP tool, no CLI verb
   const facade = join(root, 'src', 'plugins', 'forge-facade.ts');
   // The daemon's own producer, after a merge: it proposes, a person publishes.
   const landing = join(root, 'src', 'issue-resolution.ts');
-  const proposers = [facade, landing];
+  // A person's click on a pull request's branch: the daemon reads the branch
+  // and proposes the update; the person publishes it through the route above.
+  const branch = [
+    join(root, 'src', 'forge-branch-update.ts'),
+    join(root, 'src', 'plugins-bundled', 'kanban', 'forge-branch-routes.ts'),
+  ];
+  // A person's conflict resolution: proposed by the daemon on a person's
+  // click; dropping it drops its waiting publication too, never publishes it.
+  const conflicts = join(root, 'src', 'forge-conflicts.ts');
+  const proposers = [facade, landing, ...branch, conflicts];
   const offenders = files.filter((file) => !allowed.has(file) && !proposers.includes(file)
     && /\/forge-proposals\b|forge-proposals\.js|proposeForgeWrite|publishForgeProposal/.test(readFileSync(file, 'utf8')));
   assert.deepEqual(offenders.map((f) => f.slice(root.length)), []);
   for (const file of proposers) {
-    assert.doesNotMatch(readFileSync(file, 'utf8'), /publishForgeProposal|editForgeProposal|discardForgeProposal|recoverInterruptedPublications/);
+    const text = readFileSync(file, 'utf8');
+    assert.doesNotMatch(text, /publishForgeProposal|editForgeProposal|recoverInterruptedPublications/, file);
+    if (file !== conflicts) assert.doesNotMatch(text, /discardForgeProposal/, file);
   }
 });

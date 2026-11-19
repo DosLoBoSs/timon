@@ -293,6 +293,14 @@
     "forge_proposal_pending": {
       "title": "Un commentaire GitHub attend votre validation",
       "body": "Lisez puis publiez, modifiez ou écartez le commentaire proposé sur {target}."
+    },
+    "forge_branch_update_pending": {
+      "title": "Une mise à jour de branche attend votre accord",
+      "body": "Publiez ou abandonnez la mise à jour de la branche de {target} sur GitHub."
+    },
+    "forge_conflict_push_pending": {
+      "title": "Une résolution de conflit attend votre accord",
+      "body": "Lisez la résolution préparée pour {target}, puis publiez-la ou abandonnez-la."
     }
   }
 }

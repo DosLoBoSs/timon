@@ -7,9 +7,11 @@
  * their metadata and their diff as text, never their branch; and the issues
  * of a repository, a list filtered by label and one issue's text.
  *
- * It writes one thing on the forge: a comment on an issue or a pull request,
- * and only for a publication a person validated (`forge-proposals.ts`), which
- * checks the account before calling it.
+ * It writes two things on the forge, and only for a publication a person
+ * validated (`forge-proposals.ts`), which checks the account before calling
+ * it: a comment on an issue or a pull request, and the update of a pull
+ * request's branch that GitHub performs on its side (`update-branch`, never a
+ * merge on this machine).
  *
  * This is the only place `gh` and the network side of `git` are called for a
  * pull request. Every command goes through a runner the tests replace: nothing
@@ -276,6 +278,51 @@ export interface ForgeCommentWriter {
   postIssueComment(repo: string, number: number, body: string): Promise<IssueCommentOutcome>;
 }
 
+/** What a pull request's branch is, read before its update or the resolution
+ *  of its conflict. Every name in it was chosen by the pull request's author:
+ *  data, checked again before it reaches a refspec. */
+export type PullRequestBranch = {
+  state: PullRequestState;
+  isDraft: boolean;
+  baseRef: string;
+  headRef: string;
+  headSha: string | null;
+  /** `owner/name` of the repository the branch lives in, null for a deleted fork. */
+  headRepository: string | null;
+  /** The branch lives in another repository than the pull request's. */
+  isCrossRepository: boolean;
+  maintainerCanModify: boolean;
+  mergeable: 'mergeable' | 'conflicting' | 'unknown';
+  mergeStateStatus: MergeStateStatus;
+  url: string;
+};
+
+export type PullRequestBranchOutcome = { ok: true; branch: PullRequestBranch } | ForgeReadFailure;
+
+/** The branch of a pull request, read only. */
+export interface ForgeBranchReader {
+  pullRequestBranch(repo: string, number: number): Promise<PullRequestBranchOutcome>;
+}
+
+export type BranchUpdateFailureCode = ForgeReadFailure['code'] | 'head_moved' | 'conflict' | 'forbidden';
+export type BranchUpdateOutcome = { ok: true } | { ok: false; code: BranchUpdateFailureCode; reason: string };
+
+export type CommitParentsOutcome = { ok: true; parents: string[] } | ForgeReadFailure;
+
+/**
+ * The update of a pull request's branch, done by GitHub on its side: it merges
+ * the base into the branch, runs nothing here, and refuses when the branch
+ * moved since `expectedHeadSha` or when the merge conflicts. The caller holds a
+ * person's validation and checked the account.
+ */
+export interface ForgeBranchWriter extends ForgeBranchReader {
+  login(): Promise<GhLoginOutcome>;
+  updatePullRequestBranch(repo: string, number: number, expectedHeadSha: string): Promise<BranchUpdateOutcome>;
+  /** The parents of a commit: how a retried update tells its own merge from
+   *  a push of the contributor. */
+  commitParents(repo: string, sha: string): Promise<CommitParentsOutcome>;
+}
+
 /** Most issues a list asks for, the most recent first. */
 export const ISSUE_LIST_LIMIT = 50;
 /** Most characters kept of a title written on the forge. */
@@ -448,6 +495,40 @@ export function parsePullRequestChecks(stdout: string): PullRequestChecks | null
     labels: itemsOf(o.labels, LabelSchema, LABEL_LIMIT),
     closingIssues: itemsOf(o.closingIssuesReferences, IssueReferenceSchema, CLOSING_ISSUE_LIMIT),
   };
+}
+
+/** The answer of `gh pr view --json` for a pull request's branch
+ *  (`PULL_BRANCH_FIELDS`), or null when it is not one. */
+export function parsePullRequestBranch(stdout: string): PullRequestBranch | null {
+  const parsed = jsonOf(stdout);
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const o = parsed as Record<string, unknown>;
+  const states: Record<string, PullRequestState> = { OPEN: 'open', CLOSED: 'closed', MERGED: 'merged' };
+  const state = typeof o.state === 'string' ? states[o.state] : undefined;
+  const url = httpsUrl(o.url);
+  if (!state || !url) return null;
+  const oid = text(o.headRefOid);
+  return {
+    state,
+    isDraft: o.isDraft === true,
+    baseRef: boundedText(o.baseRefName, 255),
+    headRef: boundedText(o.headRefName, 255),
+    headSha: COMMIT_SHA.test(oid) ? oid : null,
+    headRepository: headRepositoryOf(o.headRepositoryOwner, o.headRepository),
+    isCrossRepository: o.isCrossRepository === true,
+    maintainerCanModify: o.maintainerCanModify === true,
+    mergeable: o.mergeable === 'MERGEABLE' ? 'mergeable' : o.mergeable === 'CONFLICTING' ? 'conflicting' : 'unknown',
+    mergeStateStatus: MergeStateSchema.parse(o.mergeStateStatus),
+    url,
+  };
+}
+
+/** What `gh api` said of a refused branch update, as a code. */
+export function branchUpdateFailure(stderr: string): BranchUpdateFailureCode {
+  if (/expected[_ ]head[_ ]sha|head ref|did ?n.t match/i.test(stderr)) return 'head_moved';
+  if (/conflict/i.test(stderr)) return 'conflict';
+  if (/HTTP 40[34]\b/.test(stderr)) return 'forbidden';
+  return 'gh_failed';
 }
 
 // ─── Answers of the forge, through zod ─────────────────────────────────────
@@ -669,6 +750,10 @@ function plainLabel(label: string): boolean {
 const PULL_SUMMARY_FIELDS = 'number,title,author,url,isDraft,updatedAt,headRepositoryOwner,headRepository,'
   + 'maintainerCanModify,mergeStateStatus,labels,closingIssuesReferences';
 
+/** What `gh pr view --json` is asked for a pull request's branch. */
+const PULL_BRANCH_FIELDS = 'state,isDraft,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner,'
+  + 'isCrossRepository,maintainerCanModify,mergeable,mergeStateStatus,url';
+
 const PULL_URL = /https:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/(\d+)/;
 
 function pullRequestFrom(text: string): PullRequestRef | null {
@@ -680,7 +765,7 @@ function pullRequestFrom(text: string): PullRequestRef | null {
 /** GitHub through `gh`, signed in with the project's config folder. */
 export function githubForge(
   configDir: string | null, runners: ForgeRunners = {},
-): Forge & ForgeReader & ForgeChecksReader & ForgeIssueReader & ForgeCommentWriter {
+): Forge & ForgeReader & ForgeChecksReader & ForgeIssueReader & ForgeCommentWriter & ForgeBranchWriter {
   const gh = runners.gh ?? hostGh;
   // Read-only `gh` calls: one shape for every failure, nothing secret in it.
   const read = async (args: string[], maxBuffer?: number): Promise<{ ok: true; result: ExecResult } | ForgeReadFailure> => {
@@ -868,6 +953,45 @@ export function githubForge(
         ? { ok: true, comment }
         : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer the address of a comment' };
     },
+    async pullRequestBranch(repo, number) {
+      const bad = badTarget(repo, number);
+      if (bad) return bad;
+      const out = await read(['pr', 'view', String(number), `--repo=${repo}`, `--json=${PULL_BRANCH_FIELDS}`]);
+      if (!out.ok) return out;
+      if (out.result.code !== 0) return failed(out.result);
+      const branch = parsePullRequestBranch(out.result.stdout);
+      return branch
+        ? { ok: true, branch }
+        : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer the branch of a pull request' };
+    },
+    async updatePullRequestBranch(repo, number, expectedHeadSha) {
+      if (!plainRepo(repo) || !Number.isSafeInteger(number) || number <= 0 || !COMMIT_SHA.test(expectedHeadSha)) {
+        return { ok: false, code: 'unexpected_answer', reason: 'not a pull request branch of a GitHub repository' };
+      }
+      // GitHub merges the base into the branch on its side; the expected head
+      // makes it refuse when the contributor pushed since the person looked.
+      const out = await read([
+        'api', '--method=PUT', `repos/${repo}/pulls/${number}/update-branch`, `--raw-field=expected_head_sha=${expectedHeadSha}`,
+      ]);
+      if (!out.ok) return out;
+      if (out.result.code !== 0) {
+        const said = out.result.stderr || out.result.stdout;
+        return { ok: false, code: branchUpdateFailure(said), reason: redactedOutput(said) || `gh exited with code ${out.result.code}` };
+      }
+      return { ok: true };
+    },
+    async commitParents(repo, sha) {
+      if (!plainRepo(repo) || !COMMIT_SHA.test(sha)) {
+        return { ok: false, code: 'unexpected_answer', reason: 'not a commit of a GitHub repository' };
+      }
+      const out = await read(['api', `repos/${repo}/commits/${sha}`, '--jq=[.parents[].sha] | join(" ")']); // portability: a GitHub API path and a jq filter, no file
+      if (!out.ok) return out;
+      if (out.result.code !== 0) return failed(out.result);
+      const parents = out.result.stdout.trim().split(/\s+/).filter((p) => p.length > 0);
+      return parents.every((p) => COMMIT_SHA.test(p))
+        ? { ok: true, parents }
+        : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer the parents of a commit' };
+    },
     async createPullRequest(input) {
       // `--flag=value`: a title or a body starting with "-" stays a value.
       const args = [
@@ -922,7 +1046,7 @@ export function assertNoForce(args: readonly string[]): void {
 
 /** A branch name safe to put in a refspec: no option, no forcing prefix, no
  *  refspec separator. */
-function plainBranch(branch: string): boolean {
+export function plainBranch(branch: string): boolean {
   return /^[A-Za-z0-9._/-]+$/.test(branch) && !branch.startsWith('-') && !branch.includes('..');
 }
 
@@ -930,6 +1054,16 @@ function plainBranch(branch: string): boolean {
 export function pushArguments(url: string, branch: string): string[] {
   if (!plainBranch(branch)) throw new Error('refusing to push a branch with an unusual name');
   const args = ['--', url, `refs/heads/${branch}:refs/heads/${branch}`];
+  assertNoForce(args);
+  return args;
+}
+
+/** The words after `git push` for one commit sent to a branch of another
+ *  repository: a fast-forward of that branch or a refusal, never a rewrite. */
+export function pushCommitArguments(url: string, sha: string, branch: string): string[] {
+  if (!plainBranch(branch)) throw new Error('refusing to push a branch with an unusual name');
+  if (!COMMIT_SHA.test(sha)) throw new Error('refusing to push something that is not a commit');
+  const args = ['--', url, `${sha}:refs/heads/${branch}`];
   assertNoForce(args);
   return args;
 }

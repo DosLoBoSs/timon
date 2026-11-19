@@ -124,7 +124,8 @@ function proposalView(row: ForgeProposalRow, pluginId: string): PluginForgePropo
     id: row.id,
     project: row.project,
     repo: row.repo,
-    kind: row.kind,
+    // A plugin proposes comments only (`propose`): its rows are all comments.
+    kind: 'comment',
     target: {
       type: row.target_type,
       number: row.target_number,

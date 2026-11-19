@@ -293,6 +293,14 @@
     "forge_proposal_pending": {
       "title": "A GitHub comment waits for your approval",
       "body": "Read and publish, edit or discard the comment proposed on {target}."
+    },
+    "forge_branch_update_pending": {
+      "title": "A branch update waits for your approval",
+      "body": "Publish or discard the update of the branch of {target} on GitHub."
+    },
+    "forge_conflict_push_pending": {
+      "title": "A conflict resolution waits for your approval",
+      "body": "Read the resolution prepared for {target}, then publish or discard it."
     }
   }
 }
