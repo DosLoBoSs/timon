@@ -2371,6 +2371,20 @@ export function restartService(opts: ServiceOpts): ServiceResult {
 
 /** `LastTaskResult` of a scheduled task that was registered and never started. */
 export const WINDOWS_TASK_NEVER_RAN = 0x41303;
+/**
+ * `LastTaskResult` 0x800710e0 (ERROR_REQUEST_REFUSED): a start, by `/Run` or the 5-minute
+ * repetition, came while the task's launcher still ran, and the task's IgnoreNew policy dropped it.
+ * It reads like a failure and is not one: the instance already running is the service.
+ */
+export const WINDOWS_TASK_ALREADY_RUNNING = 0x800710e0;
+
+/** `last result: …` of the diagnostics, with what a known code means beside it. */
+export function windowsTaskResultLine(result: number): string {
+  const hex = `0x${result.toString(16)}`;
+  return result === WINDOWS_TASK_ALREADY_RUNNING
+    ? `last result: ${result} (${hex}: an instance was already running, not a failure)`
+    : `last result: ${result} (${hex})`;
+}
 
 export type ServiceDiagnostics = {
   /** The definition sets `TIMON_DESKTOP_SERVICE=1`; `null` when none was found to read. */
@@ -2458,7 +2472,7 @@ export function serviceDiagnostics(opts: ServiceOpts): ServiceDiagnostics {
           const value = rest.join('=').trim();
           if (key.trim() === 'LastTaskResult' && /^\d+$/.test(value)) {
             lastTaskResult = Number(value);
-            lines.push(`last result: ${value} (0x${lastTaskResult.toString(16)})`);
+            lines.push(windowsTaskResultLine(lastTaskResult));
           } else {
             lines.push(`${key.trim()}: ${value || '—'}`);
           }

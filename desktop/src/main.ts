@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import {
   controlDesktopService, daemonLogHint, forgetMissingWindowsService, forgetServiceStopped, hasDesktopService, repairSessionWitness,
   restartDesktopService, serviceStoppedByUser, startDesktopService, startStoppedServiceFailureMessage, stopServiceCopy, stopServiceFailureMessage,
-  windowsRestartSeams, windowsServiceRefusedFile, windowsTaskState,
+  endWindowsLauncher, serviceHeldOutSince, windowsRestartSeams, windowsServiceRefusedFile, windowsTaskRunning, windowsTaskState,
 } from './service.js';
 import { app, BrowserWindow, Menu, Tray, WebContentsView, clipboard, dialog, shell, nativeImage, ipcMain, screen, session, systemPreferences, webContents } from 'electron';
 import { parseWindowSchemeReport, recordMachineScheme, WINDOW_BACKGROUND, WINDOW_SCHEME_CHANNEL, windowScheme, type Scheme } from './appearance.js';
@@ -35,6 +35,7 @@ import { WindowRegistry, type PageOf, type WindowRecord } from './window-registr
 import { ViewPool, type PooledView } from './view-pool.js';
 import {
   canRestartFromSetup, handoverKeptMessage, handoverRoute, relaunchOptions, serviceHandover, serviceHandoverNeeded, setupRestarter, setupRestartPending,
+  lateHandover, waitWhileBooting,
   SETUP_HANDOVER_CHANNEL, SETUP_RESTART_CHANNEL, SETUP_RESTART_STATUS_CHANNEL,
 } from './restart.js';
 import { queueAppImageRelaunch } from './appimage-restart.js';
@@ -136,6 +137,11 @@ const EMBEDDED_BOOT_BUDGET_MS = 90_000;
 const SERVICE_BOOT_BUDGET_MS = 180_000;
 /** The service replacing the embedded daemon at the end of a first setup: its database is already migrated. */
 const HANDOVER_BUDGET_MS = 90_000;
+/**
+ * How long past that the handover waits while the service's launcher still
+ * runs (Windows): a slow first boot answered a minute after the 90 s (TIM-0158).
+ */
+const HANDOVER_MAX_MS = 300_000;
 /** The one relaunch after the interface gave up (TIM-0154): a daemon that ran before, its database already migrated. */
 const REVIVE_BUDGET_MS = 90_000;
 
@@ -1831,9 +1837,27 @@ if (!app.requestSingleInstanceLock({ build: ownBuild } satisfies LaunchData)) {
     kickService: () => kickService(loadDesktopConfig(desktopHome, { packaged: app.isPackaged })),
     waitService: async () => {
       const cfg = loadDesktopConfig(desktopHome, { packaged: app.isPackaged });
-      const health = await waitForHealth(originOf(cfg.daemon.listen), HANDOVER_BUDGET_MS);
-      console.log(`[desktop] handover: service health: ${describeHealth(health, cfg.home)}`);
+      const { health, waitedMs, extended } = await waitWhileBooting({
+        probe: () => probeHealth(originOf(cfg.daemon.listen), 1200),
+        stillBooting: () => (process.platform === 'win32' ? windowsTaskRunning() : Promise.resolve(false)),
+        baseMs: HANDOVER_BUDGET_MS,
+        maxMs: HANDOVER_MAX_MS,
+      });
+      const past = extended ? ', waited past the first budget while the task ran' : '';
+      console.log(`[desktop] handover: service health after ${Math.round(waitedMs / 1000)}s${past}: ${describeHealth(health, cfg.home)}`);
       return isTimon(health, cfg.home);
+    },
+    releaseService: async () => {
+      if (process.platform !== 'win32' || !await windowsTaskRunning()) return;
+      try {
+        await endWindowsLauncher(desktopHome);
+      } catch (error) {
+        console.warn(`[desktop] handover: could not end the task's launcher: ${(error as Error).message}`);
+      }
+      // The script hides taskkill's answer: the task state says what happened.
+      console.warn(await windowsTaskRunning()
+        ? '[desktop] handover: the task still ran without answering, and still runs after the attempt to end its launcher'
+        : '[desktop] handover: the task still ran without answering, its launcher was ended');
     },
     resume: () => {
       const cfg = loadDesktopConfig(desktopHome, { packaged: app.isPackaged });
@@ -1844,12 +1868,35 @@ if (!app.requestSingleInstanceLock({ build: ownBuild } satisfies LaunchData)) {
     },
     resumeEmbedded: async () => {
       console.warn('[desktop] handover: the service did not answer, the embedded daemon serves again');
+      // Only a refusal from here on says the service waits for this embedded daemon's home.
+      keptSince = Date.now();
       await startEmbeddedDaemon(loadDesktopConfig(desktopHome, { packaged: app.isPackaged }), interfaceUrl);
+      // Its last-moment probe found the service answering and opened the pages on it.
+      if (stopEmbedded === null && daemonUp) {
+        console.log('[desktop] handover: the service answered as the embedded daemon was about to start, it serves');
+        return 'service';
+      }
+      return 'embedded';
     },
     reportKept: (why) => {
-      void reportProblem({ type: 'warning', ...handoverKeptMessage(uiLocale(), desktopHome, why) });
+      // Said once: a late attempt that falls back again leaves the setup as it was, silently.
+      if (!lateAttempt) void reportProblem({ type: 'warning', ...handoverKeptMessage(uiLocale(), desktopHome, why) });
+      void lateAdoption.start(keptSince)?.then((end) => console.log(`[desktop] late handover: ${end}`));
     },
   });
+  let keptSince = 0;
+  let lateAttempt = false;
+  // The service that answered too late takes over when it shows up, in this window (TIM-0158).
+  const lateAdoption = lateHandover({
+    serviceWaiting: (since) => serviceHeldOutSince(desktopHome, since),
+    handover: async () => {
+      lateAttempt = true;
+      try { return await handOverToService(activeCaller(windows.primary())?.page.view.route ?? '/'); }
+      finally { lateAttempt = false; }
+    },
+    log: (line) => console.log(`[desktop] late handover: ${line}`),
+  });
+  app.once('before-quit', () => lateAdoption.stop());
   ipcMain.handle(SELECT_DIRECTORY_CHANNEL, async (event, defaultPath: unknown) => {
     const parent = senderWindow(event)?.window;
     return selectDirectory(senderOf(event), senderOrigin(event), defaultPath, (options) => dialog.showOpenDialog(parent!, options));
