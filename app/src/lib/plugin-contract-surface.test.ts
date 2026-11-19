@@ -257,6 +257,11 @@ test('a widget\'s tab count, dot, menu and front state join wave 19, still unrel
     assert.ok(platformModuleExports('ui.js').includes(name), name);
     assert.equal(snapshot.modules['ui.js']?.[name]?.since, 19, name);
   }
+  const declarations = readFileSync(join(process.cwd(), '../packages/sdk/src/ui.d.ts'), 'utf8');
+  assert.ok(declarations.includes('export function useWidgetCount(count: number | null | undefined): boolean;'));
+  assert.ok(declarations.includes('export function useWidgetAttention(label: string | null | undefined): boolean;'));
+  assert.ok(declarations.includes('export function useWidgetMenu(items: readonly WidgetMenuItem[]): boolean;'));
+  assert.ok(declarations.includes('export function useWidgetInFront(): boolean;'));
 });
 
 /** Platform names a client bundle imports, per module file (`ui.js`, …). */
