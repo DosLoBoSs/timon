@@ -124,6 +124,9 @@ export type SeriesPlanAnswer = {
   /** The job's integration branch, full name; only with a `landing`, never
    *  once it is locked. The daemon checks it again. */
   branch?: string;
+  /** The job resolves its ideas' issues entirely: its pull request closes
+   *  them (`Fixes`) even when other jobs carry the same idea. Sent when ticked. */
+  resolves_issues?: boolean;
 };
 
 /** Distinct group names, in the order the parts first show them. */
@@ -820,16 +823,21 @@ function BranchField({
   topic,
   check,
   onTopic,
+  resolvesIssues,
+  onResolvesIssues,
   disabled,
 }: {
   landing: SeriesPlanLanding;
   topic: string;
   check: BranchCheck;
   onTopic: (topic: string) => void;
+  resolvesIssues: boolean;
+  onResolvesIssues: (value: boolean) => void;
   disabled: boolean;
 }) {
   const panelId = useId();
   const inputId = useId();
+  const resolvesId = useId();
   // A name to fix opens the field: folded, the error would stay unseen.
   const [open, setOpen] = useState(() => check.state === 'refused');
   useEffect(() => { if (check.state === 'refused') setOpen(true); }, [check.state]);
@@ -889,6 +897,18 @@ function BranchField({
               {t('taskForm.seriesPlan.branch.createdAs', { branch: check.branch })}
             </span>
           ) : null}
+          <div className="flex items-center gap-2 pt-1 sm:pl-[100px]" title={t('taskForm.seriesPlan.branch.resolvesIssuesHint')}>
+            <input
+              id={resolvesId}
+              type="checkbox"
+              checked={resolvesIssues}
+              disabled={disabled}
+              onChange={(e) => onResolvesIssues(e.target.checked)}
+              className="size-3.5 shrink-0 accent-primary"
+              data-testid="plan-resolves-issues"
+            />
+            <label htmlFor={resolvesId} className="text-[12px]">{t('taskForm.seriesPlan.branch.resolvesIssues')}</label>
+          </div>
         </div>
       )}
     </section>
@@ -936,6 +956,7 @@ export function SeriesPlanForm({
   /** The branch topic, without the project's prefix. */
   const [topic, setTopic] = useState(() => (landing && !landing.locked && draft?.branch !== undefined ? draft.branch : landing ? branchTopic(landing) : ''));
   const [branchCheck, setBranchCheck] = useState<BranchCheck>(() => (landing ? initialBranchCheck(landing, topic) : { state: 'pending' }));
+  const [resolvesIssues, setResolvesIssues] = useState(() => draft?.resolvesIssues === true);
   useEffect(() => {
     if (!landing || landing.locked || !pending) return;
     if (topic.trim() === '') { setBranchCheck({ state: 'refused', message: t('taskForm.seriesPlan.branch.empty') }); return; }
@@ -957,10 +978,11 @@ export function SeriesPlanForm({
   useEffect(() => {
     if (!pending) return;
     const branch = landing && !landing.locked && topic !== branchTopic(landing) ? { branch: topic } : {};
-    saveSeriesPlanDraft(sessionDraftStorage(), missionId, form, { mode, picks, groupPicks, groupCustom, note, ...branch });
+    const resolves = resolvesIssues ? { resolvesIssues: true as const } : {};
+    saveSeriesPlanDraft(sessionDraftStorage(), missionId, form, { mode, picks, groupPicks, groupCustom, note, ...branch, ...resolves });
     // `form` is a new object on every render of the card; the draft follows what the user changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, picks, groupPicks, groupCustom, note, topic]);
+  }, [mode, picks, groupPicks, groupCustom, note, topic, resolvesIssues]);
 
   const roles = ROLES_BY_MODE[mode];
   const presetRoles: Record<PresetColumn, readonly SeriesPlanRole[]> = { main: roles.filter((role) => MAIN_EDITABLE[role]), fallback: roles };
@@ -1005,6 +1027,7 @@ export function SeriesPlanForm({
       ...(Object.keys(groups).length > 0 ? { groups } : {}),
       note: trimmed || undefined,
       ...(showsBranch && !landing.locked ? { branch: branchFullName(topic, landing.prefix) } : {}),
+      ...(showsBranch && resolvesIssues ? { resolves_issues: true } : {}),
     });
     if (sent !== false) clearSeriesPlanDraft(sessionDraftStorage(), missionId, form);
   }
@@ -1163,7 +1186,7 @@ export function SeriesPlanForm({
       </div>
 
       {showsBranch && (
-        <BranchField landing={landing} topic={topic} check={branchCheck} onTopic={setTopic} disabled={disabled} />
+        <BranchField landing={landing} topic={topic} check={branchCheck} onTopic={setTopic} resolvesIssues={resolvesIssues} onResolvesIssues={setResolvesIssues} disabled={disabled} />
       )}
 
       <textarea
