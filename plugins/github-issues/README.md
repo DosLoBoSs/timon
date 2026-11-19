@@ -18,6 +18,14 @@ nothing is written on GitHub.
   project's label (`label: null` goes back to the plugin's setting).
 - `POST dismiss { project, issue, hidden? }`: hides an issue from the list.
 
+The browser half (`src/client.tsx`, built into `lib/client.js` by
+`npm run build:client`) paints the Issues widget of the "Git" stack (one row
+per issue, the import as an icon, the rest in "…"), the Issue window (the
+issue's text as outside data, then Import; "+" reads a number or a link
+first) and the project's row under "Integrations" in its settings (the label,
+changed in a dialog). It reads the stack's project with `useGitStackProject`
+and opens an idea with `useTodoOpener`, from `@timon/ui`.
+
 Every route needs a signed-in account allowed to manage projects. The text of
 an issue was written by someone else: the idea's notes keep it inside an
 `<untrusted-data>` block, as bounded JSON, under a line saying it is data.
