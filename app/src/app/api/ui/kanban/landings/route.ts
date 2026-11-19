@@ -8,7 +8,7 @@ import { proxyJson } from '@/lib/ui/proxy';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const FILTERS = ['project', 'series'];
+const FILTERS = ['project', 'series', 'todo'];
 
 export async function GET(req: Request): Promise<Response> {
   const incoming = new URL(req.url).searchParams;
