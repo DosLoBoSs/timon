@@ -315,6 +315,12 @@ A packaged daemon verifies its installation, loads its plugins and checks each p
 
 If the window stays empty after that: run the support diagnostic (tray icon). Its **Daemon** block says whether nothing listens on the port (the daemon is down: read the end of `daemon.log`), or whether a Timon process holds the port without replying (it is still starting, or busy: wait, then open the window again from the tray). Adding the Timon folders to the antivirus exclusions shortens the start: see [Slow start behind an antivirus](#slow-start-behind-an-antivirus).
 
+## "The Timon background service is slow to start" at the end of setup (TIM-0158)
+
+At the end of the first setup, the window hands over to the background service that setup installed. The desktop waits 90 seconds for it, and on Windows up to five minutes while its `TimonOrchestrator` task is still running. If the service still does not answer, setup goes on with the daemon built into the window and shows this message. Nothing is lost and there is nothing to do: as soon as the service is ready, the window hands over to it by itself, within 30 minutes, after a short "starting" screen. Otherwise it takes over at the next launch of Timon.
+
+In the diagnostic report, a last result of `0x800710e0` for the task means "an instance was already running": Windows refused to start the task a second time because it was already running. It is not an error.
+
 ## "The background service is not running" (TIM-0154)
 
 The window waited two minutes for the interface and nothing listens on the daemon's port. Timon has already tried to start the daemon once more (the background service, or its built-in daemon) before showing this message. The message gives the folder of the logs, usually `.timon/tmp` in your user folder: send its `desktop-*.log` and `daemon.log` with the diagnostic (tray icon). On Windows, also check that the `TimonOrchestrator` task exists and is enabled in Task Scheduler.
