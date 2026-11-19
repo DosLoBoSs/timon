@@ -1,14 +1,18 @@
 'use client';
 
 /**
- * "Pull requests" — the landing of the Kanban jobs that go through one: one
- * card per job, with its branch, the state of its pull request, the forge's
- * checks and a conflict with the target, and a preview of what the pull
- * request carries before anything is pushed.
+ * "Jobs" — the Kanban jobs that land through a pull request, in four groups:
+ * what needs a gesture (a check fails, a conflict, changes asked, a pull
+ * request closed without its merge), what waits on review, what is not pushed
+ * yet, and what landed this week. Groups, not columns: the widget lives in a
+ * 300 px rail.
  *
- * A widget of `@timon/kanban` (`cockpit.widget`), movable to any zone. In an
- * agent chat's rail it narrows to the conversation's project; elsewhere it
- * lists every job the reader can see.
+ * One row per job: its title and where it stands, ONE action in an icon (the
+ * preview while there is something to land, the pull request once merged),
+ * the rest in "…". A widget of `@timon/kanban`, stacked by default in the
+ * chat's "Git" stack. In a chat's rail it narrows to the conversation's
+ * project; elsewhere the project is picked once for the stack
+ * (`git-stack-project.tsx`), all of them when none is.
  *
  * The forge is asked only while the widget is mounted, the page visible, and a
  * check still runs (about once a minute; the daemon answers its stored copy in
@@ -16,22 +20,23 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CircleAlert, CircleCheck, CircleDashed, Eye, GitPullRequest, MoreHorizontal, RefreshCw } from 'lucide-react';
+import { CircleAlert, CircleCheck, CircleDashed, ExternalLink, Eye, GitPullRequest, MoreHorizontal, RefreshCw } from 'lucide-react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { Tile } from '@/components/tile';
 import { WidgetButton, widgetButtonClass } from '@/components/widget-toolbar';
 import { HUD_SURFACE } from '@/components/cockpit/hud-surface';
-import { useChatRail } from '@/components/chat/chat-rails';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
 import { t } from '@/lib/i18n';
 import { NativeViewCover } from '@/lib/native-view-cover';
 import { cn } from '@/lib/utils';
 import {
-  CHECKS_REFRESH_MS, landingsToRefresh, listLandings, refreshLandingChecks, type Landing,
+  CHECKS_REFRESH_MS, groupLandings, landingAction, landingsToRefresh, listLandings, refreshLandingChecks,
+  type Landing, type LandingGroup,
 } from './landing-api';
 import { LandingPreviewDialog } from './landing-preview-dialog';
+import { StackProjectPicker, useStackProject } from './git-stack-project';
 
-const BADGE = 'inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[10.5px] font-medium tabular-nums';
+const BADGE = 'inline-flex h-5 shrink-0 items-center gap-1 rounded-md px-1.5 text-[10.5px] font-medium tabular-nums';
 
 const TONE = {
   neutral: 'bg-foreground/[0.06] text-muted-foreground',
@@ -41,15 +46,13 @@ const TONE = {
   info: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
 } as const;
 
+const MENU_ITEM = 'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-accent';
+
+/** Where the job stands on the forge, as one chip. */
 function StateBadge({ landing }: { landing: Landing }) {
-  if (landing.state === 'open') {
-    const label = t('landings.state.open', { number: landing.pr_number ?? 0 });
-    return landing.pr_url
-      ? <a href={landing.pr_url} target="_blank" rel="noreferrer noopener" className={cn(BADGE, TONE.info, 'hover:underline')}>{label}</a>
-      : <span className={cn(BADGE, TONE.info)}>{label}</span>;
-  }
+  if (landing.state === 'open') return <span className={cn(BADGE, TONE.neutral)}>{t('landings.state.open', { number: landing.pr_number ?? 0 })}</span>;
   if (landing.state === 'merged') return <span className={cn(BADGE, TONE.good)}>{t(landing.landed ? 'landings.state.landed' : 'landings.state.merged')}</span>;
-  if (landing.state === 'closed') return <span className={cn(BADGE, TONE.neutral)}>{t('landings.state.closed')}</span>;
+  if (landing.state === 'closed') return <span className={cn(BADGE, TONE.bad)}>{t('landings.state.closed')}</span>;
   return <span className={cn(BADGE, TONE.neutral)}>{t('landings.state.branch')}</span>;
 }
 
@@ -69,14 +72,14 @@ function ChecksBadges({ landing }: { landing: Landing }) {
           <CircleDashed className="size-3 animate-spin [animation-duration:3s]" aria-hidden />{pending}
         </span>
       )}
-      {pass > 0 && (
+      {pass > 0 && fail === 0 && (
         <span className={cn(BADGE, TONE.good)} title={t('landings.checks.pass', { count: pass })}>
           <CircleCheck className="size-3" aria-hidden />{pass}
         </span>
       )}
       {checks.draft && <span className={cn(BADGE, TONE.neutral)}>{t('landings.draft')}</span>}
-      {checks.review && (
-        <span className={cn(BADGE, checks.review === 'approved' ? TONE.good : checks.review === 'changes_requested' ? TONE.bad : TONE.neutral)}>
+      {checks.review && checks.review !== 'review_required' && (
+        <span className={cn(BADGE, checks.review === 'approved' ? TONE.good : TONE.busy)}>
           {t(`landings.review.${checks.review}`)}
         </span>
       )}
@@ -84,61 +87,81 @@ function ChecksBadges({ landing }: { landing: Landing }) {
   );
 }
 
-function LandingCard({ landing, onPreview, onRefresh, refreshing }: {
+function openPr(landing: Landing) {
+  if (landing.pr_url) window.open(landing.pr_url, '_blank', 'noopener,noreferrer');
+}
+
+function LandingRow({ landing, onPreview, onRefresh, refreshing }: {
   landing: Landing;
   onPreview: () => void;
   onRefresh: () => void;
   refreshing: boolean;
 }) {
+  // The pull request's title says what the job is; until there is one, its
+  // branch is all there is, and the meta line does not repeat it.
+  const title = landing.pr_title || landing.branch;
+  const action = landingAction(landing);
+  const actionLabel = action === 'openPr' ? t('landings.openPr') : t('landings.preview');
   return (
-    <li className="flex flex-col gap-1.5 rounded-lg bg-foreground/[0.035] px-2.5 py-2" data-landing={landing.id}>
-      <div className="flex min-w-0 items-center gap-2">
-        {/* code-font: a branch name */}
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground" title={landing.branch}>{landing.branch}</span>
-        <StateBadge landing={landing} />
+    <li data-landing={landing.id} className="flex items-center gap-1 rounded-lg bg-muted/30 py-2 pl-2.5 pr-1 transition-colors hover:bg-muted/50">
+      <div className="min-w-0 flex-1">
+        <div className="line-clamp-2 break-words text-[12.5px] font-medium leading-snug text-foreground" title={title}>{title}</div>
+        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+          {landing.pr_title && <span className="min-w-0 max-w-full truncate" title={landing.branch}>{landing.branch}</span>}
+          <StateBadge landing={landing} />
+          {landing.conflict === true && <span className={cn(BADGE, TONE.busy)}>{t('landings.conflict')}</span>}
+          <ChecksBadges landing={landing} />
+        </div>
       </div>
-      {landing.pr_title && <p className="truncate text-[11.5px] text-muted-foreground" title={landing.pr_title}>{landing.pr_title}</p>}
-      <div className="flex min-w-0 flex-wrap items-center gap-1">
-        <span className="mr-1 text-[11px] text-muted-foreground">{t('landings.into', { target: `${landing.remote}/${landing.target}` })}</span>
-        {landing.conflict === true && <span className={cn(BADGE, TONE.bad)}>{t('landings.conflict')}</span>}
-        <ChecksBadges landing={landing} />
-        <span className="ml-auto flex items-center gap-0.5">
-          <WidgetButton onClick={onPreview} title={t('landings.preview')} aria-label={t('landings.preview')} icon={<Eye className="size-3.5" />} />
-          <Dropdown.Root>
-            <Dropdown.Trigger asChild>
-              <button type="button" title={t('landings.more')} aria-label={t('landings.more')} className={widgetButtonClass({ iconOnly: true })}>
-                <MoreHorizontal className="size-3.5" />
-              </button>
-            </Dropdown.Trigger>
-            <Dropdown.Portal>
-              <Dropdown.Content sideOffset={6} align="end" className="z-50 min-w-48 rounded-lg border border-border bg-popover p-1 text-xs text-popover-foreground shadow-elev-2">
-                <NativeViewCover />
-                {landing.pr_url && (
-                  <Dropdown.Item asChild className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 outline-none data-[highlighted]:bg-accent">
-                    <a href={landing.pr_url} target="_blank" rel="noreferrer noopener">
-                      <GitPullRequest className="size-3.5" />{t('landings.openPr')}
-                    </a>
-                  </Dropdown.Item>
-                )}
-                <Dropdown.Item
-                  disabled={landing.state !== 'open' || refreshing}
-                  onSelect={onRefresh}
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-accent"
-                >
-                  <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />{t('landings.refresh')}
-                </Dropdown.Item>
-              </Dropdown.Content>
-            </Dropdown.Portal>
-          </Dropdown.Root>
-        </span>
-      </div>
+      {/* Icon only: the row's width belongs to the job, not to its action. */}
+      <WidgetButton
+        data-landing-action={action}
+        onClick={action === 'openPr' ? () => openPr(landing) : onPreview}
+        title={actionLabel}
+        aria-label={actionLabel}
+        icon={action === 'openPr' ? <ExternalLink className="size-3.5" /> : <Eye className="size-3.5" />}
+      />
+      <Dropdown.Root modal={false}>
+        <Dropdown.Trigger asChild>
+          <button type="button" title={t('landings.more')} aria-label={t('landings.more')} className={widgetButtonClass({ iconOnly: true })}>
+            <MoreHorizontal className="size-3.5" />
+          </button>
+        </Dropdown.Trigger>
+        <Dropdown.Portal>
+          <Dropdown.Content sideOffset={6} align="end" className="z-50 min-w-48 rounded-lg border border-border bg-popover p-1 text-xs text-popover-foreground shadow-elev-2">
+            <NativeViewCover />
+            {action !== 'preview' && (
+              <Dropdown.Item onSelect={onPreview} className={MENU_ITEM}>
+                <Eye className="size-3.5" />{t('landings.preview')}
+              </Dropdown.Item>
+            )}
+            {landing.pr_url && action !== 'openPr' && (
+              <Dropdown.Item onSelect={() => openPr(landing)} className={MENU_ITEM}>
+                <GitPullRequest className="size-3.5" />{t('landings.openPr')}
+              </Dropdown.Item>
+            )}
+            <Dropdown.Item disabled={landing.state !== 'open' || refreshing} onSelect={onRefresh} className={MENU_ITEM}>
+              <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />{t('landings.refresh')}
+            </Dropdown.Item>
+          </Dropdown.Content>
+        </Dropdown.Portal>
+      </Dropdown.Root>
     </li>
   );
 }
 
+function GroupTitle({ group, count }: { group: LandingGroup; count: number }) {
+  return (
+    <h3 data-landing-group={group} className="flex items-center gap-1.5 px-1 pb-0.5 pt-1.5 text-[11px] font-medium text-muted-foreground">
+      {t(`landings.groups.${group}`)}
+      <span className="tabular-nums opacity-70">{count}</span>
+    </h3>
+  );
+}
+
 export function LandingWidget({ handle, className }: WidgetProps) {
-  const chat = useChatRail();
-  const project = chat?.slug ?? null;
+  const stack = useStackProject();
+  const project = stack.slug;
   const [landings, setLandings] = useState<Landing[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewed, setPreviewed] = useState<Landing | null>(null);
@@ -181,30 +204,42 @@ export function LandingWidget({ handle, className }: WidgetProps) {
     return () => clearInterval(timer);
   }, [refreshChecks]);
 
+  const groups = landings ? groupLandings(landings, Date.now()) : [];
+  const shown = groups.reduce((n, g) => n + g.landings.length, 0);
+
   return (
     <Tile
       title={t('landings.title')}
-      subtitle={landings && landings.length > 0 ? landings.length : undefined}
+      subtitle={shown > 0 ? shown : undefined}
       className={cn(HUD_SURFACE, className)}
-      bodyClassName="gap-2 p-2"
-      actions={handle}
+      bodyClassName="px-1.5 pb-3 pt-1"
+      actions={(
+        <>
+          <StackProjectPicker project={stack} none={t('landings.allProjects')} label={t('landings.selectProject')} />
+          <WidgetButton onClick={() => { void load(); }} title={t('landings.reload')} aria-label={t('landings.reload')} icon={<RefreshCw className="size-3.5" />} />
+          {handle}
+        </>
+      )}
     >
       {error && <p className="px-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
       {landings === null && !error && <p className="px-1 text-xs text-muted-foreground">{t('landings.loading')}</p>}
-      {landings !== null && landings.length === 0 && <p className="px-1 text-xs text-muted-foreground">{t('landings.empty')}</p>}
-      {landings !== null && landings.length > 0 && (
-        <ul className="flex flex-col gap-1.5">
-          {landings.map((landing) => (
-            <LandingCard
-              key={landing.id}
-              landing={landing}
-              refreshing={refreshing.has(landing.id)}
-              onPreview={() => setPreviewed(landing)}
-              onRefresh={() => { void refreshChecks([landing]); }}
-            />
-          ))}
-        </ul>
-      )}
+      {landings !== null && shown === 0 && <p className="px-1 text-xs text-muted-foreground">{t('landings.empty')}</p>}
+      {groups.map(({ group, landings: members }) => (
+        <section key={group} className="flex flex-col gap-1" aria-label={t(`landings.groups.${group}`)}>
+          <GroupTitle group={group} count={members.length} />
+          <ul className="flex flex-col gap-1">
+            {members.map((landing) => (
+              <LandingRow
+                key={landing.id}
+                landing={landing}
+                refreshing={refreshing.has(landing.id)}
+                onPreview={() => setPreviewed(landing)}
+                onRefresh={() => { void refreshChecks([landing]); }}
+              />
+            ))}
+          </ul>
+        </section>
+      ))}
       {previewed && <LandingPreviewDialog landing={previewed} onClose={() => setPreviewed(null)} />}
     </Tile>
   );

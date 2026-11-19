@@ -3,9 +3,9 @@ import test from 'node:test';
 import type { Landing, LandingPreview } from './landing-api';
 
 /**
- * The "Pull requests" widget: one card per job with its state and checks,
- * the checks asked again while one runs, and the preview dialog with the diff,
- * the commits and the dry pre-checks.
+ * The jobs widget: one row per job with its state and checks, in groups by
+ * what it waits for, the checks asked again while one runs, and the preview
+ * dialog with the diff, the commits and the dry pre-checks.
  */
 
 const branchJob: Landing = {
@@ -110,34 +110,38 @@ function card(id: string): HTMLElement {
   return el;
 }
 
-test('one card per job, with its state, conflict and checks', async () => {
+test('one row per job, in groups, with its state, conflict and checks', async () => {
   await show(async ({ calls }) => {
     const branch = card('job-branch');
     assert.match(branch.textContent!, /feat\/add-export/);
     assert.match(branch.textContent!, /Not pushed/);
-    assert.match(branch.textContent!, /into origin\/main/);
 
     const open = card('job-open');
     assert.match(open.textContent!, /PR #12/);
     assert.match(open.textContent!, /Add CSV export/);
+    assert.match(open.textContent!, /feat\/csv/, 'the branch under the title');
     assert.match(open.textContent!, /Conflict/);
-    assert.match(open.textContent!, /Review required/);
-    const link = open.querySelector<HTMLAnchorElement>('a[href="https://github.com/acme/app/pull/12"]');
-    assert.ok(link, 'the pull request is one click away');
+    assert.equal(open.querySelectorAll('a').length, 0, 'no link in the row: one action, the rest in its menu');
+    assert.equal(open.querySelector('[data-landing-action]')?.getAttribute('aria-label'), 'Preview');
+
+    // The conflict puts it on top, the branch under "In progress".
+    const groups = Array.from(document.querySelectorAll('[data-landing-group]')).map((g) => g.getAttribute('data-landing-group'));
+    assert.deepEqual(groups, ['attention', 'progress']);
+    assert.match(document.querySelector('[data-landing-group="attention"]')!.textContent!, /Needs action\s*1/);
 
     // The check that was running is asked again at once; the branch never is.
     assert.ok(calls.includes('POST /api/ui/kanban/landings/job-open/checks'));
     assert.ok(!calls.some((c) => c.includes('job-branch/checks')));
-    // Settled: 3 passed, 1 failed, none running.
-    assert.ok(open.querySelector('[title="3 checks passed"]'));
+    // Settled: 1 failed, none running; the passed ones are not the news.
     assert.ok(open.querySelector('[title="1 check failed"]'));
+    assert.ok(!open.querySelector('[title="3 checks passed"]'));
     assert.ok(!open.querySelector('[title$="running"]'));
   });
 });
 
 test('the preview shows the diff, the commits and the dry pre-checks', async () => {
   await show(async ({ React, calls }) => {
-    const button = Array.from(card('job-branch').querySelectorAll('button')).find((b) => b.getAttribute('aria-label') === 'Preview');
+    const button = card('job-branch').querySelector<HTMLButtonElement>('[data-landing-action="preview"]');
     assert.ok(button);
     await React.act(async () => { button.click(); });
     await React.act(async () => { await new Promise<void>((r) => setTimeout(r, 30)); });
@@ -163,4 +167,38 @@ test('diff lines, patch bodies and the jobs to refresh', async () => {
   assert.equal(diffLineKind(' x'), 'context');
   assert.deepEqual(patchBody('diff --git a/x b/x\nindex 1..2\n@@ -1 +1 @@\n-a\n+b'), ['@@ -1 +1 @@', '-a', '+b']);
   assert.deepEqual(landingsToRefresh([branchJob, openJob, settled, { ...settled, id: 'unread', checks: null }]).map((l) => l.id), ['job-open', 'unread']);
+});
+
+test('the groups: what needs a gesture first, landed jobs for a week only', async () => {
+  const { groupLandings, landingGroup, landingAction, LANDED_WINDOW_MS } = await import('./landing-api');
+  const now = 10 * LANDED_WINDOW_MS;
+  const at = (l: Landing, updated: number): Landing => ({ ...l, updated_at: updated });
+  const clean: Landing = {
+    ...settled, id: 'clean', conflict: false,
+    checks: { ...settled.checks!, mergeable: 'mergeable', counts: { pass: 4, fail: 0, pending: 0, skipped: 0 } },
+  };
+  assert.equal(landingGroup(clean, now), 'review');
+  assert.equal(landingGroup({ ...clean, checks: { ...clean.checks!, counts: { ...clean.checks!.counts, fail: 1 } } }, now), 'attention');
+  assert.equal(landingGroup({ ...clean, checks: { ...clean.checks!, mergeable: 'conflicting' } }, now), 'attention');
+  assert.equal(landingGroup({ ...clean, checks: { ...clean.checks!, review: 'changes_requested' } }, now), 'attention');
+  assert.equal(landingGroup({ ...clean, checks: null }, now), 'review', 'checks not read yet: waiting, not alarming');
+  assert.equal(landingGroup(branchJob, now), 'progress');
+  const merged: Landing = { ...clean, id: 'merged', state: 'merged', landed: true };
+  assert.equal(landingGroup(at(merged, now - 1000), now), 'landed');
+  assert.equal(landingGroup(at(merged, now - LANDED_WINDOW_MS - 1), now), null, 'old news');
+  const closed: Landing = { ...clean, id: 'closed', state: 'closed' };
+  assert.equal(landingGroup(at(closed, now - 1000), now), 'attention', 'closed without its merge: a decision to take');
+  assert.equal(landingGroup(at(closed, now - LANDED_WINDOW_MS - 1), now), null);
+
+  const grouped = groupLandings([at(merged, now - 5), at(branchJob, now - 3), at(clean, now - 2), at({ ...settled, id: 'late' }, now - 9), at(settled, now - 1)], now);
+  assert.deepEqual(grouped.map((g) => [g.group, g.landings.map((l) => l.id)]), [
+    ['attention', ['job-open', 'late']],
+    ['review', ['clean']],
+    ['progress', ['job-branch']],
+    ['landed', ['merged']],
+  ]);
+
+  assert.equal(landingAction(clean), 'preview');
+  assert.equal(landingAction(merged), 'openPr', 'merged: its pull request, the preview is empty');
+  assert.equal(landingAction({ ...merged, pr_url: null }), 'preview');
 });

@@ -145,3 +145,55 @@ export function patchBody(patch: string): string[] {
   const first = lines.findIndex((l) => l.startsWith('@@') || l.startsWith('Binary files'));
   return first === -1 ? lines : lines.slice(first);
 }
+
+/**
+ * The groups of the jobs widget, in the order they show: what calls for a
+ * gesture first, then what waits on the forge, then what is not pushed yet,
+ * then what landed lately. Groups, not columns: a rail is 300 px wide.
+ */
+export type LandingGroup = 'attention' | 'review' | 'progress' | 'landed';
+
+export const LANDING_GROUPS: readonly LandingGroup[] = ['attention', 'review', 'progress', 'landed'];
+
+/** How long a landed job stays in its group, and a closed one in "attention". */
+export const LANDED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * The group of `landing` at `now`; null once it is old news. An open pull
+ * request needs attention when a check fails, it conflicts with its target or
+ * a reviewer asked for changes. A pull request closed without its merge
+ * needs a decision (reopen it, or drop the job) for a week, then leaves.
+ */
+export function landingGroup(landing: Landing, now: number): LandingGroup | null {
+  const recent = now - landing.updated_at <= LANDED_WINDOW_MS;
+  switch (landing.state) {
+    case 'branch': return 'progress';
+    case 'merged': return recent ? 'landed' : null;
+    case 'closed': return recent ? 'attention' : null;
+    case 'open': {
+      const checks = landing.checks;
+      const failing = !!checks && checks.counts.fail > 0;
+      const conflict = landing.conflict === true || checks?.mergeable === 'conflicting';
+      return failing || conflict || checks?.review === 'changes_requested' ? 'attention' : 'review';
+    }
+  }
+}
+
+/** The non-empty groups of `landings`, each newest first. */
+export function groupLandings(landings: readonly Landing[], now: number): Array<{ group: LandingGroup; landings: Landing[] }> {
+  const byGroup = new Map<LandingGroup, Landing[]>();
+  for (const landing of landings) {
+    const group = landingGroup(landing, now);
+    if (!group) continue;
+    byGroup.set(group, [...(byGroup.get(group) ?? []), landing]);
+  }
+  return LANDING_GROUPS
+    .filter((group) => byGroup.has(group))
+    .map((group) => ({ group, landings: byGroup.get(group)!.sort((a, b) => b.updated_at - a.updated_at) }));
+}
+
+/** The row's main action: the preview while the job has something to land,
+ *  its pull request once it is merged or closed (the preview is empty then). */
+export function landingAction(landing: Landing): 'preview' | 'openPr' {
+  return (landing.state === 'merged' || landing.state === 'closed') && landing.pr_url ? 'openPr' : 'preview';
+}
