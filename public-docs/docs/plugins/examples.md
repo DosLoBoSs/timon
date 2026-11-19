@@ -1570,13 +1570,13 @@ Permissions: none. Read the [related guide](slots.md).
 
 `timon plugin add ./examples/plugin-publish-dialog` installs this package on the target instance.
 
-From `examples/plugin-publish-dialog/lib/client.js`, line 36 (excerpt):
+From `examples/plugin-publish-dialog/lib/client.js`, line 38 (excerpt):
 
 ```js
 function PlainPublishDialog() {
   const host = usePublishDialog()
   if (!host) return null
-  const { proposal, target, account, body, problem, busy, error, loading } = host
+  const { proposal, target, account, body, problem, busy, error, loading, editable } = host
   const waiting = proposal === null || proposal.state === 'draft' || proposal.state === 'failed'
   const canPublish = waiting && !loading && !problem && account !== null && busy === null
   const where = t(target.type === 'pull' ? 'onPull' : 'onIssue', { number: target.number })
@@ -1586,13 +1586,15 @@ function PlainPublishDialog() {
       React.createElement(DialogTitle, null, t('title')),
       React.createElement(DialogDescription, null,
         account ? `${where} · ${t('as', { account })}` : `${where} · ${t('noAccount')}`),
-      waiting
+      waiting && editable
         ? React.createElement('textarea', {
           'aria-label': t('text'), value: body, rows: 12, disabled: busy !== null,
           onChange: (e) => host.setBody(e.target.value),
           className: 'min-h-[12rem] rounded-md bg-muted/40 px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring',
         })
-        : React.createElement('p', { className: 'text-[13px] text-muted-foreground' }, t(proposal.state)),
+        : waiting
+          ? React.createElement('p', { className: 'whitespace-pre-wrap text-[13px]' }, body)
+          : React.createElement('p', { className: 'text-[13px] text-muted-foreground' }, t(proposal.state)),
       (problem && waiting) || error
         ? React.createElement('p', { role: 'alert', className: 'text-[12px] text-destructive' }, error ?? t(problem ?? ''))
         : null,
@@ -1600,7 +1602,9 @@ function PlainPublishDialog() {
         waiting
           ? React.createElement(React.Fragment, null,
             React.createElement(Button, { type: 'button', variant: 'ghost', size: 'sm', disabled: busy !== null, onClick: () => { void host.discard() } }, t('discard')),
-            React.createElement(Button, { type: 'button', variant: 'secondary', size: 'sm', disabled: busy !== null || problem !== null, onClick: () => { void host.save() } }, t('save')),
+            editable
+              ? React.createElement(Button, { type: 'button', variant: 'secondary', size: 'sm', disabled: busy !== null || problem !== null, onClick: () => { void host.save() } }, t('save'))
+              : null,
             React.createElement(Button, { type: 'button', size: 'sm', disabled: !canPublish, onClick: () => { void host.publish() }, 'data-plain-publish': '' }, t('publish')))
           : React.createElement(Button, { type: 'button', variant: 'ghost', size: 'sm', onClick: host.close }, t('close')))))
 }
