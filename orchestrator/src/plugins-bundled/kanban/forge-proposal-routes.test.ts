@@ -165,9 +165,11 @@ test('a person proposes once per target; the card waits in the notification cent
   const second = (await again.json()) as { proposal: View; created: boolean };
   assert.equal(second.created, false);
   assert.equal(second.proposal.id, first.id);
-  const cards = db.prepare(`SELECT * FROM notifications WHERE anchor = ? AND dismissed_at IS NULL`).all(proposalAnchor(first.id)) as { type: string }[];
+  const cards = db.prepare(`SELECT * FROM notifications WHERE anchor = ? AND dismissed_at IS NULL`).all(proposalAnchor('acme', first.id)) as { type: string }[];
   assert.equal(cards.length, 1);
   assert.equal(cards[0]?.type, 'action_required');
+  // The card names the project: the screen reads a proposal under it.
+  assert.equal(proposalAnchor('acme', first.id), `forge-proposal:acme:${first.id}`);
 });
 
 test('the daemon proposes under a key: the same trigger twice is one proposal', () => {
@@ -202,7 +204,7 @@ test('a project without a GitHub repository or an account gets no proposal, and 
 
 test('publishing checks the account first: another login is refused and nothing is written', async () => {
   const proposal = await propose(330);
-  login = 'PublikoFR';
+  login = 'other-account';
   const before = posts().length;
   const res = await call('POST', `/api/projects/acme/forge-proposals/${proposal.id}/publish`, 'person', {});
   assert.equal(res.status, 409);
@@ -246,7 +248,7 @@ test('a proposal is published once, with the edited text and its marker, then an
   assert.equal(posts().length, count, 'a second publication never reaches the forge');
   assert.equal((await call('PATCH', `/api/projects/acme/forge-proposals/${proposal.id}`, 'person', { body: 'late' })).status, 409);
   assert.equal((await call('POST', `/api/projects/acme/forge-proposals/${proposal.id}/discard`, 'person', {})).status, 409);
-  const open = db.prepare(`SELECT COUNT(*) AS n FROM notifications WHERE anchor = ? AND dismissed_at IS NULL`).get(proposalAnchor(proposal.id)) as { n: number };
+  const open = db.prepare(`SELECT COUNT(*) AS n FROM notifications WHERE anchor = ? AND dismissed_at IS NULL`).get(proposalAnchor('acme', proposal.id)) as { n: number };
   assert.equal(open.n, 0, 'the card closes once published');
   assert.deepEqual(writes(), [], 'no other process ever ran');
 });
@@ -314,7 +316,7 @@ test('a person edits, then discards: the card goes, the forge never hears of it'
   assert.equal(((await discarded.json()) as { proposal: View }).proposal.state, 'discarded');
   assert.equal((await call('POST', `/api/projects/acme/forge-proposals/${proposal.id}/publish`, 'person', {})).status, 409);
   assert.equal(calls.length, before);
-  const open = db.prepare(`SELECT COUNT(*) AS n FROM notifications WHERE anchor = ? AND dismissed_at IS NULL`).get(proposalAnchor(proposal.id)) as { n: number };
+  const open = db.prepare(`SELECT COUNT(*) AS n FROM notifications WHERE anchor = ? AND dismissed_at IS NULL`).get(proposalAnchor('acme', proposal.id)) as { n: number };
   assert.equal(open.n, 0);
   const listed = (await (await call('GET', '/api/projects/acme/forge-proposals?state=discarded', 'person')).json()) as { proposals: View[] };
   assert.ok(listed.proposals.some((p) => p.id === proposal.id));

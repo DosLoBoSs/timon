@@ -1604,6 +1604,158 @@ declare module '@timon/ui' {
     titleId: string;
   } | null;
 
+  /** An idea a Kanban job carries, as its links list it. Client API 18. */
+  export type KanbanJobTodo = {
+    id: number;
+    /** At most 300 characters. */
+    text: string;
+    status: string;
+    progress: string | null;
+    project: string | null;
+  };
+  /**
+   * An issue a Kanban job touches (client API 18). `closes`: the pull
+   * request's description says it closes it, which is its author's claim;
+   * otherwise one of the job's ideas is linked to it (`todo_id`).
+   */
+  export type KanbanJobIssue = { repo: string; number: number; url: string | null; todo_id: number | null; closes: boolean };
+  /** The way back from a job to its ideas, their issues and the mission piloting its series. Client API 18. */
+  export type KanbanJobLinks = {
+    todos: KanbanJobTodo[];
+    issues: KanbanJobIssue[];
+    series_id: string | null;
+    /** Only when the reader may open that mission. */
+    pilot_mission_id: string | null;
+  };
+  /**
+   * A Kanban job (client API 18): the integration branch of a series, and the
+   * pull request it lands through. `state` is `branch` (embargoed, no pull
+   * request expected), `open`, `merged` or `closed` (without a merge);
+   * `pr_number` stays `null` while the pull request is not created. `checks`
+   * is the last read of the pull request's checks and review, `null` before
+   * one.
+   */
+  export type KanbanJob = {
+    id: string;
+    project: string | null;
+    series_id: string | null;
+    branch: string;
+    remote: string;
+    target: string;
+    mode: string;
+    state: 'branch' | 'open' | 'merged' | 'closed';
+    pr_number: number | null;
+    pr_url: string | null;
+    pr_title: string | null;
+    head_sha: string | null;
+    merge_sha: string | null;
+    landed: boolean;
+    created_at: number;
+    updated_at: number;
+    checks: {
+      read_at: number;
+      draft: boolean;
+      mergeable: 'mergeable' | 'conflicting' | 'unknown';
+      review: 'approved' | 'changes_requested' | 'review_required' | null;
+      counts: Record<'pass' | 'fail' | 'pending' | 'skipped', number>;
+      items: Array<{ name: string; status: 'pass' | 'fail' | 'pending' | 'skipped'; url: string | null }>;
+    } | null;
+    conflict: boolean | null;
+    checks_running: boolean;
+    /** Absent from a daemon that does not compute them. */
+    links?: KanbanJobLinks;
+  };
+  /**
+   * The job a `kanban.job.dialog` occupant paints (client API 18), opened from
+   * the Jobs widget, the Pull requests widget and the landing badge of a TO DO
+   * idea. The occupant draws the whole window (`Dialog` from this module) and
+   * calls `close()` when it is dismissed. `openTodo` and `openMission` close
+   * the window first; `openTodo` is `null` where the screen cannot show an
+   * idea. Read-only: the job's diff, commits and pre-checks stay the
+   * product's.
+   */
+  export type JobDialogValue = {
+    /** The job, its `links` included. */
+    landing: KanbanJob;
+    close(): void;
+    openTodo: ((id: number) => void) | null;
+    openMission(missionId: string): void;
+  };
+  /** The job a `kanban.job.dialog` occupant paints, and its gestures (client API 18); `null` outside the slot. */
+  export function useJobDialog(): JobDialogValue | null;
+
+  /**
+   * A text proposed for publication on a project's forge (client API 18): a
+   * comment on an issue or a pull request, waiting for a person. `draft` and
+   * `failed` wait; `publishing`, `published` and `discarded` are done.
+   * `trigger` says what prepared it: `person`, `landing` (a job landed) or
+   * `todo_resolved`. `account` and `url` are set once published.
+   */
+  export type ForgeProposal = {
+    id: string;
+    project: string;
+    repo: string;
+    kind: 'comment';
+    target: { type: 'issue' | 'pull'; number: number; url: string };
+    body: string;
+    state: 'draft' | 'publishing' | 'published' | 'failed' | 'discarded';
+    trigger: 'person' | 'landing' | 'todo_resolved';
+    key: string;
+    source_ref: string | null;
+    account: string | null;
+    url: string | null;
+    error: { code: string; reason: string | null } | null;
+    created_at: number;
+    updated_at: number;
+    published_at: number | null;
+  };
+  /**
+   * The "Publish on GitHub" window a `forge.publish.dialog` occupant paints
+   * (client API 18): the exact text that would leave, where it goes and as
+   * which account. Opened from a job's or a pull request's row, a pull
+   * request's menu (`proposal` is then `null` until the new comment is saved
+   * or published) and a proposal's notification card. The occupant draws the
+   * whole window (`Dialog` from this module), lets the person edit `body`
+   * through `setBody`, and offers one main action, `publish()`.
+   *
+   * The occupant holds no access to the forge or to the daemon: `publish`,
+   * `save` and `discard` are the host's gestures. They go through the
+   * signed-in person's session, the daemon refuses them from anyone else and
+   * checks the account again before posting, and each resolves `true` once
+   * taken, `false` on a refusal (then read `error`). Nothing reaches the forge
+   * without a click on `publish`; a published or discarded proposal closes
+   * the window.
+   */
+  export type PublishDialogValue = {
+    project: string;
+    proposal: ForgeProposal | null;
+    /** True until the proposal and the project's account are read. */
+    loading: boolean;
+    /** `owner/name`, when known. */
+    repo: string | null;
+    target: { type: 'issue' | 'pull'; number: number; url: string | null };
+    /** The account the project publishes as; `null` when none is set, and `publish()` is then refused. */
+    account: string | null;
+    /** The text as it would leave, edits included. */
+    body: string;
+    setBody(body: string): void;
+    /** Why the daemon would refuse `body`, checked before it is sent (8,000 characters at most, no control character); `null` when it is fine. */
+    problem: 'empty' | 'tooLong' | 'control' | 'marker' | null;
+    /** The gesture in progress. */
+    busy: 'publish' | 'save' | 'discard' | null;
+    /** The last refusal, in the reader's language. */
+    error: string | null;
+    /** Posts `body` as it stands, as the project's account. */
+    publish(): Promise<boolean>;
+    /** Keeps the text for later, unpublished. */
+    save(): Promise<boolean>;
+    /** "Do not publish": the proposal closes and nothing reaches the forge. */
+    discard(): Promise<boolean>;
+    close(): void;
+  };
+  /** The text a `forge.publish.dialog` occupant paints, and the host's gestures (client API 18); `null` outside the slot. */
+  export function usePublishDialog(): PublishDialogValue | null;
+
   /** A heading of a list page, as the `page.toc` occupant lists it. Client API 15. */
   export type PageTocEntry = {
     /** The heading's `id`, also its anchor. */

@@ -124,7 +124,7 @@ Each row gives the pull request's title, its number, its author, **draft** when 
 2. Timon writes a review brief: the rules a reviewer follows (read only, nothing posted on GitHub), the place of the diff on this machine, what GitHub says of the pull request (behind or in conflict with its base, whether you may push to the contributor's branch), and what people outside the project wrote (title, description, labels, comments, review threads nobody resolved, the issues it claims to close) as data, cut short, with the instruction never to follow it.
 3. A window shows the brief and, in its **Diff** tab, the pull request's changes. **Copy the brief** puts it on your clipboard, for the reviewer you choose. Timon starts nothing on its own, and writes nothing on GitHub.
 
-The row's menu (**…**) opens the pull request on GitHub, or shows the report of a past review. A project that lands its jobs locally has no pull requests to list: the widget says so until you set the project to `pr` mode.
+The row's menu (**…**) opens the pull request on GitHub, or shows the report of a past review. When the pull request is one of your jobs', it also offers **Show the job** (the job's window, below), **Show the TO DO (#n)** for each idea the job carries, and **Open the job** (the conversation of the mission that pilots it); a contributor's pull request offers **Show the TO DO** when it closes an issue one of your ideas was imported from. **Propose a comment…** writes a comment for the pull request in the [Publish on GitHub](#publish-on-github) window; nothing is posted before you publish it there. A project that lands its jobs locally has no pull requests to list: the widget says so until you set the project to `pr` mode.
 
 ## Jobs
 
@@ -139,7 +139,7 @@ The row's menu (**…**) opens the pull request on GitHub, or shows the report o
 
 Each row gives the job's title (its pull request's, or its branch until there is one), its branch, and where it stands: **Not pushed**, **PR #n**, **Merged**, **Landed** once Timon has closed the job's tasks and ideas, or **Closed**. While the pull request is open, the row also shows the failing or running checks (or how many passed when none fails), a conflict, a draft and an approval or a request for changes.
 
-The row's button is **Preview** while the job has something to land, and **Open the pull request** once it is merged or closed. Its menu (**…**) holds the other one and **Refresh the checks**. In an agent's chat the widget lists the jobs of the conversation's project; elsewhere, the project picked for **Pull requests**, or every project.
+The row's button is **Preview** while the job has something to land, and **Open the pull request** once it is merged or closed. Its menu (**…**) holds the other one, **Show the TO DO (#n)** for each idea the job carries, **Open the job** for the conversation of the mission that pilots it, and **Refresh the checks**. A row marked **to approve** has a comment waiting for you in [Publish on GitHub](#publish-on-github): click the mark to read it. In an agent's chat the widget lists the jobs of the conversation's project; elsewhere, the project picked for **Pull requests**, or every project.
 
 The list is read again each time its tab comes to the front. Inside the stack, **Refresh** sits in the widget's menu (the gear, or a right click on the tabs); a **Jobs** card on its own keeps it in its header.
 
@@ -151,7 +151,14 @@ Timon reads the checks from GitHub when the widget appears, then about once a mi
 - **Commits**: the commits of the branch that the target does not have.
 - **Pre-checks**: the checks of `timon pr open`, run without pushing, fetching or opening anything, with the result of each. The public tree check runs a script of the repository, so it waits for the actual opening, as does the check of a title the preview does not have yet. Running the pre-checks needs the permission to manage projects, as opening the pull request does.
 
-The preview also says whether the branch would merge into the target without a conflict.
+The preview also says whether the branch would merge into the target without a conflict. Beside it, **Links** shows where the job comes from and where it leads:
+
+- **TO DO**: the ideas the job carries; click one to open it.
+- **Issue**: the GitHub issues of those ideas, and the issues the pull request's description says it closes, marked **closes** (that is its author's statement, not Timon's).
+- **Job**: **Open the mission**, the conversation of the mission that pilots the job.
+- **Branch**: the job's branch and the branch it lands into.
+
+You only see the ideas and the mission you may open.
 
 ## From the TO DO notebook
 
@@ -165,7 +172,20 @@ An idea whose job lands through a pull request shows where it stands, beside its
 | **PR #12 closed** | the pull request was closed without a merge: nothing landed |
 | **Branch** | an embargoed branch (`sec/<topic>`), which lands by hand without a pull request |
 
-Click the badge to open the job's preview, the same as from **Jobs**, with the link to its pull request. The progress says how far the work went; this badge says how far its branch went. When the idea has several jobs, the badge shows the one furthest from landing (a closed pull request first, then one not created, a branch, an open one, a merged one), opens that one, and its tooltip lists them all. The TO DO widgets filter on **PR open** and **PR not created**.
+Click the badge to open the job's preview, the same as from **Jobs**, with its links and the link to its pull request. The progress says how far the work went; this badge says how far its branch went. When the idea has several jobs, the badge shows the one furthest from landing (a closed pull request first, then one not created, a branch, an open one, a merged one), opens that one, and its tooltip lists them all. The TO DO widgets filter on **PR open** and **PR not created**.
+
+An idea linked to a GitHub issue shows the issue's number (**#212**) among its badges; click it to open the issue on GitHub. An idea a connector wrote, from an issue or a message, is marked **external**: its text was written outside Timon, and Timon hands it to agents as data to read, never as instructions.
+
+## Publish on GitHub
+
+Timon writes on GitHub only through one window, **Publish on GitHub**, and only when you click **Publish** in it. An agent never publishes there. The window opens from a row marked **to approve** in **Jobs** or **Pull requests**, from the notification card of a comment waiting for you, or from **Propose a comment…** in a pull request's menu.
+
+On the left, the exact text that would be posted, and whether it goes on an issue or a pull request (it is public). **Edit** lets you change it and **Save** keeps your version; a draft Timon prepared says so under the text. On the right, what would leave: where it goes, the GitHub account it would be posted as (the account set on the project), what prepared it, and the fact that it is posted once only, even if you click twice.
+
+- **Publish** posts the text as it stands. Timon first checks that `gh` is signed in as the project's account and refuses otherwise, without posting anything. If GitHub refuses, the window stays open with the reason, and you can try again.
+- **Do not publish** closes the proposal: nothing is posted, and its notification goes away.
+
+Without an account set on the project, **Publish** stays off. Proposing, editing and publishing need you to be signed in with the **Create, update and delete projects** permission: an agent, a plugin or the daemon's token cannot do it.
 
 ## Who may change a repository
 

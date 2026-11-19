@@ -1,25 +1,29 @@
 'use client';
 
 /**
- * The preview of a job's pull request: what it brings (the diff, file by file,
- * and the commits) and whether Timon would open it (the pre-checks, run dry
- * by the daemon: nothing fetched, pushed or opened).
+ * The product's job dialog (`kanban.job.dialog`, host `job-dialog.tsx`): what
+ * the job's pull request brings (the diff, file by file, and the commits),
+ * whether Timon would open it (the pre-checks, run dry by the daemon: nothing
+ * fetched, pushed or opened), and, beside them, its links — the ideas it
+ * carries, their issues, the mission that pilots it, its branch and target.
  *
- * Three tabs rather than one long page: a branch of a few hundred files keeps
- * its commits and its verdict one click away. A file's patch is painted only
- * once unfolded.
+ * Two islands rather than one long page: a branch of a few hundred files keeps
+ * its commits, its verdict and its links one click away. A file's patch is
+ * painted only once unfolded.
  */
 
-import { useEffect, useState } from 'react';
-import { ChevronRight, CircleAlert, CircleCheck, CircleMinus, ExternalLink } from 'lucide-react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { ChevronRight, CircleAlert, CircleCheck, CircleDot, CircleMinus, ExternalLink, GitPullRequest, MessageSquare } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { widgetButtonClass } from '@/components/widget-toolbar';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { safeHref } from './project-todo-links';
+import { useJobDialog } from './job-dialog-context';
 import {
-  diffLineKind, patchBody, previewLanding,
-  type DiffLineKind, type Landing, type LandingPreview, type Precheck, type PreviewFile,
+  diffLineKind, NO_LINKS, patchBody, previewLanding,
+  type DiffLineKind, type Landing, type LandingPreview, type LinkedIssue, type Precheck, type PreviewFile,
 } from './landing-api';
 
 /** How each kind of diff line is painted, here and in the open pull requests' dialog. */
@@ -105,7 +109,99 @@ function Verdict({ preview }: { preview: LandingPreview }) {
     : <p className="text-xs font-medium text-red-700 dark:text-red-300">{t('landings.previewDialog.refused', { count: refused })}</p>;
 }
 
-export function LandingPreviewDialog({ landing, onClose }: { landing: Landing; onClose: () => void }) {
+export function ProductJobDialog(): ReactElement | null {
+  const host = useJobDialog();
+  if (!host) return null;
+  return <JobDialogBody landing={host.landing} onClose={host.close} openTodo={host.openTodo} openMission={host.openMission} />;
+}
+
+const CHIP = 'inline-flex h-5 shrink-0 items-center gap-1 rounded-md px-1.5 text-[10.5px] font-medium tabular-nums';
+
+/** One line of the Links island: what it is on the left, the link on the right. */
+function LinkRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 items-baseline justify-between gap-3 text-xs">
+      <dt className="shrink-0 text-muted-foreground">{label}</dt>
+      <dd className="flex min-w-0 flex-wrap items-center justify-end gap-1 text-right">{children}</dd>
+    </div>
+  );
+}
+
+function IssueLink({ issue, prRepo }: { issue: LinkedIssue; prRepo: string | null }) {
+  // The pull request's own repository goes without saying; another one is named.
+  const same = prRepo !== null && prRepo.toLowerCase() === issue.repo.toLowerCase();
+  const text = same ? `#${issue.number}` : `${issue.repo}#${issue.number}`;
+  const href = safeHref(issue.url);
+  const label = issue.closes ? t('landings.links.issueCloses', { ref: `${issue.repo}#${issue.number}` }) : `${issue.repo}#${issue.number}`;
+  const body = (
+    <>
+      <CircleDot className="size-3" aria-hidden />
+      {text}
+      {issue.closes && <span className="font-normal opacity-80">· {t('landings.links.closes')}</span>}
+    </>
+  );
+  const tone = 'bg-foreground/[0.06] text-foreground/85';
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" data-job-issue={issue.number} title={label} aria-label={label}
+      className={cn(CHIP, tone, 'underline-offset-2 hover:underline')}>{body}</a>
+  ) : <span data-job-issue={issue.number} title={label} className={cn(CHIP, tone)}>{body}</span>;
+}
+
+const PR_REPO = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/\d+$/;
+
+/** The job's links: its ideas, their issues, its pilot mission, its branch. */
+export function JobLinksIsland({ landing, openTodo, openMission }: {
+  landing: Landing;
+  openTodo: ((id: number) => void) | null;
+  openMission: (missionId: string) => void;
+}): ReactElement {
+  const links = landing.links ?? NO_LINKS;
+  const prRepo = landing.pr_url ? PR_REPO.exec(landing.pr_url)?.[1] ?? null : null;
+  return (
+    <section data-job-links="" aria-label={t('landings.links.title')} className={cn(ISLAND, 'flex flex-col gap-2 px-3 py-2.5')}>
+      <h3 className="text-[11.5px] font-medium text-muted-foreground">{t('landings.links.title')}</h3>
+      <dl className="flex flex-col gap-2">
+        {links.todos.length > 0 && (
+          <LinkRow label={t('landings.links.todo', { count: links.todos.length })}>
+            {links.todos.map((todo) => (
+              openTodo ? (
+                <button key={todo.id} type="button" data-job-todo={todo.id} onClick={() => openTodo(todo.id)} title={todo.text}
+                  className="min-w-0 max-w-full truncate rounded-sm text-right text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  {todo.text}
+                </button>
+              ) : <span key={todo.id} data-job-todo={todo.id} title={todo.text} className="min-w-0 max-w-full truncate">{todo.text}</span>
+            ))}
+          </LinkRow>
+        )}
+        {links.issues.length > 0 && (
+          <LinkRow label={t('landings.links.issue', { count: links.issues.length })}>
+            {links.issues.map((issue) => <IssueLink key={`${issue.repo}#${issue.number}`} issue={issue} prRepo={prRepo} />)}
+          </LinkRow>
+        )}
+        {links.pilot_mission_id && (
+          <LinkRow label={t('landings.links.job')}>
+            <button type="button" data-job-pilot={links.pilot_mission_id} onClick={() => openMission(links.pilot_mission_id!)}
+              className={cn(CHIP, 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/[0.1]')}>
+              <MessageSquare className="size-3" aria-hidden />{t('landings.links.openMission')}
+            </button>
+          </LinkRow>
+        )}
+        <LinkRow label={t('landings.links.branch')}>
+          <span className="min-w-0 truncate" title={`${landing.branch} → ${landing.remote}/${landing.target}`}>
+            {landing.branch} → {landing.target}
+          </span>
+        </LinkRow>
+      </dl>
+    </section>
+  );
+}
+
+function JobDialogBody({ landing, onClose, openTodo, openMission }: {
+  landing: Landing;
+  onClose: () => void;
+  openTodo: ((id: number) => void) | null;
+  openMission: (missionId: string) => void;
+}) {
   const [preview, setPreview] = useState<LandingPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
@@ -131,11 +227,14 @@ export function LandingPreviewDialog({ landing, onClose }: { landing: Landing; o
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="flex max-h-[85vh] max-w-3xl flex-col gap-3 overflow-hidden">
+      <DialogContent className="flex max-h-[85vh] max-w-[900px] flex-col gap-3 overflow-hidden">
         <DialogTitle className="flex min-w-0 items-center gap-2 text-sm">
-          {/* code-font: a branch name */}
-          <span className="truncate font-mono">{landing.branch}</span>
-          <span className="shrink-0 font-normal text-muted-foreground">{t('landings.into', { target })}</span>
+          <GitPullRequest className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="min-w-0 truncate" title={landing.pr_title ?? landing.branch}>{landing.pr_title || landing.branch}</span>
+          {landing.pr_number !== null && (
+            <span className={cn(CHIP, 'bg-foreground/[0.06] text-muted-foreground')}>{t('landings.state.open', { number: landing.pr_number })}</span>
+          )}
+          {!landing.pr_title && <span className="shrink-0 font-normal text-muted-foreground">{t('landings.into', { target })}</span>}
           {landing.pr_url && (
             <a
               href={landing.pr_url}
@@ -152,89 +251,97 @@ export function LandingPreviewDialog({ landing, onClose }: { landing: Landing; o
         </DialogTitle>
         <DialogDescription className="sr-only">{t('landings.previewDialog.description')}</DialogDescription>
 
-        {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-        {!preview && !error && <p className="text-xs text-muted-foreground">{t('landings.loading')}</p>}
+        {/* The links show at once: they come with the job, the diff takes a git read. */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_17rem]">
+          <div className={cn(ISLAND, 'flex min-h-0 min-w-0 flex-col gap-2 p-2.5')}>
+            {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+            {!preview && !error && <p className="text-xs text-muted-foreground">{t('landings.loading')}</p>}
 
-        {preview && (
-          <>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] tabular-nums text-muted-foreground">
-              <span>{t('landings.previewDialog.summary', { commits: preview.commit_count, files: preview.totals.files })}</span>
-              <span>
-                <span className="text-emerald-700 dark:text-emerald-300">+{preview.totals.additions}</span>
-                {' '}
-                <span className="text-red-700 dark:text-red-300">−{preview.totals.deletions}</span>
-              </span>
-              <span className={cn(preview.conflict.state === 'conflicting' && 'font-medium text-red-700 dark:text-red-300')}>
-                {t(`landings.previewDialog.conflict.${preview.conflict.state}`, { target })}
-              </span>
-              <span className="ml-auto"><Verdict preview={preview} /></span>
-            </div>
-            {preview.problem && <p className={NOTE}>{preview.problem}</p>}
-            {preview.conflict.files.length > 0 && (
-              <p className={NOTE}>{t('landings.previewDialog.conflictFiles', { files: preview.conflict.files.join(', ') })}</p>
-            )}
-
-            <Tabs defaultValue="changes" className="flex min-h-0 flex-1 flex-col gap-2">
-              <TabsList className="h-8 self-start">
-                <TabsTrigger value="changes" className="text-xs">{t('landings.previewDialog.tabChanges')}</TabsTrigger>
-                <TabsTrigger value="commits" className="text-xs">{t('landings.previewDialog.tabCommits')}</TabsTrigger>
-                <TabsTrigger value="checks" className="text-xs">{t('landings.previewDialog.tabChecks')}</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="changes" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto">
-                {preview.files.length === 0 && !preview.problem && (
-                  <p className="text-xs text-muted-foreground">{t('landings.previewDialog.nothing', { target })}</p>
+            {preview && (
+              <>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] tabular-nums text-muted-foreground">
+                  <span>{t('landings.previewDialog.summary', { commits: preview.commit_count, files: preview.totals.files })}</span>
+                  <span>
+                    <span className="text-emerald-700 dark:text-emerald-300">+{preview.totals.additions}</span>
+                    {' '}
+                    <span className="text-red-700 dark:text-red-300">−{preview.totals.deletions}</span>
+                  </span>
+                  <span className={cn(preview.conflict.state === 'conflicting' && 'font-medium text-red-700 dark:text-red-300')}>
+                    {t(`landings.previewDialog.conflict.${preview.conflict.state}`, { target })}
+                  </span>
+                  <span className="ml-auto"><Verdict preview={preview} /></span>
+                </div>
+                {preview.problem && <p className={NOTE}>{preview.problem}</p>}
+                {preview.conflict.files.length > 0 && (
+                  <p className={NOTE}>{t('landings.previewDialog.conflictFiles', { files: preview.conflict.files.join(', ') })}</p>
                 )}
-                <ul className="flex flex-col gap-1.5">
-                  {preview.files.map((file) => (
-                    <FileDiff key={file.path} file={file} open={open.has(file.path)} onToggle={() => toggle(file.path)} />
-                  ))}
-                </ul>
-                {(preview.files_truncated || preview.patch_truncated) && (
-                  <p className={cn(NOTE, 'mt-2')}>
-                    {preview.files_truncated
-                      ? t('landings.previewDialog.filesCut', { shown: preview.files.length, total: preview.totals.files })
-                      : t('landings.previewDialog.patchCut')}
-                  </p>
-                )}
-              </TabsContent>
 
-              <TabsContent value="commits" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto">
-                <ul className="flex flex-col gap-1">
-                  {preview.commits.map((c) => (
-                    <li key={c.sha} className={cn(ISLAND, 'flex min-w-0 items-baseline gap-2 px-2.5 py-1.5')}>
-                      {/* code-font: a commit sha */}
-                      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{c.short}</span>
-                      <span className="min-w-0 flex-1 truncate text-xs" title={c.subject}>{c.subject}</span>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">{c.author}</span>
-                    </li>
-                  ))}
-                </ul>
-                {preview.commits_truncated && (
-                  <p className={cn(NOTE, 'mt-2')}>{t('landings.previewDialog.commitsCut', { shown: preview.commits.length, total: preview.commit_count })}</p>
-                )}
-              </TabsContent>
+                <Tabs defaultValue="changes" className="flex min-h-0 flex-1 flex-col gap-2">
+                  <TabsList className="h-8 self-start">
+                    <TabsTrigger value="changes" className="text-xs">{t('landings.previewDialog.tabChanges')}</TabsTrigger>
+                    <TabsTrigger value="commits" className="text-xs">{t('landings.previewDialog.tabCommits')}</TabsTrigger>
+                    <TabsTrigger value="checks" className="text-xs">{t('landings.previewDialog.tabChecks')}</TabsTrigger>
+                  </TabsList>
 
-              <TabsContent value="checks" className="scrollbar-thin mt-0 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-                {preview.pull_request && (
-                  <div className={cn(ISLAND, 'px-2.5 py-2')}>
-                    <p className="text-xs font-medium">{preview.pull_request.title}</p>
-                    {preview.pull_request.body && (
-                      <p className="mt-1 whitespace-pre-wrap break-words text-[11.5px] text-muted-foreground">{preview.pull_request.body}</p>
+                  <TabsContent value="changes" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto">
+                    {preview.files.length === 0 && !preview.problem && (
+                      <p className="text-xs text-muted-foreground">{t('landings.previewDialog.nothing', { target })}</p>
                     )}
-                  </div>
-                )}
-                {preview.prechecks.ran
-                  ? (
-                    <ul className="flex flex-col gap-1">
-                      {preview.prechecks.checks.map((c) => <PrecheckRow key={c.name} check={c} />)}
+                    <ul className="flex flex-col gap-1.5">
+                      {preview.files.map((file) => (
+                        <FileDiff key={file.path} file={file} open={open.has(file.path)} onToggle={() => toggle(file.path)} />
+                      ))}
                     </ul>
-                  )
-                  : <Verdict preview={preview} />}
-              </TabsContent>
-            </Tabs>
-          </>
-        )}
+                    {(preview.files_truncated || preview.patch_truncated) && (
+                      <p className={cn(NOTE, 'mt-2')}>
+                        {preview.files_truncated
+                          ? t('landings.previewDialog.filesCut', { shown: preview.files.length, total: preview.totals.files })
+                          : t('landings.previewDialog.patchCut')}
+                      </p>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="commits" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto">
+                    <ul className="flex flex-col gap-1">
+                      {preview.commits.map((c) => (
+                        <li key={c.sha} className={cn(ISLAND, 'flex min-w-0 items-baseline gap-2 px-2.5 py-1.5')}>
+                          {/* code-font: a commit sha */}
+                          <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{c.short}</span>
+                          <span className="min-w-0 flex-1 truncate text-xs" title={c.subject}>{c.subject}</span>
+                          <span className="shrink-0 text-[11px] text-muted-foreground">{c.author}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {preview.commits_truncated && (
+                      <p className={cn(NOTE, 'mt-2')}>{t('landings.previewDialog.commitsCut', { shown: preview.commits.length, total: preview.commit_count })}</p>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="checks" className="scrollbar-thin mt-0 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto data-[state=inactive]:hidden">
+                    {preview.pull_request && (
+                      <div className={cn(ISLAND, 'px-2.5 py-2')}>
+                        <p className="text-xs font-medium">{preview.pull_request.title}</p>
+                        {preview.pull_request.body && (
+                          <p className="mt-1 whitespace-pre-wrap break-words text-[11.5px] text-muted-foreground">{preview.pull_request.body}</p>
+                        )}
+                      </div>
+                    )}
+                    {preview.prechecks.ran
+                      ? (
+                        <ul className="flex flex-col gap-1">
+                          {preview.prechecks.checks.map((c) => <PrecheckRow key={c.name} check={c} />)}
+                        </ul>
+                      )
+                      : <Verdict preview={preview} />}
+                  </TabsContent>
+                </Tabs>
+              </>
+            )}
+          </div>
+          <div className="flex min-h-0 flex-col gap-3 md:overflow-y-auto">
+            <JobLinksIsland landing={landing} openTodo={openTodo} openMission={openMission} />
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

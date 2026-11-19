@@ -297,6 +297,17 @@ test('plugin-todo-landing: a browser-only replacement of `kanban.todo.landing` l
   });
 });
 
+test('plugin-publish-dialog: a browser-only replacement of `forge.publish.dialog` loads at API 18', async () => {
+  await withExample('plugin-publish-dialog', '@timon-ai/plugin-publish-dialog', async (url) => {
+    const gallery = await (await fetch(url('/api/plugins/example-publish-dialog'))).json() as {
+      state: string; kind: string[]; client: { slots: string[] } | null;
+    };
+    assert.equal(gallery.state, 'active');
+    assert.deepEqual(gallery.kind, ['behavior']);
+    assert.deepEqual(gallery.client?.slots, ['forge.publish.dialog']);
+  });
+});
+
 test('plugin-update-dialog: a browser-only replacement of `updates.dialog` loads at API 17', async () => {
   await withExample('plugin-update-dialog', '@timon-ai/plugin-update-dialog', async (url) => {
     const gallery = await (await fetch(url('/api/plugins/example-update-dialog'))).json() as {

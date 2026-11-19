@@ -18,6 +18,7 @@ import { effectiveProgress, type TodoProgress, type TodoUrgency } from '@/lib/pr
 import { AuthorBadge, MetaBadge, ProgressMenu, UrgencyMenu } from './project-todo-tag-chips';
 import { TodoBadgeSlot } from './todo-badge-slot';
 import { TodoLandingSlot } from './todo-landing-slot';
+import { TodoOriginChips } from './todo-issue-chips';
 import { TodoDetailSlot } from './todo-detail-slot';
 import { RailGroup, TodoFormClose } from './todo-form-parts';
 import { useTodoForm, type TodoFormValue } from './todo-form-context';
@@ -188,6 +189,7 @@ function Detail({ host, item }: { host: TodoFormValue; item: ProjectTodo }): Rea
         ) : (
           <span className="text-[11.5px] text-muted-foreground/60">{t('projectTodo.authorUnknown')}</span>
         )}
+        <TodoOriginChips item={item} />
         <TodoLandingSlot item={item} />
         <TodoBadgeSlot item={item} />
       </div>

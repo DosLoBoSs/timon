@@ -35,7 +35,13 @@ import {
   CHECKS_REFRESH_MS, groupLandings, landingAction, landingsToRefresh, listLandings, refreshLandingChecks,
   type Landing, type LandingGroup,
 } from './landing-api';
-import { LandingPreviewDialog } from './landing-preview-dialog';
+import { JobDialog } from './job-dialog';
+import { JobLinksMenuItems } from './job-links-menu';
+import { useTodoOpener } from './todo-opener';
+import { proposalsForLanding, type ForgeProposal } from './forge-proposals-api';
+import { ProposalChip } from './proposal-chip';
+import { PublishDialog } from './publish-dialog';
+import { useForgeProposals } from './use-forge-proposals';
 import { StackProjectPicker, useStackProject } from './git-stack-project';
 
 const BADGE = 'inline-flex h-5 shrink-0 items-center gap-1 rounded-md px-1.5 text-[10.5px] font-medium tabular-nums';
@@ -93,10 +99,13 @@ function openPr(landing: Landing) {
   if (landing.pr_url) window.open(landing.pr_url, '_blank', 'noopener,noreferrer');
 }
 
-function LandingRow({ landing, onPreview, onRefresh, refreshing }: {
+function LandingRow({ landing, proposals, onPreview, onRefresh, onOpenTodo, onOpenProposal, refreshing }: {
   landing: Landing;
+  proposals: readonly ForgeProposal[];
   onPreview: () => void;
   onRefresh: () => void;
+  onOpenTodo: (id: number) => void;
+  onOpenProposal: (proposal: ForgeProposal) => void;
   refreshing: boolean;
 }) {
   // The pull request's title says what the job is; until there is one, its
@@ -113,6 +122,7 @@ function LandingRow({ landing, onPreview, onRefresh, refreshing }: {
           <StateBadge landing={landing} />
           {landing.conflict === true && <span className={cn(BADGE, TONE.busy)}>{t('landings.conflict')}</span>}
           <ChecksBadges landing={landing} />
+          <ProposalChip proposals={proposals} onOpen={onOpenProposal} />
         </div>
       </div>
       {/* Icon only: the row's width belongs to the job, not to its action. */}
@@ -142,6 +152,7 @@ function LandingRow({ landing, onPreview, onRefresh, refreshing }: {
                 <GitPullRequest className="size-3.5" />{t('landings.openPr')}
               </Dropdown.Item>
             )}
+            <JobLinksMenuItems links={landing.links} onOpenTodo={onOpenTodo} itemClassName={MENU_ITEM} />
             <Dropdown.Item disabled={landing.state !== 'open' || refreshing} onSelect={onRefresh} className={MENU_ITEM}>
               <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />{t('landings.refresh')}
             </Dropdown.Item>
@@ -169,6 +180,8 @@ export function LandingWidget({ handle, className }: WidgetProps) {
   const [previewed, setPreviewed] = useState<Landing | null>(null);
   const [refreshing, setRefreshing] = useState<ReadonlySet<string>>(new Set());
   const current = useRef<Landing[]>([]);
+  const { openTodo, todoModal } = useTodoOpener();
+  const [publishing, setPublishing] = useState<ForgeProposal | null>(null);
 
   const merge = useCallback((fresh: Landing) => {
     setLandings((list) => (list ?? []).map((l) => (l.id === fresh.id ? fresh : l)));
@@ -206,6 +219,13 @@ export function LandingWidget({ handle, className }: WidgetProps) {
     return () => clearInterval(timer);
   }, [refreshChecks]);
 
+  const closePreview = useCallback(() => setPreviewed(null), []);
+  // The proposals of the projects on screen: the one picked, else every job's.
+  const proposalProjects = useMemo(
+    () => (project ? [project] : (landings ?? []).map((l) => l.project).filter((p): p is string => !!p)),
+    [project, landings],
+  );
+  const proposals = useForgeProposals(proposalProjects);
   const groups = landings ? groupLandings(landings, Date.now()) : [];
   const shown = groups.reduce((n, g) => n + g.landings.length, 0);
   // In the Git stack the count sits on the tab ("Jobs 4") and the reload
@@ -250,12 +270,25 @@ export function LandingWidget({ handle, className }: WidgetProps) {
                 refreshing={refreshing.has(landing.id)}
                 onPreview={() => setPreviewed(landing)}
                 onRefresh={() => { void refreshChecks([landing]); }}
+                onOpenTodo={openTodo}
+                proposals={proposalsForLanding(proposals.pending, landing)}
+                onOpenProposal={setPublishing}
               />
             ))}
           </ul>
         </section>
       ))}
-      {previewed && <LandingPreviewDialog landing={previewed} onClose={() => setPreviewed(null)} />}
+      {previewed && <JobDialog landing={previewed} onClose={closePreview} openTodo={openTodo} />}
+      {todoModal}
+      {publishing && (
+        <PublishDialog
+          key={publishing.id}
+          project={publishing.project}
+          proposal={publishing}
+          onClose={() => setPublishing(null)}
+          onChange={proposals.reload}
+        />
+      )}
     </Tile>
   );
 }

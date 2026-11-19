@@ -21,10 +21,10 @@ import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { safeHref } from './project-todo-links';
 import { useTodoItem } from './todo-badge-slot';
-import { findLanding, listLandings, type Landing } from './landing-api';
+import { findLanding, getLanding, listLandings, type Landing } from './landing-api';
 
 // Painted on every line of the TO DO: the dialog loads on the first click.
-const LandingPreviewDialog = lazy(() => import('./landing-preview-dialog').then((m) => ({ default: m.LandingPreviewDialog })));
+const JobDialog = lazy(() => import('./job-dialog').then((m) => ({ default: m.JobDialog })));
 
 /** React events bubble from a portal to the tree that holds it: the dialog's
  *  clicks and presses must not open the idea or drag its card. */
@@ -77,8 +77,13 @@ export function TodoLandingBadge({ landing, project = null }: { landing: TodoLan
 
   const open = async () => {
     setBusy(true);
-    const out = await listLandings(project);
+    // The job's own id when the daemon gives it (its links come with it);
+    // else the latest job of the branch in the project's list.
+    const byId = landing.jobId ? await getLanding(landing.jobId) : null;
+    const out = byId?.ok ? null : await listLandings(project);
     setBusy(false);
+    if (byId?.ok) { setOpened(byId.value); return; }
+    if (!out) return;
     const found = out.ok ? findLanding(out.value, landing.branch) : null;
     if (found) { setOpened(found); return; }
     // The job left the list (its branch removed): its pull request, if any,
@@ -119,7 +124,7 @@ export function TodoLandingBadge({ landing, project = null }: { landing: TodoLan
       {opened && (
         <span className="contents" onClick={stop} onPointerDown={stop} onMouseDown={stop} onKeyDown={stop}>
           <Suspense fallback={null}>
-            <LandingPreviewDialog landing={opened} onClose={() => setOpened(null)} />
+            <JobDialog landing={opened} onClose={() => setOpened(null)} />
           </Suspense>
         </span>
       )}

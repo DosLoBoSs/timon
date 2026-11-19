@@ -1,5 +1,5 @@
 {
-  "apiVersion": 17,
+  "apiVersion": 18,
   "clientContext": {
     "api": {
       "type": "function",
@@ -679,6 +679,14 @@
       "useUpdateDialog": {
         "type": "export",
         "since": 17
+      },
+      "useJobDialog": {
+        "type": "export",
+        "since": 18
+      },
+      "usePublishDialog": {
+        "type": "export",
+        "since": 18
       }
     },
     "api.js": {
