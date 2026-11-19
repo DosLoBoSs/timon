@@ -218,17 +218,33 @@ export function readProjectIntegration(slug: string): ProjectIntegrationRead {
  * the default when there is none or it no longer validates, checks the result
  * as a whole and stores it.
  */
-export function updateProjectIntegration(slug: string, body: unknown, opts: GhConfigDirOptions = {}): ProjectIntegration {
+export function updateProjectIntegration(
+  slug: string, body: unknown, opts: GhConfigDirOptions & {
+    /** Sees the setting as it is and as it would be stored; throws to refuse the write. */
+    guard?: (current: ProjectIntegration, next: ProjectIntegration) => void;
+  } = {},
+): ProjectIntegration {
   const current = readProjectIntegration(slug);
   const patch = ProjectIntegrationPatchSchema.safeParse(body ?? {});
   if (!patch.success) throw new ProjectIntegrationError('invalid', zodMessage(patch.error));
   const merged = ProjectIntegrationSchema.safeParse({ ...current.integration, ...patch.data });
   if (!merged.success) throw new ProjectIntegrationError('invalid', zodMessage(merged.error));
-  const value = checkProjectIntegration(merged.data, opts);
+  const { guard, ...checkOpts } = opts;
+  const value = checkProjectIntegration(merged.data, checkOpts);
+  guard?.(current.integration, value);
   if (!dbApi.setProjectIntegration(slug, JSON.stringify(value))) {
     throw new ProjectIntegrationError('not_found', `project not found: "${slug}"`);
   }
   return value;
+}
+
+/** The fields that decide where a contributor's conflict resolution is
+ *  fetched from and pushed to, and as whom (`forge-conflicts.ts`). */
+export const PUSH_TARGET_FIELDS = ['remote_url', 'account', 'gh_config_dir', 'mode', 'remote'] as const;
+
+/** The push-target fields `next` changes from `current`. */
+export function changedPushTargetFields(current: ProjectIntegration, next: ProjectIntegration): string[] {
+  return PUSH_TARGET_FIELDS.filter((field) => current[field] !== next[field]);
 }
 
 /** Back to the local merge. */
