@@ -151,6 +151,19 @@ test('texts written at once through separate openings of one folder never share 
   }
 });
 
+test('the head of a branch is read at its exact ref, never at one that only ends like it', async () => {
+  const { f, head, contrib } = conflicting();
+  f.git(contrib, 'push', '-q', 'origin', `${head}:refs/heads/decoy/refs/heads/ghost`);
+  // `ls-remote` lists it too: its pattern matches the tail of a ref.
+  const repo = await scratch(f);
+  try {
+    assert.deepEqual(await repo.remoteHead(FORK_URL, 'ghost'), { ok: true, sha: null });
+    assert.deepEqual(await repo.remoteHead(FORK_URL, 'fix/typo'), { ok: true, sha: head });
+  } finally {
+    repo.dispose();
+  }
+});
+
 test('a push that is not a fast-forward is refused by git, and the branch is untouched', async () => {
   const { f, head, contrib } = conflicting();
   const repo = await scratch(f);

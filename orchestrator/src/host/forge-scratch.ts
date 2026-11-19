@@ -403,8 +403,9 @@ function scratchAt(dir: string, options: ScratchOptions): ScratchRepo {
       if (!plainBranch(branch)) return { ok: false, reason: 'unusual branch name' };
       const r = await run(['ls-remote', '--heads', '--', url, `refs/heads/${branch}`], {}, NETWORK_TIMEOUT_MS);
       if (r.code !== 0) return said(r, 'reading the remote');
-      const line = r.stdout.split('\n').map((l) => l.trim()).find((l) => l.endsWith(`\trefs/heads/${branch}`));
-      const head = line?.split('\t')[0] ?? null;
+      // The exact ref: `ls-remote` also lists a branch `x/refs/heads/<branch>` of the fork.
+      const line = r.stdout.split('\n').map((l) => l.trim().split('\t')).find((f) => f.length === 2 && f[1] === `refs/heads/${branch}`);
+      const head = line?.[0] ?? null;
       if (head !== null && !COMMIT_SHA.test(head)) return { ok: false, reason: 'the remote answered something that is not a commit' };
       return { ok: true, sha: head };
     },
