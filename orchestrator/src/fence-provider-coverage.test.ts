@@ -57,7 +57,7 @@ const { nestedSandboxOf } = await import('./backends/capabilities.js');
 const { missionFenceTarget, upsertAgent } = await import('./agent.js');
 const { config, setConfig } = await import('./config/load.js');
 const { TIMON_HOME } = await import('./paths.js');
-const { fenceAccess } = await import('./host/isolation.js');
+const { fenceAccess, systemWritableFolders } = await import('./host/isolation.js');
 const { canonicalPaths, renderSeatbeltProfile } = await import('./host/seatbelt.js');
 const { fenceMissionCommand } = await import('./resources.js');
 type FencePolicy = import('./host/isolation.js').FencePolicy;
@@ -197,7 +197,13 @@ function launchNeeds(spec: SpawnResult, missionId: string): Need[] {
   return needs;
 }
 
-type Launch = { id: string; missionId: string; spec: SpawnResult; policy: FencePolicy; needs: Need[] };
+/**
+ * `policy` as checked: without the system folders every program writes to. Both homes of this suite
+ * sit in the temporary folder, which is one of them: left in, any path of the user's home that is
+ * not refused outright would pass for a grant. The Timon home is refused explicitly, so nothing
+ * under it changes.
+ */
+type Launch = { id: string; missionId: string; spec: SpawnResult; policy: FencePolicy; strict: FencePolicy; needs: Need[] };
 
 /** The launch the daemon makes, in its order: the spec is built first, then the fence around it. */
 async function launchOf(id: string): Promise<Launch> {
@@ -213,7 +219,9 @@ async function launchOf(id: string): Promise<Launch> {
   }, { fence, mode: 'auto', nestedSandbox: nestedSandboxOf(id), warn: () => undefined });
   const policy = policies[0];
   assert.ok(policy?.enabled, `${id}: the launch was fenced`);
-  return { id, missionId, spec, policy, needs: launchNeeds(spec, missionId) };
+  const system = systemWritableFolders(process.platform);
+  const strict = { ...policy, rw: policy.rw.filter((path) => !system.includes(path)) };
+  return { id, missionId, spec, policy, strict, needs: launchNeeds(spec, missionId) };
 }
 
 const dialectOf = (id: string): string => activeProfiles().find((entry) => entry.profile.id === id)?.profile.dialect ?? '';
@@ -243,7 +251,7 @@ for (const id of ACTIVE) {
     }
     assert.ok(run.needs.length > 0, `${id}: the launch names no folder of the Timon home, so this check would prove nothing`);
     const refused = run.needs.flatMap((need) => {
-      const access = fenceAccess(run.policy, need.path);
+      const access = fenceAccess(run.strict, need.path);
       if (!access.read) return [`${need.path} not readable (${need.why})`];
       if (need.write && !access.write) return [`${need.path} not writable (${need.why})`];
       return [];
@@ -254,7 +262,7 @@ for (const id of ACTIVE) {
   test(`${id}: the mission still cannot reach the daemon's secrets or another mission's folders`, () => {
     const run = launches.get(id)!;
     for (const name of ['daemon-token', 'timon.db', 'secret-key', 'timon.config.json']) {
-      const access = fenceAccess(run.policy, join(TIMON_HOME, name));
+      const access = fenceAccess(run.strict, join(TIMON_HOME, name));
       assert.equal(access.read, false, `${id}: ${name} readable`);
       assert.equal(access.write, false, `${id}: ${name} writable`);
     }
@@ -262,9 +270,9 @@ for (const id of ACTIVE) {
     for (const other of others) {
       for (const need of other.needs) {
         if (!need.path.includes(other.missionId)) continue;
-        assert.equal(fenceAccess(run.policy, need.path).read, false, `${id}: reads ${other.id}'s ${need.path}`);
+        assert.equal(fenceAccess(run.strict, need.path).read, false, `${id}: reads ${other.id}'s ${need.path}`);
       }
-      assert.equal(fenceAccess(run.policy, join(TIMON_HOME, 'tmp', 'missions', other.missionId)).read, false, `${id}: reads ${other.id}'s TMPDIR`);
+      assert.equal(fenceAccess(run.strict, join(TIMON_HOME, 'tmp', 'missions', other.missionId)).read, false, `${id}: reads ${other.id}'s TMPDIR`);
     }
   });
 
@@ -296,9 +304,9 @@ for (const id of CLAUDE_DIALECT) {
   test(`${id}: the claude CLI can write its config folder, and never the user's sign-in of another backend`, { todo: pending || undefined }, () => {
     const run = launches.get(id)!;
     const configDir = run.spec.env?.CLAUDE_CONFIG_DIR ?? join(USER_HOME, '.claude');
-    const access = fenceAccess(run.policy, join(configDir, 'debug', 'latest'));
+    const access = fenceAccess(run.strict, join(configDir, 'debug', 'latest'));
     assert.ok(access.read && access.write, `${id}: ${configDir} is refused to the claude CLI`);
-    if (id !== 'claude') assert.equal(fenceAccess(run.policy, join(USER_HOME, '.claude', '.credentials.json')).read, false, `${id}: reads the user's Claude sign-in`);
+    if (id !== 'claude') assert.equal(fenceAccess(run.strict, join(USER_HOME, '.claude', '.credentials.json')).read, false, `${id}: reads the user's Claude sign-in`);
   });
 }
 
