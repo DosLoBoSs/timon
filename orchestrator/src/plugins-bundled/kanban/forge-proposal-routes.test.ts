@@ -352,11 +352,16 @@ test('no agent surface creates or publishes a proposal: no MCP tool, no CLI verb
     join(root, 'src', 'forge-branch-update.ts'),
     join(root, 'src', 'plugins-bundled', 'kanban', 'forge-branch-routes.ts'),
   ];
-  const proposers = [facade, landing, ...branch];
+  // A person's conflict resolution: proposed by the daemon on a person's
+  // click; dropping it drops its waiting publication too, never publishes it.
+  const conflicts = join(root, 'src', 'forge-conflicts.ts');
+  const proposers = [facade, landing, ...branch, conflicts];
   const offenders = files.filter((file) => !allowed.has(file) && !proposers.includes(file)
     && /\/forge-proposals\b|forge-proposals\.js|proposeForgeWrite|publishForgeProposal/.test(readFileSync(file, 'utf8')));
   assert.deepEqual(offenders.map((f) => f.slice(root.length)), []);
   for (const file of proposers) {
-    assert.doesNotMatch(readFileSync(file, 'utf8'), /publishForgeProposal|editForgeProposal|discardForgeProposal|recoverInterruptedPublications/);
+    const text = readFileSync(file, 'utf8');
+    assert.doesNotMatch(text, /publishForgeProposal|editForgeProposal|recoverInterruptedPublications/, file);
+    if (file !== conflicts) assert.doesNotMatch(text, /discardForgeProposal/, file);
   }
 });

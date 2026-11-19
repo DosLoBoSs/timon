@@ -54,7 +54,8 @@ export function forgeFixture(files: Record<string, string>): ForgeFixture {
   };
   mkdirSync(work);
   git(work, 'init', '-q');
-  commit(work, 'base', files);
+  // A fixture of its own: two fixtures made in the same second must not share a commit.
+  commit(work, 'base', { ...files, '.fixture': `${root}\n` });
   git(root, 'init', '-q', '--bare', base);
   git(root, 'init', '-q', '--bare', fork);
   git(work, 'push', '-q', base, 'HEAD:refs/heads/main');

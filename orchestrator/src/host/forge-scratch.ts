@@ -31,7 +31,7 @@
  * Credentials are those of the project's account: its SSH alias, or `gh` as
  * the credential helper with the project's `GH_CONFIG_DIR` for an https URL.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ghEnv } from './gh.js';
 import { getHost } from './index.js';
@@ -136,6 +136,8 @@ export interface ScratchRepo {
   treeOf(commit: string): Promise<string | null>;
   mergeTree(ours: string, theirs: string): Promise<{ ok: true; result: MergeTreeResult } | ScratchFailure>;
   blobSize(oid: string): Promise<number | null>;
+  /** The blob at `path` in `tree` and its mode, or null. */
+  blobAt(tree: string, path: string): Promise<{ oid: string; mode: string } | null>;
   /** A blob as UTF-8 text; null when it is missing or longer than `maxBytes`. */
   readBlob(oid: string, maxBytes: number): Promise<string | null>;
   /** Stores `text` as a blob, unfiltered; its id, or null. */
@@ -212,12 +214,40 @@ export async function openScratchRepo(options: ScratchOptions): Promise<ScratchR
   const git = options.git ?? hostGit;
   mkdirSync(options.root, { recursive: true });
   const dir = mkdtempSync(join(options.root, 'merge-'));
+  const emptyConfig = join(dir, 'empty.gitconfig');
+  writeFileSync(emptyConfig, '');
+  mkdirSync(join(dir, 'incoming'));
+  // Without `--git-dir`: the repository does not exist yet, and the host
+  // reads the configuration of the one a call names before running it.
+  // `--template=`: none of git's sample hooks, which nothing would run anyway.
+  let init: ExecResult;
+  try {
+    init = await git([...scratchConfig(emptyConfig).flatMap((pair) => ['-c', pair]), 'init', '--quiet', '--bare', '--template=', join(dir, 'repo.git')], {
+      cwd: dir, env: scratchEnv(emptyConfig, options.ghConfigDir), timeout: LOCAL_TIMEOUT_MS, windowsHide: true,
+    });
+  } catch (err) {
+    init = { code: 1, stdout: '', stderr: (err as Error).message };
+  }
+  if (init.code !== 0) {
+    rmSync(dir, { recursive: true, force: true });
+    return { ok: false, reason: redactedOutput(init.stderr || init.stdout) || `git init failed (code ${init.code})` };
+  }
+  return scratchAt(dir, options);
+}
+
+/** The scratch repository `openScratchRepo` made in `dir` earlier, or null when it is gone. */
+export function reopenScratchRepo(dir: string, options: ScratchOptions): ScratchRepo | null {
+  if (!existsSync(join(dir, 'repo.git')) || !existsSync(join(dir, 'empty.gitconfig'))) return null;
+  mkdirSync(join(dir, 'incoming'), { recursive: true });
+  return scratchAt(dir, options);
+}
+
+function scratchAt(dir: string, options: ScratchOptions): ScratchRepo {
+  const git = options.git ?? hostGit;
   const repo = join(dir, 'repo.git');
   const emptyConfig = join(dir, 'empty.gitconfig');
   const incoming = join(dir, 'incoming');
   const index = join(dir, 'index');
-  writeFileSync(emptyConfig, '');
-  mkdirSync(incoming);
   const env = scratchEnv(emptyConfig, options.ghConfigDir);
   const prefix = [`--git-dir=${repo}`, ...scratchConfig(emptyConfig).flatMap((pair) => ['-c', pair])];
   let counter = 0;
@@ -238,22 +268,6 @@ export async function openScratchRepo(options: ScratchOptions): Promise<ScratchR
     const out = r.stdout.trim();
     return r.code === 0 && COMMIT_SHA.test(out) ? out : null;
   };
-
-  // `--template=`: none of git's sample hooks, which nothing would run anyway.
-  // Without `--git-dir`: the repository does not exist yet, and the host
-  // reads the configuration of the one a call names before running it.
-  let init: ExecResult;
-  try {
-    init = await git([...scratchConfig(emptyConfig).flatMap((pair) => ['-c', pair]), 'init', '--quiet', '--bare', '--template=', repo], {
-      cwd: dir, env, timeout: LOCAL_TIMEOUT_MS, windowsHide: true,
-    });
-  } catch (err) {
-    init = { code: 1, stdout: '', stderr: (err as Error).message };
-  }
-  if (init.code !== 0) {
-    rmSync(dir, { recursive: true, force: true });
-    return said(init, 'git init');
-  }
 
   return {
     dir,
@@ -292,6 +306,16 @@ export async function openScratchRepo(options: ScratchOptions): Promise<ScratchR
       const r = await run(['cat-file', '-s', oid]);
       const n = Number(r.stdout.trim());
       return r.code === 0 && Number.isSafeInteger(n) ? n : null;
+    },
+    async blobAt(tree, path) {
+      if (!COMMIT_SHA.test(tree) || path.length === 0) return null;
+      const r = await run(['ls-tree', '-z', '--full-tree', tree, '--', path]);
+      if (r.code !== 0) return null;
+      for (const field of r.stdout.split('\0')) {
+        const m = /^(\d{6}) blob ([0-9a-f]{40,64})\t(.+)$/s.exec(field);
+        if (m && m[3] === path) return { oid: m[2]!, mode: m[1]! };
+      }
+      return null;
     },
     async readBlob(oid, maxBytes) {
       if (!COMMIT_SHA.test(oid)) return null;
