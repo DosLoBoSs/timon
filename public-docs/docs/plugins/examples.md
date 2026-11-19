@@ -3,7 +3,7 @@ title: Example cookbook
 sidebar_position: 18
 ---
 
-42 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
+44 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
 
 Obtain the example tree with your developer distribution. There is no public repository link. Use a licensed test instance and follow [Testing](testing.md) before installing third-party code.
 
@@ -1557,6 +1557,57 @@ function PlainTodoForm() {
 /** @param {import('@timon-ai/sdk').ClientContext} ctx */
 export function apply(ctx) {
   return ctx.slots.register({ slot: 'todo.form' }, PlainTodoForm)
+}
+```
+
+## Replace the Publish on GitHub window {#publish-dialog}
+
+Source: `examples/plugin-publish-dialog`. Manifest ID: `example-publish-dialog`. Minimum API: **18**.
+
+API 18. One registration in the single forge.publish.dialog slot replaces the window that shows a comment before it is posted on GitHub, opened from the rows of the Jobs and Pull requests widgets, a pull request's menu and the notification of a proposed comment, with a plain dialog. The component reads usePublishDialog(): the text as it would leave and setBody(), where it goes, the account the project publishes as, why the text would be refused, and three gestures, publish(), save() and discard(). They are Timon's: the plugin holds no access to GitHub or to the daemon, the gestures go through the signed-in person's session, and nothing is posted before the click on Publish. The component draws the whole window with Dialog from @timon/ui and calls close() when it is dismissed. Remove the plugin and Timon's own window comes back.
+
+Permissions: none. Read the [related guide](slots.md).
+
+`timon plugin add ./examples/plugin-publish-dialog` installs this package on the target instance.
+
+From `examples/plugin-publish-dialog/lib/client.js`, line 36 (excerpt):
+
+```js
+function PlainPublishDialog() {
+  const host = usePublishDialog()
+  if (!host) return null
+  const { proposal, target, account, body, problem, busy, error, loading } = host
+  const waiting = proposal === null || proposal.state === 'draft' || proposal.state === 'failed'
+  const canPublish = waiting && !loading && !problem && account !== null && busy === null
+  const where = t(target.type === 'pull' ? 'onPull' : 'onIssue', { number: target.number })
+
+  return React.createElement(Dialog, { open: true, onOpenChange: (open) => { if (!open) host.close() } },
+    React.createElement(DialogContent, { className: 'flex max-w-[640px] flex-col gap-3' },
+      React.createElement(DialogTitle, null, t('title')),
+      React.createElement(DialogDescription, null,
+        account ? `${where} · ${t('as', { account })}` : `${where} · ${t('noAccount')}`),
+      waiting
+        ? React.createElement('textarea', {
+          'aria-label': t('text'), value: body, rows: 12, disabled: busy !== null,
+          onChange: (e) => host.setBody(e.target.value),
+          className: 'min-h-[12rem] rounded-md bg-muted/40 px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        })
+        : React.createElement('p', { className: 'text-[13px] text-muted-foreground' }, t(proposal.state)),
+      (problem && waiting) || error
+        ? React.createElement('p', { role: 'alert', className: 'text-[12px] text-destructive' }, error ?? t(problem))
+        : null,
+      React.createElement('div', { className: 'flex items-center justify-end gap-2' },
+        waiting
+          ? React.createElement(React.Fragment, null,
+            React.createElement(Button, { type: 'button', variant: 'ghost', size: 'sm', disabled: busy !== null, onClick: () => { void host.discard() } }, t('discard')),
+            React.createElement(Button, { type: 'button', variant: 'secondary', size: 'sm', disabled: busy !== null || problem !== null, onClick: () => { void host.save() } }, t('save')),
+            React.createElement(Button, { type: 'button', size: 'sm', disabled: !canPublish, onClick: () => { void host.publish() }, 'data-plain-publish': '' }, t('publish')))
+          : React.createElement(Button, { type: 'button', variant: 'ghost', size: 'sm', onClick: host.close }, t('close')))))
+}
+
+/** @param {import('@timon-ai/sdk').ClientContext} ctx */
+export function apply(ctx) {
+  return ctx.slots.register({ slot: 'forge.publish.dialog' }, PlainPublishDialog)
 }
 ```
 
