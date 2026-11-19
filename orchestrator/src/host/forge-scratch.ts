@@ -226,6 +226,10 @@ export function scratchConfig(emptyFile: string): string[] {
     'core.safecrlf=false',
     `core.attributesFile=${emptyFile}`,
     'core.quotePath=false',
+    // `git init` turns these on for a case-insensitive or decomposing file
+    // system (macOS, Windows): the paths of a tree are bytes, never folded.
+    'core.ignorecase=false',
+    'core.precomposeunicode=false',
     'gc.auto=0',
     'maintenance.auto=false',
     'fetch.writeCommitGraph=false',

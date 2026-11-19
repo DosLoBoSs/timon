@@ -70,7 +70,8 @@ test('the environment: no system or user configuration, no git variable of the d
   assert.equal(env.GH_TOKEN, undefined);
   assert.equal(env.GITHUB_TOKEN, undefined);
   const config = scratchConfig('/scratch/empty.gitconfig');
-  for (const pair of ['transfer.fsckObjects=true', 'protocol.file.allow=never', 'core.symlinks=false', 'commit.gpgSign=false', 'credential.helper=']) {
+  for (const pair of ['transfer.fsckObjects=true', 'protocol.file.allow=never', 'core.symlinks=false', 'commit.gpgSign=false', 'credential.helper=',
+    'core.ignorecase=false', 'core.precomposeunicode=false']) {
     assert.ok(config.includes(pair), pair);
   }
 });
@@ -159,6 +160,26 @@ test('the head of a branch is read at its exact ref, never at one that only ends
   try {
     assert.deepEqual(await repo.remoteHead(FORK_URL, 'ghost'), { ok: true, sha: null });
     assert.deepEqual(await repo.remoteHead(FORK_URL, 'fix/typo'), { ok: true, sha: head });
+  } finally {
+    repo.dispose();
+  }
+});
+
+test('paths differing only by case stay two paths of the tree', async () => {
+  // Built from objects alone: a checkout of such a tree would fold on macOS and Windows.
+  const f = forgeFixture({ 'a.txt': 'a\n' });
+  const repo = await scratch(f);
+  try {
+    const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+    const a = (await repo.writeBlob('a\n'))!;
+    const b = (await repo.writeBlob('b\n'))!;
+    const tree = (await repo.replaceInTree(EMPTY_TREE, [
+      { path: 'Dir/a.txt', mode: '100644', oid: a }, { path: 'dir/b.txt', mode: '100644', oid: a },
+    ]))!;
+    const next = (await repo.replaceInTree(tree, [{ path: 'dir/b.txt', mode: '100644', oid: b }]))!;
+    assert.deepEqual(await repo.changedPaths(tree, next), ['dir/b.txt']);
+    assert.equal((await repo.blobAt(next, 'Dir/a.txt'))?.oid, a);
+    assert.equal((await repo.blobAt(next, 'dir/b.txt'))?.oid, b);
   } finally {
     repo.dispose();
   }
