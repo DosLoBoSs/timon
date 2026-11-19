@@ -174,6 +174,7 @@ async function mount(list: PullRequestItem[]) {
   setLocale('en');
   localStorage.setItem('timon.git-stack.project', 'acme');
   const { PullRequestsWidget } = await import('./pull-requests-widget');
+  (await import('./pull-requests-model')).forgetPullListsForTests();
   const root = createRoot(document.getElementById('root')!);
   await React.act(async () => { root.render(React.createElement(PullRequestsWidget, { handle: null })); });
   const settle = async () => {

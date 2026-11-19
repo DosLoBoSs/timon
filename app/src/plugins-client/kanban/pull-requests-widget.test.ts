@@ -40,7 +40,10 @@ test('a row shows the verdict, outdated once the pull request changed; a draft s
 
 type Call = { url: string; method: string; body: string | null };
 
-async function mount(list: PullRequestItem[]) {
+/** How the widget is painted: alone by default, or as a tab of the Git stack. */
+type Self = { tabbed: boolean; selected: boolean };
+
+async function mount(list: PullRequestItem[], self?: Self, keepRead = false) {
   const { JSDOM } = await import('jsdom');
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
   const saved = new Map<string, PropertyDescriptor | undefined>();
@@ -87,10 +90,21 @@ async function mount(list: PullRequestItem[]) {
   const previousLocale = getLocale();
   setLocale('en');
   const { PullRequestsWidget } = await import('./pull-requests-widget');
+  const { WidgetSelfProvider } = await import('@/components/widget-host/widget-self');
+  if (!keepRead) (await import('./pull-requests-model')).forgetPullListsForTests();
+  // A tab of the stack shows the stack's project, picked once.
+  if (self) (await import('./git-stack-project')).pickStackProject('acme');
   const root = createRoot(document.getElementById('root')!);
-  await React.act(async () => {
-    root.render(React.createElement(PullRequestsWidget, { handle: null }));
-  });
+  const counts: Array<number | null> = [];
+  const paint = (current: Self | undefined) => {
+    const widget = React.createElement(PullRequestsWidget, { handle: null });
+    return current ? React.createElement(WidgetSelfProvider, { value: {
+      id: 'pull-requests', ...current, publishCount: (_id: string, n: number | null) => { counts.push(n); },
+      publishMenu: () => {}, publishAttention: () => {},
+    } }, widget) : widget;
+  };
+  await React.act(async () => { root.render(paint(self)); });
+  const repaint = async (next: Self) => { await React.act(async () => { root.render(paint(next)); }); };
   const settle = async () => {
     for (let i = 0; i < 5; i += 1) await React.act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   };
@@ -125,7 +139,7 @@ async function mount(list: PullRequestItem[]) {
       else delete (globalThis as Record<string, unknown>)[k];
     }
   };
-  return { calls, copied, choose, click, pressTab, settle, unmount };
+  return { calls, copied, counts, repaint, choose, click, pressTab, settle, unmount };
 }
 
 test('the widget lists a project\'s pull requests, filters by author, and shows the brief and the diff without starting anything', async () => {
@@ -177,4 +191,37 @@ test('the widget lists a project\'s pull requests, filters by author, and shows 
   } finally {
     await m.unmount();
   }
+});
+
+test('in the Git stack, a hidden PR tab reads the pull requests only when its count is over a minute old', async () => {
+  const reads = (calls: Call[]) => calls.filter((c) => c.url === '/api/ui/projects/acme/pull-requests').length;
+  const list = [pull({ number: 12, author: 'alice' }), pull({ number: 13, author: 'bob' })];
+  // Hidden, nothing read on the page yet: one read, for the count.
+  const first = await mount(list, { tabbed: true, selected: false });
+  try {
+    assert.equal(reads(first.calls), 1);
+    assert.equal(first.counts.at(-1), 2, 'the count for the tab');
+  } finally { await first.unmount(); }
+
+  // Mounted again behind another tab within the minute: no call to gh.
+  const again = await mount(list, { tabbed: true, selected: false }, true);
+  try {
+    assert.equal(reads(again.calls), 0, 'the list read a moment ago is enough');
+    assert.equal(again.counts.at(-1), 2, 'and its count stays on the tab');
+    // Its tab comes forward: the list is read again.
+    await again.repaint({ tabbed: true, selected: true });
+    await again.settle();
+    assert.equal(reads(again.calls), 1);
+  } finally { await again.unmount(); }
+
+  // In front, it reads at once, whatever it read before.
+  const front = await mount(list, { tabbed: true, selected: true }, true);
+  try {
+    assert.equal(reads(front.calls), 1);
+  } finally { await front.unmount(); }
+
+  const { shouldReadPulls } = await import('./pull-requests-model');
+  assert.equal(shouldReadPulls(false, 1_000, 60_999), false);
+  assert.equal(shouldReadPulls(false, 1_000, 61_000), true, 'a minute later, a hidden tab reads again');
+  assert.equal(shouldReadPulls(false, null, 1_000), true);
 });

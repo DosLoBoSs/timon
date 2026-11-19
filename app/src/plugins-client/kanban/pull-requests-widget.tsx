@@ -16,7 +16,7 @@
  * (`git-stack-project.tsx`): it is chosen once for both.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Copy, ExternalLink, Eye, FileText, GitMerge, GitPullRequest, GitPullRequestArrow, Loader2, MessageSquarePlus, MessageSquareWarning,
   MoreHorizontal, ScanSearch,
@@ -34,9 +34,9 @@ import { t } from '@/lib/i18n';
 import { NativeViewCover } from '@/lib/native-view-cover';
 import { cn } from '@/lib/utils';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
-import { useWidgetAttention, useWidgetCount } from '@/components/widget-host/widget-self';
+import { useWidgetAttention, useWidgetCount, useWidgetInFront } from '@/components/widget-host/widget-self';
 import {
-  anyReviewRunning, branchChip, branchLock, filterByAuthor, pullAuthors, reviewBadge,
+  anyReviewRunning, branchChip, branchLock, filterByAuthor, keepPullList, lastPullList, pullAuthors, reviewBadge, shouldReadPulls,
   type PullRequestItem, type PullRequestList, type ReviewBadge,
 } from './pull-requests-model';
 import { diffLineKind, getLanding, type Landing } from './landing-api';
@@ -117,21 +117,39 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
       const res = await fetch(projectPath(slug), { cache: 'no-store' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { setLoad({ kind: 'error', message: apiErrorMessage(json, { status: res.status }) }); return; }
+      keepPullList(slug, json as PullRequestList);
       setLoad({ kind: 'ready', list: json as PullRequestList });
     } catch (err) {
       setLoad({ kind: 'error', message: (err as Error).message });
     }
   }, [slug]);
 
-  useEffect(() => { setAuthor(null); void reload(); }, [reload]);
+  // The list comes from `gh` on the daemon's side. Behind another tab of the
+  // Git stack (kept mounted for its count), a list read less than a minute
+  // ago is enough; in front, or older, it is read again.
+  const front = useWidgetInFront();
+  const frontNow = useRef(front);
+  frontNow.current = front;
+  useEffect(() => {
+    setAuthor(null);
+    const known = slug ? lastPullList(slug) : undefined;
+    if (known) setLoad({ kind: 'ready', list: known.list });
+    if (shouldReadPulls(frontNow.current, known?.at ?? null, Date.now())) void reload(!!known);
+  }, [reload, slug]);
+  // Brought to the front: read again, behind what it already shows.
+  const wasFront = useRef(front);
+  useEffect(() => {
+    if (front && !wasFront.current) void reload(true);
+    wasFront.current = front;
+  }, [front, reload]);
 
   const pulls = load.kind === 'ready' ? load.list.pulls : [];
   const running = anyReviewRunning(pulls);
   useEffect(() => {
-    if (!running) return;
+    if (!running || !front) return;
     const timer = setInterval(() => { void reload(true); }, RUNNING_POLL_MS);
     return () => clearInterval(timer);
-  }, [running, reload]);
+  }, [running, front, reload]);
 
   const authors = useMemo(() => pullAuthors(pulls), [pulls]);
   const shown = useMemo(() => filterByAuthor(pulls, author), [pulls, author]);

@@ -92,3 +92,35 @@ export function branchChip(pull: PullRequestItem): 'conflict' | 'behind' | null 
 export function branchLock(pull: PullRequestItem): BranchLock | null {
   return pull.gestures?.locked ?? null;
 }
+
+/**
+ * How old a hidden tab's list may be before it is read again. The PR tab of
+ * the Git stack stays mounted behind the front tab for its count; reading
+ * the list at every mount would start `gh` for a list nobody sees.
+ */
+export const HIDDEN_PULLS_FRESH_MS = 60_000;
+
+/**
+ * Whether the widget reads its list now: always in front; behind another tab
+ * only when no list was read for the project on this page, or the last one
+ * is older than `HIDDEN_PULLS_FRESH_MS`.
+ */
+export function shouldReadPulls(front: boolean, readAt: number | null, now: number): boolean {
+  return front || readAt === null || now - readAt >= HIDDEN_PULLS_FRESH_MS;
+}
+
+/** The last list read per project, shared by every PR widget of the page. */
+const lastRead = new Map<string, { list: PullRequestList; at: number }>();
+
+export function lastPullList(slug: string): { list: PullRequestList; at: number } | undefined {
+  return lastRead.get(slug);
+}
+
+export function keepPullList(slug: string, list: PullRequestList, at = Date.now()): void {
+  lastRead.set(slug, { list, at });
+}
+
+/** For tests: a page that starts with nothing read. */
+export function forgetPullListsForTests(): void {
+  lastRead.clear();
+}
