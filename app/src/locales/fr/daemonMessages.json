@@ -289,6 +289,10 @@
     "layout_proposal_to_review": {
       "title": "{kind, select, widgets {Disposition de widgets} islands {Disposition d'îlots} island_arrangement {Agencement d'îlots} nav {Menu} navigate {Navigation} trigger {Déclencheur} other {Disposition}} à examiner : {agent}",
       "body": "{mission}{project, select, none {} other { ({project})}}{note, select, none {} other { — {note}}}"
+    },
+    "forge_proposal_pending": {
+      "title": "Un commentaire GitHub attend votre validation",
+      "body": "Lisez puis publiez, modifiez ou écartez le commentaire proposé sur {target}."
     }
   }
 }

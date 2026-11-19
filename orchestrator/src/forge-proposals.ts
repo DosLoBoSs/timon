@@ -1,0 +1,447 @@
+/**
+ * Publications proposed on the forge (`docs/FORGE-FLOW-PLAN.md` §0.4, §5): the
+ * only way Timon writes on GitHub besides opening its own pull request.
+ *
+ * A proposal is prepared by the daemon (after a landing, a resolved idea) or
+ * by a person's click, never by an agent: no MCP tool, no CLI verb and no
+ * plugin facade creates or publishes one. A signed-in person reads it, edits
+ * it and publishes it; the daemon then runs `gh` with the account and the
+ * config folder of the project's integration setting, after `gh api user`
+ * answered that very account. Any other answer is a refusal, and nothing is
+ * written.
+ *
+ * Idempotence holds at both ends:
+ * - one trigger, one proposal: `idem_key` is unique per project, so a trigger
+ *   that fires twice finds the proposal it already made;
+ * - one publication, one comment: the row is claimed ('publishing') before
+ *   `gh` runs, a published row answers what it published without calling the
+ *   forge again, and a retry after an interrupted attempt first looks for the
+ *   hidden marker the comment carries.
+ *
+ * What `gh` prints reaches a row, an answer or a log only through
+ * `redactedOutput`, with the config folder masked as well.
+ */
+import { randomUUID } from 'node:crypto';
+import { db } from './db.js';
+import { daemonMessage } from './daemon-message.js';
+import { projectRepository, type ExternalPrRefusal } from './external-pr-review.js';
+import {
+  githubForge, ISSUE_COMMENT_LIMIT, redactedOutput, type ForgeCommentWriter, type ForgeRunners,
+} from './host/forge.js';
+import { createNotification, resolveAnchor } from './notifications.js';
+
+export const FORGE_PROPOSAL_KINDS = ['comment'] as const;
+export type ForgeProposalKind = (typeof FORGE_PROPOSAL_KINDS)[number];
+
+export const FORGE_PROPOSAL_TARGETS = ['issue', 'pull'] as const;
+export type ForgeProposalTarget = (typeof FORGE_PROPOSAL_TARGETS)[number];
+
+export const FORGE_PROPOSAL_STATES = ['draft', 'publishing', 'published', 'failed', 'discarded'] as const;
+export type ForgeProposalState = (typeof FORGE_PROPOSAL_STATES)[number];
+
+/** What made the proposal: shown in the dialog, so the person knows why. */
+export const FORGE_PROPOSAL_TRIGGERS = ['person', 'landing', 'todo_resolved'] as const;
+export type ForgeProposalTrigger = (typeof FORGE_PROPOSAL_TRIGGERS)[number];
+
+/** Most characters of a proposal's text: the comment the forge receives. */
+export const FORGE_PROPOSAL_BODY_LIMIT = ISSUE_COMMENT_LIMIT;
+/** Most characters of an idempotency key or a source reference. */
+const KEY_LIMIT = 200;
+
+export type ForgeProposalRow = {
+  id: string;
+  project: string;
+  repo: string;
+  kind: ForgeProposalKind;
+  target_type: ForgeProposalTarget;
+  target_number: number;
+  body: string;
+  state: ForgeProposalState;
+  trigger: ForgeProposalTrigger;
+  idem_key: string;
+  source_ref: string | null;
+  created_by: string | null;
+  edited_by: string | null;
+  published_by: string | null;
+  account: string | null;
+  result_url: string | null;
+  error_code: string | null;
+  error: string | null;
+  attempts: number;
+  created_at: number;
+  updated_at: number;
+  published_at: number | null;
+};
+
+/** What the routes show of a proposal. */
+export type ForgeProposalView = {
+  id: string;
+  project: string;
+  repo: string;
+  kind: ForgeProposalKind;
+  target: { type: ForgeProposalTarget; number: number; url: string };
+  body: string;
+  state: ForgeProposalState;
+  trigger: ForgeProposalTrigger;
+  key: string;
+  source_ref: string | null;
+  /** The account that published it, once published. */
+  account: string | null;
+  url: string | null;
+  error: { code: string; reason: string | null } | null;
+  created_at: number;
+  updated_at: number;
+  published_at: number | null;
+};
+
+export type ForgeProposalRefusalCode =
+  | 'project_not_found'
+  | 'integration_invalid'
+  | 'integration_not_pr'
+  | 'pr_repository_unknown'
+  | 'forge_proposal_not_found'
+  | 'forge_proposal_invalid'
+  | 'forge_proposal_closed'
+  | 'forge_proposal_busy'
+  | 'forge_proposal_repository_changed'
+  | 'forge_account_unset'
+  | 'forge_account_unknown'
+  | 'forge_account_mismatch'
+  | 'forge_publish_failed';
+
+export type ForgeProposalRefusal = {
+  ok: false;
+  status: number;
+  code: ForgeProposalRefusalCode;
+  reason: string;
+  /** The row as it stands after the refusal, when there is one. */
+  proposal?: ForgeProposalView;
+};
+
+export type ForgeProposalDeps = {
+  /** Stands in for `gh` in tests: nothing in the suite reaches GitHub. */
+  forge?: (configDir: string | null) => ForgeCommentWriter;
+  runners?: ForgeRunners;
+  now?: () => number;
+};
+
+const refuse = (status: number, code: ForgeProposalRefusalCode, reason: string, row?: ForgeProposalRow): ForgeProposalRefusal =>
+  ({ ok: false, status, code, reason, ...(row ? { proposal: viewOf(row) } : {}) });
+
+/** The project's repository could not be resolved: the same refusal, under this module's codes. */
+function repositoryRefusal(out: ExternalPrRefusal): ForgeProposalRefusal {
+  switch (out.code) {
+    case 'project_not_found':
+    case 'integration_invalid':
+    case 'integration_not_pr':
+    case 'pr_repository_unknown':
+      return refuse(out.status, out.code, out.reason);
+    default:
+      return refuse(500, 'forge_proposal_invalid', 'the project repository could not be read');
+  }
+}
+
+/** Proposals this process is publishing right now: a recovery never takes them. */
+const inFlight = new Set<string>();
+
+const NOTIFICATION_ANCHOR = 'forge-proposal:';
+
+/** The anchor of a proposal's notification card, closed once it is dealt with. */
+export function proposalAnchor(id: string): string {
+  return `${NOTIFICATION_ANCHOR}${id}`;
+}
+
+/** The hidden line a published comment ends with: how a retry recognises it. */
+export function proposalMarker(id: string): string {
+  return `<!-- timon-proposal:${id} -->`;
+}
+
+function targetUrl(repo: string, type: ForgeProposalTarget, number: number): string {
+  return `https://github.com/${repo}/${type === 'pull' ? 'pull' : 'issues'}/${number}`;
+}
+
+export function viewOf(row: ForgeProposalRow): ForgeProposalView {
+  return {
+    id: row.id,
+    project: row.project,
+    repo: row.repo,
+    kind: row.kind,
+    target: { type: row.target_type, number: row.target_number, url: targetUrl(row.repo, row.target_type, row.target_number) },
+    body: row.body,
+    state: row.state,
+    trigger: row.trigger,
+    key: row.idem_key,
+    source_ref: row.source_ref,
+    account: row.account,
+    url: row.result_url,
+    error: row.error_code ? { code: row.error_code, reason: row.error } : null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    published_at: row.published_at,
+  };
+}
+
+const getStmt = db.prepare(`SELECT * FROM forge_proposals WHERE id = ?`);
+const getByKeyStmt = db.prepare(`SELECT * FROM forge_proposals WHERE project = ? AND idem_key = ?`);
+const listStmt = db.prepare(`SELECT * FROM forge_proposals WHERE project = ? ORDER BY created_at DESC, id LIMIT 200`);
+const listByStateStmt = db.prepare(`SELECT * FROM forge_proposals WHERE project = ? AND state = ? ORDER BY created_at DESC, id LIMIT 200`);
+const openPersonDraftStmt = db.prepare(`
+  SELECT * FROM forge_proposals
+  WHERE project = ? AND repo = ? AND kind = ? AND target_type = ? AND target_number = ? AND trigger = 'person' AND state IN ('draft', 'failed')
+  ORDER BY created_at DESC LIMIT 1
+`);
+const insertStmt = db.prepare(`
+  INSERT INTO forge_proposals
+    (id, project, repo, kind, target_type, target_number, body, state, trigger, idem_key, source_ref, created_by, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)
+  ON CONFLICT (project, idem_key) DO NOTHING
+`);
+const editStmt = db.prepare(`
+  UPDATE forge_proposals SET body = ?, edited_by = ?, updated_at = ? WHERE id = ? AND state IN ('draft', 'failed')
+`);
+const discardStmt = db.prepare(`
+  UPDATE forge_proposals SET state = 'discarded', edited_by = ?, updated_at = ? WHERE id = ? AND state IN ('draft', 'failed')
+`);
+const claimStmt = db.prepare(`
+  UPDATE forge_proposals SET state = 'publishing', attempts = attempts + 1, updated_at = ?
+  WHERE id = ? AND state IN ('draft', 'failed')
+`);
+const releaseStmt = db.prepare(`
+  UPDATE forge_proposals SET state = ?, error_code = ?, error = ?, updated_at = ? WHERE id = ? AND state = 'publishing'
+`);
+const publishedStmt = db.prepare(`
+  UPDATE forge_proposals
+  SET state = 'published', account = ?, published_by = ?, result_url = ?, error_code = NULL, error = NULL,
+      published_at = ?, updated_at = ?
+  WHERE id = ? AND state = 'publishing'
+`);
+const publishingStmt = db.prepare(`SELECT id FROM forge_proposals WHERE state = 'publishing'`);
+const interruptedStmt = db.prepare(`
+  UPDATE forge_proposals SET state = 'failed', error_code = 'interrupted', error = NULL, updated_at = ? WHERE id = ? AND state = 'publishing'
+`);
+
+function get(id: string): ForgeProposalRow | undefined {
+  return getStmt.get(id) as ForgeProposalRow | undefined;
+}
+
+export function getForgeProposal(project: string, id: string): ForgeProposalRow | undefined {
+  const row = get(id);
+  return row && row.project === project ? row : undefined;
+}
+
+export function listForgeProposals(project: string, state?: ForgeProposalState): ForgeProposalRow[] {
+  return (state ? listByStateStmt.all(project, state) : listStmt.all(project)) as ForgeProposalRow[];
+}
+
+/** Why a text cannot be published, or null. */
+export function bodyProblem(body: string): string | null {
+  if (body.trim().length === 0) return 'the text is empty';
+  if (body.length > FORGE_PROPOSAL_BODY_LIMIT) return `the text is longer than ${FORGE_PROPOSAL_BODY_LIMIT} characters`;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(body)) return 'the text holds control characters';
+  if (body.includes('<!-- timon-proposal:')) return 'the text holds a publication marker';
+  return null;
+}
+
+function keyProblem(key: string): string | null {
+  // eslint-disable-next-line no-control-regex
+  return key.length === 0 || key.length > KEY_LIMIT || /[\u0000-\u001f\u007f]/.test(key) ? 'not an idempotency key' : null;
+}
+
+export type ProposeInput = {
+  project: string;
+  kind: ForgeProposalKind;
+  target: { type: ForgeProposalTarget; number: number };
+  body: string;
+  trigger: ForgeProposalTrigger;
+  /** One trigger, one proposal: `todo:<id>:comment` for a resolved idea. A
+   *  person's proposal gets one per target instead. */
+  key?: string;
+  sourceRef?: string | null;
+  /** The person's user id, or null for the daemon. */
+  createdBy: string | null;
+};
+
+export type ProposeOutcome = { ok: true; proposal: ForgeProposalRow; created: boolean } | ForgeProposalRefusal;
+
+/**
+ * Prepares a write on the forge and tells the people who validate it. Called
+ * by the daemon's own producers and by a person's route, never on an agent's
+ * request. Nothing reaches the forge here.
+ */
+export function proposeForgeWrite(input: ProposeInput, deps: ForgeProposalDeps = {}): ProposeOutcome {
+  const now = (deps.now ?? Date.now)();
+  if (!Number.isSafeInteger(input.target.number) || input.target.number <= 0) {
+    return refuse(400, 'forge_proposal_invalid', 'not an issue or a pull request number');
+  }
+  const bad = bodyProblem(input.body);
+  if (bad) return refuse(400, 'forge_proposal_invalid', bad);
+  const where = projectRepository(input.project);
+  if (!where.ok) return repositoryRefusal(where);
+  const repo = where.value.repo;
+
+  if (input.trigger === 'person') {
+    // A second click on the same target opens the draft already waiting.
+    const open = openPersonDraftStmt.get(input.project, repo, input.kind, input.target.type, input.target.number) as ForgeProposalRow | undefined;
+    if (open) return { ok: true, proposal: open, created: false };
+  }
+  const key = input.key ?? `person:${input.kind}:${input.target.type}:${input.target.number}:${randomUUID()}`;
+  const badKey = keyProblem(key) ?? (input.sourceRef && keyProblem(input.sourceRef));
+  if (badKey) return refuse(400, 'forge_proposal_invalid', badKey);
+
+  const id = randomUUID();
+  const inserted = insertStmt.run(
+    id, input.project, repo, input.kind, input.target.type, input.target.number, input.body,
+    input.trigger, key, input.sourceRef ?? null, input.createdBy, now, now,
+  ).changes > 0;
+  if (!inserted) {
+    const existing = getByKeyStmt.get(input.project, key) as ForgeProposalRow;
+    return { ok: true, proposal: existing, created: false };
+  }
+  const row = get(id)!;
+  const target = `${repo}#${input.target.number}`;
+  createNotification({
+    type: 'action_required',
+    title: 'A GitHub comment waits for your approval',
+    body: `Read and publish, edit or discard the comment proposed on ${target}.`,
+    anchor: proposalAnchor(id),
+    message: daemonMessage('forge_proposal_pending', { target }),
+  });
+  console.log(`[forge-proposals] ${input.kind} proposed on ${target} (${id.slice(0, 8)}, ${input.trigger})`);
+  return { ok: true, proposal: row, created: true };
+}
+
+type Change = { ok: true; proposal: ForgeProposalRow } | ForgeProposalRefusal;
+
+function closedRefusal(row: ForgeProposalRow): ForgeProposalRefusal {
+  return row.state === 'publishing'
+    ? refuse(409, 'forge_proposal_busy', 'this proposal is being published', row)
+    : refuse(409, 'forge_proposal_closed', `this proposal is already ${row.state}`, row);
+}
+
+/** Replaces the text of a proposal still waiting (or whose publication failed). */
+export function editForgeProposal(project: string, id: string, body: string, by: string, deps: ForgeProposalDeps = {}): Change {
+  const row = getForgeProposal(project, id);
+  if (!row) return refuse(404, 'forge_proposal_not_found', 'no proposal has this id in this project');
+  const bad = bodyProblem(body);
+  if (bad) return refuse(400, 'forge_proposal_invalid', bad);
+  if (editStmt.run(body, by, (deps.now ?? Date.now)(), id).changes === 0) return closedRefusal(get(id)!);
+  return { ok: true, proposal: get(id)! };
+}
+
+/** "Do not publish": the proposal stays, closed, and its card goes away. */
+export function discardForgeProposal(project: string, id: string, by: string, deps: ForgeProposalDeps = {}): Change {
+  const row = getForgeProposal(project, id);
+  if (!row) return refuse(404, 'forge_proposal_not_found', 'no proposal has this id in this project');
+  if (row.state === 'discarded') return { ok: true, proposal: row };
+  if (discardStmt.run(by, (deps.now ?? Date.now)(), id).changes === 0) return closedRefusal(get(id)!);
+  resolveAnchor(proposalAnchor(id));
+  return { ok: true, proposal: get(id)! };
+}
+
+export type PublishOutcome = { ok: true; proposal: ForgeProposalRow; already: boolean } | ForgeProposalRefusal;
+
+/** `redactedOutput`, plus the config folder, which must not leave this machine's logs either. */
+function scrub(text: string, configDir: string | null): string {
+  const masked = configDir ? text.split(configDir).join('[gh config]') : text;
+  return redactedOutput(masked);
+}
+
+/**
+ * Publishes a proposal a signed-in person validated: claims it, checks the
+ * account `gh` answers for, then writes once. `body`, when given, is the text
+ * the person just validated and replaces the stored one first.
+ */
+export async function publishForgeProposal(
+  project: string, id: string, by: string, body: string | undefined, deps: ForgeProposalDeps = {},
+): Promise<PublishOutcome> {
+  const now = deps.now ?? Date.now;
+  const row = getForgeProposal(project, id);
+  if (!row) return refuse(404, 'forge_proposal_not_found', 'no proposal has this id in this project');
+  if (row.state === 'published') return { ok: true, proposal: row, already: true };
+  if (body !== undefined && body !== row.body) {
+    const edited = editForgeProposal(project, id, body, by, deps);
+    if (!edited.ok) return edited;
+  }
+  const previous = get(id)!;
+  if (claimStmt.run(now(), id).changes === 0) {
+    const current = get(id)!;
+    if (current.state === 'published') return { ok: true, proposal: current, already: true };
+    return closedRefusal(current);
+  }
+  // From here the row is ours until it is released, published or failed.
+  inFlight.add(id);
+  const release = (code: ForgeProposalRefusalCode, reason: string, status: number): ForgeProposalRefusal => {
+    releaseStmt.run(previous.state, code, reason, now(), id);
+    console.warn(`[forge-proposals] publication of ${id.slice(0, 8)} refused: ${code}`);
+    return refuse(status, code, reason, get(id)!);
+  };
+  const fail = (reason: string): ForgeProposalRefusal => {
+    releaseStmt.run('failed', 'forge_publish_failed', reason, now(), id);
+    console.warn(`[forge-proposals] publication of ${id.slice(0, 8)} failed`);
+    return refuse(502, 'forge_publish_failed', `the comment was not published: ${reason}`, get(id)!);
+  };
+
+  try {
+    const where = projectRepository(project);
+    if (!where.ok) {
+      const refusal = repositoryRefusal(where);
+      return release(refusal.code, refusal.reason, refusal.status);
+    }
+    const { integration, repo } = where.value;
+    if (repo.toLowerCase() !== previous.repo.toLowerCase()) {
+      return release('forge_proposal_repository_changed',
+        `the project now points at ${repo}, the proposal was made for ${previous.repo}: discard it`, 409);
+    }
+    const account = integration.account;
+    if (!account) return release('forge_account_unset', 'the project names no GitHub account (account)', 409);
+    const configDir = integration.gh_config_dir;
+    const forge = (deps.forge ?? ((dir) => githubForge(dir, deps.runners)))(configDir);
+
+    const login = await forge.login();
+    if (!login.ok) return release('forge_account_unknown', `cannot tell which account gh signs in as: ${scrub(login.reason, configDir)}`, 502);
+    // GitHub logins ignore case.
+    if (login.login.toLowerCase() !== account.toLowerCase()) {
+      return release('forge_account_mismatch', `gh signs in as ${login.login}, the project expects ${account}`, 409);
+    }
+
+    const marker = proposalMarker(id);
+    if (previous.attempts > 0) {
+      // An earlier attempt may have reached the forge before its answer was lost.
+      const found = await forge.findIssueComment(previous.repo, previous.target_number, login.login, marker);
+      if (!found.ok) return fail(scrub(found.reason, configDir));
+      if (found.comment) {
+        publishedStmt.run(login.login, by, found.comment.url, now(), now(), id);
+        resolveAnchor(proposalAnchor(id));
+        console.log(`[forge-proposals] ${id.slice(0, 8)} was already on ${previous.repo}#${previous.target_number}`);
+        return { ok: true, proposal: get(id)!, already: true };
+      }
+    }
+    const posted = await forge.postIssueComment(previous.repo, previous.target_number, `${previous.body}\n\n${marker}`);
+    if (!posted.ok) return fail(scrub(posted.reason, configDir));
+    publishedStmt.run(login.login, by, posted.comment.url, now(), now(), id);
+    resolveAnchor(proposalAnchor(id));
+    console.log(`[forge-proposals] ${id.slice(0, 8)} published on ${previous.repo}#${previous.target_number} as ${login.login}`);
+    return { ok: true, proposal: get(id)!, already: false };
+  } catch (err) {
+    // Not echoed: an unexpected failure may quote a path of this machine.
+    console.error('[forge-proposals] publication crashed:', (err as Error).name);
+    return fail('an unexpected error stopped the publication');
+  } finally {
+    inFlight.delete(id);
+  }
+}
+
+/**
+ * A daemon stopped while `gh` ran leaves rows 'publishing': they become
+ * 'failed' ("interrupted"), and their next publication looks for the comment
+ * on the forge before writing it again.
+ */
+export function recoverInterruptedPublications(now = Date.now()): number {
+  let changed = 0;
+  for (const { id } of publishingStmt.all() as { id: string }[]) {
+    if (!inFlight.has(id)) changed += interruptedStmt.run(now, id).changes;
+  }
+  if (changed > 0) console.log(`[forge-proposals] ${changed} interrupted publication(s) marked failed`);
+  return changed;
+}

@@ -2088,6 +2088,39 @@ CREATE INDEX IF NOT EXISTS external_pr_reviews_mission ON external_pr_reviews(mi
     if (!reviewCols.includes(col)) db.exec(`ALTER TABLE external_pr_reviews ADD COLUMN ${col} ${type}`);
   }
 }
+// A write on the forge that waits for a person (`forge-proposals.ts`): the
+// daemon or a person's click prepares it, a signed-in person reads, edits and
+// publishes it. `idem_key` makes one trigger give one proposal, whatever the
+// number of times it fires; 'publishing' is held while `gh` runs, so a second
+// click never posts twice.
+db.exec(`
+CREATE TABLE IF NOT EXISTS forge_proposals (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  repo TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_number INTEGER NOT NULL,
+  body TEXT NOT NULL,
+  state TEXT NOT NULL,
+  trigger TEXT NOT NULL,
+  idem_key TEXT NOT NULL,
+  source_ref TEXT,
+  created_by TEXT,
+  edited_by TEXT,
+  published_by TEXT,
+  account TEXT,
+  result_url TEXT,
+  error_code TEXT,
+  error TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  published_at INTEGER,
+  UNIQUE (project, idem_key)
+);
+CREATE INDEX IF NOT EXISTS forge_proposals_project_state ON forge_proposals(project, state);
+`);
 if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
 // A writer that changes the reason without naming its code (an agent's own
 // reason, a statement written before the column) must not leave

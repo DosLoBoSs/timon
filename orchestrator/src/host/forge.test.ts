@@ -2,7 +2,7 @@ import '../test-home.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  assertNoForce, FORGE_BODY_LIMIT, FORGE_TITLE_LIMIT, githubForge, githubRepoFromUrl, gitTransport, ISSUE_LIST_LIMIT,
+  assertNoForce, FORGE_BODY_LIMIT, FORGE_TITLE_LIMIT, githubForge, githubRepoFromUrl, gitTransport, ISSUE_COMMENT_LIMIT, ISSUE_LIST_LIMIT,
   parsePullRequestChecks, pushArguments, redactedOutput, REVIEW_THREAD_BODY_LIMIT, REVIEW_THREAD_LIMIT, type GitRunner,
 } from './forge.js';
 import type { GhRunner } from './gh.js';
@@ -372,4 +372,54 @@ test('one issue: an odd number, a failure or an odd answer is never an issue', a
   assert.equal((await githubForge(null, { gh: odd.run }).issueDetails('a/b', 3)).ok, false);
   const leaked = await githubForge(null, { gh: recorder({ code: 1, stderr: `could not resolve ${TOKEN}` }).run }).issueDetails('a/b', 3);
   assert.ok(!leaked.ok && !leaked.reason.includes('ghp_'));
+});
+
+const MARKER = '<!-- timon-proposal:0b6f3a7e-1c2d-4e5f-8a9b-0c1d2e3f4a5b -->';
+
+test('a comment is one POST to the issue comments endpoint, its body a raw string, with the project folder', async () => {
+  const run = recorder({ stdout: JSON.stringify({ id: 99, html_url: 'https://github.com/acme/app/issues/5#issuecomment-99', body: 'x' }) });
+  const out = await githubForge('/home/u/.config/gh-work', { gh: run.run }).postIssueComment('acme/app', 5, '@secrets.txt\nFixed in #51.');
+  assert.deepEqual(out, { ok: true, comment: { id: 99, url: 'https://github.com/acme/app/issues/5#issuecomment-99' } });
+  assert.deepEqual(run.calls[0]?.args, [
+    'api', '--method=POST', 'repos/acme/app/issues/5/comments', '--raw-field=body=@secrets.txt\nFixed in #51.',
+  ]);
+  assert.equal(run.calls[0]?.opts.env?.GH_CONFIG_DIR, '/home/u/.config/gh-work');
+  assert.equal(run.calls[0]?.opts.env?.GH_TOKEN, undefined);
+});
+
+test('a comment never reaches gh for an odd target or an empty or oversized body', async () => {
+  const run = recorder({ stdout: '{}' });
+  const forge = githubForge(null, { gh: run.run });
+  for (const [repo, n, body] of [
+    ['../x', 1, 'hi'], ['acme/..', 1, 'hi'], ['acme/app', 0, 'hi'], ['acme/app', 1.5, 'hi'],
+    ['acme/app', 1, '   '], ['acme/app', 1, 'x'.repeat(ISSUE_COMMENT_LIMIT + 201)],
+  ] as const) {
+    assert.equal((await forge.postIssueComment(repo, n, body)).ok, false, `${repo} ${n}`);
+  }
+  assert.equal(run.calls.length, 0);
+});
+
+test('a comment that failed or came back odd is a refusal without a token', async () => {
+  const leaked = await githubForge(null, { gh: recorder({ code: 1, stderr: `HTTP 401 ${TOKEN}` }).run }).postIssueComment('a/b', 1, 'hi');
+  assert.ok(!leaked.ok && !leaked.reason.includes('ghp_'));
+  assert.equal((await githubForge(null, { gh: recorder({ stdout: '{"id":1,"html_url":"http://x"}' }).run }).postIssueComment('a/b', 1, 'hi')).ok, false);
+  assert.equal((await githubForge(null, { gh: recorder('missing').run }).postIssueComment('a/b', 1, 'hi')).ok, false);
+  const slow = await githubForge(null, { gh: recorder({ code: 1, timedOut: true }).run }).postIssueComment('a/b', 1, 'hi');
+  assert.ok(!slow.ok && slow.code === 'timed_out');
+});
+
+test('the lookup of a posted comment filters on the author and the marker, and reads the first match', async () => {
+  const run = recorder({ stdout: '123 https://github.com/acme/app/pull/7#issuecomment-123\n' });
+  const out = await githubForge(null, { gh: run.run }).findIssueComment('acme/app', 7, 'AI-Bot', MARKER);
+  assert.deepEqual(out, { ok: true, comment: { id: 123, url: 'https://github.com/acme/app/pull/7#issuecomment-123' } });
+  const args = run.calls[0]?.args ?? [];
+  assert.deepEqual(args.slice(0, 3), ['api', '--paginate', 'repos/acme/app/issues/7/comments?per_page=100']);
+  assert.ok(args[3]?.includes('== "ai-bot"') && args[3]?.includes(MARKER));
+  assert.deepEqual(await githubForge(null, { gh: recorder({ stdout: '' }).run }).findIssueComment('acme/app', 7, 'ai-bot', MARKER),
+    { ok: true, comment: null });
+  const odd = recorder({ stdout: '' });
+  for (const [author, marker] of [['ai"bot', MARKER], ['ai-bot', '<!-- timon-proposal:" or true -->']] as const) {
+    assert.equal((await githubForge(null, { gh: odd.run }).findIssueComment('acme/app', 7, author, marker)).ok, false);
+  }
+  assert.equal(odd.calls.length, 0, 'a value that could close the jq string never reaches gh');
 });

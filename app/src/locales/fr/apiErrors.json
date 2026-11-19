@@ -606,6 +606,16 @@
     "pr_repository_unknown": "L'intégration du projet ne nomme aucune URL de push GitHub pour son remote.",
     "forge_read_failed": "GitHub n'a pas pu être lu : {detail}",
     "pr_read_failed": "La pull request n'a pas pu être lue.",
-    "pr_review_running": "Cette pull request est déjà en relecture."
+    "pr_review_running": "Cette pull request est déjà en relecture.",
+    "forge_proposal_not_found": "Cette publication GitHub n’existe plus.",
+    "forge_proposal_invalid": "La publication GitHub a été refusée : {detail}",
+    "forge_proposal_closed": "Cette publication GitHub est déjà close.",
+    "forge_proposal_busy": "Cette publication GitHub est en cours d’envoi.",
+    "forge_proposal_repository_changed": "Le projet pointe désormais vers un autre dépôt : {detail}",
+    "forge_account_unset": "Le projet ne nomme aucun compte GitHub pour publier.",
+    "forge_account_unknown": "Timon n’a pas pu savoir sous quel compte GitHub gh se connecte : {detail}",
+    "forge_account_mismatch": "gh se connecte avec un autre compte GitHub que celui du projet : {detail}",
+    "forge_publish_failed": "GitHub n’a pas accepté le commentaire : {detail}",
+    "forge_proposal_failed": "La publication GitHub n’a pas pu être traitée."
   }
 }
