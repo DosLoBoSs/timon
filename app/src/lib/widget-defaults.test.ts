@@ -13,7 +13,7 @@ const ids = [
   'plugin:@timon/missions:Missions', 'plugin:@timon/workflows:trace', 'plugin:@timon/files-widget:Files',
   'plugin:@timon/kanban:project-todo', 'plugin:@timon/kanban:todo',
   'plugin:@timon/git:branches', 'plugin:@timon/git:graph', 'plugin:@timon/git:publish',
-  'plugin:@timon/kanban:pull-requests', 'plugin:@timon/kanban:landings',
+  'plugin:@timon/kanban:pull-requests', 'plugin:@timon/kanban:landings', 'plugin:github-issues:issues',
   ...ADD_WIDGET_IDS,
   'plugin:@timon/docker-supervision:docker', 'plugin:@timon/skills-widget:skills', 'plugin:@timon/mcp-widget:mcp',
   'plugin:@timon/projects:overview', 'plugin:@timon/agents:team', 'plugin:@timon/video-factory:video',
@@ -45,10 +45,10 @@ test('a fresh install opens on the short arrangement the product ships (05/11/20
   const short = (rail: string) => column(chat, rail).map(w => w.id.split(':').at(-1));
   assert.deepEqual(short('chat.left.widget'), ['Missions', 'Files']);
   assert.deepEqual(shares(chat, 'chat.left.widget'), [50, 50]);
-  assert.deepEqual(short('chat.right.widget'), ['branches', 'graph', 'publish', 'pull-requests', 'landings', 'docker']);
-  // The "Git" stack: one card of five tabs, Branches in front, then Docker.
+  assert.deepEqual(short('chat.right.widget'), ['branches', 'graph', 'publish', 'pull-requests', 'landings', 'issues', 'docker']);
+  // The "Git" stack: one card of six tabs, Branches in front, then Docker.
   const stack = column(chat, 'chat.right.widget').filter(w => w.group);
-  assert.equal(stack.length, 5);
+  assert.equal(stack.length, 6);
   assert.equal(new Set(stack.map(w => w.group)).size, 1, 'one stack');
   assert.deepEqual(stack.filter(w => w.activeTab).map(w => short('chat.right.widget')[column(chat, 'chat.right.widget').indexOf(w)]), ['branches']);
   assert.ok(stack.every(w => w.heightMode === 'fill' && w.fillPercent === 66), 'the stack takes two thirds');
@@ -80,7 +80,8 @@ test('a starter never places a widget this install does not have', () => {
   // without Docker, simply never registers. What is absent from the
   // catalogue is absent from the board — and the stack it belonged to keeps
   // its other tabs rather than breaking.
-  const partial = constraints.filter(c => c.id !== 'plugin:@timon/docker-supervision:docker' && !c.id.startsWith('plugin:@timon/kanban:'));
+  const partial = constraints.filter(c => c.id !== 'plugin:@timon/docker-supervision:docker' && !c.id.startsWith('plugin:@timon/kanban:')
+    && c.id !== 'plugin:github-issues:issues');
   const chat = mergeWorkspaceWidgets(null, partial, '/chat').filter(w => !w.removed);
   assert.ok(chat.every(w => !w.id.includes('docker')));
   const right = chat.filter(w => w.rail === 'chat.right.widget');
@@ -150,7 +151,7 @@ test('a chat opened on another view starts from the places of /chat, then keeps 
   const withChat = mergeWorkspaceWidgets(stored, constraints, '/kanban', true).filter(w => !w.removed);
   assert.deepEqual(withChat.filter(w => w.rail === 'chat.left.widget').map(w => w.id.split(':').at(-1)),
     ['Missions', 'Files'], 'stored as taken out by default: placed like on /chat');
-  assert.equal(withChat.filter(w => w.rail === 'chat.right.widget').length, 6, 'absent from the row: placed too');
+  assert.equal(withChat.filter(w => w.rail === 'chat.right.widget').length, 7, 'absent from the row: placed too');
 });
 
 test('a card removed from a chat column of a view stays removed there (Q14)', () => {
@@ -212,7 +213,7 @@ test('TODO #278: the Git widgets take over the place of the former publication c
 test('the Git card of a stored chat becomes the Git stack, at its place and height, with the pull requests and jobs', () => {
   const former = ['plugin:@timon/git:repository', 'plugin:@timon/git:git-remote', 'plugin:@timon/git:Git'];
   const parts = ['plugin:@timon/git:branches', 'plugin:@timon/git:graph', 'plugin:@timon/git:publish'];
-  const kanban = ['plugin:@timon/kanban:pull-requests', 'plugin:@timon/kanban:landings'];
+  const kanban = ['plugin:@timon/kanban:pull-requests', 'plugin:@timon/kanban:landings', 'plugin:github-issues:issues'];
   const docker = 'plugin:@timon/docker-supervision:docker';
   const withFormer = constraints.map(c => parts.includes(c.id) ? { ...c, formerIds: former } : c);
   // A chat row stored before the split: the Git card under Docker, the
@@ -228,7 +229,7 @@ test('the Git card of a stored chat becomes the Git stack, at its place and heig
   const stack = right.filter(w => w.id !== docker);
   assert.equal(new Set(stack.map(w => w.group)).size, 1);
   assert.ok(stack[0]!.group);
-  assert.deepEqual(stack.map(w => w.activeTab === true), [true, false, false, false, false], 'Branches in front');
+  assert.deepEqual(stack.map(w => w.activeTab === true), [true, false, false, false, false, false], 'Branches in front');
   assert.ok(stack.every(w => w.hauteur === 410 && w.heightMode === 'fill' && w.fillPercent === 70), 'at the card\'s height');
   assert.equal(right[0]!.group, undefined, 'Docker stays a card of its own');
 
@@ -251,7 +252,7 @@ test('a widget added to the Git stack later joins it where the person moved it',
   // the jobs widget unknown to the row.
   const stored = mergeWorkspaceWidgets(null, constraints, '/chat')
     .filter(w => w.id !== 'plugin:@timon/kanban:landings')
-    .map(w => (w.id.startsWith('plugin:@timon/git:') || w.id === 'plugin:@timon/kanban:pull-requests' || w.id === docker
+    .map(w => (w.id.startsWith('plugin:@timon/git:') || w.id === 'plugin:@timon/kanban:pull-requests' || w.id === 'plugin:github-issues:issues' || w.id === docker
       ? { ...w, rail: 'chat.left.widget', group: stack, activeTab: w.id === docker ? true : undefined, rang: 10 + w.rang }
       : w));
   const merged = mergeWorkspaceWidgets(stored, constraints, '/chat');
@@ -265,6 +266,21 @@ test('a widget added to the Git stack later joins it where the person moved it',
   // A sibling taken out of every stack makes no new stack around it.
   const loose = stored.map(w => (w.group === stack ? { ...w, group: undefined, activeTab: undefined } : w));
   assert.equal(mergeWorkspaceWidgets(loose, constraints, '/chat').find(w => w.id === 'plugin:@timon/kanban:landings')?.removed, true);
+});
+
+test('Issues joins a Git stack stored before it, as its last tab, behind the one in front', () => {
+  const issues = 'plugin:github-issues:issues';
+  // A view saved with the five-tab stack, the person having brought Pull requests to the front.
+  const stored = mergeWorkspaceWidgets(null, constraints, '/chat')
+    .filter(w => w.id !== issues)
+    .map(w => (w.group ? { ...w, activeTab: w.id === 'plugin:@timon/kanban:pull-requests' ? true : undefined } : w));
+  const merged = mergeWorkspaceWidgets(stored, constraints, '/chat');
+  const tabs = merged.filter(w => !w.removed && w.group === 'stack:git').sort((a, b) => a.rang - b.rang);
+  assert.deepEqual(tabs.map(w => w.id.split(':').at(-1)), ['branches', 'graph', 'publish', 'pull-requests', 'landings', 'issues']);
+  assert.deepEqual(tabs.filter(w => w.activeTab).map(w => w.id), ['plugin:@timon/kanban:pull-requests'], 'the tab in front stays in front');
+  // Without the plugin, the widget never registers: the stack keeps its five tabs.
+  const without = mergeWorkspaceWidgets(stored, constraints.filter(c => c.id !== issues), '/chat');
+  assert.equal(without.filter(w => !w.removed && w.group === 'stack:git').length, 5);
 });
 
 // TODO #479: the agent strip became the Working agents widget. It was on
