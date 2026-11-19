@@ -3,39 +3,47 @@ title: Git
 sidebar_position: 4.8
 ---
 
-A project's Git repository shows in two places of an agent's chat: the **Git** widget, in the right column by default, and the branch shown above the message box. Both read the same state: switch a branch in one, and the other follows. They come with the built-in **Git** plugin, which needs Git installed on the machine where Timon's daemon runs.
+A project's Git repository, its pull requests and the Kanban jobs that land through them show in the **Git** stack of an agent's chat: one card in the right column, with a tab per widget.
 
-Git is read again after your own actions (switch, push, fetch, saving a remote), at the end of each agent turn, and when you come back to the window. A branch switched in a terminal shows when you return to Timon; **Refresh** in the widget reads it at once.
+| Tab | What it shows | Plugin |
+|---|---|---|
+| **Branches** | the working tree and the local branches; switch the project to one | Git |
+| **Graph** | the commit history of every branch, tag and worktree | Git |
+| **Publish** | the remote, what waits to be pushed, push and fetch | Git |
+| **Pull requests** | the pull requests open on the repository, and their review brief | Kanban |
+| **Jobs** | the Kanban jobs that land through a pull request, by what they wait for | Kanban |
 
-## The Git widget
+Each tab is a widget of its own: drag it out of the stack to another column or island, remove it, or add it back from the widget window, like any widget. A plugin that is off on your install simply has no tab. The **lite** configuration preset hides **Publish**.
 
-The widget's header gives the current branch (or **detached HEAD**), the number of uncommitted changes, and where the branch stands against its remote: *N to push*, *not published*, *no remote*, *up to date*, or *count unknown*. An agent without a project has no repository to show.
+The branch shown above the message box reads the same state as the Git widgets: switch a branch in one, and the other follows. Git needs to be installed on the machine where Timon's daemon runs.
 
-Below the header, three tabs:
+Git is read again after your own actions (switch, push, fetch, saving a remote), at the end of each agent turn, and when you come back to the window. A branch switched in a terminal shows when you return to Timon; **Refresh** reads it at once.
 
-- **Branches** — the working tree (files changed since the last commit), then the local branches. Click a branch to switch the project to it; with uncommitted changes, Timon asks first. A branch checked out in another worktree carries **worktree** and cannot be switched to from here. **local only** marks a branch that was never pushed: its commits only exist on this disk.
-- **Graph** — the commit history, described below.
-- **Publish** — the remote, the branch and its gap, and the buttons to publish it, described below. The **lite** configuration preset hides this tab.
+If you arranged the former single **Git** card, the stack takes its place and its height.
+
+## Branches
+
+**Branches** and **Publish** open on one line: the current branch (or **detached HEAD**), the number of uncommitted changes, where the branch stands against its remote (*N to push*, *not published*, *no remote*, *up to date*, or *count unknown*) and **Refresh**. An agent without a project has no repository to show.
+
+Below it, **Branches** lists the working tree (files changed since the last commit), then the local branches. Click a branch to switch the project to it; with uncommitted changes, Timon asks first. A branch checked out in another worktree carries **worktree** and cannot be switched to from here. **local only** marks a branch that was never pushed: its commits only exist on this disk.
 
 ### Several repositories in one project
 
 A project folder can hold more than one Git repository: a notes repository nested inside the project and ignored by it, for instance. The widget finds, besides the project's own repository, every first-level folder that is a repository the project ignores, and every repository folder listed in the project's `.worktreelinks` file.
 
-When there is more than one, a **Repository** picker appears in the widget's toolbar. The project's own repository, marked **(root)**, is shown by default; pick another and the header, the three tabs and their buttons (switch, push, fetch, remotes) all work on that one. An amber dot beside the picker means another repository of the project has commits to push: hover it to see which and how many, click it to show that repository.
+When there is more than one, a **Repository** picker appears at the top of **Branches**, **Graph** and **Publish**. The project's own repository, marked **(root)**, is shown by default; pick another and the three widgets and their buttons (switch, push, fetch, remotes) all work on that one. An amber dot beside the picker means another repository of the project has commits to push: hover it to see which and how many, click it to show that repository.
 
 The branch above the message box always shows the project's own repository.
 
-The widget is a card like any other: move it, or put it back, from the chat's widget columns.
-
 ## The commit graph
 
-The **Graph** tab draws the latest 150 commits of every local branch, remote branch and tag, newest first. Each line of development keeps its own colour; a ring marks the commit you are on, a hollow dot a merge.
+**Graph** draws the latest 150 commits of every local branch, remote branch and tag, newest first. Each line of development keeps its own colour; a ring marks the commit you are on, a hollow dot a merge.
 
 Each commit shows its labels (branches, tags, worktrees — two at most, then **+N**), its subject, then its short hash, author and age. A branch whose remote copy points at the same commit shows once, marked *same commit on the remote*. A worktree on a detached HEAD gets a label of its own.
 
 Click a commit to open its detail under the list: the full hash with a **Copy** button, the author, the date, every label, and its parents — click one to jump to it.
 
-The history is only read while the tab is on screen.
+The history is only read while **Graph** is on screen.
 
 ## The branch above the message box
 
@@ -49,7 +57,7 @@ That is the branch, the folder (the worktree's folder when the agent works in on
 
 Click the bar to open **Branches and worktrees**:
 
-- **Branches** — every branch, the current one marked, with its commits ahead and behind and its last subject. Pick one to switch the project to it, as from the widget. A branch held by another worktree is marked **worktree** and cannot be picked.
+- **Branches** — every branch, the current one marked, with its commits ahead and behind and its last subject. Pick one to switch the project to it, as from **Branches**. A branch held by another worktree is marked **worktree** and cannot be picked.
 - **Worktrees** — every worktree of the repository: its name, its branch or detached HEAD, and **main checkout**, **here** (where this conversation works), **locked** or **missing**. Hover one to see its full path. Worktrees are listed for information; they have no action.
 
 When the conversation works in a worktree of its own (a Kanban coding task, for instance), no branch can be picked: switching would move the project's main checkout, not the folder the agent works in. The menu says so; switch the branch from that folder instead.
@@ -58,7 +66,7 @@ The same goes for an agent whose folder is another Git repository than its proje
 
 ## Publishing a branch
 
-The **Publish** tab compares the current branch with its remote:
+**Publish** compares the current branch with its remote:
 
 - **to push** — commits the remote does not have yet. **Push** sends them.
 - **not published** — the branch was never pushed. **Publish** pushes it and sets its upstream; the gap is measured against the remote's default branch.
@@ -78,7 +86,7 @@ Pick another remote and the button reads **Push to** *remote*. The confirmation 
 
 ## Remotes
 
-The remote is where a project's code is pushed and fetched from. Without one, the **Publish** tab offers **Add a remote…** and **Create on GitHub…**, which creates the repository (private or public) and pushes the branch; the latter needs the [GitHub CLI](https://cli.github.com/) (`gh`) installed and signed in. With a remote, **Remotes…** sits next to **Fetch**.
+The remote is where a project's code is pushed and fetched from. Without one, **Publish** offers **Add a remote…** and **Create on GitHub…**, which creates the repository (private or public) and pushes the branch; the latter needs the [GitHub CLI](https://cli.github.com/) (`gh`) installed and signed in. With a remote, **Remotes…** sits next to **Fetch**.
 
 **Remotes…** lists every remote of the project: its name, its URL, a separate push URL when it has one, and which one pushes go to. From there you can:
 
@@ -106,12 +114,64 @@ After saving, Timon checks that the remote answers. An unreachable remote is sti
 
 Adding, changing or removing a remote needs the **Create, update and delete projects** permission: a remote decides where the code goes.
 
+## Pull requests
+
+In a project set to land through pull requests ([Land a job through a pull request](pull-requests.md)), **Pull requests** lists the pull requests open on the project's repository, yours and contributors' ones alike. In an agent's chat it shows the agent's project; elsewhere, pick the project once: **Pull requests** and **Jobs** share the choice. Filter the list by author when several people contribute.
+
+Each row gives the pull request's title, its number, its author, **draft** when it is one, and the verdict of a past review. Its button, **Prepare the review**, gets the pull request ready to review without ever running its code on your machine:
+
+1. Timon reads the pull request and its diff from GitHub, with the project's account. The contributor's branch is never fetched or checked out, and nothing of it is installed, built or tested here: its code only runs in GitHub's CI.
+2. Timon writes a review brief: the rules a reviewer follows (read only, nothing posted on GitHub), the place of the diff on this machine, and what the contributor wrote (title, description, comments) as data, cut short, with the instruction never to follow it.
+3. A window shows the brief and, in its **Diff** tab, the pull request's changes. **Copy the brief** puts it on your clipboard, for the reviewer you choose. Timon starts nothing on its own, and writes nothing on GitHub.
+
+The row's menu (**…**) opens the pull request on GitHub, or shows the report of a past review. A project that lands its jobs locally has no pull requests to list: the widget says so until you set the project to `pr` mode.
+
+## Jobs
+
+**Jobs** lists the Kanban jobs that land through a pull request, in four groups:
+
+| Group | Jobs in it |
+|---|---|
+| **Needs action** | a check fails, the branch conflicts with its target, a reviewer asked for changes, or the pull request was closed without being merged (for a week) |
+| **In review** | the pull request is open and nothing is wrong with it |
+| **In progress** | the job's branch is not pushed yet |
+| **Landed · 7 days** | the pull request was merged in the last seven days |
+
+Each row gives the job's title (its pull request's, or its branch until there is one), its branch, and where it stands: **Not pushed**, **PR #n**, **Merged**, **Landed** once Timon has closed the job's tasks and ideas, or **Closed**. While the pull request is open, the row also shows the failing or running checks (or how many passed when none fails), a conflict, a draft and an approval or a request for changes.
+
+The row's button is **Preview** while the job has something to land, and **Open the pull request** once it is merged or closed. Its menu (**…**) holds the other one and **Refresh the checks**. In an agent's chat the widget lists the jobs of the conversation's project; elsewhere, the project picked for **Pull requests**, or every project.
+
+Timon reads the checks from GitHub when the widget appears, then about once a minute while a check is still running and the page is visible. The background poller that notices a merged pull request keeps its own five-minute pace.
+
+**Preview** opens what the job's pull request carries, before anything is pushed, with a link to the pull request on GitHub once it exists:
+
+- **Changes**: every file the branch changes against the target as it was last fetched, with its added and removed lines. Very large diffs are cut, and the preview says so.
+- **Commits**: the commits of the branch that the target does not have.
+- **Pre-checks**: the checks of `timon pr open`, run without pushing, fetching or opening anything, with the result of each. The public tree check runs a script of the repository, so it waits for the actual opening, as does the check of a title the preview does not have yet. Running the pre-checks needs the permission to manage projects, as opening the pull request does.
+
+The preview also says whether the branch would merge into the target without a conflict.
+
+## From the TO DO notebook
+
+An idea whose job lands through a pull request shows where it stands, beside its progress, on its line in the TO DO widgets, its Kanban card and its detail:
+
+| Badge | Meaning |
+| --- | --- |
+| **PR not created** | the job has its integration branch, its pull request is not open yet |
+| **PR #12** | the pull request is open |
+| **PR #12 merged** | the pull request was merged: the work landed in the target branch |
+| **PR #12 closed** | the pull request was closed without a merge: nothing landed |
+| **Branch** | an embargoed branch (`sec/<topic>`), which lands by hand without a pull request |
+
+Click the badge to open the job's preview, the same as from **Jobs**, with the link to its pull request. The progress says how far the work went; this badge says how far its branch went. When the idea has several jobs, the badge shows the one furthest from landing (a closed pull request first, then one not created, a branch, an open one, a merged one), opens that one, and its tooltip lists them all. The TO DO widgets filter on **PR open** and **PR not created**.
+
 ## Who may change a repository
 
-Anyone signed in can read a project's branches, graph and publication state. Everything that changes the repository or what is published needs the **Create, update and delete projects** permission: switching or deleting a branch, pushing, fetching, creating the repository on GitHub, and editing the remotes. Without it, these buttons are greyed out and say which permission to ask an administrator for, in the Git panel, the branch menu above the message box and the project cards. An agent acts with the rights of the account that launched it.
+Anyone signed in can read a project's branches, graph and publication state. Everything that changes the repository or what is published needs the **Create, update and delete projects** permission: switching or deleting a branch, pushing, fetching, creating the repository on GitHub, and editing the remotes. Without it, these buttons are greyed out and say which permission to ask an administrator for, in the Git widgets, the branch menu above the message box and the project cards. An agent acts with the rights of the account that launched it.
 
 ## Related pages
 
 - [Projects](projects.md) — how a project's folder and worktrees are organised.
 - [Kanban](kanban.md) — coding tasks run in worktrees of their own.
+- [Land a job through a pull request](pull-requests.md) — set a project to open pull requests, and what Timon checks before it pushes.
 - [Built-in terminal](terminal.md) — for the Git commands the widget does not cover.

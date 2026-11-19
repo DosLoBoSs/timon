@@ -105,7 +105,8 @@ export const kanbanClient: BundledClientPlugin = {
 
     // The pull requests open on the repository of one project in `pr` mode,
     // and their read-only relecture: "Review" prepares a brief the person
-    // reads and sends; the verdict comes back on the row.
+    // reads and sends; the verdict comes back on the row. With the jobs
+    // widget below, part of the chat's "Git" stack (`widget-defaults.ts`).
     registerWidget(ctx, {
       key: 'pull-requests',
       widget: {
@@ -118,13 +119,14 @@ export const kanbanClient: BundledClientPlugin = {
       Component: PullRequestsWidget,
     });
 
-    // The jobs that land through a pull request: their state, the forge's
-    // checks and a preview of the diff before the push. In a chat's rail it
-    // narrows to the conversation's project.
+    // The jobs that land through a pull request, grouped by what they wait
+    // for: their state, the forge's checks and a preview of the diff before
+    // the push. In a chat's rail it narrows to the conversation's project.
+    // The key stays `landings`: it is the widget's placement id.
     registerWidget(ctx, {
       key: 'landings',
       widget: {
-        title: t('widgetCatalog.jobPullRequests.title'), icon: widgetPicto('jobPullRequests'), description: t('widgetCatalog.jobPullRequests.description'),
+        title: t('widgetCatalog.jobs.title'), icon: widgetPicto('jobs'), description: t('widgetCatalog.jobs.description'),
         zone: 'droite',
         height: 320,
         minHeight: 160,

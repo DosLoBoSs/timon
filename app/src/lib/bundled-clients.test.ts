@@ -161,9 +161,9 @@ test('the cockpit cards keep their placement id, title, rail and heights', () =>
       ['plugin:@timon/kanban:project-todo', 'Project TO DO', 'droite', 300, 160],
       // A project's open pull requests and their read-only review, next to
       // its notebook.
-      ['plugin:@timon/kanban:pull-requests', 'Open pull requests', 'droite', 320, 160],
+      ['plugin:@timon/kanban:pull-requests', 'Pull requests', 'droite', 320, 160],
       // The jobs that land through a pull request, and their preview.
-      ['plugin:@timon/kanban:landings', 'Pull requests', 'droite', 320, 160],
+      ['plugin:@timon/kanban:landings', 'Jobs', 'droite', 320, 160],
       // No Dreams tile: the module holds back its surfaces for the beta
       // as long as its `ui` option is not true (see the dedicated test below).
       ['plugin:@timon/agent-chat:new', 'New agent chat', 'gauche', 520, 280],

@@ -11,8 +11,9 @@
  * would not be confined, and nothing is ever posted on the forge. Opening the
  * pull request on the forge, or a past report, sit in the row's menu.
  *
- * The project comes from the chat rail when there is one, else from a picker
- * remembered per browser, like the project's TO DO widget.
+ * A widget of the "Git" stack. The project comes from the chat rail when
+ * there is one, else from a picker the jobs widget shares
+ * (`git-stack-project.tsx`): it is chosen once for both.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -24,12 +25,9 @@ import { WIDGET_SELECT, WidgetButton, widgetButtonClass } from '@/components/wid
 import { HUD_SURFACE } from '@/components/cockpit/hud-surface';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useChatRail } from '@/components/chat/chat-rails';
 import { apiErrorMessage } from '@/lib/api-error';
 import { copyToClipboard } from '@/lib/clipboard';
 import { t } from '@/lib/i18n';
-import { sharedGet } from '@/lib/shared-read';
-import { machineScopedStorage } from '@/lib/machines/machine-storage';
 import { NativeViewCover } from '@/lib/native-view-cover';
 import { cn } from '@/lib/utils';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
@@ -39,15 +37,12 @@ import {
 } from './pull-requests-model';
 import { diffLineKind } from './landing-api';
 import { DIFF_LINE_CLASS } from './landing-preview-dialog';
+import { StackProjectPicker, useStackProject } from './git-stack-project';
 
-/** The project picked by hand, per browser and per machine. */
-const PROJECT_KEY = 'timon.pull-requests.project';
 /** How often a running review is asked for its verdict. */
 const RUNNING_POLL_MS = 15_000;
 /** Most diff lines painted: a 2 MB diff would freeze the dialog. */
 const DIFF_LINES_SHOWN = 3000;
-
-type Project = { slug: string; name?: string | null };
 
 type Load =
   | { kind: 'idle' }
@@ -64,42 +59,17 @@ type DiffLoad = { number: number } & (
   | { kind: 'ready'; diff: string; truncated: boolean }
 );
 
-function storedProject(): string | null {
-  if (typeof window === 'undefined') return null;
-  return machineScopedStorage(window.localStorage).getItem(PROJECT_KEY) || null;
-}
-
 const projectPath = (slug: string) => `/api/ui/projects/${encodeURIComponent(slug)}/pull-requests`;
 
 export function PullRequestsWidget({ handle, className }: WidgetProps) {
-  const chat = useChatRail();
-  const [picked, setPicked] = useState<string | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const project = useStackProject();
+  const slug = project.slug;
   const [load, setLoad] = useState<Load>({ kind: 'idle' });
   const [author, setAuthor] = useState<string | null>(null);
   const [preparing, setPreparing] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [diff, setDiff] = useState<DiffLoad>({ number: 0, kind: 'loading' });
   const [report, setReport] = useState<PullRequestItem | null>(null);
-
-  useEffect(() => { setPicked(storedProject()); }, []);
-  const context = chat?.slug ?? null;
-  const slug = context ?? picked;
-
-  useEffect(() => {
-    if (context) return;
-    let alive = true;
-    void (async () => {
-      try {
-        const r = await sharedGet('/api/ui/projects');
-        const j = (await r.json()) as { projects?: Project[] };
-        if (alive) setProjects(j.projects ?? []);
-      } catch {
-        // The picker stays empty: the tile says it waits for a project.
-      }
-    })();
-    return () => { alive = false; };
-  }, [context]);
 
   const reload = useCallback(async (quiet = false) => {
     if (!slug) { setLoad({ kind: 'idle' }); return; }
@@ -170,22 +140,8 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
     else toast.error(t('pullRequests.dialog.copyFailed'));
   };
 
-  const projectPicker = context ? null : (
-    <select
-      data-pull-project=""
-      value={picked ?? ''}
-      aria-label={t('pullRequests.selectProject')}
-      onChange={(e) => {
-        const v = e.target.value || null;
-        setPicked(v);
-        const storage = machineScopedStorage(window.localStorage);
-        if (v) storage.setItem(PROJECT_KEY, v); else storage.removeItem(PROJECT_KEY);
-      }}
-      className={cn(WIDGET_SELECT, 'max-w-[9rem]')}
-    >
-      <option value="">{t('pullRequests.noProjectOption')}</option>
-      {projects.map((p) => <option key={p.slug} value={p.slug}>{p.name || p.slug}</option>)}
-    </select>
+  const projectPicker = (
+    <StackProjectPicker project={project} none={t('pullRequests.noProjectOption')} label={t('pullRequests.selectProject')} />
   );
 
   const authorFilter = authors.length > 1 ? (

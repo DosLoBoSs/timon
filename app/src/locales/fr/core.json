@@ -2293,7 +2293,7 @@
     "topbarCenterWidgets": "Milieu de la barre du haut"
   },
   "widgetCatalog": {
-    "jobPullRequests": {"title": "Pull requests", "description": "Les chantiers Kanban qui atterrissent par une pull request : état, contrôles, et aperçu du diff avant le push."},
+    "jobs": {"title": "Chantiers", "description": "Les chantiers Kanban qui atterrissent par une pull request, rangés par ce qu'ils attendent : état, contrôles, et aperçu du diff avant le push."},
     "botsRail": {
       "title": "TIMs",
       "description": "Vos TIMs, regroupés par équipe : choisissez-en un pour ouvrir son chat."
@@ -2331,7 +2331,7 @@
       "description": "Le carnet TO DO d'un seul projet : idées à trier, transformer en tasks ou clore."
     },
     "pullRequests": {
-      "title": "PR ouvertes",
+      "title": "Pull requests",
       "description": "Les pull requests ouvertes sur le dépôt d'un projet, leur diff et le brief de leur relecture."
     },
     "workflowRuns": {
@@ -2378,9 +2378,17 @@
       "title": "Fichiers",
       "description": "Parcourir et modifier les fichiers du dossier de travail du projet."
     },
-    "git": {
-      "title": "Git",
-      "description": "Branches, graphe des commits et publication du projet : changer de branche, voir l’historique et les worktrees, pousser."
+    "gitBranches": {
+      "title": "Branches",
+      "description": "L’arbre de travail et les branches du dépôt : voir les changements, changer de branche."
+    },
+    "gitGraph": {
+      "title": "Graphe",
+      "description": "Le graphe des commits du dépôt, avec ses branches et ses worktrees."
+    },
+    "gitPublish": {
+      "title": "Publier",
+      "description": "Où en est la publication du dépôt : remote, commits à pousser, push et fetch."
     },
     "agentTasks": {
       "title": "Liste de tâches de l'agent",
@@ -2935,7 +2943,7 @@
     "saveError": "Impossible d’enregistrer l’issue"
   },
   "pullRequests": {
-    "title": "PR ouvertes",
+    "title": "Pull requests",
     "selectProject": "Projet",
     "noProjectOption": "Projet…",
     "chooseProject": "Choisissez un projet pour voir ses pull requests.",
@@ -3051,7 +3059,7 @@
     "landingFilter": {"open": "PR ouverte", "pending": "PR pas créée"},
     "emptyLandingFilter": "Aucune idée dans cet état",
     "clearAllFilters": "Afficher toutes les idées",
-    "landing": {"branch": "Branche", "pending": "PR pas créée", "open": "PR #{number}", "openNoNumber": "PR ouverte", "merged": "PR #{number} mergée", "mergedNoNumber": "Mergée", "closed": "PR #{number} fermée", "closedNoNumber": "Fermée", "openPr": "ouvrir la pull request dans le navigateur"},
+    "landing": {"branch": "Branche", "pending": "PR pas créée", "open": "PR #{number}", "openNoNumber": "PR ouverte", "merged": "PR #{number} mergée", "mergedNoNumber": "Mergée", "closed": "PR #{number} fermée", "closedNoNumber": "Fermée", "openJob": "ouvrir l'aperçu du chantier", "notFound": "Ce chantier n'est plus listé."},
     "truncated": "Les {shown} plus récentes sur {total}",
     "add": "Ajouter",
     "newIdea": "Nouvelle idée",
@@ -4444,5 +4452,5 @@
     }
   },
   "agencyOffer": {"label": "Partenaires", "title": "Offre agence", "status": {"subscribed": "Inscrit · {email}", "none": "Non inscrit", "pending": "En attente d’envoi · {email}", "withdrawing": "Retrait en attente d’envoi", "invalid": "Adresse refusée · {email}", "refused": "Non envoyée · {email}"}, "withdraw": "Se retirer", "subscribe": "S’inscrire", "more": "Plus", "changeEmail": "Changer d’adresse", "dialogTitle": "Recevoir l’offre agence", "emailLabel": "Adresse e-mail", "notice": "Uniquement cette offre, envoyée par Timon à cette adresse. Retrait possible à tout moment ici.", "submit": "M’envoyer l’offre", "cancel": "Annuler", "loadFailed": "L’offre agence n’a pas pu être lue.", "failed": "La demande n’a pas pu être enregistrée. Réessayez.", "invalidEmail": "Saisissez une adresse e-mail valide.", "withdrawn": "Retrait fait : Timon ne vous enverra plus l’offre agence.", "recorded": "Demande enregistrée."},
-  "landings": {"title": "Pull requests", "loading": "Chargement…", "empty": "Aucun chantier n'atterrit encore par une pull request.", "into": "vers {target}", "preview": "Aperçu", "more": "Plus d'actions", "openPr": "Ouvrir la pull request", "refresh": "Rafraîchir les contrôles", "conflict": "Conflit", "draft": "Brouillon", "state": {"branch": "Pas poussée", "open": "PR #{number}", "merged": "Mergée", "landed": "Atterrie", "closed": "Fermée"}, "checks": {"pass": "{count, plural, one {# contrôle réussi} other {# contrôles réussis}}", "fail": "{count, plural, one {# contrôle en échec} other {# contrôles en échec}}", "pending": "{count, plural, one {# contrôle en cours} other {# contrôles en cours}}"}, "review": {"approved": "Approuvée", "changes_requested": "Changements demandés", "review_required": "Relecture requise"}, "precheck": {"branch_name": "Nom de branche", "account": "Compte", "remote_url": "URL du remote", "target": "Branche cible", "commits": "Commits", "commit_identity": "Identité", "commit_messages": "Messages", "pr_text": "Titre et description", "private_paths": "Fichiers ignorés", "public_tree": "Arbre public", "remote_branch": "Branche distante"}, "previewDialog": {"description": "Les commits, le diff et les pré-contrôles de la pull request du chantier, avant tout push.", "summary": "{commits, plural, one {# commit} other {# commits}}, {files, plural, one {# fichier} other {# fichiers}}", "conflict": {"clean": "Se merge sans conflit dans {target}", "conflicting": "En conflit avec {target}", "unknown": "Merge avec {target} non vérifié"}, "conflictFiles": "Fichiers en conflit : {files}", "tabChanges": "Modifications", "tabCommits": "Commits", "tabChecks": "Pré-contrôles", "binary": "Fichier binaire", "noPatch": "Diff non affiché", "fileCut": "Le diff de ce fichier est coupé.", "filesCut": "{shown} fichiers affichés sur {total}.", "patchCut": "Le diff est coupé : lisez la suite sur la branche.", "commitsCut": "{shown} commits affichés sur {total}.", "nothing": "La branche n'apporte rien au-delà de {target}.", "ready": "Prête à ouvrir", "refused": "{count, plural, one {# contrôle refuse} other {# contrôles refusent}}", "prechecksNotRun": "Pré-contrôles non lancés : {reason}", "skipped": "sauté"}}
+  "landings": {"title": "Chantiers", "groups": {"attention": "À traiter", "review": "En revue", "progress": "En cours", "landed": "Atterries · 7 jours"}, "allProjects": "Tous les projets", "selectProject": "Projet", "reload": "Rafraîchir", "loading": "Chargement…", "empty": "Aucun chantier n'atterrit encore par une pull request.", "into": "vers {target}", "preview": "Aperçu", "more": "Plus d'actions", "openPr": "Ouvrir la pull request", "refresh": "Rafraîchir les contrôles", "conflict": "Conflit", "draft": "Brouillon", "state": {"branch": "Pas poussée", "open": "PR #{number}", "merged": "Mergée", "landed": "Atterrie", "closed": "Fermée"}, "checks": {"pass": "{count, plural, one {# contrôle réussi} other {# contrôles réussis}}", "fail": "{count, plural, one {# contrôle en échec} other {# contrôles en échec}}", "pending": "{count, plural, one {# contrôle en cours} other {# contrôles en cours}}"}, "review": {"approved": "Approuvée", "changes_requested": "Changements demandés", "review_required": "Relecture requise"}, "precheck": {"branch_name": "Nom de branche", "account": "Compte", "remote_url": "URL du remote", "target": "Branche cible", "commits": "Commits", "commit_identity": "Identité", "commit_messages": "Messages", "pr_text": "Titre et description", "private_paths": "Fichiers ignorés", "public_tree": "Arbre public", "remote_branch": "Branche distante"}, "previewDialog": {"description": "Les commits, le diff et les pré-contrôles de la pull request du chantier, avant tout push.", "summary": "{commits, plural, one {# commit} other {# commits}}, {files, plural, one {# fichier} other {# fichiers}}", "conflict": {"clean": "Se merge sans conflit dans {target}", "conflicting": "En conflit avec {target}", "unknown": "Merge avec {target} non vérifié"}, "conflictFiles": "Fichiers en conflit : {files}", "tabChanges": "Modifications", "tabCommits": "Commits", "tabChecks": "Pré-contrôles", "binary": "Fichier binaire", "noPatch": "Diff non affiché", "fileCut": "Le diff de ce fichier est coupé.", "filesCut": "{shown} fichiers affichés sur {total}.", "patchCut": "Le diff est coupé : lisez la suite sur la branche.", "commitsCut": "{shown} commits affichés sur {total}.", "nothing": "La branche n'apporte rien au-delà de {target}.", "ready": "Prête à ouvrir", "refused": "{count, plural, one {# contrôle refuse} other {# contrôles refusent}}", "prechecksNotRun": "Pré-contrôles non lancés : {reason}", "skipped": "sauté"}}
 }

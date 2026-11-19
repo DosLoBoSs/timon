@@ -135,7 +135,7 @@ test('the widget lists a project\'s pull requests, filters by author, and shows 
   ]);
   try {
     assert.match(document.body.textContent ?? '', /Choose a project/);
-    await m.choose(document.querySelector('[data-pull-project]'), 'acme');
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
 
     const rows = () => Array.from(document.querySelectorAll('[data-pull-row]')).map((r) => r.getAttribute('data-pull-row'));
     assert.deepEqual(rows(), ['12', '13']);

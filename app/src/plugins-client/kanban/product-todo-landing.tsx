@@ -5,19 +5,30 @@
  * idea's jobs stands, as one chip. Read-only and derived by the daemon; the
  * work's own progress is the other chip, never this one.
  *
- * An open, merged or closed pull request is a link that opens it in the
- * browser (a click on it does not open the idea: `BoardCard` leaves links to
- * themselves). Several jobs: the chip shows the one furthest from landing, the
- * tooltip lists them all.
+ * A click opens the job's dialog, the one of the jobs widget (diff, commits,
+ * pre-checks, and its pull request on the forge), rather than leaving for the
+ * browser: the job is the work, the pull request one of its states. It does
+ * not open the idea (`BoardCard` leaves buttons to themselves), and nothing
+ * from the dialog reaches the line under it. Several jobs: the chip shows the
+ * one furthest from landing and opens it, the tooltip lists them all.
  */
 
-import type { ReactElement } from 'react';
+import { lazy, Suspense, useState, type ReactElement, type SyntheticEvent } from 'react';
+import { toast } from 'sonner';
 import { GitBranch, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, type LucideIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { safeHref } from './project-todo-links';
 import { useTodoItem } from './todo-badge-slot';
+import { findLanding, listLandings, type Landing } from './landing-api';
+
+// Painted on every line of the TO DO: the dialog loads on the first click.
+const LandingPreviewDialog = lazy(() => import('./landing-preview-dialog').then((m) => ({ default: m.LandingPreviewDialog })));
+
+/** React events bubble from a portal to the tree that holds it: the dialog's
+ *  clicks and presses must not open the idea or drag its card. */
+const stop = (e: SyntheticEvent) => { e.stopPropagation(); };
 import type { TodoLanding, TodoLandingJob, TodoLandingState } from './project-todo-types';
 
 // Same shape as the urgency and progress chips beside it.
@@ -53,55 +64,71 @@ export function landingLabel(job: TodoLandingJob): string {
 
 const TIP = 'rounded-md bg-popover px-2 py-1 text-[11.5px] text-popover-foreground shadow-elev-2';
 
-/** The chip of `landing`, a link when its pull request has a safe URL. */
-export function TodoLandingBadge({ landing }: { landing: TodoLanding }): ReactElement {
+/** The chip of `landing`; a click opens its job's dialog. `project` narrows
+ *  the lookup of the job to the idea's project. */
+export function TodoLandingBadge({ landing, project = null }: { landing: TodoLanding; project?: string | null }): ReactElement {
+  const [opened, setOpened] = useState<Landing | null>(null);
+  const [busy, setBusy] = useState(false);
   const Icon = LANDING_ICON[landing.state];
   const label = landingLabel(landing);
-  const href = safeHref(landing.prUrl);
   const several = landing.jobs.length > 1;
   const detail = landing.jobs.map((job) => `${job.branch}: ${landingLabel(job)}`);
   const accessible = several ? `${label} · ${detail.join(' · ')}` : `${label} · ${landing.branch}`;
-  const body = (
-    <>
+
+  const open = async () => {
+    setBusy(true);
+    const out = await listLandings(project);
+    setBusy(false);
+    const found = out.ok ? findLanding(out.value, landing.branch) : null;
+    if (found) { setOpened(found); return; }
+    // The job left the list (its branch removed): its pull request, if any,
+    // is still worth reaching.
+    const href = safeHref(landing.prUrl);
+    if (href) window.open(href, '_blank', 'noopener,noreferrer');
+    else toast.error(out.ok ? t('projectTodo.landing.notFound') : out.message);
+  };
+
+  const chip = (
+    <button
+      type="button"
+      data-todo-landing={landing.state}
+      aria-label={`${accessible} · ${t('projectTodo.landing.openJob')}`}
+      aria-busy={busy || undefined}
+      onClick={(e) => { e.stopPropagation(); if (!busy) void open(); }}
+      className={cn(CHIP, LANDING_CLASS[landing.state], 'cursor-pointer underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
+    >
       <Icon className="size-3" aria-hidden />
       <span className="tabular-nums">{label}</span>
       {several && <span className="tabular-nums opacity-70">+{landing.jobs.length - 1}</span>}
-    </>
-  );
-  const chip = href ? (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      data-todo-landing={landing.state}
-      aria-label={`${accessible} · ${t('projectTodo.landing.openPr')}`}
-      className={cn(CHIP, LANDING_CLASS[landing.state], 'underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
-    >
-      {body}
-    </a>
-  ) : (
-    <span data-todo-landing={landing.state} aria-label={accessible} tabIndex={several ? 0 : undefined} className={cn(CHIP, LANDING_CLASS[landing.state])}>
-      {body}
-    </span>
+    </button>
   );
   return (
-    <TooltipProvider delayDuration={300} skipDelayDuration={300}>
-      <Tooltip>
-        <TooltipTrigger asChild>{chip}</TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4} className={TIP}>
-          {several ? (
-            <ul data-todo-landing-jobs={landing.jobs.length} className="flex flex-col gap-0.5">
-              {landing.jobs.map((job, i) => <li key={`${job.branch}:${i}`}>{detail[i]}</li>)}
-            </ul>
-          ) : landing.branch}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <>
+      <TooltipProvider delayDuration={300} skipDelayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>{chip}</TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4} className={TIP}>
+            {several ? (
+              <ul data-todo-landing-jobs={landing.jobs.length} className="flex flex-col gap-0.5">
+                {landing.jobs.map((job, i) => <li key={`${job.branch}:${i}`}>{detail[i]}</li>)}
+              </ul>
+            ) : landing.branch}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      {opened && (
+        <span className="contents" onClick={stop} onPointerDown={stop} onMouseDown={stop} onKeyDown={stop}>
+          <Suspense fallback={null}>
+            <LandingPreviewDialog landing={opened} onClose={() => setOpened(null)} />
+          </Suspense>
+        </span>
+      )}
+    </>
   );
 }
 
 /** Reads the idea from `useTodoItem()`, as a plugin's replacement would. */
 export function ProductTodoLanding(): ReactElement | null {
-  const landing = useTodoItem()?.landing;
-  return landing ? <TodoLandingBadge landing={landing} /> : null;
+  const item = useTodoItem();
+  return item?.landing ? <TodoLandingBadge landing={item.landing} project={item.project} /> : null;
 }
