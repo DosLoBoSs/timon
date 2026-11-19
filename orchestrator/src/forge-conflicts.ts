@@ -49,7 +49,7 @@ import {
   type ForgeProposalDeps, type ForgeProposalExecution, type ForgeProposalExecutorResult, type ForgeProposalRefusal,
   type ForgeProposalRefusalCode, type ForgeProposalRow,
 } from './forge-proposals.js';
-import { checkRemoteUrl } from './git-remote-url.js';
+import { checkRemoteUrl, urlAuthority } from './git-remote-url.js';
 import { githubRepoFromUrl, plainBranch, type PullRequestBranch } from './host/forge.js';
 import {
   gitVersionAtLeast, MIN_GIT_VERSION, openScratchRepo, reopenScratchRepo, SCRATCH_SIZE_LIMIT, sshHostName,
@@ -83,11 +83,13 @@ const CONFLICT_MARKER = /^(?:<{7}(?: |$)|>{7}(?: |$)|\|{7}(?: |$)|={7}\r?$)/m;
 /**
  * Characters a path in conflict may not hold: controls, the comma that
  * `update-index --cacheinfo` splits on, the replacement character of an
- * undecodable name, and the bidirectional marks (U+200E/F, U+202A–U+202E,
- * U+2066–U+2069) that make a name read otherwise in the dialog and the comment.
+ * undecodable name, the bidirectional marks (U+061C, U+200E/F, U+202A–U+202E,
+ * U+2066–U+2069) that make a name read otherwise in the dialog and the
+ * comment, and the invisible ones that make two names look alike or break a
+ * line (U+200B–U+200D, U+2028/U+2029, U+FEFF).
  */
 // eslint-disable-next-line no-control-regex
-const UNUSUAL_PATH = /[\u0000-\u001f\u007f,\uFFFD\u200E\u200F\u202A-\u202E\u2066-\u2069]/;
+const UNUSUAL_PATH = /[\u0000-\u001f\u007f,\uFFFD\u061C\u200B-\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069\uFEFF]/;
 /** Paths whose change deserves a second look in the dialog: they steer GitHub or git itself. */
 const SENSITIVE_PATH = /^(?:\.github\/|\.gitattributes$|\.gitmodules$|(?:.*\/)?\.gitattributes$)/;
 
@@ -250,12 +252,16 @@ export function forkPushUrl(remoteUrl: string, repo: string, fork: string): stri
   return githubRepoFromUrl(url)?.toLowerCase() === fork.toLowerCase() ? url : null;
 }
 
-/** The host an ssh or https remote URL names (an SSH alias as written), lowercased, or null. */
+/**
+ * The host an ssh or https remote URL names (an SSH alias as written),
+ * lowercased, or null. Cut as git cuts it, never read by a URL parser alone:
+ * `urlAuthority` is null when the two would name different hosts.
+ */
 export function remoteHostOf(url: string): string | null {
   const check = checkRemoteUrl(url);
   if (!check.ok || (check.kind !== 'ssh' && check.kind !== 'https')) return null;
   if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(check.url)) {
-    try { return new URL(check.url).hostname.toLowerCase().replace(/^\[|\]$/g, '') || null; } catch { return null; }
+    return urlAuthority(check.url)?.host.replace(/^\[|\]$/g, '') || null;
   }
   const m = /^(?:[^@/:]+@)?([^@/:[\]]+):/.exec(check.url);
   return m ? m[1]!.toLowerCase() : null;

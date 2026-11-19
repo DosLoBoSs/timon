@@ -29,6 +29,24 @@ test('the repository of a GitHub push URL, ssh alias included', () => {
   assert.equal(githubRepoFromUrl('/srv/git/app.git'), null);
   assert.equal(githubRepoFromUrl('https://github.com/acme'), null);
   assert.equal(githubRepoFromUrl('git@github.com:../app.git'), null);
+  // A token stored outside Timon still names its repository.
+  assert.equal(githubRepoFromUrl('https://x-access-token:ghp_0123456789abcdef0123@github.com/acme/app.git'), 'acme/app');
+});
+
+test('the repository of a URL git would push to another host than it shows is unknown', () => {
+  for (const url of [
+    'https://github.com\\@evil.example/acme/app.git',
+    'https://github.com\\\\@evil.example/acme/app.git',
+    'HTTPS://GITHUB.COM\\@EVIL.EXAMPLE/acme/app.git',
+    'ssh://evil.example%2F@github.com/acme/app.git',
+    'ssh://git@evil.example@github.com/acme/app.git',
+    'https://github%2Ecom/acme/app.git',
+    'https://evil.example#@github.com/acme/app.git',
+    'https://127.1/acme/app.git',
+    'github.com\\@evil.example:acme/app.git',
+  ]) {
+    assert.equal(githubRepoFromUrl(url), null, url);
+  }
 });
 
 test('a push is never forced, whatever arguments are tried', () => {

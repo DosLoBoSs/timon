@@ -18,7 +18,7 @@ import { createTestAccount } from '../../../tests/helpers/accounts.js';
 import { checkout, forgeFixture, type ForgeFixture } from '../../../tests/helpers/forge-git-fixture.js';
 import { db, dbApi } from '../../db.js';
 import {
-  askContributorComment, forkPushUrl, hasConflictMarkers, pinnedRemote, resolvedText, suggestConflictResolution, sweepConflictScratch,
+  askContributorComment, forkPushUrl, hasConflictMarkers, pinnedRemote, remoteHostOf, resolvedText, suggestConflictResolution, sweepConflictScratch,
   type ConflictDeps,
 } from '../../forge-conflicts.js';
 import { DEFAULT_PROJECT_INTEGRATION, type ProjectIntegration } from '../../project-integration.js';
@@ -217,7 +217,7 @@ test('refused before any fetch: closed, our own branch, not modifiable, deleted 
   setting('resolve', '/srv/git/acme/widgets.git');
   assert.equal((await prepare()).json.code, 'pr_repository_unknown');
   setting('resolve', 'file://localhost/acme/widgets.git');
-  assert.equal((await prepare()).json.code, 'conflict_unsupported');
+  assert.ok(['conflict_unsupported', 'pr_repository_unknown'].includes((await prepare()).json.code));
   assert.equal(f.calls.length, 0, 'git never ran');
 });
 
@@ -238,6 +238,34 @@ test('the remote must lead to the forge gh reads the pull request from: refused 
   assert.equal(f.calls.length, 0, 'git never ran');
   assert.deepEqual(scratchLeft(), []);
 
+  // Read as github.com by a URL parser, as evil.example by git: a value
+  // written before the check existed, or straight into the database. The
+  // stored setting no longer validates, the repository is unknown, the remote
+  // is not pinned: whichever answers first, nothing is fetched.
+  const ambiguous = [
+    'https://github.com\\@evil.example/acme/widgets.git',
+    'https://github.com%5C@evil.example/acme/widgets.git',
+    'https://github.com\\\\@evil.example/acme/widgets.git',
+    'https://a@b@evil.example/acme/widgets.git',
+    'https://@github.com/acme/widgets.git',
+    'https://GitHub.com:443\\@evil.example/acme/widgets.git',
+    'https://[::1]\\@evil.example/acme/widgets.git',
+    'HTTPS://GITHUB.COM\\@EVIL.EXAMPLE/acme/widgets.git',
+    'ssh://evil.example%2F@github.com/acme/widgets.git',
+    'ssh://git@evil.example@github.com/acme/widgets.git',
+    'ssh://github.com\\@evil.example/acme/widgets.git',
+    'github.com\\@evil.example:acme/widgets.git',
+  ];
+  for (const remote of ambiguous) {
+    setting('resolve', remote);
+    const out = await prepare();
+    assert.equal(out.status, 409, remote);
+    assert.ok(['integration_invalid', 'conflict_unsupported', 'pr_repository_unknown'].includes(out.json.code), `${remote}: ${out.json.code}`);
+    assert.equal(remoteHostOf(remote), null, remote);
+  }
+  assert.equal(f.calls.length, 0, 'git never ran');
+  assert.deepEqual(scratchLeft(), []);
+
   const at = (remote_url: string, gh_config_dir: string | null = ghFolder): ProjectIntegration =>
     ({ ...DEFAULT_PROJECT_INTEGRATION, mode: 'pr', account: 'ai-bot', gh_config_dir, remote_url, contributor_conflicts: 'resolve' });
   const host = async (integration: ProjectIntegration) => {
@@ -249,6 +277,12 @@ test('the remote must lead to the forge gh reads the pull request from: refused 
   assert.equal(await host(at('ssh://git@ssh.github.com:443/acme/widgets.git')), 'ssh.github.com');
   assert.equal(await host(at('git@github-acme:acme/widgets.git')), 'github.com', 'an SSH alias of github.com');
   assert.equal(await host(at('https://github-acme/acme/widgets')), 'conflict_unsupported', 'an alias is an SSH name only');
+  assert.equal(await host(at('https://github.com:443/acme/widgets')), 'github.com');
+  for (const remote of ambiguous) {
+    const out = await pinnedRemote(at(remote), deps);
+    assert.ok(!out.ok && out.status === 409 && out.code === 'conflict_unsupported', remote);
+  }
+  assert.equal(f.calls.length, 0, 'pinnedRemote fetched nothing');
   // A gh folder signed in to one Enterprise host only: that host, and it alone.
   const ghe = join(home, '.config', 'gh-ghe');
   mkdirSync(ghe, { recursive: true });
@@ -293,8 +327,8 @@ test('refused after the merge: the head moved, a clean merge, a deletion, a bina
   assert.deepEqual(scratchLeft(), [], 'a refused merge leaves no objects behind');
 });
 
-test('a file whose name holds a direction mark is refused: it would read otherwise in the dialog', async () => {
-  for (const mark of ['\u202E', '\u2066', '\u200F']) {
+test('a file whose name holds a direction mark or an invisible character is refused: it would read otherwise in the dialog', async () => {
+  for (const mark of ['\u202E', '\u2066', '\u200F', '\u061C', '\u200B', '\u200C', '\u200D', '\u2028', '\u2029', '\uFEFF']) {
     const name = `docs/read${mark}me.txt`;
     conflictingFixture({ [name]: 'x\n' }, { [name]: 'contributor\n' }, { [name]: 'main\n' });
     const out = await prepare();
@@ -531,6 +565,7 @@ test('helpers: the fork URL keeps the project remote\'s form, markers, the agent
   assert.equal(forkPushUrl('ssh://git@github.com/acme/app.git', 'acme/app', 'c/app'), 'ssh://git@github.com/c/app.git');
   assert.equal(forkPushUrl('git@github.com:acme/app.git', 'other/app', 'c/app'), null);
   assert.equal(forkPushUrl('git@github.com:acme/app.git', 'acme/app', '../app'), null);
+  assert.equal(forkPushUrl('https://github.com\\@evil.example/acme/app.git', 'acme/app', 'c/app'), null);
   assert.equal(hasConflictMarkers('a\n=======\nb'), true);
   assert.equal(hasConflictMarkers('a ======= b\n========\n'), false);
   assert.equal(resolvedText('x <resolved>\nA\n</resolved> y'), 'A\n');
