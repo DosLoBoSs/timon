@@ -49,7 +49,9 @@ export function ProductPublishDialog(): ReactElement | null {
   const where = t(target.type === 'pull' ? 'forgePublish.onPull' : 'forgePublish.onIssue', { number: target.number });
   const href = safeHref(target.url);
   const canPublish = open && !loading && !problem && account !== null && busy === null;
-  const trigger = proposal ? t(`forgePublish.trigger.${proposal.trigger}`) : t('forgePublish.trigger.person');
+  const trigger = !proposal ? t('forgePublish.trigger.person')
+    : proposal.trigger === 'plugin' ? t('forgePublish.trigger.plugin', { plugin: proposal.plugin ?? '?' })
+      : t(`forgePublish.trigger.${proposal.trigger}`);
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) host.close(); }}>
@@ -87,7 +89,9 @@ export function ProductPublishDialog(): ReactElement | null {
               </div>
             )}
             {proposal && proposal.trigger !== 'person' && open && (
-              <p className="text-[11px] text-muted-foreground">{t('forgePublish.preparedHint')}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {t(proposal.trigger === 'plugin' ? 'forgePublish.preparedByPlugin' : 'forgePublish.preparedHint')}
+              </p>
             )}
             {problem && problem !== 'empty' && writing && (
               <p className="text-[11.5px] text-red-600 dark:text-red-400">{t(`forgePublish.problem.${problem}`)}</p>
