@@ -204,7 +204,7 @@ test('a project without a GitHub repository or an account gets no proposal, and 
 
 test('publishing checks the account first: another login is refused and nothing is written', async () => {
   const proposal = await propose(330);
-  login = 'PublikoFR';
+  login = 'other-account';
   const before = posts().length;
   const res = await call('POST', `/api/projects/acme/forge-proposals/${proposal.id}/publish`, 'person', {});
   assert.equal(res.status, 409);
