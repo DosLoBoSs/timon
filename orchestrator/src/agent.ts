@@ -1876,7 +1876,7 @@ function chatAttachmentsFolder(missionId: string): string | null {
  * into, the plugin packages its MCP servers run from, and the folder its chat
  * attachments were saved to. Every path is checked again by `resolveFence`.
  */
-function missionFenceTarget(input: {
+export function missionFenceTarget(input: {
   missionId: string;
   agentName: string;
   project: string;
