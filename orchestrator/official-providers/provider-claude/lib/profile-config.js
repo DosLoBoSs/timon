@@ -16,9 +16,12 @@ const SLUG_MAX = 200;
 /** A session id as the CLI mints them (a UUID), held to one safe path segment. */
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 
-/** Whether a launch of `profile` with no account gets a config folder of its own rather than `~/.claude`. */
+/**
+ * Whether a launch of `profile` with no account gets a config folder of its own rather than `~/.claude`.
+ * By the id before `@`: an instance of `claude` whose account is not found keeps the CLI's own folder.
+ */
 export function needsOwnConfigDir(profile) {
-  return profile.id !== CLAUDE_PROFILE.id;
+  return profile.id.split('@', 1)[0] !== CLAUDE_PROFILE.id;
 }
 
 /** The 32-bit string hash the CLI appends to a cut slug, in base 36. */

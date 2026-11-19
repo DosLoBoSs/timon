@@ -24,7 +24,9 @@ process.on('exit', () => {
   rmSync(PROJECT, { recursive: true, force: true });
 });
 
-const ctx = createProviderContext({ apiVersion: 18 });
+// The contract the plugin's manifest declares, which `scratch.profile` needs.
+const { timon: { apiVersion } } = JSON.parse(readFileSync(new URL('../../official-providers/provider-claude/package.json', import.meta.url), 'utf8')) as { timon: { apiVersion: number } };
+const ctx = createProviderContext({ apiVersion });
 process.on('exit', () => ctx.cleanup());
 const token = createClaudeToken(ctx.provider);
 ctx.provider.registerProvider(createClaudeProvider(ctx.provider, token, createClaudeUsage(ctx.provider, token)));
