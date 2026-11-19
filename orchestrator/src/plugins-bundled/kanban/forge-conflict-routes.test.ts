@@ -8,7 +8,7 @@ import '../../test-home.js';
 import '../../../tests/helpers/paid-license.js';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,8 +18,10 @@ import { createTestAccount } from '../../../tests/helpers/accounts.js';
 import { checkout, forgeFixture, type ForgeFixture } from '../../../tests/helpers/forge-git-fixture.js';
 import { db, dbApi } from '../../db.js';
 import {
-  askContributorComment, forkPushUrl, hasConflictMarkers, resolvedText, sweepConflictScratch, type ConflictDeps,
+  askContributorComment, forkPushUrl, hasConflictMarkers, pinnedRemote, resolvedText, suggestConflictResolution, sweepConflictScratch,
+  type ConflictDeps,
 } from '../../forge-conflicts.js';
+import { DEFAULT_PROJECT_INTEGRATION, type ProjectIntegration } from '../../project-integration.js';
 import type { ForgeBranchWriter, ForgeCommentWriter, PullRequestBranch } from '../../host/forge.js';
 import { registerForgeBranchRoutes } from './forge-branch-routes.js';
 import { registerForgeProposalRoutes } from './forge-proposal-routes.js';
@@ -44,8 +46,12 @@ let f: ForgeFixture;
 let contrib: string;
 let branchOverride: Partial<PullRequestBranch> = {};
 let commentFails = false;
+/** The fork refuses the credentials of the push. */
+let pushDenied = false;
 const posted: Array<{ number: number; body: string }> = [];
 const suggestions: Array<{ system: string; user: string }> = [];
+/** What `ssh -G` would answer for an alias of the remote. */
+const sshAliases = new Map<string, string>([['github-acme', 'github.com'], ['github-evil', 'evil.example']]);
 let suggestAnswer = '<resolved>\none\nTWO and 2\nthree\n</resolved>';
 
 function branchNow(): PullRequestBranch {
@@ -79,8 +85,14 @@ const deps: ConflictDeps = {
   forge: () => fakeComments,
   branchForge: () => fakeBranches,
   scratchRoot,
-  get scratchGit() { return f.runner; },
+  get scratchGit() {
+    if (!pushDenied) return f.runner;
+    return (args: string[], opts: Parameters<ForgeFixture['runner']>[1]) => (args.includes('push')
+      ? Promise.resolve({ code: 128, stdout: '', stderr: 'ERROR: Permission to contrib/widgets.git denied to someone-else.\nfatal: Could not read from remote repository.' })
+      : f.runner(args, opts));
+  },
   suggest: async (input) => { suggestions.push(input); return suggestAnswer; },
+  sshHostName: async (alias) => sshAliases.get(alias) ?? null,
 };
 
 const app = express();
@@ -130,6 +142,7 @@ beforeEach(() => {
   setting('resolve');
   branchOverride = {};
   commentFails = false;
+  pushDenied = false;
   posted.length = 0;
   suggestions.length = 0;
   suggestAnswer = '<resolved>\none\nTWO and 2\nthree\n</resolved>';
@@ -208,6 +221,44 @@ test('refused before any fetch: closed, our own branch, not modifiable, deleted 
   assert.equal(f.calls.length, 0, 'git never ran');
 });
 
+test('the remote must lead to the forge gh reads the pull request from: refused before any fetch', async () => {
+  for (const remote of [
+    'git@evil.example:acme/widgets.git',
+    'https://evil.example/acme/widgets.git',
+    'ssh://git@evil.example/acme/widgets.git',
+    'git@github-evil:acme/widgets.git',
+    'git@unknown-alias:acme/widgets.git',
+    'https://github.com.evil.example/acme/widgets',
+  ]) {
+    setting('resolve', remote);
+    const out = await prepare();
+    assert.equal(out.status, 409, remote);
+    assert.equal(out.json.code, 'conflict_unsupported', remote);
+  }
+  assert.equal(f.calls.length, 0, 'git never ran');
+  assert.deepEqual(scratchLeft(), []);
+
+  const at = (remote_url: string, gh_config_dir: string | null = ghFolder): ProjectIntegration =>
+    ({ ...DEFAULT_PROJECT_INTEGRATION, mode: 'pr', account: 'ai-bot', gh_config_dir, remote_url, contributor_conflicts: 'resolve' });
+  const host = async (integration: ProjectIntegration) => {
+    const out = await pinnedRemote(integration, deps);
+    return out.ok ? out.host : out.code;
+  };
+  assert.equal(await host(at('git@github.com:acme/widgets.git')), 'github.com');
+  assert.equal(await host(at('https://GitHub.com/acme/widgets')), 'github.com');
+  assert.equal(await host(at('ssh://git@ssh.github.com:443/acme/widgets.git')), 'ssh.github.com');
+  assert.equal(await host(at('git@github-acme:acme/widgets.git')), 'github.com', 'an SSH alias of github.com');
+  assert.equal(await host(at('https://github-acme/acme/widgets')), 'conflict_unsupported', 'an alias is an SSH name only');
+  // A gh folder signed in to one Enterprise host only: that host, and it alone.
+  const ghe = join(home, '.config', 'gh-ghe');
+  mkdirSync(ghe, { recursive: true });
+  writeFileSync(join(ghe, 'hosts.yml'), 'ghe.example.com:\n    users:\n        ai-bot:\n    user: ai-bot\n');
+  assert.equal(await host(at('git@ghe.example.com:acme/widgets.git', ghe)), 'ghe.example.com');
+  assert.equal(await host(at('git@github.com:acme/widgets.git', ghe)), 'conflict_unsupported');
+  writeFileSync(join(ghe, 'hosts.yml'), 'ghe.example.com:\n    user: a\ngithub.com:\n    user: b\n');
+  assert.equal(await host(at('git@ghe.example.com:acme/widgets.git', ghe)), 'conflict_unsupported', 'gh reaches github.com');
+});
+
 test('refused after the merge: the head moved, a clean merge, a deletion, a binary, a symbolic link, too many or too large files', async () => {
   // GitHub reports a head the base repository does not serve.
   branchOverride = { headSha: 'f'.repeat(40) };
@@ -240,6 +291,17 @@ test('refused after the merge: the head moved, a clean merge, a deletion, a bina
     assert.match(String(out.json.error), reason);
   }
   assert.deepEqual(scratchLeft(), [], 'a refused merge leaves no objects behind');
+});
+
+test('a file whose name holds a direction mark is refused: it would read otherwise in the dialog', async () => {
+  for (const mark of ['\u202E', '\u2066', '\u200F']) {
+    const name = `docs/read${mark}me.txt`;
+    conflictingFixture({ [name]: 'x\n' }, { [name]: 'contributor\n' }, { [name]: 'main\n' });
+    const out = await prepare();
+    assert.equal(out.json.code, 'conflict_unsupported', JSON.stringify(mark));
+    assert.match(String(out.json.error), /unusual name/);
+  }
+  assert.deepEqual(scratchLeft(), []);
 });
 
 test('a symbolic link in conflict is GitHub\'s to resolve', { skip: process.platform === 'win32' }, async () => {
@@ -375,7 +437,7 @@ test('a stored resolution that no longer rebuilds the commit shown is never push
   assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.head);
 });
 
-test('switched back to "ask", closed or locked before publishing: nothing is pushed', async () => {
+test('switched back to "ask", closed, locked or retargeted before publishing: nothing is pushed', async () => {
   const r = await proposedResolution();
   setting('ask');
   assert.equal((await publish(r.proposalId)).json.code, 'conflict_resolution_disabled');
@@ -386,6 +448,49 @@ test('switched back to "ask", closed or locked before publishing: nothing is pus
   assert.equal((await publish(r.proposalId)).json.code, 'forge_pull_closed');
   branchOverride = { headRepository: 'other/widgets' };
   assert.equal((await publish(r.proposalId)).json.code, 'forge_conflict_changed');
+  branchOverride = { baseRef: 'release' };
+  const retargeted = await publish(r.proposalId);
+  assert.equal(retargeted.json.code, 'forge_conflict_changed');
+  assert.match(retargeted.json.proposal.error.reason, /targets another branch/);
+  assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.head);
+});
+
+test('the publication shows where the commit goes, and goes nowhere else', async () => {
+  const r = await proposedResolution();
+  const view = await call('GET', `/api/projects/acme/forge-proposals/${r.proposalId}`, 'person');
+  assert.equal(view.json.proposal.details.push_url, 'git@github.com:contrib/widgets.git');
+  assert.equal(view.json.proposal.details.push_host, 'github.com');
+  assert.equal(view.json.proposal.details.push_repository, 'contrib/widgets');
+  const pushes = () => f.calls.filter((a) => a.includes('push') || a.includes('fetch')).length;
+  const before = pushes();
+  setting('resolve', 'git@evil.example:acme/widgets.git');
+  assert.equal((await publish(r.proposalId)).json.code, 'conflict_unsupported');
+  // Still github.com, but not the URL the person saw.
+  setting('resolve', 'ssh://git@github.com/acme/widgets.git');
+  assert.equal((await publish(r.proposalId)).json.code, 'forge_conflict_changed');
+  assert.equal(pushes(), before, 'nothing fetched or pushed');
+  assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.head);
+  setting('resolve');
+  assert.equal((await publish(r.proposalId)).json.proposal.state, 'published');
+  assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.commit);
+});
+
+test('a suggestion whose folder cannot be made releases its lock', async () => {
+  const { json } = await prepare();
+  const id = json.conflict.id as string;
+  const out = await suggestConflictResolution('acme', id, 'a.txt', { ...deps, scratchRoot: join(home, 'gone', 'root') });
+  assert.equal(out.ok, false);
+  assert.equal(!out.ok && out.code, 'conflict_suggest_failed');
+  const again = await call('POST', `/api/projects/acme/forge-conflicts/${id}/suggest`, 'person', { path: 'a.txt' });
+  assert.equal(again.status, 200, JSON.stringify(again.json));
+});
+
+test('a push refused for its credentials says which key or account to change', async () => {
+  const r = await proposedResolution();
+  pushDenied = true;
+  const ssh = await publish(r.proposalId);
+  assert.equal(ssh.json.code, 'forge_publish_failed');
+  assert.match(ssh.json.proposal.error.reason, /SSH alias whose key belongs to ai-bot, or at the https URL/);
   assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.head);
 });
 

@@ -270,3 +270,41 @@ test('only a signed-in person lets Timon resolve conflicts; anyone may turn it b
   assert.equal(off.status, 200);
   assert.equal(((await off.json()) as { integration: { contributor_conflicts: string } }).integration.contributor_conflicts, 'ask');
 });
+
+test('while Timon resolves conflicts, where it fetches and pushes and as whom is a person\'s to change', async () => {
+  const PUT = (who: 'daemon' | 'mission' | 'plugin' | 'person', body: Record<string, unknown>) =>
+    call('PUT', '/api/projects/acme/integration', who, body);
+  const stored = async () => ((await (await call('GET', '/api/projects/acme/integration', 'person')).json()) as {
+    integration: Record<string, unknown>;
+  }).integration;
+  assert.equal((await PUT('person', { contributor_conflicts: 'resolve' })).status, 200);
+  const before = await stored();
+  const otherGh = join(home, '.config', 'gh-other');
+  mkdirSync(otherGh, { recursive: true });
+  const changes: Array<Record<string, unknown>> = [
+    { remote_url: 'git@evil.example:acme/widgets.git' },
+    { account: 'someone-else' },
+    { gh_config_dir: otherGh },
+    { mode: 'local' },
+    { remote: 'upstream' },
+    { contributor_conflicts: 'resolve', remote_url: 'https://github.com/acme/widgets' },
+  ];
+  for (const who of ['daemon', 'mission', 'plugin'] as const) {
+    for (const change of changes) {
+      const res = await PUT(who, change);
+      assert.equal(res.status, 403, `${who} ${JSON.stringify(change)}`);
+      assert.equal(((await res.json()) as { code: string }).code, 'person_required');
+    }
+  }
+  assert.deepEqual(await stored(), before, 'nothing changed');
+  // The same values sent again, and the other fields, stay open.
+  assert.equal((await PUT('daemon', { remote_url: before.remote_url, account: 'ai-bot', mode: 'pr', remote: 'origin' })).status, 200);
+  assert.equal((await PUT('mission', { branch_prefix: 'sec/' })).status, 200);
+  // A person changes them.
+  assert.equal((await PUT('person', { remote_url: 'https://github.com/acme/widgets' })).status, 200);
+  assert.equal((await stored()).remote_url, 'https://github.com/acme/widgets');
+  // Switched off, they are open again: no push follows without a person turning it back on.
+  assert.equal((await PUT('daemon', { contributor_conflicts: 'ask' })).status, 200);
+  assert.equal((await PUT('daemon', { remote_url: before.remote_url, branch_prefix: 'feat/' })).status, 200);
+  assert.deepEqual(await stored(), { ...before, contributor_conflicts: 'ask' });
+});
