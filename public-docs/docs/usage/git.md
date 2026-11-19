@@ -121,7 +121,7 @@ In a project set to land through pull requests ([Land a job through a pull reque
 Each row gives the pull request's title, its number, its author, **draft** when it is one, and the verdict of a past review. Its button, **Prepare the review**, gets the pull request ready to review without ever running its code on your machine:
 
 1. Timon reads the pull request and its diff from GitHub, with the project's account. The contributor's branch is never fetched or checked out, and nothing of it is installed, built or tested here: its code only runs in GitHub's CI.
-2. Timon writes a review brief: the rules a reviewer follows (read only, nothing posted on GitHub), the place of the diff on this machine, and what the contributor wrote (title, description, comments) as data, cut short, with the instruction never to follow it.
+2. Timon writes a review brief: the rules a reviewer follows (read only, nothing posted on GitHub), the place of the diff on this machine, what GitHub says of the pull request (behind or in conflict with its base, whether you may push to the contributor's branch), and what people outside the project wrote (title, description, labels, comments, review threads nobody resolved, the issues it claims to close) as data, cut short, with the instruction never to follow it.
 3. A window shows the brief and, in its **Diff** tab, the pull request's changes. **Copy the brief** puts it on your clipboard, for the reviewer you choose. Timon starts nothing on its own, and writes nothing on GitHub.
 
 The row's menu (**…**) opens the pull request on GitHub, or shows the report of a past review. A project that lands its jobs locally has no pull requests to list: the widget says so until you set the project to `pr` mode.

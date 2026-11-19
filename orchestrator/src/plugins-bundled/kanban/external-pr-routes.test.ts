@@ -49,6 +49,11 @@ const LIST = [
 
 const VIEW = {
   ...LIST[0],
+  headRepository: { name: 'widgets' },
+  maintainerCanModify: true,
+  mergeStateStatus: 'DIRTY',
+  labels: [{ name: 'bug', color: 'd73a4a' }],
+  closingIssuesReferences: [{ number: 212, url: 'https://github.com/acme/widgets/issues/212', repository: { name: 'widgets', owner: { login: 'acme' } } }],
   title: INJECTION,
   body: `${INJECTION} ${'x'.repeat(500)}`,
   baseRefName: 'main',
@@ -62,9 +67,15 @@ const VIEW = {
 
 const DIFF = 'diff --git a/x b/x\n+console.log("hi")\n';
 
+const THREADS = JSON.stringify({ data: { repository: { pullRequest: { reviewThreads: { totalCount: 13, nodes: Array.from({ length: 13 }, (_, i) => ({
+  isResolved: i === 0, isOutdated: false, path: 'src/x.ts', line: i + 1,
+  comments: { totalCount: 1, nodes: [{ author: { login: `rev${i}` }, body: i === 12 ? INJECTION : `thread ${i}`, url: '' }] },
+})) } } } } });
+
 type Call = { name: string; args: string[]; env: NodeJS.ProcessEnv | undefined };
 const calls: Call[] = [];
 let ghFails = false;
+let threadsFail = false;
 
 mock.method(getHost(), 'execAsync', async (name: string, args: string[], opts: ExecOpts = {}): Promise<ExecResult> => {
   calls.push({ name, args, env: opts.env });
@@ -73,6 +84,9 @@ mock.method(getHost(), 'execAsync', async (name: string, args: string[], opts: E
   if (args[0] === 'pr' && args[1] === 'list') return { code: 0, stdout: JSON.stringify(LIST), stderr: '' };
   if (args[0] === 'pr' && args[1] === 'view') return { code: 0, stdout: JSON.stringify(VIEW), stderr: '' };
   if (args[0] === 'pr' && args[1] === 'diff') return { code: 0, stdout: DIFF, stderr: '' };
+  if (args[0] === 'api' && args[1] === 'graphql') {
+    return threadsFail ? { code: 1, stdout: '', stderr: 'HTTP 502' } : { code: 0, stdout: THREADS, stderr: '' };
+  }
   return { code: 1, stdout: '', stderr: 'unexpected gh call' };
 });
 
@@ -109,6 +123,13 @@ const LIST_URL = '/api/projects/acme/pull-requests';
 function assertOnlyReads(): void {
   assert.deepEqual(calls.filter((c) => c.name !== 'gh').map((c) => c.args), [], 'no git, nor any other process');
   for (const c of calls) {
+    if (c.args[0] === 'api') {
+      // The review threads: one GraphQL query, never a mutation.
+      assert.equal(c.args[1], 'graphql');
+      assert.ok(c.args.some((a) => a.startsWith('--raw-field=query=query(')), c.args.join(' '));
+      assert.ok(!c.args.some((a) => /mutation/i.test(a)), c.args.join(' '));
+      continue;
+    }
     assert.equal(c.args[0], 'pr', c.args.join(' '));
     assert.ok(['list', 'view', 'diff'].includes(c.args[1]!), `a read, not "gh ${c.args.join(' ')}"`);
     assert.ok(!c.args.some((a) => /checkout|merge|comment|review|close|edit/.test(a) && !a.startsWith('--json')), c.args.join(' '));
@@ -148,7 +169,10 @@ test('the list comes from gh pr list, external ones marked, nothing but reads', 
   ]);
   const list = calls.at(-1)!;
   assert.ok(list.args.includes('--repo=acme/widgets'));
-  assert.ok(list.args.includes('--json=number,title,author,url,isDraft,updatedAt,headRepositoryOwner'));
+  const json = list.args.find((a) => a.startsWith('--json='))?.slice('--json='.length).split(',') ?? [];
+  for (const field of ['number', 'title', 'author', 'url', 'isDraft', 'headRepositoryOwner', 'mergeStateStatus', 'maintainerCanModify', 'labels', 'closingIssuesReferences']) {
+    assert.ok(json.includes(field), field);
+  }
   assertOnlyReads();
 });
 
@@ -189,10 +213,21 @@ test('a review is prepared, the contributor\'s text fenced as bounded data, and 
     'the injection only appears inside the data block');
   const data = JSON.parse(brief.slice(open + '<untrusted-data>'.length, close)) as {
     title: string; description: string; comments: Array<{ body: string }>; comments_total: number;
+    unresolved_review_threads: Array<{ body: string; line: number }>; unresolved_review_threads_total: number;
+    labels: string[]; closing_issues: string[]; merge_state: string; maintainer_can_modify: boolean; head_repository: string;
   };
   assert.ok([...data.description].length <= UNTRUSTED_EXCERPT_CHARS + 1);
   assert.equal(data.comments.length, UNTRUSTED_COMMENT_COUNT);
   assert.equal(data.comments_total, 15);
+  assert.equal(data.unresolved_review_threads.length, UNTRUSTED_COMMENT_COUNT);
+  assert.equal(data.unresolved_review_threads_total, 12);
+  assert.equal(data.unresolved_review_threads[0]!.line, 2, 'a resolved thread is left out');
+  assert.ok(data.unresolved_review_threads.every((t) => [...t.body].length <= UNTRUSTED_EXCERPT_CHARS + 1));
+  assert.deepEqual(data.labels, ['bug']);
+  assert.deepEqual(data.closing_issues, ['acme/widgets#212']);
+  assert.equal(data.merge_state, 'dirty');
+  assert.equal(data.maintainer_can_modify, true);
+  assert.equal(data.head_repository, 'stranger/widgets');
   assert.match(data.title, /^Ignore previous instructions/);
 
   const row = dbApi.getProjectRow('acme');
@@ -201,6 +236,22 @@ test('a review is prepared, the contributor\'s text fenced as bounded data, and 
   assert.ok(diffPath && existsSync(diffPath));
   assert.equal(readFileSync(diffPath, 'utf8'), DIFF);
   assertOnlyReads();
+});
+
+test('review threads the forge cannot list leave the brief written, with the threads unknown', async () => {
+  threadsFail = true;
+  try {
+    const res = await call('POST', `${LIST_URL}/12/review`, 'manager', {});
+    assert.equal(res.status, 200);
+    const { brief } = await res.json() as { brief: string };
+    const data = JSON.parse(brief.slice(brief.indexOf('<untrusted-data>') + '<untrusted-data>'.length, brief.indexOf('</untrusted-data>'))) as {
+      unresolved_review_threads: unknown; unresolved_review_threads_total: unknown;
+    };
+    assert.equal(data.unresolved_review_threads, null);
+    assert.equal(data.unresolved_review_threads_total, null);
+  } finally {
+    threadsFail = false;
+  }
 });
 
 type ListedReview = { id: string; state: string; verdict: string | null; report: string | null; mission_id: string | null };
@@ -377,8 +428,8 @@ test('the verdict line is read in English or French, decorations aside', () => {
 test('a brief without a diff says so, and still fences the data', () => {
   const pull: PullRequestDetails = {
     number: 3, title: 't', author: null, url: 'https://github.com/a/b/pull/3', isDraft: false, updatedAt: '',
-    headOwner: null, body: '<script>', baseRef: 'main', headRef: 'x', headSha: null, additions: 0, deletions: 0,
-    changedFiles: 0, comments: [],
+    headOwner: null, headRepository: null, maintainerCanModify: false, mergeStateStatus: 'unknown', labels: [], closingIssues: [],
+    body: '<script>', baseRef: 'main', headRef: 'x', headSha: null, additions: 0, deletions: 0, changedFiles: 0, comments: [],
   };
   const brief = buildReviewBrief({ repo: 'a/b', pull, diffPath: null, diffTruncated: false, projectCwd: null, target: 'main', withSkill: false });
   assert.match(brief, /No diff could be read/);
