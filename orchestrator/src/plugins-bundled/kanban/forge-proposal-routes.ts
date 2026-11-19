@@ -54,7 +54,7 @@ function zodDetail(err: z.ZodError): string {
 }
 
 /** One literal per code, so the webview's messages can be checked against them. */
-function refusalBody(out: ForgeProposalRefusal) {
+export function refusalBody(out: ForgeProposalRefusal) {
   const params = { detail: out.reason };
   const extra = out.proposal ? { proposal: out.proposal } : {};
   switch (out.code) {
@@ -71,6 +71,33 @@ function refusalBody(out: ForgeProposalRefusal) {
     case 'forge_account_unknown': return { ...apiError('forge_account_unknown', out.reason, params), ...extra };
     case 'forge_account_mismatch': return { ...apiError('forge_account_mismatch', out.reason, params), ...extra };
     case 'forge_publish_failed': return { ...apiError('forge_publish_failed', out.reason, params), ...extra };
+    case 'forge_proposal_not_editable': return { ...apiError('forge_proposal_not_editable', out.reason), ...extra };
+    case 'forge_read_failed': return { ...apiError('forge_read_failed', out.reason, params), ...extra };
+    case 'forge_pull_closed': return { ...apiError('forge_pull_closed', out.reason, params), ...extra };
+    case 'forge_pull_not_behind': return { ...apiError('forge_pull_not_behind', out.reason, params), ...extra };
+    case 'forge_pull_not_conflicting': return { ...apiError('forge_pull_not_conflicting', out.reason, params), ...extra };
+    case 'forge_pull_not_fork': return { ...apiError('forge_pull_not_fork', out.reason), ...extra };
+    case 'forge_head_unknown': return { ...apiError('forge_head_unknown', out.reason), ...extra };
+    case 'forge_head_moved': return { ...apiError('forge_head_moved', out.reason), ...extra };
+    case 'forge_branch_not_modifiable': return { ...apiError('forge_branch_not_modifiable', out.reason, params), ...extra };
+    case 'forge_branch_conflict': return { ...apiError('forge_branch_conflict', out.reason), ...extra };
+    case 'forge_branch_forbidden': return { ...apiError('forge_branch_forbidden', out.reason, params), ...extra };
+    case 'forge_push_rejected': return { ...apiError('forge_push_rejected', out.reason, params), ...extra };
+    case 'forge_conflict_changed': return { ...apiError('forge_conflict_changed', out.reason, params), ...extra };
+    case 'conflict_resolution_disabled': return { ...apiError('conflict_resolution_disabled', out.reason), ...extra };
+    case 'conflict_not_found': return { ...apiError('conflict_not_found', out.reason), ...extra };
+    case 'conflict_closed': return { ...apiError('conflict_closed', out.reason, params), ...extra };
+    case 'conflict_invalid': return { ...apiError('conflict_invalid', out.reason, params), ...extra };
+    case 'conflict_git_unavailable': return { ...apiError('conflict_git_unavailable', out.reason, params), ...extra };
+    case 'conflict_fetch_failed': return { ...apiError('conflict_fetch_failed', out.reason, params), ...extra };
+    case 'conflict_fetch_too_large': return { ...apiError('conflict_fetch_too_large', out.reason, params), ...extra };
+    case 'conflict_none': return { ...apiError('conflict_none', out.reason), ...extra };
+    case 'conflict_unsupported': return { ...apiError('conflict_unsupported', out.reason, params), ...extra };
+    case 'conflict_markers_left': return { ...apiError('conflict_markers_left', out.reason, params), ...extra };
+    case 'conflict_unresolved': return { ...apiError('conflict_unresolved', out.reason, params), ...extra };
+    case 'conflict_outside_files': return { ...apiError('conflict_outside_files', out.reason, params), ...extra };
+    case 'conflict_suggest_unavailable': return { ...apiError('conflict_suggest_unavailable', out.reason, params), ...extra };
+    case 'conflict_suggest_failed': return { ...apiError('conflict_suggest_failed', out.reason, params), ...extra };
   }
 }
 
@@ -104,7 +131,7 @@ function reader(req: Request, res: Response): Parsed | null {
 }
 
 /** Writing: a person at a screen holding `projects:manage`; returns their id. */
-function person(req: Request, res: Response): (Parsed & { userId: string }) | null {
+export function personAt(req: Request, res: Response): { userId: string } | null {
   const auth = requireAuth(req, res);
   if (!auth) return null;
   if (!isPersonAuth(auth) || !auth.user) {
@@ -112,8 +139,14 @@ function person(req: Request, res: Response): (Parsed & { userId: string }) | nu
     return null;
   }
   if (rejectIfDenied(req, res, 'projects:manage')) return null;
+  return { userId: auth.user.id };
+}
+
+function person(req: Request, res: Response): (Parsed & { userId: string }) | null {
+  const who = personAt(req, res);
+  if (!who) return null;
   const params = parseParams(req, res);
-  return params ? { ...params, userId: auth.user.id } : null;
+  return params ? { ...params, userId: who.userId } : null;
 }
 
 function failed(res: Response, err: unknown): void {

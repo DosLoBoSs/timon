@@ -22,17 +22,27 @@
  *
  * What `gh` prints reaches a row, an answer or a log only through
  * `redactedOutput`, with the config folder masked as well.
+ *
+ * Three kinds of write: a comment (`comment`), the update of a pull request's
+ * branch GitHub performs (`update_branch`, `forge-branch-update.ts`), and the
+ * commit that resolves a contributor's conflict, pushed fast-forward to their
+ * branch (`conflict_push`, `forge-conflicts.ts`). The last two carry a
+ * `payload` the daemon wrote when it prepared them (the head they expect, the
+ * commit they push) and run through the executor their module registers
+ * (`registerForgeProposalExecutor`); the account check above is the same.
  */
 import { randomUUID } from 'node:crypto';
 import { db } from './db.js';
 import { daemonMessage } from './daemon-message.js';
 import { projectRepository, type ExternalPrRefusal } from './external-pr-review.js';
 import {
-  githubForge, ISSUE_COMMENT_LIMIT, redactedOutput, type ForgeCommentWriter, type ForgeRunners,
+  githubForge, ISSUE_COMMENT_LIMIT, redactedOutput,
+  type ForgeBranchWriter, type ForgeCommentWriter, type ForgeRunners, type GitRunner,
 } from './host/forge.js';
+import type { ProjectIntegration } from './project-integration.js';
 import { createNotification, resolveAnchor } from './notifications.js';
 
-export const FORGE_PROPOSAL_KINDS = ['comment'] as const;
+export const FORGE_PROPOSAL_KINDS = ['comment', 'update_branch', 'conflict_push'] as const;
 export type ForgeProposalKind = (typeof FORGE_PROPOSAL_KINDS)[number];
 
 export const FORGE_PROPOSAL_TARGETS = ['issue', 'pull'] as const;
@@ -62,6 +72,8 @@ export type ForgeProposalRow = {
   trigger: ForgeProposalTrigger;
   idem_key: string;
   source_ref: string | null;
+  /** JSON the daemon wrote for a write other than a comment, else null. */
+  payload: string | null;
   created_by: string | null;
   edited_by: string | null;
   published_by: string | null;
@@ -89,6 +101,10 @@ export type ForgeProposalView = {
   plugin: string | null;
   key: string;
   source_ref: string | null;
+  /** What a branch update or a conflict push runs with (`payload`), else null. */
+  details: Record<string, unknown> | null;
+  /** Whether a person may change the text before publishing. */
+  editable: boolean;
   /** The account that published it, once published. */
   account: string | null;
   url: string | null;
@@ -111,7 +127,34 @@ export type ForgeProposalRefusalCode =
   | 'forge_account_unset'
   | 'forge_account_unknown'
   | 'forge_account_mismatch'
-  | 'forge_publish_failed';
+  | 'forge_publish_failed'
+  | 'forge_proposal_not_editable'
+  | 'forge_read_failed'
+  | 'forge_pull_closed'
+  | 'forge_pull_not_behind'
+  | 'forge_pull_not_conflicting'
+  | 'forge_pull_not_fork'
+  | 'forge_head_unknown'
+  | 'forge_head_moved'
+  | 'forge_branch_not_modifiable'
+  | 'forge_branch_conflict'
+  | 'forge_branch_forbidden'
+  | 'forge_push_rejected'
+  | 'forge_conflict_changed'
+  | 'conflict_resolution_disabled'
+  | 'conflict_not_found'
+  | 'conflict_closed'
+  | 'conflict_invalid'
+  | 'conflict_git_unavailable'
+  | 'conflict_fetch_failed'
+  | 'conflict_fetch_too_large'
+  | 'conflict_none'
+  | 'conflict_unsupported'
+  | 'conflict_markers_left'
+  | 'conflict_unresolved'
+  | 'conflict_outside_files'
+  | 'conflict_suggest_unavailable'
+  | 'conflict_suggest_failed';
 
 export type ForgeProposalRefusal = {
   ok: false;
@@ -125,6 +168,12 @@ export type ForgeProposalRefusal = {
 export type ForgeProposalDeps = {
   /** Stands in for `gh` in tests: nothing in the suite reaches GitHub. */
   forge?: (configDir: string | null) => ForgeCommentWriter;
+  /** Same, for the branch of a pull request (read, update). */
+  branchForge?: (configDir: string | null) => ForgeBranchWriter;
+  /** Stands in for git in the scratch repository of a conflict resolution. */
+  scratchGit?: GitRunner;
+  /** Where scratch repositories go; `TIMON_HOME/tmp/forge-conflicts` by default. */
+  scratchRoot?: string;
   runners?: ForgeRunners;
   now?: () => number;
 };
@@ -179,6 +228,23 @@ function pluginOf(row: ForgeProposalRow): string | null {
   return row.trigger === 'plugin' && row.created_by?.startsWith(PLUGIN_AUTHOR) ? row.created_by.slice(PLUGIN_AUTHOR.length) : null;
 }
 
+function detailsOf(row: ForgeProposalRow): Record<string, unknown> | null {
+  if (!row.payload) return null;
+  try {
+    const parsed: unknown = JSON.parse(row.payload);
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch { return null; }
+}
+
+/** The payload of a proposal, as its executor reads it. */
+export function proposalPayload(row: ForgeProposalRow): Record<string, unknown> {
+  return detailsOf(row) ?? {};
+}
+
+function editable(kind: ForgeProposalKind): boolean {
+  return executors.get(kind)?.editable ?? kind === 'comment';
+}
+
 export function viewOf(row: ForgeProposalRow): ForgeProposalView {
   return {
     id: row.id,
@@ -192,6 +258,8 @@ export function viewOf(row: ForgeProposalRow): ForgeProposalView {
     plugin: pluginOf(row),
     key: row.idem_key,
     source_ref: row.source_ref,
+    details: detailsOf(row),
+    editable: editable(row.kind),
     account: row.account,
     url: row.result_url,
     error: row.error_code ? { code: row.error_code, reason: row.error } : null,
@@ -218,8 +286,8 @@ const openPersonDraftStmt = db.prepare(`
 `);
 const insertStmt = db.prepare(`
   INSERT INTO forge_proposals
-    (id, project, repo, kind, target_type, target_number, body, state, trigger, idem_key, source_ref, created_by, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)
+    (id, project, repo, kind, target_type, target_number, body, state, trigger, idem_key, source_ref, payload, created_by, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT (project, idem_key) DO NOTHING
 `);
 const editStmt = db.prepare(`
@@ -299,6 +367,8 @@ export type ProposeInput = {
    *  person's proposal gets one per target instead. */
   key?: string;
   sourceRef?: string | null;
+  /** What a write other than a comment runs with: written by the daemon only. */
+  payload?: Readonly<Record<string, unknown>>;
   /** The person's user id, `pluginAuthor(id)` for a plugin, or null for the daemon. */
   createdBy: string | null;
 };
@@ -321,7 +391,7 @@ export function proposeForgeWrite(input: ProposeInput, deps: ForgeProposalDeps =
   if (!where.ok) return repositoryRefusal(where);
   const repo = where.value.repo;
 
-  if (input.trigger === 'person') {
+  if (input.trigger === 'person' && input.key === undefined) {
     // A second click on the same target opens the draft already waiting.
     const open = openPersonDraftStmt.get(input.project, repo, input.kind, input.target.type, input.target.number) as ForgeProposalRow | undefined;
     if (open) return { ok: true, proposal: open, created: false };
@@ -333,7 +403,7 @@ export function proposeForgeWrite(input: ProposeInput, deps: ForgeProposalDeps =
   const id = randomUUID();
   const inserted = insertStmt.run(
     id, input.project, repo, input.kind, input.target.type, input.target.number, input.body,
-    input.trigger, key, input.sourceRef ?? null, input.createdBy, now, now,
+    input.trigger, key, input.sourceRef ?? null, input.payload ? JSON.stringify(input.payload) : null, input.createdBy, now, now,
   ).changes > 0;
   if (!inserted) {
     const existing = getByKeyStmt.get(input.project, key) as ForgeProposalRow;
@@ -341,15 +411,68 @@ export function proposeForgeWrite(input: ProposeInput, deps: ForgeProposalDeps =
   }
   const row = get(id)!;
   const target = `${repo}#${input.target.number}`;
-  createNotification({
-    type: 'action_required',
-    title: 'A GitHub comment waits for your approval',
-    body: `Read and publish, edit or discard the comment proposed on ${target}.`,
-    anchor: proposalAnchor(input.project, id),
-    message: daemonMessage('forge_proposal_pending', { target }),
-  });
+  createNotification({ type: 'action_required', anchor: proposalAnchor(input.project, id), ...pendingNotice(input.kind, target) });
   console.log(`[forge-proposals] ${input.kind} proposed on ${target} (${id.slice(0, 8)}, ${input.trigger})`);
   return { ok: true, proposal: row, created: true };
+}
+
+function pendingNotice(kind: ForgeProposalKind, target: string) {
+  switch (kind) {
+    case 'comment': return {
+      title: 'A GitHub comment waits for your approval',
+      body: `Read and publish, edit or discard the comment proposed on ${target}.`,
+      message: daemonMessage('forge_proposal_pending', { target }),
+    };
+    case 'update_branch': return {
+      title: 'A branch update waits for your approval',
+      body: `Publish or discard the update of the branch of ${target} on GitHub.`,
+      message: daemonMessage('forge_branch_update_pending', { target }),
+    };
+    case 'conflict_push': return {
+      title: 'A conflict resolution waits for your approval',
+      body: `Read the resolution prepared for ${target}, then publish or discard it.`,
+      message: daemonMessage('forge_conflict_push_pending', { target }),
+    };
+  }
+}
+
+// ─── Writes other than a comment ────────────────────────────────────────────
+
+/** What an executor runs with: a row this process claimed, the account `gh`
+ *  answered for (already checked against the project's), the project's
+ *  setting and the comment writer (a conflict push comments after pushing). */
+export type ForgeProposalExecution = {
+  row: ForgeProposalRow;
+  /** `attempts` before this one: an earlier attempt may have reached the forge. */
+  earlierAttempts: number;
+  login: string;
+  integration: ProjectIntegration;
+  configDir: string | null;
+  comments: ForgeCommentWriter;
+  deps: ForgeProposalDeps;
+  /** `redactedOutput` with the config folder masked too. */
+  scrub: (text: string) => string;
+};
+
+export type ForgeProposalExecutorResult =
+  | { ok: true; url: string; already: boolean }
+  /** `failed: false` puts the proposal back as it was (nothing reached the
+   *  forge), `true` marks it failed. Both can be published again. */
+  | { ok: false; code: ForgeProposalRefusalCode; reason: string; status: number; failed: boolean };
+
+export type ForgeProposalExecutor = {
+  /** Whether a person may change the text (a branch update has none to post). */
+  editable: boolean;
+  execute(run: ForgeProposalExecution): Promise<ForgeProposalExecutorResult>;
+  /** Called once the proposal is discarded: whatever it held goes. */
+  discarded?(row: ForgeProposalRow): void;
+};
+
+const executors = new Map<ForgeProposalKind, ForgeProposalExecutor>();
+
+/** Called by the module that runs a kind of write, when it loads. */
+export function registerForgeProposalExecutor(kind: Exclude<ForgeProposalKind, 'comment'>, executor: ForgeProposalExecutor): void {
+  executors.set(kind, executor);
 }
 
 type Change = { ok: true; proposal: ForgeProposalRow } | ForgeProposalRefusal;
@@ -364,6 +487,7 @@ function closedRefusal(row: ForgeProposalRow): ForgeProposalRefusal {
 export function editForgeProposal(project: string, id: string, body: string, by: string, deps: ForgeProposalDeps = {}): Change {
   const row = getForgeProposal(project, id);
   if (!row) return refuse(404, 'forge_proposal_not_found', 'no proposal has this id in this project');
+  if (!editable(row.kind)) return refuse(409, 'forge_proposal_not_editable', 'this proposal has no text to change', row);
   const bad = bodyProblem(body);
   if (bad) return refuse(400, 'forge_proposal_invalid', bad);
   if (editStmt.run(body, by, (deps.now ?? Date.now)(), id).changes === 0) return closedRefusal(get(id)!);
@@ -377,7 +501,11 @@ export function discardForgeProposal(project: string, id: string, by: string, de
   if (row.state === 'discarded') return { ok: true, proposal: row };
   if (discardStmt.run(by, (deps.now ?? Date.now)(), id).changes === 0) return closedRefusal(get(id)!);
   resolveAnchor(proposalAnchor(row.project, id));
-  return { ok: true, proposal: get(id)! };
+  const discarded = get(id)!;
+  try { executors.get(row.kind)?.discarded?.(discarded); } catch (err) {
+    console.error('[forge-proposals] cleanup after a discard failed:', (err as Error).name);
+  }
+  return { ok: true, proposal: discarded };
 }
 
 export type PublishOutcome = { ok: true; proposal: ForgeProposalRow; already: boolean } | ForgeProposalRefusal;
@@ -444,6 +572,25 @@ export async function publishForgeProposal(
     // GitHub logins ignore case.
     if (login.login.toLowerCase() !== account.toLowerCase()) {
       return release('forge_account_mismatch', `gh signs in as ${login.login}, the project expects ${account}`, 409);
+    }
+
+    if (previous.kind !== 'comment') {
+      const executor = executors.get(previous.kind);
+      if (!executor) return release('forge_publish_failed', 'this kind of write cannot run in this daemon', 501);
+      const out = await executor.execute({
+        row: get(id)!, earlierAttempts: previous.attempts, login: login.login, integration, configDir,
+        comments: forge, deps, scrub: (text) => scrub(text, configDir),
+      });
+      if (!out.ok) {
+        if (!out.failed) return release(out.code, out.reason, out.status);
+        releaseStmt.run('failed', out.code, out.reason, now(), id);
+        console.warn(`[forge-proposals] ${previous.kind} ${id.slice(0, 8)} failed: ${out.code}`);
+        return refuse(out.status, out.code, out.reason, get(id)!);
+      }
+      publishedStmt.run(login.login, by, out.url, now(), now(), id);
+      resolveAnchor(proposalAnchor(row.project, id));
+      console.log(`[forge-proposals] ${previous.kind} ${id.slice(0, 8)} published on ${previous.repo}#${previous.target_number} as ${login.login}`);
+      return { ok: true, proposal: get(id)!, already: out.already };
     }
 
     const marker = proposalMarker(id);

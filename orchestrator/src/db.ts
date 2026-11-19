@@ -2121,6 +2121,13 @@ CREATE TABLE IF NOT EXISTS forge_proposals (
 );
 CREATE INDEX IF NOT EXISTS forge_proposals_project_state ON forge_proposals(project, state);
 `);
+// What a write other than a comment needs to run as it was shown (the head a
+// branch update expects, the commit a conflict resolution pushes): JSON the
+// daemon writes, never a person's or a plugin's text.
+{
+  const proposalCols = (db.prepare(`PRAGMA table_info(forge_proposals)`).all() as { name: string }[]).map((c) => c.name);
+  if (!proposalCols.includes('payload')) db.exec(`ALTER TABLE forge_proposals ADD COLUMN payload TEXT`);
+}
 // What the person who launched a job said of its issues in the Kanban
 // planner (`kanban_plan`, `resolves_issues`): the job resolves them entirely,
 // so its pull request says `Fixes` even for an idea carried by several jobs

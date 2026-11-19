@@ -15,7 +15,9 @@
  *
  * Each pull request of the list comes with its `links` (`forge-links.ts`): the
  * job behind it when it is one of ours, and the ideas, issues and pilot
- * mission the caller may see.
+ * mission the caller may see; and its `gestures` (`forge-branch-update.ts`):
+ * whether its branch can be updated, or its conflict asked of its author or
+ * resolved here, read from the list without another call to the forge.
  */
 import type { Request, Response, Router } from 'express';
 import { z } from 'zod';
@@ -24,7 +26,9 @@ import {
   listPullRequests, prepareReview, readPullRequestDiff,
   type ExternalPrDeps, type ExternalPrRefusal,
 } from '../../external-pr-review.js';
+import { branchGestures } from '../../forge-branch-update.js';
 import { pullRequestLinks } from '../../forge-links.js';
+import { readProjectIntegration } from '../../project-integration.js';
 import { rejectIfDenied, requireAuth, viewerFromRequest } from '../../users/identity.js';
 
 const Params = z.object({
@@ -89,7 +93,13 @@ export function registerExternalPrRoutes(app: Router, deps: ExternalPrDeps = {})
       const out = await listPullRequests(p.slug, deps);
       if (!out.ok) { res.status(out.status).json(refusalBody(out)); return; }
       const links = pullRequestLinks(p.slug, out.repo, out.pulls, viewerFromRequest(req));
-      res.json({ repo: out.repo, pulls: out.pulls.map((pull) => ({ ...pull, links: links.get(pull.number)! })) });
+      const setting = readProjectIntegration(p.slug).integration;
+      res.json({
+        repo: out.repo,
+        pulls: out.pulls.map((pull) => ({
+          ...pull, links: links.get(pull.number)!, gestures: branchGestures(out.repo, pull, setting),
+        })),
+      });
     } catch (err) { failed(res, err); }
   });
 
