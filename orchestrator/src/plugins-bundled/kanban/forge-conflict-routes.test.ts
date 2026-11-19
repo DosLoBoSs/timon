@@ -18,7 +18,8 @@ import { createTestAccount } from '../../../tests/helpers/accounts.js';
 import { checkout, forgeFixture, type ForgeFixture } from '../../../tests/helpers/forge-git-fixture.js';
 import { db, dbApi } from '../../db.js';
 import {
-  askContributorComment, forkPushUrl, hasConflictMarkers, pinnedRemote, resolvedText, sweepConflictScratch, type ConflictDeps,
+  askContributorComment, forkPushUrl, hasConflictMarkers, pinnedRemote, resolvedText, suggestConflictResolution, sweepConflictScratch,
+  type ConflictDeps,
 } from '../../forge-conflicts.js';
 import { DEFAULT_PROJECT_INTEGRATION, type ProjectIntegration } from '../../project-integration.js';
 import type { ForgeBranchWriter, ForgeCommentWriter, PullRequestBranch } from '../../host/forge.js';
@@ -453,6 +454,16 @@ test('the publication shows where the commit goes, and goes nowhere else', async
   setting('resolve');
   assert.equal((await publish(r.proposalId)).json.proposal.state, 'published');
   assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.commit);
+});
+
+test('a suggestion whose folder cannot be made releases its lock', async () => {
+  const { json } = await prepare();
+  const id = json.conflict.id as string;
+  const out = await suggestConflictResolution('acme', id, 'a.txt', { ...deps, scratchRoot: join(home, 'gone', 'root') });
+  assert.equal(out.ok, false);
+  assert.equal(!out.ok && out.code, 'conflict_suggest_failed');
+  const again = await call('POST', `/api/projects/acme/forge-conflicts/${id}/suggest`, 'person', { path: 'a.txt' });
+  assert.equal(again.status, 200, JSON.stringify(again.json));
 });
 
 test('a comment lost after the push: publishing again finds the push done and posts the comment once', async () => {

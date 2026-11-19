@@ -600,8 +600,10 @@ export async function suggestConflictResolution(
   }
   if (suggesting.has(id)) return refuse(409, 'conflict_suggest_failed', 'a suggestion is already being written for this resolution');
   suggesting.add(id);
-  const cwd = mkdtempSync(join(scratchRoot(deps), 'suggest-'));
+  // Inside the try: a folder that cannot be made must still release the lock.
+  let cwd: string | null = null;
   try {
+    cwd = mkdtempSync(join(scratchRoot(deps), 'suggest-'));
     const user = `Resolve the conflict of this file.\n<untrusted-data>\n${untrustedJson(versions)}\n</untrusted-data>`;
     let answer: string;
     if (deps.suggest) answer = await deps.suggest({ system: SUGGEST_SYSTEM, user, cwd });
@@ -620,7 +622,7 @@ export async function suggestConflictResolution(
     return refuse(502, 'conflict_suggest_failed', 'the agent could not answer');
   } finally {
     suggesting.delete(id);
-    rmSync(cwd, { recursive: true, force: true });
+    if (cwd) rmSync(cwd, { recursive: true, force: true });
   }
 }
 
