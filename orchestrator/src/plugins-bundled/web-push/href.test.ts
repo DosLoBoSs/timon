@@ -59,7 +59,7 @@ test('a proposed GitHub publication opens its dialog, named by project and id', 
   const id = '0f9c2a54-61f7-4c55-9b0e-0d6b2f6c1e11';
   assert.equal(
     notificationHref({ ...none, anchor: `forge-proposal:acme:${id}` }),
-    `/?forge-proposal=${id}&project=acme`,
+    `/?forge-proposal=${id}&forge-project=acme`,
   );
   assert.equal(notificationHref({ ...none, anchor: `forge-proposal:${id}` }), null);
   assert.equal(notificationHref({ ...none, anchor: 'forge-proposal:acme:not-an-id' }), null);
