@@ -344,8 +344,13 @@ test('no agent surface creates or publishes a proposal: no MCP tool, no CLI verb
   // `ctx.forge.propose` (API 19) stores a proposal for a person to publish:
   // its facade may create one, never edit, discard or publish one.
   const facade = join(root, 'src', 'plugins', 'forge-facade.ts');
-  const offenders = files.filter((file) => !allowed.has(file) && file !== facade
+  // The daemon's own producer, after a merge: it proposes, a person publishes.
+  const landing = join(root, 'src', 'issue-resolution.ts');
+  const proposers = [facade, landing];
+  const offenders = files.filter((file) => !allowed.has(file) && !proposers.includes(file)
     && /\/forge-proposals\b|forge-proposals\.js|proposeForgeWrite|publishForgeProposal/.test(readFileSync(file, 'utf8')));
   assert.deepEqual(offenders.map((f) => f.slice(root.length)), []);
-  assert.doesNotMatch(readFileSync(facade, 'utf8'), /publishForgeProposal|editForgeProposal|discardForgeProposal|recoverInterruptedPublications/);
+  for (const file of proposers) {
+    assert.doesNotMatch(readFileSync(file, 'utf8'), /publishForgeProposal|editForgeProposal|discardForgeProposal|recoverInterruptedPublications/);
+  }
 });
