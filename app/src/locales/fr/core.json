@@ -2332,6 +2332,7 @@
     },
     "pullRequests": {
       "title": "Pull requests",
+      "tab": "PR",
       "description": "Les pull requests ouvertes sur le dépôt d'un projet, leur diff et le brief de leur relecture."
     },
     "workflowRuns": {

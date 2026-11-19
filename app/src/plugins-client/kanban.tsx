@@ -111,6 +111,8 @@ export const kanbanClient: BundledClientPlugin = {
       key: 'pull-requests',
       widget: {
         title: t('widgetCatalog.pullRequests.title'), icon: widgetPicto('pullRequests'), description: t('widgetCatalog.pullRequests.description'),
+        tabTitle: t('widgetCatalog.pullRequests.tab'),
+        liveCount: true,
         zone: 'droite',
         height: 320,
         minHeight: 160,
@@ -127,6 +129,7 @@ export const kanbanClient: BundledClientPlugin = {
       key: 'landings',
       widget: {
         title: t('widgetCatalog.jobs.title'), icon: widgetPicto('jobs'), description: t('widgetCatalog.jobs.description'),
+        liveCount: true,
         zone: 'droite',
         height: 320,
         minHeight: 160,

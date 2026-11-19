@@ -2332,6 +2332,7 @@
     },
     "pullRequests": {
       "title": "Pull requests",
+      "tab": "PR",
       "description": "The pull requests open on one project's repository, their diff and the brief of their review."
     },
     "workflowRuns": {
