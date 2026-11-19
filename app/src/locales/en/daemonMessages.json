@@ -189,6 +189,10 @@
       "title": "Script not run: {name}",
       "body": "{error}"
     },
+    "trigger_schedule_failed": {
+      "title": "Scheduled trigger failed: {name}",
+      "body": "{error}"
+    },
     "trigger_script_failed": {
       "title": "Script failed: {name}",
       "body": "{error}{output, select, none {} other {\n\n{output}}}"

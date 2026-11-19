@@ -189,6 +189,10 @@
       "title": "Script non exécuté : {name}",
       "body": "{error}"
     },
+    "trigger_schedule_failed": {
+      "title": "Échec du déclencheur programmé : {name}",
+      "body": "{error}"
+    },
     "trigger_script_failed": {
       "title": "Échec du script : {name}",
       "body": "{error}{output, select, none {} other {\n\n{output}}}"
