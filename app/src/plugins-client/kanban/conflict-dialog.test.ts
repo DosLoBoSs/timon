@@ -137,13 +137,18 @@ async function mount(list: PullRequestItem[]) {
     }
     if (url.endsWith(`/forge-proposals/${PROPOSAL_ID}/publish`)) {
       published = body;
+      if (current.state === 'proposed') {
+        const reason = 'the push URL is no longer the one shown: discard this publication and propose the resolution again';
+        return Response.json({ error: reason, code: 'forge_conflict_changed', params: { detail: reason } }, { status: 409 });
+      }
       return Response.json({ proposal: proposal('update_branch', 'x', { state: 'published' }) });
     }
     if (url.endsWith(`/forge-proposals/${PROPOSAL_ID}`)) {
       const kind = current.state === 'proposed' ? 'conflict_push' : 'update_branch';
       return Response.json({ proposal: proposal(kind, kind === 'conflict_push' ? 'This branch conflicted with `main`…' : 'Update the branch of #58 on GitHub', {
         details: kind === 'conflict_push'
-          ? { commit_sha: 'c'.repeat(40), expected_head_sha: 'f'.repeat(40), head_repository: 'bob/widgets', head_ref: 'tray-icon', base_ref: 'main', files: ['app/src/tray.ts'] }
+          ? { commit_sha: 'c'.repeat(40), expected_head_sha: 'f'.repeat(40), head_repository: 'bob/widgets', head_ref: 'tray-icon', base_ref: 'main', files: ['app/src/tray.ts'],
+            push_host: 'github.com', push_repository: 'bob/widgets', push_url: 'git@github.com:bob/widgets.git' }
           : { expected_head_sha: 'a'.repeat(40), base_ref: 'main', head_ref: 'tray-icon', head_repository: 'bob/widgets' },
       }) });
     }
@@ -254,6 +259,7 @@ test('the Conflict dialog resolves a file, shows the commit, and hands its publi
     assert.ok(dialog());
     assert.match(dialog()!.textContent ?? '', /Resolve the conflict · #58 bob:tray-icon/);
     assert.match(dialog()!.textContent ?? '', /acme-bot/);
+    assert.doesNotMatch(dialog()!.textContent ?? '', /allowed by the contributor|Files in conflict:/, 'no check row the dialog cannot vouch for');
     assert.equal(document.querySelector('[data-line="marker"]')?.textContent?.trim(), '<<<<<<< contributor');
     assert.equal(document.querySelector('[data-conflict-next]')?.hasAttribute('disabled'), true, 'a file is left to resolve');
 
@@ -282,11 +288,14 @@ test('the Conflict dialog resolves a file, shows the commit, and hands its publi
     assert.ok(document.querySelector('[data-conflict-preview]'));
     assert.equal(document.querySelector('[data-conflict-step="3"]')?.getAttribute('data-state'), 'current');
     await m.click(document.querySelector('[data-conflict-publish]'));
-    assert.equal(dialog(), null, 'the conflict closes before its publication opens');
+    assert.ok(!dialog(), 'the conflict closes before its publication opens');
     const publish = document.querySelector('[data-publish-dialog]');
     assert.ok(publish);
     assert.match(publish.textContent ?? '', /cccccccccccc/);
     assert.match(document.querySelector('[data-publish-send]')?.textContent ?? '', /Push and comment/);
+    const to = document.querySelector('[data-publish-push-to]');
+    assert.equal(to?.textContent, 'bob/widgets on github.com', 'the host and the fork the commit goes to');
+    assert.equal(to?.getAttribute('title'), 'git@github.com:bob/widgets.git');
     assert.deepEqual(posts(m.calls), [
       'POST /pull-requests/58/conflict',
       `POST /forge-conflicts/${CONFLICT_ID}/suggest`,
@@ -294,6 +303,10 @@ test('the Conflict dialog resolves a file, shows the commit, and hands its publi
       `PUT /forge-conflicts/${CONFLICT_ID}/files`,
       `POST /forge-conflicts/${CONFLICT_ID}/propose`,
     ], 'nothing is published from the Conflict dialog');
+
+    // The remote moved since: the refusal says that nothing left and what to do.
+    await m.click(document.querySelector('[data-publish-send]'));
+    assert.match(document.querySelector('[data-publish-error]')?.textContent ?? '', /nothing was pushed\. Choose Do not push, then resolve the conflict again/);
   } finally {
     await m.unmount();
   }

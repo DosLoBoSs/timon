@@ -6,7 +6,8 @@
  * tree. Every write needs a signed-in person; each one ends as a proposal
  * published from "Publish on GitHub", never directly.
  */
-import { apiErrorMessage } from '@/lib/api-error';
+import { apiErrorMessage, parseApiError } from '@/lib/api-error';
+import { t } from '@/lib/i18n';
 import type { Answer } from './landing-api';
 import type { ForgeProposal } from './forge-proposals-api';
 
@@ -51,11 +52,16 @@ export type ResolutionDiff = { text: string; truncated: boolean };
 const pulls = (project: string) => `/api/ui/projects/${encodeURIComponent(project)}/pull-requests`;
 const conflicts = (project: string) => `/api/ui/projects/${encodeURIComponent(project)}/forge-conflicts`;
 
-async function call<T>(url: string, init: RequestInit | undefined, pick: (body: unknown) => T | undefined, fetchImpl: typeof fetch): Promise<Answer<T>> {
+/** A refusal worded for the gesture that met it, or null to keep the dictionary's. */
+type Wording = (code: string | null) => string | null;
+
+async function call<T>(
+  url: string, init: RequestInit | undefined, pick: (body: unknown) => T | undefined, fetchImpl: typeof fetch, wording?: Wording,
+): Promise<Answer<T>> {
   try {
     const res = await fetchImpl(url, init ?? { cache: 'no-store' });
     const body: unknown = await res.json().catch(() => null);
-    if (!res.ok) return { ok: false, message: apiErrorMessage(body, { status: res.status }) };
+    if (!res.ok) return { ok: false, message: wording?.(parseApiError(body)?.code ?? null) ?? apiErrorMessage(body, { status: res.status }) };
     const value = pick(body);
     return value === undefined || value === null ? { ok: false, message: apiErrorMessage(null) } : { ok: true, value };
   } catch {
@@ -133,9 +139,14 @@ export async function readContributorConflicts(project: string, fetchImpl: typeo
   return out.ok ? { ok: true, value: out.value.value } : out;
 }
 
+/** The daemon's generic `person_required` says who, not what: here it is turning resolution on. */
+export function contributorConflictsRefusal(code: string | null): string | null {
+  return code === 'person_required' ? t('contributorConflicts.personRequired') : null;
+}
+
 export async function writeContributorConflicts(project: string, mode: ContributorConflicts, fetchImpl: typeof fetch = fetch): Promise<Answer<ContributorConflicts>> {
   return call(`/api/ui/projects/${encodeURIComponent(project)}/integration`, json('PUT', { contributor_conflicts: mode }), (b) => {
     const v = (b as { integration?: { contributor_conflicts?: unknown } } | null)?.integration?.contributor_conflicts;
     return v === 'resolve' || v === 'ask' ? v : undefined;
-  }, fetchImpl);
+  }, fetchImpl, contributorConflictsRefusal);
 }

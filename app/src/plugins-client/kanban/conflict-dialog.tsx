@@ -365,10 +365,6 @@ export function ConflictDialog({ project, pull, onClose, onPublish }: ConflictDi
               <section className={cn(ISLAND, 'flex flex-col gap-2 p-3')} aria-label={t('forgeConflict.checks.title')}>
                 <h3 className="text-[11.5px] font-medium text-muted-foreground">{t('forgeConflict.checks.title')}</h3>
                 <dl className="flex flex-col gap-2">
-                  <Row label={t('forgeConflict.checks.allowed')}><span className={cn(CHIP, GREEN)}>{t('forgeConflict.checks.yes')}</span></Row>
-                  <Row label={t('forgeConflict.checks.files')}>
-                    <span className={cn(CHIP, GREEN, 'tabular-nums')}>{files.length} / {files.length}</span>
-                  </Row>
                   <Row label={t('forgeConflict.checks.account')}>
                     {account ?? <span className="text-red-600 dark:text-red-400">{t('forgeConflict.checks.noAccount')}</span>}
                   </Row>

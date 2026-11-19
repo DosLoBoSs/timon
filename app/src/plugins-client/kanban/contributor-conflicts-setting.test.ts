@@ -37,7 +37,9 @@ async function mount(integration: Record<string, unknown>, refuse = false) {
     calls.push({ url, method, body });
     if (url !== '/api/ui/projects/acme/integration') return Response.json({ error: 'not_found' }, { status: 404 });
     if (method === 'PUT') {
-      if (refuse) return Response.json({ error: 'person_required', message: 'only a signed-in person' }, { status: 403 });
+      if (refuse) {
+        return Response.json({ error: 'only a signed-in person lets Timon resolve a contributor\'s conflict', code: 'person_required' }, { status: 403 });
+      }
       stored = { ...stored, ...(body as Record<string, unknown>) };
     }
     return Response.json({ integration: stored, configured: true });
@@ -109,7 +111,11 @@ test('a refusal of the daemon stays in the dialog, the row unchanged', async () 
     await m.click(document.querySelector('[data-contributor-conflicts-configure]'));
     await m.click(document.querySelector('[data-contributor-conflicts-mode="resolve"]'));
     await m.click(document.querySelector('[data-contributor-conflicts-save]'));
-    assert.ok(document.querySelector('[data-contributor-conflicts-error]'));
+    assert.equal(
+      document.querySelector('[data-contributor-conflicts-error]')?.textContent,
+      'Only a person signed in to Timon lets it resolve contributors\' conflicts.',
+      'the refusal names the gesture, not only who may make it',
+    );
     assert.equal(status(), 'ask');
   } finally {
     await m.unmount();

@@ -7,7 +7,8 @@
  * A write needs a signed-in person: the daemon refuses it from anyone else
  * (`person_required`), so nothing here ever publishes on its own.
  */
-import { apiErrorMessage } from '@/lib/api-error';
+import { apiErrorMessage, parseApiError } from '@/lib/api-error';
+import { t } from '@/lib/i18n';
 import type { Answer } from './landing-api';
 import type { Landing } from './landing-api';
 
@@ -68,6 +69,8 @@ export function isEditable(p: ForgeProposal): boolean {
 export type BranchUpdateDetails = { expected_head_sha: string; base_ref: string; head_ref: string; head_repository: string | null };
 export type ConflictPushDetails = {
   commit_sha: string; expected_head_sha: string; head_repository: string; head_ref: string; base_ref: string; files: string[];
+  /** Where the commit is pushed, pinned when it was proposed; null from an older daemon. */
+  push_host: string | null; push_repository: string | null; push_url: string | null;
 };
 
 const text = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
@@ -90,6 +93,9 @@ export function conflictPushDetails(p: ForgeProposal): ConflictPushDetails | nul
   return {
     commit_sha: d.commit_sha, expected_head_sha: d.expected_head_sha, head_repository: d.head_repository,
     head_ref: d.head_ref, base_ref: d.base_ref, files,
+    push_host: text(d.push_host) ? d.push_host : null,
+    push_repository: text(d.push_repository) ? d.push_repository : null,
+    push_url: text(d.push_url) ? d.push_url : null,
   };
 }
 
@@ -100,11 +106,16 @@ export function isPending(p: ForgeProposal): boolean {
 
 const base = (project: string) => `/api/ui/projects/${encodeURIComponent(project)}/forge-proposals`;
 
-async function call<T>(url: string, init: RequestInit | undefined, pick: (body: unknown) => T | undefined, fetchImpl: typeof fetch): Promise<Answer<T>> {
+/** A refusal worded for the gesture that met it, or null to keep the dictionary's. */
+type Wording = (code: string | null) => string | null;
+
+async function call<T>(
+  url: string, init: RequestInit | undefined, pick: (body: unknown) => T | undefined, fetchImpl: typeof fetch, wording?: Wording,
+): Promise<Answer<T>> {
   try {
     const res = await fetchImpl(url, init ?? { cache: 'no-store' });
     const body: unknown = await res.json().catch(() => null);
-    if (!res.ok) return { ok: false, message: apiErrorMessage(body, { status: res.status }) };
+    if (!res.ok) return { ok: false, message: wording?.(parseApiError(body)?.code ?? null) ?? apiErrorMessage(body, { status: res.status }) };
     const value = pick(body);
     return value === undefined || value === null ? { ok: false, message: apiErrorMessage(null) } : { ok: true, value };
   } catch {
@@ -136,9 +147,18 @@ export function editProposal(project: string, id: string, body: string, fetchImp
   return call(`${base(project)}/${encodeURIComponent(id)}`, json('PATCH', { body }), proposalOf, fetchImpl);
 }
 
+/**
+ * Why a publication was refused, in the person's words. The daemon's
+ * `forge_conflict_changed` names an internal check (the branch, the target or
+ * the push URL moved); what the person needs is that nothing left and what to do.
+ */
+export function publishRefusal(code: string | null): string | null {
+  return code === 'forge_conflict_changed' ? t('forgePublish.conflictChanged') : null;
+}
+
 /** Publishes `body`, the text the person read. */
 export function publishProposal(project: string, id: string, body: string, fetchImpl: typeof fetch = fetch): Promise<Answer<ForgeProposal>> {
-  return call(`${base(project)}/${encodeURIComponent(id)}/publish`, json('POST', { body }), proposalOf, fetchImpl);
+  return call(`${base(project)}/${encodeURIComponent(id)}/publish`, json('POST', { body }), proposalOf, fetchImpl, publishRefusal);
 }
 
 export function discardProposal(project: string, id: string, fetchImpl: typeof fetch = fetch): Promise<Answer<ForgeProposal>> {

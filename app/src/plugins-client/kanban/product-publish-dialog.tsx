@@ -20,7 +20,7 @@ import { WidgetButton } from '@/components/widget-toolbar';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import {
-  branchUpdateDetails, conflictPushDetails, isPending, PROPOSAL_BODY_LIMIT, type ForgeProposal,
+  branchUpdateDetails, conflictPushDetails, isPending, PROPOSAL_BODY_LIMIT, publishRefusal, type ForgeProposal,
 } from './forge-proposals-api';
 import { safeHref } from './project-todo-links';
 import { usePublishDialog } from './publish-dialog-context';
@@ -65,6 +65,11 @@ function WriteDetails({ proposal }: { proposal: ForgeProposal }) {
   return (
     <dl data-publish-push="" className="flex flex-col gap-2 rounded-md bg-background/60 px-3 py-2.5">
       <Row label={t('forgePublish.push.branch')}><span title={branch}>{branch}</span></Row>
+      {push.push_host && push.push_repository && (
+        <Row label={t('forgePublish.push.to')}>
+          <span data-publish-push-to="" title={push.push_url ?? undefined}>{t('forgePublish.push.toValue', { host: push.push_host, repository: push.push_repository })}</span>
+        </Row>
+      )}
       <Row label={t('forgePublish.push.commit')}><span className="tabular-nums" title={push.commit_sha}>{shortSha(push.commit_sha)}</span></Row>
       <Row label={t('forgePublish.push.files')}>
         <span title={push.files.join('\n')}>{t('forgePublish.push.filesValue', { count: push.files.length, base: push.base_ref })}</span>
@@ -143,7 +148,7 @@ export function ProductPublishDialog(): ReactElement | null {
             )}
             {proposal?.state === 'failed' && proposal.error && !error && (
               <p data-publish-last-error="" className="text-[11.5px] text-red-600 dark:text-red-400">
-                {t('forgePublish.lastError', { reason: proposal.error.reason ?? proposal.error.code })}
+                {publishRefusal(proposal.error.code) ?? t('forgePublish.lastError', { reason: proposal.error.reason ?? proposal.error.code })}
               </p>
             )}
             {error && <p data-publish-error="" className="text-[11.5px] text-red-600 dark:text-red-400">{error}</p>}
