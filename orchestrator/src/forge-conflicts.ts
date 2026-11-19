@@ -909,6 +909,10 @@ async function executePush(run: ForgeProposalExecution): Promise<ForgeProposalEx
   if (branch.headRepository?.toLowerCase() !== session.head_repo.toLowerCase() || branch.headRef !== session.head_ref) {
     return failed('forge_conflict_changed', 'the pull request now comes from another branch');
   }
+  // Retargeted since: the commit would bring the old target into the branch.
+  if (branch.baseRef !== session.base_ref) {
+    return failed('forge_conflict_changed', 'the pull request now targets another branch');
+  }
   const files = filesOf(session);
   const done = async (url: string): Promise<ForgeProposalExecutorResult> => {
     const out = await comment(run, url);

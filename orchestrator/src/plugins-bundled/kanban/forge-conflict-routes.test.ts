@@ -417,7 +417,7 @@ test('a stored resolution that no longer rebuilds the commit shown is never push
   assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.head);
 });
 
-test('switched back to "ask", closed or locked before publishing: nothing is pushed', async () => {
+test('switched back to "ask", closed, locked or retargeted before publishing: nothing is pushed', async () => {
   const r = await proposedResolution();
   setting('ask');
   assert.equal((await publish(r.proposalId)).json.code, 'conflict_resolution_disabled');
@@ -428,6 +428,10 @@ test('switched back to "ask", closed or locked before publishing: nothing is pus
   assert.equal((await publish(r.proposalId)).json.code, 'forge_pull_closed');
   branchOverride = { headRepository: 'other/widgets' };
   assert.equal((await publish(r.proposalId)).json.code, 'forge_conflict_changed');
+  branchOverride = { baseRef: 'release' };
+  const retargeted = await publish(r.proposalId);
+  assert.equal(retargeted.json.code, 'forge_conflict_changed');
+  assert.match(retargeted.json.proposal.error.reason, /targets another branch/);
   assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.head);
 });
 
