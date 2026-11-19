@@ -80,6 +80,14 @@ const CONTENT_CONFLICTS: ReadonlySet<string> = new Set(['Auto-merging', 'CONFLIC
 const PLAIN_FILE_MODES: ReadonlySet<string> = new Set(['100644', '100755']);
 /** Lines git writes around a conflict (`merge.conflictStyle` merge or diff3). */
 const CONFLICT_MARKER = /^(?:<{7}(?: |$)|>{7}(?: |$)|\|{7}(?: |$)|={7}\r?$)/m;
+/**
+ * Characters a path in conflict may not hold: controls, the comma that
+ * `update-index --cacheinfo` splits on, the replacement character of an
+ * undecodable name, and the bidirectional marks (U+200E/F, U+202A–U+202E,
+ * U+2066–U+2069) that make a name read otherwise in the dialog and the comment.
+ */
+// eslint-disable-next-line no-control-regex
+const UNUSUAL_PATH = /[\u0000-\u001f\u007f,\uFFFD\u200E\u200F\u202A-\u202E\u2066-\u2069]/;
 /** Paths whose change deserves a second look in the dialog: they steer GitHub or git itself. */
 const SENSITIVE_PATH = /^(?:\.github\/|\.gitattributes$|\.gitmodules$|(?:.*\/)?\.gitattributes$)/;
 
@@ -363,8 +371,7 @@ async function conflictedFiles(merged: Merged): Promise<{ ok: true; files: Store
   }
   const files: StoredFile[] = [];
   for (const [path, stages] of byPath) {
-    // eslint-disable-next-line no-control-regex
-    if (/[\u0000-\u001f\u007f,]|\uFFFD/.test(path)) return refuse(409, 'conflict_unsupported', 'a file in conflict has an unusual name');
+    if (UNUSUAL_PATH.test(path)) return refuse(409, 'conflict_unsupported', 'a file in conflict has an unusual name');
     const ours = stages.get(2);
     const theirs = stages.get(3);
     const base = stages.get(1);

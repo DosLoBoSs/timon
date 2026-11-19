@@ -285,6 +285,17 @@ test('refused after the merge: the head moved, a clean merge, a deletion, a bina
   assert.deepEqual(scratchLeft(), [], 'a refused merge leaves no objects behind');
 });
 
+test('a file whose name holds a direction mark is refused: it would read otherwise in the dialog', async () => {
+  for (const mark of ['\u202E', '\u2066', '\u200F']) {
+    const name = `docs/read${mark}me.txt`;
+    conflictingFixture({ [name]: 'x\n' }, { [name]: 'contributor\n' }, { [name]: 'main\n' });
+    const out = await prepare();
+    assert.equal(out.json.code, 'conflict_unsupported', JSON.stringify(mark));
+    assert.match(String(out.json.error), /unusual name/);
+  }
+  assert.deepEqual(scratchLeft(), []);
+});
+
 test('a symbolic link in conflict is GitHub\'s to resolve', { skip: process.platform === 'win32' }, async () => {
   f = forgeFixture({ 'a.txt': 'a\n' });
   const relink = (dir: string, target: string, message: string) => {
