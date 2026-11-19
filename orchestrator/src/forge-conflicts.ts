@@ -270,7 +270,7 @@ function forgeHosts(integration: ProjectIntegration): ReadonlySet<string> | null
   return new Set(host === 'github.com' ? ['github.com', 'ssh.github.com'] : [host]);
 }
 
-export type PinnedRemote = { ok: true; url: string; host: string };
+export type PinnedRemote = { ok: true; url: string; host: string; kind: 'ssh' | 'https' };
 
 /**
  * The project's remote, when the scratch repository may fetch from it and push
@@ -288,10 +288,10 @@ export async function pinnedRemote(integration: ProjectIntegration, deps: ForgeP
   const host = remoteHostOf(check.url);
   const allowed = forgeHosts(integration);
   if (!host || !allowed) return refuse(409, 'conflict_unsupported', 'the forge host of the project could not be told');
-  if (allowed.has(host)) return { ok: true, url: check.url, host };
+  if (allowed.has(host)) return { ok: true, url: check.url, host, kind: check.kind };
   if (check.kind === 'ssh') {
     const resolved = await (deps.sshHostName ?? sshHostName)(host);
-    if (resolved && allowed.has(resolved)) return { ok: true, url: check.url, host: resolved };
+    if (resolved && allowed.has(resolved)) return { ok: true, url: check.url, host: resolved, kind: 'ssh' };
   }
   return refuse(409, 'conflict_unsupported', `the project's remote does not lead to ${[...allowed][0]}: Timon fetches and pushes a resolution only there`);
 }
@@ -826,6 +826,21 @@ export function sweepConflictScratch(deps: ForgeProposalDeps = {}): number {
 // ─── Publication ────────────────────────────────────────────────────────────
 
 const COMMIT_SHA = /^[0-9a-f]{40,64}$/;
+/** What git or ssh says when the credentials do not reach the fork. */
+const ACCESS_REFUSED = /permission denied|permission to \S+ denied|repository not found|could not read from remote|authentication failed|\b403\b/i;
+
+/**
+ * Why a push over SSH may come from another account than the one `gh api user`
+ * checked: ssh picks the key of the host, not gh's login. Appended to a refusal
+ * of access, so the person knows what to change.
+ */
+function accessHint(pinned: PinnedRemote, reason: string, account: string): string {
+  if (!ACCESS_REFUSED.test(reason)) return reason;
+  return pinned.kind === 'ssh'
+    ? `${reason} (over SSH, the push uses the key ssh picks for the remote's host, not gh's account: point remote_url at an SSH alias `
+      + `whose key belongs to ${account}, or at the https URL so gh signs the push)`
+    : `${reason} (the push uses gh's account ${account}: check that it may push to the contributor's fork)`;
+}
 const failed = (code: ForgeProposalRefusalCode, reason: string, status = 409): ForgeProposalExecutorResult =>
   ({ ok: false, code, reason, status, failed: true });
 const unchanged = (code: ForgeProposalRefusalCode, reason: string, status = 409): ForgeProposalExecutorResult =>
@@ -943,7 +958,9 @@ async function executePush(run: ForgeProposalExecution): Promise<ForgeProposalEx
   const scratch = rebuilt.scratch;
   try {
     const remoteHead = await scratch.remoteHead(pushUrl, session.head_ref);
-    if (!remoteHead.ok) return failed('forge_publish_failed', `the contributor's branch could not be read: ${run.scrub(remoteHead.reason)}`, 502);
+    if (!remoteHead.ok) {
+      return failed('forge_publish_failed', `the contributor's branch could not be read: ${accessHint(pinned, run.scrub(remoteHead.reason), run.login)}`, 502);
+    }
     if (remoteHead.sha === commit) return done(branch.url);
     if (remoteHead.sha !== session.head_sha) {
       return failed('forge_head_moved', 'the contributor pushed since the conflict was merged: discard it and prepare it again');
@@ -952,7 +969,7 @@ async function executePush(run: ForgeProposalExecution): Promise<ForgeProposalEx
     if (!pushed.ok) {
       return pushed.code === 'rejected'
         ? failed('forge_push_rejected', run.scrub(pushed.reason))
-        : failed('forge_publish_failed', `the resolution was not pushed: ${run.scrub(pushed.reason)}`, 502);
+        : failed('forge_publish_failed', `the resolution was not pushed: ${accessHint(pinned, run.scrub(pushed.reason), run.login)}`, 502);
     }
     console.log(`[forge-conflicts] ${row.repo}#${row.target_number}: resolution pushed to ${session.head_repo} as ${run.login}`);
     return done(branch.url);

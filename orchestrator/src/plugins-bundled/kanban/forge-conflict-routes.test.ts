@@ -46,6 +46,8 @@ let f: ForgeFixture;
 let contrib: string;
 let branchOverride: Partial<PullRequestBranch> = {};
 let commentFails = false;
+/** The fork refuses the credentials of the push. */
+let pushDenied = false;
 const posted: Array<{ number: number; body: string }> = [];
 const suggestions: Array<{ system: string; user: string }> = [];
 /** What `ssh -G` would answer for an alias of the remote. */
@@ -83,7 +85,12 @@ const deps: ConflictDeps = {
   forge: () => fakeComments,
   branchForge: () => fakeBranches,
   scratchRoot,
-  get scratchGit() { return f.runner; },
+  get scratchGit() {
+    if (!pushDenied) return f.runner;
+    return (args: string[], opts: Parameters<ForgeFixture['runner']>[1]) => (args.includes('push')
+      ? Promise.resolve({ code: 128, stdout: '', stderr: 'ERROR: Permission to contrib/widgets.git denied to someone-else.\nfatal: Could not read from remote repository.' })
+      : f.runner(args, opts));
+  },
   suggest: async (input) => { suggestions.push(input); return suggestAnswer; },
   sshHostName: async (alias) => sshAliases.get(alias) ?? null,
 };
@@ -135,6 +142,7 @@ beforeEach(() => {
   setting('resolve');
   branchOverride = {};
   commentFails = false;
+  pushDenied = false;
   posted.length = 0;
   suggestions.length = 0;
   suggestAnswer = '<resolved>\none\nTWO and 2\nthree\n</resolved>';
@@ -475,6 +483,15 @@ test('a suggestion whose folder cannot be made releases its lock', async () => {
   assert.equal(!out.ok && out.code, 'conflict_suggest_failed');
   const again = await call('POST', `/api/projects/acme/forge-conflicts/${id}/suggest`, 'person', { path: 'a.txt' });
   assert.equal(again.status, 200, JSON.stringify(again.json));
+});
+
+test('a push refused for its credentials says which key or account to change', async () => {
+  const r = await proposedResolution();
+  pushDenied = true;
+  const ssh = await publish(r.proposalId);
+  assert.equal(ssh.json.code, 'forge_publish_failed');
+  assert.match(ssh.json.proposal.error.reason, /SSH alias whose key belongs to ai-bot, or at the https URL/);
+  assert.equal(f.head(f.fork, 'refs/heads/fix/typo'), r.head);
 });
 
 test('a comment lost after the push: publishing again finds the push done and posts the comment once', async () => {
