@@ -82,15 +82,16 @@ export type WidgetOptions = {
    */
   formerIds?: readonly string[];
   /**
-   * Product-internal, not part of the SDK: the name on the widget's tab when
-   * it is stacked, where `title` would not fit ("PR" for "Pull requests").
-   * The widget window and a card alone keep `title`.
+   * The name on the widget's tab when it is stacked, where `title` would not
+   * fit ("PR" for "Pull requests"). The widget window and a card alone keep
+   * `title`; the tab's tooltip still shows it.
    */
   tabTitle?: string;
   /**
-   * Product-internal, not part of the SDK: the widget publishes a count for
-   * its tab (`useWidgetCount`). In a stack the host keeps it mounted behind
-   * the tab in front, so the count stays true for the project it shows.
+   * The widget publishes a count (`useWidgetCount`) or a dot
+   * (`useWidgetAttention`) for its tab. In a stack the host keeps it mounted,
+   * hidden, behind the tab in front, so its tab stays true; it must then keep
+   * quiet until it comes to the front (`useWidgetInFront`).
    */
   liveCount?: boolean;
   /**

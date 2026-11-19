@@ -140,8 +140,8 @@ export function buildWidgetCatalog(
       ...(options?.description ? { description: options.description } : {}),
       ...(options?.catalogTitle ? { catalogTitle: options.catalogTitle } : {}),
       ...(options?.icon ? { icon: options.icon } : {}),
-      ...(options?.tabTitle && entry.pluginId.startsWith('@timon/') ? { tabTitle: options.tabTitle } : {}),
-      ...(options?.liveCount && entry.pluginId.startsWith('@timon/') ? { liveCount: true } : {}),
+      ...(options?.tabTitle ? { tabTitle: options.tabTitle } : {}),
+      ...(options?.liveCount ? { liveCount: true } : {}),
       ...(options?.placedByDefault ? { placedByDefault: true } : {}),
       ...(formerIdsOf(entry.pluginId, options).length ? { formerIds: formerIdsOf(entry.pluginId, options) } : {}),
       // The declared zone is only a first-placement preference: the slot alone
