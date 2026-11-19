@@ -472,6 +472,10 @@ test('the NSIS installer removes the daemon task, and never registers it', () =>
   for (const file of ['service-revision', 'timon-service.vbs', 'timon-service.cmd', 'service-repair-declined', 'service-refused']) {
     assert.ok(service.includes(`'${file}'`) && desktopService.includes(`'${file}'`), file);
   }
+  // The mark a service daemon refused the home leaves, read by the late handover.
+  const homeLock = readFileSync(join(root, '..', 'orchestrator', 'src', 'home-lock.ts'), 'utf8');
+  assert.match(homeLock, /export const serviceHeldOutFile = \(home: string\): string => join\(home, 'run', 'service-held-out'\);/u);
+  assert.match(desktopService, /export function serviceHeldOutFile\(home: string\): string \{ return join\(home, 'run', 'service-held-out'\); \}/u);
   // TODO #342: the "never ran" result the desktop reads after `/Run`.
   const neverRan = service.match(/export const WINDOWS_TASK_NEVER_RAN = (0x[0-9a-f]+);/u)?.[1];
   assert.ok(neverRan);

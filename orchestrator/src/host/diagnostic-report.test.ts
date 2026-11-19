@@ -60,6 +60,13 @@ test('a Windows task that never ran is named, with the Entra ID join (#342)', ()
   assert.deepEqual(ids({ ...never, platform: 'darwin' }), ['daemon-down']);
 });
 
+test('a Windows task whose last start was refused because it already ran is not a finding (TIM-0158)', () => {
+  const running = facts({
+    service: { installed: true, running: true, lines: [], details: { marked: true, lastTaskResult: 0x800710e0, lines: [] } },
+  });
+  assert.deepEqual(ids(running), []);
+});
+
 test('a task Windows refused to start, then removed, is still named from its marker (#342)', () => {
   const removed = facts({ service: { installed: false, running: false, lines: [], details: null }, serviceRefused: '2026-10-13T22:00:00.000Z' });
   assert.deepEqual(ids(removed), ['windows-service-refused']);
@@ -247,6 +254,9 @@ test('the service marker is read from the definition each supervisor runs', () =
     assert.equal(windows.marked, true);
     assert.equal(windows.lastTaskResult, 0x41303);
     assert.ok(windows.lines.includes('last result: 267011 (0x41303)'));
+    const refused = serviceDiagnostics({ ...win, exec: () => ({ code: 0, stdout: 'LastTaskResult=2147946720\nLastRunTime=2026-11-18T19:05:05\n', stderr: '' }) });
+    assert.equal(refused.lastTaskResult, 0x800710e0);
+    assert.ok(refused.lines.includes('last result: 2147946720 (0x800710e0: an instance was already running, not a failure)'), refused.lines.join('\n'));
 
     const mac = { ...base, platform: 'darwin' as const };
     mkdirSync(join(home, 'Library', 'LaunchAgents'), { recursive: true });

@@ -98,6 +98,17 @@ export function windowsRepairDeclinedFile(home: string): string { return join(ho
 export function windowsLauncher(home: string): string { return join(home, 'run', 'timon-service.cmd'); }
 /** Copy of `windowsServiceFiles().refused`: Windows registered the task but never started it for this account. */
 export function windowsServiceRefusedFile(home: string): string { return join(home, 'run', 'service-refused'); }
+/** Copy of `serviceHeldOutFile` (orchestrator `home-lock.ts`): a service daemon refused the home writes it. */
+export function serviceHeldOutFile(home: string): string { return join(home, 'run', 'service-held-out'); }
+/** The installed service was refused the home at or after `since`: it runs, and waits for the home. */
+export function serviceHeldOutSince(home: string, since: number): boolean {
+  const text = readOrNull(serviceHeldOutFile(home));
+  if (text === null) return false;
+  try {
+    const at = (JSON.parse(text) as { at?: unknown } | null)?.at;
+    return typeof at === 'number' && Number.isFinite(at) && at >= since;
+  } catch { return false; }
+}
 /** Copy of `WINDOWS_TASK_NEVER_RAN` (`LastTaskResult` of a task that was registered and never started). */
 export const WINDOWS_TASK_NEVER_RAN = 0x41303;
 
@@ -475,6 +486,33 @@ export async function startDesktopService(
   // Same contract as macOS: the health wait decides, not the exit code.
   await run(['--user', 'start', packagedUnit(home)]).catch(() => undefined);
   return 'started';
+}
+
+const TASK_STATE_QUERY = ['-NoProfile', '-NonInteractive', '-Command',
+  `'State=' + (Get-ScheduledTask -TaskName '${WINDOWS_TASK}' -TaskPath '\\' -ErrorAction Stop).State`];
+
+/**
+ * Is the task's launcher still running? Read past the handover's first wait:
+ * a daemon still booting under its launcher is worth waiting for, a launcher
+ * that ended will not answer. Unreadable is "no": the wait ends as before.
+ */
+export async function windowsTaskRunning(query: ServiceExec = execPowershell): Promise<boolean> {
+  try {
+    const { stdout } = await query(TASK_STATE_QUERY);
+    return /^State=Running\s*$/m.test(stdout);
+  } catch { return false; }
+}
+
+/**
+ * Ends the task's launcher and the daemon under it, the way the host
+ * adapter's `stopLauncherStep` does, without elevation: the launcher runs as
+ * this account. Only when the handover gives up on a launcher still running,
+ * so the embedded daemon that takes over is not refused the home.
+ */
+export async function endWindowsLauncher(home: string, run: ServiceExec = execPowershell): Promise<void> {
+  const needle = windowsLauncher(home).toLowerCase().replace(/'/g, "''");
+  await run(['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
+    `Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'cmd.exe' -and $_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains('${needle}') } | ForEach-Object { & taskkill.exe /F /T /PID $_.ProcessId | Out-Null }; exit 0`]);
 }
 
 /**

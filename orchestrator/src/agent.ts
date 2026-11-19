@@ -90,6 +90,7 @@ import {
 } from './backend-fallback.js';
 import { backendStillDry } from './backend-recheck.js';
 import { resolvedPermissionModeFor } from './backends/catalog.js';
+import { reportInertShellPreallow } from './auto-mode-preallow.js';
 import { nestedSandboxOf } from './backends/capabilities.js';
 import { settingBool, settingNum } from './settings.js';
 import { profileLimits, watchFencedLaunch, wrapMissionLaunch } from './resources.js';
@@ -2277,6 +2278,12 @@ async function spawnTurn(args: {
   // launch without a shell and file writes does not run the conversion at all.
   const confinement = readOnlyTools ? conversionBackendRefusal(backend.name) : null;
   if (confinement) throw new Error(confinement);
+  // A pre-allow the CLI will drop must not fail in silence: an autonomous
+  // mission would only show it as a denied card in the daemon log.
+  reportInertShellPreallow({
+    agent: agentName, missionId, mode: cfg.permission_mode, permissionModel: backend.permissionModel,
+    allowed: cfg.allowed_tools, modeSource: missionRow?.permission_mode_override ? 'mission' : 'agent',
+  });
   const systemPrompt = buildEffectivePrompt(agentName, cfg, backend, message, forcedSkills);
 
   // Resolve memory dir based on scope. Create it if needed.
