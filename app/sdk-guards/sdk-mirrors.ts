@@ -38,11 +38,12 @@ type Accepts<B, A> = [A] extends [B] ? true : false;
 /**
  * Members the product reads from its own registrations only, never promised
  * to a third party: `formerIds` is honoured for an `@timon/` plugin alone,
+ * `tabTitle` and `liveCount` serve the product's own Git stack,
  * `tabIcon` is a React component (the SDK has no React), `order` ranks the
  * product's nav entries, `page` shapes the product's own views in the island
  * workspace, `dispose` belongs to the loader that unloads.
  */
-type HostOnlyWidgetKeys = 'formerIds' | 'bareIslandOn';
+type HostOnlyWidgetKeys = 'formerIds' | 'bareIslandOn' | 'tabTitle' | 'liveCount';
 type HostOnlyIslandKeys = 'tabIcon' | 'bare';
 type HostOnlyRegisterKeys = 'order' | 'page';
 type LoaderOnlyContextKeys = 'dispose';

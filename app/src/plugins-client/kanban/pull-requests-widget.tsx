@@ -31,6 +31,7 @@ import { t } from '@/lib/i18n';
 import { NativeViewCover } from '@/lib/native-view-cover';
 import { cn } from '@/lib/utils';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
+import { useWidgetCount } from '@/components/widget-host/widget-self';
 import {
   anyReviewRunning, filterByAuthor, pullAuthors, reviewBadge,
   type PullRequestItem, type PullRequestList, type ReviewBadge,
@@ -96,6 +97,8 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
 
   const authors = useMemo(() => pullAuthors(pulls), [pulls]);
   const shown = useMemo(() => filterByAuthor(pulls, author), [pulls, author]);
+  // In the Git stack the count sits on the tab ("PR 3"); alone, by the title.
+  const countOnTab = useWidgetCount(load.kind === 'ready' ? shown.length : null);
 
   const prepare = async (pull: PullRequestItem) => {
     if (!slug) return;
@@ -160,7 +163,7 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
   return (
     <Tile
       title={t('pullRequests.title')}
-      subtitle={load.kind === 'ready' ? String(shown.length) : undefined}
+      subtitle={load.kind === 'ready' && !countOnTab ? String(shown.length) : undefined}
       className={cn(HUD_SURFACE, className)}
       bodyClassName="px-1.5 pb-3 pt-1"
       actions={<>{authorFilter}{projectPicker}{handle}</>}

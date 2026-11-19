@@ -14,18 +14,20 @@
  * project; elsewhere the project is picked once for the stack
  * (`git-stack-project.tsx`), all of them when none is.
  *
- * The forge is asked only while the widget is mounted, the page visible, and a
+ * The forge is asked only while the widget is mounted (in the Git stack, also
+ * behind another tab, for the count on its own), the page visible, and a
  * check still runs (about once a minute; the daemon answers its stored copy in
  * between). The landing poller keeps its own pace.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleAlert, CircleCheck, CircleDashed, ExternalLink, Eye, GitPullRequest, MoreHorizontal, RefreshCw } from 'lucide-react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { Tile } from '@/components/tile';
 import { WidgetButton, widgetButtonClass } from '@/components/widget-toolbar';
 import { HUD_SURFACE } from '@/components/cockpit/hud-surface';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
+import { useWidgetCount, useWidgetInFront, useWidgetMenu } from '@/components/widget-host/widget-self';
 import { t } from '@/lib/i18n';
 import { NativeViewCover } from '@/lib/native-view-cover';
 import { cn } from '@/lib/utils';
@@ -206,17 +208,30 @@ export function LandingWidget({ handle, className }: WidgetProps) {
 
   const groups = landings ? groupLandings(landings, Date.now()) : [];
   const shown = groups.reduce((n, g) => n + g.landings.length, 0);
+  // In the Git stack the count sits on the tab ("Jobs 4") and the reload
+  // button in the widget's menu: alone in the header, it kept a line. The
+  // list also reloads each time its tab comes to the front.
+  const countOnTab = useWidgetCount(landings === null ? null : shown);
+  const reloadInMenu = useWidgetMenu(useMemo(() => [{
+    key: 'reload', label: t('landings.reload'), icon: <RefreshCw className="size-3.5" />, onSelect: () => { void load(); },
+  }], [load]));
+  const inFront = useWidgetInFront();
+  const wasInFront = useRef(inFront);
+  useEffect(() => {
+    if (inFront && !wasInFront.current) void load();
+    wasInFront.current = inFront;
+  }, [inFront, load]);
 
   return (
     <Tile
       title={t('landings.title')}
-      subtitle={shown > 0 ? shown : undefined}
+      subtitle={shown > 0 && !countOnTab ? shown : undefined}
       className={cn(HUD_SURFACE, className)}
       bodyClassName="px-1.5 pb-3 pt-1"
       actions={(
         <>
           <StackProjectPicker project={stack} none={t('landings.allProjects')} label={t('landings.selectProject')} />
-          <WidgetButton onClick={() => { void load(); }} title={t('landings.reload')} aria-label={t('landings.reload')} icon={<RefreshCw className="size-3.5" />} />
+          {!reloadInMenu && <WidgetButton onClick={() => { void load(); }} title={t('landings.reload')} aria-label={t('landings.reload')} icon={<RefreshCw className="size-3.5" />} />}
           {handle}
         </>
       )}

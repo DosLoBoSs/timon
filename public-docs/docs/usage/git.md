@@ -10,10 +10,10 @@ A project's Git repository, its pull requests and the Kanban jobs that land thro
 | **Branches** | the working tree and the local branches; switch the project to one | Git |
 | **Graph** | the commit history of every branch, tag and worktree | Git |
 | **Publish** | the remote, what waits to be pushed, push and fetch | Git |
-| **Pull requests** | the pull requests open on the repository, and their review brief | Kanban |
+| **Pull requests** (**PR** on its tab) | the pull requests open on the repository, and their review brief | Kanban |
 | **Jobs** | the Kanban jobs that land through a pull request, by what they wait for | Kanban |
 
-Each tab is a widget of its own: drag it out of the stack to another column or island, remove it, or add it back from the widget window, like any widget. A plugin that is off on your install simply has no tab. The **lite** configuration preset hides **Publish**.
+The **PR** and **Jobs** tabs show how many pull requests and jobs they list, even while another tab is in front. Each tab is a widget of its own: drag it out of the stack to another column or island, remove it, or add it back from the widget window, like any widget. A plugin that is off on your install simply has no tab. The **lite** configuration preset hides **Publish**.
 
 The branch shown above the message box reads the same state as the Git widgets: switch a branch in one, and the other follows. Git needs to be installed on the machine where Timon's daemon runs.
 
@@ -72,7 +72,7 @@ The same goes for an agent whose folder is another Git repository than its proje
 - **not published** — the branch was never pushed. **Publish** pushes it and sets its upstream; the gap is measured against the remote's default branch.
 - **ahead** — on a detached HEAD, the gap against the remote's default branch. Pick a branch to push.
 - **unknown** — the branch Timon compares with cannot be found (its remote copy was deleted, or the remote has no default branch). The count is unknown, not zero, and pushing stays possible.
-- **behind** — commits on the remote you do not have. **Fetch** brings them and refreshes the count.
+- **behind** — commits on the remote you do not have. **Fetch** (the cloud icon beside the push button) brings them and refreshes the count.
 
 A folder that is not a Git repository, or a repository without a commit, says what to do before anything can be published.
 
@@ -86,7 +86,7 @@ Pick another remote and the button reads **Push to** *remote*. The confirmation 
 
 ## Remotes
 
-The remote is where a project's code is pushed and fetched from. Without one, **Publish** offers **Add a remote…** and **Create on GitHub…**, which creates the repository (private or public) and pushes the branch; the latter needs the [GitHub CLI](https://cli.github.com/) (`gh`) installed and signed in. With a remote, **Remotes…** sits next to **Fetch**.
+The remote is where a project's code is pushed and fetched from. Without one, **Publish** offers **Add a remote…** and **Create on GitHub…**, which creates the repository (private or public) and pushes the branch; the latter needs the [GitHub CLI](https://cli.github.com/) (`gh`) installed and signed in. With a remote, **Remotes…** is the icon after **Fetch**.
 
 **Remotes…** lists every remote of the project: its name, its URL, a separate push URL when it has one, and which one pushes go to. From there you can:
 
@@ -140,6 +140,8 @@ The row's menu (**…**) opens the pull request on GitHub, or shows the report o
 Each row gives the job's title (its pull request's, or its branch until there is one), its branch, and where it stands: **Not pushed**, **PR #n**, **Merged**, **Landed** once Timon has closed the job's tasks and ideas, or **Closed**. While the pull request is open, the row also shows the failing or running checks (or how many passed when none fails), a conflict, a draft and an approval or a request for changes.
 
 The row's button is **Preview** while the job has something to land, and **Open the pull request** once it is merged or closed. Its menu (**…**) holds the other one and **Refresh the checks**. In an agent's chat the widget lists the jobs of the conversation's project; elsewhere, the project picked for **Pull requests**, or every project.
+
+The list is read again each time its tab comes to the front. Inside the stack, **Refresh** sits in the widget's menu (the gear, or a right click on the tabs); a **Jobs** card on its own keeps it in its header.
 
 Timon reads the checks from GitHub when the widget appears, then about once a minute while a check is still running and the page is visible. The background poller that notices a merged pull request keeps its own five-minute pace.
 
