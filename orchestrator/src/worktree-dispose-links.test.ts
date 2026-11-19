@@ -93,6 +93,21 @@ for (const [name, remove] of removals) {
   });
 }
 
+test('a dirty worktree git refuses to remove gets its links back', async () => {
+  const { repo, info, cleanup } = await setup();
+  try {
+    writeFileSync(join(info.path, 'package.json'), '{"dirty":true}');
+    await assert.rejects(disposeWorktree(info));
+    for (const link of ['node_modules', join('app', 'node_modules'), 'docs', join('.claude', 'skills')]) {
+      assert.ok(lstatSync(join(info.path, link)).isSymbolicLink(), `${link} is linked again`);
+    }
+    assertWitnessesIntact(repo);
+  } finally {
+    await disposeWorktree(info, true);
+    cleanup();
+  }
+});
+
 test('a link git tracks is left to git, so a clean worktree still goes without --force', { skip: process.platform === 'win32' && 'tracked symlinks need core.symlinks' }, async () => {
   const repo = mkdtempSync(join(tmpdir(), 'timon-wt-tracked-link-'));
   const git = (...args: string[]) => execFileSync('git', ['-C', repo, ...args], { stdio: 'pipe' });

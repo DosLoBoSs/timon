@@ -439,7 +439,11 @@ export async function disposeWorktree(
     args.push(info.path);
     await exec('git', args, { timeout: 15_000 });
   } catch (err) {
-    if (!force) throw err;
+    if (!force) {
+      // Git refused (uncommitted work): the worktree stays, and may still be in use, so it gets its links back.
+      await prepareWorktreeDependencies(info.sourceRepo, info.path);
+      throw err;
+    }
   }
   // Branch -D (forced, it was already merged if we get here).
   try {
