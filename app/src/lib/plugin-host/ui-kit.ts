@@ -87,6 +87,8 @@ import { DetailFrame } from '@/components/detail-frame';
 import { NavLink } from '@/components/nav-link';
 import { useKanbanCard } from '@/plugins-client/kanban/kanban-card-context';
 import { useTodoForm } from '@/plugins-client/kanban/todo-form-context';
+import { useJobDialog } from '@/plugins-client/kanban/job-dialog-context';
+import { usePublishDialog } from '@/plugins-client/kanban/publish-dialog-context';
 
 /** What `@timon/ui` exposes. One object, so `platform-globals` and the served
  *  module cannot list different members. */
@@ -189,6 +191,12 @@ export const UI_KIT = {
   // The TO DO idea form (client API 15, `todo.form`), the twin of `useTaskForm`: the idea,
   // and the gestures (save, hand off to the orchestrator, finish, close).
   useTodoForm,
+  // A Kanban job's window (client API 18, `kanban.job.dialog`): the job, its links, and the
+  // way to its ideas and pilot mission.
+  useJobDialog,
+  // The "Publish on GitHub" window (client API 18, `forge.publish.dialog`): the text, where it
+  // goes, as which account, and the host's gestures, which go through the person's session.
+  usePublishDialog,
   // The table of contents of a list page (client API 15, `page.toc`): its headings, the one
   // in view, and the jump to one.
   usePageToc,

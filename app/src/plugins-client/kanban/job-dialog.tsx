@@ -3,9 +3,9 @@
 /**
  * The host of a Kanban job's dialog (`kanban.job.dialog`): the Jobs widget,
  * the landing badge of a TO DO idea and the Pull requests widget open the same
- * one. It hands the occupant the job and its gestures through `useJobDialog()`
- * and keeps the frame; a plugin that takes the slot repaints the dialog
- * everywhere at once.
+ * one. It hands the occupant the job and its gestures through `useJobDialog()`;
+ * the occupant draws the window, so a plugin that takes the slot repaints the
+ * dialog everywhere at once.
  *
  * The product's dialog is painted directly while only its registered fallback
  * holds the slot, as `TodoFormModal` does: the fallback is a chunk loaded on
