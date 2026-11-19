@@ -80,6 +80,21 @@ export type ProviderScratch = {
    * a probe has no mission to keep a folder for, and nothing is created for it.
    */
   mission(spawn: BuildSpawnOpts): Promise<ProviderScratchDir>;
+  /**
+   * API 18. The private folder (0700) of one profile this plugin launches, kept across its
+   * missions: where a CLI that keeps its sessions and settings in one folder per sign-in
+   * (`CLAUDE_CONFIG_DIR`) finds them again when a new mission resumes another's session.
+   * Created at the call; never removed by the daemon (no retention purge, no cache trim, no
+   * backend switch). Only the missions of that profile reach it through the fence. Only for
+   * a profile whose dialect this plugin launches: the profile of another plugin (a pack, a
+   * user's file, an API-key profile) that runs on this plugin's dialect is one of them.
+   * Refused for a launch on an account: its state goes in `account.of(profile).configDir`.
+   *
+   * Outlives every mission, so it holds no secret of one: `writeFile` refuses a text that
+   * carries a reference of `mcp()` or `env()` (write those in `mission()`), and `link` takes
+   * no source.
+   */
+  profile(profile: ProfileRuntime): ProviderScratchDir;
 };
 
 /** S5 — masks, in what a provider emits, the values only the daemon knows. */

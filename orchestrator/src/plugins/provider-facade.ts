@@ -24,10 +24,10 @@ import { sealFor, type LaunchSeal } from '../backends/launch-seal.js';
 import { providerEnvPlan } from '../backends/provider-env.js';
 import { providerMcpPlan } from '../backends/provider-mcp.js';
 import {
-  activeProfiles, isProductBackend, registerTrustedProfile, ownerCredentialDirEnv, ownerCredentialDirs, profileDeclarations, registeredBackendOwners, registerProvider,
+  activeProfiles, backendOwnerPlugin, isProductBackend, registerTrustedProfile, ownerCredentialDirEnv, ownerCredentialDirs, profileDeclarations, registeredBackendOwners, registerProvider,
   replaceProvider,
 } from '../backends/registry.js';
-import { envCredentialRoots, missionScratchPath, openMissionScratch } from '../backends/provider-scratch.js';
+import { envCredentialRoots, missionScratchPath, openMissionScratch, openProfileScratch } from '../backends/provider-scratch.js';
 import { accountConfigDir } from '../backends/accounts.js';
 import { adoptGeneratedMedia, allowShowFrom } from '../backends/provider-media.js';
 import { gitWritableRoots } from '../backends/provider-git.js';
@@ -36,7 +36,7 @@ import { getHost } from '../host/index.js';
 import { ensurePrivateDir } from '../host/private-dir.js';
 import { runtimeAccount } from '../backends/instance-id.js';
 import { redactDeep, redactText } from '../secrets/redact.js';
-import { baseBackendId } from '../backends/instance-id.js';
+import { baseBackendId, isAccountInstanceId } from '../backends/instance-id.js';
 import { assertProviderExecAllowed, PluginPolicyError } from './policy.js';
 import { createProviderBinary } from '../backends/provider-binary.js';
 import type { ProviderBinary, ProviderGeneratedMedia } from '../backends/provider-services.js';
@@ -44,6 +44,9 @@ import type { NativeProviderDefinition } from '../backends/engine/definition.js'
 
 /** The contract version `ctx.provider` appeared in. */
 export const PROVIDER_FACADE_API_VERSION = 12;
+
+/** The contract version `ctx.provider.scratch.profile` appeared in. */
+export const PROVIDER_PROFILE_SCRATCH_API_VERSION = 18;
 
 /** A plugin that declared an older contract calls a member it was not promised. */
 export class PluginApiVersionError extends Error {
@@ -81,10 +84,10 @@ function ownsBackend(pluginId: string, backend: string): boolean {
 }
 
 export function providerServicesFor(scope: ProviderFacadeScope): ProviderServices {
-  const gate = (member: string): void => {
+  const gate = (member: string, since = PROVIDER_FACADE_API_VERSION): void => {
     scope.assertPermission();
-    if (scope.apiVersion < PROVIDER_FACADE_API_VERSION) {
-      throw new PluginApiVersionError(scope.pluginId, `ctx.provider.${member}`, PROVIDER_FACADE_API_VERSION, scope.apiVersion);
+    if (scope.apiVersion < since) {
+      throw new PluginApiVersionError(scope.pluginId, `ctx.provider.${member}`, since, scope.apiVersion);
     }
   };
   /**
@@ -161,6 +164,22 @@ export function providerServicesFor(scope: ProviderFacadeScope): ProviderService
           pluginId: scope.pluginId, missionId: spawn.missionId, seal, credentialDirs: ownerCredentialDirs(scope.pluginId),
           extraLinkRoots: [...accountFolders, ...operatorFolders],
         });
+      },
+      profile(profile) {
+        gate('scratch.profile', PROVIDER_PROFILE_SCRATCH_API_VERSION);
+        // The plugin that LAUNCHES the profile, as the fence names it (`missionFenceTarget`): a
+        // profile's own plugin that only registered it on another's dialect would get a folder
+        // its missions never reach.
+        // An account's sign-in has its own folder, and its owner is a person: a profile's folder,
+        // shared by the host's sign-in and every account of the profile, is not where it goes.
+        if (isAccountInstanceId(profile.id)) {
+          throw new PluginPolicyError(scope.pluginId, 'provider-profile', 'a launch on an account keeps its state in account.of(profile).configDir');
+        }
+        const id = baseBackendId(profile.id);
+        if (backendOwnerPlugin(id) !== scope.pluginId) {
+          throw new PluginPolicyError(scope.pluginId, 'provider-profile', `\`${id}\` does not run on a dialect this plugin launches`);
+        }
+        return openProfileScratch(scope.pluginId, id);
       },
     },
     binary: {

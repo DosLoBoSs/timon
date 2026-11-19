@@ -51,7 +51,8 @@ await stubCliBinaries(...readdirSync(OFFICIAL).flatMap((dir) => {
   return (manifest.timon?.provider?.backends ?? []).flatMap((backend) => backend.binary?.names ?? []);
 }));
 await stubCodexSignIn();
-const { activeProfiles, getDialect, registerFileProfile, registerPackProfile } = await import('./backends/registry.js');
+const { activeProfiles, backendOwnerPlugin, getDialect, registerFileProfile, registerPackProfile } = await import('./backends/registry.js');
+const { providerServicesFor, PROVIDER_PROFILE_SCRATCH_API_VERSION } = await import('./plugins/provider-facade.js');
 const { getBackend } = await import('./backends/index.js');
 const { nestedSandboxOf } = await import('./backends/capabilities.js');
 const { missionFenceTarget, upsertAgent } = await import('./agent.js');
@@ -231,6 +232,23 @@ const ACTIVE = activeProfiles()
 const launches = new Map<string, Launch>();
 // No fence runs missions on Windows yet (`doctor.ts`): there is no policy whose coverage to check.
 const NO_FENCE = process.platform === 'win32' && 'missions are not fenced on Windows';
+
+/**
+ * Every profile's own folder, made the way a provider makes it: through `ctx.provider.scratch.profile`
+ * of the plugin that launches it, before the fence is computed, as `buildSpawn` would. The fence must
+ * open each mission's own one, and only it: a hand-made folder would not prove the two agree on where.
+ */
+const profileFolders = new Map<string, string>();
+for (const id of ACTIVE) {
+  const pluginId = backendOwnerPlugin(id);
+  assert.ok(pluginId, `${id}: no plugin launches it`);
+  const services = providerServicesFor({
+    pluginId, apiVersion: PROVIDER_PROFILE_SCRATCH_API_VERSION, assertPermission: () => undefined, trusted: true,
+    authorizedBinaries: [], authorizedCredentialDirs: [], osCredentials: [], effect: (register) => register(),
+  });
+  const runtime = activeProfiles().find((entry) => entry.profile.id === id)!;
+  profileFolders.set(id, services.scratch.profile({ id: runtime.profile.id, cmd: '', env: {} }).path);
+}
 if (!NO_FENCE) for (const id of ACTIVE) launches.set(id, await launchOf(id));
 
 test('every profile that must be covered is active and launched', { skip: NO_FENCE }, () => {
@@ -294,18 +312,44 @@ for (const id of ACTIVE) {
 }
 
 /**
+ * A provider keeps one folder per profile it launches (`ctx.provider.scratch.profile`): its CLI's
+ * sessions and settings, which another profile's mission must neither read nor plant a hook in.
+ */
+for (const id of ACTIVE) {
+  test(`${id}: the mission reaches its own profile folder, no other profile's`, { skip: NO_FENCE }, () => {
+    const run = launches.get(id)!;
+    const own = profileFolders.get(id)!;
+    const rules = rulesOf(renderSeatbeltProfile(run.policy, { spellings: (path) => canonicalPaths(path, (p) => realpathSync.native(p)) }).text);
+    for (const [name, access] of [['fenceAccess', fenceAccess(run.strict, join(own, 'projects', 's.jsonl'))], ['Seatbelt', evaluate(rules, join(own, 'projects', 's.jsonl'))]] as const) {
+      assert.ok(access.read && access.write, `${id}: its own folder ${own} is refused (${name})`);
+    }
+    // Every other profile's folder, and one not made yet, where a planted settings file would wait for it.
+    const others = [...profileFolders].filter(([other]) => other !== id).map(([, folder]) => folder);
+    for (const folder of [...others, join(dirname(own), 'not-made-yet')]) {
+      const path = join(folder, 'settings.json');
+      for (const [name, access] of [['fenceAccess', fenceAccess(run.strict, path)], ['Seatbelt', evaluate(rules, path)]] as const) {
+        assert.equal(access.read, false, `${id}: reads ${path} (${name})`);
+        assert.equal(access.write, false, `${id}: writes ${path} (${name})`);
+      }
+    }
+    if (id !== 'claude') {
+      assert.equal(fenceAccess(run.strict, join(USER_HOME, '.claude', '.credentials.json')).read, false, `${id}: reads the user's Claude sign-in`);
+    }
+  });
+}
+
+/**
  * The claude CLI keeps its sessions, debug logs and settings in its config folder: the one
  * `CLAUDE_CONFIG_DIR` names, else `~/.claude`, which holds the user's own Claude sign-in and stays
  * refused to any other backend. A profile on the claude dialect without an account of its own is
- * given no private folder yet, so its CLI is refused the one it writes to.
+ * given its profile folder instead (TODO #1104), which its CLI must be able to write.
  */
 const CLAUDE_DIALECT = ACTIVE.filter((id) => dialectOf(id) === 'claude');
 for (const id of CLAUDE_DIALECT) {
-  const pending = id !== 'claude'
-    && '#1104: a profile on the claude dialect other than claude gets no private CLAUDE_CONFIG_DIR yet, and ~/.claude is refused to it';
-  test(`${id}: the claude CLI can write its config folder, and never the user's sign-in of another backend`, { skip: NO_FENCE, todo: pending || undefined }, () => {
+  test(`${id}: the claude CLI can write its config folder, and never the user's sign-in of another backend`, { skip: NO_FENCE }, () => {
     const run = launches.get(id)!;
     const configDir = run.spec.env?.CLAUDE_CONFIG_DIR ?? join(USER_HOME, '.claude');
+    if (id !== 'claude') assert.equal(configDir, profileFolders.get(id), `${id}: the CLI is not told to use its profile folder`);
     const access = fenceAccess(run.strict, join(configDir, 'debug', 'latest'));
     assert.ok(access.read && access.write, `${id}: ${configDir} is refused to the claude CLI`);
     if (id !== 'claude') assert.equal(fenceAccess(run.strict, join(USER_HOME, '.claude', '.credentials.json')).read, false, `${id}: reads the user's Claude sign-in`);

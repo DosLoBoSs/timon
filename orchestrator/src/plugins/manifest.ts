@@ -99,8 +99,14 @@ import { reservedRouteSegment } from './reserved-routes.js';
  * `useUpdateDialog`, the update window (§116). A manifest naming one of the
  * new slots must declare 17 (`SLOT_API_VERSIONS`). No member of the host's
  * `PluginContext` changes.
+ *
+ * 18 — `ctx.provider.scratch.profile(profile)`: the private folder a provider
+ * keeps for one profile it launches, across its missions (the CLI's sessions
+ * and settings), which only that profile's missions reach through the fence.
+ * API 17 shipped in 0.1.9, so a new member opens a new wave
+ * (docs/SDK-COMPAT.md §121).
  */
-export const PLUGIN_API_VERSION = 17;
+export const PLUGIN_API_VERSION = 18;
 
 /** First contract that knows `kind: dictation` and its manifest block. */
 export const DICTATION_API_VERSION = 14;
