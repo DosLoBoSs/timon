@@ -162,8 +162,10 @@ test('a multi-colour logo, a logo without currentColor, an upload and an emoji k
   }
   const upload = '/api/uploads/backends/abc.png';
   assert.equal(isSingleColourSvg(upload), false);
+  // React 19 hoists a preload link in front of an image with a real URL; it is not part of the mark.
+  const withoutPreload = (html: string) => html.replace(/<link [^>]*\/>/g, '');
   assert.equal(
-    renderToStaticMarkup(React.createElement(BrandMark, { icon: upload, className: 'size-4' })),
+    withoutPreload(renderToStaticMarkup(React.createElement(BrandMark, { icon: upload, className: 'size-4' }))),
     '<img src="/api/uploads/backends/abc.png" alt="" class="shrink-0 rounded-md object-cover size-4"/>',
   );
   assert.equal(
