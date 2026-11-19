@@ -137,7 +137,7 @@ test('one card per job, with its state, conflict and checks', async () => {
 
 test('the preview shows the diff, the commits and the dry pre-checks', async () => {
   await show(async ({ React, calls }) => {
-    const button = Array.from(card('job-branch').querySelectorAll('button')).find((b) => b.textContent === 'Preview');
+    const button = Array.from(card('job-branch').querySelectorAll('button')).find((b) => b.getAttribute('aria-label') === 'Preview');
     assert.ok(button);
     await React.act(async () => { button.click(); });
     await React.act(async () => { await new Promise<void>((r) => setTimeout(r, 30)); });

@@ -150,7 +150,7 @@ test('the widget lists a project\'s pull requests, filters by author, and shows 
     assert.deepEqual(rows(), ['12', '13']);
 
     const button = document.querySelector('[data-pull-row="12"] [data-pull-review]');
-    assert.equal(button?.textContent, 'Prepare the review');
+    assert.equal(button?.getAttribute('aria-label'), 'Prepare the review');
     await m.click(button);
     assert.ok(m.calls.some((c) => c.method === 'POST' && c.url === '/api/ui/projects/acme/pull-requests/12/review'));
     assert.ok(m.calls.some((c) => c.method === 'GET' && c.url === '/api/ui/projects/acme/pull-requests/12/diff'));

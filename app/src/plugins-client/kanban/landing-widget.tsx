@@ -103,7 +103,7 @@ function LandingCard({ landing, onPreview, onRefresh, refreshing }: {
         {landing.conflict === true && <span className={cn(BADGE, TONE.bad)}>{t('landings.conflict')}</span>}
         <ChecksBadges landing={landing} />
         <span className="ml-auto flex items-center gap-0.5">
-          <WidgetButton primary onClick={onPreview} icon={<Eye className="size-3" />} label={t('landings.preview')} />
+          <WidgetButton onClick={onPreview} title={t('landings.preview')} aria-label={t('landings.preview')} icon={<Eye className="size-3.5" />} />
           <Dropdown.Root>
             <Dropdown.Trigger asChild>
               <button type="button" title={t('landings.more')} aria-label={t('landings.more')} className={widgetButtonClass({ iconOnly: true })}>

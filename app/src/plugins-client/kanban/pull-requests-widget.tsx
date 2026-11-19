@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Copy, ExternalLink, FileText, GitPullRequest, MoreHorizontal, ScanSearch } from 'lucide-react';
+import { Copy, ExternalLink, FileText, GitPullRequest, Loader2, MoreHorizontal, ScanSearch } from 'lucide-react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
 import { Tile } from '@/components/tile';
@@ -339,21 +339,22 @@ function PullRow({ pull, preparing, onReview, onReport }: {
   const meta = [`#${pull.number}`, pull.author ?? t('pullRequests.deletedAuthor')];
   if (pull.isDraft) meta.push(t('pullRequests.draft'));
   return (
-    <li data-pull-row={pull.number} className="flex items-center gap-2 rounded-lg bg-muted/30 px-2.5 py-2 transition-colors hover:bg-muted/50">
+    <li data-pull-row={pull.number} className="flex items-center gap-1 rounded-lg bg-muted/30 py-2 pl-2.5 pr-1 transition-colors hover:bg-muted/50">
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[12.5px] font-medium text-foreground" title={pull.title}>{pull.title}</div>
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="line-clamp-2 break-words text-[12.5px] font-medium leading-snug text-foreground" title={pull.title}>{pull.title}</div>
+        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <span className="truncate tabular-nums">{meta.join(' · ')}</span>
           {badge && <VerdictChip badge={badge} />}
         </div>
       </div>
+      {/* Icon only: the row's width belongs to the pull request, not to its action. */}
       <WidgetButton
-        primary
         data-pull-review=""
         onClick={onReview}
         disabled={running || preparing}
-        icon={<ScanSearch className="size-3" />}
-        label={preparing ? t('pullRequests.preparing') : t('pullRequests.review')}
+        title={preparing ? t('pullRequests.preparing') : t('pullRequests.review')}
+        aria-label={preparing ? t('pullRequests.preparing') : t('pullRequests.review')}
+        icon={preparing ? <Loader2 className="size-3.5 animate-spin" /> : <ScanSearch className="size-3.5" />}
       />
       <Dropdown.Root modal={false}>
         <Dropdown.Trigger asChild>
