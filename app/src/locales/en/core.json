@@ -2378,9 +2378,17 @@
       "title": "Files",
       "description": "Browse and edit the files of the project's working folder."
     },
-    "git": {
-      "title": "Git",
-      "description": "The project's branches, commit graph and publication: switch branch, see the history and the worktrees, push."
+    "gitBranches": {
+      "title": "Branches",
+      "description": "The repository's working tree and branches: see the changes, switch branch."
+    },
+    "gitGraph": {
+      "title": "Graph",
+      "description": "The repository's commit graph, with its branches and worktrees."
+    },
+    "gitPublish": {
+      "title": "Publish",
+      "description": "Where the repository's publication stands: remote, commits to push, push and fetch."
     },
     "agentTasks": {
       "title": "Agent task list",

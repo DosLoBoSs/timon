@@ -985,11 +985,11 @@ export function SendButton({ onClick, disabled, label }: { onClick: () => void; 
 }
 
 /**
- * The composer's branch bar is part of the Git card: a role without the card is
+ * The composer's branch bar is part of the Git widgets: a role without them is
  * refused the read (TODO #689), so it shows no bar rather than a broken one.
  */
 export function composerGitAllowed(caps: Capabilities | null): boolean {
-  return isModuleOn(caps, '@timon/git') && isWidgetSurfaceAllowed(caps, '@timon/git', 'repository');
+  return isModuleOn(caps, '@timon/git') && isWidgetSurfaceAllowed(caps, '@timon/git', 'branches');
 }
 
 /**

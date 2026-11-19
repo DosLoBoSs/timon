@@ -42,7 +42,6 @@
     "browseByProject": "Parcourir par projet"
   },
   "gitWidget": {
-    "tabs": {"branches": "Branches", "graph": "Graphe", "publish": "Publication"},
     "detached": "HEAD détaché",
     "noProject": "Cet agent n’a pas de projet : aucun dépôt à afficher.",
     "repos": {"label": "Dépôt", "root": "{name} (racine)", "otherToPush": "{name} : {count} à pousser"},

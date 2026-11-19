@@ -24,6 +24,27 @@ type Starter = Omit<WidgetLayout, 'id' | 'removed'>;
 const [ADD_WIDGET, ADD_WIDGET_2] = ADD_WIDGET_IDS as [string, string];
 
 /**
+ * The "Git" stack: one card, one tab per widget, Branches in front. Each
+ * widget stays its plugin's own (`@timon/git`, `@timon/kanban`): the stack is
+ * an arrangement, not a merge, and any of them can be moved out or removed
+ * like any widget. A widget added to this list later (Issues) joins the stack
+ * on the views stored before it (`joinedStarterStack`).
+ */
+const GIT_STACK = [
+  'plugin:@timon/git:branches',
+  'plugin:@timon/git:graph',
+  'plugin:@timon/git:publish',
+  'plugin:@timon/kanban:pull-requests',
+  'plugin:@timon/kanban:landings',
+] as const;
+
+function gitStack(rail: string, from: number): Record<string, Starter> {
+  return Object.fromEntries(GIT_STACK.map((id, i) => [id, {
+    rail, rang: from + i, hauteur: 320, heightMode: 'fill', fillPercent: 66, group: 'stack:git', ...(i === 0 ? { activeTab: true } : {}),
+  } satisfies Starter]));
+}
+
+/**
  * A fresh install's arrangements, kept short on purpose (the maintainer's request of
  * 05/11/2026): a few cards that say what each view is for, and a dashed
  * "Your widget here" (`add-widget.ts`) where the person's own will go.
@@ -42,14 +63,15 @@ const STARTERS: Record<string, Record<string, Starter>> = {
     [ADD_WIDGET]: { rail: 'agents.left.widget', rang: 0, hauteur: 160 },
     [ADD_WIDGET_2]: { rail: 'agents.right.widget', rang: 0, hauteur: 160 },
   },
-  // A project's chat: its missions and files on the left, its repository and
-  // containers on the right. A card whose module is off on this install
-  // simply never registers, and the column shares its height among the rest.
+  // A project's chat: its missions and files on the left; on the right, the
+  // "Git" stack and the containers. A card whose module is off on this
+  // install simply never registers, and the column shares its height among
+  // the rest; a stack left with one widget shows it as a lone card.
   '/chat': {
     'plugin:@timon/missions:Missions': { rail: 'chat.left.widget', rang: 0, hauteur: 300, heightMode: 'fill', fillPercent: 50 },
     'plugin:@timon/files-widget:Files': { rail: 'chat.left.widget', rang: 1, hauteur: 300, heightMode: 'fill', fillPercent: 50 },
-    'plugin:@timon/git:repository': { rail: 'chat.right.widget', rang: 0, hauteur: 320, heightMode: 'fill', fillPercent: 66 },
-    'plugin:@timon/docker-supervision:docker': { rail: 'chat.right.widget', rang: 1, hauteur: 260, heightMode: 'fill', fillPercent: 34 },
+    ...gitStack('chat.right.widget', 0),
+    'plugin:@timon/docker-supervision:docker': { rail: 'chat.right.widget', rang: GIT_STACK.length, hauteur: 260, heightMode: 'fill', fillPercent: 34 },
   },
 };
 

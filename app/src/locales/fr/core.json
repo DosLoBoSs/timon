@@ -2378,9 +2378,17 @@
       "title": "Fichiers",
       "description": "Parcourir et modifier les fichiers du dossier de travail du projet."
     },
-    "git": {
-      "title": "Git",
-      "description": "Branches, graphe des commits et publication du projet : changer de branche, voir l’historique et les worktrees, pousser."
+    "gitBranches": {
+      "title": "Branches",
+      "description": "L’arbre de travail et les branches du dépôt : voir les changements, changer de branche."
+    },
+    "gitGraph": {
+      "title": "Graphe",
+      "description": "Le graphe des commits du dépôt, avec ses branches et ses worktrees."
+    },
+    "gitPublish": {
+      "title": "Publier",
+      "description": "Où en est la publication du dépôt : remote, commits à pousser, push et fetch."
     },
     "agentTasks": {
       "title": "Liste de tâches de l'agent",

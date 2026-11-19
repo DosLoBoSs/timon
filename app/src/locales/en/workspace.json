@@ -64,7 +64,6 @@
     "browseByProject": "Browse by project"
   },
   "gitWidget": {
-    "tabs": {"branches": "Branches", "graph": "Graph", "publish": "Publish"},
     "detached": "detached HEAD",
     "noProject": "This agent has no project: no repository to show.",
     "repos": {"label": "Repository", "root": "{name} (root)", "otherToPush": "{name}: {count} to push"},
