@@ -92,6 +92,7 @@ import { usePublishDialog } from '@/plugins-client/kanban/publish-dialog-context
 import { GitStackProjectPicker, useGitStackProject } from '@/plugins-client/kanban/git-stack-project';
 import { useTodoOpener } from '@/plugins-client/kanban/todo-opener';
 import { useProjectSettings } from '@/components/project-settings-slot';
+import { useWidgetAttention, useWidgetCount, useWidgetInFront, useWidgetMenu } from '@/components/widget-host/widget-self';
 
 /** What `@timon/ui` exposes. One object, so `platform-globals` and the served
  *  module cannot list different members. */
@@ -208,6 +209,9 @@ export const UI_KIT = {
   useTodoOpener,
   // The project a `project.settings` row is painted for (client API 19).
   useProjectSettings,
+  // What a widget hands its tab in a stack (client API 19): a count, a dot while something waits
+  // for the person, its header actions moved to the widget's menu, and whether it is in view.
+  useWidgetCount, useWidgetAttention, useWidgetMenu, useWidgetInFront,
   // The table of contents of a list page (client API 15, `page.toc`): its headings, the one
   // in view, and the jump to one.
   usePageToc,
