@@ -20,6 +20,7 @@ export type PullReview = {
 };
 
 import type { JobLinks } from './landing-api';
+import type { BranchGestures } from './forge-branch-api';
 
 /** The way back from a pull request (`forge-links.ts`): our job behind it, when the reader sees it. */
 export type PullRequestLinks = JobLinks & { job_id: string | null };
@@ -36,6 +37,10 @@ export type PullRequestItem = {
   review: PullReview | null;
   /** Absent from an older daemon. */
   links?: PullRequestLinks;
+  /** How GitHub sees the branch against its base (`dirty`: in conflict, `behind`); absent from an older daemon. */
+  mergeStateStatus?: string;
+  /** What the person may do about the branch (`forge-branch-update.ts`); absent from an older daemon. */
+  gestures?: BranchGestures;
 };
 
 export type PullRequestList = { repo: string; pulls: PullRequestItem[] };
@@ -71,4 +76,11 @@ export function reviewBadge(pull: PullRequestItem): ReviewBadge | null {
 /** True while a review runs: the widget then asks again for its verdict. */
 export function anyReviewRunning(pulls: readonly PullRequestItem[]): boolean {
   return pulls.some((p) => p.review?.state === 'running');
+}
+
+/** What the row says of its branch: only a state that calls for a gesture. */
+export function branchChip(pull: PullRequestItem): 'conflict' | 'behind' | null {
+  if (pull.mergeStateStatus === 'dirty') return 'conflict';
+  if (pull.mergeStateStatus === 'behind' && pull.gestures?.update_branch) return 'behind';
+  return null;
 }

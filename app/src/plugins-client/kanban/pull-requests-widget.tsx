@@ -17,7 +17,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Copy, ExternalLink, Eye, FileText, GitPullRequest, Loader2, MessageSquarePlus, MoreHorizontal, ScanSearch } from 'lucide-react';
+import {
+  Copy, ExternalLink, Eye, FileText, GitMerge, GitPullRequest, GitPullRequestArrow, Loader2, MessageSquarePlus, MessageSquareWarning,
+  MoreHorizontal, ScanSearch,
+} from 'lucide-react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
 import { Tile } from '@/components/tile';
@@ -33,7 +36,7 @@ import { cn } from '@/lib/utils';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
 import { useWidgetCount } from '@/components/widget-host/widget-self';
 import {
-  anyReviewRunning, filterByAuthor, pullAuthors, reviewBadge,
+  anyReviewRunning, branchChip, filterByAuthor, pullAuthors, reviewBadge,
   type PullRequestItem, type PullRequestList, type ReviewBadge,
 } from './pull-requests-model';
 import { diffLineKind, getLanding, type Landing } from './landing-api';
@@ -46,6 +49,8 @@ import { ProposalChip } from './proposal-chip';
 import { PublishDialog, type PublishTarget } from './publish-dialog';
 import { useForgeProposals } from './use-forge-proposals';
 import { StackProjectPicker, useStackProject } from './git-stack-project';
+import { proposeAskContributor, proposeBranchUpdate } from './forge-branch-api';
+import { ConflictDialog } from './conflict-dialog';
 
 /** How often a running review is asked for its verdict. */
 const RUNNING_POLL_MS = 15_000;
@@ -83,7 +88,21 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
   const closeJob = useCallback(() => setJob(null), []);
   const proposals = useForgeProposals(useMemo(() => (slug ? [slug] : []), [slug]));
   // A proposal waiting on a row, or a new comment a person writes on a pull request.
-  const [publishing, setPublishing] = useState<{ proposal?: ForgeProposal; target?: PublishTarget } | null>(null);
+  const [publishing, setPublishing] = useState<{ proposal?: ForgeProposal; proposalId?: string; target?: PublishTarget } | null>(null);
+  const [resolving, setResolving] = useState<PullRequestItem | null>(null);
+  /** The branch gesture being prepared, so its row shows it and a second click waits. */
+  const [branchBusy, setBranchBusy] = useState<number | null>(null);
+
+  /** Prepares a write on a pull request's branch and opens it in "Publish on GitHub". */
+  const prepareWrite = async (pull: PullRequestItem, step: typeof proposeBranchUpdate, failure: string) => {
+    if (!slug) return;
+    setBranchBusy(pull.number);
+    const out = await step(slug, pull.number);
+    setBranchBusy(null);
+    if (!out.ok) { toast.error(failure, { description: out.message }); return; }
+    proposals.reload();
+    setPublishing({ proposal: out.value });
+  };
 
   const openJob = async (id: string) => {
     const out = await getLanding(id);
@@ -211,6 +230,10 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
               onComment={() => setPublishing({
                 target: { type: 'pull', number: pull.number, url: pull.url, repo: load.kind === 'ready' ? load.list.repo : null },
               })}
+              branchBusy={branchBusy === pull.number}
+              onUpdateBranch={() => { void prepareWrite(pull, proposeBranchUpdate, t('pullRequests.updateBranchError')); }}
+              onAskContributor={() => { void prepareWrite(pull, proposeAskContributor, t('pullRequests.askContributorError')); }}
+              onResolveConflict={() => setResolving(pull)}
             />
           ))}
         </ul>
@@ -247,12 +270,29 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
       {todoModal}
       {publishing && slug && (
         <PublishDialog
-          key={publishing.proposal?.id ?? `new:${publishing.target?.number}`}
+          key={publishing.proposal?.id ?? publishing.proposalId ?? `new:${publishing.target?.number}`}
           project={slug}
           {...(publishing.proposal ? { proposal: publishing.proposal } : {})}
+          {...(publishing.proposalId ? { proposalId: publishing.proposalId } : {})}
           {...(publishing.target ? { target: publishing.target } : {})}
           onClose={() => setPublishing(null)}
-          onChange={proposals.reload}
+          // A published branch update or push changes what GitHub says of the branch.
+          onChange={() => { proposals.reload(); void reload(true); }}
+        />
+      )}
+
+      {resolving && slug && (
+        <ConflictDialog
+          key={resolving.number}
+          project={slug}
+          pull={{ number: resolving.number, title: resolving.title }}
+          onClose={() => { setResolving(null); proposals.reload(); }}
+          onPublish={(proposalId) => {
+            // Two dialogs do not stack: the conflict closes before its publication opens.
+            setResolving(null);
+            proposals.reload();
+            setPublishing({ proposalId });
+          }}
         />
       )}
 
@@ -333,9 +373,18 @@ function VerdictChip({ badge }: { badge: ReviewBadge }) {
 
 const MENU_ITEM = 'flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 outline-none focus:bg-muted';
 
-function PullRow({ pull, preparing, proposals, onReview, onReport, onOpenTodo, onOpenJob, onOpenProposal, onComment }: {
+const BRANCH_CHIP_TONE = {
+  conflict: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+  behind: 'bg-foreground/[0.06] text-muted-foreground',
+} as const;
+
+function PullRow({
+  pull, preparing, proposals, branchBusy, onReview, onReport, onOpenTodo, onOpenJob, onOpenProposal, onComment,
+  onUpdateBranch, onAskContributor, onResolveConflict,
+}: {
   pull: PullRequestItem;
   preparing: boolean;
+  branchBusy: boolean;
   proposals: readonly ForgeProposal[];
   onReview: () => void;
   onReport: () => void;
@@ -343,8 +392,13 @@ function PullRow({ pull, preparing, proposals, onReview, onReport, onOpenTodo, o
   onOpenJob: (id: string) => void;
   onOpenProposal: (proposal: ForgeProposal) => void;
   onComment: () => void;
+  onUpdateBranch: () => void;
+  onAskContributor: () => void;
+  onResolveConflict: () => void;
 }) {
   const jobId = pull.links?.job_id ?? null;
+  const gestures = pull.gestures;
+  const chip = branchChip(pull);
   const badge = reviewBadge(pull);
   const running = badge?.kind === 'running';
   const meta = [`#${pull.number}`, pull.author ?? t('pullRequests.deletedAuthor')];
@@ -355,6 +409,12 @@ function PullRow({ pull, preparing, proposals, onReview, onReport, onOpenTodo, o
         <div className="line-clamp-2 break-words text-[12.5px] font-medium leading-snug text-foreground" title={pull.title}>{pull.title}</div>
         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <span className="truncate tabular-nums">{meta.join(' · ')}</span>
+          {chip && (
+            <span data-pull-branch={chip} className={cn('inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10.5px] font-medium', BRANCH_CHIP_TONE[chip])}>
+              {t(`pullRequests.branch.${chip}`)}
+            </span>
+          )}
+          {branchBusy && <Loader2 className="size-3 shrink-0 animate-spin" aria-label={t('pullRequests.branchPreparing')} />}
           {badge && <VerdictChip badge={badge} />}
           <ProposalChip proposals={proposals} onOpen={onOpenProposal} />
         </div>
@@ -389,6 +449,21 @@ function PullRow({ pull, preparing, proposals, onReview, onReport, onOpenTodo, o
               </Dropdown.Item>
             )}
             <JobLinksMenuItems links={pull.links} onOpenTodo={onOpenTodo} itemClassName={MENU_ITEM} />
+            {gestures?.update_branch && (
+              <Dropdown.Item data-menu-update-branch="" disabled={branchBusy} onSelect={onUpdateBranch} className={MENU_ITEM}>
+                <GitPullRequestArrow className="size-3.5" />{t('pullRequests.updateBranch')}
+              </Dropdown.Item>
+            )}
+            {gestures?.resolve_conflict && (
+              <Dropdown.Item data-menu-resolve-conflict="" disabled={branchBusy} onSelect={onResolveConflict} className={MENU_ITEM}>
+                <GitMerge className="size-3.5" />{t('pullRequests.resolveConflict')}
+              </Dropdown.Item>
+            )}
+            {gestures?.ask_contributor && (
+              <Dropdown.Item data-menu-ask-contributor="" disabled={branchBusy} onSelect={onAskContributor} className={MENU_ITEM}>
+                <MessageSquareWarning className="size-3.5" />{t('pullRequests.askContributor')}
+              </Dropdown.Item>
+            )}
             <Dropdown.Item data-menu-comment="" onSelect={onComment} className={MENU_ITEM}>
               <MessageSquarePlus className="size-3.5" />{t('pullRequests.proposeComment')}
             </Dropdown.Item>
