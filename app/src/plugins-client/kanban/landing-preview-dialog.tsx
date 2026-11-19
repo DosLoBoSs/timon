@@ -5,7 +5,10 @@
  * the job's pull request brings (the diff, file by file, and the commits),
  * whether Timon would open it (the pre-checks, run dry by the daemon: nothing
  * fetched, pushed or opened), and, beside them, its links — the ideas it
- * carries, their issues, the mission that pilots it, its branch and target.
+ * carries, their issues, the mission that pilots it, its branch and target —
+ * and its checks on the forge with the repair counter. The foot holds the
+ * window's gestures: read the checks again, and the repair the forge calls
+ * for (or, once the repairs are spent, the pull request to take it over).
  *
  * Two islands rather than one long page: a branch of a few hundred files keeps
  * its commits, its verdict and its links one click away. A file's patch is
@@ -13,18 +16,19 @@
  */
 
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
-import { ChevronRight, CircleAlert, CircleCheck, CircleDot, CircleMinus, ExternalLink, GitPullRequest, MessageSquare } from 'lucide-react';
+import { ChevronRight, CircleAlert, CircleCheck, CircleDot, CircleMinus, ExternalLink, GitPullRequest, LoaderCircle, MessageSquare, RefreshCw } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { widgetButtonClass } from '@/components/widget-toolbar';
+import { WidgetButton, widgetButtonClass } from '@/components/widget-toolbar';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { safeHref } from './project-todo-links';
-import { useJobDialog } from './job-dialog-context';
+import { useJobDialog, type JobDialogValue } from './job-dialog-context';
 import {
-  diffLineKind, NO_LINKS, patchBody, previewLanding,
-  type DiffLineKind, type Landing, type LandingPreview, type LinkedIssue, type Precheck, type PreviewFile,
+  diffLineKind, mainRepair, NO_LINKS, patchBody, previewLanding, repairsSpent,
+  type CheckStatus, type DiffLineKind, type Landing, type LandingPreview, type LinkedIssue, type Precheck, type PreviewFile,
 } from './landing-api';
+import { RepairIcon, repairHint, repairLabel } from './landing-repair';
 
 /** How each kind of diff line is painted, here and in the open pull requests' dialog. */
 export const DIFF_LINE_CLASS: Record<DiffLineKind, string> = {
@@ -112,7 +116,7 @@ function Verdict({ preview }: { preview: LandingPreview }) {
 export function ProductJobDialog(): ReactElement | null {
   const host = useJobDialog();
   if (!host) return null;
-  return <JobDialogBody landing={host.landing} onClose={host.close} openTodo={host.openTodo} openMission={host.openMission} />;
+  return <JobDialogBody host={host} />;
 }
 
 const CHIP = 'inline-flex h-5 shrink-0 items-center gap-1 rounded-md px-1.5 text-[10.5px] font-medium tabular-nums';
@@ -196,12 +200,99 @@ export function JobLinksIsland({ landing, openTodo, openMission }: {
   );
 }
 
-function JobDialogBody({ landing, onClose, openTodo, openMission }: {
-  landing: Landing;
-  onClose: () => void;
-  openTodo: ((id: number) => void) | null;
-  openMission: (missionId: string) => void;
-}) {
+const CHECK_TONE: Record<CheckStatus, string> = {
+  fail: 'bg-red-500/15 text-red-700 dark:text-red-300',
+  pass: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+  pending: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+  skipped: 'bg-foreground/[0.06] text-muted-foreground',
+};
+
+/** The pull request's checks as last read, failures first, and the repair counter. */
+export function JobChecksIsland({ landing }: { landing: Landing }): ReactElement {
+  const items = [...(landing.checks?.items ?? [])].sort((a, b) => (a.status === 'fail' ? 0 : 1) - (b.status === 'fail' ? 0 : 1));
+  const r = landing.repairs;
+  return (
+    <section data-job-checks="" aria-label={t('landings.checksIsland.title')} className={cn(ISLAND, 'flex flex-col gap-2 px-3 py-2.5')}>
+      <h3 className="text-[11.5px] font-medium text-muted-foreground">{t('landings.checksIsland.title')}</h3>
+      {landing.checks === null && <p className="text-xs text-muted-foreground">{t('landings.checksIsland.none')}</p>}
+      <dl className="flex flex-col gap-2">
+        {items.map((check) => {
+          const href = safeHref(check.url);
+          return (
+            <LinkRow key={check.name} label={check.name}>
+              <span data-check-status={check.status} className={cn(CHIP, CHECK_TONE[check.status])}>
+                {href ? (
+                  <a href={href} target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">
+                    {t(`landings.checksIsland.status.${check.status}`)}
+                  </a>
+                ) : t(`landings.checksIsland.status.${check.status}`)}
+              </span>
+            </LinkRow>
+          );
+        })}
+        {r && (
+          <div data-repair-counter="" className="flex min-w-0 items-baseline justify-between gap-3 text-xs">
+            <dt className="shrink-0 text-muted-foreground">{t('landings.repair.counterLabel')}</dt>
+            <dd className="tabular-nums" title={r.last ? t(`landings.repair.last.${r.last.state}`) : undefined}>{r.used} / {r.max}</dd>
+          </div>
+        )}
+      </dl>
+      {r?.running && (
+        <p data-repair-running="" className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+          <LoaderCircle className="size-3.5 animate-spin [animation-duration:2s]" aria-hidden />
+          {t('landings.repair.underWay', { kind: repairLabel(r.running.kind) })}
+        </p>
+      )}
+      {!r?.running && r?.last?.state === 'failed' && r.last.error && (
+        // The daemon's own wording: why the last repair was not pushed.
+        <p className="break-words text-[11.5px] text-muted-foreground">{t('landings.repair.last.failed')} · {r.last.error}</p>
+      )}
+    </section>
+  );
+}
+
+/** The foot of the window: read the checks again, and the repair the forge calls for. */
+function JobDialogFoot({ host }: { host: JobDialogValue }): ReactElement {
+  const { landing, busy } = host;
+  const kind = mainRepair(landing);
+  return (
+    <div data-job-foot="" className="flex flex-wrap items-center justify-end gap-2">
+      <WidgetButton
+        data-job-refresh=""
+        onClick={() => { void host.refresh(); }}
+        disabled={busy !== null}
+        icon={<RefreshCw className={cn('size-3.5', busy === 'refresh' && 'animate-spin')} />}
+        label={t('landings.reload')}
+      />
+      {kind && (
+        <WidgetButton
+          primary
+          data-job-repair={kind}
+          onClick={() => { void host.repair(kind); }}
+          disabled={busy !== null}
+          title={repairHint(kind, landing)}
+          icon={busy === kind ? <LoaderCircle className="size-3.5 animate-spin" /> : <RepairIcon kind={kind} />}
+          label={repairLabel(kind)}
+        />
+      )}
+      {!kind && repairsSpent(landing) && landing.pr_url && (
+        <a
+          href={landing.pr_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-job-take-over=""
+          title={t('landings.repair.takeOverTitle')}
+          className={widgetButtonClass({ primary: true })}
+        >
+          <ExternalLink className="size-3.5" aria-hidden />{t('landings.repair.takeOver')}
+        </a>
+      )}
+    </div>
+  );
+}
+
+function JobDialogBody({ host }: { host: JobDialogValue }) {
+  const { landing, close: onClose, openTodo, openMission } = host;
   const [preview, setPreview] = useState<LandingPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
@@ -340,8 +431,10 @@ function JobDialogBody({ landing, onClose, openTodo, openMission }: {
           </div>
           <div className="flex min-h-0 flex-col gap-3 md:overflow-y-auto">
             <JobLinksIsland landing={landing} openTodo={openTodo} openMission={openMission} />
+            {landing.state === 'open' && <JobChecksIsland landing={landing} />}
           </div>
         </div>
+        {landing.state === 'open' && <JobDialogFoot host={host} />}
       </DialogContent>
     </Dialog>
   );
