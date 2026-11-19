@@ -109,8 +109,21 @@ import { reservedRouteSegment } from './reserved-routes.js';
  * `forge.publish.dialog` slot (the "Publish on GitHub" window,
  * `usePublishDialog`, whose gestures go through the signed-in person's
  * session). No member of the host's `PluginContext` changes.
+ *
+ * 19 — `ctx.forge`, the GitHub repository of a project whose integration opens
+ * pull requests, for a plugin that has neither `gh` nor the project's account:
+ * `forge:read` reads its issues, open pull requests and checks; `forge:propose`
+ * stores a proposed comment that a signed-in person publishes or discards in
+ * the "Publish on GitHub" window, never a write. Both sensitive. A manifest
+ * declaring either must declare 19. API 18 is not released either, but it
+ * ships with an earlier pull request than the forge facade, possibly in an
+ * earlier release: the facade opens its own wave rather than change a wave
+ * already reviewed (docs/SDK-COMPAT.md §119). The browser half does not change.
  */
-export const PLUGIN_API_VERSION = 18;
+export const PLUGIN_API_VERSION = 19;
+
+/** First contract that knows `ctx.forge` and the `forge:read` / `forge:propose` permissions. */
+export const FORGE_API_VERSION = 19;
 
 /** First contract that knows `kind: dictation` and its manifest block. */
 export const DICTATION_API_VERSION = 14;
@@ -273,6 +286,9 @@ export const PLUGIN_PERMISSIONS = [
   'onboarding:read',
   // API 14 — a dictation engine hears the user's voice (TODO #484). Sensitive.
   'dictation:engine',
+  // API 19 — the GitHub repository of a project (`ctx.forge`). Both sensitive.
+  'forge:read',
+  'forge:propose',
 ] as const;
 export type PluginPermission = (typeof PLUGIN_PERMISSIONS)[number];
 
@@ -345,6 +361,8 @@ export const SENSITIVE_PLUGIN_PERMISSIONS = Object.freeze([
   'browser:annotations:read', // what the user pointed at in their browser, what they said about it and what the page showed
   'browser:annotations:write', // resolves, links and deletes those annotations
   'dictation:engine', // hears the user's voice and turns it into text, which may leave the window
+  'forge:read', // a project's issues and pull requests, read with the project's GitHub account, private repositories included
+  'forge:propose', // puts a public comment, to be published under the project's GitHub account, before a person
 ] as const satisfies readonly PluginPermission[]);
 
 /**
@@ -1080,6 +1098,11 @@ export function readManifest(
   }
   if (manifest.webhooks?.length && !manifest.permissions.includes('webhooks:receive')) {
     return fail('manifest', '`webhooks` requires permission `webhooks:receive`');
+  }
+  // `ctx.forge` is contract 19: a manifest written for an older one cannot know it.
+  const forge = manifest.permissions.find((permission) => permission === 'forge:read' || permission === 'forge:propose');
+  if (forge && manifest.apiVersion < FORGE_API_VERSION) {
+    return fail('manifest', `permission \`${forge}\` needs \`apiVersion: ${FORGE_API_VERSION}\` or later`);
   }
   // A format other than `standard` is contract 8: a daemon that predates it
   // refuses the manifest on its apiVersion, with a message naming the cause.
