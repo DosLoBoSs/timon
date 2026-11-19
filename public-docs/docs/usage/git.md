@@ -160,7 +160,7 @@ To allow it, open the project's window: under **Integrations**, the **Contributo
 
 Each row gives the job's title (its pull request's, or its branch until there is one), its branch, and where it stands: **Not pushed**, **PR #n**, **Merged**, **Landed** once Timon has closed the job's tasks and ideas, or **Closed**. While the pull request is open, the row also shows the failing or running checks (or how many passed when none fails), a conflict, a draft and an approval or a request for changes.
 
-The row's button is **Preview** while the job has something to land, and **Open the pull request** once it is merged or closed. Its menu (**…**) holds the other one, **Show the TO DO (#n)** for each idea the job carries, **Open the job** for the conversation of the mission that pilots it, and **Refresh the checks**. A row marked **to approve** has a comment waiting for you in [Publish on GitHub](#publish-on-github): click the mark to read it. In an agent's chat the widget lists the jobs of the conversation's project; elsewhere, the project picked for **Pull requests**, or every project.
+The row's button is the repair the pull request calls for, when one may start (below); otherwise **Preview** while the job has something to land, and **Open the pull request** once it is merged or closed. Its menu (**…**) holds the other repairs the pull request calls for, **Preview** or **Open the pull request**, **Show the TO DO (#n)** for each idea the job carries, **Open the job** for the conversation of the mission that pilots it, and **Refresh the checks**. A row marked **to approve** has a comment waiting for you in [Publish on GitHub](#publish-on-github): click the mark to read it. In an agent's chat the widget lists the jobs of the conversation's project; elsewhere, the project picked for **Pull requests**, or every project.
 
 The list is read again each time its tab comes to the front. Inside the stack, **Refresh** sits in the widget's menu (the gear, or a right click on the tabs); a **Jobs** card on its own keeps it in its header.
 
@@ -180,6 +180,24 @@ The preview also says whether the branch would merge into the target without a c
 - **Branch**: the job's branch and the branch it lands into.
 
 You only see the ideas and the mission you may open.
+
+While the pull request is open, **Checks** lists its checks as last read from GitHub, failures first (click a status to open the check on GitHub), and how many repairs the job used. The foot of the window has **Refresh**, which reads the checks again, and the repair the pull request calls for.
+
+### Repairing a job's pull request
+
+When a job's pull request needs work, Timon can hand it back to the job's agent, on your click only. The row's button, and the button at the foot of the job's window, is the repair the pull request calls for:
+
+| Button | When | What the agent gets |
+|---|---|---|
+| **Resolve the conflict** | the branch conflicts with its target | the files in conflict; it merges the target into the branch, never rebases |
+| **Fix the checks** | a check fails | the names of the failing checks and the end of their logs |
+| **Address the comments** | a reviewer asked for changes, or review threads are still open | the open review threads and the review's decision |
+
+A conflict comes first: GitHub does not run the checks of a branch that does not merge. The other repairs wait in the row's menu.
+
+Timon reads the pull request again before it starts anything, and refuses when there is nothing of that kind left to fix. The repair is a Kanban task on the job's branch, for the job's agent and model, followed by the usual review. Whatever GitHub writes (logs, comments, file names) reaches the agent as data, never as instructions. The agent never pushes and never writes on GitHub: once the repair is reviewed and merged into the job's branch, Timon pushes the branch to the pull request itself, with the same checks as when it opened it, and a notification says whether it pushed, found nothing new, or could not push.
+
+One repair runs at a time: the row shows **Repair 1/3** with a turning icon until it ends. A job gets three repairs, whatever became of them; the row then shows **Repairs 3/3**, and the job's window offers **Take over by hand**, which opens the pull request on GitHub. Asking for a repair takes a signed-in person allowed to manage projects; an agent cannot ask for one.
 
 ## From the TO DO notebook
 

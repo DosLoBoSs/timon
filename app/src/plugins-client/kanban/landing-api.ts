@@ -15,6 +15,37 @@ export type LandingChecks = {
   review: 'approved' | 'changes_requested' | 'review_required' | null;
   counts: Record<CheckStatus, number>;
   items: Array<{ name: string; status: CheckStatus; url: string | null }>;
+  /** Absent from an older daemon. */
+  merge_state?: string;
+  unresolved_threads?: number | null;
+};
+
+/** What a repair of one of our jobs fixes (`orchestrator/src/landing-repair.ts`). */
+export type RepairKind = 'checks' | 'comments' | 'conflict';
+
+/** The order a row offers them: a conflict first (the checks do not run on a
+ *  branch that does not merge), then the checks, then the review. */
+export const REPAIR_KINDS: readonly RepairKind[] = ['conflict', 'checks', 'comments'];
+
+export type LandingRepair = {
+  id: string;
+  kind: RepairKind;
+  state: 'running' | 'pushed' | 'unchanged' | 'failed';
+  task_id: string;
+  head_after: string | null;
+  /** The daemon's own wording, in English. */
+  error: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
+/** The repairs of a job: the counter and what the forge last said needs one. */
+export type LandingRepairs = {
+  used: number;
+  max: number;
+  running: LandingRepair | null;
+  last: LandingRepair | null;
+  needs: RepairKind[];
 };
 
 /** An idea a job carries (`orchestrator/src/forge-links.ts`), among those the reader sees. */
@@ -70,6 +101,8 @@ export type Landing = {
   pr_title: string | null;
   /** Absent from an older daemon. */
   links?: JobLinks;
+  /** Absent from an older daemon. */
+  repairs?: LandingRepairs;
 };
 
 export type PrecheckName =
@@ -145,6 +178,22 @@ export async function refreshLandingChecks(id: string, fetchImpl: typeof fetch =
   try {
     const res = await fetchImpl(`${BASE}/${encodeURIComponent(id)}/checks`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+    });
+    return await answer(res, (b) => (b as { landing: Landing }).landing);
+  } catch {
+    return failure();
+  }
+}
+
+/**
+ * Asks the daemon to repair the job's pull request: it reads the forge again,
+ * refuses when there is nothing of that kind to fix, and otherwise starts a
+ * `code` task on the job's branch. Answers the job with its new counter.
+ */
+export async function requestLandingRepair(id: string, kind: RepairKind, fetchImpl: typeof fetch = fetch): Promise<Answer<Landing>> {
+  try {
+    const res = await fetchImpl(`${BASE}/${encodeURIComponent(id)}/repairs`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind }),
     });
     return await answer(res, (b) => (b as { landing: Landing }).landing);
   } catch {
@@ -235,9 +284,35 @@ export function groupLandings(landings: readonly Landing[], now: number): Array<
     .map((group) => ({ group, landings: byGroup.get(group)!.sort((a, b) => b.updated_at - a.updated_at) }));
 }
 
-/** The row's main action: the preview while the job has something to land,
- *  its pull request once it is merged or closed (the preview is empty then). */
-export function landingAction(landing: Landing): 'preview' | 'openPr' {
+/** Whether a person may ask for one more repair now: an open pull request,
+ *  none under way, the cap not reached. */
+export function canRepair(landing: Landing): boolean {
+  const r = landing.repairs;
+  return !!r && landing.state === 'open' && r.running === null && r.used < r.max;
+}
+
+/** The repairs the forge calls for, in the order a row offers them. */
+export function repairsNeeded(landing: Landing): RepairKind[] {
+  const needs = landing.state === 'open' ? landing.repairs?.needs ?? [] : [];
+  return REPAIR_KINDS.filter((k) => needs.includes(k));
+}
+
+/** The repair the row offers as its main action, if one may start now. */
+export function mainRepair(landing: Landing): RepairKind | null {
+  return canRepair(landing) ? repairsNeeded(landing)[0] ?? null : null;
+}
+
+/** Repairs are spent while the forge still asks for one: a person takes the job over. */
+export function repairsSpent(landing: Landing): boolean {
+  const r = landing.repairs;
+  return !!r && r.running === null && r.used >= r.max && repairsNeeded(landing).length > 0;
+}
+
+/** The row's main action: the repair the forge calls for when one may start,
+ *  else the preview while the job has something to land, its pull request
+ *  once it is merged or closed (the preview is empty then). */
+export function landingAction(landing: Landing): 'repair' | 'preview' | 'openPr' {
+  if (mainRepair(landing)) return 'repair';
   return (landing.state === 'merged' || landing.state === 'closed') && landing.pr_url ? 'openPr' : 'preview';
 }
 

@@ -8,8 +8,10 @@
  * 300 px rail.
  *
  * One row per job: its title and where it stands, ONE action in an icon (the
- * preview while there is something to land, the pull request once merged),
- * the rest in "…". A widget of `@timon/kanban`, stacked by default in the
+ * repair the forge calls for — fix the checks, address the comments, resolve
+ * the conflict — while one may start, else the preview while there is
+ * something to land, the pull request once merged), the rest in "…". A repair
+ * starts only on that click, three at most per job (`landing-repair.tsx`). A widget of `@timon/kanban`, stacked by default in the
  * chat's "Git" stack. In a chat's rail it narrows to the conversation's
  * project; elsewhere the project is picked once for the stack
  * (`git-stack-project.tsx`), all of them when none is.
@@ -21,7 +23,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CircleAlert, CircleCheck, CircleDashed, ExternalLink, Eye, GitPullRequest, MoreHorizontal, RefreshCw } from 'lucide-react';
+import { CircleAlert, CircleCheck, CircleDashed, ExternalLink, Eye, GitPullRequest, LoaderCircle, MoreHorizontal, RefreshCw } from 'lucide-react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { Tile } from '@/components/tile';
 import { WidgetButton, widgetButtonClass } from '@/components/widget-toolbar';
@@ -32,9 +34,10 @@ import { t } from '@/lib/i18n';
 import { NativeViewCover } from '@/lib/native-view-cover';
 import { cn } from '@/lib/utils';
 import {
-  CHECKS_REFRESH_MS, groupLandings, landingAction, landingsToRefresh, listLandings, refreshLandingChecks,
-  type Landing, type LandingGroup,
+  canRepair, CHECKS_REFRESH_MS, groupLandings, landingAction, landingsToRefresh, listLandings, mainRepair,
+  refreshLandingChecks, repairsNeeded, type Landing, type LandingGroup, type RepairKind,
 } from './landing-api';
+import { askRepair, RepairChip, RepairIcon, repairLabel } from './landing-repair';
 import { JobDialog } from './job-dialog';
 import { JobLinksMenuItems } from './job-links-menu';
 import { useTodoOpener } from './todo-opener';
@@ -99,20 +102,61 @@ function openPr(landing: Landing) {
   if (landing.pr_url) window.open(landing.pr_url, '_blank', 'noopener,noreferrer');
 }
 
-function LandingRow({ landing, proposals, onPreview, onRefresh, onOpenTodo, onOpenProposal, refreshing }: {
+function MainAction({ landing, repairing, onPreview, onRepair }: {
+  landing: Landing;
+  repairing: boolean;
+  onPreview: () => void;
+  onRepair: (kind: RepairKind) => void;
+}) {
+  const action = landingAction(landing);
+  const kind = mainRepair(landing);
+  if (action === 'repair' && kind) {
+    const label = repairLabel(kind);
+    return (
+      <WidgetButton
+        data-landing-action="repair"
+        data-repair-kind={kind}
+        onClick={() => onRepair(kind)}
+        disabled={repairing}
+        aria-busy={repairing || undefined}
+        title={label}
+        aria-label={label}
+        icon={repairing ? <LoaderCircle className="size-3.5 animate-spin" /> : <RepairIcon kind={kind} />}
+      />
+    );
+  }
+  const label = action === 'openPr' ? t('landings.openPr') : t('landings.preview');
+  return (
+    <WidgetButton
+      data-landing-action={action}
+      onClick={action === 'openPr' ? () => openPr(landing) : onPreview}
+      title={label}
+      aria-label={label}
+      icon={action === 'openPr' ? <ExternalLink className="size-3.5" /> : <Eye className="size-3.5" />}
+    />
+  );
+}
+
+function LandingRow({ landing, proposals, onPreview, onRefresh, onRepair, onOpenTodo, onOpenProposal, refreshing, repairing }: {
   landing: Landing;
   proposals: readonly ForgeProposal[];
   onPreview: () => void;
   onRefresh: () => void;
+  onRepair: (kind: RepairKind) => void;
   onOpenTodo: (id: number) => void;
   onOpenProposal: (proposal: ForgeProposal) => void;
   refreshing: boolean;
+  repairing: boolean;
 }) {
   // The pull request's title says what the job is; until there is one, its
   // branch is all there is, and the meta line does not repeat it.
   const title = landing.pr_title || landing.branch;
   const action = landingAction(landing);
-  const actionLabel = action === 'openPr' ? t('landings.openPr') : t('landings.preview');
+  const main = mainRepair(landing);
+  // The other repairs the forge calls for; all of them, greyed, while one
+  // runs or none is left, so the menu still says what is wrong.
+  const otherRepairs = repairsNeeded(landing).filter((k) => k !== main);
+  const repairOpen = canRepair(landing) && !repairing;
   return (
     <li data-landing={landing.id} className="flex items-center gap-1 rounded-lg bg-muted/30 py-2 pl-2.5 pr-1 transition-colors hover:bg-muted/50">
       <div className="min-w-0 flex-1">
@@ -122,17 +166,12 @@ function LandingRow({ landing, proposals, onPreview, onRefresh, onOpenTodo, onOp
           <StateBadge landing={landing} />
           {landing.conflict === true && <span className={cn(BADGE, TONE.busy)}>{t('landings.conflict')}</span>}
           <ChecksBadges landing={landing} />
+          <RepairChip landing={landing} />
           <ProposalChip proposals={proposals} onOpen={onOpenProposal} />
         </div>
       </div>
       {/* Icon only: the row's width belongs to the job, not to its action. */}
-      <WidgetButton
-        data-landing-action={action}
-        onClick={action === 'openPr' ? () => openPr(landing) : onPreview}
-        title={actionLabel}
-        aria-label={actionLabel}
-        icon={action === 'openPr' ? <ExternalLink className="size-3.5" /> : <Eye className="size-3.5" />}
-      />
+      <MainAction landing={landing} repairing={repairing} onPreview={onPreview} onRepair={onRepair} />
       <Dropdown.Root modal={false}>
         <Dropdown.Trigger asChild>
           <button type="button" title={t('landings.more')} aria-label={t('landings.more')} className={widgetButtonClass({ iconOnly: true })}>
@@ -142,6 +181,11 @@ function LandingRow({ landing, proposals, onPreview, onRefresh, onOpenTodo, onOp
         <Dropdown.Portal>
           <Dropdown.Content sideOffset={6} align="end" className="z-50 min-w-48 rounded-lg border border-border bg-popover p-1 text-xs text-popover-foreground shadow-elev-2">
             <NativeViewCover />
+            {otherRepairs.map((kind) => (
+              <Dropdown.Item key={kind} data-repair-menu={kind} disabled={!repairOpen} onSelect={() => onRepair(kind)} className={MENU_ITEM}>
+                <RepairIcon kind={kind} />{repairLabel(kind)}
+              </Dropdown.Item>
+            ))}
             {action !== 'preview' && (
               <Dropdown.Item onSelect={onPreview} className={MENU_ITEM}>
                 <Eye className="size-3.5" />{t('landings.preview')}
@@ -179,6 +223,7 @@ export function LandingWidget({ handle, className }: WidgetProps) {
   const [error, setError] = useState<string | null>(null);
   const [previewed, setPreviewed] = useState<Landing | null>(null);
   const [refreshing, setRefreshing] = useState<ReadonlySet<string>>(new Set());
+  const [repairing, setRepairing] = useState<ReadonlySet<string>>(new Set());
   const current = useRef<Landing[]>([]);
   const { openTodo, todoModal } = useTodoOpener();
   const [publishing, setPublishing] = useState<ForgeProposal | null>(null);
@@ -196,6 +241,13 @@ export function LandingWidget({ handle, className }: WidgetProps) {
       // A forge that does not answer leaves the last copy on the card.
       if (out.ok) merge(out.value);
     }
+  }, [merge]);
+
+  const repair = useCallback(async (landing: Landing, kind: RepairKind) => {
+    setRepairing((s) => new Set(s).add(landing.id));
+    const fresh = await askRepair(landing, kind);
+    setRepairing((s) => { const n = new Set(s); n.delete(landing.id); return n; });
+    if (fresh) merge(fresh);
   }, [merge]);
 
   const load = useCallback(async () => {
@@ -268,8 +320,10 @@ export function LandingWidget({ handle, className }: WidgetProps) {
                 key={landing.id}
                 landing={landing}
                 refreshing={refreshing.has(landing.id)}
+                repairing={repairing.has(landing.id)}
                 onPreview={() => setPreviewed(landing)}
                 onRefresh={() => { void refreshChecks([landing]); }}
+                onRepair={(kind) => { void repair(landing, kind); }}
                 onOpenTodo={openTodo}
                 proposals={proposalsForLanding(proposals.pending, landing)}
                 onOpenProposal={setPublishing}
@@ -278,7 +332,7 @@ export function LandingWidget({ handle, className }: WidgetProps) {
           </ul>
         </section>
       ))}
-      {previewed && <JobDialog landing={previewed} onClose={closePreview} openTodo={openTodo} />}
+      {previewed && <JobDialog landing={previewed} onClose={closePreview} openTodo={openTodo} onChange={merge} />}
       {todoModal}
       {publishing && (
         <PublishDialog
