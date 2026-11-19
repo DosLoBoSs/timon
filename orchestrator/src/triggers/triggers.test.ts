@@ -1010,6 +1010,30 @@ test('schedule whose target fails for real: no waiting, the owner is alerted at 
   assert.match(String(alerts[0]!.body), /workflow: unknown workflow: wf/);
 });
 
+test('schedule failing occurrence after occurrence: one alert per streak, a success starts a new one', (t) => {
+  let broken = true;
+  const runs: string[] = [];
+  t.after(registerActionProvider('workflow', workflowStub(runs, () => (broken ? 'unknown workflow: wf' : null))));
+  const t0 = Date.now();
+  const id = workflowSchedule('Flaky target', t0 - 60_000);
+  const occurrence = (at: number) => {
+    db.prepare(`UPDATE triggers SET next_run_at = ? WHERE id = ?`).run(at - 1, id);
+    tickSchedules(at);
+  };
+  const alerts = () => scheduleNotes(id).filter((n) => n.type === 'alert').length;
+  occurrence(t0);
+  occurrence(t0 + 60_000);
+  occurrence(t0 + 120_000);
+  assert.equal(scheduleDeliveries(id).length, 3);
+  assert.equal(alerts(), 1, 'the owner is told once, not at every occurrence');
+  broken = false;
+  occurrence(t0 + 180_000);
+  assert.deepEqual(runs, [id]);
+  broken = true;
+  occurrence(t0 + 240_000);
+  assert.equal(alerts(), 2, 'a failure after a success is a new streak');
+});
+
 test('schedule floor: once a minute at most on every write, a schedule saved before it stays renamable and switchable off', async () => {
   const everyTenSeconds = { source: 'schedule', name: 'Too often', config: { cron: '*/10 * * * * *' }, actions: [{ type: 'notify', title: 'x' }] };
   const refused = await api('POST', '/api/triggers', everyTenSeconds);

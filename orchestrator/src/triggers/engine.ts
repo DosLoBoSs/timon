@@ -183,11 +183,20 @@ function holdForProviders(trigger: Trigger, now: number): boolean {
 }
 
 /**
+ * Schedules whose last run failed and whose owner was told. One alert per
+ * streak: a cron every minute against a module that is switched off would
+ * otherwise alert every minute. A successful run ends the streak.
+ */
+const failing = new Set<string>();
+
+/**
  * A scheduled run nobody watches: a failure that will not fix itself reaches
  * the owner as well as the journal. `trigger:<id>` as source, so an event
  * trigger never fires on its own alert.
  */
 function alertScheduleFailure(trigger: Trigger, error: string): void {
+  if (failing.has(trigger.id)) return;
+  failing.add(trigger.id);
   try {
     createNotification({
       type: 'alert', title: `Scheduled trigger failed: ${trigger.name}`, body: error,
@@ -229,7 +238,8 @@ export function tickSchedules(now: number = Date.now()): void {
       failure = (err as Error).message;
       recordDelivery({ triggerId: trigger.id, status: 'error', reason: failure });
     }
-    if (failure !== null) alertScheduleFailure(trigger, failure);
+    if (failure === null) failing.delete(trigger.id);
+    else alertScheduleFailure(trigger, failure);
   }
 }
 
