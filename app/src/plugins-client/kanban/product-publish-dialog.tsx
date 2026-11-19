@@ -16,7 +16,7 @@ import { useState, type ReactElement, type ReactNode } from 'react';
 import { ExternalLink, Loader2, Send } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { WidgetButton } from '@/components/widget-toolbar';
+import { Button } from '@/components/ui/button';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import {
@@ -187,34 +187,39 @@ export function ProductPublishDialog(): ReactElement | null {
             <>
               {fresh ? (
                 <>
-                  <WidgetButton data-publish-cancel="" onClick={host.close} disabled={busy !== null} label={t('forgePublish.cancel')} />
-                  <WidgetButton data-publish-save="" onClick={() => void host.save()} disabled={busy !== null || !!problem}
-                    label={busy === 'save' ? t('forgePublish.saving') : t('forgePublish.keep')} />
+                  <Button variant="secondary" size="sm" data-publish-cancel="" onClick={host.close} disabled={busy !== null}>{t('forgePublish.cancel')}</Button>
+                  <Button variant="secondary" size="sm" data-publish-save="" onClick={() => void host.save()} disabled={busy !== null || !!problem}>
+                    {busy === 'save' ? t('forgePublish.saving') : t('forgePublish.keep')}
+                  </Button>
                 </>
               ) : (
                 <>
-                  <WidgetButton data-publish-discard="" onClick={() => void host.discard()} disabled={busy !== null}
-                    label={busy === 'discard' ? t('forgePublish.discarding') : t(`forgePublish.discardKind.${kind}`)} />
+                  <Button variant="secondary" size="sm" data-publish-discard="" onClick={() => void host.discard()} disabled={busy !== null}>
+                    {busy === 'discard' ? t('forgePublish.discarding') : t(`forgePublish.discardKind.${kind}`)}
+                  </Button>
                   {!editable ? null : editing ? (
-                    <WidgetButton data-publish-save="" onClick={() => { void host.save().then((ok) => { if (ok) setEditing(false); }); }} disabled={busy !== null || !!problem}
-                      label={busy === 'save' ? t('forgePublish.saving') : t('forgePublish.save')} />
+                    <Button variant="secondary" size="sm" data-publish-save="" onClick={() => { void host.save().then((ok) => { if (ok) setEditing(false); }); }} disabled={busy !== null || !!problem}>
+                      {busy === 'save' ? t('forgePublish.saving') : t('forgePublish.save')}
+                    </Button>
                   ) : (
-                    <WidgetButton data-publish-edit="" onClick={() => setEditing(true)} disabled={busy !== null || loading} label={t('forgePublish.edit')} />
+                    <Button variant="secondary" size="sm" data-publish-edit="" onClick={() => setEditing(true)} disabled={busy !== null || loading}>{t('forgePublish.edit')}</Button>
                   )}
                 </>
               )}
-              <WidgetButton
-                primary
+              {/* The window's one main action, filled: what leaves GitHub's way. */}
+              <Button
+                size="sm"
                 data-publish-send=""
                 onClick={() => void host.publish()}
                 disabled={!canPublish}
                 title={account === null && !loading ? t('forgePublish.noAccount') : undefined}
-                icon={busy === 'publish' ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-                label={busy === 'publish' ? t('forgePublish.publishing') : t(`forgePublish.publishKind.${kind}`)}
-              />
+              >
+                {busy === 'publish' ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
+                {busy === 'publish' ? t('forgePublish.publishing') : t(`forgePublish.publishKind.${kind}`)}
+              </Button>
             </>
           ) : (
-            <WidgetButton onClick={host.close} label={t('forgePublish.close')} />
+            <Button variant="secondary" size="sm" onClick={host.close}>{t('forgePublish.close')}</Button>
           )}
         </div>
       </DialogContent>
