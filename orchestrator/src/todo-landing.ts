@@ -28,6 +28,8 @@ export type TodoLandingState = (typeof TODO_LANDING_STATES)[number];
 
 /** One job (integration branch) of an idea. */
 export type TodoLandingJob = {
+  /** The job's id: `GET /api/kanban/landings/:id` reads it with its links. */
+  jobId: string;
   state: TodoLandingState;
   branch: string;
   prNumber: number | null;
@@ -99,6 +101,7 @@ function jobOf(row: TodoIntegrationRow): TodoLandingJob {
   // The pull request columns only mean something once one was opened.
   const withPr = state === 'open' || state === 'merged' || state === 'closed';
   return {
+    jobId: row.id,
     state,
     branch: row.branch,
     prNumber: withPr ? row.pr_number : null,

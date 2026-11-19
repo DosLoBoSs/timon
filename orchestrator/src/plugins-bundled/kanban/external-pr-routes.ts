@@ -2,7 +2,7 @@
  * The open pull requests of a project and the brief of their relecture
  * (`external-pr-review.ts`):
  *
- *   GET  /api/projects/:slug/pull-requests                 the list, with each one's review
+ *   GET  /api/projects/:slug/pull-requests                 the list, with each one's review and links
  *   GET  /api/projects/:slug/pull-requests/:number/diff    the diff, as text
  *   POST /api/projects/:slug/pull-requests/:number/review  prepares the brief (starts nothing)
  *
@@ -12,6 +12,10 @@
  * with the account and the config folder of the project's integration setting,
  * the same right that names them. The daemon token passes, as for every
  * project setting the CLI and the agents use.
+ *
+ * Each pull request of the list comes with its `links` (`forge-links.ts`): the
+ * job behind it when it is one of ours, and the ideas, issues and pilot
+ * mission the caller may see.
  */
 import type { Request, Response, Router } from 'express';
 import { z } from 'zod';
@@ -20,7 +24,8 @@ import {
   listPullRequests, prepareReview, readPullRequestDiff,
   type ExternalPrDeps, type ExternalPrRefusal,
 } from '../../external-pr-review.js';
-import { rejectIfDenied, requireAuth } from '../../users/identity.js';
+import { pullRequestLinks } from '../../forge-links.js';
+import { rejectIfDenied, requireAuth, viewerFromRequest } from '../../users/identity.js';
 
 const Params = z.object({
   slug: z.string().min(1).max(100).regex(/^[a-z0-9][a-z0-9._-]*$/i, 'a project slug'),
@@ -83,7 +88,8 @@ export function registerExternalPrRoutes(app: Router, deps: ExternalPrDeps = {})
     try {
       const out = await listPullRequests(p.slug, deps);
       if (!out.ok) { res.status(out.status).json(refusalBody(out)); return; }
-      res.json({ repo: out.repo, pulls: out.pulls });
+      const links = pullRequestLinks(p.slug, out.repo, out.pulls, viewerFromRequest(req));
+      res.json({ repo: out.repo, pulls: out.pulls.map((pull) => ({ ...pull, links: links.get(pull.number)! })) });
     } catch (err) { failed(res, err); }
   });
 

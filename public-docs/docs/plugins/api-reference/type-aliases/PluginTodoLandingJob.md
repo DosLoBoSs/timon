@@ -13,6 +13,12 @@
 
 ***
 
+### jobId?
+
+> `optional` **jobId?**: `string`
+
+***
+
 ### prNumber
 
 > **prNumber**: `number` \| `null`

@@ -208,11 +208,23 @@ export function integrationVisibleTo(viewer: DbViewer | null, row: IntegrationRo
     .some((t) => (row.project === null || t.project === row.project) && rowVisible(t, viewer, 'tasks') !== undefined);
 }
 
-export type IntegrationFilter = { project?: string; series?: string };
+/** `todo`: the jobs of one idea, oldest first, the way its badge finds them. */
+export type IntegrationFilter = { project?: string; series?: string; todo?: number };
+
+function integrationsOfTodo(todoId: number, viewer: DbViewer | null): IntegrationRow[] {
+  // An idea the caller cannot see has no jobs: the answer must not tell it exists.
+  if (!viewer || !dbApi.getProjectTodo(todoId, viewer)) return [];
+  const ids = [...new Set(dbApi.listTodoIntegrations([todoId], viewer).map((r) => r.id))];
+  return ids.map((id) => dbApi.getIntegrationById(id)).filter((r): r is IntegrationRow => !!r)
+    .sort((a, b) => a.created_at - b.created_at);
+}
 
 export function listIntegrationViews(filter: IntegrationFilter, viewer: DbViewer | null): IntegrationView[] {
   let rows: IntegrationRow[];
-  if (filter.series) rows = dbApi.listIntegrationsBySeries(filter.series);
+  if (filter.todo !== undefined) {
+    rows = integrationsOfTodo(filter.todo, viewer);
+    if (filter.series) rows = rows.filter((r) => r.series_id === filter.series);
+  } else if (filter.series) rows = dbApi.listIntegrationsBySeries(filter.series);
   else if (filter.project) rows = dbApi.listIntegrationsByProject(filter.project);
   else rows = dbApi.listRecentIntegrations();
   if (filter.project) rows = rows.filter((r) => r.project === filter.project);

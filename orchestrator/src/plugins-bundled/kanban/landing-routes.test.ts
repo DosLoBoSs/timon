@@ -54,6 +54,10 @@ dbApi.createTask(randomUUID(), 'Add b', 'acme.coder', {
 const ROW = dbApi.recordIntegration({
   repo, branch: 'feat/topic', remote: 'origin', target: 'main', mode: 'pr', project: SLUG, seriesId: SERIES,
 });
+// The idea the job carries, linked to an issue.
+const TODO = dbApi.insertProjectTodo({ text: 'Add b', project: SLUG, ownerUserId: 'owner-a' }).id;
+dbApi.putTodoExternalRef({ todoId: TODO, provider: 'github', ref: 'acme/app#7', url: null, label: null, pluginId: null });
+dbApi.setTaskTodoId(dbApi.listTasksByBaseBranch('feat/topic')[0]!.id, TODO);
 
 let forgeCalls = 0;
 const deps: PreviewDeps = {
@@ -100,6 +104,7 @@ function call(method: 'GET' | 'POST', path: string, who: Who, body?: unknown) {
 
 const ROUTES: Array<['GET' | 'POST', string]> = [
   ['GET', '/api/kanban/landings'],
+  ['GET', `/api/kanban/landings?todo=${TODO}`],
   ['GET', `/api/kanban/landings/${ROW.id}`],
   ['POST', `/api/kanban/landings/${ROW.id}/checks`],
   ['POST', `/api/kanban/landings/${ROW.id}/preview`],
@@ -114,13 +119,15 @@ test('an anonymous request is refused on every route, before anything is read', 
 });
 
 test('a caller who cannot see the job finds nothing', async () => {
-  for (const [method, path] of ROUTES.slice(1)) {
+  for (const [method, path] of ROUTES.slice(2)) {
     const res = await call(method, path, 'stranger', method === 'POST' ? {} : undefined);
     assert.equal(res.status, 404, `${method} ${path}`);
     assert.equal(((await res.json()) as { code: string }).code, 'landing_not_found');
   }
-  const list = await (await call('GET', '/api/kanban/landings', 'stranger')).json() as { landings: unknown[] };
-  assert.deepEqual(list.landings, []);
+  for (const path of ROUTES.slice(0, 2).map(([, p]) => p)) {
+    const list = await (await call('GET', path, 'stranger')).json() as { landings: unknown[] };
+    assert.deepEqual(list.landings, [], path);
+  }
   assert.equal(forgeCalls, 0);
 });
 
@@ -168,4 +175,23 @@ test('the checks of a job without a pull request are refused as not applicable',
   const res = await call('POST', `/api/kanban/landings/${ROW.id}/checks`, 'owner', {});
   assert.equal(res.status, 409);
   assert.equal(((await res.json()) as { code: string }).code, 'landing_checks_unavailable');
+});
+
+test('every job comes with its links: its idea, the issue, the series', async () => {
+  const callsBefore = forgeCalls;
+  type Links = { todos: Array<{ id: number; text: string }>; issues: Array<{ repo: string; number: number; todo_id: number | null; closes: boolean }>; series_id: string | null; pilot_mission_id: string | null };
+  const byTodo = await (await call('GET', `/api/kanban/landings?todo=${TODO}`, 'owner')).json() as { landings: Array<{ id: string; links: Links }> };
+  assert.deepEqual(byTodo.landings.map((l) => l.id), [ROW.id]);
+  const links = byTodo.landings[0]!.links;
+  assert.deepEqual(links.todos.map((t) => [t.id, t.text]), [[TODO, 'Add b']]);
+  assert.deepEqual(links.issues, [{ repo: 'acme/app', number: 7, url: null, todo_id: TODO, closes: false }]);
+  assert.equal(links.series_id, SERIES);
+  // No mission was ever recorded for this series: nothing to open.
+  assert.equal(links.pilot_mission_id, null);
+
+  const one = await (await call('GET', `/api/kanban/landings/${ROW.id}`, 'owner')).json() as { landing: { links: Links } };
+  assert.deepEqual(one.landing.links, links);
+  assert.equal((await call('GET', '/api/kanban/landings?todo=0', 'owner')).status, 400);
+  assert.equal((await call('GET', '/api/kanban/landings?todo=abc', 'owner')).status, 400);
+  assert.equal(forgeCalls, callsBefore, 'links never reach the forge');
 });

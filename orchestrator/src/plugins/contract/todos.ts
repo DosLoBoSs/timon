@@ -42,6 +42,9 @@ export type PluginTodoLandingState = 'branch' | 'pending' | 'open' | 'merged' | 
 
 /** One job (integration branch) of an idea. */
 export type PluginTodoLandingJob = {
+  /** Id of the job, the same in `/api/kanban/landings/:id`. Absent from an
+   *  older host. */
+  jobId?: string;
   state: PluginTodoLandingState;
   branch: string;
   prNumber: number | null;
