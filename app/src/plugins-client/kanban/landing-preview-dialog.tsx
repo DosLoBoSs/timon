@@ -62,9 +62,12 @@ function FileDiff({ file, open, onToggle }: { file: PreviewFile; open: boolean; 
             : (
               // code-font: a diff
               <pre className="scrollbar-thin overflow-x-auto rounded-md bg-background/70 py-1.5 font-mono text-[11px] leading-[1.5]">
-                {patchBody(file.patch).map((line, i) => (
-                  <div key={i} className={cn('whitespace-pre px-2', DIFF_LINE_CLASS[diffLineKind(line)])} data-kind={diffLineKind(line)}>{line || ' '}</div>
-                ))}
+                {/* w-max + min-w-full: a line's colour spans the scrolled width. */}
+                <div className="w-max min-w-full">
+                  {patchBody(file.patch).map((line, i) => (
+                    <div key={i} className={cn('whitespace-pre px-2', DIFF_LINE_CLASS[diffLineKind(line)])} data-kind={diffLineKind(line)}>{line || ' '}</div>
+                  ))}
+                </div>
               </pre>
             )}
           {file.patch_truncated && <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">{t('landings.previewDialog.fileCut')}</p>}

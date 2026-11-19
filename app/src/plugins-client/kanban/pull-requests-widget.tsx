@@ -236,17 +236,17 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
           <DialogContent className="max-w-3xl">
             <DialogTitle className="text-sm">{t('pullRequests.dialog.title', { number: draft.number })}</DialogTitle>
             <DialogDescription className="sr-only">{draft.title}</DialogDescription>
-            <Tabs defaultValue="brief" className="flex min-h-0 flex-col gap-2">
+            <Tabs defaultValue="brief" className="flex min-h-0 min-w-0 flex-col gap-2">
               <TabsList className="h-8 self-start">
                 <TabsTrigger value="brief" className="text-xs">{t('pullRequests.dialog.tabBrief')}</TabsTrigger>
                 <TabsTrigger value="diff" data-pull-diff-tab="" className="text-xs">{t('pullRequests.dialog.tabDiff')}</TabsTrigger>
               </TabsList>
-              <TabsContent value="brief" className="mt-0">
+              <TabsContent value="brief" className="mt-0 min-w-0">
                 <div data-pull-brief="" className="scrollbar-thin max-h-[55vh] overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-muted/40 p-3 text-[12px] leading-relaxed text-foreground">
                   {draft.brief}
                 </div>
               </TabsContent>
-              <TabsContent value="diff" className="mt-0">
+              <TabsContent value="diff" className="mt-0 min-w-0">
                 <DiffView load={diff} />
               </TabsContent>
             </Tabs>
@@ -280,12 +280,17 @@ function DiffView({ load }: { load: DiffLoad }) {
   const lines = load.diff.split('\n');
   const cut = load.truncated || lines.length > DIFF_LINES_SHOWN;
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex min-w-0 flex-col gap-1.5">
+      {/* The dialog is a grid: without min-w-0 up the chain, the longest diff
+          line widens the dialog instead of scrolling inside it. */}
       {/* code-font: a diff */}
-      <pre data-pull-diff="" className="scrollbar-thin max-h-[55vh] overflow-auto rounded-lg bg-muted/40 py-1.5 font-mono text-[11px] leading-[1.5]">
-        {lines.slice(0, DIFF_LINES_SHOWN).map((line, i) => (
-          <div key={i} className={cn('whitespace-pre px-2', DIFF_LINE_CLASS[diffLineKind(line)])}>{line || ' '}</div>
-        ))}
+      <pre data-pull-diff="" className="scrollbar-thin max-h-[55vh] w-full overflow-auto rounded-lg bg-muted/40 py-1.5 font-mono text-[11px] leading-[1.5]">
+        {/* w-max + min-w-full: a line's colour spans the scrolled width, not only the visible one. */}
+        <div className="w-max min-w-full">
+          {lines.slice(0, DIFF_LINES_SHOWN).map((line, i) => (
+            <div key={i} className={cn('whitespace-pre px-2', DIFF_LINE_CLASS[diffLineKind(line)])}>{line || ' '}</div>
+          ))}
+        </div>
       </pre>
       {cut && <p className="text-[11px] text-muted-foreground">{t('pullRequests.dialog.diffCut')}</p>}
     </div>
