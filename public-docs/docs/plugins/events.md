@@ -73,6 +73,15 @@ What each one means:
 
 Handle them as invalidations: reload what you show, and expect several in a burst.
 
+### Why signals are bare
+
+Both limits are deliberate, not gaps to work around:
+
+- **Only identifiers.** A signal is delivered outside any request, so no account stands behind it. Reading the object back would show it to a plugin that has no right to see it, so the read answers as a background job: only what your plugin owns. To label a finished mission or a blocked task with its agent and title, listen to `task_updated` (with `kanban:read`), which carries the task, and keep a small `missionId` to agent map.
+- **Every account.** A host-half signal does not know which account it belongs to, so it reaches the plugin for all of them. Treat it as "something changed", never as "something changed for this person". If your plugin drives something shared, such as a device on a desk, decide on your side whose activity it may show.
+
+If either limit blocks your plugin, describe the use case in a feature request; it needs a decision on privacy, not just an option.
+
 ## Handlers that fail
 
 A handler that throws or rejects is your plugin's own failure: the daemon logs it under your plugin's id, the other listeners of the event still run, and the write that caused the event is not affected ([Manifest](manifest.md)). Catch what you can recover from.
