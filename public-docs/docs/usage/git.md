@@ -129,15 +129,21 @@ The row's menu (**…**) opens the pull request on GitHub, or shows the report o
 
 ### A contributor's branch behind or in conflict
 
-GitHub tells whether a pull request's branch is behind its base or in conflict with it, and the row's menu offers what fits. Each gesture prepares a write that waits in [Publish on GitHub](#publish-on-github): nothing reaches GitHub before you publish it there.
+GitHub tells whether a pull request's branch is behind its base or in conflict with it. The row then shows **Conflict**, or **Behind** when the branch can be updated, and its menu (**…**) offers what fits. Each gesture prepares a write that waits in [Publish on GitHub](#publish-on-github): nothing reaches GitHub before you publish it there.
 
 - **Update the branch** (the branch is behind): GitHub itself merges the base into the branch, on its side; nothing runs on your machine. Timon records the branch's head when you ask, and GitHub refuses the update if the contributor pushed since. The contributor's fork must let the maintainers modify it.
 - **Ask the contributor** (the branch is in conflict): a comment asking the author to merge the base into their branch and push. You can edit it before publishing. This is what a project does by default.
-- **Resolve the conflict…** (the branch is in conflict, and the project allows it): Timon merges the branch here **without a working tree**. The contributor's files are never written to your disk, and none of their code, hooks or scripts runs. For each file in conflict you keep the contributor's version, keep the target branch's, write the text yourself, or ask an agent for a suggestion. The agent has no tool at all, reads the versions as untrusted data, and its text is only shown to you. Then **Propose** commits the resolution as the project's account and shows its diff: only the files that were in conflict, nothing else. Publishing pushes that one commit to the contributor's branch as a fast-forward, never forced, and posts a comment telling them to pull it. If the contributor pushed in between, nothing is pushed.
+- **Resolve the conflict…** (the branch is in conflict, and the project allows it): Timon merges the branch here **without a working tree**. The contributor's files are never written to your disk, and none of their code, hooks or scripts runs. A window walks through four steps:
+  1. **Checks**: the contributor lets the maintainers modify their branch, every file in conflict is a text file, and the account that will push.
+  2. **Resolution**: each file in conflict shows its conflicting blocks. **Keep theirs**, **Keep main** (the target branch), **Edit by hand**, or **Suggest**: an agent with no tool at all reads the versions as untrusted data and returns a text, shown to you and applied only if you click **Apply**. A resolved file reads as a diff against the contributor's version: what your commit changes on their branch. A text that still holds conflict markers is refused.
+  3. **Commit preview**: once every file is resolved, Timon commits the resolution as the project's account and shows the commit's diff: only the files that were in conflict, nothing else.
+  4. **Propose the publication** opens [Publish on GitHub](#publish-on-github), with the commit, the contributor's branch and the comment that will follow. Publishing pushes that one commit to the branch as a fast-forward, never forced, then posts the comment, which tells them to pull it. If the contributor pushed in between, nothing is pushed.
+
+  **Close** keeps the resolution for later (a week at most): **Resolve the conflict…** brings it back while the contributor has not pushed. **Discard** drops it, and its waiting publication with it.
 
 Timon resolves only a conflict of content, in at most 20 text files of 1 MB or less, on a fork whose author lets the maintainers modify it. A deleted or renamed file, a binary file or a symbolic link goes to GitHub's conflict editor instead. Resolving needs Git 2.38 or later on your machine.
 
-To allow it, open the project's settings and set **Contributors' conflicts** to **Let Timon resolve them**. Only a signed-in person can turn it on; an agent or the daemon's token cannot. A push to the contributor's branch re-runs their checks on GitHub, and removes a `protected-paths-approved` label your repository may use: put it back after reading the change.
+To allow it, open the project's window: under **Integrations**, the **Contributors' conflicts** row says what the project does; **Configure** lets you choose **Let Timon resolve them**. The row appears for a project that lands its jobs through pull requests on GitHub. Only a signed-in person can turn it on; an agent or the daemon's token cannot. A push to the contributor's branch re-runs their checks on GitHub, and removes a `protected-paths-approved` label your repository may use: put it back after reading the change.
 
 ## Jobs
 
@@ -222,12 +228,14 @@ Once the pull request is merged, Timon prepares a comment for each issue it fixe
 
 ## Publish on GitHub
 
-Timon writes on GitHub only through one window, **Publish on GitHub**, and only when you click **Publish** in it. An agent never publishes there. The window opens from a row marked **to approve** in **Jobs** or **Pull requests**, from the notification card of a comment waiting for you, or from **Propose a comment…** in a pull request's menu.
+Timon writes on GitHub only through one window, **Publish on GitHub**, and only when you click **Publish** in it. An agent never publishes there. The window opens from a row marked **to approve** in **Jobs** or **Pull requests**, from the notification card of a write waiting for you, or from a gesture of a pull request's menu: **Propose a comment…**, **Ask the contributor**, **Update the branch**, or **Propose the publication** at the end of a conflict's resolution.
 
 On the left, the exact text that would be posted, and whether it goes on an issue or a pull request (it is public). **Edit** lets you change it and **Save** keeps your version; a draft Timon prepared says so under the text, and a comment a plugin proposed names the plugin and asks you to read every word, since a plugin, not Timon, wrote it. On the right, what would leave: where it goes, the GitHub account it would be posted as (the account set on the project), what prepared it, and the fact that it is posted once only, even if you click twice.
 
 - **Publish** posts the text as it stands. Timon first checks that `gh` is signed in as the project's account and refuses otherwise, without posting anything. If GitHub refuses, the window stays open with the reason, and you can try again.
 - **Do not publish** closes the proposal: nothing is posted, and its notification goes away.
+
+A branch update has no text to edit: the window shows the branch GitHub updates, the base it merges in and the head it expects, and its main button reads **Update the branch**. A conflict's push shows the commit and the contributor's branch above the comment that follows it; its main button reads **Push and comment**, and **Do not push** drops it.
 
 Without an account set on the project, **Publish** stays off. Proposing, editing and publishing need you to be signed in with the **Create, update and delete projects** permission: an agent or the daemon's token cannot do it. A plugin holding `forge:propose` may propose a comment ([The GitHub repository of a project](../plugins/forge.md)), never edit or publish one: it waits here for you like any other.
 
