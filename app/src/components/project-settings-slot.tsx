@@ -34,7 +34,7 @@ export function ProjectSettingsSlot({ project }: { project: string }): React.Rea
   if (entries.length === 0) return null;
   return (
     <section data-project-settings="" className="flex flex-col gap-1.5">
-      <div className="text-[11px] font-medium text-muted-foreground">{t('projectsPage.integrations')}</div>
+      <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{t('projectsPage.integrations')}</div>
       <div className="flex flex-col gap-1 rounded-lg bg-muted/40 p-1">
         <ProjectSettingsContext.Provider value={value}>{renderSlotEntries(entries)}</ProjectSettingsContext.Provider>
       </div>
