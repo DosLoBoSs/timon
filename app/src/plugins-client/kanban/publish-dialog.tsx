@@ -20,7 +20,7 @@ import { SlotSingle, useSlotEntries } from '@/lib/plugin-host/render';
 import { PUBLISH_DIALOG_SLOT } from '@/lib/plugin-host/slots';
 import { t } from '@/lib/i18n';
 import {
-  bodyProblem, createProposal, discardProposal, editProposal, getProposal, projectAccount, publishProposal,
+  bodyProblem, createProposal, discardProposal, editProposal, getProposal, isEditable, projectAccount, publishProposal,
   type ForgeProposal, type ForgeTargetType,
 } from './forge-proposals-api';
 import { PublishDialogContext, type PublishBusy, type PublishDialogValue } from './publish-dialog-context';
@@ -87,6 +87,8 @@ export function PublishDialog({ project, proposalId, proposal: given, target, on
     const where = proposal
       ? { type: proposal.target.type, number: proposal.target.number, url: proposal.target.url }
       : { type: target?.type ?? 'pull', number: target?.number ?? 0, url: target?.url ?? null };
+    // A branch update has no text of the person's: the daemon wrote it and publishes it as is.
+    const editable = proposal ? isEditable(proposal) : true;
     return {
       project,
       proposal,
@@ -96,12 +98,14 @@ export function PublishDialog({ project, proposalId, proposal: given, target, on
       account,
       body,
       setBody,
-      problem: bodyProblem(body),
+      editable,
+      problem: editable ? bodyProblem(body) : null,
       busy,
       error,
       publish: () => run('publish', async () => {
         const made = await ensure();
-        return made.ok ? publishProposal(project, made.value.id, body) : made;
+        if (!made.ok) return made;
+        return publishProposal(project, made.value.id, isEditable(made.value) ? body : made.value.body);
       }, (p) => {
         toast.success(t('forgePublish.published'), p.url ? { action: { label: t('forgePublish.openComment'), onClick: () => window.open(p.url!, '_blank', 'noopener,noreferrer') } } : undefined);
         onClose();

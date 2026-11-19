@@ -1696,7 +1696,13 @@ declare module '@timon/ui' {
     id: string;
     project: string;
     repo: string;
-    kind: 'comment';
+    /**
+     * `comment`; `update_branch`: GitHub merges the base into a pull
+     * request's branch (`body` is the host's summary, never edited);
+     * `conflict_push`: a resolution pushed to a contributor's branch, then
+     * `body` posted as a comment.
+     */
+    kind: 'comment' | 'update_branch' | 'conflict_push';
     target: { type: 'issue' | 'pull'; number: number; url: string };
     body: string;
     state: 'draft' | 'publishing' | 'published' | 'failed' | 'discarded';
@@ -1704,6 +1710,10 @@ declare module '@timon/ui' {
     plugin?: string | null;
     key: string;
     source_ref: string | null;
+    /** What a branch update or a conflict push runs with, written by the host (branch, heads, commit, files); `null` for a comment. */
+    details?: Record<string, unknown> | null;
+    /** Whether `body` may change before publishing: false for a branch update. */
+    editable?: boolean;
     account: string | null;
     url: string | null;
     error: { code: string; reason: string | null } | null;
@@ -1741,6 +1751,8 @@ declare module '@timon/ui' {
     /** The text as it would leave, edits included. */
     body: string;
     setBody(body: string): void;
+    /** False for a branch update: its text is the host's, published as is (`problem` is then `null`). */
+    editable: boolean;
     /** Why the daemon would refuse `body`, checked before it is sent (8,000 characters at most, no control character); `null` when it is fine. */
     problem: 'empty' | 'tooLong' | 'control' | 'marker' | null;
     /** The gesture in progress. */

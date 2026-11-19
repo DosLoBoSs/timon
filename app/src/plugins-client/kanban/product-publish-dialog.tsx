@@ -6,6 +6,10 @@
  * first and edited on demand; on the right where it goes, as which account,
  * what prepared it and how it is sent once only. One main action, "Publish";
  * "Edit" and "Do not publish" beside it. Nothing is sent before that click.
+ *
+ * A branch update has no text to read: the left side says which branch
+ * GitHub updates and from which head. A conflict push shows the commit it
+ * pushes to the contributor's branch above the comment that follows it.
  */
 
 import { useState, type ReactElement, type ReactNode } from 'react';
@@ -15,7 +19,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { WidgetButton } from '@/components/widget-toolbar';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { isPending, PROPOSAL_BODY_LIMIT } from './forge-proposals-api';
+import {
+  branchUpdateDetails, conflictPushDetails, isPending, PROPOSAL_BODY_LIMIT, publishRefusal, type ForgeProposal,
+} from './forge-proposals-api';
 import { safeHref } from './project-todo-links';
 import { usePublishDialog } from './publish-dialog-context';
 
@@ -37,14 +43,52 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+const shortSha = (sha: string) => sha.slice(0, 12);
+
+/** What a branch update or a conflict push writes besides a comment. */
+function WriteDetails({ proposal }: { proposal: ForgeProposal }) {
+  const update = branchUpdateDetails(proposal);
+  if (update) {
+    const branch = update.head_repository ? `${update.head_repository}:${update.head_ref}` : update.head_ref;
+    return (
+      <dl data-publish-update="" className="flex flex-col gap-2 rounded-md bg-background/60 px-3 py-2.5">
+        <Row label={t('forgePublish.update.branch')}><span title={branch}>{branch}</span></Row>
+        <Row label={t('forgePublish.update.merges')}>{t('forgePublish.update.mergesValue', { base: update.base_ref })}</Row>
+        <Row label={t('forgePublish.update.head')}><span className="tabular-nums" title={update.expected_head_sha}>{shortSha(update.expected_head_sha)}</span></Row>
+        <Row label={t('forgePublish.update.runs')}>{t('forgePublish.update.runsValue')}</Row>
+      </dl>
+    );
+  }
+  const push = conflictPushDetails(proposal);
+  if (!push) return null;
+  const branch = `${push.head_repository}:${push.head_ref}`;
+  return (
+    <dl data-publish-push="" className="flex flex-col gap-2 rounded-md bg-background/60 px-3 py-2.5">
+      <Row label={t('forgePublish.push.branch')}><span title={branch}>{branch}</span></Row>
+      {push.push_host && push.push_repository && (
+        <Row label={t('forgePublish.push.to')}>
+          <span data-publish-push-to="" title={push.push_url ?? undefined}>{t('forgePublish.push.toValue', { host: push.push_host, repository: push.push_repository })}</span>
+        </Row>
+      )}
+      <Row label={t('forgePublish.push.commit')}><span className="tabular-nums" title={push.commit_sha}>{shortSha(push.commit_sha)}</span></Row>
+      <Row label={t('forgePublish.push.files')}>
+        <span title={push.files.join('\n')}>{t('forgePublish.push.filesValue', { count: push.files.length, base: push.base_ref })}</span>
+      </Row>
+      <Row label={t('forgePublish.push.head')}><span className="tabular-nums" title={push.expected_head_sha}>{shortSha(push.expected_head_sha)}</span></Row>
+    </dl>
+  );
+}
+
 export function ProductPublishDialog(): ReactElement | null {
   const host = usePublishDialog();
   const [editing, setEditing] = useState(false);
   if (!host) return null;
-  const { proposal, target, repo, account, body, problem, busy, error, loading } = host;
+  const { proposal, target, repo, account, body, problem, busy, error, loading, editable } = host;
   const fresh = proposal === null;
   const open = fresh || isPending(proposal);
-  const writing = open && (fresh || editing);
+  const writing = open && editable && (fresh || editing);
+  const kind = proposal?.kind ?? 'comment';
+  const hasComment = kind !== 'update_branch';
   const state: keyof typeof STATE_TONE = open || proposal.state === 'draft' || proposal.state === 'failed' ? 'pending' : proposal.state;
   const where = t(target.type === 'pull' ? 'forgePublish.onPull' : 'forgePublish.onIssue', { number: target.number });
   const href = safeHref(target.url);
@@ -65,8 +109,14 @@ export function ProductPublishDialog(): ReactElement | null {
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_19rem]">
           <section className={cn(ISLAND, 'flex min-h-0 min-w-0 flex-col gap-2 p-3')} aria-label={where}>
-            <h3 className="text-[11.5px] font-medium text-muted-foreground">{t('forgePublish.commentOn', { where })}</h3>
-            {loading ? (
+            {kind !== 'comment' && proposal && (
+              <>
+                <h3 className="text-[11.5px] font-medium text-muted-foreground">{t(`forgePublish.heading.${kind}`, { where })}</h3>
+                <WriteDetails proposal={proposal} />
+              </>
+            )}
+            {hasComment && <h3 className="text-[11.5px] font-medium text-muted-foreground">{t('forgePublish.commentOn', { where })}</h3>}
+            {!hasComment ? null : loading ? (
               <p className="text-xs text-muted-foreground">{t('landings.loading')}</p>
             ) : writing ? (
               <>
@@ -98,7 +148,7 @@ export function ProductPublishDialog(): ReactElement | null {
             )}
             {proposal?.state === 'failed' && proposal.error && !error && (
               <p data-publish-last-error="" className="text-[11.5px] text-red-600 dark:text-red-400">
-                {t('forgePublish.lastError', { reason: proposal.error.reason ?? proposal.error.code })}
+                {publishRefusal(proposal.error.code) ?? t('forgePublish.lastError', { reason: proposal.error.reason ?? proposal.error.code })}
               </p>
             )}
             {error && <p data-publish-error="" className="text-[11.5px] text-red-600 dark:text-red-400">{error}</p>}
@@ -144,8 +194,8 @@ export function ProductPublishDialog(): ReactElement | null {
               ) : (
                 <>
                   <WidgetButton data-publish-discard="" onClick={() => void host.discard()} disabled={busy !== null}
-                    label={busy === 'discard' ? t('forgePublish.discarding') : t('forgePublish.discard')} />
-                  {editing ? (
+                    label={busy === 'discard' ? t('forgePublish.discarding') : t(`forgePublish.discardKind.${kind}`)} />
+                  {!editable ? null : editing ? (
                     <WidgetButton data-publish-save="" onClick={() => { void host.save().then((ok) => { if (ok) setEditing(false); }); }} disabled={busy !== null || !!problem}
                       label={busy === 'save' ? t('forgePublish.saving') : t('forgePublish.save')} />
                   ) : (
@@ -160,7 +210,7 @@ export function ProductPublishDialog(): ReactElement | null {
                 disabled={!canPublish}
                 title={account === null && !loading ? t('forgePublish.noAccount') : undefined}
                 icon={busy === 'publish' ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-                label={busy === 'publish' ? t('forgePublish.publishing') : t('forgePublish.publish')}
+                label={busy === 'publish' ? t('forgePublish.publishing') : t(`forgePublish.publishKind.${kind}`)}
               />
             </>
           ) : (
