@@ -87,7 +87,9 @@
         "label": "Branch",
         "locked": "Fixed: the job already started from this branch",
         "createdAs": "Created as {branch}",
-        "empty": "Name the branch after the job's topic"
+        "empty": "Name the branch after the job's topic",
+        "resolvesIssues": "Resolves its issues entirely",
+        "resolvesIssuesHint": "Its pull request closes the GitHub issues of its ideas, even when other jobs work on them too"
       },
       "launch": "Launch", "answered": "answered",
       "groups": {

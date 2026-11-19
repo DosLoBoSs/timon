@@ -595,3 +595,21 @@ test('a branch the job already started from is read-only and not sent back', asy
     assert.equal('branch' in r.answers[0]!, false);
   } finally { await r.unmount(); }
 });
+
+test('"Resolves its issues entirely" sits under Advanced, off by default, and is sent only when ticked', async () => {
+  const r = await mount(landed(LANDING));
+  try {
+    await r.launch();
+    assert.equal('resolves_issues' in r.answers[0]!, false, 'untouched, the answer is the previous one');
+  } finally { await r.unmount(); }
+  const ticked = await mount(landed(LANDING));
+  try {
+    await ticked.click(branchSection()!.querySelector('button')!);
+    const box = branchSection()!.querySelector<HTMLInputElement>('[data-testid="plan-resolves-issues"]')!;
+    assert.equal(box.checked, false);
+    assert.match(box.closest('div')!.textContent!, /Resolves its issues entirely/);
+    await ticked.click(box);
+    await ticked.launch();
+    assert.equal(ticked.answers[0]!.resolves_issues, true);
+  } finally { await ticked.unmount(); }
+});

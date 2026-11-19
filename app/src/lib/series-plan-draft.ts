@@ -22,6 +22,8 @@ export type SeriesPlanDraft = {
   note: string;
   /** The branch topic typed in place of the proposed one; absent when untouched. */
   branch?: string;
+  /** "Resolves its issues entirely" was ticked; absent when not. */
+  resolvesIssues?: true;
 };
 type DraftStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -57,7 +59,8 @@ function hasContent(draft: SeriesPlanDraft): boolean {
     || Object.values(draft.groupPicks).some((p) => Object.keys(p).length > 0)
     || Object.values(draft.groupCustom).some(Boolean)
     || draft.note.trim() !== ''
-    || draft.branch !== undefined;
+    || draft.branch !== undefined
+    || draft.resolvesIssues === true;
 }
 
 /** Keeps the cells that still name a role of `roles` and hold a well-formed pair. */
@@ -104,6 +107,7 @@ export function loadSeriesPlanDraft(
     groupCustom: {},
     note: typeof stored.note === 'string' ? stored.note : '',
     ...(typeof stored.branch === 'string' ? { branch: stored.branch } : {}),
+    ...(stored.resolvesIssues === true ? { resolvesIssues: true as const } : {}),
   };
   if (stored.groupPicks && typeof stored.groupPicks === 'object') {
     for (const [name, picks] of Object.entries(stored.groupPicks as Record<string, unknown>)) {

@@ -28,6 +28,7 @@ import {
 import { getHost } from './host/index.js';
 import type { ExecResult } from './host/types.js';
 import { landIntegration } from './integration-landing.js';
+import { proposeResolutionCommentsOf } from './issue-resolution.js';
 import { readProjectIntegration } from './project-integration.js';
 import { notifyIntegrationOutcome } from './wake.js';
 
@@ -97,8 +98,9 @@ async function mergeCommitOf(repo: string, head: string, target: string): Promis
 
 /**
  * The integration `id` was merged into its target. Lands it (one replay of
- * its closures, `integration-landing.ts`) and tells its pilot. Shared by the
- * poller and `mark-merged`; idempotent on both counts.
+ * its closures, `integration-landing.ts`), proposes the resolution comments of
+ * the issues it fixed (`issue-resolution.ts`) and tells its pilot. Shared by
+ * the poller and `mark-merged`; idempotent on all counts.
  */
 export async function concludeMerged(id: string, mergeSha: string | null, notify: Notify = defaultNotify): Promise<void> {
   const lines: string[] = [];
@@ -112,6 +114,14 @@ export async function concludeMerged(id: string, mergeSha: string | null, notify
     // the landing, and the pilot still learns of the merge now.
     console.error(`[landing-poller] landing replay of ${id} failed: ${(err as Error).message}`);
     lines.push('The landing replay failed; the reconciliation retries it.');
+  }
+  // After the landing, whatever its outcome: the comments wait for a person,
+  // and their keys make a second conclusion propose nothing more.
+  try {
+    const comments = proposeResolutionCommentsOf(id);
+    if (comments.proposed > 0) lines.push(`${comments.proposed} resolution comment(s) proposed: a person publishes them.`);
+  } catch (err) {
+    console.error(`[landing-poller] resolution comments of ${id} not proposed: ${(err as Error).message}`);
   }
   notify(id, 'merged', lines);
 }

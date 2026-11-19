@@ -1,0 +1,28 @@
+{
+  "name": "@timon-ai/plugin-github-issues",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "timon": {
+    "id": "github-issues",
+    "apiVersion": 19,
+    "kind": ["behavior"],
+    "label": "GitHub issues",
+    "description": "Lists the open issues of a project's GitHub repository that carry a label, and turns the one you pick into an idea of the TO DO notebook. Nothing is imported on its own, and nothing is written on GitHub.",
+    "author": "Timon",
+    "permissions": ["forge:read", "todos:read", "todos:write", "storage", "settings"],
+    "settings": [
+      { "key": "label", "type": "string", "label": "Label of the issues to list, unless a project sets its own", "default": "accepted" }
+    ],
+    "license": { "required": false }
+  }
+}

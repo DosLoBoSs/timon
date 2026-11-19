@@ -2121,6 +2121,17 @@ CREATE TABLE IF NOT EXISTS forge_proposals (
 );
 CREATE INDEX IF NOT EXISTS forge_proposals_project_state ON forge_proposals(project, state);
 `);
+// What the person who launched a job said of its issues in the Kanban
+// planner (`kanban_plan`, `resolves_issues`): the job resolves them entirely,
+// so its pull request says `Fixes` even for an idea carried by several jobs
+// (`issue-closing.ts`). Keyed by the series; absent = not said.
+db.exec(`
+CREATE TABLE IF NOT EXISTS series_landing (
+  series_id TEXT PRIMARY KEY,
+  resolves_issues INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+`);
 if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
 // A writer that changes the reason without naming its code (an agent's own
 // reason, a statement written before the column) must not leave
@@ -6018,6 +6029,18 @@ export const dbApi = {
    * otherwise takes the "spawn a new mission" path, i.e. exactly the dispersion we
    * want to eliminate.
    */
+  /** Records what the planner's answer said of the series' issues. */
+  setSeriesResolvesIssues(seriesId: string, resolves: boolean): void {
+    db.prepare(
+      `INSERT INTO series_landing (series_id, resolves_issues, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT (series_id) DO UPDATE SET resolves_issues = excluded.resolves_issues, updated_at = excluded.updated_at`,
+    ).run(seriesId, resolves ? 1 : 0, Date.now());
+  },
+  /** The series resolves its issues entirely: true only when the planner said so. */
+  seriesResolvesIssues(seriesId: string): boolean {
+    const row = db.prepare(`SELECT resolves_issues FROM series_landing WHERE series_id = ?`).get(seriesId) as { resolves_issues: number } | undefined;
+    return row?.resolves_issues === 1;
+  },
   /** The mission piloting this series now, or null when none of its tasks names one. */
   seriesPilotMission(seriesId: string): string | null {
     const row = seriesPilotStmt.get(seriesId) as { creator_mission_id: string | null } | undefined;

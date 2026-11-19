@@ -286,3 +286,56 @@ test('a row concluded without its notice (a stop in between) is told on the next
   assert.equal(notifyIntegrationOutcome(job.id, 'merged', [], () => {}), false);
   assert.equal(notifyIntegrationOutcome(job.id, 'closed', [], () => {}), false, 'a merged row is never told closed');
 });
+
+test('a merge proposes the resolution comment of each issue the job fixed, once, and publishes nothing', async () => {
+  const { db } = await import('./db.js');
+  const { TODO_OUTCOME_DDL } = await import('./todo-outcome-migration.js');
+  const { defuseMentions, resolutionComment, resolutionKey } = await import('./issue-resolution.js');
+  db.exec(TODO_OUTCOME_DDL);
+  const job = openJob();
+  const link = (todo: number, ref: string) => dbApi.putTodoExternalRef({
+    todoId: todo, provider: 'github', ref, url: `https://github.com/${ref.replace('#', '/issues/')}`, label: null, pluginId: 'github-issues',
+  });
+  link(job.todo, 'acme/app#77');
+  link(job.todo, 'other/repo#5');
+  db.prepare(`INSERT INTO todo_outcome (todo_id, resolution, public_note, duplicate_of, updated_at) VALUES (?, 'fixed', ?, NULL, 1)`)
+    .run(job.todo, 'Thanks @reporter, it ships in 0.2.');
+  // An idea two jobs carry is only mentioned (Refs): no resolution yet.
+  const shared = dbApi.insertProjectTodo({ text: 'shared idea', ownerUserId: 'user-ada' }).id;
+  link(shared, 'acme/app#78');
+  for (const branch of [job.branch, 'feat/elsewhere']) {
+    const id = randomUUID();
+    dbApi.createTask(id, `part on ${branch}`, 'acme.coder', {
+      type: 'code', project: job.slug, baseBranch: branch, integrationMode: 'pr', baseRef: 'origin/main',
+    });
+    dbApi.setTaskTodoId(id, shared);
+  }
+  dbApi.recordIntegration({ repo: job.repo, branch: 'feat/elsewhere', remote: 'origin', target: 'main', mode: 'pr', project: job.slug });
+
+  mergeOnForge(job);
+  assert.equal((await pollOpenIntegrations(deps)).get(job.id), 'merged');
+  const rows = () => db.prepare(`SELECT * FROM forge_proposals WHERE project = ?`).all(job.slug) as Array<Record<string, unknown>>;
+  const made = rows();
+  assert.equal(made.length, 1, 'one issue fixed in the project repository');
+  const n = Number(job.branch.split('-').at(-1));
+  assert.deepEqual(
+    [made[0]!.target_type, made[0]!.target_number, made[0]!.trigger, made[0]!.state, made[0]!.idem_key, made[0]!.created_by, made[0]!.repo],
+    ['issue', 77, 'landing', 'draft', resolutionKey(job.todo, 77), null, 'acme/app'],
+  );
+  assert.equal(made[0]!.body, `This is fixed by #${n}, now merged into \`main\`.\n\nThanks \`@reporter\`, it ships in 0.2.`);
+  const { proposalAnchor } = await import('./forge-proposals.js');
+  const cards = db.prepare(`SELECT type FROM notifications WHERE anchor = ? AND dismissed_at IS NULL`).all(proposalAnchor(job.slug, String(made[0]!.id))) as { type: string }[];
+  assert.deepEqual(cards.map((c) => c.type), ['action_required'], 'a person is asked to publish it');
+
+  // Concluded again (mark-merged by hand): the same proposal, no other.
+  const { concludeMerged } = await import('./integration-poller.js');
+  await concludeMerged(job.id, null, () => true);
+  assert.equal(rows().length, 1);
+  // Discarded by the person: never made again.
+  db.prepare(`UPDATE forge_proposals SET state = 'discarded' WHERE id = ?`).run(made[0]!.id);
+  await concludeMerged(job.id, null, () => true);
+  assert.deepEqual(rows().map((r) => r.state), ['discarded']);
+
+  assert.equal(defuseMentions('@a, me@mail.test, `@b` and acme/@c'), '`@a`, me@mail.test, `@b` and acme/@c');
+  assert.equal(resolutionComment({ prNumber: null, target: 'main', notes: [] }), 'This is fixed, now merged into `main`.');
+});

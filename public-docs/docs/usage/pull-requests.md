@@ -63,6 +63,8 @@ Before anything leaves your machine, Timon checks the branch. If one check fails
 | Public tree | the repository has a `docs/oss/check-public-tree.mjs` script and it reports a blocker; without the script this check is skipped and says so |
 | Remote branch | the branch already exists on the remote and has commits the local one does not contain |
 
+Timon then adds to the description a `Fixes` or `Refs` line for each GitHub issue of the job's ideas ([The issue, the pull request and the comment](git.md#the-issue-the-pull-request-and-the-comment)).
+
 Then Timon pushes the integration branch and opens the pull request. The push is never forced: a branch already on the remote only moves forward, and one that moved on its own is never overwritten. Merge it into your local branch, then run the command again.
 
 A branch under embargo (`sec/<topic>`, for a security fix) is never pushed by this command, whatever the setting says: it lands by hand once the advisory is published.

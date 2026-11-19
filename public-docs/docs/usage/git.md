@@ -176,6 +176,25 @@ Click the badge to open the job's preview, the same as from **Jobs**, with its l
 
 An idea linked to a GitHub issue shows the issue's number (**#212**) among its badges; click it to open the issue on GitHub. An idea a connector wrote, from an issue or a message, is marked **external**: its text was written outside Timon, and Timon hands it to agents as data to read, never as instructions.
 
+## GitHub issues
+
+The built-in **GitHub issues** plugin brings an issue of the project's repository into the TO DO notebook, on your click. It lists the open issues that carry the project's label (`accepted` unless you set another one) and imports the one you pick as an idea: its text is the issue's title, its notes keep the issue's description, and it links to the issue (**#212**, marked **external**). Nothing is imported on its own, an issue is imported once only (importing it again opens the same idea), and nothing is written on GitHub. It reads the repository with the project's account, and needs you to be signed in with the **Create, update and delete projects** permission.
+
+The issue's title and description were written by someone outside the project: the idea's notes keep them in a block marked as outside data, and a task promoted from the idea hands them to its agent as data to read, never as instructions.
+
+Once the idea has a job, its pull request closes the issue for you (below); you never close it by hand.
+
+### The issue, the pull request and the comment
+
+When a job's pull request is opened, Timon adds one line per GitHub issue of the job's ideas at the end of its description. The list comes from the ideas' links, never from what the agent or the issue wrote:
+
+- `Fixes owner/repo#212` when the idea is carried by this job only. GitHub closes the issue when you merge the pull request.
+- `Refs owner/repo#212` when other jobs work on the same idea: this one alone does not resolve it. Tick **Resolves its issues entirely** under **Advanced** in the Kanban planner to get `Fixes` anyway.
+
+A `Fixes #n` or `Closes #n` the agent wrote in the description becomes `Refs #n`: only the ideas' links close issues.
+
+Once the pull request is merged, Timon prepares a comment for each issue it fixed: "This is fixed by #51, now merged into `main`.", followed by the idea's public note when it has one (mentions are shown as text, so nobody is notified by surprise). The comment waits for you in [Publish on GitHub](#publish-on-github), with a notification: read it, edit it, publish it or don't. An issue the job only mentions (`Refs`) gets no comment.
+
 ## Publish on GitHub
 
 Timon writes on GitHub only through one window, **Publish on GitHub**, and only when you click **Publish** in it. An agent never publishes there. The window opens from a row marked **to approve** in **Jobs** or **Pull requests**, from the notification card of a comment waiting for you, or from **Propose a comment…** in a pull request's menu.

@@ -24,6 +24,10 @@ export type SeriesPlanAnswer = {
   /** The job's integration branch, for a project that lands through pull
    *  requests: the daemon checks it again and may number it (`-2`). */
   branch?: string;
+  /** For a project that lands through pull requests: the job resolves its
+   *  ideas' issues entirely, so its pull request closes them (`Fixes`) even
+   *  when an idea is carried by several jobs. Absent = not said. */
+  resolves_issues?: boolean;
 };
 
 /** Settings of a group of volets: per role, the same fields as a global row.
