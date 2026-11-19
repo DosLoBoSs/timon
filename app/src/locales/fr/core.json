@@ -3059,7 +3059,7 @@
     "landingFilter": {"open": "PR ouverte", "pending": "PR pas créée"},
     "emptyLandingFilter": "Aucune idée dans cet état",
     "clearAllFilters": "Afficher toutes les idées",
-    "landing": {"branch": "Branche", "pending": "PR pas créée", "open": "PR #{number}", "openNoNumber": "PR ouverte", "merged": "PR #{number} mergée", "mergedNoNumber": "Mergée", "closed": "PR #{number} fermée", "closedNoNumber": "Fermée", "openPr": "ouvrir la pull request dans le navigateur"},
+    "landing": {"branch": "Branche", "pending": "PR pas créée", "open": "PR #{number}", "openNoNumber": "PR ouverte", "merged": "PR #{number} mergée", "mergedNoNumber": "Mergée", "closed": "PR #{number} fermée", "closedNoNumber": "Fermée", "openJob": "ouvrir l'aperçu du chantier", "notFound": "Ce chantier n'est plus listé."},
     "truncated": "Les {shown} plus récentes sur {total}",
     "add": "Ajouter",
     "newIdea": "Nouvelle idée",

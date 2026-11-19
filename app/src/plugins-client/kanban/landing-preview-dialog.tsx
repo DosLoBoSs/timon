@@ -11,9 +11,10 @@
  */
 
 import { useEffect, useState } from 'react';
-import { ChevronRight, CircleAlert, CircleCheck, CircleMinus } from 'lucide-react';
+import { ChevronRight, CircleAlert, CircleCheck, CircleMinus, ExternalLink } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { widgetButtonClass } from '@/components/widget-toolbar';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import {
@@ -135,6 +136,19 @@ export function LandingPreviewDialog({ landing, onClose }: { landing: Landing; o
           {/* code-font: a branch name */}
           <span className="truncate font-mono">{landing.branch}</span>
           <span className="shrink-0 font-normal text-muted-foreground">{t('landings.into', { target })}</span>
+          {landing.pr_url && (
+            <a
+              href={landing.pr_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-landing-forge=""
+              title={t('landings.openPr')}
+              aria-label={t('landings.openPr')}
+              className={cn(widgetButtonClass({ iconOnly: true }), 'ml-auto mr-6 shrink-0')}
+            >
+              <ExternalLink className="size-3.5" />
+            </a>
+          )}
         </DialogTitle>
         <DialogDescription className="sr-only">{t('landings.previewDialog.description')}</DialogDescription>
 

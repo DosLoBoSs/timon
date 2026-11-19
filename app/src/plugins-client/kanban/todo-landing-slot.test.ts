@@ -1,6 +1,6 @@
 /**
  * The landing badge of a TO DO idea (`kanban.todo.landing`): the product's
- * chip for each state, the link to an existing pull request, the detail of
+ * chip for each state, the job's dialog it opens, the detail of
  * several jobs, a plugin's badge in its place once it takes the slot, and the
  * landing filter of the TO DO widget.
  */
@@ -55,6 +55,8 @@ async function mount(items: ProjectTodo[] = []) {
       } } });
     }
     if (url.startsWith('/api/ui/layout')) return Response.json({ layout: null });
+    if (url.startsWith('/api/ui/kanban/landings?')) return Response.json({ landings: [LANDING_OPEN, { ...LANDING_OPEN, id: 'job-old', updated_at: 1 }] });
+    if (url.endsWith('/preview')) return Response.json(PREVIEW);
     return Response.json({});
   });
 
@@ -87,6 +89,18 @@ async function mount(items: ProjectTodo[] = []) {
   return { React, slots, urls, render, until, click, unmount };
 }
 
+const LANDING_OPEN = {
+  id: 'job-open', project: 'timon', series_id: 's1', branch: 'feat/open', remote: 'origin', target: 'main', mode: 'pr',
+  state: 'open', pr_number: 12, pr_url: 'https://github.com/acme/app/pull/12', head_sha: null, merge_sha: null, landed: false,
+  created_at: 2, updated_at: 5, checks: null, conflict: null, checks_running: false, pr_title: 'Open the export',
+};
+
+const PREVIEW = {
+  integration: LANDING_OPEN, head_sha: null, target_sha: null, problem: null, commit_count: 0, commits: [], commits_truncated: false,
+  files: [], files_truncated: false, patch_truncated: false, totals: { files: 0, additions: 0, deletions: 0 },
+  conflict: { state: 'clean', files: [] }, pull_request: null, prechecks: { ran: false, reason: 'not asked' },
+};
+
 const IDEAS = [
   idea(1, null),
   idea(2, landing(job('branch', 'sec/fix-auth'))),
@@ -97,7 +111,7 @@ const IDEAS = [
   idea(7, landing(job('pending', 'feat/second'), job('open', 'feat/first', 21))),
 ];
 
-test('the product badge says each state, and links an existing pull request', async () => {
+test('the product badge says each state, and opens its job rather than the browser', async () => {
   const m = await mount();
   try {
     const { TodoLandingSlot } = await import('./todo-landing-slot');
@@ -107,11 +121,11 @@ test('the product badge says each state, and links an existing pull request', as
     assert.equal(badge(1), null, 'no job: no badge');
     assert.equal(badge(2)?.textContent, 'Branch');
     assert.equal(badge(3)?.textContent, 'PR not created');
-    assert.equal(badge(3)?.tagName, 'SPAN', 'nothing to open before the pull request exists');
+    assert.equal(badge(3)?.tagName, 'BUTTON', 'a job without its pull request still has a preview');
     assert.equal(badge(4)?.textContent, 'PR #12');
-    assert.equal(badge(4)?.getAttribute('href'), 'https://github.com/acme/app/pull/12');
-    assert.equal(badge(4)?.getAttribute('target'), '_blank');
-    assert.equal(badge(4)?.getAttribute('rel'), 'noopener noreferrer');
+    assert.equal(badge(4)?.tagName, 'BUTTON');
+    assert.equal(badge(4)?.getAttribute('href'), null, 'no longer a link to the forge');
+    assert.match(badge(4)?.getAttribute('aria-label') ?? '', /open the job's preview$/);
     assert.equal(badge(5)?.textContent, 'PR #13 merged');
     assert.equal(badge(6)?.textContent, 'PR #14 closed');
     assert.equal(badge(6)?.getAttribute('data-todo-landing'), 'closed');
@@ -201,4 +215,23 @@ test('filter helpers: a single state, shown once an idea could match', () => {
   assert.equal(showLandingFilter([IDEAS[0]!, IDEAS[4]!], null), false, 'nothing to filter on');
   assert.equal(showLandingFilter([IDEAS[0]!], 'open'), true, 'an active choice stays reachable');
   assert.equal(showLandingFilter([IDEAS[3]!], null), true);
+});
+
+test('a click on the badge of a TO DO line opens the job dialog, not the idea', async () => {
+  const m = await mount(IDEAS);
+  try {
+    const { ProjectTodoTile } = await import('./project-todo-tile');
+    await m.render(m.React.createElement(ProjectTodoTile, {
+      scope: { kind: 'project', slug: 'timon' }, titre: 'Project TO DO', handle: null, realtime: { subscribe: () => () => {} }, editing: false,
+    } as never));
+    await m.until(() => !!document.querySelector('[data-todo-landing="open"]'), 'the open pull request badge');
+    await m.click(document.querySelector('[data-todo-landing="open"]'));
+    await m.until(() => !!document.querySelector('[data-landing-forge]'), 'the job dialog');
+    assert.ok(m.urls.includes('/api/ui/kanban/landings?project=timon'), 'the job looked up in the idea\'s project');
+    assert.ok(m.urls.includes('/api/ui/kanban/landings/job-open/preview'), 'the latest job of the branch');
+    assert.equal(document.querySelector('[data-landing-forge]')?.getAttribute('href'), 'https://github.com/acme/app/pull/12', 'the forge one click away, in the dialog');
+    assert.equal(document.querySelectorAll('[role="dialog"]').length, 1, 'the idea did not open under it');
+  } finally {
+    await m.unmount();
+  }
 });

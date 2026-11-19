@@ -3059,7 +3059,7 @@
     "landingFilter": {"open": "PR open", "pending": "PR not created"},
     "emptyLandingFilter": "No idea in this state",
     "clearAllFilters": "Show all ideas",
-    "landing": {"branch": "Branch", "pending": "PR not created", "open": "PR #{number}", "openNoNumber": "PR open", "merged": "PR #{number} merged", "mergedNoNumber": "Merged", "closed": "PR #{number} closed", "closedNoNumber": "Closed", "openPr": "open the pull request in the browser"},
+    "landing": {"branch": "Branch", "pending": "PR not created", "open": "PR #{number}", "openNoNumber": "PR open", "merged": "PR #{number} merged", "mergedNoNumber": "Merged", "closed": "PR #{number} closed", "closedNoNumber": "Closed", "openJob": "open the job's preview", "notFound": "This job is no longer listed."},
     "truncated": "Showing the latest {shown} of {total}",
     "add": "Add",
     "newIdea": "New idea",

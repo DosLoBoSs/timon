@@ -197,3 +197,9 @@ export function groupLandings(landings: readonly Landing[], now: number): Array<
 export function landingAction(landing: Landing): 'preview' | 'openPr' {
   return (landing.state === 'merged' || landing.state === 'closed') && landing.pr_url ? 'openPr' : 'preview';
 }
+
+/** The job of `branch` in `landings`, the latest touched when several remotes
+ *  carry one; null when the list no longer has it. */
+export function findLanding(landings: readonly Landing[], branch: string): Landing | null {
+  return [...landings].filter((l) => l.branch === branch).sort((a, b) => b.updated_at - a.updated_at)[0] ?? null;
+}
