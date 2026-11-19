@@ -1610,6 +1610,11 @@
       "arity": 1,
       "since": 12
     },
+    "provider.scratch.profile": {
+      "type": "function",
+      "arity": 1,
+      "since": 18
+    },
     "questions": {
       "type": "object",
       "since": 10
@@ -3623,7 +3628,8 @@
       "since": 12,
       "signature": "ProviderScratch",
       "members": {
-        "mission": "(spawn: BuildSpawnOpts) => Promise<ProviderScratchDir>"
+        "mission": "(spawn: BuildSpawnOpts) => Promise<ProviderScratchDir>",
+        "profile": "(profile: ProfileRuntime) => ProviderScratchDir"
       }
     },
     "ProviderRedact": {

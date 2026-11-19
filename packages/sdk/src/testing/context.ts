@@ -27,6 +27,9 @@ import { providerRuntime } from './runtime.js';
 /** What the stand-in answers to `ctx.provider.mcp()`: a reference where the daemon would put one, never a token. */
 export const FAKE_TOKEN_REFERENCE = 'timon-seal-00000000000000000000000000000000';
 
+/** How every reference the daemon mints starts (`launch-seal.ts`, kept out of the published SDK), the stand-in's included. */
+const SEAL_REFERENCE_PREFIX = 'timon-seal-';
+
 export type ProviderContextOptions = {
   /** What `ctx.settings.get` answers: the plugin's own settings, secrets included. */
   readonly settings?: Readonly<Record<string, ProviderSettingValue>>;
@@ -81,7 +84,7 @@ export type TestProviderContext = ProviderPluginContext & {
   readonly logs: readonly LoggedLine[];
   /** The directories the plugin opened to `chat_show_media` (`media.allowShow`), by mission. */
   readonly shownFrom: ReadonlyMap<string, readonly string[]>;
-  /** Removes the temporary folders `scratch.mission` created. */
+  /** Removes the temporary folders `scratch.mission` and `scratch.profile` created. */
   cleanup(): void;
 };
 
@@ -125,6 +128,7 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
   const productProfiles: BackendProfile[] = [];
   const logs: LoggedLine[] = [];
   const scratches = new Map<string, ProviderScratchDir>();
+  const profileScratches = new Map<string, ProviderScratchDir>();
   const shownFrom = new Map<string, string[]>();
   const temporaryRoots: string[] = [];
   const secrets = (options.secrets ?? []).filter((value) => value.length >= MASK_MIN_LENGTH);
@@ -185,6 +189,31 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
             temporaryRoots.push(root);
             dir = createScratchDir({ root: join(root, spawn.missionId), linkRoots: options.credentialDirs ?? [] });
             scratches.set(spawn.missionId, dir);
+          }
+          return dir;
+        },
+        // One temporary folder per profile, the same across missions, as the daemon's. The
+        // stand-in launches every profile it is handed: it has no registry to say who does.
+        profile(profile) {
+          if (apiVersion < 18) {
+            throw new Error(`plugin: ctx.provider.scratch.profile needs apiVersion 18 or later (the manifest declares ${apiVersion})`);
+          }
+          if (profile.id.includes('@')) {
+            throw new Error('scratch.profile: a launch on an account keeps its state in account.of(profile).configDir');
+          }
+          let dir = profileScratches.get(profile.id);
+          if (!dir) {
+            const root = mkdtempSync(join(tmpdir(), 'provider-profile-'));
+            temporaryRoots.push(root);
+            dir = createScratchDir({
+              root: join(root, profile.id),
+              // The daemon's folder outlives every mission: a launch's reference is refused there too.
+              swap: (content) => {
+                if (content.includes(SEAL_REFERENCE_PREFIX)) throw new Error('scratch.profile: this text carries a launch\'s reference, write it in scratch.mission() instead');
+                return content;
+              },
+            });
+            profileScratches.set(profile.id, dir);
           }
           return dir;
         },
@@ -286,6 +315,7 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
     cleanup() {
       for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true });
       scratches.clear();
+      profileScratches.clear();
     },
   };
 }
