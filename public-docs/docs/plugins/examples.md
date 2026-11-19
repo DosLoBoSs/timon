@@ -3,7 +3,7 @@ title: Example cookbook
 sidebar_position: 18
 ---
 
-44 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
+45 supplied packages demonstrate the public contract. Commentary is written for this guide; code excerpts are copied verbatim from the named files. Some original strings are French. Regenerate excerpts with `node scripts/gen-examples.mjs`.
 
 Obtain the example tree with your developer distribution. There is no public repository link. Use a licensed test instance and follow [Testing](testing.md) before installing third-party code.
 
@@ -2219,6 +2219,77 @@ export async function syncAgents(ctx, profiles, defaults = {}) {
 const STATUS = { invalid: 400, forbidden: 403, not_found: 404, conflict: 409 };
 
 /** @param {import('@timon-ai/sdk').PluginContext} ctx */
+```
+
+## The GitHub repository of a project {#forge}
+
+Source: `examples/plugin-forge`. Manifest ID: `forge-example`. Minimum API: **19**.
+
+API 19. A behavior plugin that works with the GitHub repository of a Timon project without `gh` or a token: Timon reads it with the account set on the project and never shows it. `GET /candidates?project=<slug>` lists the open issues carrying the label of its settings (`accepted` by default), each with `brief`, the issue marked as outside data for an agent. `POST /thanks` with `{ project, issue }` proposes a thank-you comment, once per issue (`key: thanks:<n>`): it waits in the notification centre and in the **Publish on GitHub** window, where a person edits it and publishes or discards it. `GET /proposals` says where they stand. The comment is a template and never quotes the issue. Calling the routes needs an account allowed to manage projects, and proposing needs a person signed in: an agent's token is refused.
+
+Permissions: `forge:read`, `forge:propose`, `settings`. Read the [related guide](forge.md).
+
+`timon plugin add ./examples/plugin-forge` installs this package on the target instance.
+
+From `examples/plugin-forge/lib/index.js`, line 12 (excerpt):
+
+```js
+export function thanksFor() {
+  return 'Thanks for reporting this. We are tracking it, and will post here when a fix lands.'
+}
+
+/**
+ * What an agent may be handed of an issue: bounded, and marked as text from
+ * outside, never an instruction.
+ */
+export function asUntrusted(issue) {
+  const data = JSON.stringify({ number: issue.number, title: issue.title.slice(0, 200), author: issue.author })
+  return `<untrusted-data>${data.replace(/</g, '\\u003c').replace(/>/g, '\\u003e')}</untrusted-data>`
+}
+
+/** @param {import('@timon-ai/sdk').PluginContext} ctx */
+export function apply(ctx) {
+  const router = ctx.router()
+
+  const answer = (handler) => async (request, response) => {
+    if (!ctx.user()) { response.status(401).json({ error: 'sign_in_required' }); return }
+    try {
+      response.json(await handler(request))
+    } catch (err) {
+      if (err?.name === 'PluginCallerError') { response.status(403).json({ error: 'forbidden' }); return }
+      const status = STATUS[err?.code]
+      if (!status) throw err
+      response.status(status).json({ error: err.code })
+    }
+  }
+
+  // The open issues of a project that carry the label of the settings.
+  router.get('/candidates', answer(async (request) => {
+    const project = String(request.query.project ?? '')
+    const label = ctx.settings.get('label') || 'accepted'
+    const issues = await ctx.forge.issues.list(project, { label })
+    return { issues: issues.map((issue) => ({ number: issue.number, title: issue.title, url: issue.url, brief: asUntrusted(issue) })) }
+  }))
+
+  // Proposes the thank-you comment once per issue: a second call returns the
+  // same proposal. Nothing reaches GitHub here.
+  router.post('/thanks', answer(async (request) => {
+    const project = String(request.body?.project ?? '')
+    const number = Number(request.body?.issue)
+    const { proposal, created } = await ctx.forge.propose(project, {
+      target: { type: 'issue', number },
+      body: thanksFor(),
+      key: `thanks:${number}`,
+    })
+    return { id: proposal.id, state: proposal.state, created }
+  }))
+
+  // Where this plugin's proposals stand: waiting, published (with the comment's address) or discarded.
+  router.get('/proposals', answer(async (request) => {
+    const proposals = await ctx.forge.proposals.list(String(request.query.project ?? ''))
+    return { proposals: proposals.map((p) => ({ id: p.id, issue: p.target.number, state: p.state, url: p.url })) }
+  }))
+}
 ```
 
 ## A TO DO connector (GitHub Issues) {#todo-connector}
