@@ -317,7 +317,7 @@ function JobDialogBody({ landing, onClose, openTodo, openMission }: {
                     )}
                   </TabsContent>
 
-                  <TabsContent value="checks" className="scrollbar-thin mt-0 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+                  <TabsContent value="checks" className="scrollbar-thin mt-0 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto data-[state=inactive]:hidden">
                     {preview.pull_request && (
                       <div className={cn(ISLAND, 'px-2.5 py-2')}>
                         <p className="text-xs font-medium">{preview.pull_request.title}</p>
