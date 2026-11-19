@@ -35,6 +35,7 @@ import { NativeViewCover } from '@/lib/native-view-cover';
 import { cn } from '@/lib/utils';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
 import { useWidgetAttention, useWidgetCount, useWidgetInFront } from '@/components/widget-host/widget-self';
+import { sharedGet } from '@/lib/shared-read';
 import {
   anyReviewRunning, branchChip, branchLock, filterByAuthor, keepPullList, lastPullList, pullAuthors, reviewBadge, shouldReadPulls,
   type PullRequestItem, type PullRequestList, type ReviewBadge,
@@ -114,7 +115,7 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
     if (!slug) { setLoad({ kind: 'idle' }); return; }
     if (!quiet) setLoad({ kind: 'loading' });
     try {
-      const res = await fetch(projectPath(slug), { cache: 'no-store' });
+      const res = await sharedGet(projectPath(slug));
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { setLoad({ kind: 'error', message: apiErrorMessage(json, { status: res.status }) }); return; }
       keepPullList(slug, json as PullRequestList);
