@@ -565,10 +565,11 @@ test('the late watch stops on quit, runs once, and a failed handover ends it', a
 
 test('the kept-embedded notice names the home and the reason, in the user\'s language', () => {
   const en = handoverKeptMessage('en-US', '/home/me/.timon', 'timeout');
-  assert.match(en.message, /did not answer/);
+  assert.match(en.message, /slow to start/);
+  assert.doesNotMatch(en.detail, /reopen/, 'the service is taken over on its own');
   assert.match(en.detail, /\/home\/me\/\.timon/);
   assert.match(en.detail, /timeout/);
-  assert.match(handoverKeptMessage('fr', 'C:\\Users\\me\\.timon', null).message, /n’a pas répondu/); // french-ok: the French locale under test
+  assert.match(handoverKeptMessage('fr', 'C:\\Users\\me\\.timon', null).message, /tarde à démarrer/); // french-ok: the French locale under test
 });
 
 test('the configuration the wizard writes keeps the origins the window opened on', () => {
