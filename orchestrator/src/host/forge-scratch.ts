@@ -41,11 +41,16 @@ import type { ExecOpts, ExecResult } from './types.js';
 
 const hostGit: GitRunner = (args, opts) => getHost().execAsync('git', args, opts);
 
-/** Resolves the host an SSH alias connects to, for `user` when given; null when it cannot tell. */
-export type SshHostResolver = (alias: string, user?: string) => Promise<string | null>;
+/**
+ * Resolves the host an SSH alias connects to, for `user` and `port` when given
+ * (the port git passes `ssh -p`, null when the URL names none); null when it
+ * cannot tell.
+ */
+export type SshHostResolver = (alias: string, user?: string, port?: string | null) => Promise<string | null>;
 
 const SSH_ALIAS = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
 const SSH_LOGIN = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+const SSH_PORT = /^[1-9][0-9]{0,4}$/;
 
 /** The `hostname` line of `ssh -G` output, lowercased, or null. */
 export function parseSshHostName(stdout: string): string | null {
@@ -54,21 +59,36 @@ export function parseSshHostName(stdout: string): string | null {
 }
 
 /**
- * The host `ssh` connects to for `alias`, as the user's SSH configuration
- * resolves it (`Host` / `HostName`), read with `ssh -G`, which prints the
- * configuration without connecting. The push runs the same `ssh` with the same
- * configuration, so the host it names is the one the push reaches. The user
- * the push logs in as is given too: a `Match user` block may depend on it.
+ * A resolver reading the host `ssh` connects to for `alias`, as the user's SSH
+ * configuration resolves it (`Host` / `HostName`), with `ssh -G`, which prints
+ * the configuration without connecting. The push runs the same `ssh` with the
+ * same configuration, so the host it names is the one the push reaches. The
+ * user and the port the push uses are given too: a `Match user` block, or a
+ * `Match exec` testing `%p`, may depend on them. `configFile` replaces the
+ * user's configuration (`ssh -F`), for a test.
  */
-export const sshHostName: SshHostResolver = async (alias, user) => {
-  if (!SSH_ALIAS.test(alias) || (user !== undefined && !SSH_LOGIN.test(user))) return null;
-  try {
-    const r = await getHost().execAsync('ssh', ['-G', ...(user !== undefined ? ['-l', user] : []), alias], { timeout: 10_000, windowsHide: true });
-    return r.code === 0 ? parseSshHostName(r.stdout) : null;
-  } catch {
-    return null;
-  }
-};
+export function sshHostResolver(configFile?: string): SshHostResolver {
+  return async (alias, user, port) => {
+    if (!SSH_ALIAS.test(alias) || (user !== undefined && !SSH_LOGIN.test(user))) return null;
+    if (port != null && !(SSH_PORT.test(port) && Number(port) <= 65535)) return null;
+    const args = [
+      '-G',
+      ...(configFile !== undefined ? ['-F', configFile] : []),
+      ...(user !== undefined ? ['-l', user] : []),
+      ...(port != null ? ['-p', port] : []),
+      alias,
+    ];
+    try {
+      const r = await getHost().execAsync('ssh', args, { timeout: 10_000, windowsHide: true });
+      return r.code === 0 ? parseSshHostName(r.stdout) : null;
+    } catch {
+      return null;
+    }
+  };
+}
+
+/** The host the user's own SSH configuration sends `alias` to (`sshHostResolver`). */
+export const sshHostName: SshHostResolver = sshHostResolver();
 
 /** `merge-tree --write-tree` with its `-z` listing of conflicts. */
 export const MIN_GIT_VERSION: readonly [number, number] = [2, 38];

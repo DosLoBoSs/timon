@@ -293,7 +293,7 @@ export async function pinnedRemote(integration: ProjectIntegration, deps: ForgeP
   });
   if (allowed.has(endpoint.host)) return pinned(endpoint.host);
   if (endpoint.scheme === 'ssh' && SSH_ALIAS_NAME.test(endpoint.host)) {
-    const resolved = await (deps.sshHostName ?? sshHostName)(endpoint.host, endpoint.user);
+    const resolved = await (deps.sshHostName ?? sshHostName)(endpoint.host, endpoint.user, endpoint.port);
     if (resolved && allowed.has(resolved)) return pinned(resolved);
   }
   return refuse(409, 'conflict_unsupported', `the project's remote does not lead to ${[...allowed][0]}: Timon fetches and pushes a resolution only there`);
