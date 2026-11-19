@@ -7,6 +7,10 @@
  * their metadata and their diff as text, never their branch; and the issues
  * of a repository, a list filtered by label and one issue's text.
  *
+ * It writes one thing on the forge: a comment on an issue or a pull request,
+ * and only for a publication a person validated (`forge-proposals.ts`), which
+ * checks the account before calling it.
+ *
  * This is the only place `gh` and the network side of `git` are called for a
  * pull request. Every command goes through a runner the tests replace: nothing
  * in the test suite reaches GitHub or pushes anywhere.
@@ -247,6 +251,29 @@ export type IssueDetailsOutcome = { ok: true; issue: IssueDetails } | ForgeReadF
 export interface ForgeIssueReader {
   listIssues(repo: string, label: string): Promise<IssueListOutcome>;
   issueDetails(repo: string, number: number): Promise<IssueDetailsOutcome>;
+}
+
+/** A comment on an issue or a pull request (GitHub keeps both as issue comments). */
+export type IssueCommentRef = { id: number; url: string };
+export type IssueCommentOutcome = { ok: true; comment: IssueCommentRef } | ForgeReadFailure;
+export type IssueCommentLookup = { ok: true; comment: IssueCommentRef | null } | ForgeReadFailure;
+
+/** Most characters of a comment the daemon posts: GitHub takes 65 536, and a
+ *  Windows command line about 32 000. */
+export const ISSUE_COMMENT_LIMIT = 8_000;
+
+/**
+ * The one write on the forge outside a pull request's opening: a plain
+ * comment, never a review, an approval or a label. The caller has checked the
+ * account (`login`) and holds a person's validation; nothing here decides to
+ * write.
+ */
+export interface ForgeCommentWriter {
+  login(): Promise<GhLoginOutcome>;
+  /** The comment `author` left on `number` that holds `marker`, if any: how a
+   *  publication interrupted after the forge answered is not posted twice. */
+  findIssueComment(repo: string, number: number, author: string, marker: string): Promise<IssueCommentLookup>;
+  postIssueComment(repo: string, number: number, body: string): Promise<IssueCommentOutcome>;
 }
 
 /** Most issues a list asks for, the most recent first. */
@@ -601,6 +628,36 @@ const REVIEW_THREADS_QUERY = `query($owner: String!, $name: String!, $number: In
   }
 }`;
 
+/** What `gh api` answers when it creates an issue comment. */
+const CreatedComment = z.object({ id: z.number().int().positive(), html_url: z.string() });
+
+/** The comment `gh api …/comments` created, or null when the answer is not one. */
+export function parseCreatedComment(stdout: string): IssueCommentRef | null {
+  const parsed = CreatedComment.safeParse(jsonOf(stdout));
+  if (!parsed.success) return null;
+  const url = httpsUrl(parsed.data.html_url);
+  return url ? { id: parsed.data.id, url } : null;
+}
+
+/** The first `<id> <url>` line the comment lookup printed, or null. */
+function foundComment(stdout: string): IssueCommentRef | null {
+  for (const line of stdout.split('\n')) {
+    const m = /^(\d{1,20}) (\S+)$/.exec(line.trim());
+    const url = m?.[2] ? httpsUrl(m[2]) : null;
+    if (m?.[1] && url) return { id: Number(m[1]), url };
+  }
+  return null;
+}
+
+/** A marker a lookup may quote in its jq filter: a fixed shape, no quote. */
+const COMMENT_MARKER = /^<!-- timon-proposal:[0-9a-f-]{36} -->$/;
+const COMMENT_AUTHOR = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+
+/** A repository path segment GitHub accepts and an API path cannot climb out of. */
+function plainRepo(repo: string): boolean {
+  return GITHUB_REPO.test(repo) && repo.split('/').every((part) => part !== '.' && part !== '..');
+}
+
 /** A label `gh issue list --label` takes as one label: `gh` splits on commas. */
 function plainLabel(label: string): boolean {
   return label.length > 0 && label.length <= LABEL_FILTER_LIMIT && label === label.trim()
@@ -623,7 +680,7 @@ function pullRequestFrom(text: string): PullRequestRef | null {
 /** GitHub through `gh`, signed in with the project's config folder. */
 export function githubForge(
   configDir: string | null, runners: ForgeRunners = {},
-): Forge & ForgeReader & ForgeChecksReader & ForgeIssueReader {
+): Forge & ForgeReader & ForgeChecksReader & ForgeIssueReader & ForgeCommentWriter {
   const gh = runners.gh ?? hostGh;
   // Read-only `gh` calls: one shape for every failure, nothing secret in it.
   const read = async (args: string[], maxBuffer?: number): Promise<{ ok: true; result: ExecResult } | ForgeReadFailure> => {
@@ -779,6 +836,37 @@ export function githubForge(
       return view
         ? { ok: true, ...view }
         : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer the state of a pull request' };
+    },
+    async findIssueComment(repo, number, author, marker) {
+      if (!plainRepo(repo) || !Number.isSafeInteger(number) || number <= 0
+        || !COMMENT_AUTHOR.test(author) || !COMMENT_MARKER.test(marker)) {
+        return { ok: false, code: 'unexpected_answer', reason: 'not a comment lookup on a GitHub repository' };
+      }
+      // Both values were checked above: neither can close the jq string.
+      const filter = `.[] | select((.user.login | ascii_downcase) == "${author.toLowerCase()}" and (.body | contains("${marker}"))) | "\\(.id) \\(.html_url)"`;
+      const out = await read(['api', '--paginate', `repos/${repo}/issues/${number}/comments?per_page=100`, `--jq=${filter}`], 16 * 1024 * 1024);
+      if (!out.ok) return out;
+      if (out.result.code !== 0) return failed(out.result);
+      return { ok: true, comment: foundComment(out.result.stdout) };
+    },
+    async postIssueComment(repo, number, body) {
+      if (!plainRepo(repo) || !Number.isSafeInteger(number) || number <= 0) {
+        return { ok: false, code: 'unexpected_answer', reason: 'not an issue or a pull request of a GitHub repository' };
+      }
+      if (body.trim().length === 0 || body.length > ISSUE_COMMENT_LIMIT + 200) {
+        return { ok: false, code: 'unexpected_answer', reason: 'the comment is empty or too long' };
+      }
+      // `--raw-field` keeps the body a string: `-F` would read "@file" as a
+      // file of this machine. The comment endpoint serves pull requests too.
+      const out = await read([
+        'api', '--method=POST', `repos/${repo}/issues/${number}/comments`, `--raw-field=body=${body}`,
+      ]);
+      if (!out.ok) return out;
+      if (out.result.code !== 0) return failed(out.result);
+      const comment = parseCreatedComment(out.result.stdout);
+      return comment
+        ? { ok: true, comment }
+        : { ok: false, code: 'unexpected_answer', reason: 'gh did not answer the address of a comment' };
     },
     async createPullRequest(input) {
       // `--flag=value`: a title or a body starting with "-" stays a value.
