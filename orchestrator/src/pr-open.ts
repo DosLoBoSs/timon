@@ -28,6 +28,7 @@ import { getHost } from './host/index.js';
 import { nodeRuntime } from './host/node-runtime.js';
 import type { ExecResult } from './host/types.js';
 import { readProjectIntegration, type ProjectIntegration } from './project-integration.js';
+import { issueLines, jobIssueClosings, pullRequestBody } from './issue-closing.js';
 
 export const PR_CHECKS = [
   'branch_name',
@@ -75,6 +76,8 @@ export type PrOpenOutcome =
       repository: string;
       head_sha: string;
       checks: PrCheck[];
+      /** `Fixes owner/repo#n` / `Refs owner/repo#n` the daemon added to the description. */
+      issues: string[];
     }
   | { ok: false; status: number; code: PrOpenRefusalCode; reason: string; checks?: PrCheck[] };
 
@@ -518,8 +521,11 @@ export async function openPullRequest(request: PrOpenRequest, deps: PrOpenDeps =
     if (!pushed.ok) {
       return refuse(502, 'pr_push_failed', `${branch} was not pushed: ${pushed.reason}`, checks);
     }
+    // The issues come from the job's ideas, never from the agent's text, whose
+    // own closing keywords are defused (`issue-closing.ts`).
+    const issues = issueLines(jobIssueClosings(row));
     const created = await forge.createPullRequest({
-      repo: repository, base: row.target, head: branch, title: request.title, body: request.body,
+      repo: repository, base: row.target, head: branch, title: request.title, body: pullRequestBody(request.body, issues),
     });
     if (!created.ok) {
       return refuse(502, 'pr_create_failed', `${branch} was pushed, the pull request was not created: ${created.reason}. Run the command again to retry.`, checks);
@@ -534,6 +540,7 @@ export async function openPullRequest(request: PrOpenRequest, deps: PrOpenDeps =
       repository,
       head_sha: head,
       checks,
+      issues,
     };
   } finally {
     busy.delete(key);
