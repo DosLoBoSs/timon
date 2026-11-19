@@ -1165,6 +1165,8 @@ html[data-glass-bubbles] .chat-bubble[data-glass-surface='user'][data-glass-visi
  * scrollbar inside the pill would cut it in two. */
 .widget-tablist { scrollbar-width: none; }
 .widget-tablist::-webkit-scrollbar { display: none; }
+/* Set by `fitTabs` when a title would be cut at the roomy size. */
+.widget-tablist[data-tight] > [role="tab"] { padding-inline: 3px; font-size: 11px; }
 /* A title bar is a handle, not text to select: no I-beam over the title
  * before the hint shows, and a press there never starts a selection. Fields
  * placed in a header keep their own cursor. */
