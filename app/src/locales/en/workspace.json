@@ -45,7 +45,7 @@
     "logoHint": "Click the circle to browse, paste (Ctrl/Cmd+V) or drop an image — or pick an emoji.", "logoPlaceholder": "Emoji or short text",
     "autoColor": "Auto-generate from name", "auto": "auto",
     "saving": "Saving…", "save": "Save",
-    "deleting": "Deleting…", "dangerZone": "Danger zone", "dangerZoneHint": "Deleting a project is permanent."
+    "deleting": "Deleting…", "dangerZone": "Danger zone", "dangerZoneHint": "Deleting a project is permanent.", "integrations": "Integrations"
   },
   "memoryPage": {
     "saveError": "Could not save {title}: {error}",

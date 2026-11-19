@@ -32,6 +32,7 @@ import { autoColor } from '@/lib/project-visual';
 import { LogoField } from '@/components/logo-field';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
 import { apiErrorMessage } from '@/lib/api-error';
+import { ProjectSettingsSlot } from '@/components/project-settings-slot';
 
 type Project = {
   slug: string;
@@ -386,6 +387,7 @@ export function ProjectEditDialog({ slug: editingSlug, onSaved, onClose }: Proje
                 disabled={saving}
               />
             </Field>
+            {editingSlug && <ProjectSettingsSlot project={editingSlug} />}
             {/* Danger zone, edit only. Deletion lives ONLY here: on a grid of
                 twenty-five cards, a hover trash glyph makes the fatal click
                 too easy to give by mistake. */}
