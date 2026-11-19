@@ -86,10 +86,13 @@ const CONFLICT_MARKER = /^(?:<{7}(?: |$)|>{7}(?: |$)|\|{7}(?: |$)|={7}\r?$)/m;
  * undecodable name, the bidirectional marks (U+061C, U+200E/F, U+202A–U+202E,
  * U+2066–U+2069) that make a name read otherwise in the dialog and the
  * comment, and the invisible ones that make two names look alike or break a
- * line (U+200B–U+200D, U+2028/U+2029, U+FEFF).
+ * line (U+200B–U+200D, U+2028/U+2029, U+FEFF, the soft hyphen U+00AD, the
+ * invisible operators U+2060–U+2064, U+180E, the Hangul fillers U+115F,
+ * U+1160 and U+3164, the variation selectors U+FE00–U+FE0F and the tags
+ * U+E0000–U+E007F).
  */
-// eslint-disable-next-line no-control-regex
-const UNUSUAL_PATH = /[\u0000-\u001f\u007f,\uFFFD\u061C\u200B-\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069\uFEFF]/;
+// eslint-disable-next-line no-control-regex, no-misleading-character-class
+const UNUSUAL_PATH = /[\u0000-\u001f\u007f,\u00AD\uFFFD\u061C\u115F\u1160\u180E\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060-\u2064\u2066-\u2069\u3164\uFE00-\uFE0F\uFEFF\u{E0000}-\u{E007F}]/u;
 /** Paths whose change deserves a second look in the dialog: they steer GitHub or git itself. */
 const SENSITIVE_PATH = /^(?:\.github\/|\.gitattributes$|\.gitmodules$|(?:.*\/)?\.gitattributes$)/;
 

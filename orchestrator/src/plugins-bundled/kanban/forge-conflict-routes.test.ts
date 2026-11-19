@@ -354,7 +354,10 @@ test('refused after the merge: the head moved, a clean merge, a deletion, a bina
 });
 
 test('a file whose name holds a direction mark or an invisible character is refused: it would read otherwise in the dialog', async () => {
-  for (const mark of ['\u202E', '\u2066', '\u200F', '\u061C', '\u200B', '\u200C', '\u200D', '\u2028', '\u2029', '\uFEFF']) {
+  for (const mark of [
+    '\u202E', '\u2066', '\u200F', '\u061C', '\u200B', '\u200C', '\u200D', '\u2028', '\u2029', '\uFEFF',
+    '\u00AD', '\u2060', '\u2064', '\u180E', '\u3164', '\u115F', '\u1160', '\uFE00', '\uFE0F', '\u{E0001}', '\u{E007F}',
+  ]) {
     const name = `docs/read${mark}me.txt`;
     conflictingFixture({ [name]: 'x\n' }, { [name]: 'contributor\n' }, { [name]: 'main\n' });
     const out = await prepare();
