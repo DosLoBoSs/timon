@@ -222,21 +222,21 @@ test('the menu offers only what the branch allows, and a branch update opens in 
 
     await m.openMenu(57);
     assert.ok(document.querySelector('[data-menu-ask-contributor]'));
-    assert.equal(document.querySelector('[data-menu-update-branch]'), null);
-    assert.equal(document.querySelector('[data-menu-resolve-conflict]'), null, 'the project asks the contributor');
+    assert.ok(!document.querySelector('[data-menu-update-branch]'));
+    assert.ok(!document.querySelector('[data-menu-resolve-conflict]'), 'the project asks the contributor');
     await m.click(document.querySelector('[data-menu-comment]'));
     await m.click(document.querySelector('[data-publish-cancel]'));
 
     await m.openMenu(58);
-    assert.equal(document.querySelector('[data-menu-ask-contributor]'), null);
+    assert.ok(!document.querySelector('[data-menu-ask-contributor]'));
     await m.click(document.querySelector('[data-menu-update-branch]'));
     assert.deepEqual(posts(m.calls), ['POST /pull-requests/58/update-branch'], 'preparing reaches nothing but the daemon');
     const dialog = document.querySelector('[data-publish-dialog]');
     assert.ok(dialog);
     assert.match(dialog.textContent ?? '', /bob\/widgets:tray-icon/);
     assert.match(dialog.textContent ?? '', /aaaaaaaaaaaa/);
-    assert.equal(document.querySelector('[data-publish-edit]'), null, 'a branch update has no text to edit');
-    assert.equal(document.querySelector('[data-publish-body]'), null);
+    assert.ok(!document.querySelector('[data-publish-edit]'), 'a branch update has no text to edit');
+    assert.ok(!document.querySelector('[data-publish-body]'));
     assert.match(document.querySelector('[data-publish-send]')?.textContent ?? '', /Update the branch/);
     await m.click(document.querySelector('[data-publish-send]'));
     assert.deepEqual(m.published(), { body: 'Update the branch of #58 on GitHub' }, 'the daemon\'s text leaves as it is');
@@ -260,7 +260,7 @@ test('the Conflict dialog resolves a file, shows the commit, and hands its publi
     // The agent's suggestion is shown as text and applied only on a click.
     await m.click(document.querySelector('[data-conflict-suggest]'));
     assert.ok(dialog()!.textContent?.includes(HOSTILE));
-    assert.equal(document.querySelector('img'), null, 'a suggestion is text, never markup');
+    assert.ok(!document.querySelector('img'), 'a suggestion is text, never markup');
     assert.equal(m.calls.filter((c) => c.url.endsWith('/files')).length, 0);
     await m.click(document.querySelector('[data-conflict-ignore]'));
 

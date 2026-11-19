@@ -88,7 +88,7 @@ test('a project that opens pull requests on GitHub gets the row, and the choice 
     assert.equal(status(), 'ask');
     assert.match(document.body.textContent ?? '', /Contributors' conflicts/);
     assert.match(document.body.textContent ?? '', /Ask the contributor/);
-    assert.equal(document.querySelector('[data-contributor-conflicts-dialog]'), null, 'no field is shown in the row');
+    assert.ok(!document.querySelector('[data-contributor-conflicts-dialog]'), 'no field is shown in the row');
 
     await m.click(document.querySelector('[data-contributor-conflicts-configure]'));
     assert.equal(document.querySelector('[data-contributor-conflicts-mode="ask"]')?.getAttribute('aria-checked'), 'true');
@@ -97,7 +97,7 @@ test('a project that opens pull requests on GitHub gets the row, and the choice 
     const put = m.calls.find((c) => c.method === 'PUT');
     assert.deepEqual(put?.body, { contributor_conflicts: 'resolve' });
     assert.equal(status(), 'resolve');
-    assert.equal(document.querySelector('[data-contributor-conflicts-dialog]'), null);
+    assert.ok(!document.querySelector('[data-contributor-conflicts-dialog]'));
   } finally {
     await m.unmount();
   }
@@ -119,7 +119,7 @@ test('a refusal of the daemon stays in the dialog, the row unchanged', async () 
 test('a project that does not open pull requests gets no row, and its section hides itself', async () => {
   const m = await mount({ mode: 'local', forge: 'github', contributor_conflicts: 'ask' });
   try {
-    assert.equal(document.querySelector('[data-contributor-conflicts]'), null);
+    assert.ok(!document.querySelector('[data-contributor-conflicts]'));
     const section = document.querySelector('[data-project-settings]');
     assert.ok(section?.className.includes('has-[>div:empty]:hidden'));
     assert.equal(section?.lastElementChild?.childElementCount, 0);
