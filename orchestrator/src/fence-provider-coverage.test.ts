@@ -229,21 +229,23 @@ const ACTIVE = activeProfiles()
   .filter((entry) => !entry.account && isProcessDialect(entry.profile.dialect))
   .map((entry) => entry.profile.id);
 const launches = new Map<string, Launch>();
-for (const id of ACTIVE) launches.set(id, await launchOf(id));
+// No fence runs missions on Windows yet (`doctor.ts`): there is no policy whose coverage to check.
+const NO_FENCE = process.platform === 'win32' && 'missions are not fenced on Windows';
+if (!NO_FENCE) for (const id of ACTIVE) launches.set(id, await launchOf(id));
 
-test('every profile that must be covered is active and launched', () => {
+test('every profile that must be covered is active and launched', { skip: NO_FENCE }, () => {
   const missing = EXPECTED.filter((id) => !ACTIVE.includes(id));
   assert.deepEqual(missing, [], `inactive, hence not covered: ${missing.join(', ')}`);
   for (const id of ACTIVE) assert.ok(getBackend(id), id);
 });
 
-test('the profiles on another plugin\'s dialect, the cases this suite is about, are among them', () => {
+test('the profiles on another plugin\'s dialect, the cases this suite is about, are among them', { skip: NO_FENCE }, () => {
   assert.equal(dialectOf('ollama-cloud'), 'codex', 'Ollama Cloud, a plugin\'s profile on the codex dialect');
   assert.equal(dialectOf('kimi'), 'claude', 'Kimi, a plugin\'s profile on the claude dialect');
 });
 
 for (const id of ACTIVE) {
-  test(`${id}: every folder of the Timon home its launch names is open to the mission`, () => {
+  test(`${id}: every folder of the Timon home its launch names is open to the mission`, { skip: NO_FENCE }, () => {
     const run = launches.get(id)!;
     if (NO_TIMON_FOLDER.has(dialectOf(id))) {
       assert.deepEqual(run.needs, [], `${id}: its launch now names folders of the Timon home, which this suite must check`);
@@ -259,7 +261,7 @@ for (const id of ACTIVE) {
     assert.deepEqual(refused, [], `${id}: the fence refuses what the CLI is told to use`);
   });
 
-  test(`${id}: the mission still cannot reach the daemon's secrets or another mission's folders`, () => {
+  test(`${id}: the mission still cannot reach the daemon's secrets or another mission's folders`, { skip: NO_FENCE }, () => {
     const run = launches.get(id)!;
     for (const name of ['daemon-token', 'timon.db', 'secret-key', 'timon.config.json']) {
       const access = fenceAccess(run.strict, join(TIMON_HOME, name));
@@ -277,7 +279,7 @@ for (const id of ACTIVE) {
   });
 
   // Seatbelt matches the profile text, not `fenceAccess`: the rendering must agree on these paths.
-  test(`${id}: the Seatbelt rendering of the policy opens the same folders`, { skip: process.platform === 'win32' && 'Seatbelt paths are POSIX paths' }, () => {
+  test(`${id}: the Seatbelt rendering of the policy opens the same folders`, { skip: NO_FENCE }, () => {
     const run = launches.get(id)!;
     const rules = rulesOf(renderSeatbeltProfile(run.policy, { spellings: (path) => canonicalPaths(path, (p) => realpathSync.native(p)) }).text);
     const refused = run.needs.flatMap((need) => {
@@ -301,7 +303,7 @@ const CLAUDE_DIALECT = ACTIVE.filter((id) => dialectOf(id) === 'claude');
 for (const id of CLAUDE_DIALECT) {
   const pending = id !== 'claude'
     && '#1104: a profile on the claude dialect other than claude gets no private CLAUDE_CONFIG_DIR yet, and ~/.claude is refused to it';
-  test(`${id}: the claude CLI can write its config folder, and never the user's sign-in of another backend`, { todo: pending || undefined }, () => {
+  test(`${id}: the claude CLI can write its config folder, and never the user's sign-in of another backend`, { skip: NO_FENCE, todo: pending || undefined }, () => {
     const run = launches.get(id)!;
     const configDir = run.spec.env?.CLAUDE_CONFIG_DIR ?? join(USER_HOME, '.claude');
     const access = fenceAccess(run.strict, join(configDir, 'debug', 'latest'));
