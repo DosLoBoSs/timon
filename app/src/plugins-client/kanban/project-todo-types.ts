@@ -19,6 +19,8 @@ export type TodoLandingState = 'branch' | 'pending' | 'open' | 'merged' | 'close
 
 /** One job (integration branch) of an idea. */
 export type TodoLandingJob = {
+  /** The job's id in `/api/kanban/landings/:id`; absent from an older daemon. */
+  jobId?: string;
   state: TodoLandingState;
   branch: string;
   prNumber: number | null;
