@@ -23,6 +23,9 @@ function idea(id: number, l: TodoLanding | null): ProjectTodo {
   };
 }
 
+/** What `/api/ui/projects/timon/forge-proposals` answers; empty unless a test sets it. */
+let PROPOSALS: unknown[] = [];
+
 async function mount(items: ProjectTodo[] = []) {
   const { JSDOM } = await import('jsdom');
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
@@ -55,6 +58,7 @@ async function mount(items: ProjectTodo[] = []) {
       } } });
     }
     if (url.startsWith('/api/ui/layout')) return Response.json({ layout: null });
+    if (url === '/api/ui/projects/timon/forge-proposals') return Response.json({ proposals: PROPOSALS });
     if (url.startsWith('/api/ui/kanban/landings?')) return Response.json({ landings: [LANDING_OPEN, { ...LANDING_OPEN, id: 'job-old', updated_at: 1 }] });
     if (url.endsWith('/preview')) return Response.json(PREVIEW);
     return Response.json({});
@@ -291,6 +295,48 @@ test('an idea shows its GitHub issues and whether a connector wrote it', async (
     assert.ok(meta.includes('discord'), 'other links stay in the meta line');
     assert.ok(!document.querySelector('[data-zone="meta"] a'), 'a javascript: link is never an href');
   } finally {
+    await m.unmount();
+  }
+});
+
+test('a publication waiting on an idea\'s issue or its pull request shows on its line, and opens over the page', async () => {
+  const proposal = (id: string, type: 'issue' | 'pull', number: number, state = 'draft', project = 'timon') => ({
+    id, project, repo: 'acme/app', kind: 'comment', target: { type, number, url: `https://github.com/acme/app/${type === 'issue' ? 'issues' : 'pull'}/${number}` },
+    body: 'Fixed by #12.', state, trigger: 'landing', key: `k-${id}`, source_ref: null, account: null, url: null, error: null,
+    created_at: 1, updated_at: 1, published_at: null,
+  });
+  PROPOSALS = [
+    proposal('00000000-0000-4000-8000-000000000001', 'issue', 212),
+    proposal('00000000-0000-4000-8000-000000000002', 'pull', 12),
+    proposal('00000000-0000-4000-8000-000000000003', 'issue', 212, 'published'),
+    proposal('00000000-0000-4000-8000-000000000004', 'issue', 99),
+  ];
+  const m = await mount();
+  try {
+    const { TodoBadges, useTodoHasBadges } = await import('./todo-card-parts');
+    const github = { provider: 'github', ref: 'acme/app#212', url: 'https://github.com/acme/app/issues/212', label: null, plugin_id: null, created_at: 1 };
+    const linked: ProjectTodo = { ...idea(10, landing(job('open', 'feat/open', 12))), links: [github] };
+    const quiet: ProjectTodo = { ...idea(11, null), links: [{ ...github, ref: 'acme/app#5', url: null }] };
+    const plain = idea(12, null);
+    const has: Record<number, boolean> = {};
+    function Line({ item }: { item: ProjectTodo }) {
+      has[item.id] = useTodoHasBadges(item);
+      return m.React.createElement('div', { 'data-line': item.id }, m.React.createElement(TodoBadges, { item }));
+    }
+    await m.render(m.React.createElement('div', null,
+      m.React.createElement(Line, { item: linked }), m.React.createElement(Line, { item: quiet }), m.React.createElement(Line, { item: plain })));
+    await m.until(() => !!document.querySelector('[data-line="10"] [data-proposal-chip]'), 'the chip on the linked idea');
+    const chip = document.querySelector<HTMLElement>('[data-line="10"] [data-proposal-chip]')!;
+    assert.equal(chip.textContent, '2 to approve', 'its issue and its pull request, a published one left out');
+    assert.ok(!document.querySelector('[data-line="11"] [data-proposal-chip]'), 'nothing waits on another issue');
+    assert.equal(has[12], false, 'an idea with neither issue nor pull request has no badge zone');
+    assert.equal(m.urls.filter((u) => u.includes('/forge-proposals')).length, 1, 'one read for every line of the project');
+    await m.click(chip);
+    const params = new URL(window.location.href).searchParams;
+    assert.equal(params.get('forge-proposal'), '00000000-0000-4000-8000-000000000001');
+    assert.equal(params.get('forge-project'), 'timon');
+  } finally {
+    PROPOSALS = [];
     await m.unmount();
   }
 });

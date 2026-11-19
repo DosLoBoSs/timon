@@ -34,7 +34,7 @@ import { t } from '@/lib/i18n';
 import { NativeViewCover } from '@/lib/native-view-cover';
 import { cn } from '@/lib/utils';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
-import { useWidgetCount } from '@/components/widget-host/widget-self';
+import { useWidgetAttention, useWidgetCount } from '@/components/widget-host/widget-self';
 import {
   anyReviewRunning, branchChip, filterByAuthor, pullAuthors, reviewBadge,
   type PullRequestItem, type PullRequestList, type ReviewBadge,
@@ -44,7 +44,7 @@ import { DIFF_LINE_CLASS } from './landing-preview-dialog';
 import { JobDialog } from './job-dialog';
 import { JobLinksMenuItems } from './job-links-menu';
 import { useTodoOpener } from './todo-opener';
-import { proposalsForPull, type ForgeProposal } from './forge-proposals-api';
+import { proposalsForPull, waitingCount, type ForgeProposal } from './forge-proposals-api';
 import { ProposalChip } from './proposal-chip';
 import { PublishDialog, type PublishTarget } from './publish-dialog';
 import { useForgeProposals } from './use-forge-proposals';
@@ -137,6 +137,13 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
   const shown = useMemo(() => filterByAuthor(pulls, author), [pulls, author]);
   // In the Git stack the count sits on the tab ("PR 3"); alone, by the title.
   const countOnTab = useWidgetCount(load.kind === 'ready' ? shown.length : null);
+  // A publication waiting on one of the pull requests: a dot on the tab, the chip on its row.
+  const repo = load.kind === 'ready' ? load.list.repo : null;
+  const waiting = useMemo(
+    () => (repo ? waitingCount(pulls.map((pull) => proposalsForPull(proposals.pending, repo, pull))) : 0),
+    [repo, pulls, proposals.pending],
+  );
+  useWidgetAttention(waiting > 0 ? t('forgePublish.tabWaiting', { count: waiting }) : null);
 
   const prepare = async (pull: PullRequestItem) => {
     if (!slug) return;

@@ -337,9 +337,17 @@ test('a job\'s row says a publication waits, and opens it', async () => {
   });
   try {
     const { LandingWidget } = await import('./landing-widget');
-    await m.render(m.React.createElement(LandingWidget, { handle: null }));
+    const { WidgetSelfProvider } = await import('@/components/widget-host/widget-self');
+    // One tab of the Git stack: the widget asks for a dot on its tab too.
+    const dots: Array<string | null> = [];
+    const self = {
+      id: 'jobs', tabbed: true, selected: true, publishCount: () => {}, publishMenu: () => {},
+      publishAttention: (_id: string, label: string | null) => { dots.push(label); },
+    };
+    await m.render(m.React.createElement(WidgetSelfProvider, { value: self }, m.React.createElement(LandingWidget, { handle: null })));
     await m.until(() => !!q('[data-landing="job-53"] [data-proposal-chip]'), 'the chip');
     assert.equal(q('[data-proposal-chip]')?.textContent, 'to approve');
+    assert.equal(dots.at(-1), '1 publication to approve', 'the dot on the Jobs tab');
     await m.click(q('[data-proposal-chip]'));
     await m.until(() => q('[data-publish-text]')?.textContent === PROPOSAL.body, 'the dialog on it');
     assert.deepEqual(writes(m.calls), []);

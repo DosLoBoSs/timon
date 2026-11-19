@@ -19,6 +19,7 @@ import { safeHref } from './project-todo-links';
 import { TODO_BADGE_SLOT, TodoBadgeSlot } from './todo-badge-slot';
 import { TodoLandingSlot, useTodoLandingReplaced } from './todo-landing-slot';
 import { linkIssue, todoHasOrigin, TodoOriginChips } from './todo-issue-chips';
+import { TodoProposalChip, useTodoProposals } from './todo-proposal-chip';
 import type { KanbanTodoCardValue } from './kanban-card-context';
 import type { ProjectTodo } from './project-todo-types';
 
@@ -42,18 +43,22 @@ export function todoAuthor(item: ProjectTodo): string | null {
 export function useTodoHasBadges(item: ProjectTodo): boolean {
   const plugins = useSlotEntries(TODO_BADGE_SLOT).length > 0;
   const landing = useTodoLandingReplaced() || !!item.landing;
-  return !!item.urgency || effectiveProgress(item.progress) !== 'todo' || plugins || landing || todoHasOrigin(item);
+  const waiting = useTodoProposals(item).length > 0;
+  return !!item.urgency || effectiveProgress(item.progress) !== 'todo' || plugins || landing || todoHasOrigin(item) || waiting;
 }
 
 /** Urgency, progress (when it moved), its issues and whether its text came
- *  from outside, where its branch stands, and the plugins' badges. */
+ *  from outside, a publication on GitHub waiting for the person, where its
+ *  branch stands, and the plugins' badges. */
 export function TodoBadges({ item }: { item: ProjectTodo }): ReactElement {
   const progress = effectiveProgress(item.progress);
+  const proposals = useTodoProposals(item);
   return (
     <>
       {item.urgency && <UrgencyBadge value={item.urgency} />}
       {progress !== 'todo' && <ProgressBadge value={progress} />}
       <TodoOriginChips item={item} />
+      <TodoProposalChip proposals={proposals} />
       <TodoLandingSlot item={item} />
       <TodoBadgeSlot item={item} />
     </>

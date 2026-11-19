@@ -29,7 +29,7 @@ import { Tile } from '@/components/tile';
 import { WidgetButton, widgetButtonClass } from '@/components/widget-toolbar';
 import { HUD_SURFACE } from '@/components/cockpit/hud-surface';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
-import { useWidgetCount, useWidgetInFront, useWidgetMenu } from '@/components/widget-host/widget-self';
+import { useWidgetAttention, useWidgetCount, useWidgetInFront, useWidgetMenu } from '@/components/widget-host/widget-self';
 import { t } from '@/lib/i18n';
 import { NativeViewCover } from '@/lib/native-view-cover';
 import { cn } from '@/lib/utils';
@@ -41,7 +41,7 @@ import { askRepair, RepairChip, RepairIcon, repairLabel } from './landing-repair
 import { JobDialog } from './job-dialog';
 import { JobLinksMenuItems } from './job-links-menu';
 import { useTodoOpener } from './todo-opener';
-import { proposalsForLanding, type ForgeProposal } from './forge-proposals-api';
+import { proposalsForLanding, waitingCount, type ForgeProposal } from './forge-proposals-api';
 import { ProposalChip } from './proposal-chip';
 import { PublishDialog } from './publish-dialog';
 import { useForgeProposals } from './use-forge-proposals';
@@ -284,6 +284,9 @@ export function LandingWidget({ handle, className }: WidgetProps) {
   // button in the widget's menu: alone in the header, it kept a line. The
   // list also reloads each time its tab comes to the front.
   const countOnTab = useWidgetCount(landings === null ? null : shown);
+  // Counted on the rows shown: the dot on the tab never points at a row out of sight.
+  const waiting = waitingCount(groups.flatMap((g) => g.landings.map((landing) => proposalsForLanding(proposals.pending, landing))));
+  useWidgetAttention(waiting > 0 ? t('forgePublish.tabWaiting', { count: waiting }) : null);
   const reloadInMenu = useWidgetMenu(useMemo(() => [{
     key: 'reload', label: t('landings.reload'), icon: <RefreshCw className="size-3.5" />, onSelect: () => { void load(); },
   }], [load]));
