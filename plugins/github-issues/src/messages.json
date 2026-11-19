@@ -2,7 +2,6 @@
   "en": {
     "widget.title": "Issues",
     "widget.description": "The open issues of the project's GitHub repository that carry its label, each imported as a TO DO idea on a click.",
-    "widget.subtitle": "{label} · {count}",
     "chooseProject": "Choose a project",
     "chooseProjectOption": "Choose a project",
     "selectProject": "Project of the Git stack",
@@ -71,7 +70,6 @@
   "fr": {
     "widget.title": "Issues",
     "widget.description": "Les issues ouvertes du dépôt GitHub du projet qui portent son label, chacune importée en idée TO DO d'un clic.",
-    "widget.subtitle": "{label} · {count}",
     "chooseProject": "Choisis un projet",
     "chooseProjectOption": "Choisir un projet",
     "selectProject": "Projet de la pile Git",

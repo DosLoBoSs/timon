@@ -7,7 +7,6 @@ var messages_default = {
   en: {
     "widget.title": "Issues",
     "widget.description": "The open issues of the project's GitHub repository that carry its label, each imported as a TO DO idea on a click.",
-    "widget.subtitle": "{label} \xB7 {count}",
     chooseProject: "Choose a project",
     chooseProjectOption: "Choose a project",
     selectProject: "Project of the Git stack",
@@ -76,7 +75,6 @@ var messages_default = {
   fr: {
     "widget.title": "Issues",
     "widget.description": "Les issues ouvertes du d\xE9p\xF4t GitHub du projet qui portent son label, chacune import\xE9e en id\xE9e TO DO d'un clic.",
-    "widget.subtitle": "{label} \xB7 {count}",
     chooseProject: "Choisis un projet",
     chooseProjectOption: "Choisir un projet",
     selectProject: "Projet de la pile Git",
@@ -351,7 +349,7 @@ function IssuesWidget({ api, handle, className }) {
     setNotice(await copy(url) ? { text: t("notice.copied"), tone: "info" } : { text: t("notice.copyFailed"), tone: "error" });
   };
   const issues = useMemo(() => load.kind === "ready" ? sortCandidates(load.list.issues) : [], [load]);
-  const subtitle = load.kind === "ready" ? t("widget.subtitle", { label: load.list.label, count: toImport(load.list.issues) }) : void 0;
+  const subtitle = load.kind === "ready" ? String(toImport(load.list.issues)) : void 0;
   const actions = /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(GitStackProjectPicker2, { none: t("chooseProjectOption"), label: t("selectProject"), className: "max-w-[8rem]" }), project && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", "data-issues-add": "", onClick: () => setOpened({ lookup: true }), title: t("importByNumber"), "aria-label": t("importByNumber"), className: ICON_BUTTON }, /* @__PURE__ */ React.createElement(Icon, { d: ICONS.plus })), /* @__PURE__ */ React.createElement("button", { type: "button", "data-issues-refresh": "", onClick: () => void reload(), disabled: load.kind === "loading", title: t("refresh"), "aria-label": t("refresh"), className: ICON_BUTTON }, /* @__PURE__ */ React.createElement(Icon, { d: ICONS.refresh }))), handle);
   return /* @__PURE__ */ React.createElement(
     Tile2,

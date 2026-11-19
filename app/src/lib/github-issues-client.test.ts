@@ -182,7 +182,7 @@ test('the widget lists the labelled issues, not imported first; an outsider\'s t
     assert.equal(rows[0]!.querySelector('[data-issue-action]')?.getAttribute('aria-label'), 'Import as TO DO');
     assert.equal(imported.querySelector('[data-issue-action]')?.getAttribute('aria-label'), 'Open the TO DO');
     assert.ok(rows.every((r) => (r.querySelector('[data-issue-action]')?.textContent ?? '') === ''), 'icons only');
-    assert.match(document.body.textContent ?? '', /accepted · 2/, 'the label and what is left to import');
+    assert.equal(document.querySelector('header')?.textContent?.includes('Issues2'), true, 'what is left to import, by the title');
     assert.deepEqual(writes(m.calls), [], 'listing writes nothing');
     assert.ok(m.calls.every((c) => c.url.startsWith('/api/ui/')), 'every call goes through the session proxy');
   });

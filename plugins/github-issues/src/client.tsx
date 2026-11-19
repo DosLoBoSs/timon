@@ -265,7 +265,8 @@ function IssuesWidget({ api, handle, className }: { api: Api } & Partial<WidgetC
   };
 
   const issues = useMemo(() => (load.kind === 'ready' ? sortCandidates(load.list.issues) : []), [load]);
-  const subtitle = load.kind === 'ready' ? t('widget.subtitle', { label: load.list.label, count: toImport(load.list.issues) }) : undefined;
+  // What is left to import: the only number shown, by the title (on the tab's line once stacked).
+  const subtitle = load.kind === 'ready' ? String(toImport(load.list.issues)) : undefined;
 
   const actions = (
     <>
