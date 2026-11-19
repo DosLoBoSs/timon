@@ -27,6 +27,7 @@ export type RemoteUrlRefusal =
   | 'scheme'
   | 'host'
   | 'ambiguous'
+  | 'user'
   | 'malformed';
 
 export type RemoteUrlCheck =
@@ -44,7 +45,8 @@ export const REMOTE_URL_MESSAGES: Record<RemoteUrlRefusal, string> = {
   credentials: 'remote URL carries credentials — use an SSH key or a git credential helper, never a user or token in the URL',
   scheme: 'unsupported remote URL scheme — use ssh://, user@host:path, https://, http://, git://, file:// or an absolute path',
   host: 'remote URL has no valid host',
-  ambiguous: 'remote URL reads to git as another host than it shows — no backslash, "%", "?", "#" or second "@" before the path',
+  ambiguous: 'remote URL reads to git as another host than it shows — no backslash, "%", "?", "#", second "@", or "[" "]" around anything but an IPv6 host before the path',
+  user: 'the SSH user of the remote URL may hold only letters, digits, ".", "_" and "-"',
   malformed: 'not a remote URL — use ssh://, user@host:path, https://, http://, git://, file:// or an absolute path',
 };
 
@@ -61,8 +63,17 @@ const SCHEMES: Record<string, RemoteUrlKind> = {
 // A host never starts with `-`: `ssh -oProxyCommand=…` is how a host
 // becomes a command (CVE-2017-1000117).
 const HOST = /^(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9_][A-Za-z0-9._-]*)$/;
-// git's scp-like syntax: a colon before the first slash, no `//` after it.
-const SCP = /^(?:([^@/:]+)@)?(\[[0-9A-Fa-f:.]+\]|[^@/:[\]]+):(?!\/\/)(.+)$/;
+/**
+ * The user of an ssh remote. Strict on purpose: git's `host_end()` takes a
+ * `[` at the start of the authority, or right after `@`, as the start of an
+ * IPv6 host, wherever the user really ends — `ssh://[evil.example]@github.com/…`
+ * and `[evil.example]@github.com:…` connect to evil.example while every URL
+ * parser reads github.com.
+ */
+export const SSH_USER = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+// git's scp-like syntax: a colon before the first slash, no `//` after it. No
+// bracket in the user, for the reason above.
+const SCP = /^(?:([^@/:[\]]+)@)?(\[[0-9A-Fa-f:.]+\]|[^@/:[\]]+):(?!\/\/)(.+)$/;
 
 export type UrlAuthority = {
   /** What stands before the `@`, as written, or null when there is no `@`. */
@@ -90,6 +101,9 @@ const DEFAULT_PORTS: Record<string, string> = { https: '443', http: '80' };
  * - `?` and `#` — WHATWG ends the authority there, git's cut does not;
  * - a second `@` — git's credential code, curl and ssh do not split at the
  *   same one;
+ * - a `[` or `]` anywhere but around a whole IPv6 host, first in the
+ *   authority or right after the `@` — git's `host_end()` reads a bracket in
+ *   the user as the start of the host (`ssh://[evil.example]@github.com/…`);
  * - anything WHATWG rewrites (an IDN, `127.1`, a leading zero in the port).
  */
 export function urlAuthority(url: string): UrlAuthority | null {
@@ -101,7 +115,8 @@ export function urlAuthority(url: string): UrlAuthority | null {
   const at = authority.split('@');
   if (at.length > 2) return null;
   const user = at.length === 2 ? at[0]! : null;
-  const hostPort = /^(\[[^\]]*\]|[^:[\]]*)(?::(\d{1,5}))?$/.exec(at[at.length - 1]!);
+  if (user !== null && /[[\]]/.test(user)) return null;
+  const hostPort = /^(\[[0-9A-Fa-f:.]+\]|[^:[\]]*)(?::(\d{1,5}))?$/.exec(at[at.length - 1]!);
   if (!hostPort || !hostPort[1]) return null;
   const host = hostPort[1].toLowerCase();
   const port = hostPort[2] ?? null;
@@ -142,7 +157,7 @@ export function checkRemoteUrl(raw: string): RemoteUrlCheck {
     if (authority.user !== null && (kind === 'https' || kind === 'http' || authority.user.includes(':'))) {
       return { ok: false, reason: 'credentials' };
     }
-    if (authority.user !== null && (!authority.user || authority.user.startsWith('-'))) return { ok: false, reason: 'host' };
+    if (authority.user !== null && !SSH_USER.test(authority.user)) return { ok: false, reason: 'user' };
     if (!parsed.hostname || !HOST.test(parsed.hostname)) return { ok: false, reason: 'host' };
     if (!parsed.pathname || parsed.pathname === '/') return { ok: false, reason: 'malformed' };
     return { ok: true, url, kind };
@@ -161,7 +176,7 @@ export function checkRemoteUrl(raw: string): RemoteUrlCheck {
     // `user:secret@host:repo` reads to git as host `user`, path `secret@…`:
     // the password would still land in `.git/config`.
     if (/^[^/]*@/.test(path!)) return { ok: false, reason: 'credentials' };
-    if (user !== undefined && (!user || user.startsWith('-'))) return { ok: false, reason: 'host' };
+    if (user !== undefined && !SSH_USER.test(user)) return { ok: false, reason: 'user' };
     if (!HOST.test(host!)) return { ok: false, reason: 'host' };
     return { ok: true, url, kind: 'ssh' };
   }

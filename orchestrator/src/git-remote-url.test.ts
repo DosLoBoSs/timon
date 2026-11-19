@@ -102,7 +102,7 @@ test('refuses a URL git would read as another host than a URL parser (backslash,
   for (const url of AMBIGUOUS) {
     const r = checkRemoteUrl(url);
     assert.equal(r.ok, false, url);
-    if (!r.ok) assert.ok(['ambiguous', 'host', 'malformed'].includes(r.reason), `${url}: ${r.reason}`);
+    if (!r.ok) assert.ok(['ambiguous', 'host', 'user', 'malformed'].includes(r.reason), `${url}: ${r.reason}`);
   }
   // A user before the host is a credential over https, an empty one included.
   for (const url of [
@@ -117,7 +117,55 @@ test('refuses a URL git would read as another host than a URL parser (backslash,
   for (const url of ['https://evil.example#@github.com/acme/app.git', 'https://evil.example?@github.com/acme/app.git']) {
     assert.equal(checkRemoteUrl(url).ok, false, url);
   }
-  assert.deepEqual(checkRemoteUrl('ssh://@github.com/acme/app.git'), { ok: false, reason: 'host' });
+  assert.deepEqual(checkRemoteUrl('ssh://@github.com/acme/app.git'), { ok: false, reason: 'user' });
+});
+
+/**
+ * A bracket in the user of an ssh URL: git's `host_end()` takes the bracketed
+ * text as the host (`ssh -p 22 evil.example`, or an alias of the user's SSH
+ * configuration for `[x]`), every URL parser reads github.com.
+ */
+const BRACKET_USERS = [
+  'ssh://[evil.example]@github.com/acme/app.git',
+  'git+ssh://[evil.example]@github.com/acme/app.git',
+  'ssh+git://[evil.example]@github.com/acme/app.git',
+  'ssh://[evil.example]x@github.com/acme/app.git',
+  'ssh://x[evil.example]@github.com/acme/app.git',
+  'ssh://[evil.example]@github.com:22/acme/app.git',
+  'ssh://[x]@github.com/acme/app.git',
+  'ssh://[@github.com/acme/app.git',
+  'ssh://]@github.com/acme/app.git',
+  'ssh://[git@evil.example]@github.com/acme/app.git',
+  '[evil.example]@github.com:acme/app.git',
+  '[evil.example]x@github.com:acme/app.git',
+  '[x]@github.com:acme/app.git',
+  'x[@github.com:acme/app.git',
+  'x]@github.com:acme/app.git',
+];
+
+test('refuses a bracket in the user of an ssh remote, URL or scp form, with or without a port', () => {
+  for (const url of BRACKET_USERS) {
+    const r = checkRemoteUrl(url);
+    assert.equal(r.ok, false, url);
+    if (!r.ok) assert.ok(['ambiguous', 'user', 'malformed'].includes(r.reason), `${url}: ${r.reason}`);
+    if (url.includes('://')) assert.equal(urlAuthority(url), null, url);
+  }
+});
+
+test('the ssh user is a plain name, in both forms', () => {
+  for (const url of [
+    'ssh://git@github.com/acme/app.git', 'ssh://deploy.bot_1-x@nas.local:2222/app.git', 'org-123@github.com:acme/app.git', 'git@[::1]:repo.git',
+    'ssh://git@[::1]:2222/srv/app.git', 'ssh://[::1]/srv/app.git', '[::1]:srv/app.git',
+  ]) {
+    assert.equal(checkRemoteUrl(url).ok, true, url);
+  }
+  for (const url of [
+    'ssh://-x@github.com/acme/app.git', 'ssh://.x@github.com/acme/app.git', 'ssh://a!b@github.com/acme/app.git',
+    'ssh://a+b@github.com/acme/app.git', "a'b@github.com:acme/app.git", 'a;b@github.com:acme/app.git', '.x@github.com:acme/app.git',
+    'ssh://git@[evil.example]/acme/app.git', 'git@[evil.example]:acme/app.git', '[evil.example]:acme/app.git',
+  ]) {
+    assert.equal(checkRemoteUrl(url).ok, false, url);
+  }
 });
 
 test('the authority is the one git cuts, or null when a URL parser reads another', () => {

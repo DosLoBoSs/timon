@@ -263,7 +263,7 @@ export function remoteHostOf(url: string): string | null {
   if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(check.url)) {
     return urlAuthority(check.url)?.host.replace(/^\[|\]$/g, '') || null;
   }
-  const m = /^(?:[^@/:]+@)?([^@/:[\]]+):/.exec(check.url);
+  const m = /^(?:[^@/:[\]]+@)?([^@/:[\]]+):/.exec(check.url);
   return m ? m[1]!.toLowerCase() : null;
 }
 

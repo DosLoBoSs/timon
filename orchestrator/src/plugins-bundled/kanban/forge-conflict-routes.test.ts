@@ -255,6 +255,15 @@ test('the remote must lead to the forge gh reads the pull request from: refused 
     'ssh://git@evil.example@github.com/acme/widgets.git',
     'ssh://github.com\\@evil.example/acme/widgets.git',
     'github.com\\@evil.example:acme/widgets.git',
+    // A bracket in the user: git's host_end() reads the bracketed text as the host.
+    'ssh://[evil.example]@github.com/acme/widgets.git',
+    'git+ssh://[evil.example]@github.com/acme/widgets.git',
+    'ssh+git://[evil.example]@github.com/acme/widgets.git',
+    'ssh://[evil.example]x@github.com/acme/widgets.git',
+    'ssh://[evil.example]@github.com:22/acme/widgets.git',
+    'ssh://[x]@github.com/acme/widgets.git',
+    '[evil.example]@github.com:acme/widgets.git',
+    '[x]@github.com:acme/widgets.git',
   ];
   for (const remote of ambiguous) {
     setting('resolve', remote);
