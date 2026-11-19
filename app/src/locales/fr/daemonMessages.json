@@ -301,6 +301,18 @@
     "forge_conflict_push_pending": {
       "title": "Une résolution de conflit attend votre accord",
       "body": "Lisez la résolution préparée pour {target}, puis publiez-la ou abandonnez-la."
+    },
+    "landing_repair_pushed": {
+      "title": "Réparation poussée sur {pr}",
+      "body": "La réparation de {branch} a été poussée sur sa pull request {pr} ; GitHub relance ses contrôles."
+    },
+    "landing_repair_unchanged": {
+      "title": "La réparation de {pr} n'a rien changé",
+      "body": "La réparation de {branch} s'est terminée sans nouveau commit : rien n'a été poussé. Lisez le commentaire de clôture de sa task."
+    },
+    "landing_repair_failed": {
+      "title": "Réparation de {pr} non poussée",
+      "body": "La réparation de {branch} n'a pas été poussée : {reason}"
     }
   }
 }
