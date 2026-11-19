@@ -12,6 +12,7 @@ A project's Git repository, its pull requests and the Kanban jobs that land thro
 | **Publish** | the remote, what waits to be pushed, push and fetch | Git |
 | **Pull requests** (**PR** on its tab) | the pull requests open on the repository, and their review brief | Kanban |
 | **Jobs** | the Kanban jobs that land through a pull request, by what they wait for | Kanban |
+| **Issues** | the open GitHub issues that carry the project's label, to import as TO DO ideas | GitHub issues |
 
 The **PR** and **Jobs** tabs show how many pull requests and jobs they list, even while another tab is in front. Each tab is a widget of its own: drag it out of the stack to another column or island, remove it, or add it back from the widget window, like any widget. A plugin that is off on your install simply has no tab. The **lite** configuration preset hides **Publish**.
 
@@ -19,7 +20,7 @@ The branch shown above the message box reads the same state as the Git widgets: 
 
 Git is read again after your own actions (switch, push, fetch, saving a remote), at the end of each agent turn, and when you come back to the window. A branch switched in a terminal shows when you return to Timon; **Refresh** reads it at once.
 
-If you arranged the former single **Git** card, the stack takes its place and its height.
+If you arranged the former single **Git** card, the stack takes its place and its height. A stack you arranged before **Issues** existed gets it as its last tab, without changing the tab in front.
 
 ## Branches
 
@@ -183,6 +184,18 @@ The built-in **GitHub issues** plugin brings an issue of the project's repositor
 The issue's title and description were written by someone outside the project: the idea's notes keep them in a block marked as outside data, and a task promoted from the idea hands them to its agent as data to read, never as instructions.
 
 Once the idea has a job, its pull request closes the issue for you (below); you never close it by hand.
+
+### The Issues tab
+
+Each row is an issue: its title, then its number, its author and its label. The issues you have not imported come first. One button imports the issue as an idea; once imported, the row shows **TO DO** (and **PR #51** when the idea's job has a pull request), and the same button opens the idea. The row's menu (**…**) has **Read the text**, **Open on GitHub**, **Copy the link** and **Do not suggest again**, which hides the issue from the list. The number beside the title is how many issues are left to import.
+
+**Read the text** opens the **Issue** window: the issue's description as written on GitHub, shown as plain text and marked as outside data, cut at 4,000 characters as the idea will keep it, with the project and the link the idea will keep. **Import as TO DO** imports it; a closed issue cannot be imported.
+
+**+** imports an issue that does not carry the label: type its number (`212` or `#212`) or paste its GitHub link. The Issue window reads it first, then you import it. A link to another repository than the project's is refused.
+
+### The project's label
+
+The project's window (**Edit** on its card) lists **GitHub issues** under **Integrations**: the label the tab lists and how many issues are left to import. **Configure** changes the label for this project; the menu (**…**) goes back to the plugin's label (`accepted`, set in the plugin's settings). Only a project that opens pull requests on GitHub has this row.
 
 ### The issue, the pull request and the comment
 
