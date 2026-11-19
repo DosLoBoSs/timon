@@ -214,7 +214,7 @@ export function WidgetCard({ entry, members = [entry], part, orientation = 'vert
   }, [tabbed, memberKey]);
   // The strip's width follows the card's, not its own content: observing the
   // tab bar cannot loop on the change `fitTabs` makes.
-  const countKey = members.map((m) => counts[m.id] ?? '').join('|');
+  const badgesKey = members.map(({ id }) => `${counts[id] ?? ''}:${attentions[id] ? 'dot' : ''}`).join('|');
   useLayoutEffect(() => {
     const el = tablist.current;
     const bar = el?.parentElement;
@@ -224,7 +224,7 @@ export function WidgetCard({ entry, members = [entry], part, orientation = 'vert
     const observer = new ResizeObserver(() => fitTabs(el));
     observer.observe(bar);
     return () => observer.disconnect();
-  }, [tabbed, memberKey, countKey]);
+  }, [tabbed, memberKey, badgesKey]);
   // Brings the selected tab back into view, keyboard included. Done by hand on
   // the strip: `scrollIntoView` would also scroll the page to a card below the
   // fold when it mounts.

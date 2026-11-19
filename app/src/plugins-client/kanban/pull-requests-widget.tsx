@@ -433,7 +433,7 @@ function PullRow({
     <li data-pull-row={pull.number} className="flex items-center gap-1 rounded-lg bg-muted/30 py-2 pl-2.5 pr-1 transition-colors hover:bg-muted/50">
       <div className="min-w-0 flex-1">
         <div className="line-clamp-2 break-words text-[12.5px] font-medium leading-snug text-foreground" title={pull.title}>{pull.title}</div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-muted-foreground">
           <span className="truncate tabular-nums">{meta.join(' · ')}</span>
           {chip && (
             <span data-pull-branch={chip} className={cn('inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10.5px] font-medium', BRANCH_CHIP_TONE[chip])}>
@@ -441,7 +441,7 @@ function PullRow({
             </span>
           )}
           {lock && (
-            <span data-pull-locked={lock} title={t(`pullRequests.lockedHint.${lock}`)} className="inline-flex min-w-0 shrink items-center truncate rounded-md bg-foreground/[0.06] px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground">
+            <span data-pull-locked={lock} title={t(`pullRequests.lockedHint.${lock}`)} className="inline-flex max-w-full items-center rounded-md bg-foreground/[0.06] px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground">
               {t(`pullRequests.locked.${lock}`)}
             </span>
           )}
