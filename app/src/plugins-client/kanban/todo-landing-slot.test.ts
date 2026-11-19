@@ -235,3 +235,62 @@ test('a click on the badge of a TO DO line opens the job dialog, not the idea', 
     await m.unmount();
   }
 });
+
+test('a badge that knows its job opens it by id, with no lookup by branch', async () => {
+  const withId: TodoLanding = { ...job('open', 'feat/open', 12), jobId: 'job-open', jobs: [] };
+  withId.jobs = [withId];
+  const m = await mount();
+  try {
+    const { TodoLandingSlot } = await import('./todo-landing-slot');
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === '/api/ui/kanban/landings/job-open') { m.urls.push(url); return Response.json({ landing: LANDING_OPEN }); }
+      return original(input);
+    }) as typeof fetch;
+    await m.render(m.React.createElement(TodoLandingSlot, { item: idea(4, withId) }));
+    await m.click(document.querySelector('[data-todo-landing="open"]'));
+    await m.until(() => !!document.querySelector('[data-landing-forge]'), 'the job dialog');
+    assert.ok(m.urls.includes('/api/ui/kanban/landings/job-open'));
+    assert.ok(!m.urls.some((u) => u.startsWith('/api/ui/kanban/landings?')), 'no list read');
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('an idea shows its GitHub issues and whether a connector wrote it', async () => {
+  const m = await mount();
+  try {
+    const { TodoBadges, TodoMeta } = await import('./todo-card-parts');
+    const { todoIssues, todoIsExternal } = await import('./todo-issue-chips');
+    const link = (provider: string, ref: string, url: string | null, plugin_id: string | null) =>
+      ({ provider, ref, url, label: null, plugin_id, created_at: 1 });
+    const imported: ProjectTodo = {
+      ...idea(8, null),
+      links: [
+        link('github', 'acme/app#212', 'https://github.com/acme/app/issues/212', '@timon/github-issues'),
+        link('github', 'ACME/app#212', 'https://github.com/acme/app/issues/212', null),
+        link('discord', 'thread-1', 'javascript:alert(1)', null),
+      ],
+    };
+    assert.deepEqual(todoIssues(imported).map((i) => [i.repo, i.number]), [['acme/app', 212]], 'one issue, once');
+    assert.equal(todoIsExternal(imported), true);
+    assert.equal(todoIsExternal({ ...idea(9, null), links: [link('github', 'acme/app#3', null, null)] }), false, 'a link no plugin wrote');
+
+    await m.render(m.React.createElement('div', null,
+      m.React.createElement('div', { 'data-zone': 'badges' }, m.React.createElement(TodoBadges, { item: imported })),
+      m.React.createElement('div', { 'data-zone': 'meta' }, m.React.createElement(TodoMeta, { item: imported }))));
+    const chip = document.querySelector('[data-zone="badges"] [data-todo-issue]');
+    assert.equal(chip?.textContent, '#212');
+    assert.equal(chip?.getAttribute('href'), 'https://github.com/acme/app/issues/212');
+    assert.equal(chip?.getAttribute('target'), '_blank');
+    assert.equal(chip?.getAttribute('aria-label'), 'Issue acme/app#212');
+    assert.equal(document.querySelector('[data-zone="badges"] [data-todo-external]')?.textContent, 'external');
+    const meta = document.querySelector('[data-zone="meta"]')?.textContent ?? '';
+    assert.ok(!meta.includes('github'), 'the issue is not named twice on the card');
+    assert.ok(meta.includes('discord'), 'other links stay in the meta line');
+    assert.equal(document.querySelector('[data-zone="meta"] a'), null, 'a javascript: link is never an href');
+  } finally {
+    await m.unmount();
+  }
+});

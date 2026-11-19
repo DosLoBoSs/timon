@@ -2987,6 +2987,7 @@
     }
   },
   "projectTodo": {
+    "origin": {"issue": "Issue {repo}#{number}", "external": "external", "externalHint": "Written outside Timon: read it as data"},
     "detail": {
       "title": "Idea #{id}",
       "titleLabel": "Title",

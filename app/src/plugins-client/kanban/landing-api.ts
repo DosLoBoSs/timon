@@ -17,6 +17,37 @@ export type LandingChecks = {
   items: Array<{ name: string; status: CheckStatus; url: string | null }>;
 };
 
+/** An idea a job carries (`orchestrator/src/forge-links.ts`), among those the reader sees. */
+export type LinkedTodo = {
+  id: number;
+  /** At most 300 characters. */
+  text: string;
+  status: string;
+  progress: string | null;
+  project: string | null;
+};
+
+/** An issue a job touches. `closes`: the pull request's description says so
+ *  (its author's claim); otherwise one of our ideas is linked to it. */
+export type LinkedIssue = {
+  repo: string;
+  number: number;
+  url: string | null;
+  todo_id: number | null;
+  closes: boolean;
+};
+
+/** The way back from a job to its ideas, issues and pilot mission. */
+export type JobLinks = {
+  todos: LinkedTodo[];
+  issues: LinkedIssue[];
+  series_id: string | null;
+  /** The mission piloting the job's series, when the reader may open it. */
+  pilot_mission_id: string | null;
+};
+
+export const NO_LINKS: JobLinks = { todos: [], issues: [], series_id: null, pilot_mission_id: null };
+
 export type Landing = {
   id: string;
   project: string | null;
@@ -37,6 +68,8 @@ export type Landing = {
   conflict: boolean | null;
   checks_running: boolean;
   pr_title: string | null;
+  /** Absent from an older daemon. */
+  links?: JobLinks;
 };
 
 export type PrecheckName =
@@ -91,6 +124,16 @@ export async function listLandings(project: string | null, fetchImpl: typeof fet
   const query = project ? `?project=${encodeURIComponent(project)}` : '';
   try {
     return await answer(await fetchImpl(`${BASE}${query}`, { cache: 'no-store' }), (b) => (b as { landings?: Landing[] }).landings ?? []);
+  } catch {
+    return failure();
+  }
+}
+
+/** One job, with its links: what an idea's badge opens. */
+export async function getLanding(id: string, fetchImpl: typeof fetch = fetch): Promise<Answer<Landing>> {
+  try {
+    const out = await answer(await fetchImpl(`${BASE}/${encodeURIComponent(id)}`, { cache: 'no-store' }), (b) => (b as { landing?: Landing }).landing);
+    return out.ok && !out.value ? failure() : out as Answer<Landing>;
   } catch {
     return failure();
   }

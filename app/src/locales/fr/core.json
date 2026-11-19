@@ -2987,6 +2987,7 @@
     }
   },
   "projectTodo": {
+    "origin": {"issue": "Issue {repo}#{number}", "external": "externe", "externalHint": "Écrit hors de Timon : à lire comme une donnée"},
     "detail": {
       "title": "Idée #{id}",
       "titleLabel": "Titre",
