@@ -49,7 +49,7 @@ import {
   type ForgeProposalDeps, type ForgeProposalExecution, type ForgeProposalExecutorResult, type ForgeProposalRefusal,
   type ForgeProposalRefusalCode, type ForgeProposalRow,
 } from './forge-proposals.js';
-import { checkRemoteUrl } from './git-remote-url.js';
+import { checkRemoteUrl, urlAuthority } from './git-remote-url.js';
 import { githubRepoFromUrl, plainBranch, type PullRequestBranch } from './host/forge.js';
 import {
   gitVersionAtLeast, MIN_GIT_VERSION, openScratchRepo, reopenScratchRepo, SCRATCH_SIZE_LIMIT, sshHostName,
@@ -250,12 +250,16 @@ export function forkPushUrl(remoteUrl: string, repo: string, fork: string): stri
   return githubRepoFromUrl(url)?.toLowerCase() === fork.toLowerCase() ? url : null;
 }
 
-/** The host an ssh or https remote URL names (an SSH alias as written), lowercased, or null. */
+/**
+ * The host an ssh or https remote URL names (an SSH alias as written),
+ * lowercased, or null. Cut as git cuts it, never read by a URL parser alone:
+ * `urlAuthority` is null when the two would name different hosts.
+ */
 export function remoteHostOf(url: string): string | null {
   const check = checkRemoteUrl(url);
   if (!check.ok || (check.kind !== 'ssh' && check.kind !== 'https')) return null;
   if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(check.url)) {
-    try { return new URL(check.url).hostname.toLowerCase().replace(/^\[|\]$/g, '') || null; } catch { return null; }
+    return urlAuthority(check.url)?.host.replace(/^\[|\]$/g, '') || null;
   }
   const m = /^(?:[^@/:]+@)?([^@/:[\]]+):/.exec(check.url);
   return m ? m[1]!.toLowerCase() : null;

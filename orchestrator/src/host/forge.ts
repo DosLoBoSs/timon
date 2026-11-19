@@ -27,6 +27,7 @@
  *   token-shaped string masked before it reaches a caller, a log or an error.
  */
 import { z } from 'zod';
+import { urlAuthority } from '../git-remote-url.js';
 import { ghEnv, ghLogin, type GhLoginOutcome, type GhRunner } from './gh.js';
 import { getHost } from './index.js';
 import type { ExecOpts, ExecResult } from './types.js';
@@ -51,8 +52,12 @@ export function redactedOutput(text: string): string {
 }
 
 /** `owner/name` of a GitHub push URL (ssh, scp-like or https, an ssh host
- *  alias included), or null. */
+ *  alias included), or null — null too when git would reach another host
+ *  than a URL parser reads (`urlAuthority`): the repository named on GitHub
+ *  must be the one the push goes to. */
 export function githubRepoFromUrl(url: string): string | null {
+  if (url.includes('\\')) return null;
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(url.trim()) && !urlAuthority(url.trim())) return null;
   const m = /^(?:[a-z][a-z0-9+.-]*:\/\/[^/]+\/|[^\s/:@]+@[^\s/:]+:|[^\s/:]+:)([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/i.exec(url.trim());
   if (!m?.[1] || !m[2] || m[1] === '.' || m[1] === '..' || m[2] === '.' || m[2] === '..') return null;
   return `${m[1]}/${m[2]}`;

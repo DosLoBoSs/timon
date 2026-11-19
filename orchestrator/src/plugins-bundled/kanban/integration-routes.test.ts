@@ -99,6 +99,16 @@ test('bodies and paths that do not validate are refused before the database', as
     { gh_config_dir: home },
     { gh_config_dir: join(TIMON_HOME, 'gh') },
     { gh_config_dir: join(repo, '.gh') },
+    // git pushes these to evil.example, a URL parser reads github.com.
+    { remote_url: 'https://github.com\\@evil.example/acme/app.git' },
+    { remote_url: 'https://github.com%5C@evil.example/acme/app.git' },
+    { remote_url: 'https://github.com\\\\@evil.example/acme/app.git' },
+    { remote_url: 'https://a@b@evil.example/acme/app.git' },
+    { remote_url: 'https://@evil.example/acme/app.git' },
+    { remote_url: 'https://GitHub.com:443\\@evil.example/acme/app.git' },
+    { remote_url: 'https://[::1]\\@evil.example/acme/app.git' },
+    { remote_url: 'ssh://evil.example%2F@github.com/acme/app.git' },
+    { remote_url: 'ssh://git@evil.example@github.com/acme/app.git' },
   ]) {
     const res = await call('PUT', URL_, 'manager', body);
     assert.equal(res.status, 400, JSON.stringify(body));
