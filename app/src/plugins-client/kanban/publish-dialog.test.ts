@@ -7,6 +7,10 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { ComponentType, ReactElement } from 'react';
 import { waitUntil } from '../../lib/test-wait';
 import type { ForgeProposal } from './forge-proposals-api';
@@ -229,6 +233,59 @@ test('a plugin that takes forge.publish.dialog paints it from usePublishDialog',
     assert.equal(q('[data-acme-publish]')?.getAttribute('data-acme-publish'), '209');
     assert.ok(!q('[data-publish-dialog]'));
   } finally {
+    await m.unmount();
+  }
+});
+
+/** `examples/plugin-publish-dialog`, loaded as the platform loads it: `react` and `@timon/ui` are the platform's own. */
+async function loadExample(): Promise<{ apply: (ctx: unknown) => void; cleanup: () => void }> {
+  const source = readFileSync(resolve(process.cwd(), '..', 'examples', 'plugin-publish-dialog', 'lib', 'client.js'), 'utf8');
+  const platform = source
+    .replace(/import React from 'react'\n/, 'const React = globalThis.__publishTestReact\n')
+    .replace(/import \{([^}]*)\} from '@timon\/ui'\n/, 'const {$1} = globalThis.__publishTestUi\n');
+  assert.notEqual(platform, source, 'the client still imports react and @timon/ui');
+  const React = await import('react');
+  const { UI_KIT } = await import('@/lib/plugin-host/ui-kit');
+  Object.assign(globalThis, { __publishTestReact: React, __publishTestUi: UI_KIT });
+  const dir = mkdtempSync(join(tmpdir(), 'plugin-publish-dialog-'));
+  const file = join(dir, 'client.mjs');
+  writeFileSync(file, platform);
+  const mod = await import(pathToFileURL(file).href) as { apply: (ctx: unknown) => void };
+  return { apply: mod.apply, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+test('the examples/plugin-publish-dialog template publishes the edited text with the SDK alone', async () => {
+  const m = await mount(({ method, url }) => (method === 'POST' && url.endsWith('/publish')
+    ? Response.json({ proposal: { ...PROPOSAL, state: 'published' } })
+    : undefined));
+  const example = await loadExample();
+  try {
+    const { UI_KIT } = await import('@/lib/plugin-host/ui-kit');
+    const { usePublishDialog } = await import('./publish-dialog-context');
+    assert.equal(UI_KIT.usePublishDialog, usePublishDialog);
+    const disposers: Array<() => void> = [];
+    example.apply({ id: 'example-publish-dialog', slots: { register: (options: { slot: string }, Component: ComponentType) => {
+      const dispose = m.slots.register({ ...options, pluginId: 'example-publish-dialog' }, Component);
+      disposers.push(dispose);
+      return dispose;
+    } } });
+    const { PublishDialog } = await import('./publish-dialog');
+    const events: string[] = [];
+    await m.render(m.React.createElement(PublishDialog, { project: 'acme', proposalId: ID, onClose: () => events.push('close') }));
+    const area = () => q('textarea[aria-label="Text to publish"]') as HTMLTextAreaElement | null;
+    await m.until(() => area()?.value === PROPOSAL.body && !(q('[data-plain-publish]') as HTMLButtonElement | null)?.disabled, 'the plain window, ready');
+    assert.ok(!q('[data-publish-dialog]'), 'the product\'s window is not painted');
+    assert.match(document.body.textContent ?? '', /Comment on issue #209 · as acme-bot/);
+    await m.type(area(), 'Fixed in #53. Thanks!');
+    await m.click(q('[data-plain-publish]'));
+    await m.until(() => events.includes('close'), 'published');
+    assert.deepEqual(writes(m.calls).map((c) => [c.url, c.body]), [
+      [`/api/ui/projects/acme/forge-proposals/${ID}/publish`, { body: 'Fixed in #53. Thanks!' }],
+    ]);
+    assert.ok(m.calls.every((c) => c.url.startsWith('/api/ui/')), 'every call goes through the session proxy');
+    await m.React.act(async () => { for (const d of disposers.splice(0)) d(); });
+  } finally {
+    example.cleanup();
     await m.unmount();
   }
 });
