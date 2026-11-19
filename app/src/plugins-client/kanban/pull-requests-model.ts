@@ -19,6 +19,11 @@ export type PullReview = {
   updated_at: number;
 };
 
+import type { JobLinks } from './landing-api';
+
+/** The way back from a pull request (`forge-links.ts`): our job behind it, when the reader sees it. */
+export type PullRequestLinks = JobLinks & { job_id: string | null };
+
 export type PullRequestItem = {
   number: number;
   title: string;
@@ -29,6 +34,8 @@ export type PullRequestItem = {
   headOwner: string | null;
   external: boolean;
   review: PullReview | null;
+  /** Absent from an older daemon. */
+  links?: PullRequestLinks;
 };
 
 export type PullRequestList = { repo: string; pulls: PullRequestItem[] };

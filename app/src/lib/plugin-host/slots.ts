@@ -615,6 +615,28 @@ export const TODO_FORM_SLOT = 'todo.form';
 export const TODO_LANDING_SLOT = 'kanban.todo.landing';
 
 /**
+ * Slot of a Kanban job's dialog: what the job brings (diff, commits,
+ * pre-checks) and its links — the ideas it carries, their issues, the mission
+ * that pilots it, its branch and target. Opened from the Jobs widget, the
+ * landing badge of a TO DO idea and the Pull requests widget. The occupant
+ * reads `useJobDialog()` and only paints; the host keeps the dialog frame. A
+ * boot slot like `todo.form`: the product's dialog is the fallback and comes
+ * back when a replacement leaves.
+ */
+export const JOB_DIALOG_SLOT = 'kanban.job.dialog';
+
+/**
+ * Slot of the "Publish on GitHub" dialog, the one way a text reaches the
+ * forge (`docs/FORGE-FLOW-PLAN.md` §3.3): the exact text, editable, where it
+ * goes and as which account, then Publish or Do not publish. Opened from a
+ * job's row, a pull request's row and the notification card of a proposal.
+ * The occupant reads `usePublishDialog()` and only paints; the host keeps the
+ * calls to the daemon, which publishes only for a signed-in person. A boot
+ * slot like `todo.form`.
+ */
+export const PUBLISH_DIALOG_SLOT = 'forge.publish.dialog';
+
+/**
  * Slot of the table of contents of a long list page (the Skills and MCP tabs
  * of Capabilities): the sticky column on the left that jumps to a section.
  * Every page that has one paints its occupant, which reads `usePageToc()`. A
@@ -735,6 +757,8 @@ function declareBootSlots(): void {
   declareSlot(KANBAN_CARD_SLOT, 'single');
   declareSlot(TODO_FORM_SLOT, 'single');
   declareSlot(TODO_LANDING_SLOT, 'single');
+  declareSlot(JOB_DIALOG_SLOT, 'single');
+  declareSlot(PUBLISH_DIALOG_SLOT, 'single');
   declareSlot(PAGE_TOC_SLOT, 'single');
   declareSlot(CHAT_SECRET_REQUEST_SLOT, 'single');
   // Deprecated, never painted: declared so that its former occupants still load.

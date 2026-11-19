@@ -24,7 +24,7 @@ import { useTodoItem } from './todo-badge-slot';
 import { findLanding, getLanding, listLandings, type Landing } from './landing-api';
 
 // Painted on every line of the TO DO: the dialog loads on the first click.
-const LandingPreviewDialog = lazy(() => import('./landing-preview-dialog').then((m) => ({ default: m.LandingPreviewDialog })));
+const JobDialog = lazy(() => import('./job-dialog').then((m) => ({ default: m.JobDialog })));
 
 /** React events bubble from a portal to the tree that holds it: the dialog's
  *  clicks and presses must not open the idea or drag its card. */
@@ -124,7 +124,7 @@ export function TodoLandingBadge({ landing, project = null }: { landing: TodoLan
       {opened && (
         <span className="contents" onClick={stop} onPointerDown={stop} onMouseDown={stop} onKeyDown={stop}>
           <Suspense fallback={null}>
-            <LandingPreviewDialog landing={opened} onClose={() => setOpened(null)} />
+            <JobDialog landing={opened} onClose={() => setOpened(null)} />
           </Suspense>
         </span>
       )}
