@@ -36,7 +36,7 @@ import { cn } from '@/lib/utils';
 import type { WidgetProps } from '@/components/widget-host/widget-props';
 import { useWidgetAttention, useWidgetCount } from '@/components/widget-host/widget-self';
 import {
-  anyReviewRunning, branchChip, filterByAuthor, pullAuthors, reviewBadge,
+  anyReviewRunning, branchChip, branchLock, filterByAuthor, pullAuthors, reviewBadge,
   type PullRequestItem, type PullRequestList, type ReviewBadge,
 } from './pull-requests-model';
 import { diffLineKind, getLanding, type Landing } from './landing-api';
@@ -406,6 +406,7 @@ function PullRow({
   const jobId = pull.links?.job_id ?? null;
   const gestures = pull.gestures;
   const chip = branchChip(pull);
+  const lock = branchLock(pull);
   const badge = reviewBadge(pull);
   const running = badge?.kind === 'running';
   const meta = [`#${pull.number}`, pull.author ?? t('pullRequests.deletedAuthor')];
@@ -419,6 +420,11 @@ function PullRow({
           {chip && (
             <span data-pull-branch={chip} className={cn('inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10.5px] font-medium', BRANCH_CHIP_TONE[chip])}>
               {t(`pullRequests.branch.${chip}`)}
+            </span>
+          )}
+          {lock && (
+            <span data-pull-locked={lock} title={t(`pullRequests.lockedHint.${lock}`)} className="inline-flex min-w-0 shrink items-center truncate rounded-md bg-foreground/[0.06] px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground">
+              {t(`pullRequests.locked.${lock}`)}
             </span>
           )}
           {branchBusy && <Loader2 className="size-3 shrink-0 animate-spin" aria-label={t('pullRequests.branchPreparing')} />}

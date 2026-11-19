@@ -2991,6 +2991,14 @@
       "conflict": "Conflit",
       "behind": "En retard"
     },
+    "locked": {
+      "not_allowed": "Modifications non autorisées",
+      "fork_deleted": "Fork supprimé"
+    },
+    "lockedHint": {
+      "not_allowed": "Son auteur ne laisse pas les mainteneurs modifier cette branche : ni mise à jour ni résolution d’ici. Demandez au contributeur.",
+      "fork_deleted": "Le fork de cette pull request a été supprimé : sa branche ne peut plus être modifiée."
+    },
     "branchPreparing": "Préparation…",
     "updateBranch": "Mettre à jour la branche",
     "resolveConflict": "Résoudre le conflit…",

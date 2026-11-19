@@ -20,7 +20,7 @@ export type PullReview = {
 };
 
 import type { JobLinks } from './landing-api';
-import type { BranchGestures } from './forge-branch-api';
+import type { BranchGestures, BranchLock } from './forge-branch-api';
 
 /** The way back from a pull request (`forge-links.ts`): our job behind it, when the reader sees it. */
 export type PullRequestLinks = JobLinks & { job_id: string | null };
@@ -83,4 +83,12 @@ export function branchChip(pull: PullRequestItem): 'conflict' | 'behind' | null 
   if (pull.mergeStateStatus === 'dirty') return 'conflict';
   if (pull.mergeStateStatus === 'behind' && pull.gestures?.update_branch) return 'behind';
   return null;
+}
+
+/**
+ * Why the branch cannot be written from here, said on the row: without it,
+ * a missing "Update the branch" or "Resolve the conflict…" has no reason.
+ */
+export function branchLock(pull: PullRequestItem): BranchLock | null {
+  return pull.gestures?.locked ?? null;
 }

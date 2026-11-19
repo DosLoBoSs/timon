@@ -11,8 +11,17 @@ import { t } from '@/lib/i18n';
 import type { Answer } from './landing-api';
 import type { ForgeProposal } from './forge-proposals-api';
 
+/** Why no one here may write a contributor's branch (`branchGestures`). */
+export type BranchLock = 'not_allowed' | 'fork_deleted';
+
 /** What the pull request list says may be done about a branch (`branchGestures`). */
-export type BranchGestures = { update_branch: boolean; ask_contributor: boolean; resolve_conflict: boolean };
+export type BranchGestures = {
+  update_branch: boolean;
+  ask_contributor: boolean;
+  resolve_conflict: boolean;
+  /** Absent from an older daemon. */
+  locked?: BranchLock | null;
+};
 
 export type ConflictChoice = 'contributor' | 'target' | 'text';
 export type ConflictState = 'open' | 'proposed' | 'published' | 'discarded';

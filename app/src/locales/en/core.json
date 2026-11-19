@@ -2991,6 +2991,14 @@
       "conflict": "Conflict",
       "behind": "Behind"
     },
+    "locked": {
+      "not_allowed": "Changes not allowed",
+      "fork_deleted": "Fork deleted"
+    },
+    "lockedHint": {
+      "not_allowed": "Its author does not let the maintainers change this branch: it cannot be updated or resolved from here. Ask the contributor instead.",
+      "fork_deleted": "The fork of this pull request was deleted: its branch can no longer be changed."
+    },
     "branchPreparing": "Preparing…",
     "updateBranch": "Update the branch",
     "resolveConflict": "Resolve the conflict…",
