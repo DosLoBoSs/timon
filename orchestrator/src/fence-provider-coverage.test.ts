@@ -342,15 +342,14 @@ for (const id of ACTIVE) {
  * The claude CLI keeps its sessions, debug logs and settings in its config folder: the one
  * `CLAUDE_CONFIG_DIR` names, else `~/.claude`, which holds the user's own Claude sign-in and stays
  * refused to any other backend. A profile on the claude dialect without an account of its own is
- * given no private folder yet, so its CLI is refused the one it writes to.
+ * given its profile folder instead (TODO #1104), which its CLI must be able to write.
  */
 const CLAUDE_DIALECT = ACTIVE.filter((id) => dialectOf(id) === 'claude');
 for (const id of CLAUDE_DIALECT) {
-  const pending = id !== 'claude'
-    && '#1104: a profile on the claude dialect other than claude gets no private CLAUDE_CONFIG_DIR yet, and ~/.claude is refused to it';
-  test(`${id}: the claude CLI can write its config folder, and never the user's sign-in of another backend`, { skip: NO_FENCE, todo: pending || undefined }, () => {
+  test(`${id}: the claude CLI can write its config folder, and never the user's sign-in of another backend`, { skip: NO_FENCE }, () => {
     const run = launches.get(id)!;
     const configDir = run.spec.env?.CLAUDE_CONFIG_DIR ?? join(USER_HOME, '.claude');
+    if (id !== 'claude') assert.equal(configDir, profileFolders.get(id), `${id}: the CLI is not told to use its profile folder`);
     const access = fenceAccess(run.strict, join(configDir, 'debug', 'latest'));
     assert.ok(access.read && access.write, `${id}: ${configDir} is refused to the claude CLI`);
     if (id !== 'claude') assert.equal(fenceAccess(run.strict, join(USER_HOME, '.claude', '.credentials.json')).read, false, `${id}: reads the user's Claude sign-in`);
