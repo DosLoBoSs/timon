@@ -1872,7 +1872,8 @@ function chatAttachmentsFolder(missionId: string): string | null {
 /**
  * What the fence of a mission needs beyond its working directory
  * (`host/isolation.ts`, `FenceTarget`): who it is, the subscription account
- * and provider plugin it runs on, the git directories its worktree commits
+ * and provider plugin it runs on, the profile whose folder of the plugin's
+ * cache is the only one it reaches, the git directories its worktree commits
  * into, the plugin packages its MCP servers run from, and the folder its chat
  * attachments were saved to. Every path is checked again by `resolveFence`.
  */
@@ -1896,6 +1897,7 @@ export function missionFenceTarget(input: {
   });
   // Created before the fence is computed, so it is always among the folders it opens.
   const attachments = chatAttachmentsFolder(input.missionId);
+  const instance = splitBackendInstance(input.backend);
   return {
     agent: input.agentName,
     // Read again from the agent's config file: `cfg.cwd` may by now be a
@@ -1903,8 +1905,12 @@ export function missionFenceTarget(input: {
     // `workspace` exception of the fence.
     agentCwd: configuredAgentCwd(input.agentName),
     project: input.project || undefined,
-    account: splitBackendInstance(input.backend).accountId ?? undefined,
+    account: instance.accountId ?? undefined,
     providerPlugin: backendOwnerPlugin(input.backend) ?? undefined,
+    // The folder `ctx.provider.scratch.profile` keeps for a profile without an account. An
+    // account's mission keeps its sign-in in the account's own folder: its owner is a person,
+    // and the profile's folder is shared by every account of that profile.
+    providerProfile: instance.accountId ? undefined : instance.backend,
     gitDirs: git.dirs,
     pluginDirs: pluginPackageDirs(commandLines, TIMON_HOME),
     timonRead: attachments ? [attachments] : [],
