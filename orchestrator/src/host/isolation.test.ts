@@ -397,6 +397,36 @@ test('fence: the mission\'s own account is writable, every other account is refu
   assert.equal(access(policy, `${TH}/backend-accounts`), 'none', 'the accounts cannot be listed');
 });
 
+test('fence: a mission reaches its own profile\'s folder of the provider cache, never another profile\'s', { skip: POSIX_FIXTURES }, () => {
+  const cache = `${TH}/provider-cache/provider-claude`;
+  const kimi = resolveFence(cfg(), fullTarget({ backend: 'kimi', account: undefined, providerPlugin: 'provider-claude', providerProfile: 'kimi' }));
+  assert.equal(access(kimi, `${cache}/profiles/kimi/projects/-code-app/s1.jsonl`), 'rw', 'its own profile folder');
+  assert.equal(access(kimi, `${cache}/cache/models.json`), 'rw', 'the plugin\'s shared cache');
+  // Another profile of the same plugin: neither its folder nor one not made yet, where a planted hook would wait for it.
+  for (const path of [`${cache}/profiles/user-claude/settings.json`, `${cache}/profiles/not-made-yet/settings.json`]) {
+    assert.equal(access(kimi, path), 'none', path);
+  }
+  assert.equal(access(kimi, `${cache}/profiles`), 'none', 'the profiles cannot be listed');
+  for (const name of ['daemon-token', 'timon.db']) assert.equal(access(kimi, `${TH}/${name}`), 'none', name);
+  assert.equal(access(kimi, `${FAKE_HOME}/.claude/.credentials.json`), 'none', 'the user\'s Claude sign-in');
+
+  const user = resolveFence(cfg(), fullTarget({ backend: 'user-claude', account: undefined, providerPlugin: 'provider-claude', providerProfile: 'user-claude' }));
+  assert.equal(access(user, `${cache}/profiles/user-claude/settings.json`), 'rw');
+  assert.equal(access(user, `${cache}/profiles/kimi/projects/-code-app/s1.jsonl`), 'none');
+  // No profile, no profile folder; a profile id that is not a plain folder name, none either.
+  const none = resolveFence(cfg(), fullTarget({ providerPlugin: 'provider-claude' }));
+  assert.equal(access(none, `${cache}/profiles/kimi/x`), 'none');
+  assert.equal(access(none, `${cache}/cache/x`), 'rw');
+  const odd = resolveFence(cfg(), fullTarget({ account: undefined, providerPlugin: 'provider-claude', providerProfile: '../kimi' }));
+  assert.equal(access(odd, `${cache}/profiles/kimi/x`), 'none');
+  assert.ok(odd.ignored.some((i) => i.path === '../kimi'));
+  // An account's mission keeps its CLI's state in the account's folder: the profile's, which the
+  // host's sign-in and every account of that profile would share, stays closed to it.
+  const onAccount = resolveFence(cfg(), fullTarget({ providerPlugin: 'provider-claude', providerProfile: 'claude' }));
+  assert.equal(access(onAccount, `${cache}/profiles/claude/projects/x.jsonl`), 'none');
+  assert.equal(access(onAccount, `${TH}/backend-accounts/acc-mine/x`), 'rw');
+});
+
 test('fence: identity docs, skills, project memory and attachments are read-only, the own memory writable', () => {
   const policy = resolveFence(cfg(), fullTarget());
   assert.equal(access(policy, `${TH}/agents/timon.coder/SOUL.md`), 'r', 'readable, not executable');
