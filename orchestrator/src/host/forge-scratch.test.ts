@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { BASE_URL, checkout, forgeFixture, FORK_URL } from '../../tests/helpers/forge-git-fixture.js';
 import {
-  gitVersionAtLeast, openScratchRepo, parseGitVersion, parseMergeTree, parseObjectsSize, parseSshHostName, scratchConfig, scratchEnv,
+  gitVersionAtLeast, openScratchRepo, parseGitVersion, reopenScratchRepo, parseMergeTree, parseObjectsSize, parseSshHostName, scratchConfig, scratchEnv,
   type ScratchRepo,
 } from './forge-scratch.js';
 
@@ -135,6 +135,20 @@ test('a conflict merged with objects only: stages, blobs, a rebuilt tree that di
     repo.dispose();
   }
   assert.equal(existsSync(repo.dir), false);
+});
+
+test('texts written at once through separate openings of one folder never share a file', async () => {
+  const f = forgeFixture({ 'a.txt': 'a\n' });
+  const repo = await scratch(f);
+  try {
+    // Every request reopens the folder: each opening is its own instance.
+    const texts = Array.from({ length: 8 }, (_, i) => `text ${i}\n`.repeat(2000));
+    const oids = await Promise.all(texts.map((text) => reopenScratchRepo(repo.dir, { root: '', ghConfigDir: null, git: f.runner })!.writeBlob(text)));
+    for (const [i, oid] of oids.entries()) assert.equal(await repo.readBlob(oid!, 1_000_000), texts[i], `text ${i}`);
+    assert.equal(readdirSync(join(repo.dir, 'incoming')).length, 0);
+  } finally {
+    repo.dispose();
+  }
 });
 
 test('a push that is not a fast-forward is refused by git, and the branch is untouched', async () => {

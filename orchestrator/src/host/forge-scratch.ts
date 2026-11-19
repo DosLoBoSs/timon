@@ -31,6 +31,7 @@
  * Credentials are those of the project's account: its SSH alias, or `gh` as
  * the credential helper with the project's `GH_CONFIG_DIR` for an https URL.
  */
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ghEnv } from './gh.js';
@@ -277,7 +278,6 @@ function scratchAt(dir: string, options: ScratchOptions): ScratchRepo {
   const index = join(dir, 'index');
   const env = scratchEnv(emptyConfig, options.ghConfigDir);
   const prefix = [`--git-dir=${repo}`, ...scratchConfig(emptyConfig).flatMap((pair) => ['-c', pair])];
-  let counter = 0;
 
   const run = async (args: readonly string[], extra: Partial<ExecOpts> = {}, timeout = LOCAL_TIMEOUT_MS): Promise<ExecResult> => {
     try {
@@ -350,7 +350,9 @@ function scratchAt(dir: string, options: ScratchOptions): ScratchRepo {
       return r.code === 0 && Buffer.byteLength(r.stdout, 'utf8') <= maxBytes ? r.stdout : null;
     },
     async writeBlob(text) {
-      const file = join(incoming, String(++counter));
+      // A name of its own: each request reopens the folder, and two texts
+      // written at once must never share a file.
+      const file = join(incoming, randomUUID());
       writeFileSync(file, text, 'utf8');
       try {
         return sha(await run(['hash-object', '-w', '--no-filters', '--', file]));
