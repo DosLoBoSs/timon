@@ -1939,7 +1939,9 @@ async function launchMissionProcess(
   // Before `buildSpawn`: a provider may move the account's keychain entry there, which only
   // a fenced launch needs (`mission-fence-state.ts`). Released however the launch ends.
   const account = splitBackendInstance(backend.name).accountId;
-  const prepared = prepareMissionLaunch(missionId, { account, fenced: account !== null && missionFenceExpected() });
+  const project = cfg.project ?? projectFromCwd(cfg.cwd) ?? undefined;
+  const fenced = account !== null && missionFenceExpected({ agent: agentName, ...(project ? { project } : {}) });
+  const prepared = prepareMissionLaunch(missionId, { account, fenced });
   try {
     return await spawnMissionProcess(backend, spawnOpts, cfg, missionId, agentName, seal, trust, confirmSpawn);
   } catch (err) {

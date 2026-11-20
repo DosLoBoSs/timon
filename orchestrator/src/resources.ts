@@ -79,6 +79,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { cpus, homedir, loadavg } from 'node:os';
 import { basename, join } from 'node:path';
 import { config } from './config/load.js';
+import type { TimonConfig } from './config/schema.js';
 import { apiError } from './api-error.js';
 import { daemonMessage, type DaemonMessage } from './daemon-message.js';
 import { CwdUnusableError } from './cwd-check.js';
@@ -87,7 +88,7 @@ import { nodeRuntime } from './host/node-runtime.js';
 import { daemonRuntimePaths } from './mission-fence-target.js';
 import { FENCE_EXIT, fenceLaunchDecision, type FenceStatus } from './host/fence.js';
 import {
-  agentPackageCacheDir, fenceWritesCredentialStore, isFenceAgent, isFenceSegment, missionTmpDir, resolveFence,
+  agentPackageCacheDir, fenceConfigWritesCredentialStore, fenceWritesCredentialStore, isFenceAgent, isFenceSegment, missionTmpDir, resolveFence,
   type FenceMode, type FenceTarget, type IsolationTarget,
 } from './host/isolation.js';
 import type { FenceMechanism, HostFence, HostFenceWitness } from './host/types.js';
@@ -606,15 +607,23 @@ export type FenceMissionOptions = {
 };
 
 /**
- * Whether the next mission launch will run inside the fence, asked before the
- * provider builds its command: `fenceMissionCommand` then decides for real, on
- * the same configuration and the same probe. Read by the move of an account's
- * keychain entry (`mission-fence-state.ts`), which only a fenced launch needs.
- * A wrong guess costs a needless move or none, never a lost sign-in: that
- * launch's CLI is not running yet, and once it runs, it is recorded as what it is.
+ * Whether the next launch of a mission of `target` will run inside a fence that
+ * keeps the OS credential store read-only, asked before the provider builds its
+ * command: `fenceMissionCommand` then decides for real, on the same configuration
+ * and the same probe. Read by the move of an account's keychain entry
+ * (`mission-fence-state.ts`), which only such a launch needs: outside the fence,
+ * or with a `writable` exception reaching the keychain, the CLI updates the entry
+ * itself. A wrong guess costs a needless move or none, never a lost sign-in:
+ * that launch's CLI is not running yet, and once it runs, it is recorded as what it is.
  */
-export function missionFenceExpected(mode: FenceMode = config().host.isolation.filesystem, fence: HostFence | undefined = getHost().fence): boolean {
-  return mode !== 'off' && hostFenceStatus(fence).state === 'ready';
+export function missionFenceExpected(
+  target: { agent?: string; project?: string } = {},
+  on: { cfg?: TimonConfig; fence?: HostFence | undefined; platform?: NodeJS.Platform; home?: string } = {},
+): boolean {
+  const cfg = on.cfg ?? config();
+  const fence = 'fence' in on ? on.fence : getHost().fence;
+  if (cfg.host.isolation.filesystem === 'off' || hostFenceStatus(fence).state !== 'ready') return false;
+  return !fenceConfigWritesCredentialStore(cfg, target, on.platform ?? getHost().platform, on.home ?? homedir());
 }
 
 /**

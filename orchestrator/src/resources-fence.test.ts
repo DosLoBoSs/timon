@@ -27,7 +27,7 @@ import { configuredAgentCwd } from './agent-config.js';
 import type { HostFence, HostFenceProbe, HostFenceWitness } from './host/types.js';
 import {
   fenceLaunchFailure, launchErrorStatus, missionLaunchErrorBody, fenceMissionCommand, fencePolicyFile, fenceWitnessFailure, hostFenceStatus, MissionFenceRefusedError, noteFenceLaunchFailure,
-  resetFenceLaunchFailureForTest, watchFencedLaunch, wrapMissionLaunch, type MissionFenceOutcome,
+  missionFenceExpected, resetFenceLaunchFailureForTest, watchFencedLaunch, wrapMissionLaunch, type MissionFenceOutcome,
 } from './resources.js';
 
 // The fence checks every grant on the path it resolves to: the tree exists,
@@ -834,4 +834,27 @@ test('a fence refusal answers a translatable code, never a bare launch error', (
   const other = new Error('spawn claude ENOENT');
   assert.deepEqual(missionLaunchErrorBody(other), { error: 'spawn claude ENOENT' });
   assert.equal(launchErrorStatus(other, 400), 400);
+});
+
+test('a launch is expected fenced against the keychain only with a ready fence and no `writable` grant reaching it', () => {
+  const home = '/Users/tester';
+  const isolation = (filesystem: 'auto' | 'off', extra: Record<string, unknown> = {}) =>
+    TimonConfigSchema.parse({ host: { isolation: { filesystem, ...extra } } });
+  const ready = fakeFence({ available: true, abi: 0 });
+  const on = (cfg: ReturnType<typeof isolation>, fence: HostFence | undefined = ready) => ({ cfg, fence, platform: 'darwin' as const, home });
+  assert.equal(missionFenceExpected({ agent: 'coder' }, on(isolation('auto'))), true);
+  assert.equal(missionFenceExpected({ agent: 'coder' }, on(isolation('off'))), false, 'isolation off');
+  assert.equal(missionFenceExpected({ agent: 'coder' }, on(isolation('auto'), fakeFence({ available: false, reason: 'no sandbox-exec' }))), false,
+    'a fence that falls back to unfenced in `auto`');
+  assert.equal(missionFenceExpected({ agent: 'coder' }, { ...on(isolation('auto')), fence: undefined }), false, 'no fence on this OS');
+  // An exception that opens the login keychain: the CLI renews its entry in place, nothing must move.
+  const byAgent = isolation('auto', { exceptions: { agents: { coder: { writable: ['~/Library'] } } } });
+  assert.equal(missionFenceExpected({ agent: 'coder' }, on(byAgent)), false);
+  assert.equal(missionFenceExpected({ agent: 'other' }, on(byAgent)), true, 'only that agent');
+  const byProject = isolation('auto', { exceptions: { projects: { site: { writable: ['~/Library/Keychains/login.keychain-db'] } } } });
+  assert.equal(missionFenceExpected({ agent: 'coder', project: 'site' }, on(byProject)), false);
+  assert.equal(missionFenceExpected({ agent: 'coder', project: 'other' }, on(byProject)), true);
+  assert.equal(missionFenceExpected({ agent: 'coder' }, on(isolation('auto', { writable: ['~/'] }))), false, 'the whole home, globally');
+  assert.equal(missionFenceExpected({ agent: 'coder' }, on(isolation('auto', { writable: ['~/Library/Caches'] }))), true, 'a sibling folder');
+  assert.equal(missionFenceExpected({ agent: 'coder' }, { ...on(byAgent), platform: 'linux' }), true, 'no such store off macOS');
 });

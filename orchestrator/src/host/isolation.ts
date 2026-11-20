@@ -607,7 +607,7 @@ function timonGrantProblem(timonHome: string, path: string, access: 'ro' | 'rw',
 }
 
 /** The global fence values, relaxed by the project's then the agent's exception. */
-function fenceExceptions(iso: TimonConfig['host']['isolation'], target: FenceTarget): {
+function fenceExceptions(iso: TimonConfig['host']['isolation'], target: Pick<FenceTarget, 'agent' | 'project'>): {
   unixSockets: 'deny' | 'allow';
   writable: readonly string[];
 } {
@@ -901,7 +901,29 @@ export function fenceAccess(policy: FencePolicy, path: string): { read: boolean;
  * an account's sign-in there.
  */
 export function fenceWritesCredentialStore(policy: FencePolicy, platform: NodeJS.Platform = process.platform, home: string = homedir()): boolean {
-  if (platform !== 'darwin') return false;
-  const folder = join(resolve(home), 'Library', 'Keychains');
-  return [folder, join(folder, 'login.keychain-db')].some((path) => fenceAccess(policy, path).write);
+  const folder = credentialStoreFolder(platform, home);
+  return folder !== null && [folder, join(folder, 'login.keychain-db')].some((path) => fenceAccess(policy, path).write);
+}
+
+/**
+ * The same question asked of the configuration, before the launch is built: whether a
+ * `writable` path (global, the project's exception, the agent's) reaches the login
+ * keychain's folder. `resolveFence` keeps such a grant when the path exists, so the
+ * two agree; a listed path that does not exist only makes this side the cautious one.
+ */
+export function fenceConfigWritesCredentialStore(
+  config: TimonConfig,
+  target: Pick<FenceTarget, 'agent' | 'project'>,
+  platform: NodeJS.Platform = process.platform,
+  home: string = homedir(),
+): boolean {
+  const folder = credentialStoreFolder(platform, home);
+  if (folder === null) return false;
+  return fenceExceptions(config.host.isolation, target).writable
+    .map((path) => expand(path, resolve(home)))
+    .some((path) => contains(path, folder) || contains(folder, path));
+}
+
+function credentialStoreFolder(platform: NodeJS.Platform, home: string): string | null {
+  return platform === 'darwin' ? join(resolve(home), 'Library', 'Keychains') : null;
 }
