@@ -34,7 +34,11 @@ function pair(accessToken: string, refreshToken: string, expiresAt: number) {
   return { claudeAiOauth: { accessToken, refreshToken, expiresAt, scopes: ['user:inference', 'user:profile'], subscriptionType: 'max' } };
 }
 
-type Setup = { platform?: NodeJS.Platform; keychain?: string; file?: unknown; locked?: boolean };
+type Setup = {
+  platform?: NodeJS.Platform; keychain?: string; file?: unknown; locked?: boolean; signingIn?: boolean;
+  /** Runs after each read of the entry by the provider: another CLI writing the keychain then. */
+  afterRead?: (count: number, write: (value: string) => void) => void;
+};
 
 async function launchOnAccount(setup: Setup) {
   const root = mkdtempSync(join(tmpdir(), 'timon-claude-account-'));
@@ -47,8 +51,30 @@ async function launchOnAccount(setup: Setup) {
     apiVersion, secrets: SECRETS,
     osCredentials: setup.keychain === undefined ? {} : { [service]: setup.keychain },
     ...(setup.locked ? { lockedOsCredentials: [service] } : {}),
+    ...(setup.signingIn ? { signingInAccounts: ['acc-1'] } : {}),
   });
   process.on('exit', () => ctx.cleanup());
+  let reads = 0;
+  const removals: string[] = [];
+  const own = ctx.provider.account.osCredential.bind(ctx.provider.account);
+  ctx.provider.account.osCredential = (profile, name) => {
+    const entry = own(profile, name);
+    if (!entry) return entry;
+    return {
+      signingIn: () => entry.signingIn(),
+      async read() {
+        const value = await entry.read();
+        reads += 1;
+        setup.afterRead?.(reads, (next) => ctx.setOsCredential(service, next));
+        return value;
+      },
+      async remove(expected) {
+        const outcome = await entry.remove(expected);
+        removals.push(outcome);
+        return outcome;
+      },
+    };
+  };
   const warnings: string[] = [];
   const log = { info: () => {}, warn: (...args: unknown[]) => { warnings.push(args.join(' ')); }, error: () => {} };
   const token = createClaudeToken(ctx.provider);
@@ -59,10 +85,10 @@ async function launchOnAccount(setup: Setup) {
     agentName: 'claude.account', systemPrompt: 'contract', message: 'ping', resumeSession: null, missionId: `mission-account-${roots.length}`,
     cfg: { cwd: root, permission_mode: 'auto', mcp_servers: [] },
   } as never, profile as never);
-  const entry = ctx.provider.account.osCredential(profile as never, service)!;
+  const entry = own(profile as never, service)!;
   const file = join(configDir, '.credentials.json');
   return {
-    spec, configDir, warnings, logs: ctx.logs,
+    spec, configDir, warnings, logs: ctx.logs, removals,
     keychainLeft: await entry.read(),
     file: existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown> : null,
     mode: existsSync(file) ? statSync(file).mode & 0o777 : null,
@@ -128,6 +154,42 @@ test('darwin: an entry that is not the CLI\'s JSON is left alone, and nothing is
   assert.equal(result.keychainLeft, 'not json');
   assert.equal(result.file, null);
   assert.match(result.warnings[0] ?? '', /\(unreadable\)/);
+});
+
+test('darwin: a pair a sign-in writes between the read and the delete is never lost', async () => {
+  const fresh = pair(FRESH_ACCESS, FRESH_REFRESH, Date.now() + 8 * HOUR);
+  const result = await launchOnAccount({
+    keychain: JSON.stringify(pair(ACCESS, REFRESH, Date.now() + HOUR)),
+    // The CLI replaces the entry right after the provider read the old one, before its delete.
+    afterRead: (count, write) => { if (count === 1) write(JSON.stringify(fresh)); },
+  });
+  assert.deepEqual(result.removals, ['changed', 'removed'], 'the replaced entry was kept, then the fresh one moved');
+  assert.deepEqual(result.file?.claudeAiOauth, fresh.claudeAiOauth, 'the fresh pair is in the folder');
+  assert.equal(result.keychainLeft, null);
+  assert.deepEqual(result.warnings, []);
+  assertNoSecretOut(result);
+});
+
+test('darwin: an entry that changes on every pass stays in the keychain, the freshest pair with it', async () => {
+  const stamps = [FRESH_ACCESS, `${FRESH_ACCESS}-2`, `${FRESH_ACCESS}-3`];
+  const result = await launchOnAccount({
+    keychain: JSON.stringify(pair(ACCESS, REFRESH, Date.now() + HOUR)),
+    afterRead: (count, write) => write(JSON.stringify(pair(stamps[count - 1]!, FRESH_REFRESH, Date.now() + (count + 1) * HOUR))),
+  });
+  assert.deepEqual(result.removals, ['changed', 'changed', 'changed']);
+  assert.equal(JSON.parse(result.keychainLeft!).claudeAiOauth.accessToken, stamps[2], 'the last pair written is still there');
+  assert.match(result.warnings[0] ?? '', /\(changed\)/);
+  assertNoSecretOut(result);
+});
+
+test('darwin: nothing moves while a sign-in flow runs on the account', async () => {
+  const keychain = JSON.stringify(pair(ACCESS, REFRESH, Date.now() + HOUR));
+  const result = await launchOnAccount({ keychain, signingIn: true });
+  assert.equal(result.keychainLeft, keychain);
+  assert.equal(result.file, null, 'the folder is not touched either');
+  assert.deepEqual(result.removals, []);
+  assert.match(result.warnings[0] ?? '', /\(signing-in\)/);
+  assertNoSecretOut(result);
 });
 
 test('darwin: an account with no entry launches as before, with nothing written', async () => {

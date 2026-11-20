@@ -20,6 +20,12 @@ import { join } from 'node:path';
  * clear. A CLI run outside any fence may put the entry back on its next refresh: the next
  * launch moves it again. The CLI stays the one holder of the refresh token; the daemon
  * never refreshes it.
+ *
+ * The entry may change while it is moved: a sign-in flow rewrites it (the daemon holds the
+ * account meanwhile, `signingIn()`), a CLI outside any fence renews it. Nothing is moved
+ * during a sign-in, and the delete only goes through while the entry still holds what was
+ * copied (`remove(expected)`): a pair written in between stays in the keychain, and the
+ * next pass copies it, so no fresh pair is ever lost.
  */
 export const CLAUDE_KEYCHAIN_SERVICE = 'Claude Code-credentials';
 
@@ -50,12 +56,16 @@ function readStore(file) {
 
 const settling = new Map();
 
+/** An entry that changes on every pass: a handful of tries, then the launch goes on. */
+const MAX_PASSES = 3;
+
 /**
  * Moves the account's keychain entry into `configDir`. Serialized per folder: two launches
  * on one account never interleave a copy and a delete. Answers what happened, never a
- * secret: `none` (no entry), `moved`, `busy` (the CLI holds its lock: nothing deleted),
- * `kept` (the store refused the delete), `unreadable` (an entry that is not the CLI's JSON),
- * `unwritable` (the folder refused the copy).
+ * secret: `none` (no entry), `moved`, `signing-in` (a sign-in flow runs on the account:
+ * nothing moved), `changed` (the entry kept changing under the copy: left in place),
+ * `busy` (the CLI holds its lock: nothing deleted), `kept` (the store refused the delete),
+ * `unreadable` (an entry that is not the CLI's JSON), `unwritable` (the folder refused the copy).
  */
 export function settleAccountKeychain({ entry, configDir, runtime }) {
   const previous = settling.get(configDir) ?? Promise.resolve();
@@ -65,6 +75,16 @@ export function settleAccountKeychain({ entry, configDir, runtime }) {
 }
 
 async function settle({ entry, configDir, runtime }) {
+  for (let pass = 0; pass < MAX_PASSES; pass += 1) {
+    if (entry.signingIn()) return 'signing-in';
+    const outcome = await settleOnce({ entry, configDir, runtime });
+    // Changed between the copy and the delete: the newer value is copied on the next pass.
+    if (outcome !== 'changed') return outcome;
+  }
+  return 'changed';
+}
+
+async function settleOnce({ entry, configDir, runtime }) {
   const raw = await entry.read();
   if (!raw) return 'none';
   const fromKeychain = parseStore(raw);
@@ -84,5 +104,7 @@ async function settle({ entry, configDir, runtime }) {
     // The entry stays where it is: a mission still reads it, as before.
     return 'unwritable';
   }
-  return (await entry.remove()) ? 'moved' : 'kept';
+  const removal = await entry.remove(raw);
+  if (removal === 'removed') return 'moved';
+  return removal === 'refused' ? 'kept' : removal;
 }
