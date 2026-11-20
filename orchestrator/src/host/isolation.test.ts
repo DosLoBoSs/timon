@@ -27,7 +27,7 @@ const { TimonConfigSchema } = await import('../config/schema.js');
 const {
   isolationArgsFor, isolationProperties, resolveIsolation, sandboxSupported,
   setDeclaredCredentialDirsSource, PROTECTED_HOME_DIRS,
-  BACKEND_HOME_DIRS, MISSION_TIMON_ZONES, isRefusedTimonEntry, timonRefusedPaths,
+  BACKEND_HOME_DIRS, MISSION_TIMON_ZONES, isRefusedTimonEntry, timonRefusedPaths, fenceWritesCredentialStore,
 } = await import('./isolation.js');
 
 const FAKE_HOME = '/home/tester';
@@ -891,4 +891,16 @@ test('fence: the workspace exception matches without case on macOS', () => {
     cwd: join(timonHome, 'Workspace'), agentCwd: join(timonHome, 'workspace'),
   });
   assert.equal(policy.sharedWorkspace, join(timonHome, 'Workspace'));
+});
+
+test('a fence lets a mission write the macOS login keychain only through a grant that reaches it', { skip: POSIX_FIXTURES }, () => {
+  const home = '/Users/tester';
+  const policy = (rw: string[]) => ({
+    mode: 'auto' as const, enabled: true, ro: ['/'], rw, exec: ['/'], deny: [], denyUnderTimonHome: [], unixSockets: 'deny' as const, ignored: [],
+  });
+  assert.equal(fenceWritesCredentialStore(policy(['/private/tmp', `${home}/work`]), 'darwin', home), false, 'a read-only home');
+  assert.equal(fenceWritesCredentialStore(policy([`${home}/Library`]), 'darwin', home), true, 'a `writable` exception on ~/Library');
+  assert.equal(fenceWritesCredentialStore(policy([home]), 'darwin', home), true);
+  assert.equal(fenceWritesCredentialStore(policy([`${home}/Library/Keychains`]), 'darwin', home), true);
+  assert.equal(fenceWritesCredentialStore(policy([`${home}/Library`]), 'linux', home), false, 'no such store elsewhere');
 });

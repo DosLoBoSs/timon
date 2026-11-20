@@ -607,7 +607,7 @@ function timonGrantProblem(timonHome: string, path: string, access: 'ro' | 'rw',
 }
 
 /** The global fence values, relaxed by the project's then the agent's exception. */
-function fenceExceptions(iso: TimonConfig['host']['isolation'], target: FenceTarget): {
+function fenceExceptions(iso: TimonConfig['host']['isolation'], target: Pick<FenceTarget, 'agent' | 'project'>): {
   unixSockets: 'deny' | 'allow';
   writable: readonly string[];
 } {
@@ -890,4 +890,40 @@ export function fenceAccess(policy: FencePolicy, path: string): { read: boolean;
   const level = deepest<'none' | 'ro' | 'rw'>([[refused, 'none'], [policy.ro, 'ro'], [policy.rw, 'rw']], 'none');
   const executable = deepest<boolean>([[refused, false], [policy.exec, true]], false);
   return { read: level !== 'none', write: level === 'rw', exec: level !== 'none' && executable };
+}
+
+/**
+ * Whether a fenced mission may still write the OS credential store where a CLI
+ * keeps a subscription account's sign-in: on macOS the login keychain, a file
+ * the CLI's process rewrites itself, so a `writable` grant that reaches its
+ * folder lets the mission renew the entry in place. Such a mission writes the
+ * entry like an unfenced one (`mission-fence-state.ts`). No other platform keeps
+ * an account's sign-in there.
+ */
+export function fenceWritesCredentialStore(policy: FencePolicy, platform: NodeJS.Platform = process.platform, home: string = homedir()): boolean {
+  const folder = credentialStoreFolder(platform, home);
+  return folder !== null && [folder, join(folder, 'login.keychain-db')].some((path) => fenceAccess(policy, path).write);
+}
+
+/**
+ * The same question asked of the configuration, before the launch is built: whether a
+ * `writable` path (global, the project's exception, the agent's) reaches the login
+ * keychain's folder. `resolveFence` keeps such a grant when the path exists, so the
+ * two agree; a listed path that does not exist only makes this side the cautious one.
+ */
+export function fenceConfigWritesCredentialStore(
+  config: TimonConfig,
+  target: Pick<FenceTarget, 'agent' | 'project'>,
+  platform: NodeJS.Platform = process.platform,
+  home: string = homedir(),
+): boolean {
+  const folder = credentialStoreFolder(platform, home);
+  if (folder === null) return false;
+  return fenceExceptions(config.host.isolation, target).writable
+    .map((path) => expand(path, resolve(home)))
+    .some((path) => contains(path, folder) || contains(folder, path));
+}
+
+function credentialStoreFolder(platform: NodeJS.Platform, home: string): string | null {
+  return platform === 'darwin' ? join(resolve(home), 'Library', 'Keychains') : null;
 }

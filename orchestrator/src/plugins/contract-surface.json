@@ -1017,6 +1017,11 @@
       "arity": 1,
       "since": 12
     },
+    "provider.account.osCredential": {
+      "type": "function",
+      "arity": 3,
+      "since": 18
+    },
     "provider.binary": {
       "type": "object",
       "since": 12
@@ -3502,6 +3507,10 @@
         "userMcpServers?": "readonly ProviderMcpServer[] | undefined",
         "binaries?": "Readonly<Record<string, { readonly path?: string; readonly version?: string; readonly probe?: (args: readonly string[]) => Partial<ProviderProbeResult>; readonly converse?: (args: readonly string[]) => ProviderConversation; }>> | undefined",
         "osCredentials?": "Readonly<Record<string, string>> | undefined",
+        "lockedOsCredentials?": "readonly string[] | undefined",
+        "signingInAccounts?": "readonly string[] | undefined",
+        "unfencedMissions?": "readonly string[] | undefined",
+        "accountsInUse?": "readonly string[] | undefined",
         "generatedMedia?": "readonly ProviderGeneratedMedia[] | undefined",
         "secrets?": "readonly string[] | undefined",
         "credentialDirs?": "readonly string[] | undefined",
@@ -3722,7 +3731,8 @@
       "since": 12,
       "signature": "ProviderAccount",
       "members": {
-        "of": "(profile: ProfileRuntime) => ProviderAccountContext | undefined"
+        "of": "(profile: ProfileRuntime) => ProviderAccountContext | undefined",
+        "osCredential": "(profile: ProfileRuntime, service: string, missionId: string) => ProviderAccountOsCredential | undefined"
       }
     },
     "ProviderAccountContext": {
