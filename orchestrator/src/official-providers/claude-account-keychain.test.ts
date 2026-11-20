@@ -78,7 +78,7 @@ function assertNoSecretOut(result: Awaited<ReturnType<typeof launchOnAccount>>):
 test('the CLI names an account\'s keychain entry after its folder: first 8 hex of sha256, NFC', () => {
   // Measured on macOS: `printf %s /private/tmp/kc-cli.Gxaa/acct | shasum -a 256`.
   assert.equal(claudeAccountKeychainService('/private/tmp/kc-cli.Gxaa/acct'), 'Claude Code-credentials-74619e8d');
-  assert.equal(claudeAccountKeychainService('/Users/me/Compté'), claudeAccountKeychainService('/Users/me/Compté'));
+  assert.equal(claudeAccountKeychainService('/Users/me/A\u030angstrom'), claudeAccountKeychainService('/Users/me/\u00c5ngstrom'));
 });
 
 test('darwin: the entry moves into the account\'s folder and leaves the keychain, before the CLI starts', async () => {

@@ -255,7 +255,9 @@ test('API 18: an account\'s own keychain entry is a declared service plus the fo
   const row = accounts.listBackendAccounts('acme-acct-profile')[0]!;
   const entry = registry.activeProfiles().find((candidate) => candidate.profile.id === `acme-acct-profile@${row.id}`)!;
   const { runtime } = await entry.runtimeFor();
-  const own = current.provider.account.osCredential(runtime, 'Acme-credentials-0123abcd');
+  const { accountEntrySuffix } = await import('./provider-facade.js');
+  const service = `Acme-credentials${accountEntrySuffix(accounts.accountConfigDir(row.id))}`;
+  const own = current.provider.account.osCredential(runtime, service);
   assert.ok(own, 'a launch on an account gets its entry');
   if (process.platform !== 'darwin') {
     // Off macOS there is no keychain: nothing is read, nothing is left to remove.
@@ -263,16 +265,24 @@ test('API 18: an account\'s own keychain entry is a declared service plus the fo
     assert.equal(await own.remove(), true);
   }
   const host = registry.activeProfiles().find((candidate) => candidate.profile.id === 'acme-acct-profile')!;
-  assert.equal(current.provider.account.osCredential((await host.runtimeFor()).runtime, 'Acme-credentials-0123abcd'), undefined,
+  assert.equal(current.provider.account.osCredential((await host.runtimeFor()).runtime, service), undefined,
     'the host\'s own sign-in runs on no account');
-  const refused = (error: unknown) => error instanceof PluginPolicyError && /hex suffix of the account's folder/.test(error.message);
+  const refused = (error: unknown) => error instanceof PluginPolicyError && /suffix of this account's folder/.test(error.message);
   assert.throws(() => current.provider.account.osCredential(runtime, 'Acme-credentials'), refused, 'the declared name alone is the host\'s sign-in');
-  assert.throws(() => current.provider.account.osCredential(runtime, 'Other-credentials-0123abcd'), refused, 'only a declared service');
-  assert.throws(() => current.provider.account.osCredential(runtime, 'Acme-credentials-../x'), refused);
-  assert.throws(() => current.provider.account.osCredential(runtime, 'Acme-credentials-ABCDEF01'), refused);
-  assert.throws(() => pluginContext('other-accounts').provider.account.osCredential(runtime, 'Acme-credentials-0123abcd'));
+  assert.throws(() => current.provider.account.osCredential(runtime, service.replace('Acme', 'Other')), refused, 'only a declared service');
+  assert.throws(() => current.provider.account.osCredential(runtime, 'Acme-credentials-0123abcd'), refused, 'another account\'s entry');
+  assert.throws(() => current.provider.account.osCredential(runtime, service.toUpperCase()), refused);
+  // Another plugin, on the same contract and with the same declared entry, does not own the backend.
+  const res2 = readManifest({ timon: {
+    id: 'other-accounts', apiVersion: 18, kind: 'provider', permissions: ['backends:register'],
+    provider: { binaries: [{ name: 'acme-acct' }], osCredentials: [{ service: 'Acme-credentials' }] },
+  } });
+  if (!res2.ok) throw new Error(res2.message);
+  const stranger = createPluginContext(new Context(), { manifest: res2.manifest, version: '1.0.0' }, daemonHost());
+  assert.throws(() => stranger.provider.account.osCredential(runtime, service), (error: unknown) =>
+    error instanceof PluginPolicyError && /not a backend this plugin registered/.test(error.message));
   // A plugin that declared an older contract is not promised the member.
-  assert.throws(() => ctx.provider.account.osCredential(runtime, 'Acme-credentials-0123abcd'), /apiVersion 18/);
+  assert.throws(() => ctx.provider.account.osCredential(runtime, service), /apiVersion 18/);
 });
 
 test('a login driver that is not five functions and a kind of prompt is refused at registration', () => {

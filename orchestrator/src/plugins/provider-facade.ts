@@ -16,6 +16,7 @@
  * same services with less in them; each service says what.
  */
 import { openProviderCredentialStore } from '../backends/provider-credential-store.js';
+import { createHash } from 'node:crypto';
 import { isAbsolute } from 'node:path';
 import type { ProviderRuntime } from '../backends/provider-runtime.js';
 import { providerRuntime } from '../backends/provider-runtime.js';
@@ -51,8 +52,14 @@ export const PROVIDER_PROFILE_SCRATCH_API_VERSION = 18;
 /** The contract version `ctx.provider.account.osCredential` appeared in. */
 export const PROVIDER_ACCOUNT_OS_CREDENTIAL_API_VERSION = 18;
 
-/** What follows a declared service name in an account's own entry: the suffix a CLI derives from the account's folder. */
-const ACCOUNT_ENTRY_SUFFIX = /^-[0-9a-f]{8,64}$/;
+/**
+ * The suffix a CLI that keys its keychain entry on its config folder puts after the service name
+ * (Claude Code: the first 8 hex of sha256 of the folder, NFC). Computed here from the account's own
+ * folder, so a provider reaches that account's entry and no other, another user's included.
+ */
+export function accountEntrySuffix(configDir: string): string {
+  return `-${createHash('sha256').update(configDir.normalize('NFC')).digest('hex').slice(0, 8)}`;
+}
 
 /** A plugin that declared an older contract calls a member it was not promised. */
 export class PluginApiVersionError extends Error {
@@ -216,15 +223,17 @@ export function providerServicesFor(scope: ProviderFacadeScope): ProviderService
         if (!ownsBackend(scope.pluginId, profile.id)) {
           throw new PluginPolicyError(scope.pluginId, 'provider-account', `\`${profile.id}\` is not a backend this plugin registered`);
         }
-        // A declared name plus the folder's suffix: the account's own entry, never the host's sign-in nor another provider's.
+        const account = runtimeAccount(profile);
+        if (!account) return undefined;
+        // A declared name plus THIS account's suffix: never the host's sign-in, another account's or another provider's.
+        const suffix = accountEntrySuffix(account.configDir);
         const declared = typeof service === 'string'
-          ? scope.osCredentials.find((entry) => !entry.account && service.startsWith(entry.service) && ACCOUNT_ENTRY_SUFFIX.test(service.slice(entry.service.length)))
+          ? scope.osCredentials.find((entry) => !entry.account && service === `${entry.service}${suffix}`)
           : undefined;
         if (!declared) {
           throw new PluginPolicyError(scope.pluginId, 'provider-os-credentials',
-            'An account entry is a service this manifest declares (`provider.osCredentials`), followed by `-` and the hex suffix of the account\'s folder');
+            'An account entry is a service this manifest declares (`provider.osCredentials`), followed by the suffix of this account\'s folder');
         }
-        if (!runtimeAccount(profile)) return undefined;
         const entry = { service };
         return {
           async read() { return readOsCredentialNow(getHost(), entry); },

@@ -266,9 +266,10 @@ export type ProviderAccount = {
   /**
    * API 18 — the OS credential-store entry (macOS keychain) the CLI keeps for the account
    * this profile runs on, or undefined when it runs on none. `service` is a name the
-   * manifest declared in `provider.osCredentials`, followed by `-` and the suffix the CLI
-   * derives from the account's folder (8 to 64 lowercase hex characters): never the
-   * declared name alone, which is the host's own sign-in. Meant for a CLI the mission's
+   * manifest declared in `provider.osCredentials`, followed by `-` and the first 8 hex of
+   * sha256 of the account's folder (`configDir`, NFC), the name Claude Code gives it. The
+   * daemon computes that suffix itself: any other name is refused, the declared name alone
+   * (the host's own sign-in) and another account's included. Meant for a CLI the mission's
    * fence keeps from updating the keychain: copy the entry into `configDir`, then remove it,
    * so the folder is the only place the CLI keeps that sign-in.
    */

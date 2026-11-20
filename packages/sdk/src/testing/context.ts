@@ -15,6 +15,7 @@ import type {
   AnyDialect, BackendProfile, BuildSpawnOpts, Dialect, NativeProviderDefinition, ProviderGeneratedMedia, ProviderMcpOptions, ProviderMcpPlan,
   ProviderConversation, ProviderMcpServer, ProviderPluginContext, ProviderProbeResult, ProviderSettingValue, RegisteredProfile, RemoteDialect,
 } from '../provider.js';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -252,11 +253,13 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
           if (apiVersion < 18) {
             throw new Error(`plugin: ctx.provider.account.osCredential needs apiVersion 18 or later (the manifest declares ${apiVersion})`);
           }
-          // The daemon's rule: a declared name followed by the folder's hex suffix, never the host's own entry.
-          if (!/-[0-9a-f]{8,64}$/.test(service)) {
-            throw new Error(`plugin: \`${service}\` is not an account entry (a declared service, \`-\`, then the hex suffix of the account's folder)`);
+          const account = (profile as { account?: { configDir: string } }).account;
+          if (!account) return undefined;
+          // The daemon's rule: a name followed by THIS account's suffix, never the host's own entry nor another account's.
+          const suffix = `-${createHash('sha256').update(account.configDir.normalize('NFC')).digest('hex').slice(0, 8)}`;
+          if (!service.endsWith(suffix) || service.length === suffix.length) {
+            throw new Error(`plugin: \`${service}\` is not this account's entry (a declared service followed by the suffix of the account's folder)`);
           }
-          if (!(profile as { account?: unknown }).account) return undefined;
           return {
             async read() { return osStore.get(service) ?? null; },
             async remove() {
