@@ -82,6 +82,14 @@ Both limits are deliberate, not gaps to work around:
 
 If either limit blocks your plugin, describe the use case in a feature request; it needs a decision on privacy, not just an option.
 
+## Order
+
+- **Inside one family**, handlers run one at a time per plugin, in the order the events happened. A handler that awaits finishes before the next event of that family starts. The families are the mission, task, question, TO DO, agent, project, memory, automation, UI document and browser events, each with its own queue.
+- **Between families, nothing is guaranteed.** `task_blocked` and `task_updated` (or a signal and a detail event) can reach you in either order, and an event of one family can overtake a slower handler of another. There is no sequence number.
+- **Between a signal and a detail event** the order is not guaranteed either, even though the two come from the same change.
+
+So do not build a state machine that depends on one event arriving before another. Treat each event as "this object changed", then read the current state (`ctx.kanban.get`, `ctx.missions.get`) or keep the newest value by its own timestamp, such as `updated_at` on a task. A state rebuilt from the latest read cannot go stale when two events swap places.
+
 ## Handlers that fail
 
 A handler that throws or rejects is your plugin's own failure: the daemon logs it under your plugin's id, the other listeners of the event still run, and the write that caused the event is not affected ([Manifest](manifest.md)). Catch what you can recover from.
