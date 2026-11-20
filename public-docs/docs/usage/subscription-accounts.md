@@ -40,7 +40,7 @@ Good to know:
 
 Timon's database holds no secret for an account. The command-line tool keeps its sign-in in a private folder of the Timon home, one folder per account.
 
-On macOS, Claude Code first saves an account's sign-in in your login keychain. An [isolated mission](mission-isolation.md) can read the keychain but not update it, so it could not renew that sign-in when it expires. Before each mission on a Claude account, Timon therefore moves the account's sign-in from the keychain into the account's folder, where the mission renews it. If the keychain refuses (for example while it is locked), the sign-in stays there and the daemon log says so: unlock the keychain, then start the mission again.
+On macOS, Claude Code first saves an account's sign-in in your login keychain. An [isolated mission](mission-isolation.md) can read the keychain but not update it, so it could not renew that sign-in when it expires. Before each mission on a Claude account, Timon therefore moves the account's sign-in from the keychain into the account's folder, where the mission renews it. If the keychain cannot be read or refuses the change (for example while it is locked), the sign-in stays where it is and a mission may fail to renew it: unlock the keychain, then start the mission again.
 
 ## What each state means
 
@@ -118,7 +118,7 @@ Wherever Timon stores a backend, an account is written `claude@<account id>` (fo
 ## Quotas, fallback and Auto switch
 
 - **Each account has its own gauge.** The **LLM quotas** widget lists, next to the provider's sign-in of the Timon machine, every signed-in account you may use (`Claude · Perso`), measured on that account's own subscription. The strip under the chat composer of a mission running on an account shows that account's figures. An account that is not signed in has no gauge, and another user's account never appears, nor in the widget's trend.
-- **A gap after a long pause.** On Linux and Windows, Timon renews a Claude account's expired session when it reads its usage, as the CLI would. On macOS, where the CLI keeps that session in the keychain, only the account's missions renew it: when none has run for several hours, its gauge keeps its last reading (or shows *probe temporarily unavailable*) until the next one.
+- **A gap after a long pause.** On Linux and Windows, Timon renews a Claude account's expired session when it reads its usage, as the CLI would. On macOS only the account's missions renew it: when none has run for several hours, its gauge keeps its last reading (or shows *probe temporarily unavailable*) until the next one.
 
 - **Automatic fallback never moves an account.** The [Auto switch](settings.md#providers-and-fallback-choices) levels, the model-equivalence step and the last-resort model apply to the plain provider only. A mission set on an account, or whose plain `Claude` resolves to one, does not slide to another subscription when its quota runs out.
 - **Except the orchestrator of a series.** It holds the plan of the whole job and receives every task's return, so leaving it stopped stops the job. When its account runs dry and the fallback set for it cannot be used, it moves, keeping its conversation, to the first of these that works: another connection of the same provider that belongs to the mission's owner (the computer's own sign-in, one of their accounts, an account shared with them), on the same model; then the model-equivalence step and the last-resort model. Another user's account is never used, even for an administrator. A series fallback set to `none` for the orchestrator still stops it there. When nothing works, the orchestrator stays stopped and its owner gets one urgent notification listing what to do.
@@ -127,6 +127,6 @@ Wherever Timon stores a backend, an account is written `claude@<account id>` (fo
 
 ## Known limits
 
-- **macOS**: the usage of a Claude account is not shown (its sign-in lives in the macOS keychain, which Timon does not read for an account). Codex accounts are shown.
+- **macOS**: the usage of a Claude account is not shown (Timon does not read it on macOS). Codex accounts are shown.
 - An account lives on the machine running the daemon; there is no sharing of accounts between two Timon installations.
 - Check your provider's terms before letting several people use the same subscription: Timon enforces who may pick an account, not what your plan allows.
