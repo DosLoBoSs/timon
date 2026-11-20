@@ -891,3 +891,17 @@ export function fenceAccess(policy: FencePolicy, path: string): { read: boolean;
   const executable = deepest<boolean>([[refused, false], [policy.exec, true]], false);
   return { read: level !== 'none', write: level === 'rw', exec: level !== 'none' && executable };
 }
+
+/**
+ * Whether a fenced mission may still write the OS credential store where a CLI
+ * keeps a subscription account's sign-in: on macOS the login keychain, a file
+ * the CLI's process rewrites itself, so a `writable` grant that reaches its
+ * folder lets the mission renew the entry in place. Such a mission writes the
+ * entry like an unfenced one (`mission-fence-state.ts`). No other platform keeps
+ * an account's sign-in there.
+ */
+export function fenceWritesCredentialStore(policy: FencePolicy, platform: NodeJS.Platform = process.platform, home: string = homedir()): boolean {
+  if (platform !== 'darwin') return false;
+  const folder = join(resolve(home), 'Library', 'Keychains');
+  return [folder, join(folder, 'login.keychain-db')].some((path) => fenceAccess(policy, path).write);
+}

@@ -87,7 +87,8 @@ import { nodeRuntime } from './host/node-runtime.js';
 import { daemonRuntimePaths } from './mission-fence-target.js';
 import { FENCE_EXIT, fenceLaunchDecision, type FenceStatus } from './host/fence.js';
 import {
-  agentPackageCacheDir, isFenceAgent, isFenceSegment, missionTmpDir, resolveFence, type FenceMode, type FenceTarget, type IsolationTarget,
+  agentPackageCacheDir, fenceWritesCredentialStore, isFenceAgent, isFenceSegment, missionTmpDir, resolveFence,
+  type FenceMode, type FenceTarget, type IsolationTarget,
 } from './host/isolation.js';
 import type { FenceMechanism, HostFence, HostFenceWitness } from './host/types.js';
 import { argsUnderFence, type NestedSandboxDeclaration } from './backends/permission-models.js';
@@ -433,6 +434,8 @@ export type MissionFenceOutcome =
     readonly workspace: 'rw' | 'ro';
     /** The agent's package cache (`agentPackageCacheDir`), for the package managers; null without one. */
     readonly packageCacheDir: string | null;
+    /** A `writable` grant reaches the macOS login keychain (`fenceWritesCredentialStore`): the CLI can renew its sign-in there. */
+    readonly credentialStoreWritable: boolean;
   }
   /** `warning` is null only when the configuration turned the fence off. */
   | { readonly state: 'unfenced'; readonly warning: string | null; readonly tampered: boolean };
@@ -603,6 +606,18 @@ export type FenceMissionOptions = {
 };
 
 /**
+ * Whether the next mission launch will run inside the fence, asked before the
+ * provider builds its command: `fenceMissionCommand` then decides for real, on
+ * the same configuration and the same probe. Read by the move of an account's
+ * keychain entry (`mission-fence-state.ts`), which only a fenced launch needs.
+ * A wrong guess costs a needless move or none, never a lost sign-in: that
+ * launch's CLI is not running yet, and once it runs, it is recorded as what it is.
+ */
+export function missionFenceExpected(mode: FenceMode = config().host.isolation.filesystem, fence: HostFence | undefined = getHost().fence): boolean {
+  return mode !== 'off' && hostFenceStatus(fence).state === 'ready';
+}
+
+/**
  * The fence layer of a mission launch: the command wrapped by the host's
  * fence, or left as is with a warning, or refused. Never silent: outside
  * `off`, a mission that runs unfenced says why, and an altered package is
@@ -667,10 +682,11 @@ export function fenceMissionCommand(
       + 'its missions also reach the other folders in it. Give the agent a project folder (a folder inside it) for a stricter fence.');
   }
   const policyFile = fencePolicyFile(target.timonHome, unit);
+  const credentialStoreWritable = fenceWritesCredentialStore(policy, target.platform ?? process.platform, target.home ?? homedir());
   try {
     const wrapped = fence.wrap(policy, cmd, nested.args, policyFile);
     reportFenceReady(fence.mechanism, status.abi);
-    return { ...wrapped, fence: { state: 'fenced', mechanism: fence.mechanism, policyFile, tmpDir, workspace, packageCacheDir } };
+    return { ...wrapped, fence: { state: 'fenced', mechanism: fence.mechanism, policyFile, tmpDir, workspace, packageCacheDir, credentialStoreWritable } };
   } catch (err) {
     return unfenced({ state: 'unsupported', reason: `the fence policy cannot be applied (${(err as Error).message})`, abi: status.abi });
   }
