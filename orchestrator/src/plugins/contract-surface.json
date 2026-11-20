@@ -1019,7 +1019,7 @@
     },
     "provider.account.osCredential": {
       "type": "function",
-      "arity": 2,
+      "arity": 3,
       "since": 18
     },
     "provider.binary": {
@@ -3509,6 +3509,8 @@
         "osCredentials?": "Readonly<Record<string, string>> | undefined",
         "lockedOsCredentials?": "readonly string[] | undefined",
         "signingInAccounts?": "readonly string[] | undefined",
+        "unfencedMissions?": "readonly string[] | undefined",
+        "accountsInUse?": "readonly string[] | undefined",
         "generatedMedia?": "readonly ProviderGeneratedMedia[] | undefined",
         "secrets?": "readonly string[] | undefined",
         "credentialDirs?": "readonly string[] | undefined",
@@ -3730,7 +3732,7 @@
       "signature": "ProviderAccount",
       "members": {
         "of": "(profile: ProfileRuntime) => ProviderAccountContext | undefined",
-        "osCredential": "(profile: ProfileRuntime, service: string) => ProviderAccountOsCredential | undefined"
+        "osCredential": "(profile: ProfileRuntime, service: string, missionId: string) => ProviderAccountOsCredential | undefined"
       }
     },
     "ProviderAccountContext": {

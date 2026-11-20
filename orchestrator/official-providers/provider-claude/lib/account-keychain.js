@@ -21,11 +21,14 @@ import { join } from 'node:path';
  * launch moves it again. The CLI stays the one holder of the refresh token; the daemon
  * never refreshes it.
  *
- * The entry may change while it is moved: a sign-in flow rewrites it (the daemon holds the
- * account meanwhile, `signingIn()`), a CLI outside any fence renews it. Nothing is moved
- * during a sign-in, and the delete only goes through while the entry still holds what was
- * copied (`remove(expected)`): a pair written in between stays in the keychain, and the
- * next pass copies it, so no fresh pair is ever lost.
+ * Only a fenced launch needs the move: outside the fence the CLI updates the keychain itself.
+ * And the entry must not be deleted while something may write it: a sign-in flow, or another
+ * process on the account outside the fence. The daemon knows both and answers `held()`, checked
+ * before each pass and again in the very run of the delete: then nothing is moved, the launch
+ * goes on as is. The delete also only goes through while the entry still holds what was copied
+ * (`remove(expected)`): a pair written in between stays in the keychain, and the next pass
+ * copies it. Moves of one folder are serialized, and so is a launch outside the fence behind a
+ * move in progress: it returns once that move is over.
  */
 export const CLAUDE_KEYCHAIN_SERVICE = 'Claude Code-credentials';
 
@@ -62,10 +65,11 @@ const MAX_PASSES = 3;
 /**
  * Moves the account's keychain entry into `configDir`. Serialized per folder: two launches
  * on one account never interleave a copy and a delete. Answers what happened, never a
- * secret: `none` (no entry), `moved`, `signing-in` (a sign-in flow runs on the account:
- * nothing moved), `changed` (the entry kept changing under the copy: left in place),
- * `busy` (the CLI holds its lock: nothing deleted), `kept` (the store refused the delete),
- * `unreadable` (an entry that is not the CLI's JSON), `unwritable` (the folder refused the copy).
+ * secret: `none` (no entry), `moved`, a hold (`signing-in`, `unfenced`, `in-use`: nothing
+ * moved, `ProviderAccountOsCredentialHold`), `changed` (the entry kept changing under the
+ * copy: left in place), `busy` (the CLI holds its lock: nothing deleted), `kept` (the store
+ * refused the delete), `unreadable` (an entry that is not the CLI's JSON), `unwritable` (the
+ * folder refused the copy).
  */
 export function settleAccountKeychain({ entry, configDir, runtime }) {
   const previous = settling.get(configDir) ?? Promise.resolve();
@@ -76,7 +80,8 @@ export function settleAccountKeychain({ entry, configDir, runtime }) {
 
 async function settle({ entry, configDir, runtime }) {
   for (let pass = 0; pass < MAX_PASSES; pass += 1) {
-    if (entry.signingIn()) return 'signing-in';
+    const hold = entry.held();
+    if (hold) return hold;
     const outcome = await settleOnce({ entry, configDir, runtime });
     // Changed between the copy and the delete: the newer value is copied on the next pass.
     if (outcome !== 'changed') return outcome;

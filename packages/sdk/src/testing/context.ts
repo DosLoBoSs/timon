@@ -57,8 +57,15 @@ export type ProviderContextOptions = {
   readonly osCredentials?: Readonly<Record<string, string>>;
   /** Services whose `account.osCredential(...).remove()` the store refuses, as a locked keychain does. */
   readonly lockedOsCredentials?: readonly string[];
-  /** Accounts (by id) a sign-in flow runs on: `account.osCredential(...).signingIn()` answers true, `remove` `signing-in`. */
+  /** Accounts (by id) a sign-in flow runs on: `account.osCredential(...).held()` and `remove` answer `signing-in`. */
   readonly signingInAccounts?: readonly string[];
+  /**
+   * Launches (by mission id) that run outside the fence: `held()` and `remove` answer `unfenced`.
+   * Any other launch is taken as fenced, as a mission on macOS with isolation on.
+   */
+  readonly unfencedMissions?: readonly string[];
+  /** Accounts (by id) another process runs on outside the fence: `held()` and `remove` answer `in-use`. `setAccountInUse` changes it. */
+  readonly accountsInUse?: readonly string[];
   /** What `ctx.provider.media.adopt` returns for any directory. Default: nothing. */
   readonly generatedMedia?: readonly ProviderGeneratedMedia[];
   /** Values `ctx.provider.redact` masks (12 characters or more, like the daemon's). Default: none. */
@@ -98,6 +105,8 @@ export type TestProviderContext = ProviderPluginContext & {
    * outside any fence): sets the entry `key` (`service` or `service|account`), or deletes it on null.
    */
   setOsCredential(key: string, value: string | null): void;
+  /** Stands in for a process on the account starting (true) or ending (false) outside the fence. */
+  setAccountInUse(accountId: string, inUse: boolean): void;
   /** Removes the temporary folders `scratch.mission` and `scratch.profile` created. */
   cleanup(): void;
 };
@@ -145,6 +154,7 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
   const profileScratches = new Map<string, ProviderScratchDir>();
   const shownFrom = new Map<string, string[]>();
   const osStore = new Map<string, string>(Object.entries(options.osCredentials ?? {}));
+  const accountsInUse = new Set<string>(options.accountsInUse ?? []);
   const temporaryRoots: string[] = [];
   const secrets = (options.secrets ?? []).filter((value) => value.length >= MASK_MIN_LENGTH);
   const maskText = (value: string): string => secrets.reduce((out, secret) => out.split(secret).join('***'), value);
@@ -257,7 +267,7 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
           const account = (profile as { account?: { id: string; name: string; configDir: string } }).account;
           return account ? { id: account.id, name: account.name, configDir: account.configDir } : undefined;
         },
-        osCredential(profile, service) {
+        osCredential(profile, service, missionId) {
           if (apiVersion < 18) {
             throw new Error(`plugin: ctx.provider.account.osCredential needs apiVersion 18 or later (the manifest declares ${apiVersion})`);
           }
@@ -268,12 +278,21 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
           if (!service.endsWith(suffix) || service.length === suffix.length) {
             throw new Error(`plugin: \`${service}\` is not this account's entry (a declared service followed by the suffix of the account's folder)`);
           }
-          const signingIn = () => options.signingInAccounts?.includes(account.id) ?? false;
+          if (typeof missionId !== 'string' || !missionId) {
+            throw new Error('plugin: `osCredential(profile, service, missionId)` takes the id of the launch being built');
+          }
+          // The daemon's order: a sign-in first, then this launch's fence, then the other processes on the account.
+          const held = () => {
+            if (options.signingInAccounts?.includes(account.id)) return 'signing-in' as const;
+            if (options.unfencedMissions?.includes(missionId)) return 'unfenced' as const;
+            return accountsInUse.has(account.id) ? 'in-use' as const : null;
+          };
           return {
-            signingIn,
+            held,
             async read() { return osStore.get(service) ?? null; },
             async remove(expected) {
-              if (signingIn()) return 'signing-in';
+              const hold = held();
+              if (hold) return hold;
               const current = osStore.get(service);
               if (current === undefined) return 'removed';
               if (current !== expected) return 'changed';
@@ -356,6 +375,10 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
     setOsCredential(key, value) {
       if (value === null) osStore.delete(key);
       else osStore.set(key, value);
+    },
+    setAccountInUse(accountId, inUse) {
+      if (inUse) accountsInUse.add(accountId);
+      else accountsInUse.delete(accountId);
     },
     cleanup() {
       for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true });

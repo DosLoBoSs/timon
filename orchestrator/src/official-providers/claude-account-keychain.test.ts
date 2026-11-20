@@ -36,11 +36,16 @@ function pair(accessToken: string, refreshToken: string, expiresAt: number) {
 
 type Setup = {
   platform?: NodeJS.Platform; keychain?: string; file?: unknown; locked?: boolean; signingIn?: boolean;
+  /** Launches (mission ids) outside the fence, and accounts another process runs on outside it. */
+  unfencedMissions?: string[]; accountsInUse?: string[];
   /** Runs after each read of the entry by the provider: another CLI writing the keychain then. */
-  afterRead?: (count: number, write: (value: string) => void) => void;
+  afterRead?: (count: number, write: (value: string) => void, setInUse: (inUse: boolean) => void) => void;
+  /** Runs before each delete and is awaited: a test holds the move there. */
+  beforeRemove?: () => Promise<void>;
 };
 
-async function launchOnAccount(setup: Setup) {
+/** One account on macOS (or `platform`), and a provider that launches on it. */
+async function accountHarness(setup: Setup) {
   const root = mkdtempSync(join(tmpdir(), 'timon-claude-account-'));
   roots.push(root);
   const configDir = join(root, 'backend-accounts', 'acc-1');
@@ -52,23 +57,26 @@ async function launchOnAccount(setup: Setup) {
     osCredentials: setup.keychain === undefined ? {} : { [service]: setup.keychain },
     ...(setup.locked ? { lockedOsCredentials: [service] } : {}),
     ...(setup.signingIn ? { signingInAccounts: ['acc-1'] } : {}),
+    ...(setup.unfencedMissions ? { unfencedMissions: setup.unfencedMissions } : {}),
+    ...(setup.accountsInUse ? { accountsInUse: setup.accountsInUse } : {}),
   });
   process.on('exit', () => ctx.cleanup());
   let reads = 0;
   const removals: string[] = [];
   const own = ctx.provider.account.osCredential.bind(ctx.provider.account);
-  ctx.provider.account.osCredential = (profile, name) => {
-    const entry = own(profile, name);
+  ctx.provider.account.osCredential = (profile, name, missionId) => {
+    const entry = own(profile, name, missionId);
     if (!entry) return entry;
     return {
-      signingIn: () => entry.signingIn(),
+      held: () => entry.held(),
       async read() {
         const value = await entry.read();
         reads += 1;
-        setup.afterRead?.(reads, (next) => ctx.setOsCredential(service, next));
+        setup.afterRead?.(reads, (next) => ctx.setOsCredential(service, next), (inUse) => ctx.setAccountInUse('acc-1', inUse));
         return value;
       },
       async remove(expected) {
+        await setup.beforeRemove?.();
         const outcome = await entry.remove(expected);
         removals.push(outcome);
         return outcome;
@@ -81,17 +89,25 @@ async function launchOnAccount(setup: Setup) {
   ctx.provider.registerProvider(createClaudeProvider(ctx.provider, token, createClaudeUsage(ctx.provider, token), { platform: setup.platform ?? 'darwin', log }));
   const dialect = ctx.registered.dialect('claude');
   const profile = { id: 'claude@acc-1', cmd: 'claude', env: {}, account: { id: 'acc-1', name: 'Work', configDir } };
-  const spec = await dialect.buildSpawn({
-    agentName: 'claude.account', systemPrompt: 'contract', message: 'ping', resumeSession: null, missionId: `mission-account-${roots.length}`,
-    cfg: { cwd: root, permission_mode: 'auto', mcp_servers: [] },
-  } as never, profile as never);
-  const entry = own(profile as never, service)!;
   const file = join(configDir, '.credentials.json');
   return {
-    spec, configDir, warnings, logs: ctx.logs, removals,
-    keychainLeft: await entry.read(),
-    file: existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown> : null,
-    mode: existsSync(file) ? statSync(file).mode & 0o777 : null,
+    configDir, warnings, logs: ctx.logs, removals,
+    launch: (missionId: string) => dialect.buildSpawn({
+      agentName: 'claude.account', systemPrompt: 'contract', message: 'ping', resumeSession: null, missionId,
+      cfg: { cwd: root, permission_mode: 'auto', mcp_servers: [] },
+    } as never, profile as never),
+    keychainLeft: () => own(profile as never, service, 'reader')!.read(),
+    file: () => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown> : null,
+    mode: () => existsSync(file) ? statSync(file).mode & 0o777 : null,
+  };
+}
+
+async function launchOnAccount(setup: Setup, missionId = `mission-account-${roots.length + 1}`) {
+  const harness = await accountHarness(setup);
+  const spec = await harness.launch(missionId);
+  return {
+    spec, configDir: harness.configDir, warnings: harness.warnings, logs: harness.logs, removals: harness.removals,
+    keychainLeft: await harness.keychainLeft(), file: harness.file(), mode: harness.mode(),
   };
 }
 
@@ -190,6 +206,63 @@ test('darwin: nothing moves while a sign-in flow runs on the account', async () 
   assert.deepEqual(result.removals, []);
   assert.match(result.warnings[0] ?? '', /\(signing-in\)/);
   assertNoSecretOut(result);
+});
+
+test('darwin: a mission running on the account outside the fence keeps the entry where it is: never deleted', async () => {
+  const keychain = JSON.stringify(pair(ACCESS, REFRESH, Date.now() + HOUR));
+  const result = await launchOnAccount({ keychain, accountsInUse: ['acc-1'] });
+  assert.deepEqual(result.removals, [], '`remove` is never called');
+  assert.equal(result.keychainLeft, keychain, 'the pair stays in the keychain');
+  assert.equal(result.file, null, 'the folder is not touched either');
+  assert.equal(result.spec.env?.CLAUDE_CONFIG_DIR, result.configDir, 'the launch goes on');
+  assert.match(result.warnings[0] ?? '', /\(in-use\)/);
+  assertNoSecretOut(result);
+});
+
+test('darwin: a launch outside the fence moves nothing, and says nothing: its CLI updates the keychain itself', async () => {
+  const keychain = JSON.stringify(pair(ACCESS, REFRESH, Date.now() + HOUR));
+  const result = await launchOnAccount({ keychain, unfencedMissions: ['mission-outside'] }, 'mission-outside');
+  assert.deepEqual(result.removals, []);
+  assert.equal(result.keychainLeft, keychain);
+  assert.equal(result.file, null);
+  assert.deepEqual(result.warnings, []);
+  assertNoSecretOut(result);
+});
+
+test('darwin: a process that starts outside the fence during a move makes the delete renounce', async () => {
+  const keychain = JSON.stringify(pair(ACCESS, REFRESH, Date.now() + HOUR));
+  const result = await launchOnAccount({ keychain, afterRead: (_count, _write, setInUse) => setInUse(true) });
+  assert.deepEqual(result.removals, ['in-use'], 'the delete saw it and kept the entry');
+  assert.equal(result.keychainLeft, keychain);
+  assert.match(result.warnings[0] ?? '', /\(in-use\)/);
+  assertNoSecretOut(result);
+});
+
+test('darwin: a launch outside the fence that starts during a move waits for it; no delete runs beside it', async () => {
+  const keychain = JSON.stringify(pair(ACCESS, REFRESH, Date.now() + HOUR));
+  let holdDelete!: () => void;
+  const held = new Promise<void>((resolve) => { holdDelete = resolve; });
+  let entered!: () => void;
+  const atDelete = new Promise<void>((resolve) => { entered = resolve; });
+  const harness = await accountHarness({
+    keychain, unfencedMissions: ['mission-outside'],
+    beforeRemove: () => { entered(); return held; },
+  });
+  const fenced = harness.launch('mission-fenced');
+  await atDelete;
+  // The move is in its delete: a launch outside the fence on the same account starts now.
+  let outsideDone = false;
+  const outside = harness.launch('mission-outside').then((spec) => { outsideDone = true; return spec; });
+  for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(outsideDone, false, 'it waits for the move in progress');
+  assert.deepEqual(harness.removals, [], 'the delete is still held');
+  holdDelete();
+  await fenced;
+  const spec = await outside;
+  assert.deepEqual(harness.removals, ['removed'], 'one delete only, the fenced launch\'s, finished before the other launch went on');
+  assert.equal(await harness.keychainLeft(), null);
+  assert.equal(spec.env?.CLAUDE_CONFIG_DIR, harness.configDir);
+  assert.deepEqual(harness.warnings, []);
 });
 
 test('darwin: an account with no entry launches as before, with nothing written', async () => {

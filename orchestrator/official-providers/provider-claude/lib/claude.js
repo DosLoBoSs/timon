@@ -143,11 +143,12 @@ const legacy = {
             args.push('--add-dir', opts.memoryDir);
         const account = services.account.of(profile);
         // macOS keeps an account's sign-in in the keychain, which the fence lets the CLI read but
-        // not update: it moves into the account's folder first (`account-keychain.js`).
+        // not update: for a fenced launch it moves into the account's folder first (`account-keychain.js`).
         if (account && platform === 'darwin') {
-            const entry = services.account.osCredential(profile, claudeAccountKeychainService(account.configDir));
+            const entry = services.account.osCredential(profile, claudeAccountKeychainService(account.configDir), opts.missionId);
             const outcome = entry ? await settleAccountKeychain({ entry, configDir: account.configDir, runtime }) : 'none';
-            if (outcome !== 'none' && outcome !== 'moved') {
+            // Outside the fence the CLI keeps the keychain up to date itself: nothing to say.
+            if (outcome !== 'none' && outcome !== 'moved' && outcome !== 'unfenced') {
                 log?.warn(`[provider-claude] the sign-in of account ${account.id} stays in the macOS keychain (${outcome}): a fenced mission may fail to renew it`);
             }
         }

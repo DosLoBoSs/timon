@@ -20,13 +20,16 @@
  * outside the fence, and the daemon deletes it: the folder becomes the one place
  * the CLI keeps that sign-in, and the CLI stays its only holder.
  *
- * The delete is conditional: the entry is read again right before each
- * `delete-generic-password` and kept when it no longer holds what the provider
- * copied. A CLI outside any fence that renewed the sign-in in between keeps its
- * fresh pair; the provider copies it on its next pass. `security` offers no
- * compare-and-delete, so a write landing between that read and the delete,
- * a few milliseconds apart, stays possible; the sign-in flows of the daemon,
- * the one writer it knows about, are kept out by `account-signin.ts`.
+ * `security` offers no compare-and-delete. What keeps a fresh pair from being
+ * deleted is that nothing Timon launched can write the entry between the read
+ * and the delete: the caller checks, in the same synchronous run as this
+ * function, that no sign-in flow holds the account (`account-signin.ts`) and
+ * that no process on it runs outside the fence (`mission-fence-state.ts`), and
+ * `security` runs synchronously here, so no process starts in between. The
+ * entry is still read again right before each `delete-generic-password` and
+ * kept when it no longer holds what the provider copied, as a second guard.
+ * A writer Timon did not launch (`claude` started by hand with the account's
+ * `CLAUDE_CONFIG_DIR`) is outside what the daemon can see or exclude.
  */
 import type { Host } from './types.js';
 
