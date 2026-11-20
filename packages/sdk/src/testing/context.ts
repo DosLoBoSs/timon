@@ -48,8 +48,13 @@ export type ProviderContextOptions = {
     /** A scripted answer to `ctx.provider.binary.converse`: a conversation over in-memory pipes. */
     readonly converse?: (args: readonly string[]) => ProviderConversation;
   }>>;
-  /** What `ctx.provider.osCredentials` holds, by `service` or `service|account`. A key that is not here reads as null. */
+  /**
+   * What `ctx.provider.osCredentials` holds, by `service` or `service|account`. A key that is not here reads as null.
+   * `ctx.provider.account.osCredential(profile, service).read()` reads the same keys, and `remove()` deletes one.
+   */
   readonly osCredentials?: Readonly<Record<string, string>>;
+  /** Services whose `account.osCredential(...).remove()` the store refuses, as a locked keychain does. */
+  readonly lockedOsCredentials?: readonly string[];
   /** What `ctx.provider.media.adopt` returns for any directory. Default: nothing. */
   readonly generatedMedia?: readonly ProviderGeneratedMedia[];
   /** Values `ctx.provider.redact` masks (12 characters or more, like the daemon's). Default: none. */
@@ -130,6 +135,7 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
   const scratches = new Map<string, ProviderScratchDir>();
   const profileScratches = new Map<string, ProviderScratchDir>();
   const shownFrom = new Map<string, string[]>();
+  const osStore = new Map<string, string>(Object.entries(options.osCredentials ?? {}));
   const temporaryRoots: string[] = [];
   const secrets = (options.secrets ?? []).filter((value) => value.length >= MASK_MIN_LENGTH);
   const maskText = (value: string): string => secrets.reduce((out, secret) => out.split(secret).join('***'), value);
@@ -242,6 +248,24 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
           const account = (profile as { account?: { id: string; name: string; configDir: string } }).account;
           return account ? { id: account.id, name: account.name, configDir: account.configDir } : undefined;
         },
+        osCredential(profile, service) {
+          if (apiVersion < 18) {
+            throw new Error(`plugin: ctx.provider.account.osCredential needs apiVersion 18 or later (the manifest declares ${apiVersion})`);
+          }
+          // The daemon's rule: a declared name followed by the folder's hex suffix, never the host's own entry.
+          if (!/-[0-9a-f]{8,64}$/.test(service)) {
+            throw new Error(`plugin: \`${service}\` is not an account entry (a declared service, \`-\`, then the hex suffix of the account's folder)`);
+          }
+          if (!(profile as { account?: unknown }).account) return undefined;
+          return {
+            async read() { return osStore.get(service) ?? null; },
+            async remove() {
+              if (options.lockedOsCredentials?.includes(service)) return false;
+              osStore.delete(service);
+              return true;
+            },
+          };
+        },
       },
       media: {
         async adopt() { return options.generatedMedia ?? []; },
@@ -251,7 +275,7 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
       osCredentials: {
         invalidate() {},
         async read(service, account) {
-          return options.osCredentials?.[account ? `${service}|${account}` : service] ?? null;
+          return osStore.get(account ? `${service}|${account}` : service) ?? null;
         },
       },
       redact: { text: maskText, deep: maskDeep },

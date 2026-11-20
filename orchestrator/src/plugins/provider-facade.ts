@@ -31,7 +31,7 @@ import { envCredentialRoots, missionScratchPath, openMissionScratch, openProfile
 import { accountConfigDir } from '../backends/accounts.js';
 import { adoptGeneratedMedia, allowShowFrom } from '../backends/provider-media.js';
 import { gitWritableRoots } from '../backends/provider-git.js';
-import { readOsCredential, resetOsCredentialMisses } from '../host/os-credentials.js';
+import { readOsCredential, readOsCredentialNow, removeOsCredential, resetOsCredentialMisses } from '../host/os-credentials.js';
 import { getHost } from '../host/index.js';
 import { ensurePrivateDir } from '../host/private-dir.js';
 import { runtimeAccount } from '../backends/instance-id.js';
@@ -47,6 +47,12 @@ export const PROVIDER_FACADE_API_VERSION = 12;
 
 /** The contract version `ctx.provider.scratch.profile` appeared in. */
 export const PROVIDER_PROFILE_SCRATCH_API_VERSION = 18;
+
+/** The contract version `ctx.provider.account.osCredential` appeared in. */
+export const PROVIDER_ACCOUNT_OS_CREDENTIAL_API_VERSION = 18;
+
+/** What follows a declared service name in an account's own entry: the suffix a CLI derives from the account's folder. */
+const ACCOUNT_ENTRY_SUFFIX = /^-[0-9a-f]{8,64}$/;
 
 /** A plugin that declared an older contract calls a member it was not promised. */
 export class PluginApiVersionError extends Error {
@@ -204,6 +210,26 @@ export function providerServicesFor(scope: ProviderFacadeScope): ProviderService
         }
         const account = runtimeAccount(profile);
         return account ? { id: account.id, name: account.name, configDir: ensurePrivateDir(account.configDir) } : undefined;
+      },
+      osCredential(profile, service) {
+        gate('account.osCredential', PROVIDER_ACCOUNT_OS_CREDENTIAL_API_VERSION);
+        if (!ownsBackend(scope.pluginId, profile.id)) {
+          throw new PluginPolicyError(scope.pluginId, 'provider-account', `\`${profile.id}\` is not a backend this plugin registered`);
+        }
+        // A declared name plus the folder's suffix: the account's own entry, never the host's sign-in nor another provider's.
+        const declared = typeof service === 'string'
+          ? scope.osCredentials.find((entry) => !entry.account && service.startsWith(entry.service) && ACCOUNT_ENTRY_SUFFIX.test(service.slice(entry.service.length)))
+          : undefined;
+        if (!declared) {
+          throw new PluginPolicyError(scope.pluginId, 'provider-os-credentials',
+            'An account entry is a service this manifest declares (`provider.osCredentials`), followed by `-` and the hex suffix of the account\'s folder');
+        }
+        if (!runtimeAccount(profile)) return undefined;
+        const entry = { service };
+        return {
+          async read() { return readOsCredentialNow(getHost(), entry); },
+          async remove() { return removeOsCredential(getHost(), entry); },
+        };
       },
     },
     media: {

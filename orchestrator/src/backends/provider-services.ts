@@ -263,6 +263,24 @@ export type ProviderAccount = {
    * registered.
    */
   of(profile: ProfileRuntime): ProviderAccountContext | undefined;
+  /**
+   * API 18 — the OS credential-store entry (macOS keychain) the CLI keeps for the account
+   * this profile runs on, or undefined when it runs on none. `service` is a name the
+   * manifest declared in `provider.osCredentials`, followed by `-` and the suffix the CLI
+   * derives from the account's folder (8 to 64 lowercase hex characters): never the
+   * declared name alone, which is the host's own sign-in. Meant for a CLI the mission's
+   * fence keeps from updating the keychain: copy the entry into `configDir`, then remove it,
+   * so the folder is the only place the CLI keeps that sign-in.
+   */
+  osCredential(profile: ProfileRuntime, service: string): ProviderAccountOsCredential | undefined;
+};
+
+/** One account's entry in the OS credential store. Off macOS, `read` answers null and `remove` true. */
+export type ProviderAccountOsCredential = {
+  /** The secret, or null (absent, locked, refused). Asked now, never cached, never logged. */
+  read(): Promise<string | null>;
+  /** Deletes the entry; true once none is left, false when the store refused (locked keychain). */
+  remove(): Promise<boolean>;
 };
 
 /** A release-owned opaque credential. Values never enter an HTTP response. */
