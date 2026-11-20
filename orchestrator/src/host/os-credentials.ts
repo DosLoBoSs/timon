@@ -13,12 +13,20 @@
  * master key.
  *
  * One write exists, and it is a removal: the entry a CLI keeps for ONE
- * subscription account (`removeOsCredential`). A mission's fence cannot update
+ * subscription account (`removeOsCredentialIf`). A mission's fence cannot update
  * the keychain (the home is read-only inside it), so a CLI that rotates its
  * refresh token there ends up with a stale entry that shadows the fresh copy it
  * wrote in its folder. The provider moves the entry into the account's folder,
  * outside the fence, and the daemon deletes it: the folder becomes the one place
  * the CLI keeps that sign-in, and the CLI stays its only holder.
+ *
+ * The delete is conditional: the entry is read again right before each
+ * `delete-generic-password` and kept when it no longer holds what the provider
+ * copied. A CLI outside any fence that renewed the sign-in in between keeps its
+ * fresh pair; the provider copies it on its next pass. `security` offers no
+ * compare-and-delete, so a write landing between that read and the delete,
+ * a few milliseconds apart, stays possible; the sign-in flows of the daemon,
+ * the one writer it knows about, are kept out by `account-signin.ts`.
  */
 import type { Host } from './types.js';
 
@@ -67,38 +75,58 @@ export function readOsCredentialNow(host: Pick<Host, 'platform' | 'exec'>, entry
 }
 
 function findEntry(host: Pick<Host, 'exec'>, entry: OsCredentialEntry): string | null {
+  const found = probeEntry(host, entry);
+  return found.kind === 'found' ? found.value : null;
+}
+
+type Probe = { kind: 'found'; value: string } | { kind: 'absent' } | { kind: 'error' };
+
+/** What `security` answers, telling an absent entry from one it would not give (locked, refused, timeout). */
+function probeEntry(host: Pick<Host, 'exec'>, entry: OsCredentialEntry): Probe {
   try {
     const args = ['find-generic-password', '-s', entry.service, ...(entry.account ? ['-a', entry.account] : []), '-w'];
     const result = host.exec('security', args, { timeout: SECURITY_TIMEOUT_MS });
     const value = result.stdout.trim();
-    if (result.code === 0 && value) return value;
+    if (result.code === 0 && value) return { kind: 'found', value };
+    return result.code === NOT_FOUND ? { kind: 'absent' } : { kind: 'error' };
   } catch {
-    // treated as a miss
+    return { kind: 'error' };
   }
-  return null;
 }
 
+/** `removed`: none is left; `changed`: the entry holds something else, left as is; `refused`: the store said no. */
+export type OsCredentialRemoval = 'removed' | 'changed' | 'refused';
+
 /**
- * Deletes every entry under `service` (and `account`, when given), and answers
- * whether none is left: `true` off macOS, where there is nothing to remove, and
- * `false` when `security` refused (locked keychain, a prompt denied, a timeout).
- * Only names go on the command line, never the secret.
+ * Deletes the entries under `service` (and `account`, when given) as long as
+ * each still holds `expected`, and answers what is left: `removed` off macOS,
+ * where there is nothing to remove; `changed` as soon as an entry holds
+ * another value, which is never deleted; `refused` when `security` would not
+ * read or delete (locked keychain, a prompt denied, a timeout). Only names go
+ * on the command line, never the secret.
  */
-export function removeOsCredential(host: Pick<Host, 'platform' | 'exec'>, entry: OsCredentialEntry): boolean {
-  if (host.platform !== 'darwin') return true;
+export function removeOsCredentialIf(host: Pick<Host, 'platform' | 'exec'>, entry: OsCredentialEntry, expected: string): OsCredentialRemoval {
+  if (host.platform !== 'darwin') return 'removed';
   const args = ['delete-generic-password', '-s', entry.service, ...(entry.account ? ['-a', entry.account] : [])];
   for (let attempt = 0; attempt < MAX_REMOVALS; attempt += 1) {
+    const found = probeEntry(host, entry);
+    if (found.kind === 'error') return 'refused';
+    if (found.kind === 'absent') {
+      misses.delete(keyOf(entry));
+      return 'removed';
+    }
+    if (found.value !== expected) return 'changed';
     let code: number;
     try {
       code = host.exec('security', args, { timeout: SECURITY_TIMEOUT_MS }).code;
     } catch {
-      return false;
+      return 'refused';
     }
     if (code === NOT_FOUND) {
       misses.delete(keyOf(entry));
-      return true;
+      return 'removed';
     }
-    if (code !== 0) return false;
+    if (code !== 0) return 'refused';
   }
-  return false;
+  return 'refused';
 }

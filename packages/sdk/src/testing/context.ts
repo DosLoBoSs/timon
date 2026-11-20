@@ -51,11 +51,14 @@ export type ProviderContextOptions = {
   }>>;
   /**
    * What `ctx.provider.osCredentials` holds, by `service` or `service|account`. A key that is not here reads as null.
-   * `ctx.provider.account.osCredential(profile, service).read()` reads the same keys, and `remove()` deletes one.
+   * `ctx.provider.account.osCredential(profile, service).read()` reads the same keys, and `remove(expected)`
+   * deletes one while it still holds `expected`. `setOsCredential` changes them during a test.
    */
   readonly osCredentials?: Readonly<Record<string, string>>;
   /** Services whose `account.osCredential(...).remove()` the store refuses, as a locked keychain does. */
   readonly lockedOsCredentials?: readonly string[];
+  /** Accounts (by id) a sign-in flow runs on: `account.osCredential(...).signingIn()` answers true, `remove` `signing-in`. */
+  readonly signingInAccounts?: readonly string[];
   /** What `ctx.provider.media.adopt` returns for any directory. Default: nothing. */
   readonly generatedMedia?: readonly ProviderGeneratedMedia[];
   /** Values `ctx.provider.redact` masks (12 characters or more, like the daemon's). Default: none. */
@@ -90,6 +93,11 @@ export type TestProviderContext = ProviderPluginContext & {
   readonly logs: readonly LoggedLine[];
   /** The directories the plugin opened to `chat_show_media` (`media.allowShow`), by mission. */
   readonly shownFrom: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Stands in for a CLI that writes the keychain while the plugin works (a sign-in, a renewal
+   * outside any fence): sets the entry `key` (`service` or `service|account`), or deletes it on null.
+   */
+  setOsCredential(key: string, value: string | null): void;
   /** Removes the temporary folders `scratch.mission` and `scratch.profile` created. */
   cleanup(): void;
 };
@@ -253,19 +261,25 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
           if (apiVersion < 18) {
             throw new Error(`plugin: ctx.provider.account.osCredential needs apiVersion 18 or later (the manifest declares ${apiVersion})`);
           }
-          const account = (profile as { account?: { configDir: string } }).account;
+          const account = (profile as { account?: { id: string; configDir: string } }).account;
           if (!account) return undefined;
           // The daemon's rule: a name followed by THIS account's suffix, never the host's own entry nor another account's.
           const suffix = `-${createHash('sha256').update(account.configDir.normalize('NFC')).digest('hex').slice(0, 8)}`;
           if (!service.endsWith(suffix) || service.length === suffix.length) {
             throw new Error(`plugin: \`${service}\` is not this account's entry (a declared service followed by the suffix of the account's folder)`);
           }
+          const signingIn = () => options.signingInAccounts?.includes(account.id) ?? false;
           return {
+            signingIn,
             async read() { return osStore.get(service) ?? null; },
-            async remove() {
-              if (options.lockedOsCredentials?.includes(service)) return false;
+            async remove(expected) {
+              if (signingIn()) return 'signing-in';
+              const current = osStore.get(service);
+              if (current === undefined) return 'removed';
+              if (current !== expected) return 'changed';
+              if (options.lockedOsCredentials?.includes(service)) return 'refused';
               osStore.delete(service);
-              return true;
+              return 'removed';
             },
           };
         },
@@ -339,6 +353,10 @@ export function createProviderContext(options: ProviderContextOptions = {}): Tes
     },
     logs,
     shownFrom,
+    setOsCredential(key, value) {
+      if (value === null) osStore.delete(key);
+      else osStore.set(key, value);
+    },
     cleanup() {
       for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true });
       scratches.clear();

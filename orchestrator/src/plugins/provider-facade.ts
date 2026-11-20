@@ -32,7 +32,8 @@ import { envCredentialRoots, missionScratchPath, openMissionScratch, openProfile
 import { accountConfigDir } from '../backends/accounts.js';
 import { adoptGeneratedMedia, allowShowFrom } from '../backends/provider-media.js';
 import { gitWritableRoots } from '../backends/provider-git.js';
-import { readOsCredential, readOsCredentialNow, removeOsCredential, resetOsCredentialMisses } from '../host/os-credentials.js';
+import { readOsCredential, readOsCredentialNow, removeOsCredentialIf, resetOsCredentialMisses } from '../host/os-credentials.js';
+import { accountSigningIn } from '../backends/account-signin.js';
 import { getHost } from '../host/index.js';
 import { ensurePrivateDir } from '../host/private-dir.js';
 import { runtimeAccount } from '../backends/instance-id.js';
@@ -235,9 +236,19 @@ export function providerServicesFor(scope: ProviderFacadeScope): ProviderService
             'An account entry is a service this manifest declares (`provider.osCredentials`), followed by the suffix of this account\'s folder');
         }
         const entry = { service };
+        const accountId = account.id;
         return {
+          signingIn: () => accountSigningIn(accountId),
           async read() { return readOsCredentialNow(getHost(), entry); },
-          async remove() { return removeOsCredential(getHost(), entry); },
+          async remove(expected) {
+            if (typeof expected !== 'string' || !expected) {
+              throw new PluginPolicyError(scope.pluginId, 'provider-os-credentials', '`remove(expected)` takes the value that was read and copied');
+            }
+            // Checked in the same synchronous run as the delete: a flow started after the read
+            // is seen here, before its CLI could write anything.
+            if (accountSigningIn(accountId)) return 'signing-in';
+            return removeOsCredentialIf(getHost(), entry, expected);
+          },
         };
       },
     },

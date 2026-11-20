@@ -259,11 +259,24 @@ test('API 18: an account\'s own keychain entry is a declared service plus the fo
   const service = `Acme-credentials${accountEntrySuffix(accounts.accountConfigDir(row.id))}`;
   const own = current.provider.account.osCredential(runtime, service);
   assert.ok(own, 'a launch on an account gets its entry');
+  assert.equal(own.signingIn(), false);
   if (process.platform !== 'darwin') {
     // Off macOS there is no keychain: nothing is read, nothing is left to remove.
     assert.equal(await own.read(), null);
-    assert.equal(await own.remove(), true);
+    assert.equal(await own.remove('copied'), 'removed');
   }
+  await assert.rejects(own.remove(''), (error: unknown) => error instanceof PluginPolicyError && /value that was read/.test(error.message));
+
+  // A sign-in on the account: its CLI may rewrite the entry, so nothing is deleted until the
+  // flow finished AND the CLI exited — checked before the platform, the same on every OS.
+  startAccountLogin(row, initiator);
+  const cli = lastCli!;
+  assert.equal(own.signingIn(), true);
+  assert.equal(await own.remove('copied'), 'signing-in');
+  writeFileSync(join(cli.env.ACME_HOME!, 'credentials.json'), JSON.stringify({ who: row.identity_label ?? nextWho }));
+  cli.exit(0);
+  await settled(row.id);
+  assert.equal(own.signingIn(), false, 'released once the flow is over and its CLI gone');
   const host = registry.activeProfiles().find((candidate) => candidate.profile.id === 'acme-acct-profile')!;
   assert.equal(current.provider.account.osCredential((await host.runtimeFor()).runtime, service), undefined,
     'the host\'s own sign-in runs on no account');

@@ -3508,6 +3508,7 @@
         "binaries?": "Readonly<Record<string, { readonly path?: string; readonly version?: string; readonly probe?: (args: readonly string[]) => Partial<ProviderProbeResult>; readonly converse?: (args: readonly string[]) => ProviderConversation; }>> | undefined",
         "osCredentials?": "Readonly<Record<string, string>> | undefined",
         "lockedOsCredentials?": "readonly string[] | undefined",
+        "signingInAccounts?": "readonly string[] | undefined",
         "generatedMedia?": "readonly ProviderGeneratedMedia[] | undefined",
         "secrets?": "readonly string[] | undefined",
         "credentialDirs?": "readonly string[] | undefined",

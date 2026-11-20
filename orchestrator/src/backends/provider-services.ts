@@ -276,13 +276,26 @@ export type ProviderAccount = {
   osCredential(profile: ProfileRuntime, service: string): ProviderAccountOsCredential | undefined;
 };
 
-/** One account's entry in the OS credential store. Off macOS, `read` answers null and `remove` true. */
+/**
+ * One account's entry in the OS credential store. Off macOS, `read` answers null and `remove`
+ * `removed`. The entry may change under the provider's feet (a sign-in flow, a CLI outside any
+ * fence renewing it): `remove` takes the value that was copied and never deletes another one.
+ */
 export type ProviderAccountOsCredential = {
+  /** A sign-in flow runs on the account: its CLI may rewrite the entry, leave it alone. */
+  signingIn(): boolean;
   /** The secret, or null (absent, locked, refused). Asked now, never cached, never logged. */
   read(): Promise<string | null>;
-  /** Deletes the entry; true once none is left, false when the store refused (locked keychain). */
-  remove(): Promise<boolean>;
+  /**
+   * Deletes the entry if it still holds `expected` (what `read` gave and was copied):
+   * `removed` once none is left, `changed` when it holds another value now, `signing-in`
+   * when a sign-in flow started meanwhile (both left as they are), `refused` when the store
+   * said no (locked keychain).
+   */
+  remove(expected: string): Promise<ProviderAccountOsCredentialRemoval>;
 };
+
+export type ProviderAccountOsCredentialRemoval = 'removed' | 'changed' | 'signing-in' | 'refused';
 
 /** A release-owned opaque credential. Values never enter an HTTP response. */
 export type ProviderCredentialStore = {
