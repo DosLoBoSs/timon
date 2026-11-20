@@ -40,7 +40,7 @@ Good to know:
 
 Timon's database holds no secret for an account. The command-line tool keeps its sign-in in a private folder of the Timon home, one folder per account.
 
-On macOS, Claude Code first saves an account's sign-in in your login keychain. An [isolated mission](mission-isolation.md) can read the keychain but not update it, so it could not renew that sign-in when it expires. Before each mission on a Claude account, Timon therefore moves the account's sign-in from the keychain into the account's folder, where the mission renews it. If the keychain cannot be read or refuses the change (for example while it is locked), the sign-in stays where it is and a mission may fail to renew it: unlock the keychain, then start the mission again.
+On macOS, Claude Code first saves an account's sign-in in your login keychain. An [isolated mission](mission-isolation.md) can read the keychain but not update it, so it could not renew that sign-in when it expires. Before each mission on a Claude account, Timon therefore moves the account's sign-in from the keychain into the account's folder, where the mission renews it. A mission started while you are signing that account in again keeps reading the keychain: Timon moves nothing until the sign-in is over, so the new sign-in is never lost. If the keychain cannot be read or refuses the change (for example while it is locked), the sign-in stays where it is and a mission may fail to renew it: unlock the keychain, then start the mission again.
 
 ## What each state means
 
