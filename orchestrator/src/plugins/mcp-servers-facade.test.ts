@@ -209,11 +209,11 @@ test('a job lists and reads only what it declared; a request sees what the page 
   await dispose();
 });
 
-test('the input is strict: no oauth, no unknown field, a valid id', async () => {
+test('the input is strict: no oauth, no unknown field (a read-only one is ignored, not refused), a valid id', async () => {
   const { plugin, dispose } = await pluginWith(BOTH);
   const withOauth = { transport: { type: 'http', url: 'https://mcp.acme.test/sse', oauth: { tokens: { access_token: 'forged' } } } };
   await assert.rejects(as(manager, () => plugin.mcpServers.put('strict-a', withOauth as never)), code('invalid'));
-  await assert.rejects(as(manager, () => plugin.mcpServers.put('strict-a', { ...http(), createdBy: 'x' } as never)), code('invalid'));
+  await assert.rejects(as(manager, () => plugin.mcpServers.put('strict-a', { ...http(), owner: 'x' } as never)), code('invalid'));
   await assert.rejects(as(manager, () => plugin.mcpServers.put('strict-a', { transport: { type: 'external', claude_key: 'x' } } as never)), code('invalid'));
   for (const id of ['', 'UPPER', 'a/b', '../x', 'x'.repeat(101)]) {
     await assert.rejects(as(manager, () => plugin.mcpServers.put(id, http())), code('invalid'), id);

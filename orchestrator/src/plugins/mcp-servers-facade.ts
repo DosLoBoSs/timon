@@ -83,17 +83,10 @@ const READ_ONLY_KEYS: readonly string[] = [
   'tools_cache', 'tools_cached_at', 'public_only', 'app_slug',
 ];
 
-/** Without the read-only keys; the OAuth state of an http transport is one too (the host runs that flow). */
+/** Without the read-only keys. `oauth` is not one: forged tokens in a write stay refused, a plugin never declares that state. */
 function withoutReadOnly(input: unknown): unknown {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return input;
-  const rest: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(input)) if (!READ_ONLY_KEYS.includes(key)) rest[key] = value;
-  const transport = rest.transport;
-  if (typeof transport === 'object' && transport !== null && (transport as { type?: unknown }).type === 'http') {
-    const { oauth: _oauth, ...http } = transport as Record<string, unknown>;
-    rest.transport = http;
-  }
-  return rest;
+  return Object.fromEntries(Object.entries(input).filter(([key]) => !READ_ONLY_KEYS.includes(key)));
 }
 
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
