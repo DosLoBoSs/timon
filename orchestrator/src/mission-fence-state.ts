@@ -27,7 +27,7 @@
  * before its provider builds the command (`prepareMissionLaunch`): that is
  * when the move happens.
  */
-import { splitBackendInstance } from './backends/instance-id.js';
+import { credentialAccountOf } from './backends/host-sign-in.js';
 
 type Live = {
   readonly missionId: string;
@@ -48,7 +48,7 @@ type Preparing = { readonly token: object; readonly account: string | null; read
 const preparing = new Map<string, Preparing>();
 
 export type MissionFenceAccount = {
-  /** The subscription account the process runs on (`splitBackendInstance`), null for none. */
+  /** The account folder the process signs in from (`credentialAccountOf`), null for none. */
   readonly account?: string | null;
   /** A fenced process whose fence leaves the OS credential store writable (`fenceWritesCredentialStore`). */
   readonly credentialStoreWritable?: boolean;
@@ -116,7 +116,7 @@ export function accountCredentialHold(account: string, missionId: string): 'unfe
  * with its account in the tick of its spawn and forgotten when it closes.
  */
 export function recordOneShotProcess(missionId: string, backendName: string, proc: { once(event: 'close', listener: () => void): unknown }): void {
-  recordMissionFence(missionId, proc, false, { account: splitBackendInstance(backendName).accountId });
+  recordMissionFence(missionId, proc, false, { account: credentialAccountOf(backendName) });
   proc.once('close', () => forgetMissionFence(missionId, proc));
 }
 

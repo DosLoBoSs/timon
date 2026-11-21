@@ -57,6 +57,8 @@ function record(key: string, verdict: Verdict): void {
 }
 
 const inFlight = new Map<string, Promise<boolean | null>>();
+/** Bumped when a person's sign-in settles a verdict: a check that started before cannot undo it. */
+const epochs = new Map<string, number>();
 /** Null until the boot wires it: before that (unit tests, a CLI command) no provider is asked. */
 let envOf: (() => Readonly<Record<string, string | undefined>>) | null = null;
 
@@ -92,11 +94,14 @@ export function refreshProviderSignIn(backend: string, explicit = false): Promis
   // daemon died every half hour on a Mac, froze for minutes on a Windows PC).
   // The first `await` lets `inFlight.set` below land first; a re-entrant
   // caller then gets the running promise and the walk ends.
+  const epoch = epochs.get(key) ?? 0;
   const request = (async () => {
     try {
       await undefined;
       const status = await providerAuthStatus(key, definedEnv(env()));
       if (!status) return null;
+      // A sign-in settled while this check ran: what it read predates it.
+      if ((epochs.get(key) ?? 0) !== epoch) return verdicts.get(key)?.signedIn ?? status.ok;
       const current = verdicts.get(key);
       const turnStillRules = !explicit && current?.from === 'turn' && Date.now() - current.at < lifetime(current);
       if (!turnStillRules) record(key, { signedIn: status.ok, at: Date.now(), from: 'check' });
@@ -104,7 +109,8 @@ export function refreshProviderSignIn(backend: string, explicit = false): Promis
     } catch {
       return null;
     } finally {
-      inFlight.delete(key);
+      // After a sign-in the map may hold the refresh that followed it, not this one.
+      if ((epochs.get(key) ?? 0) === epoch) inFlight.delete(key);
     }
   })();
   inFlight.set(key, request);
@@ -132,6 +138,20 @@ export function providerSignedOut(backend: string | null | undefined): boolean {
 export function noteProviderSignedIn(backend: string | null | undefined): void {
   const key = keyOf(backend);
   if (key) record(key, { signedIn: true, at: Date.now(), from: 'turn' });
+}
+
+/**
+ * A person just signed `backend` in, or minted its long-lived token: it is usable now.
+ * Recorded before the flow reports success, so nothing that reads the verdict in
+ * between (the backend picker, the setup card) still sees it signed out; a check
+ * already running cannot overwrite it, and the next refresh starts afresh.
+ */
+export function noteProviderSignedInByPerson(backend: string | null | undefined): void {
+  const key = keyOf(backend);
+  if (!key) return;
+  epochs.set(key, (epochs.get(key) ?? 0) + 1);
+  inFlight.delete(key);
+  record(key, { signedIn: true, at: Date.now(), from: 'turn' });
 }
 
 /** The CLI of `backend` refused to authenticate a turn. */
@@ -164,5 +184,6 @@ export function setProviderSignInForTest(backend: string, signedIn: boolean | nu
 export function resetProviderSignInForTest(): void {
   verdicts.clear();
   inFlight.clear();
+  epochs.clear();
   envOf = null;
 }

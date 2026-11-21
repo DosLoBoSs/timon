@@ -9,13 +9,19 @@
  * else: no path, no authorization, no token, no version. Only a gesture that
  * did not go through (an install that failed, a command Timon could not copy)
  * opens a line under its row, with what to run by hand.
+ *
+ * A provider whose host sign-in Timon can keep (Claude) signs in in the app
+ * instead: "Sign in" opens the page-and-code dialog, no terminal. Once a
+ * terminal session is found, the row offers a long-lived token, never more.
  */
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
-import { ExternalLink, Loader2, LogIn, RefreshCw } from 'lucide-react';
+import { ExternalLink, KeyRound, Loader2, LogIn, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CommandToRun } from '@/components/command-to-run';
 import { ProviderRow } from '@/components/provider-list/provider-row';
 import { onboardingProvider, providerCliState, type InstallJob, type ProviderCli } from '@/lib/provider-clis';
+import { hostSignInOffer, type HostFlowKind } from '@/lib/host-sign-in';
+import { HostSignInDialog } from './host-sign-in-dialog';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useProviderCliCards, type ProviderCliSignInOutcome } from './provider-cli-context';
@@ -158,6 +164,7 @@ function OnboardingProviderRow({ cli, job, chained, unfound, outcome, onInstall,
   onSignIn: () => void;
 }): ReactElement {
   const host = useProviderCliCards();
+  const [dialog, setDialog] = useState<HostFlowKind | null>(null);
   const state = providerCliState(cli);
   const running = job?.state === 'running';
   const failed = job?.state === 'failed' ? job : null;
@@ -174,9 +181,19 @@ function OnboardingProviderRow({ cli, job, chained, unfound, outcome, onInstall,
       </span>
     );
   } else if (signingIn) {
+    // Signed in in the app when Timon can keep the sign-in; else the terminal's command.
+    const inApp = cli.host?.browser === true;
     action = (
-      <Button type="button" size="sm" variant="secondary" className="gap-1.5" disabled={blocked} onClick={onSignIn}>
+      <Button type="button" size="sm" variant="secondary" className="gap-1.5" disabled={blocked}
+        onClick={inApp ? () => setDialog('login') : onSignIn} data-host-sign-in-offer={inApp ? 'login' : undefined}>
         <LogIn className="size-3.5" aria-hidden />{t('providerClis.signIn')}
+      </Button>
+    );
+  } else if (state === 'ready' && hostSignInOffer(cli.host) === 'token') {
+    action = (
+      <Button type="button" size="sm" variant="ghost" className="gap-1.5 text-muted-foreground" disabled={blocked}
+        onClick={() => setDialog('token')} data-host-sign-in-offer="token" title={t('hostSignIn.token.offerHint')}>
+        <KeyRound className="size-3.5" aria-hidden />{t('hostSignIn.token.offer')}
       </Button>
     );
   } else if (canInstall) {
@@ -220,6 +237,10 @@ function OnboardingProviderRow({ cli, job, chained, unfound, outcome, onInstall,
           )}
         </div>
       )}
+      {cli.host ? (
+        <HostSignInDialog backend={cli.host.backend} name={cli.label} kind={dialog ?? 'login'} open={dialog !== null}
+          onOpenChange={(open) => { if (!open) setDialog(null); }} onDone={() => void host?.refresh()} />
+      ) : null}
     </section>
   );
 }

@@ -10,6 +10,7 @@ import { registerRoutes } from './routes.js';
 import { registerCustomBackendRoutes } from './custom-routes.js';
 import { migrateBackendKeys } from './backend-keys.js';
 import { registerAccountRoutes } from './account-routes.js';
+import { registerHostSignInRoutes } from './host-sign-in-routes.js';
 import { registerBinaryRoutes } from './binary-routes.js';
 import { registerProviderCliRoutes } from './provider-cli-routes.js';
 import { registerProviderOverviewRoutes } from './provider-overview-routes.js';
@@ -36,6 +37,7 @@ export function apply(ctx: Context): void {
   registerRoutes(router);
   registerCustomBackendRoutes(router);
   registerAccountRoutes(router);
+  registerHostSignInRoutes(router);
   registerBinaryRoutes(router);
   registerProviderCliRoutes(router);
   registerProviderOverviewRoutes(router);

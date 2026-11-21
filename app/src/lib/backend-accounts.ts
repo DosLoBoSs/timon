@@ -35,7 +35,7 @@ export type LoginState = 'starting' | 'waiting' | 'verifying' | 'connected' | 'f
 
 export type LoginFailure =
   | 'expired' | 'cancelled' | 'code_rejected' | 'duplicate' | 'mismatch'
-  | 'not_signed_in' | 'cli_failed' | 'cli_missing' | 'unsupported';
+  | 'not_signed_in' | 'cli_failed' | 'cli_missing' | 'unsupported' | 'not_saved';
 
 export type AccountLogin = {
   accountId: string;

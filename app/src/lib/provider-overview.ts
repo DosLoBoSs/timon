@@ -7,6 +7,7 @@
  * the app cannot import the daemon. Open-ended for a plugin (`packages/sdk`):
  * a field the daemon adds later must not break a section compiled today.
  */
+import type { HostSignInView } from '@/lib/host-sign-in';
 import { t } from '@/lib/i18n';
 
 /** Same order and names as the daemon's `PROVIDER_STATUSES`. */
@@ -87,6 +88,8 @@ export type ProviderOverview = {
     signInThen: string | null;
     acceptsAccounts: boolean;
     accounts: ProviderAccountView[];
+    /** The host's own sign-in, when Timon can keep it; absent from an older daemon. */
+    host?: HostSignInView | null;
   };
   secret: { required: boolean; present: boolean; names: string[] };
   programs: ProviderProgramView[];

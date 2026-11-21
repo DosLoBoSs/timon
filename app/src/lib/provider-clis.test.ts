@@ -20,6 +20,10 @@ test('a card: missing, desktop build to sign in, installed to sign in, ready', (
   assert.equal(providerCliState(cli({ path: '/a/claude', signedIn: null })), 'signIn');
   assert.equal(providerCliState(cli({ path: '/a/claude', signedIn: false })), 'signIn');
   assert.equal(providerCliState(cli({ path: '/a/claude', bundled: true, signedIn: true })), 'ready');
+  const kept = { backend: 'claude', kept: true, identity: 'a@b.example', browser: true, token: { stored: false }, signedIn: false };
+  assert.equal(providerCliState(cli({ path: '/a/claude', signedIn: false, host: kept })), 'ready', 'a sign-in Timon keeps is ready while the verdict lags');
+  assert.equal(readyForSetupChat([cli({ path: '/a/claude', signedIn: false, host: kept })]), true);
+  assert.equal(providerCliStatus(cli({ path: '/a/claude', signedIn: false, host: kept })), 'connected');
 });
 
 test('the chat opens on one CLI it can start on, installed and not known to be signed out', () => {

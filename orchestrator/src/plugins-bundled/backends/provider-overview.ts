@@ -18,6 +18,7 @@
  * - an agent installed from the ACP registry;
  * - a profile nobody registered (a built-in kept by the product itself).
  */
+import { hostSignInView, type HostSignInView } from '../../backends/host-sign-in-view.js';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { BackendProfile } from '../../backends/types.js';
@@ -120,6 +121,8 @@ export type ProviderOverview = {
     signInThen: string | null;
     acceptsAccounts: boolean;
     accounts: ProviderAccountView[];
+    /** The host's own sign-in, when Timon can keep it (`host-sign-in-view.ts`); null otherwise. */
+    host: HostSignInView | null;
   };
   /** Vault entries its backends read: names only, never a value. */
   secret: { required: boolean; present: boolean; names: string[] };
@@ -324,7 +327,7 @@ function blockedFileOverview(group: Group, file: { name: string; reason: string 
     }],
     modelCount: 0,
     agentCount: 0,
-    connection: { signedIn: null, signInCommand: null, signInThen: null, acceptsAccounts: false, accounts: [] },
+    connection: { signedIn: null, signInCommand: null, signInThen: null, acceptsAccounts: false, accounts: [], host: null },
     secret: { required: false, present: false, names: [] },
     programs: [],
     status: 'blocked',
@@ -563,6 +566,7 @@ function overviewOf(group: Group, snap: Snapshot, viewer: DbViewer): ProviderOve
       signInThen,
       acceptsAccounts: group.backendIds.some((id) => backendTakesAccounts(id)),
       accounts,
+      host: group.backendIds.map((id) => hostSignInView(id)).find((view) => view !== null) ?? null,
     },
     secret,
     programs: progs,
@@ -601,6 +605,7 @@ export function narrowToOwnAccounts(provider: ProviderOverview): ProviderOvervie
       signInThen: null,
       acceptsAccounts: provider.connection.acceptsAccounts,
       accounts: provider.connection.accounts.filter((account) => account.mine),
+      host: null,
     },
     secret: { required: provider.secret.required, present: provider.secret.present, names: [] },
     programs: [],

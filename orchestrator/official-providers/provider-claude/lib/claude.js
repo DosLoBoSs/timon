@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { claudeThinking } from './thinking.js';
-import { claudeAccountEnv } from './token.js';
-import { adoptSession, needsOwnConfigDir } from './profile-config.js';
+import { CLAUDE_TOKEN_ENV, claudeAccountEnv } from './token.js';
+import { adoptSession, folderAt, needsOwnConfigDir } from './profile-config.js';
 import { claudeLoginDriver } from './login.js';
+import { claudeTokenDriver } from './setup-token.js';
 import { claudeAccountKeychainService, settleAccountKeychain } from './account-keychain.js';
 import { manifestBackend } from './manifest.js';
 
@@ -28,7 +29,7 @@ export function createClaudeProvider(services, token, usage, options = {}) {
  const { extractInitSessionId, providerRetryEvent } = runtime.events;
  const { streamJsonSpans } = runtime.spans;
  const { getClaudeUsage, getClaudeAccountUsage, claudeAuthStatus } = usage;
- const { claudeSpawnEnv } = token;
+ const { claudeSpawnEnv, readClaudeToken } = token;
 const CONTROL_TIMEOUT_MS = 10_000;
 const pendingControl = new Map();
 function settleControl(requestId, ok) {
@@ -153,6 +154,14 @@ const legacy = {
             }
         }
         let env = account ? claudeAccountEnv(account.configDir) : claudeSpawnEnv(profile.env);
+        // The base profile on an account is the host's own sign-in, kept by Timon in a folder of its
+        // own: a long-lived token, when one is kept, still runs it, and a session the CLI kept in
+        // `~/.claude` before the switch is brought along for `--resume`.
+        if (account && !profile.id.includes('@')) {
+            const value = readClaudeToken();
+            if (value) env = { ...env, [CLAUDE_TOKEN_ENV]: value };
+            if (opts.resumeSession) adoptSession({ dir: folderAt(account.configDir), cwd: opts.cfg.cwd, sessionId: opts.resumeSession });
+        }
         // Never `~/.claude` for another profile than `claude`: the user's subscription sign-in is there.
         if (!account && needsOwnConfigDir(profile)) {
             const dir = services.scratch.profile(profile);
@@ -292,7 +301,7 @@ const legacy = {
   // The binary and the sign-in folder: the manifest's entry, the one place they are written (`manifest.js`).
   declares: { binary: CLAUDE.binary,
     credentialDirs: CLAUDE.credentialDirs, hostedConnectors: true, spans: 'stream-json', localEnv: legacy.localEnv,
-    accounts: { login: claudeLoginDriver }, protocols: ['anthropic'], oneShot: { model: 'sonnet' },
+    accounts: { login: claudeLoginDriver, host: { token: claudeTokenDriver(token, usage) } }, protocols: ['anthropic'], oneShot: { model: 'sonnet' },
     // Async: on macOS the sign-in lives in the keychain.
     authStatus: claudeAuthStatus },
  };

@@ -25,8 +25,8 @@ With **Even when I'm logged out**, macOS asks once for an administrator password
 
 Claude missions in a launchd daemon need a long-lived Claude token: `claude` keeps its sign-in in your login keychain, which background services cannot read, even while you are logged in.
 
-1. In a terminal, run `claude setup-token` and copy the token it prints.
-2. Store it in Timon, either in **Settings → AI models → Providers → Claude**, row **Long-lived token** under **Settings**, then **Set**, or with `timon auth claude-token set` (paste the token when asked).
+1. Open **Settings → AI models → Providers → Claude**, row **Long-lived token** under **Settings**, then **Create**: open the sign-in page, sign in, and paste the code it shows. Timon stores the token it receives; nothing to copy.
+2. Or, from a terminal, run `claude setup-token`, copy the token it prints, and store it with **Paste a token** in that row's **…** menu, or with `timon auth claude-token set` (paste the token when asked).
 
 Every Claude mission then uses this token. An installation made before setup asked the question still follows the token: with a token, `timon service install` installs the daemon; without one, the agent.
 

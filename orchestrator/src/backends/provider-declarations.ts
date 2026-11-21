@@ -245,8 +245,45 @@ export type ProviderLoginDriver = {
   readonly ttlMs?: number;
 };
 
+/**
+ * A long-lived token the CLI mints through the same paste-code page (`claude setup-token`),
+ * played by the daemon like a login. The CLI draws a screen and reads the code there, so it runs
+ * in a pseudo-terminal, in a throwaway folder; nothing it prints leaves the daemon but the page's
+ * address, and the token goes from its output to `save` and nowhere else.
+ */
+export type ProviderTokenDriver = {
+  /** The CLI's arguments. */
+  args(): string[];
+  /** The environment that points the CLI at the throwaway `dir`; `base` is the system whitelist, to extend. */
+  env(dir: string, base: Readonly<Record<string, string>>): Record<string, string>;
+  /** The page to open, once the CLI printed it (escape sequences included, as the terminal got them). */
+  parse(output: string): Extract<ProviderLoginPrompt, { kind: 'paste-code' }> | null;
+  /** The token, once the CLI printed it; null until then. */
+  token(output: string): string | null;
+  /** The CLI refused the pasted code and waits for another one. */
+  rejected(output: string): boolean;
+  /** Keeps the token where the provider's launches read it. Throws when it cannot. */
+  save(token: string): void;
+  /** Whether a token is kept now. */
+  stored(): boolean;
+  /** How long a flow waits for the person. Default 10 minutes. */
+  readonly ttlMs?: number;
+};
+
+/**
+ * The host's own sign-in of the backend (the profile without an account), kept by Timon in a
+ * folder of its own instead of the CLI's default one. It is signed in with `login`, like an
+ * account, and the base profile's launches then carry it as their `account` (`account.of`).
+ */
+export type ProviderHostSignInDeclaration = {
+  /** A long-lived token for the host's launches, minted in the app. */
+  readonly token?: ProviderTokenDriver;
+};
+
 export type ProviderAccountsDeclaration = {
   readonly login: ProviderLoginDriver;
+  /** The host's sign-in can be kept by Timon (`ProviderHostSignInDeclaration`). Absent: only the CLI's own. */
+  readonly host?: ProviderHostSignInDeclaration;
 };
 
 /* ── The whole declaration ───────────────────────────────────────────────── */

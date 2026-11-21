@@ -122,6 +122,11 @@ export function onBackendAccountsChanged(listener: () => void): () => void {
   return () => { changeListeners.delete(listener); };
 }
 
+/** Tells the subscribers of `onBackendAccountsChanged` that what a backend launches on changed (`host-sign-in.ts`). */
+export function backendAccountsChanged(): void {
+  accountsChanged();
+}
+
 function accountsChanged(): void {
   for (const listener of changeListeners) {
     try { listener(); } catch (err) { console.warn(`[accounts] change listener failed: ${(err as Error).message}`); }

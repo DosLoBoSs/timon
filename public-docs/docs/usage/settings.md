@@ -114,7 +114,10 @@ nothing. **Remove this provider**, in the row's **…** menu, deletes it. When
 its file holds a credential in clear text, a warning shows under the row.
 Built-in and plugin providers keep their name, picture and connection under
 their provider's control. On the Claude page, **Settings** holds the
-**Long-lived token** row: **Set** opens a dialog to paste it (see
+**Long-lived token** row: **Create** makes one in the app, through the same
+sign-in page and code as above (valid for a year, missions then never renew
+the sign-in), **Renew** replaces it, and the row's **…** menu pastes one
+printed by `claude setup-token` in a terminal or removes it (see
 [macOS](../installation/macos.md#keep-timon-running-when-you-are-logged-out)).
 
 **Add a provider**, next to the search of the list, opens a page with two ways:
@@ -163,7 +166,7 @@ Providers that come with Timon are not asked for any authorization.
 
 Choose a provider in **Settings → AI models → Providers** to open its page. Two sections deal with how Timon reaches it, each shown only when it applies:
 
-- **Connection** has a **This computer** row saying whether this computer is signed in to the provider (**Signed in on this computer** or **Not signed in**). When it is not but one of your subscription accounts is, the row says missions use your subscription accounts: nothing to fix. **Connect** types the provider's sign-in command in Timon's terminal, or copies it when no terminal is open, then shows the command and its steps under the row; sign in through your browser, then click **Try again**. **Try again** and **Show the sign-in command** are also in the row's **…** menu. When the provider takes several subscriptions, each account is a row below, with the gestures described in [Subscription accounts](#subscription-accounts).
+- **Connection** has a **This computer** row saying whether this computer is signed in to the provider (**Signed in on this computer** or **Not signed in**). When it is not but one of your subscription accounts is, the row says missions use your subscription accounts: nothing to fix. **Connect** types the provider's sign-in command in Timon's terminal, or copies it when no terminal is open, then shows the command and its steps under the row; sign in through your browser, then click **Try again**. **Try again** and **Show the sign-in command** are also in the row's **…** menu. On the Claude page, no terminal is needed: **Sign in** opens a dialog with the sign-in page to open and a field for the code that page shows at the end, and Timon keeps that sign-in in a folder of its own rather than in `~/.claude`. The row then reads **Signed in with Timon as** _your email_; its **…** menu signs in again, or **Use the terminal session instead** goes back to the sign-in of Claude Code in your terminal. A computer already signed in from a terminal keeps using it as is, and its menu offers **Sign in with the browser instead**. When the provider takes several subscriptions, each account is a row below, with the gestures described in [Subscription accounts](#subscription-accounts).
 - **API key** says whether the key the provider expects is in the vault (**Key saved** or **No key**). **Add a key** or **Replace** opens a dialog to paste it. The key is reserved to that provider and never shown again: a saved key can only be replaced. **Open Secrets**, in the row's **…** menu, leads to the vault for anything else, such as sharing the key or deleting it.
 
 ## Subscription accounts
