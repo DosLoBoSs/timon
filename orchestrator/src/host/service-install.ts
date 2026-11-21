@@ -475,6 +475,12 @@ export function windowsServiceFiles(timonHome: string, joinPath: (...parts: stri
     revision: joinPath(run, 'service-revision'),
     /** Written by the desktop when the user declines the offer to reinstall the task. */
     repairDeclined: joinPath(run, 'service-repair-declined'),
+    /** Written by the desktop when the rewrite that repairs a task changed
+     *  outside Timon (#116) is declined or fails at launch, with the app's
+     *  version: the same version stops asking. Removed by an install that
+     *  succeeds (Settings › Installation, `timon service install`) and by an
+     *  uninstall. */
+    rewriteDeclined: joinPath(run, 'service-rewrite-declined'),
     /** Written when Windows registered the task but never started it for this
      *  account (`verifyTaskStartedStep`); removed by an install whose task runs
      *  and by an uninstall. */
@@ -1240,7 +1246,11 @@ function installWindows(opts: ServiceOpts, lines: string[]): ServiceResult {
     lines.push(`scheduled task ${WINDOWS_TASK} was created but could not be started: ${output.trim() || `exit ${started ?? 'unknown'}`}`);
     return { ok: false, code: 1, lines };
   }
-  if (!opts.dryRun) rmSync(files.refused, { force: true });
+  if (!opts.dryRun) {
+    rmSync(files.refused, { force: true });
+    // The task is now the one this release writes: nothing is left to decline.
+    rmSync(files.rewriteDeclined, { force: true });
+  }
   // An upgrade keeps it until its new task answers (`keepBatchLauncher`).
   if (!opts.keepBatchLauncher) retireBatchLauncher(opts, lines);
   const when = offSession && !fellBack ? 'starts at boot and keeps running after logoff' : 'starts at logon and stops when you log off';
@@ -1281,7 +1291,7 @@ function uninstallWindows(opts: ServiceOpts, lines: string[]): ServiceResult | n
   // task back after a reinstall of the very version that was declined. So does
   // `refused`: kept, doctor would report no supervisor and the setup would
   // offer only the portable mode, after the very command the notice names.
-  for (const file of [files.launcher, files.batchLauncher, files.legacyLauncher, files.sessionWitness, files.revision, files.repairDeclined, files.refused]) {
+  for (const file of [files.launcher, files.batchLauncher, files.legacyLauncher, files.sessionWitness, files.revision, files.repairDeclined, files.rewriteDeclined, files.refused]) {
     if (!opts.dryRun) rmSync(file, { force: true });
   }
   lines.push(`${opts.dryRun ? '(dry-run) would remove' : 'removed'} the task launcher and its session witness`);

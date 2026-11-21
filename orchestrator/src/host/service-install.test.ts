@@ -953,6 +953,20 @@ test('windows: a session fallback is remembered, and only an explicit "always" t
   assert.equal(existsSync(marker), true);
 });
 
+test('#116: an install that succeeds forgets a declined repair, one that is refused keeps it', () => {
+  const opts = { ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })), nodePath: PACKAGED_NODE };
+  const files = windowsServiceFiles(opts.timonHome, join);
+  assert.equal(files.rewriteDeclined, join(opts.timonHome, 'run', 'service-rewrite-declined'));
+  mkdirSync(dirname(files.rewriteDeclined), { recursive: true });
+  writeFileSync(files.rewriteDeclined, '0.1.9\n');
+  const refused = installService({ ...opts, sessionMode: 'session', readFile: () => transcript({ create: 1 }) });
+  assert.equal(refused.ok, false);
+  assert.equal(existsSync(files.rewriteDeclined), true, 'still declined: nothing was rewritten');
+  const done = installService({ ...opts, sessionMode: 'session', readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: 0 }) });
+  assert.equal(done.ok, true, done.lines.join('\n'));
+  assert.equal(existsSync(files.rewriteDeclined), false);
+});
+
 test('windows: a restored S4U task that falls back to the session task is remembered too', () => {
   const win = { ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })), nodePath: PACKAGED_NODE };
   const previous = previousTask('S4U', PACKAGED_NODE);
@@ -1184,7 +1198,7 @@ test('windows: uninstall removes the task, stops its daemon, and leaves TIMON_HO
   });
   const files = windowsServiceFiles(opts.timonHome, join);
   mkdirSync(dirname(files.launcher), { recursive: true });
-  for (const file of [files.launcher, files.batchLauncher, files.legacyLauncher, files.sessionWitness, files.revision, files.repairDeclined, files.refused]) writeFileSync(file, 'x');
+  for (const file of [files.launcher, files.batchLauncher, files.legacyLauncher, files.sessionWitness, files.revision, files.repairDeclined, files.rewriteDeclined, files.refused]) writeFileSync(file, 'x');
   writeFileSync(join(opts.timonHome, 'timon.db'), 'data', 'utf8');
   const res = uninstallService({ ...opts, readFile: () => transcript({ end: 0, delete: 0, stop: 0 }) });
   assert.equal(res.ok, true);
@@ -1199,7 +1213,7 @@ test('windows: uninstall removes the task, stops its daemon, and leaves TIMON_HO
   assert.doesNotMatch(batch, /goto :done/);
   // The task files go with it, the refusal finding too
   // (TODO #342: otherwise the setup would only offer portable mode); the data stays.
-  for (const file of [files.launcher, files.batchLauncher, files.legacyLauncher, files.sessionWitness, files.revision, files.repairDeclined, files.refused]) {
+  for (const file of [files.launcher, files.batchLauncher, files.legacyLauncher, files.sessionWitness, files.revision, files.repairDeclined, files.rewriteDeclined, files.refused]) {
     assert.equal(existsSync(file), false, file);
   }
   assert.equal(readFileSync(join(opts.timonHome, 'timon.db'), 'utf8'), 'data');
