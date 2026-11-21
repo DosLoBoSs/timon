@@ -23,6 +23,11 @@ test('windows #116, PC A: a task without a revision is rewritten, then serves; d
   assert.equal(branch({ ...pcA, rewrite: 'failed', start: 'started' }), 'service');
   // Windows never starts it for this account: the embedded daemon, and the task off.
   assert.equal(branch({ ...pcA, rewrite: 'failed', start: 'never-ran' }), 'disable-task');
+  // Declined at an earlier launch of this version: not asked again, the task serves.
+  const remembered = windowsStartBranch({ ...base, ...pcA, rewrite: 'declined' });
+  assert.equal(remembered.branch, 'service');
+  assert.match(remembered.reason, /declined for this version/);
+  assert.equal(branch({ ...pcA, rewrite: 'declined', start: 'never-ran' }), 'disable-task');
 });
 
 /** #116, PC B: revision 5, interactive token + cmd.exe, its daemon already up. */
@@ -49,7 +54,7 @@ test('windows: a task that never ran is disabled, unless its daemon was refused 
 });
 
 test('windows: every verdict says why', () => {
-  const rewrites = ['none', 'pending', 'done', 'failed', 'unusable'] as const;
+  const rewrites = ['none', 'pending', 'done', 'failed', 'unusable', 'declined'] as const;
   const starts = [undefined, 'started', 'needs-repair', 'never-ran'] as const;
   for (const rewrite of rewrites) for (const start of starts) for (const taskExists of [false, true]) for (const heldOut of [false, true]) {
     const verdict = windowsStartBranch({ taskExists, revisionRecorded: taskExists, rewrite, heldOut, ...(start ? { start } : {}) });

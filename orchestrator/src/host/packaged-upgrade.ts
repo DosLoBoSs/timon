@@ -29,18 +29,18 @@ import { isServiceSessionMode, type ServiceSessionMode } from './service-session
 export const DESKTOP_SESSION_INTENT_ENV = 'TIMON_DESKTOP_SESSION_INTENT';
 
 /**
- * The session mode the rewrite should use: the desktop's intent, only when
- * the user never answered the question (`service-session-mode`), whose answer
- * always wins. `undefined` leaves the install to read the recorded answer or
- * the task in place, as before.
- */
-/**
  * The line the runner prints when the rewrite kept the task for the session
  * only (`UpgradeResult.sessionFallback`): the desktop reads it from the
  * runner's output to say it once. Its copy lives in `desktop/src/upgrade.ts`.
  */
 export const UPGRADE_SESSION_FALLBACK_LINE = 'timon-upgrade: session-fallback';
 
+/**
+ * The session mode the rewrite should use: the desktop's intent, only when
+ * the user never answered the question (`service-session-mode`), whose answer
+ * always wins. `undefined` leaves the install to read the recorded answer or
+ * the task in place, as before.
+ */
 export function upgradeSessionMode(intent: string | undefined, recorded: ServiceSessionMode | null): ServiceSessionMode | undefined {
   if (recorded !== null || !isServiceSessionMode(intent)) return undefined;
   return intent;

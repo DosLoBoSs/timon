@@ -40,8 +40,8 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep, win32 as winPath } from 'node:path';
 import { runtimeDir } from './packaged-service.js';
 import type { ExecResult } from './types.js';
-import { isBundledNode } from './bundled-node.js';
-import { readServiceSessionMode, sessionModeSupported, writeServiceSessionMode, type ServiceSessionMode } from './service-session-mode.js';
+import { isBundledNode, packagedRuntime } from './bundled-node.js';
+import { readServiceSessionMode, serviceS4uRefusedPath, sessionModeSupported, writeServiceSessionMode, type ServiceSessionMode } from './service-session-mode.js';
 import { parseLauncherConfig, WINDOWS_LAUNCHER_FORMAT, type WindowsLauncherConfig } from './windows-service-launcher.js';
 import { windowsTaskShape, type WindowsTaskShape } from './windows-task-shape.js';
 
@@ -475,6 +475,12 @@ export function windowsServiceFiles(timonHome: string, joinPath: (...parts: stri
     revision: joinPath(run, 'service-revision'),
     /** Written by the desktop when the user declines the offer to reinstall the task. */
     repairDeclined: joinPath(run, 'service-repair-declined'),
+    /** Written by the desktop when the rewrite that repairs a task changed
+     *  outside Timon (#116) is declined or fails at launch, with the app's
+     *  version: the same version stops asking. Removed by an install that
+     *  succeeds (Settings › Installation, `timon service install`) and by an
+     *  uninstall. */
+    rewriteDeclined: joinPath(run, 'service-rewrite-declined'),
     /** Written when Windows registered the task but never started it for this
      *  account (`verifyTaskStartedStep`); removed by an install whose task runs
      *  and by an uninstall. */
@@ -803,7 +809,7 @@ export function windowsTaskOffSession(opts: Pick<ServiceOpts, 'exec'>): boolean 
  * the question registered the boot task, and silently turning an upgraded
  * user's night tasks off is the worse mistake.
  */
-function windowsKeepsRunning(opts: ServiceOpts): boolean {
+function windowsWantsOffSession(opts: ServiceOpts): boolean {
   const mode = sessionModeOf(opts);
   if (mode !== null) return mode === 'always';
   const found = windowsTaskOffSession(opts);
@@ -813,6 +819,32 @@ function windowsKeepsRunning(opts: ServiceOpts): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Off session (S4U) or not, once a past refusal is counted: Windows already
+ * kept the S4U task for the session only on this account (`service-s4u-refused`),
+ * so trying again would only fall back the same way, after the same wait. The
+ * explicit "always" (`writeServiceSessionMode`) removes the marker first.
+ */
+function windowsKeepsRunning(opts: ServiceOpts, lines: string[]): boolean {
+  if (!windowsWantsOffSession(opts)) return false;
+  const marker = serviceS4uRefusedPath(opts.timonHome);
+  if (!existsSync(marker)) return true;
+  let since = '';
+  try {
+    since = readFileSync(marker, 'utf8').trim();
+  } catch {
+    // Unreadable: the refusal still holds, only its date is lost.
+  }
+  lines.push(`Windows kept the ${WINDOWS_TASK} task for the session only on this account before${since ? ` (recorded ${since})` : ''}: `
+    + 'registering the session task directly. Run `timon service session-mode always` to try running with no session open again.');
+  return false;
+}
+
+/** Remembers that this account refuses the S4U task (`windowsKeepsRunning`). */
+function recordS4uRefused(opts: ServiceOpts, lines: string[]): void {
+  write(serviceS4uRefusedPath(opts.timonHome), `${new Date().toISOString()}\n`, opts.dryRun ?? false, lines);
 }
 
 function powershellLiteral(value: string): string {
@@ -1136,7 +1168,7 @@ function installWindows(opts: ServiceOpts, lines: string[]): ServiceResult {
     return { ok: false, code: 1, lines, written: false };
   }
   const file = taskXmlPath();
-  const offSession = windowsKeepsRunning(opts);
+  const offSession = windowsKeepsRunning(opts, lines);
   const userId = windowsTaskUserId(opts);
   // UTF-16 with a BOM: `schtasks /XML` rejects a UTF-8 file with a parse error
   // that names neither the encoding nor the file.
@@ -1214,12 +1246,17 @@ function installWindows(opts: ServiceOpts, lines: string[]): ServiceResult {
     lines.push(`scheduled task ${WINDOWS_TASK} was created but could not be started: ${output.trim() || `exit ${started ?? 'unknown'}`}`);
     return { ok: false, code: 1, lines };
   }
-  if (!opts.dryRun) rmSync(files.refused, { force: true });
+  if (!opts.dryRun) {
+    rmSync(files.refused, { force: true });
+    // The task is now the one this release writes: nothing is left to decline.
+    rmSync(files.rewriteDeclined, { force: true });
+  }
   // An upgrade keeps it until its new task answers (`keepBatchLauncher`).
   if (!opts.keepBatchLauncher) retireBatchLauncher(opts, lines);
   const when = offSession && !fellBack ? 'starts at boot and keeps running after logoff' : 'starts at logon and stops when you log off';
   lines.push(`${opts.dryRun ? '(dry-run) would install and start the service' : 'service installed and started'} (scheduled task ${WINDOWS_TASK}, ${when})`);
   if (!fellBack) return { ok: true, code: 0, lines };
+  recordS4uRefused(opts, lines);
   lines.push(WINDOWS_SESSION_FALLBACK_NOTICE);
   return { ok: true, code: 0, lines, sessionFallback: true };
 }
@@ -1254,7 +1291,7 @@ function uninstallWindows(opts: ServiceOpts, lines: string[]): ServiceResult | n
   // task back after a reinstall of the very version that was declined. So does
   // `refused`: kept, doctor would report no supervisor and the setup would
   // offer only the portable mode, after the very command the notice names.
-  for (const file of [files.launcher, files.batchLauncher, files.legacyLauncher, files.sessionWitness, files.revision, files.repairDeclined, files.refused]) {
+  for (const file of [files.launcher, files.batchLauncher, files.legacyLauncher, files.sessionWitness, files.revision, files.repairDeclined, files.rewriteDeclined, files.refused]) {
     if (!opts.dryRun) rmSync(file, { force: true });
   }
   lines.push(`${opts.dryRun ? '(dry-run) would remove' : 'removed'} the task launcher and its session witness`);
@@ -1283,6 +1320,17 @@ export function windowsConsoleTaskAdvice(shape: WindowsTaskShape): string {
     + 'Reinstall the service (Settings > Installation, or `timon service install` from the app\'s terminal): Timon then registers a task that opens no window.';
 }
 
+/**
+ * Is a console this task opens the trap of #116, which a reinstall fixes?
+ * A source checkout has no `Timon.exe`: its session task is a hidden
+ * PowerShell by design (`windowsTaskAction`), and reinstalling would register
+ * the same one. A package never starts PowerShell. Shared by
+ * `timon service status` and the diagnostic report, so both say the same.
+ */
+export function windowsConsoleTaskTrap(shape: WindowsTaskShape, packaged: boolean = packagedRuntime()): boolean {
+  return shape.consoleVisible && (packaged || shape.program !== 'powershell.exe');
+}
+
 function statusWindows(opts: ServiceOpts): ServiceResult {
   const res = opts.exec('schtasks', ['/Query', '/TN', WINDOWS_TASK, '/FO', 'LIST']);
   const installed = res.code === 0;
@@ -1301,7 +1349,7 @@ function statusWindows(opts: ServiceOpts): ServiceResult {
   const shape = installed ? readWindowsTaskShape(opts) : null;
   if (shape) {
     lines.push(`logon     : ${shape.logon}`, `action    : ${shape.program ?? 'unknown'}`);
-    if (shape.consoleVisible) lines.push(`console   : visible - ${windowsConsoleTaskAdvice(shape)}`);
+    if (windowsConsoleTaskTrap(shape)) lines.push(`console   : visible - ${windowsConsoleTaskAdvice(shape)}`);
   }
   return { ok: running, code: running ? 0 : 3, installed, lines, ...(shape ? { taskShape: shape } : {}) };
 }
@@ -1371,7 +1419,10 @@ function restoreWindowsDefinition(opts: ServiceOpts, previous: string, lines: st
     lines.push(`could not read back the logon type of scheduled task ${WINDOWS_TASK}: it is kept as restored`);
   }
   const fellBack = logon === TASK_SESSION_FALLBACK;
-  if (fellBack) lines.push(WINDOWS_SESSION_FALLBACK_NOTICE);
+  if (fellBack) {
+    recordS4uRefused(opts, lines);
+    lines.push(WINDOWS_SESSION_FALLBACK_NOTICE);
+  }
   // The revision `installWindows` just recorded describes the definition that
   // was taken away: left, the migration would never run again. Not cleared
   // either: to the desktop, no revision file means no task at all — a

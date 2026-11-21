@@ -96,6 +96,7 @@ export const WINDOWS_SERVICE_REVISION = '6';
 export function windowsServiceRevisionFile(home: string): string { return join(home, 'run', 'service-revision'); }
 export function windowsLegacyLauncher(home: string): string { return join(home, 'run', 'timon-service.vbs'); }
 export function windowsRepairDeclinedFile(home: string): string { return join(home, 'run', 'service-repair-declined'); }
+export function windowsRewriteDeclinedFile(home: string): string { return join(home, 'run', 'service-rewrite-declined'); }
 /** The launcher configuration the task names (revision 6 and later). */
 export function windowsLauncher(home: string): string { return join(home, 'run', 'timon-service.json'); }
 /** The batch launcher of revisions 2 to 5, until the upgrade retires it. */

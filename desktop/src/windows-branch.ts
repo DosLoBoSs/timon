@@ -19,9 +19,10 @@ export type WindowsStartBranch = 'embedded' | 'service' | 'rewrite' | 'disable-t
 /**
  * The rewrite of the task by the upgrade runner: not needed, still to run,
  * done, failed or declined (the runner put the previous task back or left it
- * alone), or `unusable` (exit 2: no task is left to serve).
+ * alone), `unusable` (exit 2: no task is left to serve), or `declined` at an
+ * earlier launch of this version and not asked again (`windowsRewriteDeclined`).
  */
-export type WindowsRewrite = 'none' | 'pending' | 'done' | 'failed' | 'unusable';
+export type WindowsRewrite = 'none' | 'pending' | 'done' | 'failed' | 'unusable' | 'declined';
 
 export type WindowsStartFacts = {
   /** Task Scheduler knows the task (`windowsTaskState().exists`, lenient). */
@@ -61,6 +62,9 @@ export function windowsStartBranch(facts: WindowsStartFacts): WindowsStartVerdic
   if (facts.start === 'started') return { branch: 'service', reason: 'the task started' };
   if (facts.rewrite === 'failed' && facts.taskExists) {
     return { branch: 'service', reason: 'the rewrite was declined or failed, the task in place serves' };
+  }
+  if (facts.rewrite === 'declined' && facts.taskExists) {
+    return { branch: 'service', reason: 'its repair was declined for this version, the task in place serves' };
   }
   if (facts.revisionRecorded) return { branch: 'service', reason: 'the task is installed' };
   if (facts.taskExists) return { branch: 'service', reason: 'the task exists without a revision' };

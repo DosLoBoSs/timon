@@ -67,6 +67,7 @@ import {
   clearServiceRefused, declineServiceRepair, markServiceRefusedNotice, recordServiceRefused, serviceRefusedMessage, serviceRefusedNoticeDue,
   serviceRepairFailureMessage, serviceRepairPrompt, serviceRepairVerdict,
   serviceUpgradeNeeded, upgradeFailureMessage, upgradeNeedsFallback, upgradePackagedService, windowsSessionIntent,
+  declineWindowsRewrite, windowsRewriteDeclined, windowsTaskRepair,
   sessionFallbackMessage,
 } from './upgrade.js';
 import {
@@ -1623,8 +1624,15 @@ async function main(): Promise<void> {
     ...(taskState ? { taskExists: taskState.exists, taskShape } : {}),
   });
   console.log(`[desktop] service installed: ${serviceInstalled}; upgrade needed: ${upgradeNeeded}`);
+  // Not a revision upgrade but the repair of a task changed outside Timon (#116):
+  // declining its elevation must not fail an approved update, the task in place serves.
+  const windowsRepair = winService && windowsTaskRepair(cfg.home, { ...(taskState ? { taskExists: taskState.exists } : {}), taskShape });
+  const repairDeclined = windowsRepair && windowsRewriteDeclined(cfg.home, app.getVersion());
+  if (repairDeclined) {
+    console.log(`[desktop] the repair of the boot task was declined for ${app.getVersion()}: not asked again before the next version (Settings > Installation or timon service install ask now)`);
+  }
   // Windows: one daemon per home, decided from the task itself (`windows-branch.ts`).
-  let rewrite: WindowsRewrite = upgradeNeeded ? 'pending' : 'none';
+  let rewrite: WindowsRewrite = upgradeNeeded ? 'pending' : repairDeclined ? 'declined' : 'none';
   const decideWindows = (start?: 'started' | 'needs-repair' | 'never-ran'): WindowsStartVerdict => {
     const verdict = windowsStartBranch({
       taskExists: taskState?.exists ?? false,
@@ -1636,9 +1644,6 @@ async function main(): Promise<void> {
     console.log(`[desktop] branch: ${verdict.branch} (${verdict.reason})`);
     return verdict;
   };
-  // Not a revision upgrade but the repair of a task changed outside Timon (#116):
-  // declining its elevation must not fail an approved update, the task in place serves.
-  const windowsRepair = winService && (taskShape?.consoleVisible === true || !serviceInstalled);
   const repair = serviceRepairVerdict(cfg.home, app.getVersion(), {
     packaged: app.isPackaged,
     // A portable install chose no supervisor: nothing was lost there.
@@ -1677,6 +1682,12 @@ async function main(): Promise<void> {
       if (updateApproved && !upgradeNeedsFallback(error) && !windowsRepair) throw error;
       serviceUnusable = upgradeNeedsFallback(error);
       rewrite = serviceUnusable ? 'unusable' : 'failed';
+      // Asked at every launch, a declined repair would be as tiresome as the
+      // console it fixes: this version stops asking, the task in place serves.
+      if (windowsRepair && !serviceUnusable) {
+        declineWindowsRewrite(cfg.home, app.getVersion());
+        console.log('[desktop] the repair of the boot task was declined or failed: not asked again before the next version');
+      }
       const unsaved = snapshotFailure(cfg.home, app.getVersion());
       void reportProblem({
         type: 'warning',

@@ -24,12 +24,15 @@ import {
   upgradeNeedsFallback,
   upgradePackagedService,
   windowsSessionIntent,
+  declineWindowsRewrite,
+  windowsRewriteDeclined,
+  windowsTaskRepair,
   DESKTOP_SESSION_INTENT_ENV,
   UPGRADE_SESSION_FALLBACK_LINE,
   sessionFallbackMessage,
 } from './upgrade.js';
 import { windowsTaskShape } from './windows-task-shape.js';
-import { WINDOWS_SERVICE_REVISION, hasDesktopService, windowsBatchLauncher, windowsLauncher, windowsLegacyLauncher, windowsServiceRefusedFile, windowsServiceRevisionFile } from './service.js';
+import { WINDOWS_SERVICE_REVISION, hasDesktopService, windowsBatchLauncher, windowsLauncher, windowsLegacyLauncher, windowsRewriteDeclinedFile, windowsServiceRefusedFile, windowsServiceRevisionFile } from './service.js';
 
 const cfg: DesktopConfig = {
   home: '/Users/sam/.timon', packagedDefaults: false,
@@ -368,6 +371,53 @@ test('windows #116: a task that opens a console is rewritten whatever its revisi
     assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, taskShape: session }), false, 'the session task opens no console');
     assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, taskShape: null }), false, 'unreadable: the revision decides');
     assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, packaged: false, taskShape: pcB }), false, 'dev and portable: never');
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+/**
+ * A repair declined at launch used to ask for elevation again at every launch,
+ * as tiresome as the console it fixes. Remembered for the version: the next
+ * one asks again, an explicit install removes the file (host adapter).
+ */
+test('windows #116: a declined repair is not asked again in the same version, and is at the next one', () => {
+  const home = mkdtempSync(join(tmpdir(), 'timon-upgrade-declined-'));
+  try {
+    const pcA = { platform: 'win32' as NodeJS.Platform, packaged: true, serviceInstalled: false, taskExists: true };
+    assert.equal(windowsTaskRepair(home, pcA), true, 'a task without a revision: a repair');
+    assert.equal(windowsRewriteDeclined(home, '0.2.0'), false);
+    declineWindowsRewrite(home, '0.2.0');
+    assert.equal(readFileSync(windowsRewriteDeclinedFile(home), 'utf8'), '0.2.0\n');
+    assert.equal(windowsRewriteDeclinedFile(home), join(home, 'run', 'service-rewrite-declined'));
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', pcA), false, 'declined for this version: not asked again');
+    assert.equal(serviceUpgradeNeeded(home, '0.2.1', pcA), true, 'the next version asks again');
+
+    // PC B: a console task, whatever its revision, is a repair too.
+    writeFileSync(windowsServiceRevisionFile(home), '5\n');
+    const pcB = { ...pcA, serviceInstalled: true, taskShape: windowsTaskShape(taskXml('InteractiveToken', 'cmd.exe', 'Boot')) };
+    assert.equal(windowsTaskRepair(home, pcB), true);
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', pcB), false);
+    assert.equal(serviceUpgradeNeeded(home, '0.2.1', pcB), true);
+    // A revision upgrade of a task that opens no console is no repair: the marker is not read.
+    assert.equal(windowsTaskRepair(home, { ...pcA, taskShape: windowsTaskShape(taskXml('S4U', 'node.exe', 'Boot')) }), false);
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...pcA, serviceInstalled: true }), true, 'revision 5: still moved to 6');
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+/**
+ * The revision-1 logon task records no revision either, but its launcher
+ * marks it: moving it is a migration, which an approved update cannot skip
+ * (a failure still fails the update, as before #116).
+ */
+test('windows #116: the revision-1 migration is no repair', () => {
+  const home = mkdtempSync(join(tmpdir(), 'timon-upgrade-legacy-'));
+  try {
+    mkdirSync(join(home, 'run'), { recursive: true });
+    writeFileSync(windowsLegacyLauncher(home), 'x');
+    const facts = { platform: 'win32' as NodeJS.Platform, packaged: true, serviceInstalled: false, taskExists: true };
+    assert.equal(windowsTaskRepair(home, facts), false);
+    declineWindowsRewrite(home, '0.2.0');
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', facts), true, 'never silenced by a declined repair');
+    assert.equal(windowsTaskRepair(home, { taskExists: false }), false);
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 

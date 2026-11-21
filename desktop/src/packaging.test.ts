@@ -469,7 +469,7 @@ test('the NSIS installer removes the daemon task, and never registers it', () =>
   const daemonsDir = service.match(/export const MACOS_LAUNCH_DAEMONS_DIR = '([^']+)'/u)?.[1];
   assert.ok(daemonsDir);
   assert.equal(desktopService.match(/export const MACOS_LAUNCH_DAEMONS_DIR = '([^']+)'/u)?.[1], daemonsDir);
-  for (const file of ['service-revision', 'timon-service.vbs', 'timon-service.cmd', 'timon-service.json', 'service-repair-declined', 'service-refused']) {
+  for (const file of ['service-revision', 'timon-service.vbs', 'timon-service.cmd', 'timon-service.json', 'service-repair-declined', 'service-rewrite-declined', 'service-refused']) {
     assert.ok(service.includes(`'${file}'`) && desktopService.includes(`'${file}'`), file);
   }
   // The mark a service daemon refused the home leaves, read by the late handover.
