@@ -34,6 +34,13 @@ export const DESKTOP_SESSION_INTENT_ENV = 'TIMON_DESKTOP_SESSION_INTENT';
  * always wins. `undefined` leaves the install to read the recorded answer or
  * the task in place, as before.
  */
+/**
+ * The line the runner prints when the rewrite kept the task for the session
+ * only (`UpgradeResult.sessionFallback`): the desktop reads it from the
+ * runner's output to say it once. Its copy lives in `desktop/src/upgrade.ts`.
+ */
+export const UPGRADE_SESSION_FALLBACK_LINE = 'timon-upgrade: session-fallback';
+
 export function upgradeSessionMode(intent: string | undefined, recorded: ServiceSessionMode | null): ServiceSessionMode | undefined {
   if (recorded !== null || !isServiceSessionMode(intent)) return undefined;
   return intent;
@@ -66,7 +73,14 @@ export type UpgradeDeps = {
  * previous one could not be put back), so the desktop must start its embedded
  * daemon rather than wait on a supervisor.
  */
-export type UpgradeResult = { ok: boolean; lines: string[]; reason: string | null; fallback: boolean };
+export type UpgradeResult = {
+  ok: boolean; lines: string[]; reason: string | null; fallback: boolean;
+  /**
+   * Windows: the task was asked to run logged out, Windows kept it for the
+   * session only, and the session task now serves (`ServiceResult.sessionFallback`).
+   */
+  sessionFallback?: boolean;
+};
 
 const detail = (result: ServiceResult, otherwise: string): string =>
   result.reason ?? result.lines.at(-1) ?? otherwise;
@@ -134,7 +148,7 @@ export async function upgradeDesktopService(deps: UpgradeDeps): Promise<UpgradeR
     } catch (error) {
       (deps.warn ?? console.warn)('[desktop-runtime] could not remove the previous launcher', error);
     }
-    return { ok: true, lines, reason: null, fallback: false };
+    return { ok: true, lines, reason: null, fallback: false, ...(installed.sessionFallback ? { sessionFallback: true } : {}) };
   }
 
   try {

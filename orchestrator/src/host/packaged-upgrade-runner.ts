@@ -13,7 +13,7 @@ import {
   pruneInactiveReleases,
   stagePackagedRuntime,
 } from './packaged-service.js';
-import { DESKTOP_SESSION_INTENT_ENV, upgradeDesktopService, upgradeSessionMode } from './packaged-upgrade.js';
+import { DESKTOP_SESSION_INTENT_ENV, UPGRADE_SESSION_FALLBACK_LINE, upgradeDesktopService, upgradeSessionMode } from './packaged-upgrade.js';
 import { readServiceSessionMode } from './service-session-mode.js';
 import { serviceOfAnotherHome } from './service-ownership.js';
 import {
@@ -114,4 +114,5 @@ if (!result.ok) {
   process.exitCode = result.fallback ? 2 : 1;
 } else {
   console.log(result.lines.join('\n'));
+  if (result.sessionFallback) console.log(UPGRADE_SESSION_FALLBACK_LINE);
 }

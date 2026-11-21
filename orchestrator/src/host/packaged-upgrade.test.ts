@@ -234,3 +234,17 @@ test('windows #116: the desktop\'s session intent is used only when the user nev
   assert.equal(upgradeSessionMode(undefined, null), undefined, 'no intent: the task in place decides');
   assert.equal(upgradeSessionMode('boot', null), undefined, 'an unknown intent is ignored');
 });
+
+test('windows #116: a rewrite kept for the session only says so in its result', async () => {
+  const notice = 'it stops at logout';
+  const { deps } = harness({
+    platform: 'win32',
+    install: () => ({ ok: true, code: 0, lines: [notice], sessionFallback: true }),
+  });
+  const result = await upgradeDesktopService(deps);
+  assert.equal(result.ok, true);
+  assert.equal(result.sessionFallback, true);
+  assert.deepEqual(result.lines, [notice]);
+  const plain = await upgradeDesktopService(harness({ platform: 'win32' }).deps);
+  assert.equal(plain.sessionFallback, undefined, 'an off-session task kept as asked says nothing');
+});
