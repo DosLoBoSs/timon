@@ -82,6 +82,20 @@ export type LauncherDeps = {
   now: () => Date;
 };
 
+/**
+ * The daemon's environment: the task's, then the configuration's. Never an
+ * `ELECTRON_RUN_AS_NODE` inherited by accident (packaging audit I2): only the
+ * configuration sets it, for Electron run as Node; the Node the package ships
+ * would pass it on to every child.
+ */
+export function daemonEnv(inherited: NodeJS.ProcessEnv, own: Record<string, string>): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...inherited };
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === 'ELECTRON_RUN_AS_NODE') delete env[key];
+  }
+  return { ...env, ...own };
+}
+
 /** Windows PowerShell by its full path: the task's PATH is the one read when it started (packaging audit I5). */
 export function windowsPowershell(env: NodeJS.ProcessEnv = process.env): string {
   const root = env.SystemRoot ?? env.windir;
@@ -97,7 +111,7 @@ export const launcherDeps: LauncherDeps = {
   runDaemon: (config, logFd) => new Promise((done) => {
     const child = spawn(config.node, config.args, {
       cwd: config.cwd,
-      env: { ...process.env, ...config.env },
+      env: daemonEnv(process.env, config.env),
       stdio: ['ignore', logFd, logFd],
       windowsHide: true,
     });

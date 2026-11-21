@@ -1025,7 +1025,14 @@ function replacedLauncherSteps(opts: ServiceOpts): ElevatedStep[] {
 export function retireBatchLauncher(opts: Pick<ServiceOpts, 'timonHome' | 'dryRun'>, lines: string[] = []): void {
   const file = windowsServiceFiles(opts.timonHome, join).batchLauncher;
   if (!existsSync(file)) return;
-  if (!opts.dryRun) rmSync(file, { force: true });
+  try {
+    if (!opts.dryRun) rmSync(file, { force: true });
+  } catch (error) {
+    // Held by an antivirus scan, say: the task no longer runs it, so it only
+    // costs a stale file, which the next install or the uninstall removes.
+    lines.push(`could not remove the batch launcher of the previous task (${file}): ${(error as Error).message}`);
+    return;
+  }
   lines.push(`${opts.dryRun ? '(dry-run) would remove' : 'removed'} the batch launcher of the previous task (${file})`);
 }
 

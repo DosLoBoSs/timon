@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
-  fallbackLog, parseLauncherConfig, runLauncher, WINDOWS_LAUNCHER_FORMAT, WITNESS_RETRY_SECONDS, windowsPowershell, type WindowsLauncherConfig,
+  daemonEnv, fallbackLog, parseLauncherConfig, runLauncher, WINDOWS_LAUNCHER_FORMAT, WITNESS_RETRY_SECONDS, windowsPowershell, type WindowsLauncherConfig,
 } from './windows-service-launcher.js';
 
 function config(dir: string, over: Partial<WindowsLauncherConfig> = {}): WindowsLauncherConfig {
@@ -98,4 +98,9 @@ test('PowerShell is named by its full path, the task\'s PATH being whatever it w
   assert.equal(windowsPowershell({ SystemRoot: 'C:\\Windows' }).replace(/\//g, '\\'), 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
   assert.equal(windowsPowershell({}), 'powershell.exe');
   assert.equal(fallbackLog(join('h', 'run', 'timon-service.json')), join('h', 'tmp', 'daemon.log'));
+});
+
+test('the daemon never inherits Electron\'s Node flag; only the configuration sets it', () => {
+  assert.deepEqual(daemonEnv({ PATH: 'p', electron_run_as_node: '1' }, { TIMON_HOME: 'h' }), { PATH: 'p', TIMON_HOME: 'h' });
+  assert.equal(daemonEnv({ ELECTRON_RUN_AS_NODE: '1' }, { ELECTRON_RUN_AS_NODE: '1' }).ELECTRON_RUN_AS_NODE, '1');
 });
