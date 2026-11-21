@@ -38,7 +38,7 @@ export function HostSignInDialog({ backend, name, kind, open, onOpenChange, onDo
             {kind === 'login' ? t('hostSignIn.login.title', { name }) : t('hostSignIn.token.title')}
           </DialogTitle>
           <DialogDescription className="text-xs leading-relaxed">
-            {kind === 'login' ? t('hostSignIn.login.description', { name }) : t('hostSignIn.token.description')}
+            {kind === 'login' ? t('hostSignIn.login.description') : t('hostSignIn.token.description')}
           </DialogDescription>
         </DialogHeader>
         {open ? <HostFlow backend={backend} name={name} kind={kind} onClose={() => onOpenChange(false)} onDone={onDone} /> : null}
