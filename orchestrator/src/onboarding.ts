@@ -85,6 +85,10 @@ export type OnboardingResult = {
   sessionMode?: ServiceSessionMode | null;
   /** `service-status`: the answer changes something on this OS (`sessionModeSupported`). */
   sessionModeSupported?: boolean;
+  /** `install-service`, Windows: asked to keep running when logged out, the
+   *  service was registered for the session instead and stops at logout
+   *  (`ServiceResult.sessionFallback`; `lines` says it in words). */
+  sessionFallback?: boolean;
 };
 
 export class OnboardingError extends Error {}
@@ -96,9 +100,9 @@ export class OnboardingError extends Error {}
  */
 export function runInstallService(
   opts: ServiceOpts,
-  install: (o: ServiceOpts) => { ok: boolean; lines: string[] } = installService,
+  install: (o: ServiceOpts) => { ok: boolean; lines: string[]; sessionFallback?: boolean } = installService,
 ): OnboardingResult {
-  let result: { ok: boolean; lines: string[] };
+  let result: { ok: boolean; lines: string[]; sessionFallback?: boolean };
   try {
     result = install(opts);
   } catch (e) {
@@ -109,7 +113,9 @@ export function runInstallService(
       reason: (e as Error).message,
     };
   }
-  if (result.ok) return { ok: true, installed: true, lines: result.lines, command: null, reason: null };
+  if (result.ok) {
+    return { ok: true, installed: true, lines: result.lines, command: null, reason: null, ...(result.sessionFallback ? { sessionFallback: true } : {}) };
+  }
   return {
     ok: false,
     lines: result.lines,
