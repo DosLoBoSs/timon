@@ -19,6 +19,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BrandMark } from '@/components/brand-mark';
 import { ProviderRow } from '@/components/provider-list/provider-row';
+import { HostSignInAction } from '@/components/provider-cli/host-sign-in-action';
+import { hostSignInOffer } from '@/lib/host-sign-in';
 import type { Setting } from '@/components/settings/settings-row';
 import { fetchProvidersOverview, type ProviderOverview, type ProvidersOverview } from '@/lib/provider-overview';
 import { defaultChoices, groupProviders, verifyProviders } from '@/lib/provider-list';
@@ -116,16 +118,17 @@ export function ProvidersList({ onOpen, onAdd, readOnly = false }: {
       </div>
 
       {reordering && !readOnly ? <ProvidersReorder onChanged={() => void load()} /> : (
-        <ProviderGroups providers={providers} query={query} onOpen={onOpen} />
+        <ProviderGroups providers={providers} query={query} onOpen={onOpen} onChanged={() => void load()} />
       )}
     </div>
   );
 }
 
-function ProviderGroups({ providers, query, onOpen }: {
+function ProviderGroups({ providers, query, onOpen, onChanged }: {
   providers: readonly ProviderOverview[];
   query: string;
   onOpen: (id: string) => void;
+  onChanged: () => void;
 }): ReactElement {
   const groups = useMemo(() => groupProviders(providers, query), [providers, query]);
   if (providers.length === 0) return <p className="m-0 text-[13px] text-muted-foreground">{t('providerList.empty')}</p>;
@@ -134,17 +137,18 @@ function ProviderGroups({ providers, query, onOpen }: {
   }
   return (
     <div className="space-y-6">
-      <ProviderGroup id="connected" title={t('providerList.groups.connected')} providers={groups.connected} onOpen={onOpen} />
-      <ProviderGroup id="others" title={t('providerList.groups.others')} providers={groups.others} onOpen={onOpen} />
+      <ProviderGroup id="connected" title={t('providerList.groups.connected')} providers={groups.connected} onOpen={onOpen} onChanged={onChanged} />
+      <ProviderGroup id="others" title={t('providerList.groups.others')} providers={groups.others} onOpen={onOpen} onChanged={onChanged} />
     </div>
   );
 }
 
-function ProviderGroup({ id, title, providers, onOpen }: {
+function ProviderGroup({ id, title, providers, onOpen, onChanged }: {
   id: string;
   title: string;
   providers: readonly ProviderOverview[];
   onOpen: (id: string) => void;
+  onChanged: () => void;
 }): ReactElement | null {
   if (providers.length === 0) return null;
   const heading = `providers-group-${id}`;
@@ -156,7 +160,8 @@ function ProviderGroup({ id, title, providers, onOpen }: {
       <ul className="m-0 flex list-none flex-col gap-0.5 rounded-xl bg-muted p-1">
         {providers.map((provider) => (
           <li key={provider.id}>
-            <ProviderRow provider={provider} onOpen={() => onOpen(provider.id)} />
+            <ProviderRow provider={provider} onOpen={() => onOpen(provider.id)}
+              action={hostSignInOffer(provider.connection.host) ? <HostSignInAction host={provider.connection.host} name={provider.name} onDone={onChanged} /> : null} />
           </li>
         ))}
       </ul>

@@ -87,7 +87,7 @@ function LoginAddress({ url }: { url: string }): ReactElement {
  * What the person has to do right now, for one flow. Stateless: the pane owns
  * the flow and the pasted text.
  */
-export function AccountLoginPrompt({ login, code, busy, onCode, onSubmit, onRetry, onClose }: {
+export function AccountLoginPrompt({ login, code, busy, onCode, onSubmit, onRetry, onClose, signInWith, connected }: {
   login: AccountLogin | null;
   code: string;
   busy: boolean;
@@ -95,6 +95,10 @@ export function AccountLoginPrompt({ login, code, busy, onCode, onSubmit, onRetr
   onSubmit: () => void;
   onRetry: () => void;
   onClose: () => void;
+  /** The first step's words, when the sign-in is not an account's (the host's own). */
+  signInWith?: string;
+  /** What success says, when it is not "Signed in as …" (a long-lived token). */
+  connected?: string;
 }): ReactElement {
   if (!login || login.state === 'starting') {
     return <p className="text-[12px] text-muted-foreground">{t('backendAccounts.login.starting')}</p>;
@@ -111,7 +115,7 @@ export function AccountLoginPrompt({ login, code, busy, onCode, onSubmit, onRetr
     );
   }
   if (login.state === 'connected') {
-    return <p className="text-[12px] text-emerald-700 dark:text-emerald-300">{t('backendAccounts.login.connected', { identity: login.identity ?? '' })}</p>;
+    return <p className="text-[12px] text-emerald-700 dark:text-emerald-300">{connected ?? t('backendAccounts.login.connected', { identity: login.identity ?? '' })}</p>;
   }
   if (login.state === 'verifying' || login.codeSent) {
     return <p className="text-[12px] text-muted-foreground">{t('backendAccounts.login.verifying')}</p>;
@@ -142,7 +146,7 @@ export function AccountLoginPrompt({ login, code, busy, onCode, onSubmit, onRetr
   }
   return (
     <form className="space-y-2" onSubmit={(event: FormEvent) => { event.preventDefault(); onSubmit(); }}>
-      <p className="text-[12px] leading-snug">{t('backendAccounts.login.pasteStep1')} {link}</p>
+      <p className="text-[12px] leading-snug">{signInWith ?? t('backendAccounts.login.pasteStep1')} {link}</p>
       {address}
       <label className="block space-y-1">
         <span className="text-[12px]">{t('backendAccounts.login.pasteStep2')}</span>

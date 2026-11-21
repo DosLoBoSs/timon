@@ -5,6 +5,7 @@
  * everything — what is installed, signed in, which installer runs; this module
  * types its answers and reads them.
  */
+import type { HostSignInView } from '@/lib/host-sign-in';
 import type { ProviderOverview, ProviderStatus } from '@/lib/provider-overview';
 
 export type ProviderCli = {
@@ -27,6 +28,8 @@ export type ProviderCli = {
   signInThen: string | null;
   /** The onboarding's chat can start on it. */
   seedsMainAgent: boolean;
+  /** The host's own sign-in, when Timon can keep it (sign in from the browser, a long-lived token); absent from an older daemon. */
+  host?: HostSignInView | null;
   version: string | null;
   latest: string | null;
   updateAvailable: boolean;
@@ -116,6 +119,7 @@ export function onboardingProvider(cli: ProviderCli): ProviderOverview {
       signInThen: cli.signInThen,
       acceptsAccounts: false,
       accounts: [],
+      host: cli.host ?? null,
     },
     secret: { required: false, present: false, names: [] },
     programs: [],

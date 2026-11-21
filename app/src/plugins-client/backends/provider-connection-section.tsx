@@ -11,6 +11,11 @@
  * one's own. A computer that is not signed in while an account is says so
  * without alarm: missions run on the accounts.
  *
+ * A provider whose host sign-in Timon can keep (`connection.host`, Claude)
+ * signs this computer in in the app: "Sign in" opens the page-and-code
+ * dialog, and the "…" menu goes back to the terminal's session or signs in
+ * again. The command stays one click away ("Show the sign-in command").
+ *
  * Painted only when there is something to say: a sign-in command, a known
  * sign-in state, or backends that take accounts. Accounts are listed in the
  * daemon's order: a mission is never moved from one to another, so there is
@@ -29,6 +34,8 @@ import { useProviderPage } from '@/components/provider-page/provider-page-contex
 import { TonePill } from '@/components/provider-page/provider-status-pill';
 import { BackendAccountsList } from '@/components/settings/backend-accounts-settings';
 import { fetchProviderClis } from '@/lib/provider-clis';
+import { forgetHostSignIn, type HostFlowKind } from '@/lib/host-sign-in';
+import { HostSignInDialog } from '@/components/provider-cli/host-sign-in-dialog';
 import type { ProviderOverview, StatusTone } from '@/lib/provider-overview';
 import { t } from '@/lib/i18n';
 
@@ -43,6 +50,7 @@ export function hasConnection(provider: Pick<ProviderOverview, 'connection'>): b
  * in here but an account is: missions run on it, nothing to fix.
  */
 export function computerState(connection: ProviderOverview['connection']): { tone: StatusTone; key: string } | null {
+  if (connection.host?.kept) return { tone: 'ready', key: 'hostSignIn.status.kept' };
   if (connection.signedIn === true) return { tone: 'ready', key: 'providerPage.connection.signedIn' };
   if (connection.signedIn === null) return null;
   if (connection.accounts.some((account) => account.connected)) return { tone: 'off', key: 'providerPage.connection.usesAccounts' };
@@ -57,7 +65,7 @@ export function ConnectionSection(): ReactElement | null {
   return (
     <ProviderSection title={t('providerPage.connection.title')}>
       {connection.signInCommand !== null || connection.signedIn !== null
-        ? <ComputerRow connection={connection} refresh={page.refresh} />
+        ? <ComputerRow connection={connection} name={provider.name} refresh={page.refresh} />
         : null}
       {connection.acceptsAccounts ? (
         <div className="flex flex-col gap-0.5" data-connection="accounts">
@@ -68,8 +76,12 @@ export function ConnectionSection(): ReactElement | null {
   );
 }
 
-function ComputerRow({ connection, refresh }: { connection: ProviderOverview['connection']; refresh: () => Promise<void> }): ReactElement {
+function ComputerRow({ connection, name, refresh }: { connection: ProviderOverview['connection']; name: string; refresh: () => Promise<void> }): ReactElement {
   const [checking, setChecking] = useState(false);
+  const [dialog, setDialog] = useState<HostFlowKind | null>(null);
+  const host = connection.host ?? null;
+  // Signed in in the app, into Timon's folder, rather than with the terminal's command.
+  const inApp = host?.browser === true;
   /** Unfolded after "Connect": what happened to the command, and the command itself. */
   const [steps, setSteps] = useState<ProviderCliSignInOutcome | 'shown' | null>(null);
   const command = connection.signInCommand;
@@ -94,23 +106,42 @@ function ComputerRow({ connection, refresh }: { connection: ProviderOverview['co
     setSteps(await runSignInCommand(command));
   };
 
-  const offerConnect = command !== null && connection.signedIn !== true;
+  const backToTerminal = async (): Promise<void> => {
+    if (!host) return;
+    try {
+      await forgetHostSignIn(host.backend);
+      toast.success(t('hostSignIn.forgotten'));
+      await refresh();
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
+
+  const offerConnect = (command !== null || inApp) && connection.signedIn !== true && !host?.kept;
   return (
     <ProviderSettingRow
       data-connection="computer"
       data-signed-in={connection.signedIn === null ? undefined : String(connection.signedIn)}
       title={t('providerPage.connection.computer')}
-      status={state ? <TonePill tone={state.tone} className="flex">{t(state.key)}</TonePill> : null}
+      status={state ? <TonePill tone={state.tone} className="flex">{t(state.key, { identity: host?.identity ?? '' })}</TonePill> : null}
       action={offerConnect ? (
-        <Button type="button" size="sm" variant={usesAccounts ? 'outline' : 'default'} className="h-8 gap-1.5" onClick={() => void connect()}>
+        <Button type="button" size="sm" variant={usesAccounts ? 'outline' : 'default'} className="h-8 gap-1.5"
+          onClick={inApp ? () => setDialog('login') : () => void connect()} data-host-sign-in-offer={inApp ? 'login' : undefined}>
           <LogIn aria-hidden className="size-3.5" />
-          {t('providerPage.connection.connect')}
+          {t(inApp ? 'providerClis.signIn' : 'providerPage.connection.connect')}
         </Button>
       ) : null}
       menu={<>
         <DropdownMenuItem disabled={checking} onSelect={() => void checkAgain()}>{t('providerPage.connection.checkAgain')}</DropdownMenuItem>
-        {command !== null && connection.signedIn === true
-          ? <DropdownMenuItem onSelect={() => void connect()}>{t('providerPage.connection.reconnect')}</DropdownMenuItem>
+        {host?.kept ? <>
+          <DropdownMenuItem onSelect={() => setDialog('login')}>{t('providerPage.connection.reconnect')}</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void backToTerminal()}>{t('hostSignIn.useTerminal')}</DropdownMenuItem>
+        </> : null}
+        {inApp && !host?.kept && connection.signedIn === true
+          ? <DropdownMenuItem onSelect={() => setDialog('login')}>{t('hostSignIn.useBrowser')}</DropdownMenuItem>
+          : null}
+        {command !== null && connection.signedIn === true && !host?.kept
+          ? <DropdownMenuItem onSelect={() => void connect()}>{t(inApp ? 'hostSignIn.reconnectTerminal' : 'providerPage.connection.reconnect')}</DropdownMenuItem>
           : null}
         {command !== null && steps === null
           ? <DropdownMenuItem onSelect={() => setSteps('shown')}>{t('providerPage.connection.showCommand')}</DropdownMenuItem>
@@ -132,6 +163,10 @@ function ComputerRow({ connection, refresh }: { connection: ProviderOverview['co
             </Button>
           </div>
         </div>
+      ) : null}
+      {host ? (
+        <HostSignInDialog backend={host.backend} name={name} kind={dialog ?? 'login'} open={dialog !== null}
+          onOpenChange={(open) => { if (!open) setDialog(null); }} onDone={() => void refresh()} />
       ) : null}
     </ProviderSettingRow>
   );

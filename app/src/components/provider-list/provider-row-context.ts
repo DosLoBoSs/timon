@@ -23,7 +23,7 @@ export type ProviderRowValue = {
   status: ProviderStatus;
   /** Opens the provider's page; `null` where the row leads nowhere (the onboarding). */
   open: (() => void) | null;
-  /** What the surface puts at the end of the row (the onboarding's install button); `null` in the list. */
+  /** What the surface puts at the end of the row: the onboarding's install button, the list's sign-in offer (`HostSignInAction`). */
   action: ReactNode;
 };
 
