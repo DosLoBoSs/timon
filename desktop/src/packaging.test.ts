@@ -191,7 +191,7 @@ test('the NSIS installer pauses the service with one elevation as it opens, over
   // A per-machine install elevates itself and runs again: one prompt, from the elevated instance.
   assert.match(pause, /!ifndef BUILD_UNINSTALLER[\s\S]*\$\{If\} \$\{Silent\}\s+\$\{AndIf\} \$hasPerMachineInstallation == "1"\s+\$\{AndIfNot\} \$\{UAC_IsAdmin\}\s+StrCpy \$2 "skip"/);
   assert.ok(pause.includes('${FileExists} "$INSTDIR\\${APP_EXECUTABLE_FILENAME}"'), 'an existing install');
-  assert.match(pause, /timon-service\.cmd[\s\S]*timon-service\.vbs/, 'a service launcher, revision 2 or 1');
+  assert.match(pause, /timon-service\.json[\s\S]*timon-service\.cmd[\s\S]*timon-service\.vbs/, 'a service launcher, revision 6, 2 or 1');
   assert.match(pause, /"runas"/);
   // Elevation refused (standard account, Entra-joined PC): the same script runs
   // unelevated, which is enough for the user's own Interactive task.
@@ -423,7 +423,7 @@ test('the NSIS uninstaller removes the launcher files once the task is deleted',
   const nsh = readFileSync(join(root, 'build', 'installer.nsh'), 'utf8');
   const uninstall = nsh.match(/!macro customUnInstall\s+([\s\S]*?)!macroend/)?.[1] ?? '';
   const cleanup = uninstall.match(/\$\{If\} \$0 == 0\s+([\s\S]*?)\$\{EndIf\}\s+DetailPrint "Timon data has been kept\."/)?.[1] ?? '';
-  for (const file of ['service-revision', 'timon-service.cmd', 'timon-service.vbs', 'session-witness.dpapi', 'service-repair-declined']) {
+  for (const file of ['service-revision', 'timon-service.json', 'timon-service.cmd', 'timon-service.vbs', 'session-witness.dpapi', 'service-repair-declined']) {
     assert.ok(cleanup.includes(`Delete "$PROFILE\\.timon\\run\\${file}"`), file);
   }
 });
@@ -469,7 +469,7 @@ test('the NSIS installer removes the daemon task, and never registers it', () =>
   const daemonsDir = service.match(/export const MACOS_LAUNCH_DAEMONS_DIR = '([^']+)'/u)?.[1];
   assert.ok(daemonsDir);
   assert.equal(desktopService.match(/export const MACOS_LAUNCH_DAEMONS_DIR = '([^']+)'/u)?.[1], daemonsDir);
-  for (const file of ['service-revision', 'timon-service.vbs', 'timon-service.cmd', 'service-repair-declined', 'service-refused']) {
+  for (const file of ['service-revision', 'timon-service.vbs', 'timon-service.cmd', 'timon-service.json', 'service-repair-declined', 'service-refused']) {
     assert.ok(service.includes(`'${file}'`) && desktopService.includes(`'${file}'`), file);
   }
   // The mark a service daemon refused the home leaves, read by the late handover.
@@ -492,9 +492,17 @@ test('the NSIS installer removes the daemon task, and never registers it', () =>
   ]) {
     assert.ok(service.includes(expression) && desktopService.includes(expression), expression);
   }
-  // `windowsLauncherUnmarked` looks for the line the launcher writes per variable (TIM-0087).
-  assert.ok(service.includes('`set "${key}=${batchValue(value)}"`'), 'the launcher sets each variable as set "KEY=value"');
-  assert.ok(desktopService.includes('/^set "TIMON_DESKTOP_SERVICE=1"\\r?$/m'));
+  // `windowsLauncherUnmarked` reads the marker where the host adapter does (TIM-0087):
+  // `env` of the configuration, or the line the batch of revisions 2 to 5 wrote per variable.
+  assert.ok(service.includes("return config.env.TIMON_DESKTOP_SERVICE === '1';"));
+  assert.ok(desktopService.includes("return env?.TIMON_DESKTOP_SERVICE !== '1';"));
+  assert.ok(service.includes('/^set "TIMON_DESKTOP_SERVICE=1"\\r?$/m') && desktopService.includes('/^set "TIMON_DESKTOP_SERVICE=1"\\r?$/m'));
+  // The executable the logon task starts, its switch, and the programs a launcher runs as.
+  assert.equal(service.match(/export const WINDOWS_APP_EXECUTABLE = '([^']+)'/u)?.[1], `${yml.match(/^productName:\s*(\S+)/m)?.[1]}.exe`);
+  const shell = readFileSync(join(root, 'src', 'windows-service-shell.ts'), 'utf8');
+  assert.equal(shell.match(/export const WINDOWS_SERVICE_FLAG = '([^']+)'/u)?.[1], service.match(/export const WINDOWS_SERVICE_FLAG = '([^']+)'/u)?.[1]);
+  const programs = (text: string, name: string) => new RegExp(`${name} = (\\[[^\\]]*\\])`).exec(text)?.[1];
+  assert.equal(programs(desktopService, 'WINDOWS_LAUNCHER_PROGRAMS'), programs(service, 'LAUNCHER_PROGRAMS')?.replace("WINDOWS_APP_EXECUTABLE.toLowerCase()", "'timon.exe'"));
   // The macOS label and the packaged ports are copied the same way: both sides must agree.
   const label = service.match(/export const MACOS_LABEL = '([^']+)'/u)?.[1];
   assert.ok(label);

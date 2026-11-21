@@ -33,6 +33,10 @@ export type UpgradeDeps = {
   healthy: () => Promise<boolean>;
   mark: () => Promise<void>;
   prune: () => Promise<void>;
+  /** Windows: what the previous task ran and the new one does not, removed
+   *  once the new one answers (`retireBatchLauncher`). Never before: a
+   *  rollback restores the previous task. */
+  retire?: (opts: ServiceOpts) => void;
   warn?: (message: string, error: unknown) => void;
 };
 
@@ -102,7 +106,15 @@ export async function upgradeDesktopService(deps: UpgradeDeps): Promise<UpgradeR
   if (installed.refused) return failed(detail(installed, 'Windows never started the service'), true);
   if (!installed.ok) return rollback(`the service could not be rewritten: ${detail(installed, 'refused')}`);
   if (!await deps.healthy()) return rollback('the new release of the service did not answer');
-  if (!releases) return { ok: true, lines, reason: null, fallback: false };
+  if (!releases) {
+    // Best effort, like the prune: a leftover file must not fail an upgrade that succeeded.
+    try {
+      deps.retire?.(opts);
+    } catch (error) {
+      (deps.warn ?? console.warn)('[desktop-runtime] could not remove the previous launcher', error);
+    }
+    return { ok: true, lines, reason: null, fallback: false };
+  }
 
   try {
     await deps.mark();

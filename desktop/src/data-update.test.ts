@@ -11,7 +11,7 @@ import {
   DaemonStartTimeoutError, finishUpdate, LIGHT_THEME, REPLACE_BUDGET_MS, START_BUDGET_MS, readProgress, renderNotes, requestUpdate, THEME, themeFor, updateCopy, updateOffer, updatePage, updateProgressPage, updateUnauthorizedMessage,
   unmanagedDaemon, UpdateTokenMissingError, updateFailureDialog, type UpdateStatus,
 } from './data-update.js';
-import { instanceId, windowsLauncher } from './service.js';
+import { instanceId, windowsBatchLauncher } from './service.js';
 
 function fixture(t: { after: (fn: () => void) => void }) {
   const home = mkdtempSync(join(tmpdir(), 'desktop-update-'));
@@ -141,14 +141,14 @@ test('a 401 behind an unmarked Windows launcher names the service and how to rep
   const home = fixture(t);
   writeFileSync(join(home, 'update-token'), 'a'.repeat(64));
   mkdirSync(join(home, 'run'), { recursive: true });
-  writeFileSync(windowsLauncher(home), ['@echo off', 'set "TIMON_HOME=C:\\Users\\sam\\.timon"', 'set "PORT=3010"', ''].join('\r\n'));
+  writeFileSync(windowsBatchLauncher(home), ['@echo off', 'set "TIMON_HOME=C:\\Users\\sam\\.timon"', 'set "PORT=3010"', ''].join('\r\n'));
   const fetcher: typeof fetch = async () => new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 });
   const error = await requestUpdate('http://127.0.0.1:3010', home, undefined, fetcher).then(() => null, (e: Error) => e);
   assert.match(error?.message ?? '', /installed by `timon service install` from Timon 0\.1\.3 or earlier/);
   assert.match(error?.message ?? '', /accept the Windows permission prompt/);
   assert.doesNotMatch(error?.message ?? '', /older/);
   // A marked launcher is not the cause: the generic message stays.
-  writeFileSync(windowsLauncher(home), ['@echo off', 'set "TIMON_DESKTOP_SERVICE=1"', ''].join('\r\n'));
+  writeFileSync(windowsBatchLauncher(home), ['@echo off', 'set "TIMON_DESKTOP_SERVICE=1"', ''].join('\r\n'));
   assert.equal(updateUnauthorizedMessage(home), updateUnauthorizedMessage(home, false));
 });
 
