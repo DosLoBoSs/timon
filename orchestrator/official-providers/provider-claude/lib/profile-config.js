@@ -5,9 +5,9 @@
  * without an account (Kimi, an API-key profile, a user's file) is given a folder of its own,
  * kept across its missions so that a new mission still resumes another's session (TODO #1104).
  */
-import { lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { CLAUDE_PROFILE } from './profile.js';
 
 /** The longest folder name the CLI keeps as is (Claude Code 2.1.322, `VL`): a longer one is cut and hashed. */
@@ -73,4 +73,19 @@ export function adoptSession({ dir, cwd, sessionId, sourceConfigDir = userClaude
     }
   } catch { /* the CLI starts a fresh session */ }
   return false;
+}
+
+/**
+ * A config folder the plugin was handed as a path (`account.of(profile).configDir`), with the two
+ * gestures `adoptSession` needs: the CLI's own files there, written owner-only.
+ */
+export function folderAt(path) {
+  return {
+    has: (name) => existsSync(join(path, name)),
+    writeFile(name, bytes) {
+      const file = join(path, name);
+      mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+      writeFileSync(file, bytes, { mode: 0o600 });
+    },
+  };
 }

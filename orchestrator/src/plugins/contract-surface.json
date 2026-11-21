@@ -3748,7 +3748,8 @@
       "since": 12,
       "signature": "ProviderAccountsDeclaration",
       "members": {
-        "login": "ProviderLoginDriver"
+        "login": "ProviderLoginDriver",
+        "host?": "ProviderHostSignInDeclaration | undefined"
       }
     },
     "ProviderLoginDriver": {
@@ -3986,6 +3987,27 @@
       "members": {
         "level?": "{ readonly flag: string; readonly off: string; readonly readOnly?: readonly string[]; } | undefined",
         "offArgs?": "readonly string[] | undefined"
+      }
+    },
+    "ProviderHostSignInDeclaration": {
+      "since": 18,
+      "signature": "ProviderHostSignInDeclaration",
+      "members": {
+        "token?": "ProviderTokenDriver | undefined"
+      }
+    },
+    "ProviderTokenDriver": {
+      "since": 18,
+      "signature": "ProviderTokenDriver",
+      "members": {
+        "args": "() => string[]",
+        "env": "(dir: string, base: Readonly<Record<string, string>>) => Record<string, string>",
+        "parse": "(output: string) => Extract<ProviderLoginPrompt, { kind: \"paste-code\"; }> | null",
+        "token": "(output: string) => string | null",
+        "rejected": "(output: string) => boolean",
+        "save": "(token: string) => void",
+        "stored": "() => boolean",
+        "ttlMs?": "number | undefined"
       }
     }
   },

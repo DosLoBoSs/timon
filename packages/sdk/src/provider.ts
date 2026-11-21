@@ -85,7 +85,8 @@ export type {
 /* ── Vocabulary: the types and constants of what a codec produces and the daemon reads ── */
 export type {
   ProviderAuthStatus, ProviderBinaryDeclaration, ProviderBinaryIdentity, ProviderBrand, ProviderUnverified, UnverifiedSubject, ProviderDeclarations, ProviderDesktopBuild,
-  ProviderAccountsDeclaration, ProviderInstallPlan, ProviderLoginDriver, ProviderLoginIdentity, ProviderLoginPrompt,
+  ProviderAccountsDeclaration, ProviderHostSignInDeclaration, ProviderInstallPlan, ProviderLoginDriver, ProviderLoginIdentity, ProviderLoginPrompt,
+  ProviderTokenDriver,
   ProviderLoginRun, ProviderServiceNeed, InstallPlatform, PackageManagerName, TemplateContext,
 } from '../../../orchestrator/src/backends/provider-declarations.js';
 export {
