@@ -53,6 +53,7 @@ import { getMcp, refreshToolsCacheFromInit, listMcp } from './mcp.js';
 import { ensureChatAttachmentsDir } from './chat-attachments.js';
 import { pluginPackageDirs, removeAgentPackageCache, worktreeGitDirs } from './mission-fence-target.js';
 import { forgetMissionFence, missionFenced, prepareMissionLaunch, recordMissionFence } from './mission-fence-state.js';
+import { credentialAccountOf } from './backends/host-sign-in.js';
 import { setAcpFenceSource } from './backends/acp/provider.js';
 import type { FenceTarget } from './host/isolation.js';
 import { journalDirectSkillReads } from './skill-reads.js';
@@ -1905,7 +1906,8 @@ export function missionFenceTarget(input: {
     // `workspace` exception of the fence.
     agentCwd: configuredAgentCwd(input.agentName),
     project: input.project || undefined,
-    account: instance.accountId ?? undefined,
+    // An account's folder, or the host's sign-in kept by Timon (`host-sign-in.ts`).
+    account: credentialAccountOf(input.backend) ?? undefined,
     providerPlugin: backendOwnerPlugin(input.backend) ?? undefined,
     // The folder `ctx.provider.scratch.profile` keeps for a profile without an account. An
     // account's mission keeps its sign-in in the account's own folder: its owner is a person,
@@ -1938,7 +1940,7 @@ async function launchMissionProcess(
   const seal = trust === 'core' ? null : openLaunchSeal(missionId, backend.name, spawnOpts, () => missionApiToken(missionId));
   // Before `buildSpawn`: a provider may move the account's keychain entry there, which only
   // a fenced launch needs (`mission-fence-state.ts`). Released however the launch ends.
-  const account = splitBackendInstance(backend.name).accountId;
+  const account = credentialAccountOf(backend.name);
   const project = cfg.project ?? projectFromCwd(cfg.cwd) ?? undefined;
   const fenced = account !== null && missionFenceExpected({ agent: agentName, ...(project ? { project } : {}) });
   const prepared = prepareMissionLaunch(missionId, { account, fenced });
@@ -2087,7 +2089,7 @@ async function spawnMissionProcess(
   // The move of an account's keychain entry too: recorded in the tick of the spawn, so a process that
   // may write the entry is seen by any delete that comes after it (`mission-fence-state.ts`).
   recordMissionFence(missionId, proc, launch.fence?.state === 'fenced', {
-    account: splitBackendInstance(backend.name).accountId,
+    account: credentialAccountOf(backend.name),
     credentialStoreWritable: launch.fence?.state === 'fenced' && launch.fence.credentialStoreWritable,
   });
   proc.once('close', () => forgetMissionFence(missionId, proc));

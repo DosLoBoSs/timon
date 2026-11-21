@@ -48,7 +48,8 @@ import { BUILTIN_DECLARATIONS, type BuiltinDeclarations } from './builtin-declar
 import { ProfileEnvError, probeProfileEnv, probeResolver, resolveProfileEnv } from './credentials.js';
 import { localEnvNames, localEnvReason } from './local-env.js';
 import { accountConfigDir, accountInstance, listBackendAccounts, onBackendAccountsChanged, type BackendAccountRow } from './accounts.js';
-import { baseBackendId, isAccountInstanceId } from './instance-id.js';
+import { getHostSignIn, hostSignInDir, hostSignInId } from './host-sign-in.js';
+import { ACCOUNT_ID_RE, baseBackendId, isAccountInstanceId } from './instance-id.js';
 
 /**
  * The SHAPE of an active profile. No credential lives here: `runtimeFor`
@@ -439,14 +440,49 @@ function takesAccounts(resolved: ResolvedProfile): boolean {
 }
 
 /**
+ * The base profile of a backend whose provider lets Timon keep the host's sign-in
+ * (`accounts.host`): while one is kept (`host-sign-in.ts`), its launches carry it as
+ * their account, read at each launch so that a sign-in or a sign-out applies to
+ * the next one without a registry change.
+ */
+function keepsHostSignIn(resolved: ResolvedProfile): boolean {
+  return profileAccountsDeclaration(resolved)?.host !== undefined && ACCOUNT_ID_RE.test(`host${resolved.profile.id}`);
+}
+
+function withHostSignIn(base: ResolvedProfile): ResolvedProfile {
+  const id = base.profile.id;
+  return {
+    ...base,
+    runtimeFor: async (target) => {
+      const built = await base.runtimeFor(target);
+      if (!getHostSignIn(id)) return built;
+      return {
+        runtime: Object.assign({ ...built.runtime }, { account: { id: hostSignInId(id), name: base.profile.label, configDir: hostSignInDir(id) } }),
+        injected: built.injected,
+      };
+    },
+  };
+}
+
+/**
+ * The host's sign-in of `id` is kept by Timon and its provider still offers it:
+ * the CLI's own check would read the wrong folder (`authStatus`).
+ */
+export function hostSignInKept(id: string): boolean {
+  const entry = activeProfiles().find((candidate) => candidate.profile.id === id && !candidate.account);
+  return !!entry && takesAccounts(entry) && keepsHostSignIn(entry) && getHostSignIn(id) !== undefined;
+}
+
+/**
  * One instance per account, right after its backend. An account whose backend
  * is inactive (disabled, binary missing) is absent like its backend: the launch
  * then refuses it by name instead of running it elsewhere.
  */
 function withAccountInstances(resolved: ResolvedProfile[], accounts: readonly BackendAccountRow[]): ResolvedProfile[] {
-  if (!accounts.length) return resolved;
-  return resolved.flatMap((base) => {
-    if (!takesAccounts(base)) return [base];
+  return resolved.flatMap((profile) => {
+    if (!takesAccounts(profile)) return [profile];
+    const base = keepsHostSignIn(profile) ? withHostSignIn(profile) : profile;
+    if (!accounts.length) return [base];
     const instances = accounts.filter((row) => row.backend === base.profile.id).map((row): ResolvedProfile => {
       const id = accountInstance(row);
       return {
@@ -1086,7 +1122,14 @@ export function oneShotProviderIds(): string[] {
 }
 
 /** C4 — is the user signed in to this provider, as the provider says it? `null` when it declared no way to tell. */
+/** What the provider's own check would miss: the sign-in sits in Timon's folder, not the CLI's. */
+function keptStatus(id: string): ProviderAuthStatus | null {
+  return hostSignInKept(id) ? { ok: true, detail: 'Signed in through Timon', signInCommand: null, source: 'file' } : null;
+}
+
 export async function providerAuthStatus(id: string, env: Readonly<Record<string, string>> = {}): Promise<ProviderAuthStatus | null> {
+  const kept = keptStatus(id);
+  if (kept) return kept;
   const authStatus = profileDeclarations(id)?.authStatus;
   return authStatus ? authStatus(env) : null;
 }
@@ -1121,6 +1164,8 @@ export function protocolOfDialect(dialectId: string): ProviderProtocol | null {
  * `null` when the provider declared no way to tell, or only an asynchronous one.
  */
 export function authStatusNow(id: string, env: Readonly<Record<string, string>> = {}): ProviderAuthStatus | null {
+  const kept = keptStatus(id);
+  if (kept) return kept;
   const authStatus = profileDeclarations(id)?.authStatus;
   if (!authStatus) return null;
   const status = authStatus(env);
