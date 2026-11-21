@@ -667,7 +667,7 @@ for (const platform of ['win32', 'darwin', 'linux']) {
         // #116: what the task runs, read at launch; a plain task here, nothing to rewrite or decide.
         readWindowsTaskShape: async () => null, windowsSessionIntent: () => undefined,
         serviceStoppedByUser: () => false, forgetServiceStopped: () => {},
-        shellDaemonRuntime: () => ({ execPath: 'node', env: {} }), upgradePackagedService: async () => { calls.push('service'); },
+        shellDaemonRuntime: () => ({ execPath: 'node', env: {} }), upgradePackagedService: async () => { calls.push('service'); return { sessionFallback: false }; },
         originOf: () => 'http://127.0.0.1', probeHealth: async () => ({ ok: true }),
         isTimon: () => true, daemonUp: false, tray: {},
         buildTray: () => { calls.push('tray'); },

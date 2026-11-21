@@ -25,6 +25,8 @@ import {
   upgradePackagedService,
   windowsSessionIntent,
   DESKTOP_SESSION_INTENT_ENV,
+  UPGRADE_SESSION_FALLBACK_LINE,
+  sessionFallbackMessage,
 } from './upgrade.js';
 import { windowsTaskShape } from './windows-task-shape.js';
 import { WINDOWS_SERVICE_REVISION, hasDesktopService, windowsBatchLauncher, windowsLauncher, windowsLegacyLauncher, windowsServiceRefusedFile, windowsServiceRevisionFile } from './service.js';
@@ -393,4 +395,23 @@ test('windows #116: the intent reaches the runner under the name the host adapte
     assert.equal(envs[0]?.[DESKTOP_SESSION_INTENT_ENV], 'always');
     assert.equal(envs[1]?.[DESKTOP_SESSION_INTENT_ENV], undefined, 'no intent: nothing handed over');
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('windows #116: a rewrite kept for the session only is read from the runner\'s line, and said in the user\'s language', async () => {
+  const source = readFileSync(new URL('../../orchestrator/src/host/packaged-upgrade.ts', import.meta.url), 'utf8');
+  assert.equal(/export const UPGRADE_SESSION_FALLBACK_LINE = '([^']+)'/.exec(source)?.[1], UPGRADE_SESSION_FALLBACK_LINE);
+  const root = mkdtempSync(join(tmpdir(), 'timon-upgrade-fallback-'));
+  try {
+    const resourcesPath = join(root, 'resources');
+    mkdirSync(join(resourcesPath, 'orchestrator', 'dist', 'host'), { recursive: true });
+    writeFileSync(join(resourcesPath, 'orchestrator', 'dist', 'host', 'packaged-upgrade-runner.js'), '');
+    const input = { execPath: 'C:\\Timon\\Timon.exe', resourcesPath, version: '0.2.0' };
+    const answering = (stdout: string) => async () => ({ stdout, stderr: '' });
+    assert.deepEqual(await upgradePackagedService(cfg, input, answering(`it stops at logout\r\n${UPGRADE_SESSION_FALLBACK_LINE}\r\n`)), { sessionFallback: true });
+    assert.deepEqual(await upgradePackagedService(cfg, input, answering('installed\n')), { sessionFallback: false });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+  const en = sessionFallbackMessage('en');
+  assert.match(en.message, /signed in/);
+  assert.match(en.detail, /sign out/);
+  assert.notEqual(sessionFallbackMessage('fr').message, en.message, 'French has its own words');
 });

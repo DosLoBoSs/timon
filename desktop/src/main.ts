@@ -67,6 +67,7 @@ import {
   clearServiceRefused, declineServiceRepair, markServiceRefusedNotice, recordServiceRefused, serviceRefusedMessage, serviceRefusedNoticeDue,
   serviceRepairFailureMessage, serviceRepairPrompt, serviceRepairVerdict,
   serviceUpgradeNeeded, upgradeFailureMessage, upgradeNeedsFallback, upgradePackagedService, windowsSessionIntent,
+  sessionFallbackMessage,
 } from './upgrade.js';
 import {
   selectDirectory, selectExecutable, selectPluginSource, SELECT_DIRECTORY_CHANNEL, SELECT_EXECUTABLE_CHANNEL, SELECT_PLUGIN_SOURCE_CHANNEL,
@@ -1656,7 +1657,7 @@ async function main(): Promise<void> {
     if (updateApproved) updateStage = 'service';
     if (winService) decideWindows();
     try {
-      await upgradePackagedService(cfg, {
+      const upgraded = await upgradePackagedService(cfg, {
         execPath: shellDaemonRuntime().execPath,
         runtimeEnv: shellDaemonRuntime().env,
         resourcesPath: process.resourcesPath,
@@ -1664,6 +1665,11 @@ async function main(): Promise<void> {
         sessionIntent: windowsSessionIntent(taskShape),
       });
       rewrite = 'done';
+      // Said once: the rewrite that kept the task for the session only happens once.
+      if (upgraded.sessionFallback) {
+        console.log('[desktop] the rewritten boot task runs only while the user is signed in (session fallback)');
+        void dialog.showMessageBox({ type: 'info', title: DISPLAY_NAME, ...sessionFallbackMessage(uiLocale()) });
+      }
     } catch (error) {
       // Boot on whatever the runner left rather than refusing to start, and
       // say so instead of silently serving the old UI.

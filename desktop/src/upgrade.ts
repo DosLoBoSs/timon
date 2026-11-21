@@ -39,6 +39,9 @@ import type { WindowsTaskShape } from './windows-task-shape.js';
 /** Copy of `DESKTOP_SESSION_INTENT_ENV` (orchestrator `host/packaged-upgrade.ts`), held together by `upgrade.test.ts`. */
 export const DESKTOP_SESSION_INTENT_ENV = 'TIMON_DESKTOP_SESSION_INTENT';
 
+/** Copy of `UPGRADE_SESSION_FALLBACK_LINE` (orchestrator `host/packaged-upgrade.ts`), held together by `upgrade.test.ts`. */
+export const UPGRADE_SESSION_FALLBACK_LINE = 'timon-upgrade: session-fallback';
+
 /** Copy of `ServiceSessionMode` (orchestrator `host/service-session-mode.ts`). */
 export type ServiceSessionIntent = 'session' | 'always';
 
@@ -260,7 +263,11 @@ const execUpgrade: UpgradeExec = (command, args, options) => new Promise((resolv
   });
 });
 
-/** Stages this release and rewrites the service; the runner rolls back if it does not answer. */
+/**
+ * Stages this release and rewrites the service; the runner rolls back if it
+ * does not answer. `sessionFallback`: Windows kept the rewritten task for the
+ * session only, so it stops at logout (the runner's fixed line says so).
+ */
 export async function upgradePackagedService(
   cfg: DesktopConfig,
   input: {
@@ -269,10 +276,10 @@ export async function upgradePackagedService(
     sessionIntent?: ServiceSessionIntent;
   },
   execute: UpgradeExec = execUpgrade,
-): Promise<void> {
+): Promise<{ sessionFallback: boolean }> {
   const runner = join(input.resourcesPath, 'orchestrator', 'dist', 'host', 'packaged-upgrade-runner.js');
   if (!existsSync(runner)) throw new Error(`The packaged service updater is missing: ${runner}`);
-  await execute(input.execPath, [runner], {
+  const { stdout } = await execute(input.execPath, [runner], {
     timeout: 300_000,
     env: {
       ...withRuntimeEnv(process.env, { execPath: input.execPath, env: input.runtimeEnv ?? { ELECTRON_RUN_AS_NODE: '1' } }),
@@ -288,6 +295,13 @@ export async function upgradePackagedService(
       ...(input.sessionIntent ? { [DESKTOP_SESSION_INTENT_ENV]: input.sessionIntent } : {}),
     },
   });
+  return { sessionFallback: String(stdout ?? '').split(/\r?\n/).some(line => line.trim() === UPGRADE_SESSION_FALLBACK_LINE) };
+}
+
+/** Said once, when the rewrite kept the task for the session only (#116). */
+export function sessionFallbackMessage(locale: string): { message: string; detail: string } {
+  const t = shellText(locale);
+  return { message: t('service.sessionFallback'), detail: t('service.sessionFallbackDetail') };
 }
 
 /**
