@@ -78,6 +78,7 @@ import {
   type ServiceOpts,
 } from './service-install.js';
 import { readServiceSessionMode, serviceS4uRefusedPath, writeServiceSessionMode } from './service-session-mode.js';
+import { windowsTaskShape } from './windows-task-shape.js';
 
 /**
  * What the elevated batch leaves behind: one line per step run.
@@ -1691,6 +1692,30 @@ test('#116: a rollback never puts back a task that opens a console in the sessio
   const gui = previousTask('InteractiveToken', 'C:\\Program Files\\Timon\\Timon.exe');
   assert.equal(restoreServiceDefinition({ ...win, readFile: ok }, gui).ok, true);
   assert.equal(registered(), gui);
+});
+
+test('#116: a rollback judges the console with the shared rule: a source checkout keeps its hidden PowerShell', () => {
+  const ok = () => transcript({ create: 0, stop: 0, run: 0 });
+  const registered = () => readFileSync(taskXmlPath(), 'utf16le').replace(/^\ufeff/, '');
+
+  // A source checkout has no Timon.exe: its session task is a hidden
+  // PowerShell by design, and replacing it would register the same one.
+  const source = { ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })), nodePath: 'C:\\Users\\tester\\node\\node.exe' };
+  const hidden = renderTaskXml({ ...source, userId: 'S-1-5-21-1-2-3-1001', offSession: false });
+  assert.equal(windowsTaskShape(hidden)?.program, 'powershell.exe');
+  assert.equal(windowsTaskShape(hidden)?.consoleVisible, true, 'the raw shape alone would call it a console');
+  const kept = restoreServiceDefinition({ ...source, readFile: ok }, hidden);
+  assert.equal(kept.ok, true, kept.lines.join('\n'));
+  assert.doesNotMatch(kept.lines.join('\n'), /opens a console window/);
+  assert.equal(registered(), hidden);
+
+  // A package: a session task that starts cmd.exe is the trap, replaced by the session task.
+  const packaged = { ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })), nodePath: PACKAGED_NODE };
+  const replaced = restoreServiceDefinition({ ...packaged, readFile: ok }, previousTask('InteractiveToken', 'cmd.exe'));
+  assert.equal(replaced.ok, true, replaced.lines.join('\n'));
+  assert.match(replaced.lines.join('\n'), /started cmd\.exe in the session, which opens a console window/);
+  assert.match(registered(), /<LogonType>InteractiveToken<\/LogonType>/);
+  assert.match(registered(), /<Command>C:\\Program Files\\Timon\\Timon\.exe<\/Command>/);
 });
 
 test('#116: a restored S4U task is read back, falls back to the session task, and an unreadable one deletes nothing', () => {
