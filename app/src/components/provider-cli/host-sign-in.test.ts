@@ -192,7 +192,7 @@ test('setup: a sign-in Timon keeps is ready even while the verdict still says si
     const { ProviderCliCards } = await import('./provider-cli-cards');
     await m.render(m.React.createElement(ProviderCliCards, { mode: 'onboarding' }));
     await m.until(() => document.querySelector('[data-state="ready"]') !== null, 'the ready row');
-    assert.equal(document.querySelector('[data-host-sign-in-offer]'), null, 'no "Sign in" again, no token offer');
+    assert.ok(!document.querySelector('[data-host-sign-in-offer]'), 'no "Sign in" again, no token offer');
   } finally {
     await m.unmount();
   }
@@ -230,7 +230,7 @@ test('the providers list row: "Sign in" opens the dialog, closing it early cance
     assert.equal(done, 0);
     // A sign-in Timon keeps offers nothing on the row, even with a verdict that says signed out.
     await m.render(m.React.createElement(HostSignInAction, { host: view({ kept: true, identity: 'a@b.example' }), name: 'Claude', onDone: () => {} }));
-    assert.equal(document.querySelector('[data-host-sign-in-offer]'), null);
+    assert.ok(!document.querySelector('[data-host-sign-in-offer]'));
   } finally {
     await m.unmount();
   }
@@ -288,7 +288,7 @@ test('the provider page: this computer signs in in the app, a kept sign-in says 
     // Kept by Timon: who it is, no action, the way back in the menu.
     await m.render(page({ signedIn: true, host: view({ kept: true, identity: 'host@perso.example', signedIn: true }) }));
     await m.until(() => /Signed in with Timon as host@perso\.example/.test(computer()?.textContent ?? ''), 'the kept sign-in');
-    assert.equal(computer()!.querySelector('[data-host-sign-in-offer="login"]'), null);
+    assert.ok(!computer()!.querySelector('[data-host-sign-in-offer="login"]'));
     const trigger = computer()!.querySelector('button[data-row-menu]') as HTMLElement;
     await m.React.act(async () => {
       trigger.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
