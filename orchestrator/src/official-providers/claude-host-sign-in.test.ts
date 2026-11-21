@@ -182,3 +182,47 @@ test('darwin: the kept sign-in\'s keychain entry moves into Timon\'s folder befo
   const file = JSON.parse(readFileSync(join(harness.configDir, '.credentials.json'), 'utf8')) as typeof pair;
   assert.equal(file.claudeAiOauth.refreshToken, pair.claudeAiOauth.refreshToken);
 });
+
+/** The provider's own check (C4), as the setup row and the providers list read it before offering anything. */
+async function detect(options: { file?: unknown; keychain?: string; token?: string }) {
+  const root = mkdtempSync(join(tmpdir(), 'timon-claude-detect-'));
+  roots.push(root);
+  if (options.file !== undefined) writeFileSync(join(root, '.credentials.json'), JSON.stringify(options.file));
+  const ctx = createProviderContext({
+    apiVersion, secrets: [LONG_LIVED],
+    osCredentials: options.keychain === undefined ? {} : { 'Claude Code-credentials': options.keychain },
+  });
+  process.on('exit', () => ctx.cleanup());
+  const token = createClaudeToken(ctx.provider);
+  if (options.token) token.setClaudeToken(options.token);
+  const usage = createClaudeUsage(ctx.provider, token);
+  return usage.claudeAuthStatus({ CLAUDE_CONFIG_DIR: root });
+}
+
+const SESSION = { claudeAiOauth: { accessToken: 'sk-ant-oat01-terminal-access', refreshToken: 'sk-ant-ort01-terminal-refresh', expiresAt: Date.now() + 3_600_000 } };
+
+test('detection: a terminal session in the CLI\'s folder (Linux, Windows) is used as it is', async () => {
+  const status = await detect({ file: SESSION });
+  assert.equal(status.ok, true);
+  assert.equal(status.source, 'file');
+});
+
+test('detection: no session anywhere says how to sign in, which the app turns into its browser sign-in', async () => {
+  const status = await detect({});
+  assert.equal(status.ok, false);
+  assert.equal(status.signInCommand, 'claude');
+});
+
+test('detection: macOS, a session only in the login keychain is found, read and never written', async () => {
+  const status = await detect({ keychain: JSON.stringify(SESSION) });
+  assert.equal(status.ok, true);
+  assert.match(status.detail, /keychain/);
+  // A signed-out keychain entry is no session.
+  assert.equal((await detect({ keychain: JSON.stringify({ claudeAiOauth: {} }) })).ok, false);
+});
+
+test('detection: a long-lived token kept by Timon counts as signed in, and nothing of it is said', async () => {
+  const status = await detect({ token: LONG_LIVED });
+  assert.equal(status.ok, true);
+  assert.ok(!JSON.stringify(status).includes(LONG_LIVED));
+});
