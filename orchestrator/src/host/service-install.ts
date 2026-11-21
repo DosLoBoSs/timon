@@ -40,7 +40,7 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep, win32 as winPath } from 'node:path';
 import { runtimeDir } from './packaged-service.js';
 import type { ExecResult } from './types.js';
-import { isBundledNode } from './bundled-node.js';
+import { isBundledNode, packagedRuntime } from './bundled-node.js';
 import { readServiceSessionMode, sessionModeSupported, writeServiceSessionMode, type ServiceSessionMode } from './service-session-mode.js';
 import { parseLauncherConfig, WINDOWS_LAUNCHER_FORMAT, type WindowsLauncherConfig } from './windows-service-launcher.js';
 import { windowsTaskShape, type WindowsTaskShape } from './windows-task-shape.js';
@@ -1283,6 +1283,17 @@ export function windowsConsoleTaskAdvice(shape: WindowsTaskShape): string {
     + 'Reinstall the service (Settings > Installation, or `timon service install` from the app\'s terminal): Timon then registers a task that opens no window.';
 }
 
+/**
+ * Is a console this task opens the trap of #116, which a reinstall fixes?
+ * A source checkout has no `Timon.exe`: its session task is a hidden
+ * PowerShell by design (`windowsTaskAction`), and reinstalling would register
+ * the same one. A package never starts PowerShell. Shared by
+ * `timon service status` and the diagnostic report, so both say the same.
+ */
+export function windowsConsoleTaskTrap(shape: WindowsTaskShape, packaged: boolean = packagedRuntime()): boolean {
+  return shape.consoleVisible && (packaged || shape.program !== 'powershell.exe');
+}
+
 function statusWindows(opts: ServiceOpts): ServiceResult {
   const res = opts.exec('schtasks', ['/Query', '/TN', WINDOWS_TASK, '/FO', 'LIST']);
   const installed = res.code === 0;
@@ -1301,7 +1312,7 @@ function statusWindows(opts: ServiceOpts): ServiceResult {
   const shape = installed ? readWindowsTaskShape(opts) : null;
   if (shape) {
     lines.push(`logon     : ${shape.logon}`, `action    : ${shape.program ?? 'unknown'}`);
-    if (shape.consoleVisible) lines.push(`console   : visible - ${windowsConsoleTaskAdvice(shape)}`);
+    if (windowsConsoleTaskTrap(shape)) lines.push(`console   : visible - ${windowsConsoleTaskAdvice(shape)}`);
   }
   return { ok: running, code: running ? 0 : 3, installed, lines, ...(shape ? { taskShape: shape } : {}) };
 }

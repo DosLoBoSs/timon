@@ -35,6 +35,7 @@ import {
   logonCheckStep,
   sessionTaskXmlPath,
   verifyTaskStartedStep,
+  windowsConsoleTaskTrap,
   WINDOWS_TASK_NEVER_RAN,
   WINDOWS_TASK_REFUSED_REASON,
   windowsTaskUserId,
@@ -668,6 +669,26 @@ test('#116: status names the logon and the program of the task, and warns of a c
   const unreadable = status('ERROR: Access is denied.');
   assert.equal(unreadable.taskShape, undefined);
   assert.doesNotMatch(unreadable.lines.join('\n'), /logon {5}:|action {4}:/);
+});
+
+test('#116: status and the diagnostic share one rule for a console worth reinstalling over', () => {
+  const shape = (program: string, consoleVisible = true) => ({ logon: 'InteractiveToken' as const, program, triggers: ['Logon' as const], consoleVisible });
+  assert.equal(windowsConsoleTaskTrap(shape('cmd.exe'), false), true);
+  assert.equal(windowsConsoleTaskTrap(shape('cmd.exe'), true), true);
+  assert.equal(windowsConsoleTaskTrap(shape('timon.exe', false), true), false);
+  // A source checkout's session task is a hidden PowerShell by design; a package never starts one.
+  assert.equal(windowsConsoleTaskTrap(shape('powershell.exe'), false), false);
+  assert.equal(windowsConsoleTaskTrap(shape('powershell.exe'), true), true);
+
+  // The test runner is a source checkout: status no longer tells it to reinstall its PowerShell task.
+  const task = `<Task><Principals><Principal><LogonType>InteractiveToken</LogonType></Principal></Principals><Actions><Exec><Command>powershell.exe</Command></Exec></Actions></Task>`;
+  const res = statusService(fixture('win32', (n, a) => {
+    if (n === 'schtasks' && a.includes('LIST')) return { code: 0, stdout: 'Status: Running\r\n', stderr: '' };
+    if (n === 'schtasks' && a.includes('/XML')) return { code: 0, stdout: task, stderr: '' };
+    return { code: 0, stdout: '', stderr: '' };
+  }));
+  assert.match(res.lines.join('\n'), /action {4}: powershell\.exe/);
+  assert.doesNotMatch(res.lines.join('\n'), /console {3}: visible/);
 });
 
 test('windows: without a sealed session witness, nothing is elevated or registered', () => {
