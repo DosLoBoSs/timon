@@ -31,8 +31,8 @@ import { withRuntimeEnv } from './daemon-runtime.js';
 import { shellText } from './shell-i18n.js';
 import { startupText } from './startup-text.js';
 import {
-  WINDOWS_SERVICE_REVISION, windowsLauncherUnmarked, windowsLegacyLauncher, windowsRepairDeclinedFile, windowsServiceRefusedFile,
-  windowsServiceRevisionFile,
+  WINDOWS_SERVICE_REVISION, windowsLauncherUnmarked, windowsLegacyLauncher, windowsRepairDeclinedFile, windowsRewriteDeclinedFile,
+  windowsServiceRefusedFile, windowsServiceRevisionFile,
 } from './service.js';
 import type { WindowsTaskShape } from './windows-task-shape.js';
 
@@ -83,6 +83,9 @@ export function serviceUpgradeNeeded(
   const platform = facts.platform ?? process.platform;
   if (platform === 'win32') {
     if (!facts.packaged) return false;
+    // Declined for this version: asked again at the next one, or by an explicit
+    // install, rather than at every launch.
+    if (windowsTaskRepair(home, facts) && windowsRewriteDeclined(home, version)) return false;
     // A task that opens a console on the desktop is outdated whatever its
     // revision says: it was changed after Timon wrote it (#116).
     if (facts.taskShape?.consoleVisible) return true;
@@ -112,6 +115,41 @@ function windowsTaskOutdated(home: string, taskExists: boolean): boolean {
   // Checked only once a task is known to exist: a launcher left behind by an
   // uninstall must not bring a task back.
   return recorded !== WINDOWS_SERVICE_REVISION || windowsLauncherUnmarked(home);
+}
+
+/**
+ * Is the Windows rewrite at launch the repair of a task changed outside Timon
+ * (#116) rather than the move to a new revision? A task that opens a console,
+ * or one Task Scheduler has with no revision recorded. The revision-1 logon
+ * task records none either, but its launcher marks it: moving it is a
+ * migration, which an approved update still cannot skip.
+ */
+export function windowsTaskRepair(
+  home: string,
+  facts: { taskExists?: boolean; taskShape?: WindowsTaskShape | null },
+): boolean {
+  if (facts.taskShape?.consoleVisible) return true;
+  return facts.taskExists === true && !existsSync(windowsServiceRevisionFile(home)) && !existsSync(windowsLegacyLauncher(home));
+}
+
+/**
+ * The repair was declined (or failed) at a launch of this very version: it
+ * is not asked again until the next version, or an explicit install
+ * (Settings › Installation, `timon service install`), which removes the file.
+ * Meanwhile the task in place serves and `timon doctor` still names it.
+ */
+export function windowsRewriteDeclined(home: string, version: string): boolean {
+  try {
+    return readFileSync(windowsRewriteDeclinedFile(home), 'utf8').trim() === version;
+  } catch {
+    return false;
+  }
+}
+
+export function declineWindowsRewrite(home: string, version: string): void {
+  const file = windowsRewriteDeclinedFile(home);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, `${version}\n`);
 }
 
 /**
