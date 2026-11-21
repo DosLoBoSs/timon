@@ -862,7 +862,7 @@ export function launcherProcessFilter(timonHome: string): string {
   const needles = [windowsLauncherPath(timonHome), windowsBatchLauncherPath(timonHome)]
     .map((needle) => `$_.CommandLine.ToLowerInvariant().Contains(${powershellLiteral(needle.toLowerCase())})`);
   const programs = LAUNCHER_PROGRAMS.map(powershellLiteral).join(', ');
-  return `@(${programs}) -contains $_.Name.ToLowerInvariant() -and $_.ProcessId -ne $PID -and $_.CommandLine -and (${needles.join(' -or ')})`;
+  return `@(${programs}) -contains $_.Name -and $_.ProcessId -ne $PID -and $_.CommandLine -and (${needles.join(' -or ')})`;
 }
 
 /**
