@@ -7,7 +7,7 @@ import { installService, readServiceDefinition, restoreServiceDefinition, remove
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServiceOpts, ServiceResult } from './service-install.js';
-import { upgradeDesktopService, type UpgradeDeps } from './packaged-upgrade.js';
+import { upgradeDesktopService, upgradeSessionMode, type UpgradeDeps } from './packaged-upgrade.js';
 
 const OLD = 'unit of 0.1.0';
 const NEW = 'unit of 0.2.0';
@@ -220,3 +220,31 @@ for (const previous of [null, OLD]) {
     } finally { rmSync(home, { recursive: true, force: true }); }
   });
 }
+
+/**
+ * #116: a task switched to the interactive token by hand keeps the boot
+ * trigger of an off-session task. The desktop hands the runner that intent;
+ * the user's recorded answer always wins over it.
+ */
+test('windows #116: the desktop\'s session intent is used only when the user never answered', () => {
+  assert.equal(upgradeSessionMode('always', null), 'always');
+  assert.equal(upgradeSessionMode('session', null), 'session');
+  assert.equal(upgradeSessionMode('always', 'session'), undefined, 'the recorded answer wins');
+  assert.equal(upgradeSessionMode('session', 'always'), undefined, 'the recorded answer wins');
+  assert.equal(upgradeSessionMode(undefined, null), undefined, 'no intent: the task in place decides');
+  assert.equal(upgradeSessionMode('boot', null), undefined, 'an unknown intent is ignored');
+});
+
+test('windows #116: a rewrite kept for the session only says so in its result', async () => {
+  const notice = 'it stops at logout';
+  const { deps } = harness({
+    platform: 'win32',
+    install: () => ({ ok: true, code: 0, lines: [notice], sessionFallback: true }),
+  });
+  const result = await upgradeDesktopService(deps);
+  assert.equal(result.ok, true);
+  assert.equal(result.sessionFallback, true);
+  assert.deepEqual(result.lines, [notice]);
+  const plain = await upgradeDesktopService(harness({ platform: 'win32' }).deps);
+  assert.equal(plain.sessionFallback, undefined, 'an off-session task kept as asked says nothing');
+});

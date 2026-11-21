@@ -9,6 +9,7 @@ import type { DesktopConfig } from './config.js';
 import { withRuntimeEnv } from './daemon-runtime.js';
 import { shellText } from './shell-i18n.js';
 import { startupText } from './startup-text.js';
+import { windowsTaskShape, type WindowsTaskShape } from './windows-task-shape.js';
 
 export function instanceId(home: string): string {
   return createHash('sha256').update(resolve(home)).digest('hex').slice(0, 24);
@@ -330,8 +331,10 @@ export function startStoppedServiceFailureMessage(error: unknown, home: string, 
 type ServiceExec = (args: string[]) => Promise<{ stdout: string }>;
 const execSystemctl: ServiceExec = (args) => promisify(execFile)('systemctl', args, { timeout: 15_000 });
 const execLaunchctl: ServiceExec = (args) => promisify(execFile)('launchctl', args, { timeout: 15_000 });
-const execSchtasks: ServiceExec = (args) => promisify(execFile)('schtasks', args, { timeout: 15_000 });
-const execPowershell: ServiceExec = (args) => promisify(execFile)('powershell', args, { timeout: 30_000 });
+// Both are console programs: started from the windowed shell without
+// `windowsHide`, each call flashes a console on the user's desktop (#116).
+const execSchtasks: ServiceExec = (args) => promisify(execFile)('schtasks', args, { timeout: 15_000, windowsHide: true });
+const execPowershell: ServiceExec = (args) => promisify(execFile)('powershell', args, { timeout: 30_000, windowsHide: true });
 
 /**
  * `kickstart -k` fails when launchd has not loaded the agent yet (first run
@@ -353,6 +356,31 @@ async function kickstartMacAgent(run: ServiceExec, uid: number, mac: MacServiceS
 /** Whether Task Scheduler knows the boot task. A failed query counts as absent: both leave nothing to wait on. */
 export async function windowsTaskExists(exec: ServiceExec = execSchtasks): Promise<boolean> {
   return exec(['/Query', '/TN', WINDOWS_TASK]).then(() => true, () => false);
+}
+
+/**
+ * What the registered task runs (`windowsTaskShape`), read without elevation
+ * the way the host adapter reads it (`readWindowsTaskShape`): `schtasks /XML`
+ * starts far faster than PowerShell, and loses only non-ASCII characters,
+ * which neither the logon, the program name nor a trigger holds. `null` when
+ * the task is missing or its definition cannot be read.
+ */
+export async function readWindowsTaskShape(exec: ServiceExec = execSchtasks): Promise<WindowsTaskShape | null> {
+  try {
+    const { stdout } = await exec(['/Query', '/TN', WINDOWS_TASK, '/XML', 'ONE']);
+    return windowsTaskShape(stdout);
+  } catch { return null; }
+}
+
+/**
+ * Switches the task off, without elevation: Windows never starts it for this
+ * account, and its five-minute trigger would keep knocking on the home the
+ * embedded daemon holds (#116). Allowed when the task is the user's own; an
+ * S4U task registered from an elevated prompt may refuse, and the caller
+ * only logs it. Rejects with what schtasks said.
+ */
+export async function disableWindowsTask(exec: ServiceExec = execSchtasks): Promise<void> {
+  await exec(['/Change', '/TN', WINDOWS_TASK, '/DISABLE']);
 }
 
 /** `ScheduledTasks` module lookup: the call `Unregister-ScheduledTask` answers to, unlike `schtasks`. */
