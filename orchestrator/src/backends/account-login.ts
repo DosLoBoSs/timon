@@ -51,7 +51,7 @@ import {
 import { activeProfiles, backendTakesAccounts, profileAccountsDeclaration } from './registry.js';
 import type { ProviderHostSignInDeclaration, ProviderLoginDriver, ProviderLoginRun, ProviderTokenDriver } from './provider-declarations.js';
 import { forgetHostSignIn, getHostSignIn, hostSignInDir, hostSignInId, recordHostSignIn } from './host-sign-in.js';
-import { refreshProviderSignIn } from './sign-in-state.js';
+import { noteProviderSignedInByPerson, refreshProviderSignIn } from './sign-in-state.js';
 import { loadNodePty, ptySpawnOptions } from '../terminal-host/pty.js';
 import { isRemoteDialect } from './types.js';
 
@@ -474,9 +474,9 @@ function hostTarget(backend: string): LoginTarget {
       clearBackendCooldown(backend);
       resetBreaker(backend);
       hostAudit(flow.initiator, 'backend_host.connect', backend);
+      // Before `connected`: whoever reads the verdict once the flow reports success must find it signed in.
+      noteProviderSignedInByPerson(backend);
       finish(flow, 'connected', null, identity.label);
-      // The badges read the verdict: a fresh sign-in replaces whatever a turn said.
-      void refreshProviderSignIn(backend, true);
     },
   };
 }
@@ -784,8 +784,8 @@ function tokenSeen(flow: TokenFlow): boolean {
     return true;
   }
   hostAudit(flow.initiator, 'backend_host.token_created', flow.view.backend);
+  noteProviderSignedInByPerson(flow.view.backend);
   finishToken(flow, 'connected', null);
-  void refreshProviderSignIn(flow.view.backend, true);
   return true;
 }
 

@@ -30,6 +30,7 @@ const { activeProfiles, providerAuthStatus } = await import('../../backends/regi
 const { dbApi } = await import('../../db.js');
 const { SESSION_COOKIE } = await import('../../users/session.js');
 const { issueMissionApiToken } = await import('../../users/api-tokens.js');
+const { providerSignedIn, setProviderSignInForTest } = await import('../../backends/sign-in-state.js');
 
 class FakeCli extends EventEmitter {
   stdin = new PassThrough();
@@ -132,7 +133,7 @@ const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 test.after(() => { resetAccountLogins(); resetHostTokens(); server.close(); });
 
 type Login = { state: string; failure: string | null; identity: string | null; codeSent: boolean; prompt: { kind: string; url: string } | null };
-type View = { kept: boolean; identity: string | null; browser: boolean; token: { stored: boolean } | null };
+type View = { kept: boolean; identity: string | null; browser: boolean; token: { stored: boolean } | null; signedIn: boolean | null };
 type Reply = { status: number; text: string; json: { login?: Login; hostSignIn?: View } & Record<string, unknown> };
 const replies: string[] = [];
 
@@ -220,16 +221,20 @@ test('signed in from the browser: the sign-in lands in Timon\'s folder and the b
   assert.equal((await call('GET', `${HOST}/login`, { cookie: other })).status, 404);
   assert.equal((await call('POST', `${HOST}/login/code`, { cookie: other, body: { code: CODE } })).status, 404);
 
+  // Known signed out until now: the success must not wait for a check to say otherwise.
+  setProviderSignInForTest('claude', false);
   const sent = await call('POST', `${HOST}/login/code`, { cookie: admin, body: { code: CODE } });
   assert.equal(sent.status, 200, sent.text);
   const done = await until(`${HOST}/login`, admin, over);
   assert.equal(done.state, 'connected', JSON.stringify(done));
   assert.equal(done.identity, EMAIL);
+  assert.equal(providerSignedIn('claude'), true, 'usable as soon as the flow says connected');
 
   const dir = hostSignInDir('claude');
   assert.ok(existsSync(join(dir, '.credentials.json')), 'the credential moved into Timon\'s folder');
   const kept = (await call('GET', HOST, { cookie: admin })).json.hostSignIn!;
   assert.equal(kept.kept, true);
+  assert.equal(kept.signedIn, true, 'the screens read it signed in, so none offers to sign in again');
   assert.equal(kept.identity, EMAIL);
   assert.equal(credentialAccountOf('claude'), 'hostclaude');
   assert.equal(credentialAccountOf('kimi'), null);
@@ -262,6 +267,7 @@ test('the fence and the keychain move name the kept sign-in as they name an acco
 
 test('a long-lived token is minted in a pseudo-terminal and goes to the provider\'s store, nowhere else', async () => {
   ptyAnswer = 'token';
+  setProviderSignInForTest('claude', false);
   const started = await call('POST', `${HOST}/token`, { cookie: admin, body: {} });
   assert.equal(started.status, 202, started.text);
   const waiting = await until(`${HOST}/token`, admin, (l) => l.state !== 'starting');
@@ -269,6 +275,7 @@ test('a long-lived token is minted in a pseudo-terminal and goes to the provider
   assert.equal((await call('POST', `${HOST}/token/code`, { cookie: admin, body: { code: `  ${TOKEN_CODE}  ` } })).status, 200);
   const done = await until(`${HOST}/token`, admin, over);
   assert.equal(done.state, 'connected', JSON.stringify(done));
+  assert.equal(providerSignedIn('claude'), true, 'a minted token makes claude usable at once');
 
   const run = ptyRuns.at(-1)!;
   assert.deepEqual(run.args, ['setup-token']);
