@@ -52,7 +52,7 @@ import {
 import { getMcp, refreshToolsCacheFromInit, listMcp } from './mcp.js';
 import { ensureChatAttachmentsDir } from './chat-attachments.js';
 import { pluginPackageDirs, removeAgentPackageCache, worktreeGitDirs } from './mission-fence-target.js';
-import { forgetMissionFence, missionFenced, recordMissionFence } from './mission-fence-state.js';
+import { forgetMissionFence, missionFenced, prepareMissionLaunch, recordMissionFence } from './mission-fence-state.js';
 import { setAcpFenceSource } from './backends/acp/provider.js';
 import type { FenceTarget } from './host/isolation.js';
 import { journalDirectSkillReads } from './skill-reads.js';
@@ -93,7 +93,7 @@ import { resolvedPermissionModeFor } from './backends/catalog.js';
 import { reportInertShellPreallow } from './auto-mode-preallow.js';
 import { nestedSandboxOf } from './backends/capabilities.js';
 import { settingBool, settingNum } from './settings.js';
-import { profileLimits, watchFencedLaunch, wrapMissionLaunch } from './resources.js';
+import { missionFenceExpected, profileLimits, watchFencedLaunch, wrapMissionLaunch } from './resources.js';
 import { getHost, type Host } from './host/index.js';
 import {
   backgroundDescendants, cliBaseline, cliProcessPid, readProcessTable, type ProcessEntry,
@@ -1936,6 +1936,12 @@ async function launchMissionProcess(
   // plugin brought, and the daemon swaps what comes back at the points where the
   // data leaves for the process. A core dialect has no plugin to answer to.
   const seal = trust === 'core' ? null : openLaunchSeal(missionId, backend.name, spawnOpts, () => missionApiToken(missionId));
+  // Before `buildSpawn`: a provider may move the account's keychain entry there, which only
+  // a fenced launch needs (`mission-fence-state.ts`). Released however the launch ends.
+  const account = splitBackendInstance(backend.name).accountId;
+  const project = cfg.project ?? projectFromCwd(cfg.cwd) ?? undefined;
+  const fenced = account !== null && missionFenceExpected({ agent: agentName, ...(project ? { project } : {}) });
+  const prepared = prepareMissionLaunch(missionId, { account, fenced });
   try {
     return await spawnMissionProcess(backend, spawnOpts, cfg, missionId, agentName, seal, trust, confirmSpawn);
   } catch (err) {
@@ -1943,6 +1949,8 @@ async function launchMissionProcess(
     // references of a launch that never reached a process must not outlive it.
     if (seal) closeLaunchSeal(seal);
     throw err;
+  } finally {
+    prepared();
   }
 }
 
@@ -2076,7 +2084,12 @@ async function spawnMissionProcess(
   // A launcher that cannot fence on this machine after all switches the fence off for the next launches.
   void watchFencedLaunch(proc, launch.fence);
   // The session driver reads it: inside the fence, a sign-in step that opens a browser can never finish.
-  recordMissionFence(missionId, proc, launch.fence?.state === 'fenced');
+  // The move of an account's keychain entry too: recorded in the tick of the spawn, so a process that
+  // may write the entry is seen by any delete that comes after it (`mission-fence-state.ts`).
+  recordMissionFence(missionId, proc, launch.fence?.state === 'fenced', {
+    account: splitBackendInstance(backend.name).accountId,
+    credentialStoreWritable: launch.fence?.state === 'fenced' && launch.fence.credentialStoreWritable,
+  });
   proc.once('close', () => forgetMissionFence(missionId, proc));
   journalInjectedSecrets({ missionId, agent: agentName, injected: vault?.injected ?? [] });
   requested?.consume();

@@ -3,6 +3,7 @@ import { claudeThinking } from './thinking.js';
 import { claudeAccountEnv } from './token.js';
 import { adoptSession, needsOwnConfigDir } from './profile-config.js';
 import { claudeLoginDriver } from './login.js';
+import { claudeAccountKeychainService, settleAccountKeychain } from './account-keychain.js';
 import { manifestBackend } from './manifest.js';
 
 /**
@@ -18,7 +19,10 @@ export const NO_TOOLS_ARGS = Object.freeze(['--tools=', '--strict-mcp-config']);
 const CLAUDE = manifestBackend('claude');
 
 /** The persistent Claude stream-json protocol, entirely against ctx.provider. */
-export function createClaudeProvider(services, token, usage) {
+/** `options.platform` and `options.log`: what tests inject; the plugin passes its own log. */
+export function createClaudeProvider(services, token, usage, options = {}) {
+ const platform = options.platform ?? process.platform;
+ const log = options.log;
  const runtime = services.runtime;
  const { streamJsonUser, partialTextDelta } = runtime.streamJson;
  const { extractInitSessionId, providerRetryEvent } = runtime.events;
@@ -138,6 +142,16 @@ const legacy = {
         if (opts.memoryDir)
             args.push('--add-dir', opts.memoryDir);
         const account = services.account.of(profile);
+        // macOS keeps an account's sign-in in the keychain, which the fence lets the CLI read but
+        // not update: for a fenced launch it moves into the account's folder first (`account-keychain.js`).
+        if (account && platform === 'darwin') {
+            const entry = services.account.osCredential(profile, claudeAccountKeychainService(account.configDir), opts.missionId);
+            const outcome = entry ? await settleAccountKeychain({ entry, configDir: account.configDir, runtime }) : 'none';
+            // Outside the fence the CLI keeps the keychain up to date itself: nothing to say.
+            if (outcome !== 'none' && outcome !== 'moved' && outcome !== 'unfenced') {
+                log?.warn(`[provider-claude] the sign-in of account ${account.id} stays in the macOS keychain (${outcome}): a fenced mission may fail to renew it`);
+            }
+        }
         let env = account ? claudeAccountEnv(account.configDir) : claudeSpawnEnv(profile.env);
         // Never `~/.claude` for another profile than `claude`: the user's subscription sign-in is there.
         if (!account && needsOwnConfigDir(profile)) {
