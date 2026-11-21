@@ -1369,7 +1369,8 @@ function readWindowsDefinition(opts: ServiceOpts): string | null {
  * What a rollback registers in place of `previous`. Never a task that starts
  * a console program in the user's session (issue #116): it would open a
  * window at every start, so the session task of this installation, which
- * opens none, goes in its place. A shape that cannot be read is put back as
+ * opens none, goes in its place (`windowsConsoleTaskTrap`: a source
+ * checkout's hidden PowerShell is no such task). A shape that cannot be read is put back as
  * it was. `sessionFile`: the session task to fall back to when the previous
  * task asks for S4U and Windows stores it for the session only.
  */
@@ -1386,7 +1387,9 @@ function windowsRestoreDefinition(opts: ServiceOpts, previous: string, lines: st
     lines.push(`could not render the session task (${(error as Error).message}): the previous ${WINDOWS_TASK} task is put back as it was`);
     return { definition: previous, sessionFile: null };
   }
-  if (shape.consoleVisible) {
+  // The shared rule, not `consoleVisible` alone: the session task of a source
+  // checkout is a hidden PowerShell, and replacing it would register the same.
+  if (windowsConsoleTaskTrap(shape)) {
     lines.push(`the previous ${WINDOWS_TASK} task started ${shape.program} in the session, which opens a console window: the session task is registered instead`);
     return { definition: session, sessionFile: null };
   }
