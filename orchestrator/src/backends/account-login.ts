@@ -114,9 +114,38 @@ type LoginDriver = {
   ttlMs?: number;
 };
 
+/**
+ * Where a flow's sign-in goes and what accepting it means. A subscription
+ * account is one target; the flow itself (process, prompt, clocks, staging)
+ * does not depend on which.
+ */
+type LoginTarget = {
+  /** The flow's key in `flows`: one flow per target at a time. */
+  readonly key: string;
+  /** What the view calls it (`LoginView.accountId`). */
+  readonly id: string;
+  readonly backend: string;
+  /** Who a reconnect expects (an e-mail), handed to the CLI; null for anyone. */
+  readonly expected: string | null;
+  /** The folder the sign-in ends in. */
+  dir(): string;
+  /** Where the CLI signs in before the result is checked (not in place). */
+  stagingDir(): string;
+  /** Holds the target while the flow or its CLI may still write its credential. */
+  hold(): () => void;
+  /** Records the start of a flow. */
+  started(initiator: LoginInitiator): void;
+  /**
+   * The CLI signed in as `identity`: accept it (and move the credential in
+   * when not in place), or refuse it. Never throws for a refusal.
+   */
+  settle(flow: Flow, identity: Identity): Promise<void>;
+};
+
 type Flow = {
   view: LoginView;
   initiator: LoginInitiator;
+  target: LoginTarget;
   driver: LoginDriver;
   dir: string;
   inPlace: boolean;
@@ -307,66 +336,84 @@ function finish(flow: Flow, state: 'connected' | 'failed', failure: LoginFailure
   }
   if (state === 'failed') console.warn(`[account-login] ${flow.view.backend} account ${flow.view.accountId}: ${failure}`);
   const retain = setTimeout(() => {
-    if (flows.get(flow.view.accountId) === flow) flows.delete(flow.view.accountId);
+    if (flows.get(flow.target.key) === flow) flows.delete(flow.target.key);
   }, options.retainMs);
   retain.unref();
 }
 
-function audit(flow: Flow, action: string, row: BackendAccountRow): void {
+function audit(initiator: LoginInitiator, action: string, row: BackendAccountRow): void {
   dbApi.insertAuditLog({
-    userId: flow.initiator.userId,
+    userId: initiator.userId,
     action,
     target: `${accountInstance(row)} owner:${row.owner_user_id ?? 'instance'}`,
   });
 }
 
 /**
- * The CLI said it is signed in: check who as, refuse a duplicate or another
- * person than expected, then move the credential in and put the account back
- * in rotation.
+ * The CLI said it is signed in: check who as, then let the target accept it.
  */
 async function verify(flow: Flow): Promise<void> {
   flow.view = { ...flow.view, state: 'verifying' };
-  const row = getBackendAccount(flow.view.accountId);
-  if (!row) return finish(flow, 'failed', 'cancelled');
   const identity = await flow.driver.identity(flow.dir);
   if (flow.done) return;
   if (!identity) return finish(flow, 'failed', 'not_signed_in');
+  await flow.target.settle(flow, identity);
+}
 
-  const refuse = async (failure: LoginFailure, label: string | null = null) => {
-    // In place, the refused sign-in already replaced the previous one: it
-    // must not stay usable, so the account waits for a proper reconnect.
-    if (flow.inPlace) {
-      await flow.driver.signOut(flow.dir);
-      setBackendAccountStatus(row.id, 'reauth');
-    }
-    finish(flow, 'failed', failure, label);
+/**
+ * A subscription account: refuse a duplicate or another person than
+ * expected, then move the credential in and put the account back in rotation.
+ */
+function accountTarget(account: BackendAccountRow): LoginTarget {
+  return {
+    key: account.id,
+    id: account.id,
+    backend: account.backend,
+    expected: account.identity_label,
+    dir: () => ensureAccountConfigDir(account.id),
+    stagingDir: () => accountLoginStagingDir(account.id),
+    hold: () => beginAccountSignIn(account.id),
+    started: (initiator) => audit(initiator, 'backend_account.login_start', account),
+    async settle(flow, identity) {
+      const row = getBackendAccount(account.id);
+      if (!row) return finish(flow, 'failed', 'cancelled');
+
+      const refuse = async (failure: LoginFailure, label: string | null = null) => {
+        // In place, the refused sign-in already replaced the previous one: it
+        // must not stay usable, so the account waits for a proper reconnect.
+        if (flow.inPlace) {
+          await flow.driver.signOut(flow.dir);
+          setBackendAccountStatus(row.id, 'reauth');
+        }
+        finish(flow, 'failed', failure, label);
+      };
+      if (row.identity_key && row.identity_key !== identity.key) return refuse('mismatch', row.identity_label);
+      const holder = findBackendAccountByIdentity(row.backend, identity.key);
+      if (holder && holder.id !== row.id) return refuse('duplicate');
+
+      // Claimed before the move: the unique index settles two flows finishing at
+      // once, and the loser never touches its account's credential.
+      try {
+        setBackendAccountIdentity(row.id, identity);
+      } catch (err) {
+        if (err instanceof BackendAccountIdentityTakenError) return refuse('duplicate');
+        throw err;
+      }
+      if (!flow.inPlace) {
+        try {
+          flow.driver.install(flow.dir, ensureAccountConfigDir(row.id));
+        } catch {
+          setBackendAccountIdentity(row.id, row.identity_key && row.identity_label ? { key: row.identity_key, label: row.identity_label } : null);
+          return finish(flow, 'failed', 'cli_failed');
+        }
+      }
+      setBackendAccountStatus(row.id, 'active');
+      clearBackendCooldown(accountInstance(row));
+      resetBreaker(accountInstance(row));
+      audit(flow.initiator, 'backend_account.connect', row);
+      finish(flow, 'connected', null, identity.label);
+    },
   };
-  if (row.identity_key && row.identity_key !== identity.key) return refuse('mismatch', row.identity_label);
-  const holder = findBackendAccountByIdentity(row.backend, identity.key);
-  if (holder && holder.id !== row.id) return refuse('duplicate');
-
-  // Claimed before the move: the unique index settles two flows finishing at
-  // once, and the loser never touches its account's credential.
-  try {
-    setBackendAccountIdentity(row.id, identity);
-  } catch (err) {
-    if (err instanceof BackendAccountIdentityTakenError) return refuse('duplicate');
-    throw err;
-  }
-  if (!flow.inPlace) {
-    try {
-      flow.driver.install(flow.dir, ensureAccountConfigDir(row.id));
-    } catch {
-      setBackendAccountIdentity(row.id, row.identity_key && row.identity_label ? { key: row.identity_key, label: row.identity_label } : null);
-      return finish(flow, 'failed', 'cli_failed');
-    }
-  }
-  setBackendAccountStatus(row.id, 'active');
-  clearBackendCooldown(accountInstance(row));
-  resetBreaker(accountInstance(row));
-  audit(flow, 'backend_account.connect', row);
-  finish(flow, 'connected', null, identity.label);
 }
 
 /**
@@ -374,20 +421,24 @@ async function verify(flow: Flow): Promise<void> {
  * cancelled first: one CLI login per account at a time.
  */
 export function startAccountLogin(account: BackendAccountRow, initiator: LoginInitiator): LoginView {
-  const resolved = driverFor(account.backend);
-  if (!resolved) throw new LoginFlowError('unsupported', `backend ${account.backend} has no login flow`);
+  return startLogin(accountTarget(account), initiator);
+}
+
+function startLogin(target: LoginTarget, initiator: LoginInitiator): LoginView {
+  const resolved = driverFor(target.backend);
+  if (!resolved) throw new LoginFlowError('unsupported', `backend ${target.backend} has no login flow`);
   const { driver, cmd } = resolved;
-  cancelAccountLoginInternal(account.id);
+  cancelLoginInternal(target.key);
 
   // macOS claude keeps the sign-in in a keychain entry named after the config
   // directory: signing in elsewhere and moving the files would lose it.
   const inPlace = driver.inPlace?.(options.platform) ?? false;
-  const ttlMs = options.ttlMs(account.backend, driver.ttlMs);
+  const ttlMs = options.ttlMs(target.backend, driver.ttlMs);
   let dir: string;
   if (inPlace) {
-    dir = ensureAccountConfigDir(account.id);
+    dir = target.dir();
   } else {
-    dir = accountLoginStagingDir(account.id);
+    dir = target.stagingDir();
     removeStaging(dir);
     ensurePrivateDir(LOGIN_STAGING_DIR, options.platform);
     ensurePrivateDir(dir, options.platform);
@@ -395,17 +446,17 @@ export function startAccountLogin(account: BackendAccountRow, initiator: LoginIn
   const startedAt = Date.now();
   const flow: Flow = {
     view: {
-      accountId: account.id, backend: account.backend, state: 'starting', prompt: null, failure: null,
+      accountId: target.id, backend: target.backend, state: 'starting', prompt: null, failure: null,
       identity: null, codeSent: false, startedAt, expiresAt: startedAt + ttlMs,
     },
-    initiator, driver, dir, inPlace, child: null, output: '', timers: [], done: false,
-    exited: false, release: beginAccountSignIn(account.id),
+    initiator, target, driver, dir, inPlace, child: null, output: '', timers: [], done: false,
+    exited: false, release: target.hold(),
   };
-  flows.set(account.id, flow);
+  flows.set(target.key, flow);
 
   let child: ChildProcess;
   try {
-    child = options.spawn(cmd, driver.args(account.identity_label), { env: driver.env(dir), cwd: dir });
+    child = options.spawn(cmd, driver.args(target.expected), { env: driver.env(dir), cwd: dir });
   } catch {
     flow.exited = true;
     finish(flow, 'failed', 'cli_missing');
@@ -448,12 +499,12 @@ export function startAccountLogin(account: BackendAccountRow, initiator: LoginIn
   expire.unref();
   promptGuard.unref();
   flow.timers.push(expire, promptGuard);
-  audit(flow, 'backend_account.login_start', account);
+  target.started(initiator);
   return snapshot(flow);
 }
 
-function owned(accountId: string, initiator: LoginInitiator): Flow | undefined {
-  const flow = flows.get(accountId);
+function owned(key: string, initiator: LoginInitiator): Flow | undefined {
+  const flow = flows.get(key);
   if (!flow || flow.initiator.userId !== initiator.userId || flow.initiator.binding !== initiator.binding) return undefined;
   return flow;
 }
@@ -515,10 +566,14 @@ export function cancelAccountLogin(accountId: string, initiator: LoginInitiator)
 
 /** Stops whatever flow runs on the account (account deleted, new flow). */
 export function cancelAccountLoginInternal(accountId: string): void {
-  const flow = flows.get(accountId);
+  cancelLoginInternal(accountId);
+}
+
+function cancelLoginInternal(key: string): void {
+  const flow = flows.get(key);
   if (!flow) return;
   finish(flow, 'failed', 'cancelled');
-  flows.delete(accountId);
+  flows.delete(key);
 }
 
 /** Staging left by a daemon that stopped mid-flow: never a live sign-in. */
@@ -528,5 +583,5 @@ export function purgeLoginStaging(): void {
 
 /** Tests only. */
 export function resetAccountLogins(): void {
-  for (const id of [...flows.keys()]) cancelAccountLoginInternal(id);
+  for (const key of [...flows.keys()]) cancelLoginInternal(key);
 }
