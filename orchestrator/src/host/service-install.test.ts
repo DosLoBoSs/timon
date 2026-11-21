@@ -7,7 +7,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { ExecResult } from './types.js';
@@ -77,7 +77,7 @@ import {
   windowsTaskOffSession,
   type ServiceOpts,
 } from './service-install.js';
-import { readServiceSessionMode, writeServiceSessionMode } from './service-session-mode.js';
+import { readServiceSessionMode, serviceS4uRefusedPath, writeServiceSessionMode } from './service-session-mode.js';
 
 /**
  * What the elevated batch leaves behind: one line per step run.
@@ -902,6 +902,65 @@ test('windows: a boot task that never started is replaced by the session task, i
   assert.notEqual(res.refused, true);
   assert.equal(existsSync(files.refused), false);
   assert.equal(readFileSync(files.revision, 'utf8').trim(), WINDOWS_SERVICE_REVISION);
+});
+
+/**
+ * #116 on an Entra account: every rewrite asked for S4U again, waited, fell
+ * back to the session task again. The first fallback is remembered; only the
+ * user's explicit "always" tries S4U again.
+ */
+test('windows: a session fallback is remembered, and only an explicit "always" tries S4U again', () => {
+  const opts = { ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })), nodePath: PACKAGED_NODE };
+  const marker = serviceS4uRefusedPath(opts.timonHome);
+  assert.equal(marker, join(opts.timonHome, 'run', 'service-s4u-refused'));
+  writeServiceSessionMode(opts.timonHome, 'always');
+
+  // Kept off session: nothing to remember.
+  installService({ ...opts, readFile: () => transcript({ create: 0, logon: 0, stop: 0, run: 0, verify: 0 }) });
+  assert.equal(existsSync(marker), false);
+
+  // Stored for the session only: the fallback writes the marker, at the logon check or at the verify step.
+  for (const codes of [{ create: 0, logon: TASK_SESSION_FALLBACK, stop: 0, run: 0, verify: 0 }, { create: 0, logon: 0, stop: 0, run: 0, verify: TASK_SESSION_FALLBACK }]) {
+    rmSync(marker, { force: true });
+    const res = installService({ ...opts, readFile: () => transcript(codes) });
+    assert.equal(res.sessionFallback, true, res.lines.join('\n'));
+    assert.match(readFileSync(marker, 'utf8'), /^\d{4}-\d{2}-\d{2}T/);
+  }
+
+  // The next rewrite, with no explicit choice (recorded "always", or the desktop's
+  // boot-trigger intent passed by the upgrade runner): the session task directly.
+  for (const sessionMode of [undefined, 'always' as const]) {
+    const res = installService({ ...opts, ...(sessionMode ? { sessionMode } : {}), readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: 0 }) });
+    assert.equal(res.ok, true, res.lines.join('\n'));
+    assert.equal(res.sessionFallback, undefined, 'nothing fell back: the session task was asked for');
+    assert.match(readFileSync(taskXmlPath(), 'utf16le'), /<LogonType>InteractiveToken<\/LogonType>/);
+    assert.doesNotMatch(readFileSync(elevatedScriptPath(), 'utf8'), /TIMON-STEP logon=/);
+    const text = res.lines.join('\n');
+    assert.match(text, /for the session only on this account before \(recorded \d{4}-.*registering the session task directly.*timon service session-mode always/);
+    assert.match(text, /starts at logon and stops when you log off/);
+  }
+
+  // The explicit gesture (`timon service session-mode always`) forgets it, and the reinstall tries S4U.
+  assert.equal(applySessionMode(opts, 'always').ok, true);
+  assert.equal(existsSync(marker), false);
+  const retried = installService({ ...opts, readFile: () => transcript({ create: 0, logon: 0, stop: 0, run: 0, verify: 0 }) });
+  assert.match(readFileSync(taskXmlPath(), 'utf16le'), /<LogonType>S4U<\/LogonType>/);
+  assert.doesNotMatch(retried.lines.join('\n'), /registering the session task directly/);
+
+  // "session" is no request to try S4U: the refusal stays known.
+  writeFileSync(marker, 'x\n');
+  writeServiceSessionMode(opts.timonHome, 'session');
+  assert.equal(existsSync(marker), true);
+});
+
+test('windows: a restored S4U task that falls back to the session task is remembered too', () => {
+  const win = { ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })), nodePath: PACKAGED_NODE };
+  const previous = previousTask('S4U', PACKAGED_NODE);
+  restoreServiceDefinition({ ...win, readFile: () => transcript({ create: 0, logon: 0, stop: 0, run: 0 }) }, previous);
+  assert.equal(existsSync(serviceS4uRefusedPath(win.timonHome)), false);
+  const res = restoreServiceDefinition({ ...win, readFile: () => transcript({ create: 0, logon: TASK_SESSION_FALLBACK, stop: 0, run: 0 }) }, previous);
+  assert.equal(res.sessionFallback, true);
+  assert.equal(existsSync(serviceS4uRefusedPath(win.timonHome)), true);
 });
 
 test('windows: a task never launched is an honest refusal, without a revision, with a marker', () => {

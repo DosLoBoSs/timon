@@ -41,7 +41,7 @@ import { dirname, isAbsolute, join, posix, relative, resolve, sep, win32 as winP
 import { runtimeDir } from './packaged-service.js';
 import type { ExecResult } from './types.js';
 import { isBundledNode, packagedRuntime } from './bundled-node.js';
-import { readServiceSessionMode, sessionModeSupported, writeServiceSessionMode, type ServiceSessionMode } from './service-session-mode.js';
+import { readServiceSessionMode, serviceS4uRefusedPath, sessionModeSupported, writeServiceSessionMode, type ServiceSessionMode } from './service-session-mode.js';
 import { parseLauncherConfig, WINDOWS_LAUNCHER_FORMAT, type WindowsLauncherConfig } from './windows-service-launcher.js';
 import { windowsTaskShape, type WindowsTaskShape } from './windows-task-shape.js';
 
@@ -803,7 +803,7 @@ export function windowsTaskOffSession(opts: Pick<ServiceOpts, 'exec'>): boolean 
  * the question registered the boot task, and silently turning an upgraded
  * user's night tasks off is the worse mistake.
  */
-function windowsKeepsRunning(opts: ServiceOpts): boolean {
+function windowsWantsOffSession(opts: ServiceOpts): boolean {
   const mode = sessionModeOf(opts);
   if (mode !== null) return mode === 'always';
   const found = windowsTaskOffSession(opts);
@@ -813,6 +813,32 @@ function windowsKeepsRunning(opts: ServiceOpts): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Off session (S4U) or not, once a past refusal is counted: Windows already
+ * kept the S4U task for the session only on this account (`service-s4u-refused`),
+ * so trying again would only fall back the same way, after the same wait. The
+ * explicit "always" (`writeServiceSessionMode`) removes the marker first.
+ */
+function windowsKeepsRunning(opts: ServiceOpts, lines: string[]): boolean {
+  if (!windowsWantsOffSession(opts)) return false;
+  const marker = serviceS4uRefusedPath(opts.timonHome);
+  if (!existsSync(marker)) return true;
+  let since = '';
+  try {
+    since = readFileSync(marker, 'utf8').trim();
+  } catch {
+    // Unreadable: the refusal still holds, only its date is lost.
+  }
+  lines.push(`Windows kept the ${WINDOWS_TASK} task for the session only on this account before${since ? ` (recorded ${since})` : ''}: `
+    + 'registering the session task directly. Run `timon service session-mode always` to try running with no session open again.');
+  return false;
+}
+
+/** Remembers that this account refuses the S4U task (`windowsKeepsRunning`). */
+function recordS4uRefused(opts: ServiceOpts, lines: string[]): void {
+  write(serviceS4uRefusedPath(opts.timonHome), `${new Date().toISOString()}\n`, opts.dryRun ?? false, lines);
 }
 
 function powershellLiteral(value: string): string {
@@ -1136,7 +1162,7 @@ function installWindows(opts: ServiceOpts, lines: string[]): ServiceResult {
     return { ok: false, code: 1, lines, written: false };
   }
   const file = taskXmlPath();
-  const offSession = windowsKeepsRunning(opts);
+  const offSession = windowsKeepsRunning(opts, lines);
   const userId = windowsTaskUserId(opts);
   // UTF-16 with a BOM: `schtasks /XML` rejects a UTF-8 file with a parse error
   // that names neither the encoding nor the file.
@@ -1220,6 +1246,7 @@ function installWindows(opts: ServiceOpts, lines: string[]): ServiceResult {
   const when = offSession && !fellBack ? 'starts at boot and keeps running after logoff' : 'starts at logon and stops when you log off';
   lines.push(`${opts.dryRun ? '(dry-run) would install and start the service' : 'service installed and started'} (scheduled task ${WINDOWS_TASK}, ${when})`);
   if (!fellBack) return { ok: true, code: 0, lines };
+  recordS4uRefused(opts, lines);
   lines.push(WINDOWS_SESSION_FALLBACK_NOTICE);
   return { ok: true, code: 0, lines, sessionFallback: true };
 }
@@ -1382,7 +1409,10 @@ function restoreWindowsDefinition(opts: ServiceOpts, previous: string, lines: st
     lines.push(`could not read back the logon type of scheduled task ${WINDOWS_TASK}: it is kept as restored`);
   }
   const fellBack = logon === TASK_SESSION_FALLBACK;
-  if (fellBack) lines.push(WINDOWS_SESSION_FALLBACK_NOTICE);
+  if (fellBack) {
+    recordS4uRefused(opts, lines);
+    lines.push(WINDOWS_SESSION_FALLBACK_NOTICE);
+  }
   // The revision `installWindows` just recorded describes the definition that
   // was taken away: left, the migration would never run again. Not cleared
   // either: to the desktop, no revision file means no task at all — a
