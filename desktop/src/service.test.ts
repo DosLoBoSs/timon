@@ -258,8 +258,11 @@ test('windows: the handover ends only the launcher of this home, and its tree', 
   await endWindowsLauncher("C:\\Users\\O'Neil\\.timon", async (args) => { commands.push(args.at(-1)!); return { stdout: '' }; });
   assert.equal(commands.length, 1);
   assert.ok(commands[0]!.includes("c:\\users\\o''neil\\.timon"), commands[0]);
-  assert.ok(commands[0]!.includes('timon-service.cmd'));
-  assert.match(commands[0]!, /\$_.Name -eq 'cmd\.exe'/);
+  // Revision 6 names its configuration; a revision-5 task still runs the batch until it is rewritten.
+  assert.ok(commands[0]!.includes('timon-service.json'), commands[0]);
+  assert.ok(commands[0]!.includes('timon-service.cmd'), commands[0]);
+  for (const program of ['cmd.exe', 'node.exe', 'timon.exe']) assert.ok(commands[0]!.includes(`'${program}'`), program);
+  assert.match(commands[0]!, /\$_\.ProcessId -ne \$PID/);
   assert.match(commands[0]!, /taskkill\.exe \/F \/T \/PID/);
 });
 
