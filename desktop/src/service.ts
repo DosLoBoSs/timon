@@ -9,6 +9,7 @@ import type { DesktopConfig } from './config.js';
 import { withRuntimeEnv } from './daemon-runtime.js';
 import { shellText } from './shell-i18n.js';
 import { startupText } from './startup-text.js';
+import { windowsTaskShape, type WindowsTaskShape } from './windows-task-shape.js';
 
 export function instanceId(home: string): string {
   return createHash('sha256').update(resolve(home)).digest('hex').slice(0, 24);
@@ -355,6 +356,20 @@ async function kickstartMacAgent(run: ServiceExec, uid: number, mac: MacServiceS
 /** Whether Task Scheduler knows the boot task. A failed query counts as absent: both leave nothing to wait on. */
 export async function windowsTaskExists(exec: ServiceExec = execSchtasks): Promise<boolean> {
   return exec(['/Query', '/TN', WINDOWS_TASK]).then(() => true, () => false);
+}
+
+/**
+ * What the registered task runs (`windowsTaskShape`), read without elevation
+ * the way the host adapter reads it (`readWindowsTaskShape`): `schtasks /XML`
+ * starts far faster than PowerShell, and loses only non-ASCII characters,
+ * which neither the logon, the program name nor a trigger holds. `null` when
+ * the task is missing or its definition cannot be read.
+ */
+export async function readWindowsTaskShape(exec: ServiceExec = execSchtasks): Promise<WindowsTaskShape | null> {
+  try {
+    const { stdout } = await exec(['/Query', '/TN', WINDOWS_TASK, '/XML', 'ONE']);
+    return windowsTaskShape(stdout);
+  } catch { return null; }
 }
 
 /** `ScheduledTasks` module lookup: the call `Unregister-ScheduledTask` answers to, unlike `schtasks`. */

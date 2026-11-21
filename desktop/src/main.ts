@@ -22,6 +22,7 @@ import {
   controlDesktopService, daemonLogHint, forgetMissingWindowsService, forgetServiceStopped, hasDesktopService, repairSessionWitness,
   restartDesktopService, serviceStoppedByUser, startDesktopService, startStoppedServiceFailureMessage, stopServiceCopy, stopServiceFailureMessage,
   endWindowsLauncher, serviceHeldOutSince, windowsRestartSeams, windowsServiceRefusedFile, windowsTaskRunning, windowsTaskState,
+  readWindowsTaskShape,
 } from './service.js';
 import { app, BrowserWindow, Menu, Tray, WebContentsView, clipboard, dialog, shell, nativeImage, ipcMain, screen, session, systemPreferences, webContents } from 'electron';
 import { parseWindowSchemeReport, recordMachineScheme, WINDOW_BACKGROUND, WINDOW_SCHEME_CHANNEL, windowScheme, type Scheme } from './appearance.js';
@@ -64,7 +65,7 @@ import { keepDictionariesLocal } from './spellcheck.js';
 import {
   clearServiceRefused, declineServiceRepair, markServiceRefusedNotice, recordServiceRefused, serviceRefusedMessage, serviceRefusedNoticeDue,
   serviceRepairFailureMessage, serviceRepairPrompt, serviceRepairVerdict,
-  serviceUpgradeNeeded, upgradeFailureMessage, upgradeNeedsFallback, upgradePackagedService,
+  serviceUpgradeNeeded, upgradeFailureMessage, upgradeNeedsFallback, upgradePackagedService, windowsSessionIntent,
 } from './upgrade.js';
 import {
   selectDirectory, selectExecutable, selectPluginSource, SELECT_DIRECTORY_CHANNEL, SELECT_EXECUTABLE_CHANNEL, SELECT_PLUGIN_SOURCE_CHANNEL,
@@ -1597,6 +1598,12 @@ async function main(): Promise<void> {
       if (forgotten.length > 0) console.log(`[desktop] the boot task was deleted outside Timon: forgot ${forgotten.join(', ')}`);
     }
   }
+  // What the task runs: one changed by hand to the interactive token opens a
+  // console at every start (#116), and is rewritten below.
+  const taskShape = taskState?.exists ? await readWindowsTaskShape() : null;
+  if (taskShape) {
+    console.log(`[desktop] boot task: logon ${taskShape.logon}, program ${taskShape.program ?? 'none'}, triggers ${taskShape.triggers.join('+') || 'none'}${taskShape.consoleVisible ? ', opens a console' : ''}`);
+  }
   const serviceInstalled = hasDesktopService(cfg.home);
   // The session witness the launcher waits on can go stale (password reset):
   // sealed again here, in the user's own session. Not awaited, the launcher
@@ -1610,7 +1617,7 @@ async function main(): Promise<void> {
   const upgradeNeeded = serviceUpgradeNeeded(cfg.home, app.getVersion(), {
     packaged: app.isPackaged,
     serviceInstalled,
-    ...(taskState ? { taskExists: taskState.exists } : {}),
+    ...(taskState ? { taskExists: taskState.exists, taskShape } : {}),
   });
   console.log(`[desktop] service installed: ${serviceInstalled}; upgrade needed: ${upgradeNeeded}`);
   const repair = serviceRepairVerdict(cfg.home, app.getVersion(), {
@@ -1635,6 +1642,7 @@ async function main(): Promise<void> {
         runtimeEnv: shellDaemonRuntime().env,
         resourcesPath: process.resourcesPath,
         version: app.getVersion(),
+        sessionIntent: windowsSessionIntent(taskShape),
       });
     } catch (error) {
       // Boot on whatever the runner left rather than refusing to start, and

@@ -23,7 +23,10 @@ import {
   runnerFailureReason,
   upgradeNeedsFallback,
   upgradePackagedService,
+  windowsSessionIntent,
+  DESKTOP_SESSION_INTENT_ENV,
 } from './upgrade.js';
+import { windowsTaskShape } from './windows-task-shape.js';
 import { WINDOWS_SERVICE_REVISION, hasDesktopService, windowsBatchLauncher, windowsLauncher, windowsLegacyLauncher, windowsServiceRefusedFile, windowsServiceRevisionFile } from './service.js';
 
 const cfg: DesktopConfig = {
@@ -336,4 +339,58 @@ test('TIM-0108: the repair verdict says why the offer stays silent', t => {
   assert.equal(serviceRepairVerdict(home, '0.1.5', facts), 'declined');
   recordServiceRefused(home);
   assert.equal(serviceRepairVerdict(home, '0.1.5', facts), 'refused');
+});
+
+/** The shapes of #116: S4U written by Timon, then switched by hand to the interactive token. */
+const taskXml = (logon: string, command: string, trigger: 'Boot' | 'Logon') => `<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Triggers><${trigger}Trigger><Enabled>true</Enabled></${trigger}Trigger><TimeTrigger><Repetition><Interval>PT5M</Interval></Repetition></TimeTrigger></Triggers>
+  <Principals><Principal id="Author"><UserId>S-1-5-21-1</UserId><LogonType>${logon}</LogonType></Principal></Principals>
+  <Actions Context="Author"><Exec><Command>${command}</Command></Exec></Actions>
+</Task>`;
+
+test('windows #116: a task that opens a console is rewritten whatever its revision says', () => {
+  const home = mkdtempSync(join(tmpdir(), 'timon-upgrade-console-'));
+  try {
+    mkdirSync(join(home, 'run'), { recursive: true });
+    writeFileSync(windowsServiceRevisionFile(home), `${WINDOWS_SERVICE_REVISION}\n`);
+    const facts = { platform: 'win32' as NodeJS.Platform, packaged: true, serviceInstalled: true, taskExists: true };
+    const pcB = windowsTaskShape(taskXml('InteractiveToken', 'C:\\Windows\\System32\\cmd.exe', 'Boot'));
+    assert.equal(pcB?.consoleVisible, true);
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, taskShape: pcB }), true, 'interactive + cmd.exe, current revision');
+    const node = windowsTaskShape(taskXml('InteractiveToken', 'C:\\Timon\\resources\\node\\node.exe', 'Boot'));
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, taskShape: node }), true, 'interactive + node.exe, revision 6 changed by hand');
+    const s4u = windowsTaskShape(taskXml('S4U', 'C:\\Timon\\resources\\node\\node.exe', 'Boot'));
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, taskShape: s4u }), false, 'S4U + node.exe: what Timon writes');
+    const session = windowsTaskShape(taskXml('InteractiveToken', 'C:\\Timon\\Timon.exe', 'Logon'));
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, taskShape: session }), false, 'the session task opens no console');
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, taskShape: null }), false, 'unreadable: the revision decides');
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, packaged: false, taskShape: pcB }), false, 'dev and portable: never');
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+test('windows #116: the boot trigger of a console task says it was meant to run logged out', () => {
+  assert.equal(windowsSessionIntent(windowsTaskShape(taskXml('InteractiveToken', 'cmd.exe', 'Boot'))), 'always');
+  assert.equal(windowsSessionIntent(windowsTaskShape(taskXml('InteractiveToken', 'cmd.exe', 'Logon'))), 'session');
+  assert.equal(windowsSessionIntent(windowsTaskShape(taskXml('S4U', 'cmd.exe', 'Boot'))), undefined, 'no console: the runner reads the task');
+  assert.equal(windowsSessionIntent(windowsTaskShape(taskXml('InteractiveToken', 'Timon.exe', 'Logon'))), undefined);
+  assert.equal(windowsSessionIntent(null), undefined);
+});
+
+test('windows #116: the intent reaches the runner under the name the host adapter reads', async () => {
+  const source = readFileSync(new URL('../../orchestrator/src/host/packaged-upgrade.ts', import.meta.url), 'utf8');
+  assert.equal(/export const DESKTOP_SESSION_INTENT_ENV = '([^']+)'/.exec(source)?.[1], DESKTOP_SESSION_INTENT_ENV);
+  const root = mkdtempSync(join(tmpdir(), 'timon-upgrade-intent-'));
+  try {
+    const resourcesPath = join(root, 'resources');
+    mkdirSync(join(resourcesPath, 'orchestrator', 'dist', 'host'), { recursive: true });
+    writeFileSync(join(resourcesPath, 'orchestrator', 'dist', 'host', 'packaged-upgrade-runner.js'), '');
+    const envs: NodeJS.ProcessEnv[] = [];
+    const record = async (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => { envs.push(options.env); return { stdout: '', stderr: '' }; };
+    const input = { execPath: 'C:\\Timon\\Timon.exe', resourcesPath, version: '0.2.0' };
+    await upgradePackagedService(cfg, { ...input, sessionIntent: 'always' }, record);
+    await upgradePackagedService(cfg, input, record);
+    assert.equal(envs[0]?.[DESKTOP_SESSION_INTENT_ENV], 'always');
+    assert.equal(envs[1]?.[DESKTOP_SESSION_INTENT_ENV], undefined, 'no intent: nothing handed over');
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
