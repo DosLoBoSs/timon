@@ -30,7 +30,7 @@ const { activeProfiles, providerAuthStatus } = await import('../../backends/regi
 const { dbApi } = await import('../../db.js');
 const { SESSION_COOKIE } = await import('../../users/session.js');
 const { issueMissionApiToken } = await import('../../users/api-tokens.js');
-const { providerSignedIn, setProviderSignInForTest } = await import('../../backends/sign-in-state.js');
+const { providerSignedIn, refreshProviderSignIn, resetProviderSignInForTest, setProviderSignInForTest, setSignInEnv } = await import('../../backends/sign-in-state.js');
 
 class FakeCli extends EventEmitter {
   stdin = new PassThrough();
@@ -317,4 +317,15 @@ test('back to the terminal\'s session: Timon\'s folder goes, the base profile ru
   const base = activeProfiles().find((entry) => entry.profile.id === 'claude' && !entry.account)!;
   const { runtime } = await base.runtimeFor();
   assert.equal((runtime as { account?: unknown }).account, undefined);
+
+  // No kept sign-in and no terminal session any more: the minted token alone keeps claude
+  // signed in, for a person's explicit check too, not only for the verdict the flow recorded.
+  const empty = mkdtempSync(join(tmpdir(), 'timon-no-session-'));
+  setSignInEnv(() => ({ CLAUDE_CONFIG_DIR: empty, HOME: empty }));
+  try {
+    assert.equal(await refreshProviderSignIn('claude', true), true);
+    assert.equal(providerSignedIn('claude'), true);
+  } finally {
+    resetProviderSignInForTest();
+  }
 });
