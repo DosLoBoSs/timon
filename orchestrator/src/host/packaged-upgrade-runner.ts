@@ -13,7 +13,8 @@ import {
   pruneInactiveReleases,
   stagePackagedRuntime,
 } from './packaged-service.js';
-import { upgradeDesktopService } from './packaged-upgrade.js';
+import { DESKTOP_SESSION_INTENT_ENV, upgradeDesktopService, upgradeSessionMode } from './packaged-upgrade.js';
+import { readServiceSessionMode } from './service-session-mode.js';
 import { serviceOfAnotherHome } from './service-ownership.js';
 import {
   installService,
@@ -81,7 +82,13 @@ const result = await upgradeDesktopService({
     const host = createGenericHost(cfg);
     // A revision-1 task left its detached daemon on the port (0.1.1-rc.7).
     // The batch of revision 5 stays until the new task answers: a rollback runs it.
-    return { ...serviceOptsFromEnvironment(cfg, () => host), replacePortOwner: true, keepBatchLauncher: true };
+    const sessionMode = process.platform === 'win32'
+      ? upgradeSessionMode(process.env[DESKTOP_SESSION_INTENT_ENV], readServiceSessionMode(TIMON_HOME))
+      : undefined;
+    return {
+      ...serviceOptsFromEnvironment(cfg, () => host), replacePortOwner: true, keepBatchLauncher: true,
+      ...(sessionMode ? { sessionMode } : {}),
+    };
   },
   foreign: serviceOfAnotherHome,
   install: installService,
