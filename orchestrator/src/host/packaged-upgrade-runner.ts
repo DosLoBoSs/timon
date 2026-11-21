@@ -20,6 +20,7 @@ import {
   readServiceDefinition,
   removeServiceDefinition,
   restoreServiceDefinition,
+  retireBatchLauncher,
 } from './service-install.js';
 
 /** Cold boot of a packaged daemon, migrations and a restore included, stays well below this. */
@@ -79,7 +80,8 @@ const result = await upgradeDesktopService({
   options: () => {
     const host = createGenericHost(cfg);
     // A revision-1 task left its detached daemon on the port (0.1.1-rc.7).
-    return { ...serviceOptsFromEnvironment(cfg, () => host), replacePortOwner: true };
+    // The batch of revision 5 stays until the new task answers: a rollback runs it.
+    return { ...serviceOptsFromEnvironment(cfg, () => host), replacePortOwner: true, keepBatchLauncher: true };
   },
   foreign: serviceOfAnotherHome,
   install: installService,
@@ -97,6 +99,7 @@ const result = await upgradeDesktopService({
     }
   },
   prune: () => pruneInactiveReleases(TIMON_HOME, undefined, previousRelease ? [previousRelease] : []),
+  retire: (opts) => retireBatchLauncher(opts),
 });
 if (!result.ok) {
   console.error(result.reason ?? 'service upgrade failed');
