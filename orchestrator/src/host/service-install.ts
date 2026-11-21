@@ -1294,16 +1294,61 @@ function readWindowsDefinition(opts: ServiceOpts): string | null {
   return res.code === 0 && res.stdout.includes('<Task') ? res.stdout : null;
 }
 
+/**
+ * What a rollback registers in place of `previous`. Never a task that starts
+ * a console program in the user's session (issue #116): it would open a
+ * window at every start, so the session task of this installation, which
+ * opens none, goes in its place. A shape that cannot be read is put back as
+ * it was. `sessionFile`: the session task to fall back to when the previous
+ * task asks for S4U and Windows stores it for the session only.
+ */
+function windowsRestoreDefinition(opts: ServiceOpts, previous: string, lines: string[]): { definition: string; sessionFile: string | null } {
+  const shape = windowsTaskShape(previous);
+  if (!shape || shape.logon === 'unknown') {
+    lines.push(`could not read the logon of the previous ${WINDOWS_TASK} task: it is put back as it was`);
+    return { definition: previous, sessionFile: null };
+  }
+  let session: string;
+  try {
+    session = renderTaskXml({ ...opts, userId: windowsTaskUserId(opts), offSession: false });
+  } catch (error) {
+    lines.push(`could not render the session task (${(error as Error).message}): the previous ${WINDOWS_TASK} task is put back as it was`);
+    return { definition: previous, sessionFile: null };
+  }
+  if (shape.consoleVisible) {
+    lines.push(`the previous ${WINDOWS_TASK} task started ${shape.program} in the session, which opens a console window: the session task is registered instead`);
+    return { definition: session, sessionFile: null };
+  }
+  if (shape.logon === 'InteractiveToken') return { definition: previous, sessionFile: null };
+  const sessionFile = sessionTaskXmlPath();
+  writeTaskXml(sessionFile, session, opts.dryRun ?? false, lines);
+  return { definition: previous, sessionFile };
+}
+
 function restoreWindowsDefinition(opts: ServiceOpts, previous: string, lines: string[]): ServiceResult {
   const file = taskXmlPath();
-  writeTaskXml(file, previous, opts.dryRun ?? false, lines);
+  const { definition, sessionFile } = windowsRestoreDefinition(opts, previous, lines);
+  writeTaskXml(file, definition, opts.dryRun ?? false, lines);
   const { codes, output, cancelled } = runElevated(opts, lines, [
     { label: 'create', args: ['/Create', '/TN', WINDOWS_TASK, '/XML', file, '/F'], stopOnFailure: true },
+    ...(sessionFile ? [logonCheckStep(sessionFile)] : []),
     stopLauncherStep(opts.timonHome),
     { label: 'run', args: ['/Run', '/TN', WINDOWS_TASK] },
   ]);
   if (cancelled) return { ok: false, code: 1, lines, reason: 'elevation refused' };
   if (codes.get('create') !== 0) return { ok: false, code: 1, lines, reason: output.trim() || 'schtasks refused the previous task' };
+  const logon = codes.get('logon');
+  if (logon === TASK_LOGON_FALLBACK_FAILED) {
+    // Removed rather than left to open a console at every start.
+    clearRevision(opts);
+    lines.push(`the previous ${WINDOWS_TASK} task was stored for the session only, and the session task could not replace it: it was removed`);
+    return { ok: false, code: 1, lines, reason: `Windows stored the previous ${WINDOWS_TASK} task for the session only, and Timon could not register its session task instead` };
+  }
+  if (logon === TASK_LOGON_UNREADABLE) {
+    lines.push(`could not read back the logon type of scheduled task ${WINDOWS_TASK}: it is kept as restored`);
+  }
+  const fellBack = logon === TASK_SESSION_FALLBACK;
+  if (fellBack) lines.push(WINDOWS_SESSION_FALLBACK_NOTICE);
   // The revision `installWindows` just recorded describes the definition that
   // was taken away: left, the migration would never run again. Not cleared
   // either: to the desktop, no revision file means no task at all — a
@@ -1312,7 +1357,11 @@ function restoreWindowsDefinition(opts: ServiceOpts, previous: string, lines: st
   // desktop tries again at its next launch.
   write(windowsServiceFiles(opts.timonHome, join).revision, `${WINDOWS_REVISION_RESTORED}\n`, opts.dryRun ?? false, lines);
   const ok = codes.get('run') === 0;
-  return { ok, code: ok ? 0 : 1, lines, ...(ok ? {} : { reason: output.trim() || 'the previous task could not be started' }) };
+  return {
+    ok, code: ok ? 0 : 1, lines,
+    ...(fellBack ? { sessionFallback: true } : {}),
+    ...(ok ? {} : { reason: output.trim() || 'the previous task could not be started' }),
+  };
 }
 
 function removeWindowsDefinition(opts: ServiceOpts, lines: string[]): ServiceResult {
