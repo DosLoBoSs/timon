@@ -10,7 +10,7 @@ import {
   startStoppedServiceFailureMessage, stopServiceCopy, stopServiceFailureMessage,
   WINDOWS_SERVICE_REVISION, WINDOWS_TASK, windowsLauncher, windowsRepairDeclinedFile, windowsRestartRunner, windowsTaskNeverRan,
   windowsRestartSeams, windowsServiceRevisionFile, windowsSessionWitnessFile, windowsTaskState, windowsTaskRunning, endWindowsLauncher, serviceHeldOutFile, serviceHeldOutSince,
-  readWindowsTaskShape,
+  readWindowsTaskShape, disableWindowsTask,
 } from './service.js';
 import type { DesktopConfig } from './config.js';
 
@@ -491,4 +491,11 @@ test('windows #116: the task\'s shape is read with schtasks /XML, and an unreada
   assert.deepEqual(shape?.triggers, ['Boot']);
   assert.equal(await readWindowsTaskShape(async () => { throw new Error('ERROR: The system cannot find the file specified.'); }), null);
   assert.equal(await readWindowsTaskShape(async () => ({ stdout: '' })), null);
+});
+
+test('windows #116: a task Windows never starts is disabled with schtasks, and a refusal is reported', async () => {
+  const calls: string[][] = [];
+  await disableWindowsTask(async (args) => { calls.push(args); return { stdout: 'SUCCESS' }; });
+  assert.deepEqual(calls, [['/Change', '/TN', WINDOWS_TASK, '/DISABLE']]);
+  await assert.rejects(disableWindowsTask(async () => { throw new Error('ERROR: Access is denied.'); }), /Access is denied/);
 });

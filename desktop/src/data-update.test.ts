@@ -664,6 +664,8 @@ for (const platform of ['win32', 'darwin', 'linux']) {
         serviceRepairVerdict: () => 'task-exists', existsSync: () => true,
         windowsTaskState: async () => ({ schtasks: true, lookup: 'present', exists: true, confirmedAbsent: false }),
         forgetMissingWindowsService: () => [], repairSessionWitness: async () => 'ok',
+        // #116: what the task runs, read at launch; a plain task here, nothing to rewrite or decide.
+        readWindowsTaskShape: async () => null, windowsSessionIntent: () => undefined,
         serviceStoppedByUser: () => false, forgetServiceStopped: () => {},
         shellDaemonRuntime: () => ({ execPath: 'node', env: {} }), upgradePackagedService: async () => { calls.push('service'); },
         originOf: () => 'http://127.0.0.1', probeHealth: async () => ({ ok: true }),

@@ -372,6 +372,17 @@ export async function readWindowsTaskShape(exec: ServiceExec = execSchtasks): Pr
   } catch { return null; }
 }
 
+/**
+ * Switches the task off, without elevation: Windows never starts it for this
+ * account, and its five-minute trigger would keep knocking on the home the
+ * embedded daemon holds (#116). Allowed when the task is the user's own; an
+ * S4U task registered from an elevated prompt may refuse, and the caller
+ * only logs it. Rejects with what schtasks said.
+ */
+export async function disableWindowsTask(exec: ServiceExec = execSchtasks): Promise<void> {
+  await exec(['/Change', '/TN', WINDOWS_TASK, '/DISABLE']);
+}
+
 /** `ScheduledTasks` module lookup: the call `Unregister-ScheduledTask` answers to, unlike `schtasks`. */
 const TASK_LOOKUP = ['-NoProfile', '-NonInteractive', '-Command',
   `if (Get-ScheduledTask -TaskName '${WINDOWS_TASK}' -TaskPath '\\' -ErrorAction SilentlyContinue) { 'present' } else { 'absent' }`];
