@@ -350,6 +350,16 @@ The versions that follow start the task without any script, which these antiviru
 
 To check the result, open **Task Scheduler**: `TimonOrchestrator` is listed and **Running**. `%USERPROFILE%\.timon\tmp\daemon.log` then ends with a `starting the daemon` line.
 
+## Windows: a console window opens every few minutes
+
+A black console window (Command Prompt, PowerShell or `node.exe`) opens on its own, about every five minutes, and closing it stops Timon. The `TimonOrchestrator` task was changed after Timon registered it, usually with **Run only when user is logged on** selected in Task Scheduler: it then starts a console program in your session.
+
+1. Run `timon doctor`. Its **Findings** list has a line that starts with "A console window opens on this PC" when the task is in this state (`windows-task-console` in the diagnostic report). `timon service status` shows the same verdict on its `console` line, next to the task's `logon` and `action`.
+2. Repair the task: run `timon service install` in Timon's terminal or in PowerShell, and allow the Windows permission prompt. Timon registers a task that opens no window. Opening Timon also offers this repair at launch, once per version: if you declined it, Timon asks again only after the next update.
+3. Choose when the task runs with `timon service session-mode session` (it starts when you sign in and stops when you sign out) or `timon service session-mode always` (it starts at boot and keeps running after you sign out). If Windows does not keep `always` for your account, as on some work or school PCs, Timon registers the session task instead and says so; see [Windows](windows.md#desktop-installer).
+
+Do not change the task in Task Scheduler afterwards: switch with `timon service session-mode` or **Settings › System › Installation** instead.
+
 ## Windows: updating while the background service runs
 
 The installer pauses the `TimonOrchestrator` task and ends its daemon before replacing the files, with the Windows permission prompt when it is granted and without it otherwise. If an older installer left Timon failing at launch (for example "ffmpeg.dll was not found"), close every `Timon.exe` from Task Manager, run the installer again, then start the task from Task Scheduler or reopen Timon.
