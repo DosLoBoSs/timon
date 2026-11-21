@@ -330,8 +330,10 @@ export function startStoppedServiceFailureMessage(error: unknown, home: string, 
 type ServiceExec = (args: string[]) => Promise<{ stdout: string }>;
 const execSystemctl: ServiceExec = (args) => promisify(execFile)('systemctl', args, { timeout: 15_000 });
 const execLaunchctl: ServiceExec = (args) => promisify(execFile)('launchctl', args, { timeout: 15_000 });
-const execSchtasks: ServiceExec = (args) => promisify(execFile)('schtasks', args, { timeout: 15_000 });
-const execPowershell: ServiceExec = (args) => promisify(execFile)('powershell', args, { timeout: 30_000 });
+// Both are console programs: started from the windowed shell without
+// `windowsHide`, each call flashes a console on the user's desktop (#116).
+const execSchtasks: ServiceExec = (args) => promisify(execFile)('schtasks', args, { timeout: 15_000, windowsHide: true });
+const execPowershell: ServiceExec = (args) => promisify(execFile)('powershell', args, { timeout: 30_000, windowsHide: true });
 
 /**
  * `kickstart -k` fails when launchd has not loaded the agent yet (first run
