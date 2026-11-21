@@ -32,6 +32,9 @@ test('what a row offers: sign in when nothing is, a token beside a terminal sess
   assert.equal(hostSignInOffer(view({ signedIn: true })), 'token');
   assert.equal(hostSignInOffer(view({ signedIn: true, token: { stored: true } })), null);
   assert.equal(hostSignInOffer(view({ signedIn: true, kept: true, identity: 'a@b.example' })), null);
+  // Just signed in from the browser while the verdict still lags: no "Sign in" again.
+  assert.equal(hostSignInOffer(view({ signedIn: false, kept: true, identity: 'a@b.example' })), null);
+  assert.equal(hostSignInOffer(view({ signedIn: null, kept: true })), null);
   assert.equal(hostSignInOffer(view({ signedIn: true, token: null })), null);
   assert.equal(hostSignInOffer(view({ signedIn: null })), null);
   assert.equal(hostSignInOffer(null), null);
@@ -211,6 +214,9 @@ test('the providers list row: "Sign in" opens the dialog, closing it early cance
     await m.until(() => server.calls.includes('DELETE login'), 'the flow cancelled');
     assert.equal(dialog(), null);
     assert.equal(done, 0);
+    // A sign-in Timon keeps offers nothing on the row, even with a verdict that says signed out.
+    await m.render(m.React.createElement(HostSignInAction, { host: view({ kept: true, identity: 'a@b.example' }), name: 'Claude', onDone: () => {} }));
+    assert.equal(document.querySelector('[data-host-sign-in-offer]'), null);
   } finally {
     await m.unmount();
   }

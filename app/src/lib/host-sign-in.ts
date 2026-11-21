@@ -75,10 +75,13 @@ export async function cancelHostFlow(backend: string, kind: HostFlowKind): Promi
 /**
  * What a surface offers for the host's sign-in, by order of need: signing in
  * when nothing is, a long-lived token when a session runs without one, nothing
- * once both are there. `null`: the daemon cannot tell, or offers none.
+ * once both are there or Timon keeps the sign-in. `null`: the daemon cannot
+ * tell, or offers none.
  */
 export function hostSignInOffer(view: HostSignInView | null | undefined): HostFlowKind | null {
-  if (!view) return null;
+  // A sign-in Timon keeps is never offered again on the row, even while the
+  // verdict lags behind it; reconnecting stays on the provider's page.
+  if (!view || view.kept) return null;
   if (view.signedIn === false) return view.browser ? 'login' : null;
   if (view.signedIn === true && !view.kept && view.token && !view.token.stored) return 'token';
   return null;
