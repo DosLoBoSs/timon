@@ -184,6 +184,20 @@ test('setup: a terminal session without a token offers one; with a token, or kep
   }
 });
 
+test('setup: a sign-in Timon keeps is ready even while the verdict still says signed out', async () => {
+  const host = view({ kept: true, identity: 'a@b.example', signedIn: false });
+  const server: Server = { list: [cli({ signedIn: false, host })], flows: {}, calls: [], codes: [] };
+  const m = await mount(server);
+  try {
+    const { ProviderCliCards } = await import('./provider-cli-cards');
+    await m.render(m.React.createElement(ProviderCliCards, { mode: 'onboarding' }));
+    await m.until(() => document.querySelector('[data-state="ready"]') !== null, 'the ready row');
+    assert.equal(document.querySelector('[data-host-sign-in-offer]'), null, 'no "Sign in" again, no token offer');
+  } finally {
+    await m.unmount();
+  }
+});
+
 test('a CLI whose host sign-in Timon cannot keep still signs in with its terminal command', async () => {
   const server: Server = { list: [cli({ host: null })], flows: {}, calls: [], codes: [] };
   const m = await mount(server);

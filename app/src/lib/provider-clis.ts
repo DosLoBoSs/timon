@@ -61,14 +61,23 @@ export type ProviderCliList = {
 export type ProviderCliState = 'missing' | 'bundled' | 'signIn' | 'ready';
 
 /**
+ * Whether a CLI is signed in. A sign-in Timon keeps counts even while the
+ * daemon's verdict lags behind it: right after signing in from the browser,
+ * the card must not ask to sign in again.
+ */
+function cliSignedIn(cli: Pick<ProviderCli, 'signedIn' | 'host'>): boolean | null {
+  return cli.host?.kept === true ? true : cli.signedIn;
+}
+
+/**
  * Where a card stands. The copy a desktop app ships runs from a terminal once it
  * is signed in: signing it in comes first, installing the standalone CLI stays
  * the alternative. `signedIn: null` (the provider cannot tell) reads as "sign
  * in", with nothing blocking.
  */
-export function providerCliState(cli: Pick<ProviderCli, 'path' | 'signedIn' | 'bundled'>): ProviderCliState {
+export function providerCliState(cli: Pick<ProviderCli, 'path' | 'signedIn' | 'bundled' | 'host'>): ProviderCliState {
   if (!cli.path) return 'missing';
-  if (cli.signedIn === true) return 'ready';
+  if (cliSignedIn(cli) === true) return 'ready';
   return cli.bundled ? 'bundled' : 'signIn';
 }
 
@@ -79,7 +88,7 @@ export function providerCliState(cli: Pick<ProviderCli, 'path' | 'signedIn' | 'b
  * chat says so itself if the model then does not answer.
  */
 export function readyForSetupChat(backends: readonly ProviderCli[]): boolean {
-  return backends.some((cli) => cli.seedsMainAgent && cli.path !== null && cli.signedIn !== false);
+  return backends.some((cli) => cli.seedsMainAgent && cli.path !== null && cliSignedIn(cli) !== false);
 }
 
 /**
@@ -87,10 +96,11 @@ export function readyForSetupChat(backends: readonly ProviderCli[]): boolean {
  * daemon's own order (`provider-status.ts`): not downloaded, then signed in,
  * then known to be signed out; a CLI that cannot tell is available.
  */
-export function providerCliStatus(cli: Pick<ProviderCli, 'path' | 'signedIn'>): ProviderStatus {
+export function providerCliStatus(cli: Pick<ProviderCli, 'path' | 'signedIn' | 'host'>): ProviderStatus {
   if (!cli.path) return 'not-installed';
-  if (cli.signedIn === true) return 'connected';
-  return cli.signedIn === false ? 'not-connected' : 'available';
+  const signedIn = cliSignedIn(cli);
+  if (signedIn === true) return 'connected';
+  return signedIn === false ? 'not-connected' : 'available';
 }
 
 /**
@@ -114,7 +124,7 @@ export function onboardingProvider(cli: ProviderCli): ProviderOverview {
     backends: [],
     modelCount: 0,
     connection: {
-      signedIn: cli.signedIn,
+      signedIn: cliSignedIn(cli),
       signInCommand: cli.signInCommand,
       signInThen: cli.signInThen,
       acceptsAccounts: false,
