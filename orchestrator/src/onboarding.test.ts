@@ -25,7 +25,7 @@ const {
   serviceOptsForPlatform,
   stagesPackagedRuntime,
 } = await import('./onboarding.js');
-const { plistPath, renderPlist, renderTaskXml, renderWindowsLauncher, unitPath, windowsTaskCommand } = await import('./host/service-install.js');
+const { plistPath, renderPlist, renderTaskXml, renderWindowsLauncherConfig, unitPath, windowsTaskAction } = await import('./host/service-install.js');
 const { packagedServiceOptions } = await import('./host/packaged-service.js');
 const { installPlanFor } = await import('./host/machine.js');
 
@@ -369,7 +369,7 @@ test('Windows npm failures and missing output never record a successful installa
 // staged copy, this test must fail until the migration covers it too.
 test('packaged windows: the service launches the install folder, never a copy under desktop-runtime/releases', () => {
   const installDir = 'C:\\Program Files\\Timon\\resources\\orchestrator';
-  const executable = 'C:\\Program Files\\Timon\\Timon.exe';
+  const executable = 'C:\\Program Files\\Timon\\resources\\node\\node.exe';
   const base = {
     platform: 'win32' as NodeJS.Platform,
     homeDir: 'C:\\Users\\sam',
@@ -387,13 +387,15 @@ test('packaged windows: the service launches the install folder, never a copy un
     const opts = serviceOptsForPlatform(base, env, executable, 3101);
     assert.equal(opts.installDir, installDir);
     assert.equal(opts.nodePath, executable);
-    for (const text of [renderWindowsLauncher(opts), windowsTaskCommand(opts), renderTaskXml(opts)]) {
+    const launcher = JSON.parse(renderWindowsLauncherConfig(opts)) as { node: string; env: Record<string, string> };
+    for (const text of [JSON.stringify(launcher), JSON.stringify(windowsTaskAction(opts, true)), JSON.stringify(windowsTaskAction(opts, false)), renderTaskXml(opts)]) {
       assert.doesNotMatch(text, /desktop-runtime|releases/);
     }
-    assert.match(renderWindowsLauncher(opts), /Program Files\\Timon\\Timon\.exe/);
+    assert.equal(launcher.node, executable);
+    assert.equal(windowsTaskAction(opts, false).command, 'C:\\Program Files\\Timon\\Timon.exe');
     // Packaged like the macOS and Linux services: update approval and routes.
-    assert.match(renderWindowsLauncher(opts), /set "TIMON_DESKTOP_SERVICE=1"/);
-    assert.match(renderWindowsLauncher(opts), /set "TIMON_DESKTOP_EMBEDDED=0"/);
+    assert.equal(launcher.env.TIMON_DESKTOP_SERVICE, '1');
+    assert.equal(launcher.env.TIMON_DESKTOP_EMBEDDED, '0');
   }
   // `timon service install` from a plain shell is no packaged daemon.
   assert.equal(serviceOptsForPlatform(base, {}, executable, 3101).environment, undefined);

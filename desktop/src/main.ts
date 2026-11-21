@@ -94,6 +94,7 @@ import { diagnosticCopy, fallbackReport, OPEN_LOGS_CHANNEL, runDiagnosticRunner,
 import { canUninstall, cleanupCopy, cleanupPlan, uninstallRequest, removalInstructions, UNINSTALL_CHANNEL, UNINSTALL_INFO_CHANNEL, UNINSTALL_HELPER_FLAG } from './uninstall.js';
 import { performUninstall, prepareCleanup, stopInstalledService, verifyStopped } from './uninstall-controller.js';
 import { runUninstallHelper } from './uninstall-helper.js';
+import { runWindowsServiceShell, WINDOWS_SERVICE_FLAG } from './windows-service-shell.js';
 import { BROWSER_ATTACH_CHANNEL, BROWSER_DETACH_CHANNEL, trustedBrowserSender } from './native-browser-protocol.js';
 
 import { DaemonStartTimeoutError, updateOffer, finishUpdate, finishUpdateDeps, updateCopy, updateFailureDialog, unmanagedDaemon, type UpdateOffer, type UpdateStage } from './data-update.js';
@@ -1747,7 +1748,10 @@ async function main(): Promise<void> {
   app.setLoginItemSettings({ openAtLogin: true });
 }
 
-if (process.argv.includes(UNINSTALL_HELPER_FLAG)) {
+// The Windows logon task's launch (`windows-service-shell.ts`): nothing of the application runs.
+if (process.platform === 'win32' && process.argv.includes(WINDOWS_SERVICE_FLAG)) {
+  void runWindowsServiceShell(app, process.argv).catch(() => app.exit(1));
+} else if (process.argv.includes(UNINSTALL_HELPER_FLAG)) {
   void runUninstallHelper().catch(error => { dialog.showErrorBox(DISPLAY_NAME, String(error)); app.exit(1); });
 } else {
 // Before any window: the class the dock matches its launcher against (`linux-desktop.ts`).

@@ -25,7 +25,7 @@ import { readServiceSessionMode, sessionModeSupported, type ServiceSessionMode }
 import { serviceOptsFromEnvironment } from './onboarding.js';
 import {
   LINUX_UNIT, MACOS_LABEL, shQuote, statusService, WINDOWS_SERVICE_REVISION, WINDOWS_TASK,
-  windowsServiceFiles, type ServiceOpts,
+  windowsLauncherMarked, windowsServiceFiles, type ServiceOpts,
 } from './host/service-install.js';
 import { effectiveEdition } from './license/license.js';
 import { licenseState } from './license/runtime.js';
@@ -220,8 +220,7 @@ function serviceReport(opts: ServiceOpts, mode: DaemonMode, packagedRuntime: boo
   if (platform === 'win32' && installed) {
     const files = windowsServiceFiles(opts.timonHome, join);
     const revision = readText(files.revision)?.trim() || null;
-    const launcher = readText(files.launcher);
-    const launcherMarked = launcher === null ? null : /set "TIMON_DESKTOP_SERVICE=1"/i.test(launcher);
+    const launcherMarked = windowsLauncherMarked(opts.timonHome);
     windows = { revision, expected: WINDOWS_SERVICE_REVISION, launcherMarked };
     stale = windowsTaskStale({ revision, launcherMarked, packagedRuntime });
   }

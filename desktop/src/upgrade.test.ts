@@ -24,7 +24,7 @@ import {
   upgradeNeedsFallback,
   upgradePackagedService,
 } from './upgrade.js';
-import { WINDOWS_SERVICE_REVISION, hasDesktopService, windowsLauncher, windowsLegacyLauncher, windowsServiceRefusedFile, windowsServiceRevisionFile } from './service.js';
+import { WINDOWS_SERVICE_REVISION, hasDesktopService, windowsBatchLauncher, windowsLauncher, windowsLegacyLauncher, windowsServiceRefusedFile, windowsServiceRevisionFile } from './service.js';
 
 const cfg: DesktopConfig = {
   home: '/Users/sam/.timon', packagedDefaults: false,
@@ -131,6 +131,10 @@ test('windows: the task is rewritten as long as its revision is not the current 
     writeFileSync(windowsServiceRevisionFile(home), '3\n');
     assert.equal(serviceUpgradeNeeded(home, '0.2.0', facts), true, 'revision 3: the task has no SID yet (TODO #564)');
     assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, packaged: false }), false, 'revision 3, dev and portable: never');
+    // Revision 5 ran a batch through cmd.exe or a hidden PowerShell, which Avast and AVG quarantine.
+    writeFileSync(windowsServiceRevisionFile(home), '5\n');
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', facts), true, 'revision 5: the task still runs the batch');
+    assert.notEqual(WINDOWS_SERVICE_REVISION, '5');
     writeFileSync(windowsServiceRevisionFile(home), 'restored\n');
     assert.equal(serviceUpgradeNeeded(home, '0.2.0', facts), true, 'a rollback put an older task back: try again');
     assert.equal(hasDesktopService(home, 'win32'), true, 'and that task is still there');
@@ -149,14 +153,21 @@ test('windows: an up-to-date task whose launcher is not marked packaged is rewri
   try {
     const facts = { platform: 'win32' as NodeJS.Platform, packaged: true, serviceInstalled: true };
     mkdirSync(join(home, 'run'), { recursive: true });
-    writeFileSync(windowsLauncher(home), launcher(false));
+    writeFileSync(windowsBatchLauncher(home), launcher(false));
     assert.equal(serviceUpgradeNeeded(home, '0.1.5', facts), false, 'a launcher without a task: never install one');
     writeFileSync(windowsServiceRevisionFile(home), `${WINDOWS_SERVICE_REVISION}\n`);
     assert.equal(serviceUpgradeNeeded(home, '0.1.5', facts), true, 'current revision, unmarked launcher');
     assert.equal(serviceUpgradeNeeded(home, '0.1.5', { ...facts, packaged: false }), false, 'dev and portable: never');
-    writeFileSync(windowsLauncher(home), launcher(true));
+    writeFileSync(windowsBatchLauncher(home), launcher(true));
     assert.equal(serviceUpgradeNeeded(home, '0.1.5', facts), false, 'current revision, marked launcher (CRLF)');
+    // The configuration of revision 6 is read first, as the host adapter does.
+    const config = (env: Record<string, string>) => `${JSON.stringify({ format: 1, node: 'C:\\T\\resources\\node\\node.exe', env }, null, 2)}\n`;
+    writeFileSync(windowsLauncher(home), config({ TIMON_HOME: 'C:\\Users\\sam\\.timon' }));
+    assert.equal(serviceUpgradeNeeded(home, '0.1.5', facts), true, 'an unmarked configuration, whatever the batch says');
+    writeFileSync(windowsLauncher(home), config({ TIMON_DESKTOP_SERVICE: '1', TIMON_DESKTOP_EMBEDDED: '0' }));
+    assert.equal(serviceUpgradeNeeded(home, '0.1.5', facts), false, 'a marked configuration');
     rmSync(windowsLauncher(home));
+    rmSync(windowsBatchLauncher(home));
     assert.equal(serviceUpgradeNeeded(home, '0.1.5', facts), false, 'current revision, no launcher to judge');
   } finally { rmSync(home, { recursive: true, force: true }); }
 });

@@ -338,6 +338,18 @@ Excluding the Timon folders from real-time scanning shortens the start. The chec
 
 With Microsoft Defender: **Windows Security › Virus & threat protection › Manage settings › Exclusions › Add or remove exclusions › Add an exclusion › Folder**, once per folder. On a PC managed by your organisation, exclusions are usually set by the IT department: send them these two folders. On macOS and Linux, the same applies to a third-party antivirus: exclude `Timon.app` (or `/opt/Timon`) and `~/.timon`.
 
+## Windows: an antivirus quarantined the background task
+
+Up to version 0.1.9, Avast and AVG could flag the `TimonOrchestrator` task (the file `C:\Windows\System32\Tasks\TimonOrchestrator`, with a detection name such as `CMD:Heur.BZC.WBO.Boxter`) and move it to quarantine. Timon then no longer starts at boot or when you sign in, and runs only while its window is open.
+
+The versions that follow start the task without any script, which these antiviruses do not flag. If yours removed the task:
+
+1. Update Timon, and open it once: it updates the task, with one Windows permission prompt.
+2. In the antivirus, open its quarantine (in Avast or AVG: **Menu › Quarantine**). Restore the `TimonOrchestrator` file, or add an exception for it, so the antivirus does not remove it again. If you prefer an exception for a folder, add the Timon installation folder (`%LOCALAPPDATA%\Programs\Timon` by default).
+3. Run `timon service install` in Timon's terminal, or in PowerShell, and allow the permission prompt. It writes the task again and starts it. Opening Timon also offers to reinstall a missing task.
+
+To check the result, open **Task Scheduler**: `TimonOrchestrator` is listed and **Running**. `%USERPROFILE%\.timon\tmp\daemon.log` then ends with a `starting the daemon` line.
+
 ## Windows: updating while the background service runs
 
 The installer pauses the `TimonOrchestrator` task and ends its daemon before replacing the files, with the Windows permission prompt when it is granted and without it otherwise. If an older installer left Timon failing at launch (for example "ffmpeg.dll was not found"), close every `Timon.exe` from Task Manager, run the installer again, then start the task from Task Scheduler or reopen Timon.
