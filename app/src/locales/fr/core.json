@@ -2804,6 +2804,7 @@
       "unsupported": "Aucun gestionnaire de services pris en charge sur cette machine",
       "absent": "Non installé",
       "stale": "Installé, périmé",
+      "console": "Une fenêtre de console s'ouvre : réparez la tâche de fond",
       "stopped": "Installé, arrêté",
       "running": "Installé et actif"
     },
