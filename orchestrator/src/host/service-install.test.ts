@@ -645,6 +645,31 @@ test('windows: status reads what the registered task does at logoff from its log
   assert.match(status.lines.join('\n'), /logged out: stops when you log out/);
 });
 
+test('#116: status names the logon and the program of the task, and warns of a console in the session', () => {
+  const status = (xml: string) => statusService(fixture('win32', (n, a) => {
+    if (n === 'schtasks' && a.includes('LIST')) return { code: 0, stdout: 'Status: Running\r\n', stderr: '' };
+    if (n === 'schtasks' && a.includes('/XML')) return { code: 0, stdout: xml, stderr: '' };
+    return { code: 0, stdout: '', stderr: '' };
+  }));
+  const task = (logon: string, command: string) => `<Task><Principals><Principal><LogonType>${logon}</LogonType></Principal></Principals><Actions><Exec><Command>${command}</Command></Exec></Actions></Task>`;
+  const visible = status(task('InteractiveToken', 'cmd.exe'));
+  const text = visible.lines.join('\n');
+  assert.match(text, /logon {5}: InteractiveToken/);
+  assert.match(text, /action {4}: cmd\.exe/);
+  assert.match(text, /console {3}: visible - TimonOrchestrator starts cmd\.exe in your session.*timon service install/);
+  assert.equal(visible.taskShape?.consoleVisible, true);
+  assert.equal(visible.offSession, false, 'read from the same definition');
+
+  const boot = status(task('S4U', 'C:\\Timon\\resources\\node\\node.exe'));
+  assert.match(boot.lines.join('\n'), /action {4}: node\.exe/);
+  assert.doesNotMatch(boot.lines.join('\n'), /console/);
+  assert.equal(boot.offSession, true);
+
+  const unreadable = status('ERROR: Access is denied.');
+  assert.equal(unreadable.taskShape, undefined);
+  assert.doesNotMatch(unreadable.lines.join('\n'), /logon {5}:|action {4}:/);
+});
+
 test('windows: without a sealed session witness, nothing is elevated or registered', () => {
   const calls: string[][] = [];
   const res = installService(fixture('win32', (n, a) => {

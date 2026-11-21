@@ -1261,6 +1261,28 @@ function uninstallWindows(opts: ServiceOpts, lines: string[]): ServiceResult | n
   return null;
 }
 
+/**
+ * The shape of the registered task (`windowsTaskShape`), `null` when none is
+ * registered or its definition cannot be read. `schtasks /XML`, as
+ * `windowsTaskOffSession`: what the shape reads is ASCII.
+ */
+export function readWindowsTaskShape(opts: Pick<ServiceOpts, 'exec'>): WindowsTaskShape | null {
+  let res: ExecResult;
+  try {
+    res = opts.exec('schtasks', ['/Query', '/TN', WINDOWS_TASK, '/XML', 'ONE']);
+  } catch {
+    return null;
+  }
+  return res.code === 0 ? windowsTaskShape(res.stdout) : null;
+}
+
+/** What a reader of `timon service status` and the diagnostic report should do about a task that shows a console. */
+export function windowsConsoleTaskAdvice(shape: WindowsTaskShape): string {
+  return `${WINDOWS_TASK} starts ${shape.program ?? 'a console program'} in your session: Windows opens a console window at every start, `
+    + 'and closing it stops Timon. It was switched to "Run only when user is logged on" after Timon registered it. '
+    + 'Reinstall the service (Settings > Installation, or `timon service install` from the app\'s terminal): Timon then registers a task that opens no window.';
+}
+
 function statusWindows(opts: ServiceOpts): ServiceResult {
   const res = opts.exec('schtasks', ['/Query', '/TN', WINDOWS_TASK, '/FO', 'LIST']);
   const installed = res.code === 0;
@@ -1271,16 +1293,17 @@ function statusWindows(opts: ServiceOpts): ServiceResult {
   const statusLine = res.stdout.split('\n').find((l) => /^\s*(status|statut|état)\s*:/i.test(l));
   const state = statusLine?.split(':').slice(1).join(':').trim() || (installed ? 'unknown' : 'not installed');
   const running = /running|en cours/i.test(state);
-  return {
-    ok: running,
-    code: running ? 0 : 3,
-    installed,
-    lines: [
-      `task      : ${WINDOWS_TASK}`,
-      `registered: ${installed ? 'yes' : 'no'}`,
-      `state     : ${state}`,
-    ],
-  };
+  const lines = [
+    `task      : ${WINDOWS_TASK}`,
+    `registered: ${installed ? 'yes' : 'no'}`,
+    `state     : ${state}`,
+  ];
+  const shape = installed ? readWindowsTaskShape(opts) : null;
+  if (shape) {
+    lines.push(`logon     : ${shape.logon}`, `action    : ${shape.program ?? 'unknown'}`);
+    if (shape.consoleVisible) lines.push(`console   : visible - ${windowsConsoleTaskAdvice(shape)}`);
+  }
+  return { ok: running, code: running ? 0 : 3, installed, lines, ...(shape ? { taskShape: shape } : {}) };
 }
 
 /**
@@ -2426,6 +2449,13 @@ function lingerEnabled(opts: ServiceOpts): boolean | null {
   return value === 'yes' ? true : value === 'no' ? false : null;
 }
 
+/** Same answer as `windowsTaskOffSession`, from a shape already read. */
+function shapeKeepsRunning(shape: WindowsTaskShape): boolean | null {
+  if (shape.logon === 'InteractiveToken') return false;
+  if (shape.logon === 'S4U' || shape.logon === 'Password') return true;
+  return null;
+}
+
 /** What the registered supervisor does at logout, read from the machine (see `ServiceResult.offSession`). */
 function keepsRunningLoggedOut(opts: ServiceOpts): boolean | null {
   if (opts.platform === 'win32') return windowsTaskOffSession(opts);
@@ -2476,7 +2506,10 @@ export function statusService(opts: ServiceOpts): ServiceResult {
     if (lingering !== null) res.lingering = lingering;
   }
   if (res.installed) {
-    const offSession = opts.platform === 'linux' ? res.lingering ?? null : keepsRunningLoggedOut(opts);
+    // Windows: read from the shape `statusWindows` already queried, not twice.
+    const offSession = opts.platform === 'linux' ? res.lingering ?? null
+      : opts.platform === 'win32' && res.taskShape ? shapeKeepsRunning(res.taskShape)
+        : keepsRunningLoggedOut(opts);
     if (offSession !== null) {
       res.offSession = offSession;
       res.lines.push(`logged out: ${offSession ? 'keeps running' : 'stops when you log out'}`);
@@ -2622,6 +2655,8 @@ export type ServiceDiagnostics = {
   lastTaskResult: number | null;
   /** What the supervisor says about the last run, a few `key: value` lines. */
   lines: string[];
+  /** Windows only: what the registered task runs, `null` when unreadable. */
+  shape?: WindowsTaskShape | null;
 };
 
 function readIfPresent(path: string): string | null {
@@ -2684,6 +2719,7 @@ export function serviceDiagnostics(opts: ServiceOpts): ServiceDiagnostics {
   const marked = serviceDefinitionMarked(opts);
   const lines: string[] = [];
   let lastTaskResult: number | null = null;
+  let shape: WindowsTaskShape | null = null;
   try {
     if (opts.platform === 'win32') {
       const res = opts.exec('powershell', ['-NoProfile', '-NonInteractive', '-Command',
@@ -2704,6 +2740,10 @@ export function serviceDiagnostics(opts: ServiceOpts): ServiceDiagnostics {
           }
         }
       }
+      shape = readWindowsTaskShape(opts);
+      if (shape) {
+        lines.push(`Action: ${shape.program ?? '—'}`, `ConsoleVisible: ${shape.consoleVisible ? 'yes' : 'no'}`);
+      }
       lines.push(...windowsServiceNotes(opts));
     } else if (opts.platform === 'darwin') {
       const target = existsSync(daemonPlistOf(opts)) ? SYSTEM_TARGET : guiTarget(opts.uid);
@@ -2722,5 +2762,5 @@ export function serviceDiagnostics(opts: ServiceOpts): ServiceDiagnostics {
       }
     }
   } catch { /* A supervisor that cannot be queried: what we have. */ }
-  return { marked, lastTaskResult, lines };
+  return { marked, lastTaskResult, lines, ...(opts.platform === 'win32' ? { shape } : {}) };
 }
