@@ -142,6 +142,25 @@ test('windows: the task is rewritten as long as its revision is not the current 
 });
 
 /**
+ * #116, PC A: Task Scheduler has the task, but no revision was recorded (the
+ * install verdict removed it, then the task was changed by hand to run), so it
+ * was never rewritten and looped on the embedded daemon's home.
+ */
+test('windows #116: a task that exists without a revision is rewritten, and none is installed where there is none', () => {
+  const home = mkdtempSync(join(tmpdir(), 'timon-upgrade-norevision-'));
+  try {
+    const facts = { platform: 'win32' as NodeJS.Platform, packaged: true, serviceInstalled: false };
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, taskExists: true }), true, 'a task, no revision: rewrite it');
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, taskExists: false }), false, 'no task, no revision: never install');
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', facts), false, 'task state unknown: nothing assumed');
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, taskExists: true, packaged: false }), false, 'dev and portable: never');
+    mkdirSync(join(home, 'run'), { recursive: true });
+    writeFileSync(windowsServiceRevisionFile(home), `${WINDOWS_SERVICE_REVISION}\n`);
+    assert.equal(serviceUpgradeNeeded(home, '0.2.0', { ...facts, taskExists: true }), false, 'the current revision recorded: nothing to do');
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+/**
  * TIM-0087: `timon service install` from the CLI of 0.1.3 and earlier recorded
  * revision 3 with a launcher that does not mark its daemon as packaged. The
  * revision alone never had it rewritten.

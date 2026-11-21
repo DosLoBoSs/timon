@@ -48,10 +48,14 @@ export function activeReleaseFile(home: string): string {
 export function serviceUpgradeNeeded(
   home: string,
   version: string,
-  facts: { platform?: NodeJS.Platform; packaged: boolean; serviceInstalled: boolean },
+  facts: {
+    platform?: NodeJS.Platform; packaged: boolean; serviceInstalled: boolean;
+    /** Windows: Task Scheduler knows the boot task (`windowsTaskState().exists`). */
+    taskExists?: boolean;
+  },
 ): boolean {
   const platform = facts.platform ?? process.platform;
-  if (platform === 'win32') return facts.packaged && windowsTaskOutdated(home);
+  if (platform === 'win32') return facts.packaged && windowsTaskOutdated(home, facts.taskExists === true);
   if ((platform !== 'darwin' && platform !== 'linux') || !facts.packaged || !facts.serviceInstalled) return false;
   try {
     return readFileSync(activeReleaseFile(home), 'utf8').trim() !== packagedReleaseId(version);
@@ -60,14 +64,18 @@ export function serviceUpgradeNeeded(
   }
 }
 
-function windowsTaskOutdated(home: string): boolean {
+function windowsTaskOutdated(home: string, taskExists: boolean): boolean {
   let recorded: string;
   try {
     recorded = readFileSync(windowsServiceRevisionFile(home), 'utf8').trim();
   } catch {
-    // No revision: a task exists only if the revision-1 launcher does. Without
-    // either, there is no task to migrate — never install one unasked.
-    return existsSync(windowsLegacyLauncher(home));
+    // No revision, yet Task Scheduler has the task: one Timon did not record,
+    // or whose revision a failed install verdict removed, then changed outside
+    // Timon (#116, a task left on the interactive token that loops on a held
+    // home). Rewriting a task that exists is not an install. Without a task
+    // nor the revision-1 launcher, there is nothing to migrate: never install
+    // one unasked.
+    return taskExists || existsSync(windowsLegacyLauncher(home));
   }
   // Checked only once a task is known to exist: a launcher left behind by an
   // uninstall must not bring a task back.

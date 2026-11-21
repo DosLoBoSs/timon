@@ -1610,6 +1610,7 @@ async function main(): Promise<void> {
   const upgradeNeeded = serviceUpgradeNeeded(cfg.home, app.getVersion(), {
     packaged: app.isPackaged,
     serviceInstalled,
+    ...(taskState ? { taskExists: taskState.exists } : {}),
   });
   console.log(`[desktop] service installed: ${serviceInstalled}; upgrade needed: ${upgradeNeeded}`);
   const repair = serviceRepairVerdict(cfg.home, app.getVersion(), {
