@@ -31,7 +31,7 @@ import { instanceId } from './packaged-service.js';
 import { serviceOptsFromEnvironment } from './service-environment.js';
 import {
   LINUX_UNIT, MACOS_LABEL, readServiceDefinition, serviceDiagnostics, statusService, WINDOWS_SERVICE_REVISION, WINDOWS_TASK,
-  WINDOWS_TASK_NEVER_RAN, windowsServiceFiles, type ServiceDiagnostics, type ServiceOpts,
+  WINDOWS_TASK_NEVER_RAN, windowsConsoleTaskAdvice, windowsServiceFiles, type ServiceDiagnostics, type ServiceOpts,
 } from './service-install.js';
 import type { Host } from './types.js';
 
@@ -104,6 +104,13 @@ export function diagnosticFindings(facts: DiagnosticFacts): Finding[] {
         + (facts.windows?.azureAdJoined === true ? ' This PC is joined to Microsoft Entra ID, which explains it.' : '')
         + (facts.service.installed ? ' Remove the task that will not run with `timon service uninstall`.' : ''),
     });
+  }
+  const shape = details?.shape;
+  // A source checkout has no Timon.exe: its session task is a hidden
+  // PowerShell by design (`windowsTaskAction`), not the trap of #116.
+  if (facts.platform === 'win32' && facts.service.installed && shape?.consoleVisible
+    && (facts.packagedRuntime || shape.program !== 'powershell.exe')) {
+    findings.push({ id: 'windows-task-console', text: `A console window opens on this PC (#116): the task ${windowsConsoleTaskAdvice(shape)}` });
   }
   const expected = facts.appVersion ?? facts.daemonVersion;
   if (facts.dataVersion && compareVersions(facts.dataVersion, expected) === -1) {

@@ -28,6 +28,12 @@ import {
   TASK_NEVER_RAN_KEPT,
   TASK_NEVER_RAN_REMOVED,
   TASK_VERIFY_SECONDS,
+  TASK_SESSION_FALLBACK,
+  TASK_LOGON_UNREADABLE,
+  TASK_LOGON_FALLBACK_FAILED,
+  WINDOWS_SESSION_FALLBACK_NOTICE,
+  logonCheckStep,
+  sessionTaskXmlPath,
   verifyTaskStartedStep,
   WINDOWS_TASK_NEVER_RAN,
   WINDOWS_TASK_REFUSED_REASON,
@@ -639,6 +645,31 @@ test('windows: status reads what the registered task does at logoff from its log
   assert.match(status.lines.join('\n'), /logged out: stops when you log out/);
 });
 
+test('#116: status names the logon and the program of the task, and warns of a console in the session', () => {
+  const status = (xml: string) => statusService(fixture('win32', (n, a) => {
+    if (n === 'schtasks' && a.includes('LIST')) return { code: 0, stdout: 'Status: Running\r\n', stderr: '' };
+    if (n === 'schtasks' && a.includes('/XML')) return { code: 0, stdout: xml, stderr: '' };
+    return { code: 0, stdout: '', stderr: '' };
+  }));
+  const task = (logon: string, command: string) => `<Task><Principals><Principal><LogonType>${logon}</LogonType></Principal></Principals><Actions><Exec><Command>${command}</Command></Exec></Actions></Task>`;
+  const visible = status(task('InteractiveToken', 'cmd.exe'));
+  const text = visible.lines.join('\n');
+  assert.match(text, /logon {5}: InteractiveToken/);
+  assert.match(text, /action {4}: cmd\.exe/);
+  assert.match(text, /console {3}: visible - TimonOrchestrator starts cmd\.exe in your session.*timon service install/);
+  assert.equal(visible.taskShape?.consoleVisible, true);
+  assert.equal(visible.offSession, false, 'read from the same definition');
+
+  const boot = status(task('S4U', 'C:\\Timon\\resources\\node\\node.exe'));
+  assert.match(boot.lines.join('\n'), /action {4}: node\.exe/);
+  assert.doesNotMatch(boot.lines.join('\n'), /console/);
+  assert.equal(boot.offSession, true);
+
+  const unreadable = status('ERROR: Access is denied.');
+  assert.equal(unreadable.taskShape, undefined);
+  assert.doesNotMatch(unreadable.lines.join('\n'), /logon {5}:|action {4}:/);
+});
+
 test('windows: without a sealed session witness, nothing is elevated or registered', () => {
   const calls: string[][] = [];
   const res = installService(fixture('win32', (n, a) => {
@@ -747,11 +778,109 @@ test('windows: after /Run, the elevated batch checks the task ran, and removes i
   // BOTH signals of "never run", and an unreadable state passes.
   assert.ok(step.includes(`-ne ${WINDOWS_TASK_NEVER_RAN}`), step);
   assert.match(step, /LastRunTime\.Year -ge 2000/);
-  assert.match(step, /if \(-not \$i\) \{ exit 0 \}/);
+  assert.match(step, /if \(-not \$i -or /);
+  assert.match(step, /if \(\$ran\) \{ exit 0 \}/);
+  assert.doesNotMatch(step, /\/XML/, 'no session task staged: nothing to fall back to');
   assert.ok(step.includes(`AddSeconds(${TASK_VERIFY_SECONDS})`));
   assert.match(step, /schtasks\.exe \/Delete \/TN 'TimonOrchestrator' \/F/);
   // Neither `"` nor `%`: the command crosses cmd between quotes.
   assert.doesNotMatch(step, /["%]/);
+});
+
+/**
+ * Issue #116: a task stored for the session starts its console program on the
+ * user's desktop. An off-session install reads the stored logon back before
+ * `/Run`, and falls back to the session task within the same elevation.
+ */
+test('windows: an off-session install stages the session task and reads the logon back before /Run', () => {
+  const opts = { ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })), nodePath: PACKAGED_NODE };
+  const res = installService({ ...opts, sessionMode: 'always', readFile: () => transcript({ create: 0, logon: 0, stop: 0, run: 0, verify: 0 }) });
+  assert.equal(res.ok, true, res.lines.join('\n'));
+  assert.equal(res.sessionFallback, undefined);
+  assert.match(res.lines.join('\n'), /starts at boot and keeps running after logoff/);
+  assert.match(readFileSync(taskXmlPath(), 'utf16le'), /<LogonType>S4U<\/LogonType>/);
+  const session = readFileSync(sessionTaskXmlPath(), 'utf16le');
+  assert.match(session, /<LogonType>InteractiveToken<\/LogonType>/);
+  assert.match(session, /<Command>C:\\Program Files\\Timon\\Timon\.exe<\/Command>/);
+  const batch = readFileSync(elevatedScriptPath(), 'utf8');
+  const create = batch.indexOf('schtasks /Create');
+  const logon = batch.indexOf('TIMON-STEP logon=');
+  const run = batch.indexOf('schtasks /Run');
+  assert.ok(create >= 0 && create < logon && logon < run, batch);
+  assert.ok(batch.includes(sessionTaskXmlPath()), 'the verify step falls back to the staged session task');
+
+  // Asked for the session: nothing to read back, nothing to fall back to.
+  installService({ ...opts, sessionMode: 'session', readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: 0 }) });
+  const sessionBatch = readFileSync(elevatedScriptPath(), 'utf8');
+  assert.doesNotMatch(sessionBatch, /TIMON-STEP logon=/);
+  assert.ok(!sessionBatch.includes(sessionTaskXmlPath()));
+});
+
+test('windows: S4U kept, downgraded to the session, unreadable: what the install reports', () => {
+  const install = (codes: Record<string, number>) => {
+    const opts = { ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })), nodePath: PACKAGED_NODE };
+    return { opts, res: installService({ ...opts, sessionMode: 'always', readFile: () => transcript(codes) }) };
+  };
+  const kept = install({ create: 0, logon: 0, stop: 0, run: 0, verify: 0 });
+  assert.equal(kept.res.ok, true);
+  assert.doesNotMatch(kept.res.lines.join('\n'), /stops at logout|could not read back/);
+
+  const downgraded = install({ create: 0, logon: TASK_SESSION_FALLBACK, stop: 0, run: 0, verify: 0 });
+  assert.equal(downgraded.res.ok, true, downgraded.res.lines.join('\n'));
+  assert.equal(downgraded.res.sessionFallback, true);
+  assert.ok(downgraded.res.lines.includes(WINDOWS_SESSION_FALLBACK_NOTICE));
+  assert.match(downgraded.res.lines.join('\n'), /starts at logon and stops when you log off/);
+  const files = windowsServiceFiles(downgraded.opts.timonHome, join);
+  assert.equal(readFileSync(files.revision, 'utf8').trim(), WINDOWS_SERVICE_REVISION);
+  assert.equal(existsSync(files.refused), false, 'a session task that runs is a service, not a refusal');
+
+  const unreadable = install({ create: 0, logon: TASK_LOGON_UNREADABLE, stop: 0, run: 0, verify: 0 });
+  assert.equal(unreadable.res.ok, true);
+  assert.equal(unreadable.res.sessionFallback, undefined);
+  assert.match(unreadable.res.lines.join('\n'), /could not read back the logon type .* kept as registered/);
+  assert.match(unreadable.res.lines.join('\n'), /starts at boot/);
+
+  // The session task could not replace the downgraded one, which was removed:
+  // its `/Run` fails, and nothing is left for the desktop to wait on.
+  const failed = install({ create: 0, logon: TASK_LOGON_FALLBACK_FAILED, stop: 0, run: 1 });
+  assert.equal(failed.res.ok, false);
+  assert.match(failed.res.reason!, /session only/);
+  assert.equal(existsSync(windowsServiceFiles(failed.opts.timonHome, join).revision), false);
+});
+
+test('windows: the logon check falls back only from a session logon, and deletes nothing it cannot read', () => {
+  const step = logonCheckStep('C:\\Temp\\TimonOrchestrator-session.xml');
+  assert.equal(step.label, 'logon');
+  const command = step.args.at(-1)!;
+  assert.match(command, /schtasks\.exe \/Query \/TN 'TimonOrchestrator' \/XML ONE/);
+  assert.match(command, /if \(\$l -eq 'S4U' -or \$l -eq 'Password'\) \{ exit 0 \}/);
+  const unreadable = command.indexOf(`exit ${TASK_LOGON_UNREADABLE}`);
+  const create = command.indexOf("/Create /TN 'TimonOrchestrator' /XML 'C:\\Temp\\TimonOrchestrator-session.xml' /F");
+  const remove = command.indexOf('/Delete');
+  assert.ok(unreadable >= 0 && unreadable < create && create < remove, command);
+  assert.match(command, /if \(\$l -ne 'InteractiveToken'\) \{ exit 7 \}/);
+  assert.ok(command.indexOf(`exit ${TASK_SESSION_FALLBACK}`) < remove, 'a registered session task is never deleted');
+  assert.doesNotMatch(command, /["%]/, 'the command crosses cmd between quotes');
+});
+
+test('windows: a boot task that never started is replaced by the session task, in the same elevation', () => {
+  const step = verifyTaskStartedStep('C:\\Temp\\TimonOrchestrator-session.xml').args.at(-1)!;
+  const fallback = step.indexOf("/Create /TN 'TimonOrchestrator' /XML 'C:\\Temp\\TimonOrchestrator-session.xml' /F");
+  const remove = step.indexOf('/Delete');
+  assert.ok(step.indexOf('if ($ran) { exit 0 }') < fallback && fallback < remove, step);
+  // Only a task still off session is replaced, and the replacement must start too.
+  assert.ok(step.indexOf("if ($l -eq 'S4U' -or $l -eq 'Password')") < fallback);
+  assert.ok(step.indexOf(`if ($ran) { exit ${TASK_SESSION_FALLBACK} }`) > fallback);
+  assert.doesNotMatch(step, /["%]/);
+
+  const opts = { ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })), nodePath: PACKAGED_NODE };
+  const files = windowsServiceFiles(opts.timonHome, join);
+  const res = installService({ ...opts, sessionMode: 'always', readFile: () => transcript({ create: 0, logon: 0, stop: 0, run: 0, verify: TASK_SESSION_FALLBACK }) });
+  assert.equal(res.ok, true, res.lines.join('\n'));
+  assert.equal(res.sessionFallback, true);
+  assert.notEqual(res.refused, true);
+  assert.equal(existsSync(files.refused), false);
+  assert.equal(readFileSync(files.revision, 'utf8').trim(), WINDOWS_SERVICE_REVISION);
 });
 
 test('windows: a task never launched is an honest refusal, without a revision, with a marker', () => {
@@ -1437,6 +1566,74 @@ test('a failed upgrade puts the previous definition back and restarts it', () =>
   assert.equal(readFileSync(files.revision, 'utf8').trim(), WINDOWS_SERVICE_REVISION, 'not put back: the new definition is still there');
   assert.equal(restoreServiceDefinition({ ...win, readFile: () => transcript({ create: 0, stop: 0, run: 0 }) }, sameLauncher).ok, true);
   assert.notEqual(readFileSync(files.revision, 'utf8').trim(), WINDOWS_SERVICE_REVISION);
+});
+
+/** A previous task as `Export-ScheduledTask` gives it back to a rollback. */
+function previousTask(logon: string, command: string): string {
+  return '<?xml version="1.0" encoding="UTF-16"?>\n<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">'
+    + '<Triggers><BootTrigger><Enabled>true</Enabled></BootTrigger></Triggers>'
+    + `<Principals><Principal id="Author"><UserId>S-1-5-21-1-2-3-1001</UserId><LogonType>${logon}</LogonType></Principal></Principals>`
+    + `<Actions Context="Author"><Exec><Command>${command}</Command><Arguments>/d /s /c x</Arguments></Exec></Actions></Task>`;
+}
+
+test('#116: a rollback never puts back a task that opens a console in the session', () => {
+  const win = { ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })), nodePath: PACKAGED_NODE };
+  const ok = () => transcript({ create: 0, stop: 0, run: 0 });
+  const registered = () => readFileSync(taskXmlPath(), 'utf16le').replace(/^\ufeff/, '');
+
+  const res = restoreServiceDefinition({ ...win, readFile: ok }, previousTask('InteractiveToken', 'cmd.exe'));
+  assert.equal(res.ok, true, res.lines.join('\n'));
+  assert.match(res.lines.join('\n'), /started cmd\.exe in the session, which opens a console window/);
+  assert.match(registered(), /<LogonType>InteractiveToken<\/LogonType>/);
+  assert.match(registered(), /<Command>C:\\Program Files\\Timon\\Timon\.exe<\/Command>/);
+  assert.doesNotMatch(readFileSync(elevatedScriptPath(), 'utf8'), /TIMON-STEP logon=/, 'nothing off session to read back');
+
+  // node.exe of revision 6, switched to the session: the same window.
+  const node = previousTask('InteractiveToken', 'C:\\Program Files\\Timon\\resources\\node\\node.exe');
+  restoreServiceDefinition({ ...win, readFile: ok }, node);
+  assert.match(registered(), /Timon\.exe/);
+
+  // A session task with no console is put back as it was.
+  const gui = previousTask('InteractiveToken', 'C:\\Program Files\\Timon\\Timon.exe');
+  assert.equal(restoreServiceDefinition({ ...win, readFile: ok }, gui).ok, true);
+  assert.equal(registered(), gui);
+});
+
+test('#116: a restored S4U task is read back, falls back to the session task, and an unreadable one deletes nothing', () => {
+  const win = { ...fixture('win32', () => ({ code: 0, stdout: '', stderr: '' })), nodePath: PACKAGED_NODE };
+  const files = windowsServiceFiles(win.timonHome, join);
+  const s4u = previousTask('S4U', 'cmd.exe');
+  const registered = () => readFileSync(taskXmlPath(), 'utf16le').replace(/^\ufeff/, '');
+
+  const kept = restoreServiceDefinition({ ...win, readFile: () => transcript({ create: 0, logon: 0, stop: 0, run: 0 }) }, s4u);
+  assert.equal(kept.ok, true, kept.lines.join('\n'));
+  assert.equal(kept.sessionFallback, undefined);
+  assert.equal(registered(), s4u);
+  const batch = readFileSync(elevatedScriptPath(), 'utf8');
+  assert.ok(batch.indexOf('TIMON-STEP create=') < batch.indexOf('TIMON-STEP logon=') && batch.indexOf('TIMON-STEP logon=') < batch.indexOf('/Run'), batch);
+  assert.match(readFileSync(sessionTaskXmlPath(), 'utf16le'), /<Command>C:\\Program Files\\Timon\\Timon\.exe<\/Command>/);
+
+  const downgraded = restoreServiceDefinition({ ...win, readFile: () => transcript({ create: 0, logon: TASK_SESSION_FALLBACK, stop: 0, run: 0 }) }, s4u);
+  assert.equal(downgraded.ok, true);
+  assert.equal(downgraded.sessionFallback, true);
+  assert.ok(downgraded.lines.includes(WINDOWS_SESSION_FALLBACK_NOTICE));
+  assert.equal(readFileSync(files.revision, 'utf8').trim(), 'restored');
+
+  const unreadableLogon = restoreServiceDefinition({ ...win, readFile: () => transcript({ create: 0, logon: TASK_LOGON_UNREADABLE, stop: 0, run: 0 }) }, s4u);
+  assert.equal(unreadableLogon.ok, true);
+  assert.match(unreadableLogon.lines.join('\n'), /could not read back the logon type/);
+
+  const failed = restoreServiceDefinition({ ...win, readFile: () => transcript({ create: 0, logon: TASK_LOGON_FALLBACK_FAILED, stop: 0, run: 1 }) }, s4u);
+  assert.equal(failed.ok, false);
+  assert.equal(existsSync(files.revision), false, 'the task is gone: no revision for the desktop to wait on');
+
+  // A definition whose logon cannot be read goes back verbatim, unchecked.
+  const odd = '<Task><Actions><Exec><Command>wscript.exe</Command></Exec></Actions></Task>';
+  const verbatim = restoreServiceDefinition({ ...win, readFile: () => transcript({ create: 0, stop: 0, run: 0 }) }, odd);
+  assert.equal(verbatim.ok, true);
+  assert.equal(registered(), odd);
+  assert.match(verbatim.lines.join('\n'), /could not read the logon of the previous TimonOrchestrator task: it is put back as it was/);
+  assert.doesNotMatch(readFileSync(elevatedScriptPath(), 'utf8'), /TIMON-STEP logon=|\/Delete/);
 });
 
 test('a definition written with nothing to restore is stopped and removed', () => {
