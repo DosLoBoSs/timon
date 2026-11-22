@@ -315,14 +315,17 @@ merge into the target branch (\`main\`) on this machine:
 - every task of the job starts from the job's **integration branch**
   (\`feat/<topic>\`), which the daemon cuts from the remote's target
   (\`origin/main\`) at the first dispatch. The series planner (\`kanban_plan\`)
-  names it and gives it to every task with \`--base\`; a task created without a
+  names it and gives it to every task with \`--base\` (plus \`--project <slug>\`
+  when you are not in the job's project: keep it); a task created without a
   base gets one named after its title;
 - reviews and merges run as usual, into that branch;
 - the job ends on a \`merge\` task created with \`--landing pr\`, in deps on the
   job's code tasks (or on the grouped merge in \`code-group\`). It opens the
   pull request with \`timon pr open\` (MCP \`pr_open\`): the daemon checks the
   account, the remote, the commits and the public tree, pushes the branch and
-  opens it. A person merges it on the forge; Timon notices it afterwards.
+  opens it. A person merges it on the forge; Timon notices it afterwards,
+  closes the job's TO DO ideas, and the job's pilot gets one message when the
+  pull request is merged, or closed without a merge.
 
 Never \`git push\`, never \`gh\`, never a merge into the target yourself. A
 task based on the target itself is refused at dispatch.
