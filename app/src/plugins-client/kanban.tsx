@@ -28,6 +28,7 @@ const ProductKanbanCard = dynamic(() => import('./kanban/product-kanban-card').t
 const ProductTodoLanding = dynamic(() => import('./kanban/product-todo-landing').then((m) => m.ProductTodoLanding), { ssr: false });
 const ProductJobDialog = dynamic(() => import('./kanban/landing-preview-dialog').then((m) => m.ProductJobDialog), { ssr: false });
 const ProductPublishDialog = dynamic(() => import('./kanban/product-publish-dialog').then((m) => m.ProductPublishDialog), { ssr: false });
+const PullRequestSetting = dynamic(() => import('./kanban/pull-request-setting').then((m) => m.PullRequestSetting), { ssr: false });
 const ContributorConflictsSetting = dynamic(() => import('./kanban/contributor-conflicts-setting').then((m) => m.ContributorConflictsSetting), { ssr: false });
 
 /**
@@ -77,6 +78,9 @@ export const kanbanClient: BundledClientPlugin = {
     // Default occupant of `forge.publish.dialog` (a boot slot): the one dialog
     // through which a text of Timon's reaches GitHub, read and approved first.
     ctx.register({ slot: PUBLISH_DIALOG_SLOT, fallback: true }, ProductPublishDialog);
+    // A row of a project's window: whether the project's jobs merge locally
+    // or land through a pull request, and where it goes.
+    ctx.register({ slot: PROJECT_SETTINGS_SLOT, key: 'pull-requests', order: 10 }, PullRequestSetting);
     // A row of a project's window: whether Timon asks a contributor to
     // resolve a conflict of their pull request, or may resolve it itself.
     // It paints nothing for a project that does not open pull requests on GitHub.
