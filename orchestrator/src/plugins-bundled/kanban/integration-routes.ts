@@ -29,8 +29,8 @@ import { ghLogin, type GhLoginOutcome } from '../../host/gh.js';
 import { checkPlanBranch, MAX_PLAN_BRANCH_CHARS, prLandingSetting } from '../../plan-landing.js';
 import { announceProjectUpdated } from '../../project-service.js';
 import {
-  changedPushTargetFields, clearProjectIntegration, ProjectIntegrationError, readProjectIntegration, updateProjectIntegration,
-  type ProjectIntegration,
+  changedPushTargetFields, checkProjectIntegration, clearProjectIntegration, ProjectIntegrationError, ProjectIntegrationPatchSchema,
+  readProjectIntegration, updateProjectIntegration, type ProjectIntegration,
 } from '../../project-integration.js';
 import { readMeta } from '../../projects.js';
 import { todoOriginFromRequest } from '../../todo-origin.js';
@@ -82,6 +82,10 @@ function answerError(res: Response, err: unknown): void {
     detail: 'the integration setting could not be handled',
   }));
 }
+
+/** A draft the settings dialog checks before it is saved: the account and
+ *  the folder only, held to the same rules as a write. */
+const CheckDraftBody = ProjectIntegrationPatchSchema.pick({ account: true, gh_config_dir: true }).strict();
 
 const PlanBranchBody = z.object({
   branch: z.string().max(MAX_PLAN_BRANCH_CHARS),
@@ -147,17 +151,36 @@ export function registerIntegrationRoutes(app: Router, deps: IntegrationRouteDep
     } catch (err) { answerError(res, err); }
   });
 
-  // One network call to the forge, on demand only: never on a read.
+  // One network call to the forge, on demand only: never on a read. The body
+  // may carry a draft (`account`, `gh_config_dir`) to check before saving it;
+  // nothing is written either way.
   app.post('/api/projects/:slug/integration/check', async (req, res) => {
     const slug = projectForRoute(req, res);
     if (!slug) return;
+    const draft = CheckDraftBody.safeParse(req.body ?? {});
+    if (!draft.success) {
+      const detail = draft.error.issues.map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message)).join('; ');
+      res.status(400).json(apiError('integration_invalid', detail, { detail }));
+      return;
+    }
+    const drafted = Object.keys(draft.data).length > 0;
     let read;
     try { read = readProjectIntegration(slug); } catch (err) { answerError(res, err); return; }
-    if (read.invalid) {
+    if (read.invalid && !drafted) {
       res.status(409).json(apiError('integration_invalid', `the stored setting is invalid: ${read.invalid}`, { detail: read.invalid }));
       return;
     }
-    const { account, gh_config_dir: configDir } = read.integration;
+    let checked = read.integration;
+    if (drafted) {
+      // `local` so a draft without its account still reaches gh: the check is
+      // what tells the person which login to type.
+      try {
+        checked = checkProjectIntegration(
+          { ...read.integration, ...draft.data, mode: 'local' }, deps.home ? { home: deps.home } : {},
+        );
+      } catch (err) { answerError(res, err); return; }
+    }
+    const { account, gh_config_dir: configDir } = checked;
     const out = await login(configDir);
     if (!out.ok) {
       res.json({ ok: false, expected: account, code: out.code, reason: out.reason });
