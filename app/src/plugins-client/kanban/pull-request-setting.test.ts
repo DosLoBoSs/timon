@@ -148,7 +148,8 @@ for (const who of ['anonymous', 'reader'] as const) {
       assert.equal(status()?.textContent, 'Visible to accounts that manage projects');
       const button = configure();
       assert.ok(button?.hasAttribute('disabled'), 'the action is greyed');
-      assert.match(button?.getAttribute('title') ?? '', /projects:manage/);
+      assert.match(document.querySelector('[data-pr-setting-reason]')?.getAttribute('title') ?? '', /projects:manage/, 'the reason shows on hover');
+      assert.match(document.getElementById(button?.getAttribute('aria-describedby') ?? '')?.textContent ?? '', /projects:manage/, 'and is read out');
       assert.ok(!document.querySelector('[data-pr-setting-menu]'), 'no menu');
       assert.deepEqual(integrationCalls(m.calls), []);
     } finally {

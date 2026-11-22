@@ -145,7 +145,7 @@ function SetupDialog({ project, current, onClose, onSaved }: {
                 data-pr-setting-remote=""
                 value={remote}
                 onChange={(e) => pickRemote(e.target.value)}
-                className="h-9 w-full min-w-0 rounded-md border border-input bg-muted/40 px-2 text-sm"
+                className="h-9 w-full min-w-0 rounded-md border border-input bg-muted/40 px-2 text-base md:text-sm"
               >
                 {!remotes.some((r) => r.name === remote) && <option value={remote}>{remote}</option>}
                 {remotes.map((r) => <option key={r.name} value={r.name}>{r.name}</option>)}
@@ -275,17 +275,20 @@ export function PullRequestSetting(): ReactElement | null {
         <div data-pr-setting-status={status.key} title={status.title} className="truncate text-[11px] text-muted-foreground">{status.text}</div>
         {notice && <NoticeLine notice={notice} attr="data-pr-setting-notice" />}
       </div>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => setEditing(true)}
-        disabled={!read || busy}
-        title={manage.denied ?? undefined}
-        className="shrink-0"
-      >
-        <span data-pr-setting-configure="">{enabled ? t('prSetting.configure') : t('prSetting.setUp')}</span>
-      </Button>
+      {/* A disabled button takes no pointer events: the wrapper carries the reason's tooltip. */}
+      <span title={manage.denied ?? undefined} data-pr-setting-reason={manage.denied ? '' : undefined} className="shrink-0">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setEditing(true)}
+          disabled={!read || busy}
+          aria-describedby={manage.denied ? `pr-setting-reason-${project}` : undefined}
+        >
+          <span data-pr-setting-configure="">{enabled ? t('prSetting.configure') : t('prSetting.setUp')}</span>
+        </Button>
+        {manage.denied && <span id={`pr-setting-reason-${project}`} className="sr-only">{manage.denied}</span>}
+      </span>
       {menu && (
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
