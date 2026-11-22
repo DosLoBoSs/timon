@@ -263,7 +263,7 @@ test('a contributor\'s branch the maintainers may not change says so, with only 
     assert.equal(chip?.textContent, 'Changes not allowed');
     assert.match(chip?.getAttribute('title') ?? '', /does not let the maintainers change this branch/, 'the reason on hover');
     assert.equal(document.querySelector('[data-pull-row="57"] [data-pull-locked]')?.textContent, 'Fork deleted');
-    assert.equal(document.querySelector('[data-pull-row="56"] [data-pull-locked]'), null, 'a branch we may write says nothing');
+    assert.ok(!document.querySelector('[data-pull-row="56"] [data-pull-locked]'), 'a branch we may write says nothing');
     await m.openMenu(58);
     assert.ok(document.querySelector('[data-menu-ask-contributor]'));
     assert.ok(!document.querySelector('[data-menu-update-branch]'));
