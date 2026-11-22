@@ -147,6 +147,29 @@ test('the check asks gh with the configured folder and compares the login, case 
   await call('DELETE', URL_, 'manager');
 });
 
+test('the check takes a draft account and folder, writes nothing, and holds them to the write rules', async () => {
+  ghCalls.length = 0;
+  ghAnswer = { ok: true, login: 'ai-bot' };
+  const res = await call('POST', `${URL_}/check`, 'manager', { account: 'AI-Bot', gh_config_dir: ghDir });
+  const body = await res.json() as { ok: boolean; matches: boolean; login: string; expected: string };
+  assert.deepEqual([res.status, body.ok, body.matches, body.login, body.expected], [200, true, true, 'ai-bot', 'AI-Bot']);
+  assert.deepEqual(ghCalls, [ghDir]);
+  assert.equal(dbApi.getProjectRow('acme')?.integration, null, 'a draft is never stored');
+
+  // Without its account, the draft still says which login gh answers.
+  const loginOnly = await (await call('POST', `${URL_}/check`, 'manager', { gh_config_dir: ghDir })).json() as { login: string; expected: null; matches: boolean };
+  assert.deepEqual([loginOnly.login, loginOnly.expected, loginOnly.matches], ['ai-bot', null, false]);
+
+  ghCalls.length = 0;
+  const outside = await call('POST', `${URL_}/check`, 'manager', { gh_config_dir: join(TIMON_HOME, 'gh') });
+  assert.equal(outside.status, 400);
+  assert.equal((await outside.json() as { code: string }).code, 'integration_invalid');
+  assert.equal((await call('POST', `${URL_}/check`, 'manager', { account: 'not a login' })).status, 400);
+  assert.equal((await call('POST', `${URL_}/check`, 'manager', { remote: 'upstream' })).status, 400, 'only the account and the folder are a draft');
+  assert.equal((await call('POST', `${URL_}/check`, 'reader', { account: 'ai-bot' })).status, 403);
+  assert.deepEqual(ghCalls, [], 'a refused draft never reaches gh');
+});
+
 /* The Kanban planner's branch field: the daemon is the only judge of the name. */
 const planRepo = join(home, 'code', 'plan');
 mkdirSync(planRepo, { recursive: true });

@@ -16,6 +16,7 @@ import { useProjectSettings } from '@/components/project-settings-slot';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { readContributorConflicts, writeContributorConflicts, type ContributorConflicts } from './forge-branch-api';
+import { onIntegrationChanged } from './project-integration-api';
 
 const MODES: readonly ContributorConflicts[] = ['ask', 'resolve'];
 
@@ -86,6 +87,8 @@ export function ContributorConflictsSetting(): ReactElement | null {
   }, [project]);
 
   useEffect(() => { void reload(); }, [reload]);
+  // The row comes and goes with the pull request mode, set in the row above.
+  useEffect(() => (project ? onIntegrationChanged(project, () => { void reload(); }) : undefined), [project, reload]);
 
   if (!project || mode === null) return null;
   return (

@@ -9,6 +9,21 @@ GitHub is the only forge Timon opens pull requests on for now, through the GitHu
 
 ## Set up the project
 
+### From the app
+
+Open the project's window (**Edit** on its card): under **Integrations**, the **Pull requests** row says how the project's jobs land, **Jobs merge locally** or the target branch and account of its pull requests (`Pull request to origin/main · account my-bot`). **Set up** (**Configure** once it is on) opens the fields:
+
+- **Remote** and **Push URL of the remote**: pick one of the repository's remotes; the URL it pushes to is filled in for you. A remote that later points elsewhere is refused.
+- **Target branch** (`main` by default) and **Branch prefix** (`feat/` by default).
+- **GitHub account**: the login `gh` must be signed in as.
+- **gh configuration folder** (optional): a `gh` configuration folder kept for this project, inside your home folder and outside every project folder.
+
+**Check** asks `gh` which account it signs in as with the account and folder you typed, before anything is saved, and says why it could not answer (`gh` missing, not signed in, a folder Timon refuses). **Turn on** saves the setting. The row's menu (**…**) checks `gh`'s sign-in again later, and **Go back to the local merge** clears the setting.
+
+The row and its fields are for accounts that hold the `projects:manage` permission: the setting names a folder of your machine and the account Timon pushes as. Without it, the row says so and its action is greyed.
+
+### From the command line
+
 ```bash
 timon project set-integration my-app --mode pr --account my-bot \
   --remote-url git@github.com:my-org/my-app.git \
