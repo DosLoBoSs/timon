@@ -12,11 +12,12 @@ import './test-home.js';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, beforeEach, test } from 'node:test';
-import { dbApi } from './db.js';
+import { db, dbApi } from './db.js';
+import { agentDir } from './paths.js';
 import type { ForgeStateReader, GitTransport, PullRequestStateOutcome } from './host/forge.js';
 import { landIntegration } from './integration-landing.js';
 import { pollOpenIntegrations, type PollerDeps } from './integration-poller.js';
@@ -55,7 +56,7 @@ const remotes = new Map<string, string>();
  * remote one commit ahead of `main`, its code chain merged into it with a TO
  * DO idea waiting, and the integration row the pull request step recorded.
  */
-function openJob(): Job {
+function openJob(opts: { pilot?: string } = {}): Job {
   counter += 1;
   const remote = join(root, `remote-${counter}.git`);
   execFileSync('git', ['init', '-q', '--bare', '-b', 'main', remote]);
@@ -84,6 +85,7 @@ function openJob(): Job {
   const merge = randomUUID();
   dbApi.createTask(merge, `merge ${counter}`, 'acme.merger', {
     type: 'merge', project: slug, baseBranch: branch, integrationMode: 'pr', baseRef: 'origin/main',
+    ...(opts.pilot ? { seriesId: opts.pilot, creatorMissionId: opts.pilot } : {}),
   });
   dbApi.setTaskTodoId(merge, todo);
   dbApi.setTaskMergedSha(merge, head);
@@ -149,6 +151,12 @@ const deps: PollerDeps = {
   },
 };
 
+/** The notification centre's cards about `id`'s outcome: type and title. */
+function cardsFor(id: string): string[] {
+  return (db.prepare(`SELECT type, title FROM notifications WHERE anchor LIKE ? ORDER BY created_at ASC`)
+    .all(`integration:${id}:%`) as Array<{ type: string; title: string }>).map((c) => `${c.type}: ${c.title}`);
+}
+
 function noticesFor(branch: string): string[] {
   return dbApi.listAllInbox({ limit: 1000 })
     .filter((m) => m.payload.includes(branch))
@@ -170,12 +178,19 @@ test('a merge is learnt from git alone: the row lands, its idea closes, the pilo
   assert.ok(row.last_polled_at);
   assert.equal(dbApi.getProjectTodo(job.todo)?.status, 'done');
   assert.deepEqual(noticesFor(job.branch), [`Pull request merged: ${job.branch}`]);
+  assert.deepEqual(cardsFor(job.id), [`report: Pull request merged: ${job.branch}`]);
+  const recap = dbApi.listAllInbox({ limit: 1000 }).find((m) => m.payload.includes(job.branch))!;
+  const body = (JSON.parse(recap.payload) as { body: string }).body;
+  assert.match(body, new RegExp(`https://github.com/acme/app/pull/\\d+`), 'the pull request is named');
+  assert.match(body, new RegExp(`TO DO ideas: #${job.todo} done\\.`), 'the ideas it closed are named');
+  assert.match(body, /\d+ doc task\(s\) created/, 'the doc tasks are counted');
 
   // Replayed: nothing is open any more, nothing is told twice.
   const again = await pollOpenIntegrations(deps);
   assert.equal(again.has(job.id), false);
   assert.equal(ghCalls, 0);
   assert.deepEqual(noticesFor(job.branch), [`Pull request merged: ${job.branch}`]);
+  assert.deepEqual(cardsFor(job.id), [`report: Pull request merged: ${job.branch}`]);
 });
 
 test('a fast-forward lands under the head itself', async () => {
@@ -199,10 +214,12 @@ test('a pull request closed without a merge closes the row and nothing else', as
   assert.equal(row.landed_at, null, 'nothing landed');
   assert.notEqual(dbApi.getProjectTodo(job.todo)?.status, 'done');
   assert.deepEqual(noticesFor(job.branch), [`Pull request closed: ${job.branch}`]);
+  assert.deepEqual(cardsFor(job.id), [`alert: Pull request closed: ${job.branch}`], 'a closed pull request is not a report');
 
   await pollOpenIntegrations(deps);
   assert.equal(ghCalls, 1, 'a closed row is no longer polled');
   assert.deepEqual(noticesFor(job.branch), [`Pull request closed: ${job.branch}`]);
+  assert.deepEqual(cardsFor(job.id), [`alert: Pull request closed: ${job.branch}`]);
 });
 
 test('a pull request still open stays open', async () => {
@@ -338,4 +355,33 @@ test('a merge proposes the resolution comment of each issue the job fixed, once,
 
   assert.equal(defuseMentions('@a, me@mail.test, `@b` and acme/@c'), '`@a`, me@mail.test, `@b` and acme/@c');
   assert.equal(resolutionComment({ prNumber: null, target: 'main', notes: [] }), 'This is fixed, now merged into `main`.');
+});
+
+test('the recap goes to the agent of the series pilot', async () => {
+  mkdirSync(agentDir('acme.pilot'), { recursive: true });
+  const pilot = randomUUID();
+  dbApi.createMission(pilot, 'acme.pilot', 'plan the job');
+  const job = openJob({ pilot });
+  mergeOnForge(job);
+  assert.equal((await pollOpenIntegrations(deps)).get(job.id), 'merged');
+  const recaps = dbApi.listAllInbox({ limit: 1000 }).filter((m) => m.payload.includes(job.branch));
+  assert.deepEqual(recaps.map((m) => m.to_agent), ['acme.pilot']);
+  assert.equal(cardsFor(job.id).length, 1);
+});
+
+test('a pilot that no longer exists gets no recap: the card alone tells, once', async () => {
+  // The pilot's agent was deleted with its team: its mission row survives.
+  const pilot = randomUUID();
+  dbApi.createMission(pilot, 'gone.pilot', 'plan the job');
+  const job = openJob({ pilot });
+  mergeOnForge(job);
+  assert.equal((await pollOpenIntegrations(deps)).get(job.id), 'merged');
+  assert.deepEqual(noticesFor(job.branch), [], 'nothing is queued for an agent that cannot wake');
+  assert.deepEqual(cardsFor(job.id), [`report: Pull request merged: ${job.branch}`]);
+  assert.equal(dbApi.getIntegrationById(job.id)?.notified_state, 'merged', 'the notice is spent');
+
+  await pollOpenIntegrations(deps);
+  assert.equal(notifyIntegrationOutcome(job.id, 'merged', [], () => {}), false);
+  assert.deepEqual(cardsFor(job.id), [`report: Pull request merged: ${job.branch}`]);
+  assert.deepEqual(noticesFor(job.branch), []);
 });
