@@ -7,7 +7,7 @@ request's number and state, a link when it exists. The product's chip comes
 back as soon as the plugin is removed.
 
 The component takes no props: it reads `useTodoItem()` from `@timon/ui`
-(client API 18), whose `landing` is `null` when no job of the idea has an
+(client API 19), whose `landing` is `null` when no job of the idea has an
 integration branch, or `{ state, branch, prNumber, prUrl, jobs }`. `state` is
 `branch` (no pull request expected), `pending` (not created yet), `open`,
 `merged` or `closed`; the job shown first is the one furthest from landing,

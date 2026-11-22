@@ -67,7 +67,7 @@ The directories the plugin opened to `chat_show_media` (`media.allowShow`), by m
 
 > **cleanup**(): `void`
 
-Removes the temporary folders `scratch.mission` created.
+Removes the temporary folders `scratch.mission` and `scratch.profile` created.
 
 #### Returns
 

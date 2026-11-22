@@ -753,25 +753,25 @@ test('a slot opened by API 17 needs a manifest that declares it', () => {
   assert.equal(SLOT_API_VERSIONS['updates.dialog'], 17);
 });
 
-test('a slot opened by API 18 needs a manifest that declares it', () => {
-  // A host 17 has no `kanban.todo.landing`: the registration would be refused
+test('a slot opened by API 19 needs a manifest that declares it', () => {
+  // A host 18 has no `kanban.todo.landing`: the registration would be refused
   // there, and the badge never painted, without a word to the plugin's author.
-  assert.match(refusal(pkg({ apiVersion: 17, client: { slots: ['kanban.todo.landing'] } })),
-    /names `kanban\.todo\.landing`, which needs `apiVersion: 18`/);
-  const res = readManifest(pkg({ apiVersion: 18, client: { slots: ['kanban.todo.landing'] } }));
+  assert.match(refusal(pkg({ apiVersion: 18, client: { slots: ['kanban.todo.landing'] } })),
+    /names `kanban\.todo\.landing`, which needs `apiVersion: 19`/);
+  const res = readManifest(pkg({ apiVersion: 19, client: { slots: ['kanban.todo.landing'] } }));
   assert.ok(res.ok, res.ok ? '' : res.message);
-  assert.equal(SLOT_API_VERSIONS['kanban.todo.landing'], 18);
+  assert.equal(SLOT_API_VERSIONS['kanban.todo.landing'], 19);
 });
 
-test('the job and Publish on GitHub dialogs join wave 18', () => {
-  // Their hooks are missing from a host 17: a manifest naming either slot must
-  // declare 18, or its browser half would die there on a missing import.
+test('the job and Publish on GitHub dialogs join wave 19', () => {
+  // Their hooks are missing from a host 18: a manifest naming either slot must
+  // declare 19, or its browser half would die there on a missing import.
   for (const slot of ['kanban.job.dialog', 'forge.publish.dialog']) {
-    const message = refusal(pkg({ apiVersion: 17, client: { slots: [slot] } }));
-    assert.ok(message.includes(`names \`${slot}\`, which needs \`apiVersion: 18\``), message);
-    const res = readManifest(pkg({ apiVersion: 18, client: { slots: [slot] } }));
+    const message = refusal(pkg({ apiVersion: 18, client: { slots: [slot] } }));
+    assert.ok(message.includes(`names \`${slot}\`, which needs \`apiVersion: 19\``), message);
+    const res = readManifest(pkg({ apiVersion: 19, client: { slots: [slot] } }));
     assert.ok(res.ok, res.ok ? '' : res.message);
-    assert.equal(SLOT_API_VERSIONS[slot], 18);
+    assert.equal(SLOT_API_VERSIONS[slot], 19);
   }
 });
 

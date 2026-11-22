@@ -8,7 +8,7 @@ later** or **Do not publish**. The product's window comes back as soon as the
 plugin is removed.
 
 The component takes no props: it reads `usePublishDialog()` from `@timon/ui`
-(client API 18) and draws the whole window with `Dialog`. It holds no access
+(client API 19) and draws the whole window with `Dialog`. It holds no access
 to GitHub or to the daemon: `publish()`, `save()` and `discard()` are the
 host's gestures, sent through the signed-in person's session; the daemon
 refuses them from anyone else and checks the project's account again before

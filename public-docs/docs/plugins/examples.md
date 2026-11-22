@@ -1376,9 +1376,9 @@ export function apply(ctx) {
 
 ## Replace the pull request badge of an idea {#todo-landing}
 
-Source: `examples/plugin-todo-landing`. Manifest ID: `example-todo-landing`. Minimum API: **18**.
+Source: `examples/plugin-todo-landing`. Manifest ID: `example-todo-landing`. Minimum API: **19**.
 
-API 18. One registration in the single kanban.todo.landing slot replaces the badge that says where the branch of a TO DO idea stands, on the lines of the TO DO widgets, in the Kanban TO DO column and in the idea's detail, with a plain line of text. The component reads the idea from useTodoItem(): its landing is null when no job of the idea has an integration branch, else the state (branch, pending, open, merged or closed), the branch, the pull request's number and address, and every job in jobs, the one furthest from landing first. The field is read-only. Remove the plugin and Timon's own badge comes back.
+API 19. One registration in the single kanban.todo.landing slot replaces the badge that says where the branch of a TO DO idea stands, on the lines of the TO DO widgets, in the Kanban TO DO column and in the idea's detail, with a plain line of text. The component reads the idea from useTodoItem(): its landing is null when no job of the idea has an integration branch, else the state (branch, pending, open, merged or closed), the branch, the pull request's number and address, and every job in jobs, the one furthest from landing first. The field is read-only. Remove the plugin and Timon's own badge comes back.
 
 Permissions: none. Read the [related guide](slots.md).
 
@@ -1562,9 +1562,9 @@ export function apply(ctx) {
 
 ## Replace the Publish on GitHub window {#publish-dialog}
 
-Source: `examples/plugin-publish-dialog`. Manifest ID: `example-publish-dialog`. Minimum API: **18**.
+Source: `examples/plugin-publish-dialog`. Manifest ID: `example-publish-dialog`. Minimum API: **19**.
 
-API 18. One registration in the single forge.publish.dialog slot replaces the window that shows a comment before it is posted on GitHub, opened from the rows of the Jobs and Pull requests widgets, a pull request's menu and the notification of a proposed comment, with a plain dialog. The component reads usePublishDialog(): the text as it would leave and setBody(), where it goes, the account the project publishes as, why the text would be refused, and three gestures, publish(), save() and discard(). They are Timon's: the plugin holds no access to GitHub or to the daemon, the gestures go through the signed-in person's session, and nothing is posted before the click on Publish. The component draws the whole window with Dialog from @timon/ui and calls close() when it is dismissed. Remove the plugin and Timon's own window comes back.
+API 19. One registration in the single forge.publish.dialog slot replaces the window that shows a comment before it is posted on GitHub, opened from the rows of the Jobs and Pull requests widgets, a pull request's menu and the notification of a proposed comment, with a plain dialog. The component reads usePublishDialog(): the text as it would leave and setBody(), where it goes, the account the project publishes as, why the text would be refused, and three gestures, publish(), save() and discard(). They are Timon's: the plugin holds no access to GitHub or to the daemon, the gestures go through the signed-in person's session, and nothing is posted before the click on Publish. The component draws the whole window with Dialog from @timon/ui and calls close() when it is dismissed. Remove the plugin and Timon's own window comes back.
 
 Permissions: none. Read the [related guide](slots.md).
 

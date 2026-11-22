@@ -21,7 +21,7 @@ const TMP_HOME = mkdtempSync(join(tmpdir(), 'timon-registry-'));
 process.env.TIMON_HOME = TMP_HOME;
 removeHomeOnExit(TMP_HOME);
 
-const { registerDialect, registerProfile, registeredBackendOwners } = await import('./registry.js');
+const { backendOwnerPlugin, registerDialect, registerFileProfile, registerPackProfile, registerProfile, registeredBackendOwners } = await import('./registry.js');
 const { backendNames, getBackend, isBackendName, backendCatalog } = await import('./index.js');
 type Dialect = import('./types.js').Dialect;
 type NormalizedEvent = import('./types.js').NormalizedEvent;
@@ -108,6 +108,32 @@ test('a plugin adds its provider, and removes it when leaving', async () => {
   assert.equal(isBackendName('acme-llm'), false, 'an unloaded plugin leaves no ghost backend');
   assert.equal(backendCatalog().some((b) => b.id === 'acme-llm'), false);
   assert.deepEqual(registeredBackendOwners(), { profiles: {}, dialects: {} });
+});
+
+test('the fence names the plugin whose dialect opens the scratch folder, not the one that added the profile', () => {
+  const removeDialect = registerDialect('acme-dialect-plugin', 'acme-echo', echoDialect);
+  const data = { id: 'user-llm', dialect: 'acme-echo', label: 'User LLM', vendor: 'User', custom: true,
+    defaultModel: 'u-1', models: [{ slug: 'u-1', label: 'u-1' }] };
+  const removeFile = registerFileProfile('local-file', data);
+  const removePack = registerPackProfile('acme-pack', { ...data, id: 'pack-llm' });
+  const removeOwn = registerProfile('acme-dialect-plugin', { ...data, id: 'own-llm' });
+  const removeOrphan = registerFileProfile('local-file', { ...data, id: 'orphan-llm', dialect: 'not-installed' });
+  try {
+    // A user's file and a provider pack bring data only: the dialect's plugin runs `buildSpawn`.
+    assert.equal(backendOwnerPlugin('user-llm'), 'acme-dialect-plugin');
+    assert.equal(backendOwnerPlugin('user-llm@abcdef12'), 'acme-dialect-plugin', 'an account instance too');
+    assert.equal(backendOwnerPlugin('pack-llm'), 'acme-dialect-plugin');
+    assert.equal(backendOwnerPlugin('own-llm'), 'acme-dialect-plugin');
+    // No plugin answers for the dialect: the profile's owner is all there is.
+    assert.equal(backendOwnerPlugin('orphan-llm'), 'local-file');
+    assert.equal(backendOwnerPlugin('no-such-backend'), null);
+  } finally {
+    removeOrphan();
+    removeOwn();
+    removePack();
+    removeFile();
+    removeDialect();
+  }
 });
 
 test('collisions are refused, naming who holds the place', () => {

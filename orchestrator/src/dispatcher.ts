@@ -15,6 +15,7 @@ import { CwdUnusableError } from './cwd-check.js';
 import { taskProjectSlug } from './task-project.js';
 import { bus } from './bus.js';
 import { loadConfig, type AgentConfig } from './agent.js';
+import { reportReroutedShellPreallow } from './auto-mode-preallow.js';
 import { readRoles, type RoleSpec, type TaskRole } from './projects.js';
 import {
   asBackendName, assertBackendEnabled, defaultBackendName, isBackendName, backendCapabilities, backendForModel, catalogClaimsModel,
@@ -1392,6 +1393,14 @@ async function dispatch(): Promise<void> {
       let taskExtraAllowed: string[] = [];
       try { if (task.extra_skills) taskExtraSkills = JSON.parse(task.extra_skills); } catch { /* */ }
       try { if (task.extra_allowed_tools) taskExtraAllowed = JSON.parse(task.extra_allowed_tools); } catch { /* */ }
+      // The card a rerouted task raises would read as the named agent's own rule failing.
+      if (rerouted) {
+        const allowedOf = (name: string): string[] => { try { return loadConfig(name).allowed_tools ?? []; } catch { return []; } };
+        reportReroutedShellPreallow({
+          taskId, named: task.agent_name, routed: effectiveAgentName, why: describeRouting(task.agent_name, routing),
+          namedAllowed: allowedOf(task.agent_name), routedAllowed: [...allowedOf(effectiveAgentName), ...taskExtraAllowed],
+        });
+      }
       // Before the worktree is created: a refusal after it would leave the
       // worktree and its branch behind.
       if (blockIfExtrasWiden(task, effectiveAgentName)) continue;

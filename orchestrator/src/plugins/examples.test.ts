@@ -289,7 +289,7 @@ for (const [dir, pkg, id, slot] of [
   });
 }
 
-test('plugin-todo-landing: a browser-only replacement of `kanban.todo.landing` loads at API 18', async () => {
+test('plugin-todo-landing: a browser-only replacement of `kanban.todo.landing` loads at API 19', async () => {
   await withExample('plugin-todo-landing', '@timon-ai/plugin-todo-landing', async (url) => {
     const gallery = await (await fetch(url('/api/plugins/example-todo-landing'))).json() as {
       state: string; kind: string[]; client: { slots: string[] } | null;
@@ -300,7 +300,7 @@ test('plugin-todo-landing: a browser-only replacement of `kanban.todo.landing` l
   });
 });
 
-test('plugin-publish-dialog: a browser-only replacement of `forge.publish.dialog` loads at API 18', async () => {
+test('plugin-publish-dialog: a browser-only replacement of `forge.publish.dialog` loads at API 19', async () => {
   await withExample('plugin-publish-dialog', '@timon-ai/plugin-publish-dialog', async (url) => {
     const gallery = await (await fetch(url('/api/plugins/example-publish-dialog'))).json() as {
       state: string; kind: string[]; client: { slots: string[] } | null;

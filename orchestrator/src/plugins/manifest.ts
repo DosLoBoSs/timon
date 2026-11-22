@@ -100,29 +100,33 @@ import { reservedRouteSegment } from './reserved-routes.js';
  * new slots must declare 17 (`SLOT_API_VERSIONS`). No member of the host's
  * `PluginContext` changes.
  *
- * 18 — the `kanban.todo.landing` slot: the badge that says where the branch
- * of a TO DO idea's jobs stands (pull request not created, open, merged,
- * closed), read from `useTodoItem().landing`; `PluginTodo.landing` and the
- * `landing` filter of `ctx.kanban.todos.list`. API 17 shipped in 0.1.9, so a
- * new slot opens a new wave. The same wave, still unreleased, opens the
- * `kanban.job.dialog` slot (a job's window, `useJobDialog`) and the
- * `forge.publish.dialog` slot (the "Publish on GitHub" window,
- * `usePublishDialog`, whose gestures go through the signed-in person's
- * session). No member of the host's `PluginContext` changes.
+ * 18 — `ctx.provider.scratch.profile(profile)`: the private folder a provider
+ * keeps for one profile it launches, across its missions (the CLI's sessions
+ * and settings), which only that profile's missions reach through the fence.
+ * API 17 shipped in 0.1.9, so a new member opens a new wave
+ * (docs/SDK-COMPAT.md §121).
  *
- * 19 — `ctx.forge`, the GitHub repository of a project whose integration opens
- * pull requests, for a plugin that has neither `gh` nor the project's account:
- * `forge:read` reads its issues, open pull requests and checks; `forge:propose`
- * stores a proposed comment that a signed-in person publishes or discards in
- * the "Publish on GitHub" window, never a write. Both sensitive. A manifest
- * declaring either must declare 19. API 18 is not released either, but it
- * ships with an earlier pull request than the forge facade, possibly in an
- * earlier release: the facade opens its own wave rather than change a wave
- * already reviewed (docs/SDK-COMPAT.md §119). The same wave, still unreleased,
- * opens the `project.settings` slot (a plugin's row in a project's settings,
- * `useProjectSettings`) and gives a widget of the "Git" stack its project
- * (`useGitStackProject`) and the way to a TO DO idea (`useTodoOpener`), which
- * the browser half of the built-in `github-issues` plugin reads (§120).
+ * 19 — the Kanban to pull request wave. The `kanban.todo.landing` slot: the
+ * badge that says where the branch of a TO DO idea's jobs stands (pull
+ * request not created, open, merged, closed), read from
+ * `useTodoItem().landing`; `PluginTodo.landing` and the `landing` filter of
+ * `ctx.kanban.todos.list`. The `kanban.job.dialog` slot (a job's window,
+ * `useJobDialog`) and the `forge.publish.dialog` slot (the "Publish on
+ * GitHub" window, `usePublishDialog`, whose gestures go through the
+ * signed-in person's session). `ctx.forge`, the GitHub repository of a
+ * project whose integration opens pull requests, for a plugin that has
+ * neither `gh` nor the project's account: `forge:read` reads its issues, open
+ * pull requests and checks; `forge:propose` stores a proposed comment that a
+ * signed-in person publishes or discards in the "Publish on GitHub" window,
+ * never a write. Both sensitive. A manifest declaring either must declare 19.
+ * The same wave opens the `project.settings` slot (a plugin's row in a
+ * project's settings, `useProjectSettings`), gives a widget of the "Git"
+ * stack its project (`useGitStackProject`) and the way to a TO DO idea
+ * (`useTodoOpener`), which the browser half of the built-in `github-issues`
+ * plugin reads, and a stacked widget its tab name, count, dot and menu.
+ * These were numbered 18 and 19 while unreleased; `main` took 18 for the
+ * provider profile folder first, so they all moved to 19
+ * (docs/SDK-COMPAT.md §119, §120, §122).
  */
 export const PLUGIN_API_VERSION = 19;
 
@@ -148,9 +152,9 @@ export const SLOT_API_VERSIONS: Readonly<Record<string, number>> = Object.freeze
   notices: 17,
   'notices.card': 17,
   'updates.dialog': 17,
-  'kanban.todo.landing': 18,
-  'kanban.job.dialog': 18,
-  'forge.publish.dialog': 18,
+  'kanban.todo.landing': 19,
+  'kanban.job.dialog': 19,
+  'forge.publish.dialog': 19,
   'project.settings': 19,
 });
 

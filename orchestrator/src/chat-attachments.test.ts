@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -8,10 +8,12 @@ process.env.TIMON_HOME ??= mkdtempSync(join(tmpdir(), 'timon-attach-'));
 const TIMON_HOME_DIR = process.env.TIMON_HOME;
 
 const {
-  composeChatTurn, discardChatAttachments, persistChatAttachments, purgeChatAttachments, safeAttachmentName,
+  composeChatTurn, discardChatAttachments, ensureChatAttachmentsDir, persistChatAttachments, purgeChatAttachments, safeAttachmentName,
   skippedAttachmentsField, MAX_ATTACHMENT_BYTES, MAX_TURN_BYTES,
 } = await import('./chat-attachments.js');
 import type { SkippedAttachment } from './chat-attachments.js';
+const { resolveFence, fenceAccess } = await import('./host/isolation.js');
+const { TimonConfigSchema } = await import('./config/schema.js');
 
 test('a client-supplied name can never escape the turn directory', () => {
   for (const [raw, expected] of [
@@ -175,4 +177,36 @@ test('a turn that was not delivered leaves no file, and nothing outside the chat
   writeFileSync(file, 'keep');
   discardChatAttachments([{ name: 'keep.txt', path: file, size: 4, mime: 'text/plain' }]);
   assert.ok(existsSync(file), 'a file outside the chat uploads survives');
+});
+
+test('the attachments folder exists before the first attachment, so a fence computed at launch already opens it', () => {
+  const missionId = 'aaaaaaaa-0000-4000-8000-0000000000a1';
+  const dir = ensureChatAttachmentsDir(missionId);
+  assert.equal(dir, join(TIMON_HOME_DIR, 'uploads', 'chat', missionId));
+  assert.deepEqual(readdirSync(dir), [], 'created empty');
+  // Windows has no POSIX mode bits to compare.
+  if (process.platform !== 'win32') assert.equal(statSync(dir).mode & 0o777, 0o700);
+  assert.equal(ensureChatAttachmentsDir(missionId), dir, 'a second launch reuses it');
+
+  // A persistent CLI keeps the rules it was launched with: the folder must be granted
+  // while it is still empty, and the file a later turn saves must fall inside it.
+  const config = TimonConfigSchema.parse({ host: { isolation: { filesystem: 'auto' } } });
+  const policy = resolveFence(config, {
+    timonHome: TIMON_HOME_DIR, platform: process.platform, missionId, timonRead: [dir],
+  });
+  assert.equal(policy.ignored.some((entry) => entry.path === dir), false, 'the empty folder is not dropped');
+  const [saved] = persistChatAttachments(missionId, [{ name: 'later.txt', data: Buffer.from('x').toString('base64') }]);
+  // Resolved: on macOS the temporary folder is reached through a link, and the fence grants its target.
+  const savedPath = realpathSync(saved!.path);
+  assert.equal(policy.enabled, true);
+  assert.equal(fenceAccess(policy, savedPath).read, true, 'readable without a relaunch');
+  assert.equal(fenceAccess(policy, savedPath).write, false);
+  assert.equal(fenceAccess(policy, join(realpathSync(TIMON_HOME_DIR), 'uploads', 'chat', 'other-mission', 'a.txt')).read, false);
+
+  // Discarding the turn leaves the mission's folder, empty again; the purge still takes it.
+  discardChatAttachments([saved!]);
+  assert.deepEqual(readdirSync(dir), []);
+  const out = purgeChatAttachments((id) => (id === missionId ? { live: false, endedAt: 0 } : { live: true, endedAt: null }), 1);
+  assert.deepEqual(out.removed, [missionId]);
+  assert.equal(existsSync(dir), false);
 });

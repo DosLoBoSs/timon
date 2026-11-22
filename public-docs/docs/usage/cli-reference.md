@@ -57,6 +57,8 @@ Agents & missions:
            --look '{"shape":"round","color":"#d4a373","eyes":"happy","acc":"coffee"}'
                                     (mascot look; --look null clears it)
            --avatar emoji|image|mascot   (head shown; --avatar null = picture, logo, emoji, initial)
+    (--allowed-tools Bash pre-allows every shell command, Bash(git:*) only those starting
+     with git; in auto mode the claude CLI ignores Bash and Bash(*): use acceptEdits)
     (--skills is the whole checked set, stored as the agent's skill attachments:
      unlisted ones are detached; import mode / exclusion: timon skill attach)
     (deletion: the app or the agent_delete tool; the agent waits in the trash)
