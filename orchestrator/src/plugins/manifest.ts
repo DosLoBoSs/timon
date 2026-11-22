@@ -126,7 +126,7 @@ import { reservedRouteSegment } from './reserved-routes.js';
  * plugin reads, and a stacked widget its tab name, count, dot and menu.
  * These were numbered 18 and 19 while unreleased; `main` took 18 for the
  * provider profile folder first, so they all moved to 19
- * (docs/SDK-COMPAT.md §119, §120, §122).
+ * (docs/SDK-COMPAT.md §118-§120, §129).
  */
 export const PLUGIN_API_VERSION = 19;
 
