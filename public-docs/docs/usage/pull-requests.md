@@ -43,6 +43,7 @@ timon project get-integration my-app --check
 Once the project is in `pr` mode, its jobs land through a pull request and nothing of them is merged into the target branch on your machine:
 
 - When you plan a job with an agent (the Kanban planner), Timon names the job's integration branch after the job's title, `feat/add-csv-export` for "Add CSV export" (with `-2`, `-3`… when an earlier job already used the name), or after the name the agent proposes, and every task of the job starts from it. In the planner, **Advanced** shows that name: you can change it before you launch the job (the project's prefix, `feat/`, is added for you). Timon checks the name as you type and says why one cannot be used (an id in it, a name reserved for Timon's own branches, the target branch itself, a name git refuses). Once a task of the job has started, the branch exists and its name is fixed: planning the same job again shows it read-only.
+- The planner follows the job's project, not only the agent's: an agent that belongs to no project but works in the project's folder plans the job the same way, and the tasks it creates name the project.
 - When the first task starts, Timon creates that branch from the remote's target branch (`origin/main`), without touching your checkout. If the remote cannot be reached, the task is blocked with the reason instead of starting from your local `main`.
 - Reviews and merges run as usual, into the integration branch.
 - The plan ends with a final task, **Pull request — <job title>**. It starts once every part of the job is merged into the branch: an agent brings the target branch in if it has moved, writes the title and the description, and opens the pull request as described below. The task is done as soon as the pull request is open; you review and merge it on the forge.
@@ -85,6 +86,10 @@ Then Timon pushes the integration branch and opens the pull request. The push is
 A branch under embargo (`sec/<topic>`, for a security fix) is never pushed by this command, whatever the setting says: it lands by hand once the advisory is published.
 
 If the push succeeds but the pull request cannot be created, run the command again: the branch is already there and only the pull request is opened.
+
+## Once the pull request is merged
+
+Timon checks every few minutes whether the pull request was merged, by looking for its branch in the remote's target branch. Once it was, the job's TO DO ideas close, its documentation task is created, a card in your notifications says the pull request was merged, and the conversation that planned the job gets a message listing what closed. A pull request closed without a merge closes nothing and keeps the branches: the card is an alert, and the job's conversation is asked what comes next. Without access to the forge, `timon task mark-merged <task> --sha <merge commit>` on a task of the job does the same by hand. If the conversation that planned the job no longer exists, the card is the only notice.
 
 ## Follow the job and review contributors
 

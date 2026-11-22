@@ -320,6 +320,9 @@ export type SeriesPlanLanding = {
   branch: string;
   /** Title of the job, for the pull request task's title. */
   chantier: string;
+  /** The job's project, given to every task (`--project`) when the agent
+   *  creating them is not in it. */
+  taskProject?: string | null;
 };
 
 /**
@@ -342,7 +345,8 @@ export type SeriesPlanLanding = {
  * iterations inherit. Without a group, the output is the previous one, to the byte.
  *
  * With `landing` (the project lands through a pull request), every task created
- * carries `--base <branch>`, and a last `merge` task with `--landing pr`, which
+ * carries `--base <branch>` (and `--project <slug>` when the planning agent is
+ * not in that project), and a last `merge` task with `--landing pr`, which
  * depends on the code tasks (or on the grouped merge), opens the pull request.
  * Without it, the output is the previous one, to the byte.
  */
@@ -384,7 +388,8 @@ export function seriesPlanCommands(
   const pipeline = PIPELINE_BY_MODE[answer.mode];
   if (pipeline) {
     const group = answer.mode === 'kanban-code-group' ? ' --group-id <GROUP>' : '';
-    const base = landing ? ` --base ${shellQuote(landing.branch)}` : '';
+    const base = (landing ? ` --base ${shellQuote(landing.branch)}` : '')
+      + (landing?.taskProject ? ` --project ${shellQuote(landing.taskProject)}` : '');
     const count = volets.length || 1;
     for (let i = 0; i < count; i++) {
       const title = volets[i]?.title ?? '<part title>';

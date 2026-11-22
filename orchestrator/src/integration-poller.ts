@@ -35,6 +35,7 @@ import { landIntegration } from './integration-landing.js';
 import { advanceRepairs, type RepairDeps } from './landing-repair.js';
 import { proposeResolutionCommentsOf } from './issue-resolution.js';
 import { readProjectIntegration } from './project-integration.js';
+import type { TodoClosure } from './todo-closure.js';
 import { notifyIntegrationOutcome } from './wake.js';
 
 /** Minutes, not seconds: a pull request waits for a person. */
@@ -104,6 +105,12 @@ async function mergeCommitOf(repo: string, head: string, target: string): Promis
 
 // ─── Conclusions ────────────────────────────────────────────────────────────
 
+/** `#12 done`, `#13 partial (1/2)`: what the pilot reads of a TO DO move. */
+function describeClosure(c: TodoClosure): string {
+  const share = c.progress === 'partial' && c.total ? ` (${c.landed ?? 0}/${c.total})` : '';
+  return `#${c.todoId} ${c.progress}${share}${c.osTest ? ', OS test owed' : ''}`;
+}
+
 /**
  * The integration `id` was merged into its target. Lands it (one replay of
  * its closures, `integration-landing.ts`), proposes the resolution comments of
@@ -115,7 +122,8 @@ export async function concludeMerged(id: string, mergeSha: string | null, notify
   try {
     const out = await landIntegration(id, mergeSha);
     if (out.replayed) {
-      lines.push(`Landing replayed on ${out.tasks} task(s): ${out.closures.length} TO DO move(s), ${out.docs} doc task(s).`);
+      lines.push(`Landing replayed on ${out.tasks} task(s): ${out.closures.length} TO DO move(s), ${out.docs} doc task(s) created.`);
+      if (out.closures.length) lines.push(`TO DO ideas: ${out.closures.map(describeClosure).join(', ')}.`);
     }
   } catch (err) {
     // The row is 'merged' whatever happened next: the reconciliation replays

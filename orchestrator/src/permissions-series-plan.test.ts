@@ -146,6 +146,11 @@ test('a project that lands through pull requests: the plan gives the job branch 
   assert.match(pr.integration!.note, /never from main/);
   assert.ok(pr.commands.slice(0, -1).every((c) => c.includes('--base feat/big-feature-2')));
   assert.match(pr.commands.at(-1)!, /--type merge --landing pr --base feat\/big-feature-2/);
+  // An agent of the project: no `--project`, the commands of step 8 to the byte.
+  assert.deepEqual(pr.commands, seriesPlanCommands(
+    { mode: 'kanban-full', roles: {} }, [{ title: 'Front' }], { branch: 'feat/big-feature-2', chantier: 'Big feature' },
+  ));
+  assert.doesNotMatch(pr.integration!.note, /--project/);
   const resumed = buildContinuation({ tool_name: 'ask_user', mission_id: 'plan-pr-1' } as never, { behavior: 'allow', updatedInput: pr });
   assert.match(resumed, /Pull request: Project plan-pr lands through a pull request/);
 
@@ -234,4 +239,75 @@ test('a project without the setting gets no branch field', async () => {
   const { resolvePermission } = await import('./permissions.js');
   resolvePermission(card.id, { behavior: 'deny', message: 'x' });
   await pending;
+});
+
+/* The planner reads the project of the job, not only the agent's: an agent
+   outside any project, working in a registered project's folder, plans that
+   project's job, and the tasks it creates name the project. */
+test('an agent outside any project plans the job of the project whose folder it works in', async () => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const { agentDir } = await import('./paths.js');
+  const { updateProjectIntegration } = await import('./project-integration.js');
+  const { resolvePermission } = await import('./permissions.js');
+  const { seriesPlanCommands } = await import('./series-plan.js');
+  const mkAgent = (name: string, config: Record<string, unknown>) => {
+    mkdirSync(agentDir(name), { recursive: true });
+    writeFileSync(join(agentDir(name), 'config.json'), JSON.stringify({ role: 'orchestrator', ...config }));
+    writeFileSync(join(agentDir(name), 'system-prompt.md'), 'Test');
+  };
+  const prRepo = mkdtempSync(join(tmpdir(), 'timon-plan-loose-pr-'));
+  const localRepo = mkdtempSync(join(tmpdir(), 'timon-plan-loose-local-'));
+  dbApi.upsertProject('loose-pr', { cwd: prRepo });
+  updateProjectIntegration('loose-pr', { mode: 'pr', account: 'octocat' });
+  dbApi.upsertProject('loose-local', { cwd: localRepo });
+  mkAgent('loose.pr', { cwd: join(prRepo, 'sub') });
+  mkAgent('loose.local', { cwd: localRepo });
+  mkAgent('elsewhere.main', { cwd: localRepo, project: 'loose-local' });
+
+  const form = { form: { kind: 'series_plan', chantier: 'Loose job', volets: [{ title: 'Front' }] } };
+  const open = (mission: string, agent: string) => {
+    dbApi.createMission(mission, agent, 'job');
+    const pending = requestPermission({ mission_id: mission, agent, tool_name: 'ask_user', input: form, tool_use_id: `tu-${mission}` });
+    const card = listPending(mission)[0]!;
+    const landing = (card.input as { form: { landing?: { project: string; branch: string } } }).form.landing;
+    const answer = async () => {
+      resolvePermission(card.id, { behavior: 'allow', updatedInput: { plan: { mode: 'kanban-full', roles: {} } } });
+      const decision = await pending;
+      assert.equal(decision.behavior, 'allow');
+      return (decision.behavior === 'allow' ? decision.updatedInput : {}) as {
+        commands: string[]; integration?: { branch: string; note: string };
+      };
+    };
+    return { landing, answer };
+  };
+
+  // In a subfolder of the `pr` project: its branch, its pull request task, and
+  // `--project` on every task so the setting reaches them.
+  const loose = open('loose-1', 'loose.pr');
+  assert.equal(loose.landing?.project, 'loose-pr');
+  const pr = await loose.answer();
+  assert.equal(pr.integration?.branch, 'feat/loose-job');
+  assert.match(pr.integration!.note, /--project loose-pr/);
+  assert.deepEqual(pr.commands, [
+    "timon task create --type code --pipeline full --base feat/loose-job --project loose-pr --title Front --description '<part brief>'",
+    "timon task create --type merge --landing pr --base feat/loose-job --project loose-pr --deps <IDS of the code tasks> "
+      + "--title 'Pull request — Loose job' --description '<what the pull request carries>'",
+  ]);
+
+  // In the folder of a `local` project: the plan stays what it was.
+  const local = await open('loose-2', 'loose.local').answer();
+  assert.equal(local.integration, undefined);
+  assert.deepEqual(local.commands, seriesPlanCommands({ mode: 'kanban-full', roles: {} }, [{ title: 'Front' }]));
+
+  // The mission's job comes first: a series already started in the `pr`
+  // project stays there, whatever project the agent belongs to.
+  dbApi.createMission('loose-3', 'elsewhere.main', 'job');
+  dbApi.createTask('loose-3-task', 'earlier part', 'elsewhere.main', { type: 'code', project: 'loose-pr', seriesId: 'loose-3', creatorMissionId: 'loose-3' });
+  const pending = requestPermission({ mission_id: 'loose-3', agent: 'elsewhere.main', tool_name: 'ask_user', input: form, tool_use_id: 'tu-loose-3' });
+  const card = listPending('loose-3')[0]!;
+  assert.equal((card.input as { form: { landing?: { project: string } } }).form.landing?.project, 'loose-pr');
+  resolvePermission(card.id, { behavior: 'allow', updatedInput: { plan: { mode: 'kanban-full', roles: {} } } });
+  const followed = await pending;
+  const commands = followed.behavior === 'allow' ? (followed.updatedInput as { commands: string[] }).commands : [];
+  assert.ok(commands.length > 0 && commands.every((c) => c.includes('--project loose-pr')));
 });

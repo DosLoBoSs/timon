@@ -158,6 +158,15 @@ test('commands, pull request: every task on the job branch, then the task that o
   assert.deepEqual(seriesPlanCommands({ mode: 'sequential-here', roles: {} }, [{ title: 'a' }], landing), []);
 });
 
+test('a landing for another project than the agent\'s names it on every task', () => {
+  const landing = { branch: 'feat/big-feature', chantier: 'Big feature', taskProject: 'acme' };
+  const grouped = seriesPlanCommands({ mode: 'kanban-code-group', roles: {} }, [{ title: 'a' }], landing);
+  assert.equal(grouped.length, 3);
+  assert.ok(grouped.every((c) => c.includes(' --base feat/big-feature --project acme ')));
+  const same = seriesPlanCommands({ mode: 'kanban-full', roles: {} }, [{ title: 'a' }], { ...landing, taskProject: null });
+  assert.ok(same.every((c) => !c.includes('--project')));
+});
+
 test('non-regression: without a landing the commands are byte for byte the previous ones', () => {
   for (const mode of ['kanban-full', 'kanban-code-self', 'kanban-code-group'] as const) {
     const before = seriesPlanCommands({ mode, roles: {} }, [{ title: 'a' }]);

@@ -325,6 +325,14 @@
     "landing_repair_failed": {
       "title": "Repair of {pr} not pushed",
       "body": "The repair of {branch} was not pushed: {reason}"
+    },
+    "integration_merged": {
+      "title": "{pr, select, none {Integration branch merged: {branch}} other {Pull request merged: {branch}}}",
+      "body": "{branch} landed in {target}. Its TO DO ideas and doc tasks follow on their own."
+    },
+    "integration_closed": {
+      "title": "{pr, select, none {Integration branch closed: {branch}} other {Pull request closed: {branch}}}",
+      "body": "{branch} did not land in {target}: nothing closes and the branches are kept. Its pilot decides what comes next."
     }
   }
 }
