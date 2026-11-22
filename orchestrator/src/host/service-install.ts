@@ -808,10 +808,18 @@ export function windowsTaskOffSession(opts: Pick<ServiceOpts, 'exec'>): boolean 
  * A task registered but unreadable is kept off session: every release before
  * the question registered the boot task, and silently turning an upgraded
  * user's night tasks off is the worse mistake.
+ *
+ * A task in place that opens a console was switched by hand to "Run only when
+ * user is logged on" (#116): its logon type no longer says what the user
+ * wanted, its boot trigger still does. Same rule as the desktop's rewrite
+ * (`windowsSessionIntent`, desktop `upgrade.ts`), so a reinstall from the CLI
+ * and a repair from the app register the same task.
  */
 function windowsWantsOffSession(opts: ServiceOpts): boolean {
   const mode = sessionModeOf(opts);
   if (mode !== null) return mode === 'always';
+  const shape = readWindowsTaskShape(opts);
+  if (shape?.consoleVisible) return shape.triggers.includes('Boot');
   const found = windowsTaskOffSession(opts);
   if (found !== null) return found;
   try {

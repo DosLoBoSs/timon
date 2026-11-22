@@ -628,6 +628,25 @@ test('windows: with no answer, the task in place is kept as found; a first insta
   }
 });
 
+test('#116: with no answer, a task switched by hand to the session is reinstalled off session if it kept its boot trigger', () => {
+  const task = (command: string, triggers: string) => (n: string, a: string[]): ExecResult => (n === 'schtasks' && a[0] === '/Query'
+    ? { code: 0, stdout: `<Task><Triggers>${triggers}</Triggers><Principals><Principal><LogonType>InteractiveToken</LogonType></Principal></Principals><Actions><Exec><Command>${command}</Command></Exec></Actions></Task>`, stderr: '' }
+    : { code: 0, stdout: '', stderr: '' });
+  const boot = '<BootTrigger /><TimeTrigger />';
+  const logon = '<LogonTrigger /><TimeTrigger />';
+  for (const [exec, sessionMode, expected, label] of [
+    [task('cmd.exe', boot), null, 'S4U', 'console task, boot trigger kept'],
+    [task('cmd.exe', logon), null, 'InteractiveToken', 'console task, logon trigger only'],
+    [task('cmd.exe', boot), 'session', 'InteractiveToken', 'the recorded answer wins over the trigger'],
+    [task('C:\\Timon\\Timon.exe', boot), null, 'InteractiveToken', 'session task with no console: kept as found'],
+  ] as const) {
+    const opts = fixture('win32', exec);
+    const res = installService({ ...opts, sessionMode, readFile: () => transcript({ create: 0, stop: 0, run: 0, verify: 0 }) });
+    assert.equal(res.ok, true, res.lines.join('\n'));
+    assert.match(readFileSync(taskXmlPath(), 'utf16le'), new RegExp(`<LogonType>${expected}</LogonType>`), label);
+  }
+});
+
 test('windows: status reads what the registered task does at logoff from its logon type', () => {
   const read = (stdout: string, code = 0) => windowsTaskOffSession({ exec: () => ({ code, stdout, stderr: '' }) });
   assert.equal(read('<LogonType>S4U</LogonType>'), true);
