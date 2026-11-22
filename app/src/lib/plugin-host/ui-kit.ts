@@ -195,10 +195,10 @@ export const UI_KIT = {
   // The TO DO idea form (client API 15, `todo.form`), the twin of `useTaskForm`: the idea,
   // and the gestures (save, hand off to the orchestrator, finish, close).
   useTodoForm,
-  // A Kanban job's window (client API 18, `kanban.job.dialog`): the job, its links, and the
+  // A Kanban job's window (client API 19, `kanban.job.dialog`): the job, its links, and the
   // way to its ideas and pilot mission.
   useJobDialog,
-  // The "Publish on GitHub" window (client API 18, `forge.publish.dialog`): the text, where it
+  // The "Publish on GitHub" window (client API 19, `forge.publish.dialog`): the text, where it
   // goes, as which account, and the host's gestures, which go through the person's session.
   usePublishDialog,
   // The project a widget of the "Git" stack shows (client API 19): the chat's in a chat's

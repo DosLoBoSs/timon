@@ -606,7 +606,7 @@ export const KANBAN_CARD_SLOT = 'kanban.card';
 export const TODO_FORM_SLOT = 'todo.form';
 
 /**
- * Slot of the landing badge of a TO DO idea (client API 18): where the branch
+ * Slot of the landing badge of a TO DO idea (client API 19): where the branch
  * of its jobs stands — pull request not created, open, merged, closed — in
  * every place the idea's badges show. The occupant reads the idea, its
  * `landing` included, from `useTodoItem()`. A boot slot like `kanban.card`: a
@@ -620,7 +620,7 @@ export const TODO_LANDING_SLOT = 'kanban.todo.landing';
  * pre-checks) and its links — the ideas it carries, their issues, the mission
  * that pilots it, its branch and target. Opened from the Jobs widget, the
  * landing badge of a TO DO idea and the Pull requests widget. The occupant
- * reads `useJobDialog()` (client API 18) and draws the whole window, closing
+ * reads `useJobDialog()` (client API 19) and draws the whole window, closing
  * it through `close()`. A boot slot like `todo.form`: the product's dialog is
  * the fallback and comes back when a replacement leaves.
  */
@@ -631,7 +631,7 @@ export const JOB_DIALOG_SLOT = 'kanban.job.dialog';
  * forge (`docs/FORGE-FLOW-PLAN.md` §3.3): the exact text, editable, where it
  * goes and as which account, then Publish or Do not publish. Opened from a
  * job's row, a pull request's row and the notification card of a proposal.
- * The occupant reads `usePublishDialog()` (client API 18) and draws the
+ * The occupant reads `usePublishDialog()` (client API 19) and draws the
  * window; the host keeps the calls to the daemon, which publishes only for a
  * signed-in person. A boot slot like `todo.form`.
  */

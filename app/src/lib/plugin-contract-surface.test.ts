@@ -213,15 +213,16 @@ test('the notice cards and the update window open wave 17, after 0.1.8 shipped A
   }
 });
 
-test('the job and Publish on GitHub dialogs join wave 18, still unreleased', () => {
-  // 0.1.9 shipped API 17: a plugin importing these hooks must declare 18.
+test('the job and Publish on GitHub dialogs join wave 19, still unreleased', () => {
+  // 0.1.9 shipped API 17 and 18 is the provider profile folder: a plugin
+  // importing these hooks must declare 19.
   const declarations = readFileSync(join(process.cwd(), '../packages/sdk/src/ui.d.ts'), 'utf8');
-  assert.ok(snapshot.apiVersion >= 18);
+  assert.ok(snapshot.apiVersion >= 19);
   assert.equal(UI_KIT.useJobDialog, useJobDialog);
   assert.equal(UI_KIT.usePublishDialog, usePublishDialog);
   for (const name of ['useJobDialog', 'usePublishDialog']) {
     assert.ok(platformModuleExports('ui.js').includes(name), name);
-    assert.equal(snapshot.modules['ui.js']?.[name]?.since, 18, name);
+    assert.equal(snapshot.modules['ui.js']?.[name]?.since, 19, name);
   }
   assert.ok(declarations.includes('export function useJobDialog(): JobDialogValue | null;'));
   assert.ok(declarations.includes('export function usePublishDialog(): PublishDialogValue | null;'));
