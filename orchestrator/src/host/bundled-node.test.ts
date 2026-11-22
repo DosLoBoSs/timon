@@ -73,10 +73,11 @@ test('a service of the shipped Node runs it, staged inside the release, without 
 });
 
 test('the Windows launcher and the update runner set the Electron flag only for Electron', async () => {
-  const { renderWindowsLauncher } = await import('./service-install.js');
+  const { renderWindowsLauncherConfig } = await import('./service-install.js');
   const opts = { timonHome: 'C:\\Users\\Sam\\.timon', installDir: 'C:\\Programs\\Timon\\resources\\orchestrator', heapMb: 512, port: 3010 };
-  assert.doesNotMatch(renderWindowsLauncher({ ...opts, nodePath: 'C:\\Programs\\Timon\\resources\\node\\node.exe' }), /ELECTRON_RUN_AS_NODE/);
-  assert.match(renderWindowsLauncher({ ...opts, nodePath: 'C:\\Programs\\Timon\\Timon.exe' }), /set "ELECTRON_RUN_AS_NODE=1"/);
+  const env = (nodePath: string) => (JSON.parse(renderWindowsLauncherConfig({ ...opts, nodePath })) as { env: Record<string, string> }).env;
+  assert.equal(env('C:\\Programs\\Timon\\resources\\node\\node.exe').ELECTRON_RUN_AS_NODE, undefined);
+  assert.equal(env('C:\\Programs\\Timon\\Timon.exe').ELECTRON_RUN_AS_NODE, '1');
   const { runnerEnvironment } = await import('./packaged-apply.js');
   const input = { platform: 'linux' as const, home: '/h', cliVersion: '0.1.7', installDir: '/opt/Timon/resources/orchestrator',
     daemonPort: 3010, appEnabled: true, appPort: 3110, path: undefined, now: 0 };

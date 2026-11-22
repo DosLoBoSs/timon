@@ -50,9 +50,9 @@ import {
   type AgentSkillsDraft, type AgentSkillsWrite, type ResolvedSkill, type SkillMode, type SkillVia,
 } from './skill-attachments.js';
 import { getMcp, refreshToolsCacheFromInit, listMcp } from './mcp.js';
-import { chatAttachmentsRoot } from './chat-attachments.js';
+import { ensureChatAttachmentsDir } from './chat-attachments.js';
 import { pluginPackageDirs, removeAgentPackageCache, worktreeGitDirs } from './mission-fence-target.js';
-import { forgetMissionFence, missionFenced, recordMissionFence } from './mission-fence-state.js';
+import { forgetMissionFence, missionFenced, prepareMissionLaunch, recordMissionFence } from './mission-fence-state.js';
 import { setAcpFenceSource } from './backends/acp/provider.js';
 import type { FenceTarget } from './host/isolation.js';
 import { journalDirectSkillReads } from './skill-reads.js';
@@ -90,9 +90,10 @@ import {
 } from './backend-fallback.js';
 import { backendStillDry } from './backend-recheck.js';
 import { resolvedPermissionModeFor } from './backends/catalog.js';
+import { reportInertShellPreallow } from './auto-mode-preallow.js';
 import { nestedSandboxOf } from './backends/capabilities.js';
 import { settingBool, settingNum } from './settings.js';
-import { profileLimits, watchFencedLaunch, wrapMissionLaunch } from './resources.js';
+import { missionFenceExpected, profileLimits, watchFencedLaunch, wrapMissionLaunch } from './resources.js';
 import { getHost, type Host } from './host/index.js';
 import {
   backgroundDescendants, cliBaseline, cliProcessPid, readProcessTable, type ProcessEntry,
@@ -1861,14 +1862,25 @@ const HANDOVER_START_TIMEOUT_MS = 120_000;
 
 type MissionLaunch = { spec: SpawnResult; proc: ChildProcessWithoutNullStreams; procEnv: NodeJS.ProcessEnv; missionToken: string };
 
+/** The mission's attachments folder, made if missing; `null` when the home refuses it, the fence then leaving it closed. */
+function chatAttachmentsFolder(missionId: string): string | null {
+  try {
+    return ensureChatAttachmentsDir(missionId);
+  } catch (error) {
+    console.warn(`[agent] mission ${missionId.slice(0, 8)}: attachments folder not created, the fence leaves it closed: ${(error as Error).message}`);
+    return null;
+  }
+}
+
 /**
  * What the fence of a mission needs beyond its working directory
  * (`host/isolation.ts`, `FenceTarget`): who it is, the subscription account
- * and provider plugin it runs on, the git directories its worktree commits
+ * and provider plugin it runs on, the profile whose folder of the plugin's
+ * cache is the only one it reaches, the git directories its worktree commits
  * into, the plugin packages its MCP servers run from, and the folder its chat
  * attachments were saved to. Every path is checked again by `resolveFence`.
  */
-function missionFenceTarget(input: {
+export function missionFenceTarget(input: {
   missionId: string;
   agentName: string;
   project: string;
@@ -1886,7 +1898,9 @@ function missionFenceTarget(input: {
       return []; // an id that is not a server's: the launch leaves it out too
     }
   });
-  const attachments = join(chatAttachmentsRoot(), input.missionId);
+  // Created before the fence is computed, so it is always among the folders it opens.
+  const attachments = chatAttachmentsFolder(input.missionId);
+  const instance = splitBackendInstance(input.backend);
   return {
     agent: input.agentName,
     // Read again from the agent's config file: `cfg.cwd` may by now be a
@@ -1894,11 +1908,15 @@ function missionFenceTarget(input: {
     // `workspace` exception of the fence.
     agentCwd: configuredAgentCwd(input.agentName),
     project: input.project || undefined,
-    account: splitBackendInstance(input.backend).accountId ?? undefined,
+    account: instance.accountId ?? undefined,
     providerPlugin: backendOwnerPlugin(input.backend) ?? undefined,
+    // The folder `ctx.provider.scratch.profile` keeps for a profile without an account. An
+    // account's mission keeps its sign-in in the account's own folder: its owner is a person,
+    // and the profile's folder is shared by every account of that profile.
+    providerProfile: instance.accountId ? undefined : instance.backend,
     gitDirs: git.dirs,
     pluginDirs: pluginPackageDirs(commandLines, TIMON_HOME),
-    timonRead: existsSync(attachments) ? [attachments] : [],
+    timonRead: attachments ? [attachments] : [],
   };
 }
 
@@ -1921,6 +1939,12 @@ async function launchMissionProcess(
   // plugin brought, and the daemon swaps what comes back at the points where the
   // data leaves for the process. A core dialect has no plugin to answer to.
   const seal = trust === 'core' ? null : openLaunchSeal(missionId, backend.name, spawnOpts, () => missionApiToken(missionId));
+  // Before `buildSpawn`: a provider may move the account's keychain entry there, which only
+  // a fenced launch needs (`mission-fence-state.ts`). Released however the launch ends.
+  const account = splitBackendInstance(backend.name).accountId;
+  const project = cfg.project ?? projectFromCwd(cfg.cwd) ?? undefined;
+  const fenced = account !== null && missionFenceExpected({ agent: agentName, ...(project ? { project } : {}) });
+  const prepared = prepareMissionLaunch(missionId, { account, fenced });
   try {
     return await spawnMissionProcess(backend, spawnOpts, cfg, missionId, agentName, seal, trust, confirmSpawn);
   } catch (err) {
@@ -1928,6 +1952,8 @@ async function launchMissionProcess(
     // references of a launch that never reached a process must not outlive it.
     if (seal) closeLaunchSeal(seal);
     throw err;
+  } finally {
+    prepared();
   }
 }
 
@@ -2061,7 +2087,12 @@ async function spawnMissionProcess(
   // A launcher that cannot fence on this machine after all switches the fence off for the next launches.
   void watchFencedLaunch(proc, launch.fence);
   // The session driver reads it: inside the fence, a sign-in step that opens a browser can never finish.
-  recordMissionFence(missionId, proc, launch.fence?.state === 'fenced');
+  // The move of an account's keychain entry too: recorded in the tick of the spawn, so a process that
+  // may write the entry is seen by any delete that comes after it (`mission-fence-state.ts`).
+  recordMissionFence(missionId, proc, launch.fence?.state === 'fenced', {
+    account: splitBackendInstance(backend.name).accountId,
+    credentialStoreWritable: launch.fence?.state === 'fenced' && launch.fence.credentialStoreWritable,
+  });
   proc.once('close', () => forgetMissionFence(missionId, proc));
   journalInjectedSecrets({ missionId, agent: agentName, injected: vault?.injected ?? [] });
   requested?.consume();
@@ -2280,6 +2311,12 @@ async function spawnTurn(args: {
   // launch without a shell and file writes does not run the conversion at all.
   const confinement = readOnlyTools ? conversionBackendRefusal(backend.name) : null;
   if (confinement) throw new Error(confinement);
+  // A pre-allow the CLI will drop must not fail in silence: an autonomous
+  // mission would only show it as a denied card in the daemon log.
+  reportInertShellPreallow({
+    agent: agentName, missionId, mode: cfg.permission_mode, permissionModel: backend.permissionModel,
+    allowed: cfg.allowed_tools, modeSource: missionRow?.permission_mode_override ? 'mission' : 'agent',
+  });
   const systemPrompt = buildEffectivePrompt(agentName, cfg, backend, message, forcedSkills);
 
   // Resolve memory dir based on scope. Create it if needed.

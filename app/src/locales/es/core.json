@@ -1067,6 +1067,13 @@
     "mascotsStyle2dHint": "El dibujo plano, más ligero para ordenadores antiguos.",
     "mascotsStyleNoWebgl": "Este navegador no puede dibujar en 3D (WebGL2 está desactivado o no existe): las mascotas se dibujan en 2D.",
     "mascotsStyleShared": "Se aplica a todas las mascotas. Puedes cambiarlo más tarde en {settingsPath}.",
+    "dockIconTitle": "Icono del Dock",
+    "dockIconHint": "El icono que macOS muestra para Timon en el Dock mientras la app está abierta. El Finder y el Dock antes del inicio conservan el clásico.",
+    "dockIconClassic": "Clásico",
+    "dockIconClassicHint": "Los colores de Timon.",
+    "dockIconDark": "Oscuro",
+    "dockIconDarkHint": "En blanco y negro.",
+    "dockIconError": "No se pudo cambiar el icono del Dock.",
     "variants": {
       "coral": {
         "name": "Coral",
@@ -1594,7 +1601,7 @@
         "installation": "Instalación",
         "updates": "Actualizaciones",
         "backup": "Copias y papelera",
-        "diagnostics": "Diagnóstico",
+        "diagnostics": "Registros y retención",
         "desktop": "App de escritorio",
         "privacy": "Privacidad"
       },
@@ -1658,7 +1665,7 @@
         "installation": "versión acerca de instalación servicio daemon tarea launchagent systemd ruta carpeta de datos registro puerto exportar importar copia actualización",
         "updates": "actualización actualizar nueva versión comprobar descargar instalador notas automática",
         "backup": "copia copias archivo nocturna restaurar conservar retención días papelera eliminado agente recuperar deshacer purgar",
-        "diagnostics": "registros logs depuración debug infra solución de problemas",
+        "diagnostics": "diagnóstico registros logs depuración debug infra solución de problemas",
         "desktop": "desinstalar quitar eliminar electron aplicación",
         "privacy": "privacidad telemetría analítica estadísticas de uso anónimo seguimiento rechazar"
       },

@@ -315,6 +315,12 @@ A packaged daemon verifies its installation, loads its plugins and checks each p
 
 If the window stays empty after that: run the support diagnostic (tray icon). Its **Daemon** block says whether nothing listens on the port (the daemon is down: read the end of `daemon.log`), or whether a Timon process holds the port without replying (it is still starting, or busy: wait, then open the window again from the tray). Adding the Timon folders to the antivirus exclusions shortens the start: see [Slow start behind an antivirus](#slow-start-behind-an-antivirus).
 
+## "The Timon background service is slow to start" at the end of setup (TIM-0158)
+
+At the end of the first setup, the window hands over to the background service that setup installed. The desktop waits 90 seconds for it, and on Windows up to five minutes while its `TimonOrchestrator` task is still running. If the service still does not answer, setup goes on with the daemon built into the window and shows this message. Nothing is lost and there is nothing to do: as soon as the service is ready, the window hands over to it by itself, within 30 minutes, showing a starting screen for as long as the service takes to start. Otherwise it takes over at the next launch of Timon.
+
+In the diagnostic report, a last result of `0x800710e0` for the task means "an instance was already running": Windows refused to start the task a second time because it was already running. It is not an error.
+
 ## "The background service is not running" (TIM-0154)
 
 The window waited two minutes for the interface and nothing listens on the daemon's port. Timon has already tried to start the daemon once more (the background service, or its built-in daemon) before showing this message. The message gives the folder of the logs, usually `.timon/tmp` in your user folder: send its `desktop-*.log` and `daemon.log` with the diagnostic (tray icon). On Windows, also check that the `TimonOrchestrator` task exists and is enabled in Task Scheduler.
@@ -331,6 +337,18 @@ Excluding the Timon folders from real-time scanning shortens the start. The chec
 | `%USERPROFILE%\.timon` | Your data, and the copy of the daemon the background service runs |
 
 With Microsoft Defender: **Windows Security › Virus & threat protection › Manage settings › Exclusions › Add or remove exclusions › Add an exclusion › Folder**, once per folder. On a PC managed by your organisation, exclusions are usually set by the IT department: send them these two folders. On macOS and Linux, the same applies to a third-party antivirus: exclude `Timon.app` (or `/opt/Timon`) and `~/.timon`.
+
+## Windows: an antivirus quarantined the background task
+
+Up to version 0.1.9, Avast and AVG could flag the `TimonOrchestrator` task (the file `C:\Windows\System32\Tasks\TimonOrchestrator`, with a detection name such as `CMD:Heur.BZC.WBO.Boxter`) and move it to quarantine. Timon then no longer starts at boot or when you sign in, and runs only while its window is open.
+
+The versions that follow start the task without any script, which these antiviruses do not flag. If yours removed the task:
+
+1. Update Timon, and open it once: it updates the task, with one Windows permission prompt.
+2. In the antivirus, open its quarantine (in Avast or AVG: **Menu › Quarantine**). Restore the `TimonOrchestrator` file, or add an exception for it, so the antivirus does not remove it again. If you prefer an exception for a folder, add the Timon installation folder (`%LOCALAPPDATA%\Programs\Timon` by default).
+3. Run `timon service install` in Timon's terminal, or in PowerShell, and allow the permission prompt. It writes the task again and starts it. Opening Timon also offers to reinstall a missing task.
+
+To check the result, open **Task Scheduler**: `TimonOrchestrator` is listed and **Running**. `%USERPROFILE%\.timon\tmp\daemon.log` then ends with a `starting the daemon` line.
 
 ## Windows: updating while the background service runs
 

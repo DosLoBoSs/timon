@@ -19,10 +19,10 @@
  *      the worktree dir is unmounted. The DB events and the sha remain the audit.
  */
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { TIMON_HOME } from './paths.js';
 import { execFileHost, linkDirectory } from './host/index.js';
-import { purgeShell } from './worktree-shell.js';
+import { purgeShell, unlinkWorktreeLinks } from './worktree-shell.js';
 
 const exec = execFileHost;
 
@@ -367,6 +367,34 @@ async function abortPendingMerge(worktreePath: string): Promise<void> {
   }
 }
 
+/** Absolute paths of the symbolic links git tracks in a worktree; empty when git cannot say. */
+async function trackedLinks(worktreePath: string): Promise<Set<string>> {
+  try {
+    const { stdout } = await exec('git', ['-C', worktreePath, 'ls-files', '-s', '-z'], { timeout: 30_000, maxBuffer: 64 * 1024 * 1024 });
+    const links = new Set<string>();
+    for (const record of stdout.split('\0')) {
+      const tab = record.indexOf('\t');
+      if (tab > 0 && record.startsWith('120000 ')) links.add(join(resolve(worktreePath), ...record.slice(tab + 1).split('/')));
+    }
+    return links;
+  } catch {
+    // Unknown: every link goes, which at worst makes a removal without --force refuse.
+    return new Set();
+  }
+}
+
+/**
+ * Removes the links a worktree shares with the main clone before git deletes
+ * the folder: on Windows they are junctions, which the deletion has traversed,
+ * emptying the main clone's `node_modules`. Throws when one stays, so the
+ * folder is never deleted with it. A worktree kept after all (git refuses a
+ * dirty one) gets its links back from the dispatcher, which re-links on reuse.
+ */
+async function unlinkBeforeRemoval(worktreePath: string): Promise<void> {
+  if (!existsSync(worktreePath)) return;
+  unlinkWorktreeLinks(worktreePath, await trackedLinks(worktreePath));
+}
+
 /**
  * Removes a task's worktree folder and KEEPS its branch: its commits stay, and
  * the next dispatch reattaches to it (`createWorktree`). Run from the worktree
@@ -385,6 +413,7 @@ export async function releaseWorktreeFolder(path: string): Promise<void> {
     { timeout: 10_000 },
   );
   const commonDir = r.stdout.trim();
+  await unlinkBeforeRemoval(path);
   await exec('git', ['-C', commonDir || path, 'worktree', 'remove', path], { timeout: 15_000 });
   purgeShell(WORKTREES_ROOT, path, 0, Date.now());
 }
@@ -396,20 +425,25 @@ export async function releaseWorktreeFolder(path: string): Promise<void> {
  * Codex rollouts — that is on purpose.
  *
  * `force = true` ignores the `worktree remove` errors (case of a dirty
- * or already partly deleted worktree).
+ * or already partly deleted worktree), never a shared link that could not be
+ * removed first: that one throws, and the folder and the branch both stay.
  */
 export async function disposeWorktree(
   info: WorktreeInfo,
   force = false,
 ): Promise<void> {
-  // Worktree remove
+  await unlinkBeforeRemoval(info.path);
   try {
     const args = ['-C', info.sourceRepo, 'worktree', 'remove'];
     if (force) args.push('--force');
     args.push(info.path);
     await exec('git', args, { timeout: 15_000 });
   } catch (err) {
-    if (!force) throw err;
+    if (!force) {
+      // Git refused (uncommitted work): the worktree stays, and may still be in use, so it gets its links back.
+      await prepareWorktreeDependencies(info.sourceRepo, info.path);
+      throw err;
+    }
   }
   // Branch -D (forced, it was already merged if we get here).
   try {

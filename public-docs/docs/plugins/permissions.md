@@ -224,8 +224,8 @@ const { task, item } = await ctx.kanban.todos.promote(open[0].id, { agent: 'acme
 await ctx.kanban.todos.delete(item.id);
 ```
 
-- `list` returns what the caller sees, open ideas first, links included. Filters: `status` (`open`, `done`, `promoted`), `project`, `urgency`, `progress`, `landing` (API 18: `branch`, `pending`, `open`, `merged`, `closed`), `limit` (200 at most). Any other key fails with `code: 'invalid'`.
-- Every idea read through the facade carries `landing` (API 18), read-only: `null` when no job of the idea has an integration branch, or the state of its pull request (`{ state, branch, prNumber, prUrl, jobs }`, the job furthest from landing first). It is derived from the tasks the caller can see.
+- `list` returns what the caller sees, open ideas first, links included. Filters: `status` (`open`, `done`, `promoted`), `project`, `urgency`, `progress`, `landing` (API 19: `branch`, `pending`, `open`, `merged`, `closed`), `limit` (200 at most). Any other key fails with `code: 'invalid'`.
+- Every idea read through the facade carries `landing` (API 19), read-only: `null` when no job of the idea has an integration branch, or the state of its pull request (`{ state, branch, prNumber, prUrl, jobs }`, the job furthest from landing first). It is derived from the tasks the caller can see.
 - `promote` turns the idea into a pending task for `agent` and marks the idea promoted. It needs **both** `todos:write` and `kanban:write`, and only works on an idea the caller owns. `type`, `priority`, `base` (a branch name) and `pipeline` (`full`, `code-self`, `code-group`) are optional; the task's project is the idea's. The task carries the idea, so it closes once the task lands. An idea already promoted fails with `code: 'conflict'`; a refused input with `code: 'invalid'`, and nothing is created.
 - `delete` removes the idea and its links; `todo_deleted` follows with your plugin as `origin`. An idea outside the caller's view fails with `code: 'not_found'` and stays.
 

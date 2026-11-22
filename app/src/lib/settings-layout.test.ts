@@ -59,6 +59,18 @@ test('an owner with a functional home files there, any other owner under Plugins
   assert.deepEqual(placeSetting(ROWS[8]!), { category: 'plugins', tab: '@timon/video-factory' });
 });
 
+test('the built-in terminal switch sits in Interface › Terminal, where "terminal unavailable" points', () => {
+  const row: SettingsRowLike = { key: 'TIMON_TERMINAL_WEB_ENABLED', group: 'Terminal', advanced: false, owner: '@timon/terminal-web' };
+  assert.deepEqual(placeSetting(row), { category: 'interface', tab: 'terminal' });
+  assert.ok(!tabIds(buildSettingsLayout(input({ rows: [...ROWS, row] })), 'plugins').includes('@timon/terminal-web'));
+});
+
+test('the Misc and Infra strays with a home leave Diagnostics', () => {
+  assert.deepEqual(placeSetting({ key: 'TIMON_CHROME_PATH', group: 'Misc', advanced: true }), { category: 'network', tab: 'browser' });
+  assert.deepEqual(placeSetting({ key: 'DISPATCHER_INTERVAL_MS', group: 'Infra', advanced: true }), { category: 'missions', tab: 'execution' });
+  assert.deepEqual(placeSetting({ key: 'TIMON_LOG_MAX_MB', group: 'Infra', advanced: false }), { category: 'system', tab: 'diagnostics' });
+});
+
 test('an unknown group falls back to System › Diagnostics instead of vanishing', () => {
   assert.deepEqual(
     placeSetting({ key: 'X', group: 'Tomorrow', advanced: false }),

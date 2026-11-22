@@ -1097,6 +1097,13 @@
     "mascotsStyle2dHint": "平面绘制，对较旧的电脑更轻量。",
     "mascotsStyleNoWebgl": "此浏览器无法进行 3D 绘制（WebGL2 已关闭或不可用）：吉祥物将以 2D 显示。",
     "mascotsStyleShared": "适用于所有吉祥物。之后可以在“{settingsPath}”中更改。",
+    "dockIconTitle": "程序坞图标",
+    "dockIconHint": "Timon 运行时 macOS 在程序坞中显示的图标。访达和启动前的程序坞仍显示经典图标。",
+    "dockIconClassic": "经典",
+    "dockIconClassicHint": "Timon 的配色。",
+    "dockIconDark": "深色",
+    "dockIconDarkHint": "黑白。",
+    "dockIconError": "无法更改程序坞图标。",
     "variants": {
       "coral": {
         "name": "珊瑚色",
@@ -1624,7 +1631,7 @@
         "installation": "安装",
         "updates": "更新",
         "backup": "备份与回收站",
-        "diagnostics": "诊断",
+        "diagnostics": "日志与保留",
         "desktop": "桌面应用",
         "privacy": "隐私"
       },
@@ -1688,7 +1695,7 @@
         "installation": "版本 关于 安装 服务 守护进程 任务 launchagent systemd 路径 数据 文件夹 日志 端口 导出 导入 备份 更新",
         "updates": "更新 升级 新版本 检查 下载 安装程序 发行说明 自动 update",
         "backup": "备份 归档 每晚 恢复 保留 保留期 天数 回收站 已删除 智能体 找回 撤销 彻底删除",
-        "diagnostics": "日志 调试 杂项 基础设施 故障排查",
+        "diagnostics": "诊断 日志 调试 杂项 基础设施 故障排查",
         "desktop": "卸载 移除 删除 electron 应用",
         "privacy": "隐私 遥测 分析 用量 统计 匿名 跟踪 退出"
       },

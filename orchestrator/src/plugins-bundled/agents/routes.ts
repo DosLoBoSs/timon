@@ -58,6 +58,7 @@ import {
 import { AGENT_ICON_URL_PREFIX, isServedIconUrl, readAgentIcon } from '../../uploads.js';
 import { registerSkillAttachmentRoutes } from './skill-attachment-routes.js';
 import { checkReasoningEffort } from './reasoning-effort.js';
+import { agentConfigWarnings } from '../../auto-mode-preallow.js';
 import { migrateTrashedAgentSkills } from '../../agent-skills-migration.js';
 import { journalMissionSkillRead } from '../../skill-reads.js';
 import { listSkillFiles, readSkillFile, SkillFileError } from '../../skill-files.js';
@@ -1000,7 +1001,8 @@ export function registerRoutes(app: express.IRouter): void {
       // for partial updates; the POST path used to skip it which is why
       // changing the model mid-chat didn't take effect.
       const killed = killRunningForAgent(body.name);
-      res.json({ ...agent, _killed: killed });
+      const warnings = agentConfigWarnings(body.name, agent);
+      res.json({ ...agent, _killed: killed, ...(warnings.length ? { warnings } : {}) });
     } catch (err) {
       res.status(400).json(apiError('agent_save_refused', (err as Error).message, { detail: (err as Error).message }));
     }
@@ -1255,7 +1257,8 @@ export function registerRoutes(app: express.IRouter): void {
       const needsRespawn = respawnTriggers.some((k) => k in patch);
       let killed = 0;
       if (needsRespawn) killed = killRunningForAgent(req.params.name);
-      res.json({ ...next, _killed: killed });
+      const warnings = agentConfigWarnings(req.params.name, next);
+      res.json({ ...next, _killed: killed, ...(warnings.length ? { warnings } : {}) });
     } catch (err) {
       const msg = (err as Error).message;
       if (msg.startsWith('agent not found')) {

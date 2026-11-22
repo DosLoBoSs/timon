@@ -8,7 +8,7 @@
   "files": ["lib", "README.md", "SIGNATURE"],
   "timon": {
     "id": "example-publish-dialog",
-    "apiVersion": 18,
+    "apiVersion": 19,
     "kind": "behavior",
     "label": "Plain Publish on GitHub window",
     "description": "Replaces the Publish on GitHub window with a plain one: the text to post, editable, where it goes and as which account, then Publish or Do not publish.",

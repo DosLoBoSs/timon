@@ -193,7 +193,7 @@ declare module '@timon/ui' {
     /** Files attached to the idea; absent from a host older than client API 15. */
     attachment_count?: number;
     /** Where the branch of the idea's jobs stands, read-only; `null` when no
-     *  job has an integration branch. Absent from a host older than client API 18. */
+     *  job has an integration branch. Absent from a host older than client API 19. */
     landing?: TodoLanding | null;
   };
   /** State of one job's branch: `branch` (embargo, no pull request expected),
@@ -204,7 +204,7 @@ declare module '@timon/ui' {
   /** An idea's landing: its job furthest from landing on top, every job in `jobs`, oldest first. */
   export type TodoLanding = TodoLandingJob & { jobs: TodoLandingJob[] };
   /**
-   * The idea a `kanban.todo.badge` or `kanban.todo.landing` (client API 18)
+   * The idea a `kanban.todo.badge` or `kanban.todo.landing` (client API 19)
    * occupant is rendered for; `null` outside those slots. Read it from here,
    * never from props: the entry is registered once and rendered on every line.
    */
@@ -1604,7 +1604,7 @@ declare module '@timon/ui' {
     titleId: string;
   } | null;
 
-  /** An idea a Kanban job carries, as its links list it. Client API 18. */
+  /** An idea a Kanban job carries, as its links list it. Client API 19. */
   export type KanbanJobTodo = {
     id: number;
     /** At most 300 characters. */
@@ -1614,12 +1614,12 @@ declare module '@timon/ui' {
     project: string | null;
   };
   /**
-   * An issue a Kanban job touches (client API 18). `closes`: the pull
+   * An issue a Kanban job touches (client API 19). `closes`: the pull
    * request's description says it closes it, which is its author's claim;
    * otherwise one of the job's ideas is linked to it (`todo_id`).
    */
   export type KanbanJobIssue = { repo: string; number: number; url: string | null; todo_id: number | null; closes: boolean };
-  /** The way back from a job to its ideas, their issues and the mission piloting its series. Client API 18. */
+  /** The way back from a job to its ideas, their issues and the mission piloting its series. Client API 19. */
   export type KanbanJobLinks = {
     todos: KanbanJobTodo[];
     issues: KanbanJobIssue[];
@@ -1628,7 +1628,7 @@ declare module '@timon/ui' {
     pilot_mission_id: string | null;
   };
   /**
-   * A Kanban job (client API 18): the integration branch of a series, and the
+   * A Kanban job (client API 19): the integration branch of a series, and the
    * pull request it lands through. `state` is `branch` (embargoed, no pull
    * request expected), `open`, `merged` or `closed` (without a merge);
    * `pr_number` stays `null` while the pull request is not created. `checks`
@@ -1702,7 +1702,7 @@ declare module '@timon/ui' {
     needs: KanbanJobRepairKind[];
   };
   /**
-   * The job a `kanban.job.dialog` occupant paints (client API 18), opened from
+   * The job a `kanban.job.dialog` occupant paints (client API 19), opened from
    * the Jobs widget, the Pull requests widget and the landing badge of a TO DO
    * idea. The occupant draws the whole window (`Dialog` from this module) and
    * calls `close()` when it is dismissed. `openTodo` and `openMission` close
@@ -1726,11 +1726,11 @@ declare module '@timon/ui' {
     openTodo: ((id: number) => void) | null;
     openMission(missionId: string): void;
   };
-  /** The job a `kanban.job.dialog` occupant paints, and its gestures (client API 18); `null` outside the slot. */
+  /** The job a `kanban.job.dialog` occupant paints, and its gestures (client API 19); `null` outside the slot. */
   export function useJobDialog(): JobDialogValue | null;
 
   /**
-   * A text proposed for publication on a project's forge (client API 18): a
+   * A text proposed for publication on a project's forge (client API 19): a
    * comment on an issue or a pull request, waiting for a person. `draft` and
    * `failed` wait; `publishing`, `published` and `discarded` are done.
    * `trigger` says what prepared it: `person`, `landing` (a job landed),
@@ -1768,7 +1768,7 @@ declare module '@timon/ui' {
   };
   /**
    * The "Publish on GitHub" window a `forge.publish.dialog` occupant paints
-   * (client API 18): the exact text that would leave, where it goes and as
+   * (client API 19): the exact text that would leave, where it goes and as
    * which account. Opened from a job's or a pull request's row, a pull
    * request's menu (`proposal` is then `null` until the new comment is saved
    * or published) and a proposal's notification card. The occupant draws the
@@ -1812,7 +1812,7 @@ declare module '@timon/ui' {
     discard(): Promise<boolean>;
     close(): void;
   };
-  /** The text a `forge.publish.dialog` occupant paints, and the host's gestures (client API 18); `null` outside the slot. */
+  /** The text a `forge.publish.dialog` occupant paints, and the host's gestures (client API 19); `null` outside the slot. */
   export function usePublishDialog(): PublishDialogValue | null;
 
   /**

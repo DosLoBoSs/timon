@@ -682,11 +682,11 @@
       },
       "useJobDialog": {
         "type": "export",
-        "since": 18
+        "since": 19
       },
       "usePublishDialog": {
         "type": "export",
-        "since": 18
+        "since": 19
       },
       "useGitStackProject": {
         "type": "export",

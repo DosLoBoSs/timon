@@ -15,6 +15,8 @@ const { TEAM_STATE_KEY } = await import('./onboarding-team-state.js');
 const { applySetup } = await import('./setup.js');
 const { resumeExistingInstance } = await import('./onboarding-resume.js');
 const { capabilitiesPayload } = await import('./kernel/capabilities.js');
+const { ownLinuxUnit, packagedUnit } = await import('./host/packaged-service.js');
+const { TIMON_HOME } = await import('./paths.js');
 
 /** Steps 3 and 4 answered — what the end of a first setup looks like. */
 function stepsAnswered() {
@@ -129,13 +131,21 @@ test('the restart never jumps over a step the wizard still owes', () => {
 });
 
 test('each supervisor has a command a human can paste, and portable mode has none', () => {
-  assert.equal(restartCommand('systemd-user'), 'systemctl --user restart timon-orchestrator');
+  assert.equal(restartCommand('systemd-user', false, {}), 'systemctl --user restart timon-orchestrator');
   assert.match(restartCommand('launchd', false)!, /^launchctl kickstart -k gui\/\$\(id -u\)\/com\.timon\.daemon$/);
   assert.equal(restartCommand('launchd', true), 'sudo launchctl kickstart -k system/com.timon.daemon');
   assert.match(restartCommand('windows')!, /^schtasks \/End \/TN TimonOrchestrator && schtasks \/Run \/TN TimonOrchestrator$/);
   // No supervisor: nothing will restart on its own, and the step says so rather
   // than offering a command that does not exist.
   assert.equal(restartCommand(null), null);
+});
+
+test('a packaged Linux service is restarted under its own unit, not the source checkout\'s', () => {
+  const unit = packagedUnit(TIMON_HOME);
+  assert.match(unit, /^timon-desktop-[0-9a-f]{24}$/);
+  assert.equal(restartCommand('systemd-user', false, { TIMON_DESKTOP_SERVICE: '1' }), `systemctl --user restart ${unit}`);
+  assert.equal(ownLinuxUnit('timon-orchestrator', TIMON_HOME, { TIMON_DESKTOP_SERVICE: '1' }), unit);
+  assert.equal(ownLinuxUnit('timon-orchestrator', TIMON_HOME, {}), 'timon-orchestrator');
 });
 
 test('the daemon only offers to restart itself where it actually can', () => {

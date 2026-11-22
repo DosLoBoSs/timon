@@ -91,13 +91,27 @@ function macService(home: string, mac: MacServiceSeams): { kind: 'daemon' | 'age
  *  `windowsServiceFiles` (orchestrator `host/service-install.ts`): the two
  *  packages build separately, `packaging.test.ts` holds them together. */
 export const WINDOWS_TASK = 'TimonOrchestrator';
-export const WINDOWS_SERVICE_REVISION = '5';
+export const WINDOWS_SERVICE_REVISION = '6';
 export function windowsServiceRevisionFile(home: string): string { return join(home, 'run', 'service-revision'); }
 export function windowsLegacyLauncher(home: string): string { return join(home, 'run', 'timon-service.vbs'); }
 export function windowsRepairDeclinedFile(home: string): string { return join(home, 'run', 'service-repair-declined'); }
-export function windowsLauncher(home: string): string { return join(home, 'run', 'timon-service.cmd'); }
+/** The launcher configuration the task names (revision 6 and later). */
+export function windowsLauncher(home: string): string { return join(home, 'run', 'timon-service.json'); }
+/** The batch launcher of revisions 2 to 5, until the upgrade retires it. */
+export function windowsBatchLauncher(home: string): string { return join(home, 'run', 'timon-service.cmd'); }
 /** Copy of `windowsServiceFiles().refused`: Windows registered the task but never started it for this account. */
 export function windowsServiceRefusedFile(home: string): string { return join(home, 'run', 'service-refused'); }
+/** Copy of `serviceHeldOutFile` (orchestrator `home-lock.ts`): a service daemon refused the home writes it. */
+export function serviceHeldOutFile(home: string): string { return join(home, 'run', 'service-held-out'); }
+/** The installed service was refused the home at or after `since`: it runs, and waits for the home. */
+export function serviceHeldOutSince(home: string, since: number): boolean {
+  const text = readOrNull(serviceHeldOutFile(home));
+  if (text === null) return false;
+  try {
+    const at = (JSON.parse(text) as { at?: unknown } | null)?.at;
+    return typeof at === 'number' && Number.isFinite(at) && at >= since;
+  } catch { return false; }
+}
 /** Copy of `WINDOWS_TASK_NEVER_RAN` (`LastTaskResult` of a task that was registered and never started). */
 export const WINDOWS_TASK_NEVER_RAN = 0x41303;
 
@@ -108,9 +122,17 @@ export const WINDOWS_TASK_NEVER_RAN = 0x41303;
  * and migrated the data without a copy. Unreadable or absent: nothing to say.
  */
 export function windowsLauncherUnmarked(home: string): boolean {
-  let launcher: string;
-  try { launcher = readFileSync(windowsLauncher(home), 'utf8'); } catch { return false; }
-  return !/^set "TIMON_DESKTOP_SERVICE=1"\r?$/m.test(launcher);
+  // The configuration first, as the host adapter reads it (`windowsLauncherMarked`).
+  const config = readOrNull(windowsLauncher(home));
+  if (config !== null) {
+    try {
+      const env = (JSON.parse(config) as { env?: Record<string, unknown> } | null)?.env;
+      return env?.TIMON_DESKTOP_SERVICE !== '1';
+    } catch { return false; }
+  }
+  const batch = readOrNull(windowsBatchLauncher(home));
+  if (batch === null) return false;
+  return !/^set "TIMON_DESKTOP_SERVICE=1"\r?$/m.test(batch);
 }
 
 /**
@@ -156,7 +178,7 @@ export async function repairSessionWitness(
   exec: WitnessExec = (args) => promisify(execFile)('powershell', args, { timeout: 30_000, windowsHide: true }),
   platform: NodeJS.Platform = process.platform,
 ): Promise<'ok' | 'resealed' | 'failed' | 'skipped'> {
-  if (platform !== 'win32' || !existsSync(windowsLauncher(home))) return 'skipped';
+  if (platform !== 'win32' || (!existsSync(windowsLauncher(home)) && !existsSync(windowsBatchLauncher(home)))) return 'skipped';
   const file = windowsSessionWitnessFile(home);
   try {
     await exec(readSessionWitnessArgs(file));
@@ -476,6 +498,39 @@ export async function startDesktopService(
   await run(['--user', 'start', packagedUnit(home)]).catch(() => undefined);
   return 'started';
 }
+
+const TASK_STATE_QUERY = ['-NoProfile', '-NonInteractive', '-Command',
+  `'State=' + (Get-ScheduledTask -TaskName '${WINDOWS_TASK}' -TaskPath '\\' -ErrorAction Stop).State`];
+
+/**
+ * Is the task's launcher still running? Read past the handover's first wait:
+ * a daemon still booting under its launcher is worth waiting for, a launcher
+ * that ended will not answer. Unreadable is "no": the wait ends as before.
+ */
+export async function windowsTaskRunning(query: ServiceExec = execPowershell): Promise<boolean> {
+  try {
+    const { stdout } = await query(TASK_STATE_QUERY);
+    return /^State=Running\s*$/m.test(stdout);
+  } catch { return false; }
+}
+
+/**
+ * Ends the task's launcher and the daemon under it, the way the host
+ * adapter's `stopLauncherStep` does, without elevation: the launcher runs as
+ * this account. Only when the handover gives up on a launcher still running,
+ * so the embedded daemon that takes over is not refused the home.
+ */
+export async function endWindowsLauncher(home: string, run: ServiceExec = execPowershell): Promise<void> {
+  // Both forms, as `launcherProcessFilter` matches them: the batch of revision 5 and what names the configuration.
+  const needles = [windowsLauncher(home), windowsBatchLauncher(home)]
+    .map((file) => `$_.CommandLine.ToLowerInvariant().Contains('${file.toLowerCase().replace(/'/g, "''")}')`);
+  const programs = WINDOWS_LAUNCHER_PROGRAMS.map((name) => `'${name}'`).join(', ');
+  await run(['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
+    `Get-CimInstance Win32_Process | Where-Object { @(${programs}) -contains $_.Name -and $_.ProcessId -ne $PID -and $_.CommandLine -and (${needles.join(' -or ')}) } | ForEach-Object { & taskkill.exe /F /T /PID $_.ProcessId | Out-Null }; exit 0`]);
+}
+
+/** Copy of `LAUNCHER_PROGRAMS` (orchestrator `host/service-install.ts`): what may run a launcher of the task. */
+export const WINDOWS_LAUNCHER_PROGRAMS = ['cmd.exe', 'node.exe', 'timon.exe', 'powershell.exe', 'electron.exe'];
 
 /**
  * Restarts the installed service so it reads the configuration the first-run
