@@ -6,13 +6,18 @@
  * They used to exist only in the home of the machine Timon was built on: a
  * fresh install spawned its tasks without the closing protocol and without the
  * `allowed_tools` these skills grant, with nothing but a `[skills] … not found`
- * warning in the daemon log. Shipped here, seeded like every bundled skill, and
- * never overwritten once present (no `version`): an operator who edited one
- * keeps their copy.
+ * warning in the daemon log. Shipped here, seeded like every bundled skill.
+ *
+ * `timon-task` and `timon-worktree` carry a `version`: their wording is the
+ * protocol of every task, so a change to it (the pull-request landing) must
+ * reach the installs that already seeded them. Raise it with every change to
+ * their text. A copy edited at the current version is kept; an older one is
+ * replaced (`seedBundledSkills`).
  */
 export const PRODUCT_SKILLS: ReadonlyArray<{ id: string; content: string; version?: number }> = [
   {
     id: 'timon-task',
+    version: 1,
     content: `---
 allowed_tools: ["Bash(timon:*)"]
 ---
@@ -426,6 +431,7 @@ timon task update <TASK_ID> --priority 5 --title "New title"
   },
   {
     id: 'timon-worktree',
+    version: 1,
     content: `---
 allowed_tools: ["Bash(timon:*)", "Bash(git:*)"]
 ---

@@ -40,16 +40,38 @@ test('they carry the tool grants a task relies on, and nothing broader', () => {
   assert.deepEqual(readSkillsAllowedTools(['timon-delegate']), []);
 });
 
-test('a copy already on disk is never replaced, edited or not', () => {
+test('an install seeded with the unversioned text gets the current one; an edit at the current version stays', async () => {
+  const { writeFileSync } = await import('node:fs');
+  const { skillFile } = await import('./paths.js');
+  const { PRODUCT_SKILLS } = await import('./skills-product.js');
+  for (const id of ['timon-task', 'timon-worktree']) {
+    const shipped = PRODUCT_SKILLS.find((s) => s.id === id)!;
+    assert.ok(shipped.version !== undefined && shipped.version >= 1, `${id} is versioned`);
+    freshSeed();
+    const current = getSkill(id)!.content;
+    assert.ok(current.includes(`timon-bundled-version: ${shipped.version}`), `${id} carries its version mark`);
+
+    // What a build before the pull-request landing seeded: the same skill, no mark.
+    const older = shipped.content.replace(/### (Projects that land through a pull request|`type=merge` with `landing: pr`)[\s\S]*$/, '');
+    assert.notEqual(older, shipped.content);
+    writeFileSync(skillFile(id), older, 'utf8');
+    seedBundledSkills();
+    assert.equal(getSkill(id)!.content, current, `${id}: the older copy is replaced`);
+    assert.match(getSkill(id)!.content, /--landing pr|landing: pr/);
+
+    const edited = `${current}\n<!-- edited by the operator -->\n`;
+    upsertSkill(id, edited);
+    seedBundledSkills();
+    assert.equal(getSkill(id)!.content, edited, `${id}: an edit at the current version stays`);
+  }
+});
+
+test('the unversioned product skill is never replaced, edited or not', () => {
   freshSeed();
-  const edited = `${getSkill('timon-task')!.content}\n<!-- edited by the operator -->\n`;
-  upsertSkill('timon-task', edited);
-  // An older hand-made copy, front matter included, as installs had before the skill shipped.
-  const older = '---\nallowed_tools: ["Bash(timon:*)", "Bash(git:*)"]\n---\n\n# skill: timon-worktree\n\nmy own version\n';
-  upsertSkill('timon-worktree', older);
+  const edited = `${getSkill('timon-delegate')!.content}\n<!-- edited by the operator -->\n`;
+  upsertSkill('timon-delegate', edited);
   seedBundledSkills();
-  assert.equal(getSkill('timon-task')!.content, edited);
-  assert.equal(getSkill('timon-worktree')!.content, older);
+  assert.equal(getSkill('timon-delegate')!.content, edited);
 });
 
 test('the shipped text holds nothing of the machine it was written on', () => {

@@ -624,7 +624,7 @@ done
   },
   {
     id: 'create-timon-plugin',
-    version: 6,
+    version: 7,
     content: `---
 name: create-timon-plugin
 description: Create, install and check a Timon plugin (widget, page, theme, behaviour…) in the right order, shippable to anyone from the first line (self-contained, English, neutral defaults, no author data), pointing at the public plugin docs instead of repeating them. Also use it to audit, package or upgrade an existing plugin without losing user data.
