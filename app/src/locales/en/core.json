@@ -2811,6 +2811,7 @@
       "unsupported": "No supported service manager on this machine",
       "absent": "Not installed",
       "stale": "Installed, out of date",
+      "console": "A console window opens: repair the background task",
       "stopped": "Installed, not running",
       "running": "Installed and running"
     },

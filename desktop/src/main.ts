@@ -22,7 +22,9 @@ import {
   controlDesktopService, daemonLogHint, forgetMissingWindowsService, forgetServiceStopped, hasDesktopService, repairSessionWitness,
   restartDesktopService, serviceStoppedByUser, startDesktopService, startStoppedServiceFailureMessage, stopServiceCopy, stopServiceFailureMessage,
   endWindowsLauncher, serviceHeldOutSince, windowsRestartSeams, windowsServiceRefusedFile, windowsTaskRunning, windowsTaskState,
+  readWindowsTaskShape, disableWindowsTask,
 } from './service.js';
+import { HELD_OUT_WINDOW_MS, windowsStartBranch, type WindowsRewrite, type WindowsStartVerdict } from './windows-branch.js';
 import { app, BrowserWindow, Menu, Tray, WebContentsView, clipboard, dialog, shell, nativeImage, ipcMain, screen, session, systemPreferences, webContents } from 'electron';
 import { parseWindowSchemeReport, recordMachineScheme, WINDOW_BACKGROUND, WINDOW_SCHEME_CHANNEL, windowScheme, type Scheme } from './appearance.js';
 import { DOCK_ICON_CHANNELS, dockIconPath, parseDockIconRequest, readDockIcon, writeDockIcon, type DockIcon } from './dock-icon.js';
@@ -65,7 +67,9 @@ import { keepDictionariesLocal } from './spellcheck.js';
 import {
   clearServiceRefused, declineServiceRepair, markServiceRefusedNotice, recordServiceRefused, serviceRefusedMessage, serviceRefusedNoticeDue,
   serviceRepairFailureMessage, serviceRepairPrompt, serviceRepairVerdict,
-  serviceUpgradeNeeded, upgradeFailureMessage, upgradeNeedsFallback, upgradePackagedService,
+  serviceUpgradeNeeded, upgradeFailureMessage, upgradeNeedsFallback, upgradePackagedService, windowsSessionIntent,
+  declineWindowsRewrite, windowsRewriteDeclined, windowsTaskRepair,
+  sessionFallbackMessage,
 } from './upgrade.js';
 import {
   selectDirectory, selectExecutable, selectPluginSource, SELECT_DIRECTORY_CHANNEL, SELECT_EXECUTABLE_CHANNEL, SELECT_PLUGIN_SOURCE_CHANNEL,
@@ -1599,6 +1603,7 @@ async function main(): Promise<void> {
   // Asked before anything reads the revision file: a task deleted outside
   // Timon leaves it behind, and everything below would believe in a service.
   const winService = app.isPackaged && process.platform === 'win32';
+  const launchedAt = Date.now();
   const taskState = winService ? await windowsTaskState() : null;
   if (taskState) {
     console.log(`[desktop] boot task: schtasks ${taskState.schtasks ? 'sees' : 'does not see'} it, ScheduledTasks says ${taskState.lookup}`);
@@ -1606,6 +1611,12 @@ async function main(): Promise<void> {
       const forgotten = forgetMissingWindowsService(cfg.home);
       if (forgotten.length > 0) console.log(`[desktop] the boot task was deleted outside Timon: forgot ${forgotten.join(', ')}`);
     }
+  }
+  // What the task runs: one changed by hand to the interactive token opens a
+  // console at every start (#116), and is rewritten below.
+  const taskShape = taskState?.exists ? await readWindowsTaskShape() : null;
+  if (taskShape) {
+    console.log(`[desktop] boot task: logon ${taskShape.logon}, program ${taskShape.program ?? 'none'}, triggers ${taskShape.triggers.join('+') || 'none'}${taskShape.consoleVisible ? ', opens a console' : ''}`);
   }
   const serviceInstalled = hasDesktopService(cfg.home);
   // The session witness the launcher waits on can go stale (password reset):
@@ -1620,8 +1631,29 @@ async function main(): Promise<void> {
   const upgradeNeeded = serviceUpgradeNeeded(cfg.home, app.getVersion(), {
     packaged: app.isPackaged,
     serviceInstalled,
+    ...(taskState ? { taskExists: taskState.exists, taskShape } : {}),
   });
   console.log(`[desktop] service installed: ${serviceInstalled}; upgrade needed: ${upgradeNeeded}`);
+  // Not a revision upgrade but the repair of a task changed outside Timon (#116):
+  // declining its elevation must not fail an approved update, the task in place serves.
+  const windowsRepair = winService && windowsTaskRepair(cfg.home, { ...(taskState ? { taskExists: taskState.exists } : {}), taskShape });
+  const repairDeclined = windowsRepair && windowsRewriteDeclined(cfg.home, app.getVersion());
+  if (repairDeclined) {
+    console.log(`[desktop] the repair of the boot task was declined for ${app.getVersion()}: not asked again before the next version (Settings > Installation or timon service install ask now)`);
+  }
+  // Windows: one daemon per home, decided from the task itself (`windows-branch.ts`).
+  let rewrite: WindowsRewrite = upgradeNeeded ? 'pending' : repairDeclined ? 'declined' : 'none';
+  const decideWindows = (start?: 'started' | 'needs-repair' | 'never-ran'): WindowsStartVerdict => {
+    const verdict = windowsStartBranch({
+      taskExists: taskState?.exists ?? false,
+      revisionRecorded: hasDesktopService(cfg.home),
+      rewrite,
+      heldOut: serviceHeldOutSince(cfg.home, launchedAt - HELD_OUT_WINDOW_MS),
+      ...(start ? { start } : {}),
+    });
+    console.log(`[desktop] branch: ${verdict.branch} (${verdict.reason})`);
+    return verdict;
+  };
   const repair = serviceRepairVerdict(cfg.home, app.getVersion(), {
     packaged: app.isPackaged,
     // A portable install chose no supervisor: nothing was lost there.
@@ -1638,19 +1670,34 @@ async function main(): Promise<void> {
   }
   if (upgradeNeeded) {
     if (updateApproved) updateStage = 'service';
+    if (winService) decideWindows();
     try {
-      await upgradePackagedService(cfg, {
+      const upgraded = await upgradePackagedService(cfg, {
         execPath: shellDaemonRuntime().execPath,
         runtimeEnv: shellDaemonRuntime().env,
         resourcesPath: process.resourcesPath,
         version: app.getVersion(),
+        sessionIntent: windowsSessionIntent(taskShape),
       });
+      rewrite = 'done';
+      // Said once: the rewrite that kept the task for the session only happens once.
+      if (upgraded.sessionFallback) {
+        console.log('[desktop] the rewritten boot task runs only while the user is signed in (session fallback)');
+        void dialog.showMessageBox({ type: 'info', title: DISPLAY_NAME, ...sessionFallbackMessage(uiLocale()) });
+      }
     } catch (error) {
       // Boot on whatever the runner left rather than refusing to start, and
       // say so instead of silently serving the old UI.
       console.error('[desktop] service upgrade failed', error);
-      if (updateApproved && !upgradeNeedsFallback(error)) throw error;
+      if (updateApproved && !upgradeNeedsFallback(error) && !windowsRepair) throw error;
       serviceUnusable = upgradeNeedsFallback(error);
+      rewrite = serviceUnusable ? 'unusable' : 'failed';
+      // Asked at every launch, a declined repair would be as tiresome as the
+      // console it fixes: this version stops asking, the task in place serves.
+      if (windowsRepair && !serviceUnusable) {
+        declineWindowsRewrite(cfg.home, app.getVersion());
+        console.log('[desktop] the repair of the boot task was declined or failed: not asked again before the next version');
+      }
       const unsaved = snapshotFailure(cfg.home, app.getVersion());
       void reportProblem({
         type: 'warning',
@@ -1677,6 +1724,8 @@ async function main(): Promise<void> {
 
   if (!updateWindow) buildTray(cfg, uiUrl);
 
+  // Asked only when no daemon answers: an answering one is used whatever the task says.
+  const windowsVerdict = winService && !daemonUp && !health.ok && !serviceUnusable ? decideWindows() : null;
   if (daemonUp) {
     console.log('[desktop] branch: daemon already up');
     // Started again by other means (`timon service start`, a boot): the marker
@@ -1691,7 +1740,7 @@ async function main(): Promise<void> {
   } else if (serviceUnusable) {
     console.log('[desktop] branch: service unusable, embedded daemon');
     await startEmbeddedDaemon(cfg, uiUrl);
-  } else if (hasDesktopService(cfg.home)) {
+  } else if (windowsVerdict ? windowsVerdict.branch === 'service' : hasDesktopService(cfg.home)) {
     showStartingWindow(uiUrl);
     if (serviceStoppedByUser(cfg.home)) {
       // "Quit and stop the background service" disabled the Windows task
@@ -1711,12 +1760,21 @@ async function main(): Promise<void> {
     const service = await startDesktopService(cfg.home, cfg.packagedDefaults, undefined, process.platform, undefined, {},
       existsSync(windowsServiceRefusedFile(cfg.home)) ? { budgetMs: 2_000 } : {});
     console.log(`[desktop] branch: start the service → ${service}`);
+    const after = windowsVerdict ? decideWindows(service) : null;
     if (service === 'needs-repair') {
       await startEmbeddedDaemon(cfg, uiUrl);
     } else if (service === 'never-ran') {
       // Windows will not run the task for this account (TODO #342): waiting
       // on it would end in "does not answer" with no log to read.
       recordServiceRefused(cfg.home);
+      // Switched off before the embedded daemon takes the home: its trigger
+      // would knock on it every five minutes (#116). Tried once, never insisted on.
+      if (after?.branch === 'disable-task') {
+        await disableWindowsTask().then(
+          () => console.log('[desktop] the boot task was disabled'),
+          (error: unknown) => console.warn(`[desktop] the boot task could not be disabled: ${(error as Error).message}`),
+        );
+      }
       await startEmbeddedDaemon(cfg, uiUrl);
       if (serviceRefusedNoticeDue(cfg.home, app.getVersion())) {
         markServiceRefusedNotice(cfg.home, app.getVersion());
@@ -1735,7 +1793,7 @@ async function main(): Promise<void> {
       else offerServiceInstall(cfg);
     }
   } else if (cfg.daemon.supervisor === 'none' || app.isPackaged) {
-    console.log('[desktop] branch: embedded daemon');
+    console.log(`[desktop] branch: embedded daemon${windowsVerdict ? ` (${windowsVerdict.reason})` : ''}`);
     await startEmbeddedDaemon(cfg, uiUrl);
   } else {
     console.log('[desktop] branch: no service, no embedded daemon');

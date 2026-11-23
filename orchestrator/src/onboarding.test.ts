@@ -135,6 +135,14 @@ test('the installed service returns ok, without a fallback command', () => {
   assert.equal(res.ok, true);
   assert.equal(res.command, null);
   assert.deepEqual(res.lines, ['service installed']);
+  assert.equal(res.sessionFallback, undefined);
+});
+
+test('#116: a Windows service kept for the session only is said to the route that installed it', () => {
+  const res = runInstallService({} as never, () => ({ ok: true, lines: ['service installed', 'it stops at logout'], sessionFallback: true }));
+  assert.equal(res.ok, true);
+  assert.equal(res.sessionFallback, true);
+  assert.deepEqual(res.lines, ['service installed', 'it stops at logout']);
 });
 
 /**
