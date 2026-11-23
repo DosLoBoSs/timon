@@ -114,9 +114,10 @@ async function isAncestor(repo: string, ancestor: string, descendant: string): P
   return (await git(repo, ['merge-base', '--is-ancestor', ancestor, descendant])).code === 0;
 }
 
-/** The tasks of the job still waiting or running: on its branch, or in its
- *  series and not given a base yet. */
-export function jobTasksUnderWay(row: IntegrationRow): TaskRow[] {
+type JobRef = Pick<IntegrationRow, 'branch' | 'project' | 'series_id'>;
+
+/** The tasks of the job: on its branch, or in its series and not given a base yet. */
+function jobTasks(row: JobRef): TaskRow[] {
   const found = new Map<string, TaskRow>();
   for (const t of dbApi.listTasksByBaseBranch(row.branch)) {
     if (!row.project || !t.project || t.project === row.project) found.set(t.id, t);
@@ -127,7 +128,54 @@ export function jobTasksUnderWay(row: IntegrationRow): TaskRow[] {
       if (sameProject && (!t.base_branch || t.base_branch === row.branch)) found.set(t.id, t);
     }
   }
-  return [...found.values()].filter((t) => UNDER_WAY.has(t.status));
+  return [...found.values()];
+}
+
+/** The tasks of the job still waiting or running. */
+export function jobTasksUnderWay(row: JobRef): TaskRow[] {
+  return jobTasks(row).filter((t) => UNDER_WAY.has(t.status));
+}
+
+/**
+ * What the Jobs widget needs to offer the landing gesture on a job's row:
+ * whether the planner kept the job on its branch, what still runs in it, and
+ * the last task merged into the branch.
+ */
+export type KeptState = {
+  /** The planner's choice for the end of the job; null when it chose nothing. */
+  finish: 'merge' | 'keep' | null;
+  /** The job waits on its branch for a person to land it. */
+  kept: boolean;
+  /** Tasks of a kept job still waiting or running: landing is refused meanwhile. */
+  under_way: number;
+  /** The latest task of a kept job merged into its branch. */
+  last_merge: { sha: string; at: number } | null;
+};
+
+function finishOf(seriesId: string | null): KeptState['finish'] {
+  const finish = seriesId ? dbApi.getSeriesPlanLanding(seriesId)?.finish : null;
+  return finish === 'merge' || finish === 'keep' ? finish : null;
+}
+
+/** Adds `KeptState` to each job; the tasks are read only for a kept one. */
+export function withKeptState<T extends JobRef & Pick<IntegrationRow, 'state'>>(views: readonly T[]): Array<T & KeptState> {
+  return views.map((view) => {
+    const finish = finishOf(view.series_id);
+    const kept = view.state === 'branch' && finish === 'keep';
+    if (!kept) return { ...view, finish, kept, under_way: 0, last_merge: null };
+    const tasks = jobTasks(view);
+    let last: TaskRow | null = null;
+    for (const t of tasks) {
+      if (t.status === 'DONE' && t.merged_commit_sha && (!last || t.updated_at > last.updated_at)) last = t;
+    }
+    return {
+      ...view,
+      finish,
+      kept,
+      under_way: tasks.filter((t) => UNDER_WAY.has(t.status)).length,
+      last_merge: last?.merged_commit_sha ? { sha: last.merged_commit_sha, at: last.updated_at } : null,
+    };
+  });
 }
 
 /** The working directory that has `branch` checked out, or null. */

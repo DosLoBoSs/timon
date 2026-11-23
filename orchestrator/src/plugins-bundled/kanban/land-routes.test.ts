@@ -346,3 +346,45 @@ test('a job of a project that merges locally is listed, and previewed against it
   assert.equal(preview.commit_count, 1);
   assert.equal(preview.conflict.state, 'clean');
 });
+
+test('a job the planner kept on its branch says so, with what still runs and its last merge', async () => {
+  const j = job({ detached: true });
+  const headers = { 'content-type': 'application/json', 'x-test-who': 'owner' };
+  type Kept = { kept: boolean; finish: string | null; under_way: number; last_merge: { sha: string; at: number } | null };
+  const read = async (): Promise<Kept> => (await (await fetch(`${base}/api/kanban/landings/${j.row.id}`, { headers })).json() as { landing: Kept }).landing;
+
+  // No choice recorded: not kept, the gesture is not offered.
+  const plain = await read();
+  assert.deepEqual([plain.kept, plain.finish, plain.under_way, plain.last_merge], [false, null, 0, null]);
+
+  dbApi.setSeriesPlanLanding(j.seriesId, {
+    project: j.project, repo: j.repo, branch: j.branch, branch_kind: 'new', mode: 'branch', base_ref: 'refs/heads/main', finish: 'keep',
+  });
+  const kept = await read();
+  assert.equal(kept.kept, true);
+  assert.equal(kept.finish, 'keep');
+  assert.equal(kept.under_way, 0);
+  assert.equal(kept.last_merge?.sha, sha(j.repo, j.branch));
+  assert.equal(typeof kept.last_merge?.at, 'number');
+
+  dbApi.createTask(randomUUID(), 'Another part', 'acme.coder', {
+    type: 'code', project: j.project, seriesId: j.seriesId, ownerUserId: 'owner-a',
+  });
+  assert.equal((await read()).under_way, 1);
+
+  // The list carries the same fields.
+  const list = await (await fetch(`${base}/api/kanban/landings?project=${j.project}`, { headers })).json() as { landings: Kept[] };
+  assert.equal(list.landings[0]?.kept, true);
+  assert.equal(list.landings[0]?.under_way, 1);
+});
+
+test('a job that merges at its end is not kept', async () => {
+  const j = job({ detached: true });
+  dbApi.setSeriesPlanLanding(j.seriesId, {
+    project: j.project, repo: j.repo, branch: j.branch, branch_kind: 'new', mode: 'branch', base_ref: 'refs/heads/main', finish: 'merge',
+  });
+  const headers = { 'x-test-who': 'owner' };
+  const view = (await (await fetch(`${base}/api/kanban/landings/${j.row.id}`, { headers })).json() as { landing: { kept: boolean; finish: string } }).landing;
+  assert.equal(view.kept, false);
+  assert.equal(view.finish, 'merge');
+});
