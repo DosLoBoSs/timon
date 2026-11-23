@@ -58,6 +58,8 @@ import { StackProjectPicker, useStackProject } from './git-stack-project';
 import { proposeAskContributor, proposeBranchUpdate } from './forge-branch-api';
 import { ConflictDialog } from './conflict-dialog';
 import { useLandingChanges, useLandingFallbackPoll, type LandingChange } from './landing-events';
+import { landsLocally, LocalLandingEmpty, useProjectIntegration } from './local-landing';
+import { onIntegrationChanged } from './project-integration-api';
 
 /** How often a running review is asked for its verdict. */
 const RUNNING_POLL_MS = 15_000;
@@ -156,6 +158,9 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
     [slug],
   ), slug);
   useLandingFallbackPoll(() => { if (frontNow.current) void reload(true); });
+  // Turned to pull requests from the shortcut below: the list exists from now on.
+  useEffect(() => (slug ? onIntegrationChanged(slug, () => { void reload(); }) : undefined), [slug, reload]);
+  const integration = useProjectIntegration(slug);
 
   const pulls = load.kind === 'ready' ? load.list.pulls : [];
   const running = anyReviewRunning(pulls);
@@ -247,6 +252,8 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
     >
       {!slug ? (
         <Empty text={t('pullRequests.chooseProject')} />
+      ) : landsLocally(integration) ? (
+        <LocalLandingEmpty project={slug} read={integration} />
       ) : load.kind === 'loading' || load.kind === 'idle' ? (
         <Empty text={t('pullRequests.loading')} />
       ) : load.kind === 'error' ? (
