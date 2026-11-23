@@ -78,12 +78,15 @@ export type SeriesPlanDefaults = Partial<
   Record<SeriesPlanRole, { model?: string; fallback?: string }>
 >;
 
-/** The job's integration branch, attached by the orchestrator when the
- *  agent's project lands through pull requests (`plan-landing.ts`). Absent
- *  for any other project: the form then has no branch field. */
+/** The job's branch, attached by the orchestrator for the project the job is
+ *  for (`plan-landing.ts`). Absent when the job has no project. A project
+ *  that merges locally (`mode: 'local'`) gets no branch field yet: this form
+ *  only knows the pull request's branch. */
 export type SeriesPlanLanding = {
   /** The project whose check route judges a typed name. */
   project: string;
+  /** `pr`: the project lands through pull requests; `local`: it merges locally. */
+  mode?: 'pr' | 'local';
   /** `feat/`: shown before the field, never typed. */
   prefix: string;
   /** The name the job would get today, already numbered (`-2`). */
@@ -93,6 +96,13 @@ export type SeriesPlanLanding = {
   locked: boolean;
   /** Why the agent's proposal cannot be used. */
   refusal?: string;
+  /** `new` unless the locked job started from a branch it did not cut. */
+  kind?: 'new' | 'existing';
+  /** Where the branch ends up: merged into `target`, or kept. */
+  finish?: 'merge' | 'keep';
+  target?: string;
+  /** The repository's branches a job may start from, newest first. */
+  branches?: Array<{ name: string; committed_at: number }>;
 };
 
 export type SeriesPlanFormPayload = {
@@ -955,7 +965,9 @@ export function SeriesPlanForm({
    *  the click, not only at the first changed menu. */
   const [groupCustom, setGroupCustom] = useState<Record<string, boolean>>(() => draft?.groupCustom ?? {});
   const [note, setNote] = useState(() => draft?.note ?? '');
-  const landing = form.landing;
+  // A project that merges locally keeps the form it had: without a branch, its
+  // job lands as before (the daemon reads no bare name there).
+  const landing = form.landing?.mode === 'local' ? undefined : form.landing;
   /** The branch topic, without the project's prefix. */
   const [topic, setTopic] = useState(() => (landing && !landing.locked && draft?.branch !== undefined ? draft.branch : landing ? branchTopic(landing) : ''));
   const [branchCheck, setBranchCheck] = useState<BranchCheck>(() => (landing ? initialBranchCheck(landing, topic) : { state: 'pending' }));

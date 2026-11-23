@@ -512,12 +512,19 @@ async function typeTopic(r: Awaited<ReturnType<typeof mount>>, value: string) {
 }
 
 test('a project without the pull request setting shows no branch field and sends no branch', async () => {
-  const r = await mount({ kind: 'series_plan', chantier: 'Job', volets: [{ title: 'A' }] });
-  try {
-    assert.equal(branchSection(), null);
-    await r.launch();
-    assert.equal('branch' in r.answers[0]!, false);
-  } finally { await r.unmount(); }
+  for (const form of [
+    { kind: 'series_plan' as const, chantier: 'Job', volets: [{ title: 'A' }] },
+    // The daemon describes the branch of a project that merges locally too:
+    // this form still has no field for it.
+    landed({ ...LANDING, mode: 'local', base_ref: 'main', target: 'main', kind: 'new', finish: 'merge', branches: [] }),
+  ]) {
+    const r = await mount(form);
+    try {
+      assert.equal(branchSection(), null);
+      await r.launch();
+      assert.equal('branch' in r.answers[0]!, false);
+    } finally { await r.unmount(); }
+  }
 });
 
 test('a pull request project folds the branch under Advanced, prefix shown, and sends the full name', async () => {
