@@ -4,6 +4,7 @@
  * the types, the reads, and the small decisions the island takes on them.
  */
 import { apiErrorMessage } from '@/lib/api-error';
+import { refusalText } from '@/lib/permission-refusal';
 
 export type LandingState = 'branch' | 'open' | 'merged' | 'closed';
 export type CheckStatus = 'pass' | 'fail' | 'pending' | 'skipped';
@@ -103,6 +104,14 @@ export type Landing = {
   links?: JobLinks;
   /** Absent from an older daemon. */
   repairs?: LandingRepairs;
+  /** What the planner chose for the job's end; absent from an older daemon. */
+  finish?: 'merge' | 'keep' | null;
+  /** The planner kept the job on its branch: it waits for a person to land it. */
+  kept?: boolean;
+  /** Tasks of a kept job still waiting or running: the daemon refuses to land it meanwhile. */
+  under_way?: number;
+  /** The latest task of a kept job merged into its branch. */
+  last_merge?: { sha: string; at: number } | null;
 };
 
 export type PrecheckName =
@@ -201,6 +210,58 @@ export async function requestLandingRepair(id: string, kind: RepairKind, fetchIm
   }
 }
 
+/** What a pull request's opening sends; a local merge sends nothing. */
+export type LandRequest = { title?: string; body?: string };
+
+/** The daemon's answer to a landing gesture (`orchestrator/src/integration-land.ts`). */
+export type LandOutcome =
+  | { ok: true; outcome: 'merged' | 'pull_request'; already: boolean; pr_url: string | null; landing: Landing | null }
+  | { ok: false; code: string | null; message: string; files: string[] };
+
+/**
+ * Lands a job kept on its branch: merged into its local target in a project
+ * that merges locally, its pull request opened in one that lands through pull
+ * requests (`title` required there). The daemon refuses a conflict (with its
+ * files), a target checked out with changes, a task still running, a caller
+ * without `projects:manage`.
+ */
+export async function landJob(id: string, request: LandRequest = {}, fetchImpl: typeof fetch = fetch): Promise<LandOutcome> {
+  try {
+    const res = await fetchImpl(`${BASE}/${encodeURIComponent(id)}/land`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(request),
+    });
+    const body: unknown = await res.json().catch(() => null);
+    const b = (body ?? {}) as { outcome?: unknown; already?: unknown; pr_url?: unknown; landing?: Landing; code?: unknown; files?: unknown };
+    if (res.ok) {
+      return {
+        ok: true,
+        outcome: b.outcome === 'pull_request' ? 'pull_request' : 'merged',
+        already: b.already === true,
+        pr_url: typeof b.pr_url === 'string' ? b.pr_url : null,
+        landing: b.landing ?? null,
+      };
+    }
+    return {
+      ok: false,
+      code: typeof b.code === 'string' ? b.code : null,
+      message: refusalText(body) ?? apiErrorMessage(body, { status: res.status }),
+      files: Array.isArray(b.files) ? b.files.filter((f): f is string => typeof f === 'string') : [],
+    };
+  } catch {
+    return { ok: false, code: null, message: apiErrorMessage(null), files: [] };
+  }
+}
+
+/** The job merges into a local target: no remote, no pull request. */
+export function landsInPlace(landing: Landing): boolean {
+  return landing.remote === '';
+}
+
+/** The ideas of the job still waiting for its landing. */
+export function waitingTodos(landing: Landing): number {
+  return (landing.links?.todos ?? []).filter((todo) => todo.status !== 'done').length;
+}
+
 export async function previewLanding(id: string, fetchImpl: typeof fetch = fetch): Promise<Answer<LandingPreview>> {
   try {
     const res = await fetchImpl(`${BASE}/${encodeURIComponent(id)}/preview`, {
@@ -241,11 +302,12 @@ export function patchBody(patch: string): string[] {
 /**
  * The groups of the jobs widget, in the order they show: what calls for a
  * gesture first, then what waits on the forge, then what is not pushed yet,
- * then what landed lately. Groups, not columns: a rail is 300 px wide.
+ * then what the planner kept on its branch until someone lands it, then
+ * what landed lately. Groups, not columns: a rail is 300 px wide.
  */
-export type LandingGroup = 'attention' | 'review' | 'progress' | 'landed';
+export type LandingGroup = 'attention' | 'review' | 'progress' | 'kept' | 'landed';
 
-export const LANDING_GROUPS: readonly LandingGroup[] = ['attention', 'review', 'progress', 'landed'];
+export const LANDING_GROUPS: readonly LandingGroup[] = ['attention', 'review', 'progress', 'kept', 'landed'];
 
 /** How long a landed job stays in its group, and a closed one in "attention". */
 export const LANDED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -259,7 +321,7 @@ export const LANDED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 export function landingGroup(landing: Landing, now: number): LandingGroup | null {
   const recent = now - landing.updated_at <= LANDED_WINDOW_MS;
   switch (landing.state) {
-    case 'branch': return 'progress';
+    case 'branch': return landing.kept ? 'kept' : 'progress';
     case 'merged': return recent ? 'landed' : null;
     case 'closed': return recent ? 'attention' : null;
     case 'open': {
@@ -308,10 +370,12 @@ export function repairsSpent(landing: Landing): boolean {
   return !!r && r.running === null && r.used >= r.max && repairsNeeded(landing).length > 0;
 }
 
-/** The row's main action: the repair the forge calls for when one may start,
- *  else the preview while the job has something to land, its pull request
- *  once it is merged or closed (the preview is empty then). */
-export function landingAction(landing: Landing): 'repair' | 'preview' | 'openPr' {
+/** The row's main action: the landing of a job kept on its branch, the
+ *  repair the forge calls for when one may start, else the preview while the
+ *  job has something to land, its pull request once it is merged or closed
+ *  (the preview is empty then). */
+export function landingAction(landing: Landing): 'land' | 'repair' | 'preview' | 'openPr' {
+  if (landing.kept && landing.state === 'branch') return 'land';
   if (mainRepair(landing)) return 'repair';
   return (landing.state === 'merged' || landing.state === 'closed') && landing.pr_url ? 'openPr' : 'preview';
 }

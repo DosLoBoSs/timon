@@ -1670,6 +1670,14 @@ declare module '@timon/ui' {
     links?: KanbanJobLinks;
     /** Absent from a daemon that does not compute them. Client API 19. */
     repairs?: KanbanJobRepairs;
+    /** What the planner chose for the job's end; absent from an older daemon. Client API 19. */
+    finish?: 'merge' | 'keep' | null;
+    /** The planner kept the job on its branch: it waits for a person to land it. Client API 19. */
+    kept?: boolean;
+    /** Tasks of a kept job still waiting or running: Timon refuses to land it meanwhile. Client API 19. */
+    under_way?: number;
+    /** The latest task of a kept job merged into its branch. Client API 19. */
+    last_merge?: { sha: string; at: number } | null;
   };
   /** What a repair of a Kanban job fixes (client API 19). */
   export type KanbanJobRepairKind = 'checks' | 'comments' | 'conflict';
@@ -1717,11 +1725,21 @@ declare module '@timon/ui' {
     /** The job, its `links` and `repairs` included. */
     landing: KanbanJob;
     /** The gesture under way, if any. Client API 19. */
-    busy: 'refresh' | KanbanJobRepairKind | null;
+    busy: 'refresh' | 'land' | KanbanJobRepairKind | null;
     /** Client API 19. */
     refresh(): Promise<void>;
     /** Client API 19. */
     repair(kind: KanbanJobRepairKind): Promise<boolean>;
+    /**
+     * Lands a job the planner kept on its branch, on a person's click only:
+     * merged into its local target, or its pull request opened (`title`
+     * required then). Timon asks for confirmation with `commits` (read again
+     * when absent), says how it went, and resolves `true` once it landed.
+     * `null` when the job is not kept. Client API 19.
+     */
+    land: ((request?: { title?: string; body?: string }, commits?: number | null) => Promise<boolean>) | null;
+    /** Why `land` cannot start now (a missing right, a task of the job still running), or null. Client API 19. */
+    landBlocked: string | null;
     close(): void;
     openTodo: ((id: number) => void) | null;
     openMission(missionId: string): void;

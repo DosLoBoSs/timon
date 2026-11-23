@@ -7,7 +7,8 @@
  * the occupant draws the window, so a plugin that takes the slot repaints the
  * dialog everywhere at once.
  *
- * The gestures (read the checks again, ask for a repair) belong to the host:
+ * The gestures (read the checks again, ask for a repair, land a job kept on
+ * its branch) belong to the host:
  * it keeps the job fresh in the window and hands it back to the screen that
  * opened it (`onChange`), so its row shows the same counter.
  *
@@ -25,7 +26,9 @@ import { t } from '@/lib/i18n';
 import { requestNavigation } from '@/lib/navigate-proposals';
 import { ProductJobDialog } from './landing-preview-dialog';
 import { JobDialogContext, type JobDialogValue } from './job-dialog-context';
-import { refreshLandingChecks, type Landing, type RepairKind } from './landing-api';
+import { useAccess } from '@/hooks/use-me';
+import { previewLanding, refreshLandingChecks, type Landing, type LandRequest, type RepairKind } from './landing-api';
+import { askLand, landBlocked } from './landing-land';
 import { askRepair } from './landing-repair';
 
 export function JobDialog({ landing, onClose, openTodo = null, onChange }: {
@@ -60,15 +63,35 @@ export function JobDialog({ landing, onClose, openTodo = null, onChange }: {
     return fresh !== null;
   }, [current, update]);
 
+  const manage = useAccess('projects:manage');
+  const land = useCallback(async (request: LandRequest = {}, commits: number | null = null) => {
+    setBusy('land');
+    try {
+      let count = commits;
+      if (count === null) {
+        const preview = await previewLanding(current.id);
+        count = preview.ok ? preview.value.commit_count : null;
+      }
+      const fresh = await askLand(current, count, request);
+      if (fresh) update(fresh);
+      return fresh !== null;
+    } finally {
+      setBusy(null);
+    }
+  }, [current, update]);
+  const kept = current.kept === true && current.state === 'branch';
+
   const value = useMemo<JobDialogValue>(() => ({
     landing: current,
     busy,
     refresh,
     repair,
+    land: kept ? land : null,
+    landBlocked: kept ? landBlocked(current, manage.denied) : null,
     close: onClose,
     openTodo: openTodo ? (id) => { onClose(); openTodo(id); } : null,
     openMission: (missionId) => { onClose(); requestNavigation(chatMissionHref(missionId)); },
-  }), [current, busy, refresh, repair, onClose, openTodo]);
+  }), [current, busy, refresh, repair, kept, land, manage.denied, onClose, openTodo]);
   const occupant = useSlotEntries(JOB_DIALOG_SLOT)[0];
   return (
     <JobDialogContext.Provider value={value}>
