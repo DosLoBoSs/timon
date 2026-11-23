@@ -81,9 +81,12 @@ type Self = { tabbed: boolean; selected: boolean };
 
 /**
  * `width`: what a ResizeObserver reports of every element it watches (none by
- * default). `page`: what the daemon answers for pull request #12.
+ * default). `page`: what the daemon answers for pull request #12, or how it
+ * answers when the answer is not a page.
  */
-async function mount(list: PullRequestItem[], self?: Self, keepRead = false, width?: number, page: object = PAGE) {
+type PageAnswer = object | (() => Promise<Response>);
+
+async function mount(list: PullRequestItem[], self?: Self, keepRead = false, width?: number, page: PageAnswer = PAGE) {
   const { JSDOM } = await import('jsdom');
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
   const saved = new Map<string, PropertyDescriptor | undefined>();
@@ -128,7 +131,9 @@ async function mount(list: PullRequestItem[], self?: Self, keepRead = false, wid
     }
     if (url.endsWith('/diff')) return Response.json({ diff: DETAIL_DIFF, truncated: false });
     if (url.startsWith('/api/ui/projects/acme/pull-requests/12/check-log?')) return Response.json({ log: { tail: 'Error: boom', truncated: false } });
-    if (/^\/api\/ui\/projects\/acme\/pull-requests\/12(\?|$)/.test(url)) return Response.json({ pull: page, cached: false });
+    if (/^\/api\/ui\/projects\/acme\/pull-requests\/12(\?|$)/.test(url)) {
+      return typeof page === 'function' ? (page as () => Promise<Response>)() : Response.json({ pull: page, cached: false });
+    }
     return Response.json({ error: 'not_found' }, { status: 404 });
   });
 
@@ -313,8 +318,8 @@ test('a click on a row opens its page in a window, at the mouse and at the keybo
     assert.match(text, /Add a dark theme/);
     assert.match(text, /wants to merge 1 commit into main from stranger:dark-theme/);
     assert.equal(d.querySelector('[data-pull-state]')?.getAttribute('data-pull-state'), 'open');
-    assert.equal(d.querySelector('[data-pull-decision]')?.textContent, 'Changes requested');
-    assert.ok(d.querySelector('[data-pull-branch="conflict"]'));
+    assert.equal(d.querySelector('[data-pull-status-card] [data-pull-box-decision]')?.textContent, 'Changes requested');
+    assert.equal(d.querySelector('[data-pull-status-card] [data-pull-box-merge]')?.getAttribute('data-pull-box-merge'), 'conflict');
 
     // Conversation: the description as markdown without raw HTML, the reviews and comments, the threads.
     const markdown = d.querySelector('[data-pull-body] [data-pull-markdown]')!;
@@ -548,5 +553,111 @@ test('the column lists only the fields a pull request has, and no block when it 
     await new Promise((r) => setTimeout(r, 30));
   } finally {
     await some.unmount();
+  }
+});
+
+test('while GitHub\'s page is read, the card is there with its gestures and says so', async () => {
+  let answer: (res: Response) => void = () => {};
+  const pending = new Promise<Response>((resolve) => { answer = resolve; });
+  const m = await mount([conflicted()], undefined, false, undefined, () => pending);
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const d = document.querySelector('[data-pull-dialog]');
+    assert.ok(d);
+    const card = d.querySelector('[data-pull-side-column] [data-pull-status-card="column"]');
+    assert.ok(card, 'the card does not wait for the page');
+    assert.match(card.querySelector('[data-pull-box-reading]')?.textContent ?? '', /Reading the pull request on GitHub/);
+    assert.ok(!card.querySelector('[data-pull-box-checks]'), 'no checks line before the page');
+    assert.equal(card.querySelector('[data-pull-action-primary]')?.getAttribute('data-pull-action'), 'resolveConflict');
+    assert.deepEqual(
+      Array.from(card.querySelectorAll('[data-pull-action]')).map((b) => b.getAttribute('data-pull-action')),
+      ['resolveConflict', 'askContributor', 'review'],
+    );
+    assert.ok(!d.querySelector('[data-pull-tab]'), 'no tabs before the page');
+
+    // The page arrives: the card says what it says, the same gestures under it.
+    await m.settle();
+    answer(Response.json({ pull: PAGE, cached: false }));
+    await m.settle();
+    const read = d.querySelector('[data-pull-status-card]');
+    assert.equal(read?.querySelector('[data-pull-box-checks]')?.getAttribute('data-pull-box-checks'), 'failed');
+    assert.ok(!read?.querySelector('[data-pull-box-reading]'));
+    assert.equal(read?.querySelector('[data-pull-action-primary]')?.getAttribute('data-pull-action'), 'resolveConflict');
+    assert.ok(d.querySelector('[data-pull-tab="conversation"]'));
+    await m.key(document.activeElement ?? document.body, 'Escape');
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    answer(Response.json({ pull: PAGE, cached: false }));
+    await m.unmount();
+  }
+});
+
+test('when GitHub\'s page cannot be read, the card keeps every gesture, says why and reads again on demand', async () => {
+  let fail = true;
+  const m = await mount([conflicted()], undefined, false, 480, async () => (
+    fail ? Response.json({ error: 'gh_failed' }, { status: 502 }) : Response.json({ pull: PAGE, cached: false })
+  ));
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const d = document.querySelector('[data-pull-dialog]');
+    assert.ok(d);
+    const card = d.querySelector('[data-pull-status-card="across"]');
+    assert.ok(card, 'a narrow window shows the card across, page or not');
+    const error = card.querySelector('[data-pull-box-error]');
+    assert.ok(error);
+    assert.notEqual((error.textContent ?? '').trim(), '');
+    assert.equal(card.querySelector('[data-pull-action-primary]')?.getAttribute('data-pull-action'), 'resolveConflict');
+    assert.equal(card.querySelectorAll('[data-pull-action]').length, 3);
+
+    // "…" keeps the rest, as with a page.
+    await m.key(d.querySelector('[data-pull-dialog-menu]'), 'Enter');
+    assert.ok(document.querySelector('[data-menu-comment]'));
+    assert.ok(!document.querySelector('[data-menu-resolve-conflict]'));
+    await m.key(document.activeElement ?? document.body, 'Escape');
+
+    // Read again: the page comes, the error goes.
+    fail = false;
+    await m.click(card.querySelector('[data-pull-retry]'));
+    assert.ok(!d.querySelector('[data-pull-box-error]'));
+    assert.equal(d.querySelector('[data-pull-status-card] [data-pull-box-merge]')?.getAttribute('data-pull-box-merge'), 'conflict');
+    await m.key(document.activeElement ?? document.body, 'Escape');
+    await m.key(document.activeElement ?? document.body, 'Escape');
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('the line under the title says what the pull request is; where it stands is said once, in the card', async () => {
+  const m = await mount([conflicted({
+    gestures: { update_branch: false, ask_contributor: true, resolve_conflict: false, locked: 'not_allowed' },
+    review: review({ verdict: 'changes_requested' }),
+  })]);
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const d = document.querySelector('[data-pull-dialog]');
+    assert.ok(d);
+    const header = d.querySelector('[data-pull-header]');
+    assert.ok(header);
+    assert.equal(header.querySelector('[data-pull-state]')?.textContent, 'Open');
+    assert.match(header.textContent ?? '', /stranger/);
+    assert.match(header.textContent ?? '', /wants to merge 1 commit into main from stranger:dark-theme/);
+    assert.match(header.textContent ?? '', /opened/);
+    assert.ok(!header.querySelector('[data-pull-locked], [data-pull-branch], [data-pull-decision], [data-pull-mergeable]'));
+    assert.doesNotMatch(header.textContent ?? '', /Changes not allowed|conflict|Changes requested|Timon:/i);
+
+    const card = d.querySelector('[data-pull-status-card]');
+    assert.ok(card);
+    assert.equal(card.querySelector('[data-pull-box-lock]')?.textContent, 'Changes not allowed');
+    assert.equal(card.querySelector('[data-pull-box-merge]')?.getAttribute('data-pull-box-merge'), 'conflict');
+    assert.equal(card.querySelector('[data-pull-box-decision]')?.textContent, 'Changes requested');
+    assert.equal(card.querySelector('[data-pull-box-verdict]')?.textContent, 'Timon: Changes requested');
+    await m.key(document.activeElement ?? document.body, 'Escape');
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    await m.unmount();
   }
 });
