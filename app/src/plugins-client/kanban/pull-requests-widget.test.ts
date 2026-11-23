@@ -375,6 +375,40 @@ test('a click on a row opens its page in a window, at the mouse and at the keybo
   }
 });
 
+test('beside the column, the tab bar is a row of its own: the card starts level with the first block of every tab', async () => {
+  const m = await mount([conflicted()]);
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const d = document.querySelector('[data-pull-dialog]');
+    assert.ok(d);
+    // jsdom lays nothing out: the rows the grid gives each part stand for the alignment.
+    const body = d.querySelector('[data-pull-body-layout="wide"]');
+    assert.ok(body, 'a window with no width read counts as wide');
+    assert.match(body.className, /grid-rows-\[auto_minmax\(0,1fr\)\]/);
+    const bar = d.querySelector('[role="tablist"]');
+    assert.ok(bar);
+    assert.match(bar.className, /\brow-start-1\b/);
+    assert.match(bar.parentElement?.className ?? '', /\bcontents\b/, 'Tabs lays out nothing: its bar and panels are cells of the grid');
+    for (const tab of ['conversation', 'commits', 'checks', 'files']) {
+      await m.pressTab(d.querySelector(`[data-pull-tab="${tab}"]`));
+      const panel = Array.from(d.querySelectorAll('[role="tabpanel"]')).find((p) => !p.hasAttribute('hidden'));
+      assert.ok(panel, tab);
+      assert.match(panel.className, /\brow-start-2\b/, `${tab}: under the bar`);
+    }
+    const column = d.querySelector('[data-pull-side-column]');
+    assert.ok(column);
+    assert.match(column.className, /\brow-start-2\b/, 'the column shares the row of the tab\'s content, not the bar\'s');
+    assert.ok(column.firstElementChild?.querySelector('[data-pull-status-card="column"]'), 'the card heads it');
+
+    await m.click(d.querySelector('[data-pull-close]'));
+    assert.ok(!document.querySelector('[data-pull-dialog]'), 'the header\'s close button closes the window');
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    await m.unmount();
+  }
+});
+
 const conflicted = (extra: Partial<PullRequestItem> = {}) => pull({
   mergeStateStatus: 'dirty', gestures: { update_branch: false, ask_contributor: true, resolve_conflict: true, locked: null }, ...extra,
 });
@@ -398,9 +432,11 @@ test('the window shows its main gestures in its column without opening "…": th
     assert.equal(d.querySelectorAll('[data-pull-action]').length, 3, 'each gesture shows once');
     assert.ok(!document.querySelector('[data-menu-comment]'), 'no menu was opened to see them');
 
-    // The header keeps its icon buttons only: the title has the width.
+    // The header keeps its icon buttons only: the title has the width. The
+    // window's own close button is the last of them, not a corner apart.
     const tools = Array.from(d.querySelectorAll('[data-pull-header-tools] button, [data-pull-header-tools] a'));
-    assert.deepEqual(tools.map((b) => b.getAttribute('aria-label')), ['Read again from GitHub', 'Open on GitHub', 'More actions']);
+    assert.deepEqual(tools.map((b) => b.getAttribute('aria-label')), ['Read again from GitHub', 'Open on GitHub', 'More actions', 'Close']);
+    assert.equal(d.querySelectorAll('button[aria-label="Close"]').length, 1, 'no second close button in the corner');
     for (const b of tools) assert.equal(b.textContent, '', `${b.getAttribute('aria-label')} has no visible label`);
     assert.equal(d.querySelector('[data-pull-title]')?.getAttribute('title'), 'Add a dark theme');
 
