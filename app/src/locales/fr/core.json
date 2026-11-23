@@ -1849,6 +1849,7 @@
     "perMissionOverride": "Override per-mission ; n'affecte pas la config de l'agent",
     "thinkingLevelIcon": "Niveau de raisonnement",
     "composerProject": "Projet {name}",
+    "projectSettings": "Réglages du projet…",
     "copyMarkdown": "Copier en Markdown",
     "reply": "Répondre",
     "replyToAgent": "En réponse à l'agent",

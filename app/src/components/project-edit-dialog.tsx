@@ -33,6 +33,7 @@ import { LogoField } from '@/components/logo-field';
 import { confirmAction } from '@/components/confirm-dialog/confirm-dialog-context';
 import { apiErrorMessage } from '@/lib/api-error';
 import { ProjectSettingsSlot } from '@/components/project-settings-slot';
+import { announceProjectsChanged } from '@/hooks/use-project-meta';
 
 type Project = {
   slug: string;
@@ -216,6 +217,7 @@ export function ProjectEditDialog({ slug: editingSlug, onSaved, onClose }: Proje
           : 'cwdWarnMissing';
         toast.warning(t(`projectsPage.${key}`, { path: w.path, code: w.code }));
       }
+      announceProjectsChanged();
       onSaved();
       onClose();
     } catch (e) {
@@ -252,6 +254,7 @@ export function ProjectEditDialog({ slug: editingSlug, onSaved, onClose }: Proje
         throw new Error(apiErrorMessage(j, { status: r.status }));
       }
       toast.success(t('projectsPage.deleted', { slug: editingSlug }));
+      announceProjectsChanged();
       onSaved();
       onClose();
     } catch (e) {
