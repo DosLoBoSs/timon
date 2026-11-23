@@ -20,6 +20,10 @@
  * behind another tab, for the count on its own), the page visible, and a
  * check still runs (about once a minute; the daemon answers its stored copy in
  * between). The landing poller keeps its own pace.
+ *
+ * The list follows the daemon's `integration_changed` (`landing-events.ts`):
+ * a job that moves is read again at once, a burst of changes in one read.
+ * A slow poll stays behind it.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -46,6 +50,7 @@ import { ProposalChip } from './proposal-chip';
 import { PublishDialog } from './publish-dialog';
 import { useForgeProposals } from './use-forge-proposals';
 import { StackProjectPicker, useStackProject } from './git-stack-project';
+import { inProject, useLandingChanges, useLandingFallbackPoll } from './landing-events';
 
 const BADGE = 'inline-flex h-5 shrink-0 items-center gap-1 rounded-md px-1.5 text-[10.5px] font-medium tabular-nums';
 
@@ -250,16 +255,36 @@ export function LandingWidget({ handle, className }: WidgetProps) {
     if (fresh) merge(fresh);
   }, [merge]);
 
-  const load = useCallback(async () => {
+  // Only the latest answer lands: a change announced during a slower read
+  // must not be overwritten by that read's older list.
+  const lastRead = useRef(0);
+  const readList = useCallback(async (): Promise<Landing[] | null> => {
+    const read = ++lastRead.current;
     const out = await listLandings(project);
-    if (!out.ok) { setError(out.message); return; }
+    if (read !== lastRead.current) return null;
+    if (!out.ok) { setError(out.message); return null; }
     setError(null);
     setLandings(out.value);
     current.current = out.value;
-    await refreshChecks(landingsToRefresh(out.value));
-  }, [project, refreshChecks]);
+    return out.value;
+  }, [project]);
+
+  const load = useCallback(async () => {
+    const list = await readList();
+    if (list) await refreshChecks(landingsToRefresh(list));
+  }, [readList, refreshChecks]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // A change the daemon announced: the list again, and the forge only for a
+  // pull request it has never read (just opened). The checks it announces
+  // are already in the list: asking for them again would only echo.
+  useLandingChanges(() => {
+    void readList().then((list) => {
+      if (list) void refreshChecks(list.filter((l) => l.state === 'open' && l.checks === null));
+    });
+  }, inProject(project), project);
+  useLandingFallbackPoll(() => { void load(); });
 
   // Only while a check runs, and the page is in front of someone.
   useEffect(() => {

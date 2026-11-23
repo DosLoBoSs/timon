@@ -14,6 +14,11 @@
  * A widget of the "Git" stack. The project comes from the chat rail when
  * there is one, else from a picker the jobs widget shares
  * (`git-stack-project.tsx`): it is chosen once for both.
+ *
+ * A job of the project that opens, merges or closes its pull request is
+ * announced by the daemon (`landing-events.ts`): the list is read again then,
+ * behind what it shows. A slow poll, in front only, catches the contributors'
+ * pull requests, which nothing announces.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -52,6 +57,7 @@ import { useForgeProposals } from './use-forge-proposals';
 import { StackProjectPicker, useStackProject } from './git-stack-project';
 import { proposeAskContributor, proposeBranchUpdate } from './forge-branch-api';
 import { ConflictDialog } from './conflict-dialog';
+import { useLandingChanges, useLandingFallbackPoll, type LandingChange } from './landing-events';
 
 /** How often a running review is asked for its verdict. */
 const RUNNING_POLL_MS = 15_000;
@@ -143,6 +149,13 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
     if (front && !wasFront.current) void reload(true);
     wasFront.current = front;
   }, [front, reload]);
+
+  // Its checks and its landing do not change the list of open pull requests.
+  useLandingChanges(() => { void reload(true); }, useCallback(
+    (change: LandingChange) => change.project === slug && change.changed.some((c) => c === 'state' || c === 'pull_request'),
+    [slug],
+  ), slug);
+  useLandingFallbackPoll(() => { if (frontNow.current) void reload(true); });
 
   const pulls = load.kind === 'ready' ? load.list.pulls : [];
   const running = anyReviewRunning(pulls);

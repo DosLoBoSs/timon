@@ -38,6 +38,7 @@ import {
 import type { WidgetProps } from '@/components/widget-host/widget-props';
 import type { ClientRealtime } from '@/lib/plugin-host/realtime';
 import { subscribeProjectTodoChanges } from '@/lib/project-todo-realtime';
+import { movesTodoLanding, useLandingChanges } from './landing-events';
 import { cn } from '@/lib/utils';
 import { NativeViewCover } from '@/lib/native-view-cover';
 
@@ -163,6 +164,10 @@ export function ProjectTodoTile({
     void load();
     return unsubscribe;
   }, [load, realtime]);
+  // An idea's landing badge moves with its jobs, which the notebook's own
+  // signal does not announce. Not narrowed to the project: an idea may be
+  // carried out by a job of another one.
+  useLandingChanges(() => { void load(); }, movesTodoLanding);
 
   const patch = async (id: number, fields: Partial<Pick<ProjectTodo, 'text' | 'status' | 'project' | 'notes'>>) => {
     await fetch(`/api/ui/project-todo/${id}`, {
