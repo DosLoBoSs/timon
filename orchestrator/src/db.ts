@@ -2427,8 +2427,9 @@ export function isTaskType(v: unknown): v is TaskType {
 export const PIPELINES = ['full', 'code-self', 'code-group'] as const;
 
 /** Accepted values for `tasks.landing` (null = an ordinary task). Only a
- *  `merge` task carries one. */
-export const TASK_LANDINGS = ['pr'] as const;
+ *  `merge` task carries one: `pr` opens the job's pull request, `local`
+ *  merges the job's branch into its local target (`local-landing.ts`). */
+export const TASK_LANDINGS = ['pr', 'local'] as const;
 
 export type TaskRow = {
   id: string;
@@ -3302,6 +3303,11 @@ const finishLandingRepairStmt = db.prepare(`
 `);
 const failLandingRepairAttemptStmt = db.prepare(
   `UPDATE landing_repairs SET attempts = attempts + 1, error = ?, updated_at = ? WHERE id = ? AND state = 'running'`,
+);
+// A job of a project that merges locally has no remote: its branch lands by
+// its `--landing local` task, never through a pull request.
+const listLocalIntegrationsToLandStmt = db.prepare(
+  `SELECT * FROM integrations WHERE state = 'branch' AND remote = '' ORDER BY repo ASC, created_at ASC`,
 );
 const listOpenIntegrationsStmt = db.prepare(
   `SELECT * FROM integrations WHERE state = 'open' ORDER BY repo ASC, created_at ASC`,
@@ -6061,6 +6067,10 @@ export const dbApi = {
   /** Integrations whose pull request is open: what the landing poller reads. */
   listOpenIntegrations(): IntegrationRow[] {
     return listOpenIntegrationsStmt.all() as IntegrationRow[];
+  },
+  /** Local integration branches (no remote) that have not landed yet. */
+  listLocalIntegrationsToLand(): IntegrationRow[] {
+    return listLocalIntegrationsToLandStmt.all() as IntegrationRow[];
   },
   /** The pull request was closed without a merge; false unless it was open. */
   markIntegrationClosed(id: string): boolean {

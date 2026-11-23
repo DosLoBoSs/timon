@@ -28,9 +28,10 @@ export function pipelineRefusal(pipeline: string | null | undefined): string | n
 }
 
 /**
- * `landing` names the task that opens a job's pull request: a `merge` task, the
- * only kind with a worktree of its own on the job's branch. Elsewhere it would
- * be read by nothing.
+ * `landing` names the task that ends a job on its branch: `pr` opens the
+ * pull request, `local` merges the branch into its local target. A `merge`
+ * task, the only kind with a worktree of its own on the job's branch.
+ * Elsewhere it would be read by nothing.
  */
 export function landingRefusal(landing: string | null | undefined, type: string | undefined): string | null {
   if (landing == null || landing === '') return null;

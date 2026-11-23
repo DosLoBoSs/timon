@@ -859,7 +859,7 @@ Tasks (Kanban backlog):
   timon task list [--status PENDING|IN_PROGRESS|DONE|BLOCKED]   (TODO = deprecated alias of PENDING)
   timon task get <id>
   timon task create --title TEXT --agent NAME [--type code|review|merge|research|doc|chore] [--project SLUG] [--description D] [--priority 1-5]
-                   [--base BRANCH] [--todo TODO_ID] [--plan-group NAME] [--landing pr]
+                   [--base BRANCH] [--todo TODO_ID] [--plan-group NAME] [--landing pr|local]
                    [--model SLUG] [--permission-mode default|acceptEdits|bypassPermissions]
                    [--fallback-backend NAME|none] [--fallback-model SLUG]
                    [--deps id1,id2] [--scheduled ISO8601]
@@ -2072,12 +2072,14 @@ async function cmdTaskCreate(argv) {
   const todo = takeFlag(argv, 'todo');
   // --landing pr: the final merge task of a job that lands through a pull
   // request; it opens the pull request instead of merging into the branch.
+  // --landing local: the final merge task of a job on a branch of its own in a
+  // project that merges locally; it merges that branch into the target.
   const landing = takeFlag(argv, 'landing');
 
   if (!title || !agent) {
     process.stderr.write('usage: timon task create --title TEXT --agent NAME [--description D] [--priority 1-5]\n' +
       '       [--type code|review|merge|research|doc|chore] [--project SLUG] [--base BRANCH]\n' +
-      '       [--pipeline full|code-self|code-group] [--group-id ID] [--plan-group NAME] [--todo ID] [--landing pr]\n' +
+      '       [--pipeline full|code-self|code-group] [--group-id ID] [--plan-group NAME] [--todo ID] [--landing pr|local]\n' +
       '       [--backend NAME] [--model SLUG] [--permission-mode default|acceptEdits|bypassPermissions]\n' +
       '       [--fallback-backend NAME|none] [--fallback-model SLUG]\n' +
       '       [--deps id1,id2] [--scheduled ISO] [--extra-skills s1,s2] [--extra-mcp m1,m2]\n' +
@@ -2089,8 +2091,8 @@ async function cmdTaskCreate(argv) {
     process.stderr.write(`timon task create: --pipeline must be 'full', 'code-self' or 'code-group' (got: ${pipeline})\n`);
     process.exit(64);
   }
-  if (landing && landing !== 'pr') {
-    process.stderr.write(`timon task create: --landing must be 'pr' (got: ${landing})\n`);
+  if (landing && landing !== 'pr' && landing !== 'local') {
+    process.stderr.write(`timon task create: --landing must be 'pr' or 'local' (got: ${landing})\n`);
     process.exit(64);
   }
   if (todo !== undefined && todo !== null && !/^[1-9]\d*$/.test(todo)) {

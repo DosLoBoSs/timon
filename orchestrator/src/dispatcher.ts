@@ -49,8 +49,8 @@ import { MissionFenceRefusedError, profileLimits } from './resources.js';
 import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal, pullRequestCloseRefusal } from './code-gate.js';
 import { GIT_MISSING_MESSAGE, GIT_MISSING_REASON, gitTaskRefusal } from './task-git.js';
 import {
-  ensureIntegrationBranch, integrationBranchName, integrationBranchRefusal, isIntegrationMode, usesIntegrationBranch,
-  type IntegrationMode,
+  ensureIntegrationBranch, integrationBranchName, integrationBranchRefusal, isIntegrationMode, localTargetOf,
+  usesIntegrationBranch, type IntegrationMode,
 } from './git-integration.js';
 import { integrationBaseRef, readProjectIntegration } from './project-integration.js';
 import { chainLanding } from './chain-landing.js';
@@ -448,6 +448,47 @@ export function pullRequestDirective(task: TaskRow, wt: WorktreeInfo, activeBran
 }
 
 /**
+ * The brief of the task that merges a job's branch into its local target
+ * (`landing = 'local'`, `local-landing.ts`). Like a `code-self` coder, it merges
+ * on a detached copy of the target in its own worktree (first parent = the
+ * target), then moves the target the way every merger does
+ * (`baseAdvanceInstructions`): by reference, or through the user's checkout
+ * when it stands on the target. Its DONE lands the whole job, so the daemon
+ * proves the sha with git before accepting it.
+ */
+export function localLandingDirective(task: TaskRow, wt: WorktreeInfo, activeBranch: string | null): string {
+  const branch = wt.base;
+  const target = localTargetOf(task.base_ref) ?? '<target>';
+  const repo = wt.sourceRepo;
+  const move = baseAdvanceInstructions(repo, target, 'HEAD', activeBranch);
+  return (
+    `\n\n## Your task: merge the job's branch into ${target}\n\n` +
+    `This \`merge\` task merges no task branch. The job's work is already in its ` +
+    `branch \`${branch}\`; you merge that branch into \`${target}\`, on this machine. ` +
+    `Never push, never force, never rewrite a commit.\n\n` +
+    `You have YOUR worktree: \`${wt.path}\` (branch \`${wt.branch}\`, on \`${branch}\`). ` +
+    `The main repo (\`${repo}\`) has ONE working directory shared by every agent: ` +
+    `run no command that writes there except the single move of step 3.\n\n` +
+    `1. **Merge**, in your worktree, on a detached copy of the target:\n\n` +
+    `\`\`\`bash\ngit checkout --detach ${target}\n` +
+    // The branch name is public-safe (`integrationBranchRefusal` refused ids).
+    `git merge --no-ff -m "merge: integrate ${branch} into ${target}" ${branch}\n\`\`\`\n\n` +
+    `   Resolve a conflict here (\`git commit --no-edit\` keeps the message), then run ` +
+    `the checks of the packages the job touched.\n\n` +
+    `2. **Check** that the merge carries the branch: ` +
+    `\`git merge-base --is-ancestor ${branch} HEAD\` must succeed.\n\n` +
+    `3. **Move \`${target}\`** to your merge. ${move}\n\n` +
+    `4. **Close** with the target's FULL sha. The daemon checks that it is in ` +
+    `\`${target}\` and carries \`${branch}\`, then lands the job: its TO DO ideas ` +
+    `close and its doc task is created.\n\n` +
+    `\`\`\`bash\ntimon task done <TASK_ID> --merged-sha "$(git -C ${repo} rev-parse ${target})" ` +
+    `--comment "${branch} merged into ${target}"\n\`\`\`\n\n` +
+    `Then \`git checkout ${wt.branch}\` to leave your worktree on its branch. A conflict you ` +
+    `cannot resolve cleanly → \`timon task block <TASK_ID> --reason "<the conflict>"\`.`
+  );
+}
+
+/**
  * What the agent needs to know about ITS worktree when it starts.
  *
  * Two things it can't guess: that its base was refreshed under its feet
@@ -510,6 +551,8 @@ export function worktreeDirective(
   }
   if (task.type === 'merge' && task.landing === 'pr') {
     parts.push(pullRequestDirective(task, wt, activeBranch ?? null));
+  } else if (task.type === 'merge' && task.landing === 'local') {
+    parts.push(localLandingDirective(task, wt, activeBranch ?? null));
   } else if (task.type === 'merge') {
     const finish = baseAdvanceInstructions(wt.sourceRepo, wt.base, wt.branch, activeBranch ?? null);
     parts.push(
@@ -1078,6 +1121,21 @@ export async function blockIfBaseUnavailable(task: TaskRow): Promise<boolean> {
     const detail =
       `this task opens the job's pull request, but the job does not land through one ` +
       `(integration mode "${task.integration_mode ?? 'local'}"); set the project to mode pr or delete the task`;
+    const reason =
+      `Integration branch ${base ?? 'none'} is unavailable: ${detail}. The task was not started, and the ` +
+      `branch is never cut from the local base instead of ${task.base_ref ?? 'none'}. Fix the remote or the ` +
+      `branch name, then retry the task.`;
+    blockTask(task, reason, daemonMessage('integration_branch_unavailable', {
+      branch: base ?? 'none', baseRef: task.base_ref ?? 'none', detail,
+    }));
+    return true;
+  }
+  // The task that merges a job's branch into its local target has nothing to
+  // merge in a job without a branch of its own, or one that lands remotely.
+  if (task.landing === 'local' && (task.integration_mode !== 'branch' || !localTargetOf(task.base_ref))) {
+    const detail =
+      `this task merges the job's branch into its local target, but the job has no branch of its own in a project ` +
+      `that merges locally (integration mode "${task.integration_mode ?? 'local'}"); plan the job on a branch, or delete the task`;
     const reason =
       `Integration branch ${base ?? 'none'} is unavailable: ${detail}. The task was not started, and the ` +
       `branch is never cut from the local base instead of ${task.base_ref ?? 'none'}. Fix the remote or the ` +

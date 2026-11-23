@@ -35,10 +35,12 @@ async function post(body: unknown): Promise<Response> {
   }
 }
 
-test('landingRefusal: only "pr", only on a merge task', () => {
+test('landingRefusal: "pr" or "local", only on a merge task', () => {
   assert.equal(landingRefusal(undefined, 'code'), null);
   assert.equal(landingRefusal(null, 'merge'), null);
   assert.equal(landingRefusal('pr', 'merge'), null);
+  assert.equal(landingRefusal('local', 'merge'), null);
+  assert.match(landingRefusal('local', 'code') ?? '', /only for a merge task/);
   assert.match(landingRefusal('pr', 'code') ?? '', /only for a merge task/);
   assert.match(landingRefusal('pr', undefined) ?? '', /only for a merge task/);
   assert.match(landingRefusal('push', 'merge') ?? '', /invalid landing "push"/);
@@ -49,6 +51,10 @@ test('a merge task created with landing pr keeps it; a task without it has none'
   assert.equal(marked.status, 201);
   const { task } = (await marked.json()) as { task: { id: string } };
   assert.equal(dbApi.getTask(task.id)?.landing, 'pr');
+
+  const local = await post({ title: 'Merge into main', agent_name: 'acme.merger', type: 'merge', landing: 'local' });
+  assert.equal(local.status, 201);
+  assert.equal(dbApi.getTask(((await local.json()) as { task: { id: string } }).task.id)?.landing, 'local');
 
   const plain = await post({ title: 'Merge', agent_name: 'acme.merger', type: 'merge' });
   assert.equal(plain.status, 201);

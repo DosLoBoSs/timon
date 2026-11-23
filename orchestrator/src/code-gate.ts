@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { getHost } from './host/index.js';
 import { loadConfig } from './agent-config.js';
 import { integrationOfTask } from './chain-landing.js';
+import { localTargetOf } from './git-integration.js';
 import { db, dbApi, isCodeOnlyPipeline, type TaskRow } from './db.js';
 
 /** Null distinguishes an unavailable inspection from an empty branch. */
@@ -378,6 +379,7 @@ export function effectiveMergeSha(task: TaskRow, sha: string | null | undefined,
  */
 export function mergeCloseRefusal(task: TaskRow, sha: string | null): string | null {
   if (task.type !== 'merge') return null;
+  if (task.landing === 'local') return localLandingCloseRefusal(task, sha);
   const sources = mergeSourceBranches(task);
   const verdict = evaluateMergeClose({
     repoPath: taskRepo(task),
@@ -403,6 +405,45 @@ export function mergeCloseRefusal(task: TaskRow, sha: string | null): string | n
     console.warn(`[merge-guard] task ${task.id}: merge not fully verified (${verdict.undecided.join('; ')})`);
   }
   return verdict.refusal;
+}
+
+/**
+ * Whether the task that merges a job's branch into its local target
+ * (`landing = 'local'`, `local-landing.ts`) may go DONE with `sha`. Its DONE
+ * lands the whole job (ideas closed, doc task created), so git must prove it,
+ * and nothing undecided passes: `sha` is in the target, and carries the
+ * branch's tip. The target is the chain's (`refs/heads/<target>`), else the
+ * integration row's.
+ */
+export function localLandingCloseRefusal(task: TaskRow, sha: string | null): string | null {
+  const branch = task.base_branch;
+  const target = localTargetOf(task.base_ref) ?? integrationOfTask(task)?.target ?? null;
+  const guard = 'Landing guard: this task merges the job\'s branch into its target, and its close lands the whole job';
+  if (!branch || !target) return `${guard}, but the job has no branch or no target to check. Mark the task failed with the reason.`;
+  const repo = taskRepo(task);
+  const how = `Merge ${branch} into ${target} as your brief says, then close with the full sha of \`git rev-parse ${target}\`.`;
+  if (!sha) return `${guard}: close it with the sha of the merge (\`--merged-sha\`). ${how}`;
+  if (!repo || !existsSync(repo)) return `${guard}, and the repository cannot be read to check it. Retry once it is back.`;
+  try {
+    const git = gitIn(repo);
+    const commit = resolveCommit(git, sha);
+    const tip = resolveCommit(git, `refs/heads/${target}`);
+    const head = resolveCommit(git, `refs/heads/${branch}`);
+    if (!commit) return `${guard}: commit ${sha} does not exist in this repository. ${how}`;
+    if (!tip || !head) return `${guard}: ${tip ? branch : target} is not a branch of this repository. Mark the task failed with the reason.`;
+    const inTarget = isAncestor(git, commit, tip);
+    if (inTarget !== true) {
+      return `${guard}: commit ${sha} is ${inTarget === false ? 'not' : 'not provably'} in ${target}. ${how}`;
+    }
+    const carries = isAncestor(git, head, commit);
+    if (carries !== true) {
+      return `${guard}: commit ${sha} does not ${carries === false ? '' : 'provably '}contain ${branch} (head ${head.slice(0, 12)}): ` +
+        `it is not the merge of the job's branch. ${how}`;
+    }
+    return null;
+  } catch {
+    return `${guard}, and git could not check it. Retry the close.`;
+  }
 }
 
 /**
