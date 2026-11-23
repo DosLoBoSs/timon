@@ -57,6 +57,16 @@ timon task create --type merge --landing pr --agent my-app.merger --base feat/ad
 
 Jobs already under way keep the mode they started with: changing the setting, or going back to the local merge with `timon project set-integration my-app --reset`, applies to the next jobs.
 
+### A job run sequentially
+
+When you pick a sequential mode in the planner (**in this mission**, or **in a new mission**), the job has no task to cut its branch, so the agent asks Timon for it first:
+
+```bash
+timon pr branch feat/add-csv-export
+```
+
+Agents use the `pr_branch` tool, which does the same. Timon checks the name, creates the branch from the remote's target branch as it does for a Kanban job (refused, never cut from your local `main`, when the remote cannot be reached), fixes its name for the job, and answers with a working folder of the agent's own on that branch. The agent codes and commits only in that folder, never in your checkout, and moves the branch forward after each commit. When the work is done, it creates the same final task, **Pull request — <job title>**, which opens the pull request; the rest of the circuit is the same as for a Kanban job. Running the command again for the same job gives back the same branch and folder.
+
 ## Open the pull request
 
 When the job's work is merged into its integration branch, the agent (or you) asks Timon to open the pull request:

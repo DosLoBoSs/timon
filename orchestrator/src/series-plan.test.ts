@@ -154,8 +154,21 @@ test('commands, pull request: every task on the job branch, then the task that o
   assert.match(grouped[2]!, /^timon task create --type merge --landing pr --group-id <GROUP> --base feat\/big-feature --deps <ID of the grouped merge>/);
   assert.ok(grouped.every((c) => c.includes('--base feat/big-feature')));
 
-  // A sequential mode creates no task, pull request or not.
-  assert.deepEqual(seriesPlanCommands({ mode: 'sequential-here', roles: {} }, [{ title: 'a' }], landing), []);
+  // A sequential job: the branch first, then only the pull request task, with no deps.
+  for (const mode of ['sequential-here', 'sequential-new-mission'] as const) {
+    assert.deepEqual(seriesPlanCommands({ mode, roles: {} }, [{ title: 'a' }], landing), [
+      'timon pr branch feat/big-feature',
+      "timon task create --type merge --landing pr --base feat/big-feature --title 'Pull request — Big feature' "
+      + "--description '<what the pull request carries>'",
+    ], mode);
+  }
+  // The model choices still come before it.
+  const withRoles = seriesPlanCommands(
+    { mode: 'sequential-new-mission', roles: { mission: { fallbackBackend: 'codex' } } }, [], landing,
+  );
+  assert.deepEqual(withRoles.map((c) => c.split(' ').slice(0, 3).join(' ')), [
+    'timon series fallback', 'timon pr branch', 'timon task create',
+  ]);
 });
 
 test('a landing for another project than the agent\'s names it on every task', () => {
@@ -163,12 +176,14 @@ test('a landing for another project than the agent\'s names it on every task', (
   const grouped = seriesPlanCommands({ mode: 'kanban-code-group', roles: {} }, [{ title: 'a' }], landing);
   assert.equal(grouped.length, 3);
   assert.ok(grouped.every((c) => c.includes(' --base feat/big-feature --project acme ')));
+  const seq = seriesPlanCommands({ mode: 'sequential-here', roles: {} }, [], landing);
+  assert.deepEqual(seq.map((c) => c.includes('--project acme')), [false, true], 'the daemon reads the project from the series');
   const same = seriesPlanCommands({ mode: 'kanban-full', roles: {} }, [{ title: 'a' }], { ...landing, taskProject: null });
   assert.ok(same.every((c) => !c.includes('--project')));
 });
 
 test('non-regression: without a landing the commands are byte for byte the previous ones', () => {
-  for (const mode of ['kanban-full', 'kanban-code-self', 'kanban-code-group'] as const) {
+  for (const mode of SERIES_PLAN_MODES) {
     const before = seriesPlanCommands({ mode, roles: {} }, [{ title: 'a' }]);
     assert.deepEqual(seriesPlanCommands({ mode, roles: {} }, [{ title: 'a' }], null), before);
     assert.ok(before.every((c) => !c.includes('--base') && !c.includes('--landing')), mode);

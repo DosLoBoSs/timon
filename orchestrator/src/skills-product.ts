@@ -325,7 +325,14 @@ merge into the target branch (\`main\`) on this machine:
   account, the remote, the commits and the public tree, pushes the branch and
   opens it. A person merges it on the forge; Timon notices it afterwards,
   closes the job's TO DO ideas, and the job's pilot gets one message when the
-  pull request is merged, or closed without a merge.
+  pull request is merged, or closed without a merge;
+- a job the planner runs **sequentially** (coded in a mission, no task) gets
+  the same branch through \`timon pr branch <branch>\` (MCP \`pr_branch\`):
+  the daemon cuts it and returns a worktree detached on it. The pilot codes
+  and commits only there, moves the branch by reference after each commit
+  (\`git push . HEAD:refs/heads/<branch>\` from the worktree), then creates the
+  same \`--landing pr\` task, with no deps and with \`--todo <id>\` when the job
+  carries a TO DO idea, and removes the worktree.
 
 Never \`git push\`, never \`gh\`, never a merge into the target yourself. A
 task based on the target itself is refused at dispatch.

@@ -121,6 +121,24 @@ export const tools = [
       required: ['id', 'title'],
     },
   },
+  {
+    name: 'pr_branch',
+    title: 'Prepare a sequential job\'s branch',
+    description:
+      'For a job coded in a mission (`kanban_plan` modes sequential-here / sequential-new-mission) whose project lands ' +
+      'through pull requests (CLI `timon pr branch`): the daemon cuts the job\'s integration branch from the remote\'s ' +
+      'target (never from the local one, never checked out), records it for the series, and returns a worktree of your ' +
+      'own, detached on its tip. Code and commit only there, then move the branch by reference. Run the command ' +
+      '`kanban_plan` gave, with its branch name. Needs kanban:write.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        branch: { type: 'string', description: 'The integration branch the plan named (`feat/<topic>`).' },
+        series_id: { type: 'string', description: 'Series id, or the id of the mission piloting it; defaults to THIS mission (`current`).' },
+      },
+      required: ['branch'],
+    },
+  },
   { name: 'pipeline_list', title: 'List pipelines', description: 'Lists the multi-agent pipeline templates (CLI `timon pipeline list`).', inputSchema: { type: 'object', properties: {} } },
   {
     name: 'pipeline_get',
@@ -252,6 +270,9 @@ export const handlers = {
       if (!/ → 404 .*\[pr_target_not_found\]/.test(String(err?.message))) throw err;
       return await call('POST', `/api/series/${enc(args.id)}/pull-request`, payload);
     }
+  },
+  async pr_branch(args, { call }) {
+    return await call('POST', `/api/series/${enc(args.series_id ?? 'current')}/integration-branch`, { branch: args.branch });
   },
   async worktree_dispose(args, { call }) {
     const r = await call('DELETE', `/api/tasks/${enc(args.task_id)}/worktree${args.force ? '?force=1' : ''}`);

@@ -317,6 +317,26 @@ test('pr open: the series is asked only when no task has the id, never after ano
   }, refused);
 });
 
+test('pr branch: the CLI takes the route of the MCP tool, THIS series by default', async () => {
+  await withDaemon(async (base, seen) => {
+    const posted = () => seen.filter((x) => x.method === 'POST' && x.url.endsWith('/integration-branch'));
+    await session(base, [{ method: 'tools/call', params: { name: 'pr_branch', arguments: { branch: 'feat/x' } } }], true);
+    const viaMcp = posted();
+    assert.deepEqual(viaMcp.map((x) => [x.url, x.body]), [['/api/series/current/integration-branch', { branch: 'feat/x' }]]);
+    seen.length = 0;
+    await cli(base, ['pr', 'branch', 'feat/x']);
+    assert.deepEqual(posted().map((x) => [x.url, x.body]), viaMcp.map((x) => [x.url, x.body]));
+    seen.length = 0;
+    await cli(base, ['pr', 'branch', 'feat/x', '--series', 's1']);
+    assert.deepEqual(posted().map((x) => x.url), ['/api/series/s1/integration-branch']);
+    seen.length = 0;
+    // No branch, or two: a usage error, never a request.
+    assert.equal((await cli(base, ['pr', 'branch'])).code, 64);
+    assert.equal((await cli(base, ['pr', 'branch', 'a', 'b'])).code, 64);
+    assert.equal(seen.length, 0);
+  });
+});
+
 test('project create/update and workspace list: the MCP tools and the CLI take the same routes, with the same body', async () => {
   await withDaemon(async (base, seen) => {
     const flags = ['--name', 'Acme', '--cwd', '/srv/acme', '--workspace', 'Design Studio', '--speech', 'pitch'];

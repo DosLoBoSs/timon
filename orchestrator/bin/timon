@@ -909,6 +909,9 @@ Pull requests (projects whose jobs land through one, see set-integration):
                                              checks the job's integration branch (account, remote URL,
                                              identity, messages, ignored files, public tree), pushes it
                                              without force and opens its pull request; sec/ is refused
+  timon pr branch <branch> [--series ID]       sequential job: cuts its integration branch from the remote's
+                                             target and gives the pilot a worktree on it (default: THIS
+                                             mission's series)
 
 Projects (agent roles per project):
   timon project list                           lists configured projects
@@ -2596,12 +2599,26 @@ async function cmdPrOpen(argv) {
   process.stdout.write(JSON.stringify(j, null, 2) + '\n');
 }
 
+/** The integration branch of a sequential job, and the pilot's worktree on it. */
+async function cmdPrBranch(argv) {
+  const series = takeFlag(argv, 'series');
+  const branch = argv[0];
+  if (!branch || argv.length > 1) {
+    process.stderr.write('usage: timon pr branch <branch> [--series ID]\n');
+    process.exit(64);
+  }
+  const j = await http('POST', `/api/series/${encodeURIComponent(series || 'current')}/integration-branch`, { branch });
+  process.stdout.write(JSON.stringify(j, null, 2) + '\n');
+}
+
 async function cmdPr(argv) {
   const [sub, ...rest] = argv;
   switch (sub) {
     case 'open': return cmdPrOpen(rest);
+    case 'branch': return cmdPrBranch(rest);
     default:
       process.stderr.write('usage: timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]\n');
+      process.stderr.write('usage: timon pr branch <branch> [--series ID]\n');
       process.exit(64);
   }
 }

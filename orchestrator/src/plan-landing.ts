@@ -9,8 +9,10 @@
  * job, named after the job's title or the name the agent proposed (and the
  * person answering the planner may change): the plan's commands give it to
  * every task (`--base`, and `--project` when the planning agent is not in that
- * project) and end with the task that opens the pull request. Any other
- * project, or none, gets null: the plan stays what it was.
+ * project) and end with the task that opens the pull request. A sequential job
+ * has its pilot ask the daemon for the branch (`series-integration.ts`) and
+ * code in a worktree on it. Any other project, or none, gets null: the plan
+ * stays what it was.
  */
 import { loadConfig } from './agent-config.js';
 import { registeredProjects } from './browser-project.js';
@@ -132,6 +134,9 @@ function seriesBranch(seriesId: string | null | undefined, slug: string, repo: s
 export type PlanLandingOptions = {
   /** The name the agent (`kanban_plan`) or the form proposed. */
   branch?: string | null;
+  /** The job is coded in a mission (`sequential-*` modes): no task but the
+   *  last one, and the pilot asks the daemon for the branch itself. */
+  sequential?: boolean;
   /** The mission that opens the planner: the series of the job's tasks, and
    *  the first place the job's project is read from. */
   seriesId?: string | null;
@@ -219,6 +224,20 @@ export function planLanding(agentName: string, chantier: string, opts: PlanLandi
   // never reaches: they name it.
   const taskProject = slug !== target.agentSlug ? slug : null;
   const carried = taskProject ? `Every command carries \`--project ${slug}\`: keep it. ` : '';
+  const note = opts.sequential
+    ? `Project ${slug} lands through a pull request into ${baseRef}. ${named}This job is coded in a mission, not by ` +
+      `Kanban tasks. Its first command (\`timon pr branch\`) has the daemon cut the integration branch \`${branch}\` ` +
+      `from ${baseRef} and answers with \`worktree\`, a folder of your own detached on that branch: code and commit ` +
+      `only there (in sequential-new-mission, give that folder to the mission you spawn), never in the shared ` +
+      `checkout, never on ${setting.target}, and nothing is merged into ${setting.target} locally. After each commit, ` +
+      `move the branch by reference from the worktree: \`git push . HEAD:refs/heads/${branch}\`. Once the work is ` +
+      `committed, run the last command (add \`--todo <id>\` when the job carries a TO DO idea${taskProject ? `, keep \`--project ${slug}\`` : ''}): ` +
+      `it creates the task that opens the pull request (\`--landing pr\`). Then remove the worktree ` +
+      `(\`git worktree remove <worktree>\`); a person merges the pull request on the forge.`
+    : `Project ${slug} lands through a pull request into ${baseRef}. ${named}${carried}Every task of this job starts ` +
+      `from the integration branch \`${branch}\`, which the daemon cuts from ${baseRef}: never from ` +
+      `${setting.target}, and nothing is merged into ${setting.target} locally. The last command creates the ` +
+      `task that opens the pull request (\`--landing pr\`); a person merges it on the forge.`;
   return {
     branch,
     chantier,
@@ -228,10 +247,6 @@ export function planLanding(agentName: string, chantier: string, opts: PlanLandi
     locked: held !== null,
     ...(taskProject ? { taskProject } : {}),
     ...(refusal ? { refusal } : {}),
-    note:
-      `Project ${slug} lands through a pull request into ${baseRef}. ${named}${carried}Every task of this job starts ` +
-      `from the integration branch \`${branch}\`, which the daemon cuts from ${baseRef}: never from ` +
-      `${setting.target}, and nothing is merged into ${setting.target} locally. The last command creates the ` +
-      `task that opens the pull request (\`--landing pr\`); a person merges it on the forge.`,
+    note,
   };
 }

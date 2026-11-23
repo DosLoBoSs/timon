@@ -535,14 +535,15 @@ test('a pull request project folds the branch under Advanced, prefix shown, and 
   } finally { await r.unmount(); }
 });
 
-test('a sequential mode hides the branch field', async () => {
+test('a sequential mode keeps the branch field: the job lands through the same pull request', async () => {
   const r = await mount(landed(LANDING));
   try {
     const sequential = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')).find((b) => b.title === 'Sequential — in this mission')!;
     await r.click(sequential);
-    assert.equal(branchSection(), null);
+    assert.ok(branchSection());
     await r.launch();
-    assert.equal('branch' in r.answers[0]!, false);
+    assert.equal(r.answers[0]!.mode, 'sequential-here');
+    assert.equal(r.answers[0]!.branch, 'feat/branch-job');
   } finally { await r.unmount(); }
 });
 
