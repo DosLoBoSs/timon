@@ -162,6 +162,7 @@ function SetupDialog({ project, current, onClose, onSaved }: {
               <Input
                 data-pr-setting-remote-url=""
                 value={remoteUrl}
+                // i18n-exempt: sample remote URL, the same in every language
                 placeholder="git@github.com:owner/repo.git"
                 onChange={(e) => setRemoteUrl(e.target.value)}
               />
