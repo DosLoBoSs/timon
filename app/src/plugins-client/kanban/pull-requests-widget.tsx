@@ -201,7 +201,7 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
       });
       const json = await res.json().catch(() => ({})) as { brief?: string };
       if (!res.ok || !json.brief) {
-        toast.error(t('pullRequests.prepareError'), { description: apiErrorMessage(json, { status: res.status }) });
+        toast.error(t('pullRequests.briefError'), { description: apiErrorMessage(json, { status: res.status }) });
         return;
       }
       setDiff({ number: pull.number, kind: 'loading' });
@@ -209,7 +209,7 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
       setDraft({ number: pull.number, title: pull.title, brief: json.brief });
       void readDiff(slug, pull.number);
     } catch (err) {
-      toast.error(t('pullRequests.prepareError'), { description: (err as Error).message });
+      toast.error(t('pullRequests.briefError'), { description: (err as Error).message });
     } finally {
       setPreparing(null);
     }
@@ -346,7 +346,7 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
         <Dialog open onOpenChange={(open) => { if (!open) setDraft(null); }}>
           <DialogContent className="max-w-3xl">
             <DialogTitle className="text-sm">{t('pullRequests.dialog.title', { number: draft.number })}</DialogTitle>
-            <DialogDescription className="sr-only">{draft.title}</DialogDescription>
+            <DialogDescription data-pull-brief-description="" className="text-xs text-muted-foreground">{t('pullRequests.dialog.description')}</DialogDescription>
             <Tabs defaultValue="brief" className="flex min-h-0 min-w-0 flex-col gap-2">
               <TabsList className="h-8 self-start">
                 <TabsTrigger value="brief" className="text-xs">{t('pullRequests.dialog.tabBrief')}</TabsTrigger>
@@ -576,8 +576,8 @@ function PullRow({
           data-pull-review=""
           onClick={onReview}
           disabled={running || preparing}
-          title={preparing ? t('pullRequests.preparing') : t('pullRequests.review')}
-          aria-label={preparing ? t('pullRequests.preparing') : t('pullRequests.review')}
+          title={preparing ? t('pullRequests.briefPreparing') : t('pullRequests.reviewBrief')}
+          aria-label={preparing ? t('pullRequests.briefPreparing') : t('pullRequests.reviewBrief')}
           icon={preparing ? <Loader2 className="size-3.5 animate-spin" /> : <ScanSearch className="size-3.5" />}
         />
         <Dropdown.Root modal={false}>
