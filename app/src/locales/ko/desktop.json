@@ -2,6 +2,10 @@
   "desktop": {
     "menu": {
       "newWindow": "새 창",
+      "view": "보기",
+      "zoomReset": "실제 크기",
+      "zoomIn": "확대",
+      "zoomOut": "축소",
       "open": "{appName} 열기",
       "daemon": "데몬: {state, select, running {실행 중} other {연결할 수 없음}} ({origin})",
       "quit": "종료"

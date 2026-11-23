@@ -2,6 +2,10 @@
   "desktop": {
     "menu": {
       "newWindow": "Nowe okno",
+      "view": "Widok",
+      "zoomReset": "Rzeczywisty rozmiar",
+      "zoomIn": "Powiększ",
+      "zoomOut": "Pomniejsz",
       "open": "Otwórz {appName}",
       "daemon": "Demon: {state, select, running {działa} other {nieosiągalny}} ({origin})",
       "quit": "Zakończ"

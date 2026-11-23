@@ -62,6 +62,10 @@ import { StartupView, probeUi } from './startup-view.js';
 import { DaemonRevival, giveUpBox, recordingExec, requestAppRearm, serviceProgram, type GiveUpVerdict, type RelaunchOutcome } from './app-rearm.js';
 import { reportDesktopOpened } from './telemetry-ping.js';
 import { reloadShortcut } from './reload-shortcuts.js';
+import {
+  DEFAULT_UI_ZOOM, UI_ZOOM_CHANNELS, UI_ZOOM_STEPS, parseUiZoomSetRequest, parseUiZoomStepRequest, readUiZoom, stepUiZoom,
+  writeUiZoom, zoomShortcut, type UiZoomFactor,
+} from './ui-zoom.js';
 import { externalUrl, navigationAction } from './external-links.js';
 import { keepDictionariesLocal } from './spellcheck.js';
 import {
@@ -156,6 +160,8 @@ let updateApproved = false;
 /** What the failure dialog of an approved update may claim happened. */
 let updateStage: UpdateStage = 'none';
 let desktopHome = '';
+/** The size of the interface on this screen, every page of every window alike; read from `ui-zoom.json` at launch. */
+let currentUiZoom: UiZoomFactor = DEFAULT_UI_ZOOM;
 /**
  * A packaged install without `timon.config.json`: the onboarding comes next.
  * The windows then wait in its look rather than with the startup diagnostic.
@@ -397,6 +403,30 @@ function watchDisplays(): void {
   screen.on('display-metrics-changed', () => { for (const record of liveWindows()) layoutPages(record); });
 }
 
+/**
+ * Sizes every interface page of every window at `factor`; the native browser
+ * panel and its overlays are other views, and keep the site's own size.
+ * Every page hears the factor before any page changes: Chromium keeps one
+ * zoom per host, so zooming one page can resize another window's page of the
+ * same host before it was told. The size it already has (a wheel tick held at
+ * an end, Ctrl+0 at 100 %) changes nothing, sends nothing and writes nothing.
+ */
+function applyUiZoom(factor: UiZoomFactor, persist: boolean): UiZoomFactor {
+  if (factor === currentUiZoom) return currentUiZoom;
+  currentUiZoom = factor;
+  if (persist && !writeUiZoom(desktopHome, factor)) console.warn('[desktop] Could not save the interface size.');
+  const pages: Electron.WebContents[] = [];
+  for (const record of liveWindows()) {
+    for (const page of record.pages.list()) {
+      const contents = contentsOf(page);
+      if (!contents.isDestroyed()) pages.push(contents);
+    }
+  }
+  for (const contents of pages) contents.send(UI_ZOOM_CHANNELS.changed, { factor });
+  for (const contents of pages) contents.setZoomFactor(factor);
+  return factor;
+}
+
 /** Every page of a window covers its whole content area; Electron sizes views in DIPs, so a change of display density needs nothing more. */
 function layoutPages(record: AppWindow): void {
   if (record.window.isDestroyed()) return;
@@ -557,6 +587,8 @@ function createPage(record: AppWindow, machineId: string | null, url: string): P
       sandbox: true,
       nodeIntegration: false,
       contextIsolation: true,
+      // The first paint is at the interface size, not at 100 % then resized.
+      zoomFactor: currentUiZoom,
     },
   });
   view.setBackgroundColor(windowBackground(scheme));
@@ -580,9 +612,27 @@ function createPage(record: AppWindow, machineId: string | null, url: string): P
   if (process.env.TIMON_RENDERER_DIAGNOSTICS === '1') {
     startRendererDiagnostic(contents.debugger, (line) => console.log(line));
   }
+  // Chromium keeps a zoom per origin: going from the waiting page to the
+  // interface lands on the interface's, so the size is set again on each
+  // commit, a cross-origin one included, and on each load.
+  contents.setZoomFactor(currentUiZoom);
+  contents.on('did-navigate', () => { contents.setZoomFactor(currentUiZoom); });
+  contents.on('dom-ready', () => { contents.setZoomFactor(currentUiZoom); });
+  contents.on('did-finish-load', () => {
+    contents.setZoomFactor(currentUiZoom);
+    contents.send(UI_ZOOM_CHANNELS.changed, { factor: currentUiZoom });
+  });
+  // Ctrl+wheel: one stop at a time, for every page. A canvas or terminal
+  // that takes the wheel for itself prevents it first.
+  contents.on('zoom-changed', (_event, zoomDirection) => {
+    applyUiZoom(stepUiZoom(currentUiZoom, zoomDirection === 'in' ? 'in' : 'out'), true);
+  });
   // No menu bar carries the reload keys: the page handles them itself.
   contents.on('before-input-event', (event, input) => {
     if (newWindowShortcut(input, process.platform)) { event.preventDefault(); openNewWindow(); return; }
+    // Prevented here so the key does not also reach the page.
+    const zoom = zoomShortcut(input, process.platform);
+    if (zoom) { event.preventDefault(); applyUiZoom(stepUiZoom(currentUiZoom, zoom), true); return; }
     const reload = reloadShortcut(input, process.platform);
     if (!reload) return;
     event.preventDefault();
@@ -973,10 +1023,11 @@ function openAbout(): void {
   });
 }
 
-/** macOS: "About Timon" in the menu bar leads to the same window (TODO #641). */
+/** The menu bar: on macOS "About Timon" leads to the same window (TODO #641); everywhere, View sizes the interface. */
 function installAppMenu(): void {
   const template = appMenuTemplate({
     platform: process.platform, appName: app.name, locale: uiLocale(), onAbout: openAbout, onNewWindow: () => openNewWindow(),
+    onZoom: (direction) => { applyUiZoom(stepUiZoom(currentUiZoom, direction), true); },
   });
   if (template) Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   // macOS never sends a second launch to a running app: the Dock menu is where "New window" is looked for.
@@ -1435,6 +1486,12 @@ function paintPageScheme(caller: Caller, scheme: Scheme): void {
   if (caller.record.pages.isActive(caller.page.contentsId)) caller.record.window.setBackgroundColor(windowBackground(scheme));
 }
 
+/** Throws unless the IPC call comes from the main frame of a page of an interface window, on its own origin. */
+function zoomCaller(event: Electron.IpcMainInvokeEvent): void {
+  const caller = senderPage(event);
+  if (!caller || !canReadAppInfo(senderOf(event), caller.record.origin)) throw new Error('Only a Timon window sizes its interface.');
+}
+
 /** The interface window an IPC call came from, whichever of its pages sent it. */
 function senderWindow(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): AppWindow | null {
   return senderPage(event)?.record ?? null;
@@ -1835,6 +1892,7 @@ if (process.platform === 'win32' && app.isPackaged) app.setAppUserModelId(WINDOW
 const requestedHome = resolve(resolveTimonHome());
 mkdirSync(requestedHome, { recursive: true });
 desktopHome = realpathSync(requestedHome);
+currentUiZoom = readUiZoom(desktopHome);
 installDesktopLog(desktopHome);
 console.log(`[desktop] Timon ${app.getVersion()} starting on ${process.platform} (packaged: ${app.isPackaged}), home ${desktopHome}`);
 const configuredAtLaunch = existsSync(join(desktopHome, 'timon.config.json'));
@@ -2326,6 +2384,25 @@ if (!app.requestSingleInstanceLock({ build: ownBuild } satisfies LaunchData)) {
     if (!applyDockIcon(icon)) throw new Error('The Dock icon could not be loaded.');
     if (!writeDockIcon(desktopHome, icon)) throw new Error('The Dock icon choice could not be saved.');
     return { icon };
+  });
+
+  // The interface size: a preference of this screen, not of a machine, so a
+  // page of another machine reads and changes it like a local one.
+  ipcMain.handle(UI_ZOOM_CHANNELS.get, (event) => {
+    zoomCaller(event);
+    return { factor: currentUiZoom, steps: [...UI_ZOOM_STEPS] };
+  });
+  ipcMain.handle(UI_ZOOM_CHANNELS.set, (event, input: unknown) => {
+    zoomCaller(event);
+    const factor = parseUiZoomSetRequest(input);
+    if (factor === null) throw new Error('An interface size is a factor between 0.5 and 3.');
+    return { factor: applyUiZoom(factor, true) };
+  });
+  ipcMain.handle(UI_ZOOM_CHANNELS.step, (event, input: unknown) => {
+    zoomCaller(event);
+    const direction = parseUiZoomStepRequest(input);
+    if (!direction) throw new Error('An interface size steps in, out or back to 100 %.');
+    return { factor: applyUiZoom(stepUiZoom(currentUiZoom, direction), true) };
   });
 
   // A page opens one of its routes in a new window (V5): a route and the

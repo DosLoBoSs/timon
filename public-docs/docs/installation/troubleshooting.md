@@ -85,6 +85,16 @@ Timon to restore it. The window remains usable without the tray icon; closing
 it quits the desktop app. A daemon running as a service stays running, while
 a daemon running in portable mode stops with the app.
 
+## Text too small or blurry in the desktop app
+
+Use **Interface size** in **Settings › Interface › Appearance**, or **Ctrl** and **+** (**Cmd** and **+** on macOS): it enlarges Timon itself, sharply, in every window, and is remembered. See [Appearance and plugin settings](../usage/settings.md#appearance-and-plugin-settings).
+
+On Linux, text that looks blurry rather than small usually comes from display scaling:
+
+- **Wayland with fractional scaling** (125%, 150%): the desktop app runs as an X11 app by default, and the compositor stretches it. Start it with the environment variable `ELECTRON_OZONE_PLATFORM_HINT=auto` to run it as a Wayland app, drawn at the screen's own scale. Run that way, windows keep their size from one launch to the next but not their position: Wayland does not let an app place its own windows.
+- **KDE Plasma**: alternatively, in **System Settings › Display & Monitor**, set **Legacy applications (X11)** to **Apply scaling themselves**.
+- **A scale that is still wrong**, on X11 without a scale set for example: start Timon with `--force-device-scale-factor=1.2`, or the factor of your choice, added to the command or launcher that opens it.
+
 ## Forgot your password
 
 **Forgot password** on the sign-in screen sends a 6-digit code to the e-mail address of your account. Type the code, then your new password twice. Resetting a password signs that account out everywhere. It needs an internet connection, and works only if your address was confirmed; if no code arrives within a few minutes, use one of the ways below.

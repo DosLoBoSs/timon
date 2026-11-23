@@ -975,6 +975,12 @@
   },
   "appearance": {
     "title": "Darstellung",
+    "zoomTitle": "Oberflächengröße",
+    "zoomHint": "Vergrößert oder verkleinert Text und Bedienelemente in allen Timon-Fenstern auf diesem Computer. Tastenkürzel: Strg und +, Strg und − sowie Strg und 0 zum Zurücksetzen; unter macOS bei allen dreien Cmd statt Strg. Unter Windows und Linux auch Strg und Mausrad.",
+    "zoomIn": "Größer",
+    "zoomOut": "Kleiner",
+    "zoomReset": "Zurücksetzen",
+    "zoomError": "Die Oberflächengröße konnte nicht geändert werden.",
     "theme": "Design",
     "layout": "Layout",
     "themeHint": "Farbtokens für dieses Konto.",

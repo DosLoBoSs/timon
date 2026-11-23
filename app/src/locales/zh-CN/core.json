@@ -1005,6 +1005,12 @@
   },
   "appearance": {
     "title": "外观",
+    "zoomTitle": "界面大小",
+    "zoomHint": "放大或缩小此电脑上所有 Timon 窗口中的文字和控件。快捷键：Ctrl 和 +、Ctrl 和 −、Ctrl 和 0 恢复默认（在 macOS 上，这三个快捷键均用 Cmd 代替 Ctrl）。在 Windows 和 Linux 上，也可以用 Ctrl 加鼠标滚轮。",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "zoomReset": "重置",
+    "zoomError": "无法更改界面大小。",
     "theme": "主题",
     "layout": "布局",
     "themeHint": "此账号使用的界面配色。",
