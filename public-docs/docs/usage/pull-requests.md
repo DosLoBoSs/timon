@@ -44,7 +44,7 @@ timon project get-integration my-app --check
 
 Once the project is in `pr` mode, its jobs land through a pull request and nothing of them is merged into the target branch on your machine:
 
-- When you plan a job with an agent (the Kanban planner), Timon names the job's integration branch after the job's title, `feat/add-csv-export` for "Add CSV export" (with `-2`, `-3`… when an earlier job already used the name), or after the name the agent proposes, and every task of the job starts from it. In the planner, **Advanced** shows that name: you can change it before you launch the job (the project's prefix, `feat/`, is added for you). Timon checks the name as you type and says why one cannot be used (an id in it, a name reserved for Timon's own branches, the target branch itself, a name git refuses). Once a task of the job has started, the branch exists and its name is fixed: planning the same job again shows it read-only.
+- When you plan a job with an agent (the Kanban planner), Timon names the job's integration branch after the job's title, `feat/add-csv-export` for "Add CSV export" (with `-2`, `-3`… when an earlier job already used the name), or after the name the agent proposes, and every task of the job starts from it. In the planner, **Advanced** shows that name: you can change it before you launch the job (the project's prefix, `feat/`, is added for you), or pick a branch the repository already has (see [Choose the job's branch and where it ends](#choose-the-jobs-branch-and-where-it-ends)). Timon checks the name as you type and says why one cannot be used (an id in it, a name reserved for Timon's own branches, the target branch itself, a name git refuses). Once a task of the job has started, the branch exists and its name is fixed: planning the same job again shows it read-only.
 - The planner follows the job's project, not only the agent's: an agent that belongs to no project but works in the project's folder plans the job the same way, and the tasks it creates name the project.
 - When the first task starts, Timon creates that branch from the remote's target branch (`origin/main`), without touching your checkout. If the remote cannot be reached, the task is blocked with the reason instead of starting from your local `main`.
 - Reviews and merges run as usual, into the integration branch.
@@ -71,6 +71,13 @@ Agents use the `pr_branch` tool, which does the same. Timon checks the name, cre
 
 ## Choose the job's branch and where it ends
 
+In the planner, **Advanced** holds both choices, for every project. Folded, it sums them up: `feat/add-csv-export · merged into main`, `· PR to main` in a project that lands through pull requests, or `· kept on the branch`.
+
+- **Branch**: **New** shows the name proposed for the job after the project's prefix (`feat/`), which is not typed; change the rest, and Timon checks it as you type, says why a name cannot be used, and shows the number it adds (`Created as feat/add-csv-export-2`). **Existing** lists the repository's local branches, newest first, without the target branch, with a search field when the list is long; Timon checks the branch you pick. Once a task of the job has started, the branch is fixed: planning the same job again shows it read-only.
+- **At the end**: **Merge into main** (the default), read **Open a PR to main** in a project that lands through pull requests, or **Keep on the branch**. **Resolves its issues entirely** only shows when a pull request will be opened.
+
+The planner keeps these choices, with the rest of the form, if its card comes back or the page reloads before you launch.
+
 The plan can name the job's branch in two ways: a **new branch** (the name Timon or the agent proposes, which you may change), or a branch the repository **already has**, picked among its local branches, newest first, so that the job continues work already under way instead of starting a new branch from `origin/main`. Timon checks the choice before the plan applies: an existing branch must be in the repository, and can be neither the target branch, nor one of Timon's own task branches (`timon/…`), nor a name carrying an id, nor the branch of a job that already landed or whose pull request was closed. A new name that the repository already has gets `-2`, `-3`…
 
 The plan also says where the branch ends up:
@@ -85,7 +92,7 @@ timon task create --type merge --landing local --agent my-app.merger --base feat
   --deps <ids of the code tasks> --title "Merge into main — Add CSV export"
 ```
 
-Without a branch chosen in the plan, a project that merges locally works as before. A sequential job uses the same choice: `timon pr branch` gives the agent a working folder on the chosen branch, existing or new, in either kind of project. A branch that was chosen as existing and has since been deleted blocks the job's tasks with the reason; it is never recreated.
+A job planned in the planner always names its branch, so in a project that merges locally it runs on a branch of its own, merged into `main` at the end unless you keep it. Tasks you create by hand, without a branch, work as before. A sequential job uses the same choice: `timon pr branch` gives the agent a working folder on the chosen branch, existing or new, in either kind of project. A branch that was chosen as existing and has since been deleted blocks the job's tasks with the reason; it is never recreated.
 
 ## Open the pull request
 

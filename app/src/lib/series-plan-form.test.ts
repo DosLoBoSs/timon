@@ -31,8 +31,8 @@ const CATALOG = {
 };
 
 /** What the daemon's branch check answers, and what it was asked. */
-let branchRoute: (branch: string) => Response = () => new Response(null, { status: 404 });
-const branchChecks: Array<{ url: string; branch: string }> = [];
+let branchRoute: (branch: string, kind?: string) => Response = () => new Response(null, { status: 404 });
+const branchChecks: Array<{ url: string; branch: string; kind?: string }> = [];
 
 // Catalog bodies read so far. The store caches the catalog for the whole
 // process: only the first mount fetches it, later ones paint it at once.
@@ -72,9 +72,9 @@ async function mount(form: SeriesPlanFormPayload, opts: MountOptions = {}) {
   install('fetch', async (url: string, init?: RequestInit) => {
     if (url === '/api/ui/prefs/model-favorites') return Response.json({ favorites: [] });
     if (url.endsWith('/integration/branch')) {
-      const { branch } = JSON.parse(String(init?.body ?? '{}')) as { branch: string };
-      branchChecks.push({ url, branch });
-      return branchRoute(branch);
+      const { branch, kind } = JSON.parse(String(init?.body ?? '{}')) as { branch: string; kind?: string };
+      branchChecks.push({ url, branch, kind });
+      return branchRoute(branch, kind);
     }
     if (url !== '/api/ui/backends/catalog') return new Response(null, { status: 404 });
     const response = Response.json(CATALOG);
@@ -493,64 +493,98 @@ test('TODO #515: a plan the daemon did not receive keeps its draft; another miss
   try { assert.equal(document.querySelector('textarea')!.value, ''); } finally { await r.unmount(); }
 });
 
-/* The branch field: only for a project that lands through pull requests. */
+/* The branch field: every project, a new branch or an existing one, and where it ends up. */
 const landed = (landing: NonNullable<SeriesPlanFormPayload['landing']>): SeriesPlanFormPayload => ({
   kind: 'series_plan', chantier: 'Branch job', volets: [{ title: 'A' }], landing,
 });
 const LANDING = { project: 'acme', prefix: 'feat/', branch: 'feat/branch-job', base_ref: 'origin/main', locked: false };
+const BRANCHES = [
+  { name: 'feat/kanban-pr-landing', committed_at: 3 },
+  { name: 'main', committed_at: 2 },
+  { name: 'fix/old', committed_at: 1 },
+];
+const PR_LANDING = { ...LANDING, mode: 'pr' as const, target: 'main', kind: 'new' as const, finish: 'merge' as const, branches: BRANCHES };
+const LOCAL_LANDING = { ...PR_LANDING, mode: 'local' as const, base_ref: 'main' };
 const branchSection = () => document.querySelector<HTMLElement>('[data-testid="plan-branch"]');
-const branchInput = () => branchSection()!.querySelector('input')!;
+const branchHeader = () => branchSection()!.querySelector('button')!;
+const branchInput = () => branchSection()!.querySelector<HTMLInputElement>('[data-testid="plan-branch-input"]')!;
+const segment = (group: 'plan-branch-kind' | 'plan-finish', value: string) =>
+  branchSection()!.querySelector<HTMLButtonElement>(`[data-testid="${group}"] button[data-value="${value}"]`)!;
+const listed = () => Array.from(branchSection()!.querySelectorAll<HTMLButtonElement>('[data-testid="plan-branch-list"] [role="option"]'));
+const summary = () => `${branchSection()!.querySelector('[data-testid="plan-branch-summary"]')!.textContent} ${branchSection()!.querySelector('[data-testid="plan-finish-summary"]')!.textContent}`;
 const launchButton = () => Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Launch')!;
 
-async function typeTopic(r: Awaited<ReturnType<typeof mount>>, value: string) {
+async function typeTopic(r: Awaited<ReturnType<typeof mount>>, value: string, input: HTMLInputElement = branchInput()) {
   const React = await import('react');
   await React.act(async () => {
     const setter = Object.getOwnPropertyDescriptor(r.window.HTMLInputElement.prototype, 'value')!.set!;
-    setter.call(branchInput(), value);
-    branchInput().dispatchEvent(new r.window.Event('input', { bubbles: true }));
+    setter.call(input, value);
+    input.dispatchEvent(new r.window.Event('input', { bubbles: true }));
   });
 }
 
-test('a project without the pull request setting shows no branch field and sends no branch', async () => {
-  for (const form of [
-    { kind: 'series_plan' as const, chantier: 'Job', volets: [{ title: 'A' }] },
-    // The daemon describes the branch of a project that merges locally too:
-    // this form still has no field for it.
-    landed({ ...LANDING, mode: 'local', base_ref: 'main', target: 'main', kind: 'new', finish: 'merge', branches: [] }),
-  ]) {
-    const r = await mount(form);
-    try {
-      assert.equal(branchSection(), null);
-      await r.launch();
-      assert.equal('branch' in r.answers[0]!, false);
-    } finally { await r.unmount(); }
-  }
+test('a job without a project shows no branch field and sends no branch', async () => {
+  const r = await mount({ kind: 'series_plan', chantier: 'Job', volets: [{ title: 'A' }] });
+  try {
+    assert.equal(branchSection(), null);
+    await r.launch();
+    assert.equal('branch' in r.answers[0]!, false);
+    assert.equal('finish' in r.answers[0]!, false);
+  } finally { await r.unmount(); }
+});
+
+test('a project that merges locally gets the field too: a new branch merged into its target by default', async () => {
+  const r = await mount(landed(LOCAL_LANDING));
+  try {
+    assert.equal(branchHeader().getAttribute('aria-expanded'), 'false');
+    assert.equal(summary(), 'feat/branch-job · merged into main');
+    await r.click(branchHeader());
+    assert.equal(segment('plan-branch-kind', 'new').getAttribute('aria-pressed'), 'true');
+    assert.equal(branchSection()!.querySelector('[data-testid="plan-branch-prefix"]')!.textContent, 'feat/');
+    assert.equal(segment('plan-finish', 'merge').textContent, 'Merge into main');
+    assert.equal(segment('plan-finish', 'merge').getAttribute('aria-pressed'), 'true');
+    assert.ok(!branchSection()!.querySelector('[data-testid="plan-resolves-issues"]'), 'no pull request, no issues to close');
+    await r.launch();
+    assert.deepEqual(r.answers[0]!.branch, { kind: 'new', name: 'feat/branch-job' });
+    assert.equal(r.answers[0]!.finish, 'merge');
+    assert.equal('resolves_issues' in r.answers[0]!, false);
+  } finally { await r.unmount(); }
 });
 
 test('a pull request project folds the branch under Advanced, prefix shown, and sends the full name', async () => {
-  const r = await mount(landed(LANDING));
+  branchChecks.length = 0;
+  const r = await mount(landed(PR_LANDING));
   try {
-    const header = branchSection()!.querySelector('button')!;
-    assert.equal(header.getAttribute('aria-expanded'), 'false');
-    assert.match(header.textContent!, /Advanced.*feat\/branch-job/);
-    await r.click(header);
+    assert.match(branchHeader().textContent!, /^Advanced.*feat\/branch-job.*· PR to main$/);
+    await r.click(branchHeader());
     assert.equal(branchSection()!.querySelector('[data-testid="plan-branch-prefix"]')!.textContent, 'feat/');
     assert.equal(branchInput().value, 'branch-job');
+    assert.equal(segment('plan-finish', 'merge').textContent, 'Open a PR to main');
     await r.launch();
-    assert.equal(r.answers[0]!.branch, 'feat/branch-job');
+    assert.deepEqual(r.answers[0]!.branch, { kind: 'new', name: 'feat/branch-job' });
+    assert.equal(r.answers[0]!.finish, 'merge');
     assert.deepEqual(branchChecks, [], 'the proposal judged at opening is not checked again');
   } finally { await r.unmount(); }
 });
 
-test('a sequential mode keeps the branch field: the job lands through the same pull request', async () => {
+test('a payload without mode nor target reads as the pull request project it was', async () => {
   const r = await mount(landed(LANDING));
+  try {
+    assert.equal(summary(), 'feat/branch-job · PR to main');
+    await r.click(branchHeader());
+    assert.ok(branchSection()!.querySelector('[data-testid="plan-resolves-issues"]'));
+  } finally { await r.unmount(); }
+});
+
+test('a sequential mode keeps the branch field: the job lands the same way', async () => {
+  const r = await mount(landed(PR_LANDING));
   try {
     const sequential = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')).find((b) => b.title === 'Sequential — in this mission')!;
     await r.click(sequential);
     assert.ok(branchSection());
     await r.launch();
     assert.equal(r.answers[0]!.mode, 'sequential-here');
-    assert.equal(r.answers[0]!.branch, 'feat/branch-job');
+    assert.deepEqual(r.answers[0]!.branch, { kind: 'new', name: 'feat/branch-job' });
   } finally { await r.unmount(); }
 });
 
@@ -559,71 +593,174 @@ test('a typed name goes to the daemon: its refusal shows under the field and blo
   branchRoute = (branch) => (branch.includes('timon')
     ? Response.json({ error: 'reserved', code: 'plan_branch_refused', params: { detail: 'reserved for Timon' }, ok: false, refusal: 'reserved for Timon' }, { status: 400 })
     : Response.json({ ok: true, branch: `${branch}-2` }));
-  const r = await mount(landed(LANDING));
+  const r = await mount(landed(PR_LANDING));
   const React = await import('react');
   const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);
   try {
-    await r.click(branchSection()!.querySelector('button')!);
+    await r.click(branchHeader());
     await typeTopic(r, 'timon-thing');
     await until(() => branchSection()!.querySelector('[data-testid="plan-branch-error"]') !== null, 'the refusal to show');
     assert.match(branchSection()!.querySelector('[data-testid="plan-branch-error"]')!.textContent!, /reserved for Timon/);
     assert.equal(branchInput().getAttribute('aria-invalid'), 'true');
     assert.equal(launchButton().disabled, true);
-    assert.deepEqual(branchChecks.map((c) => c.branch), ['feat/timon-thing']);
+    assert.deepEqual(branchChecks.map((c) => [c.branch, c.kind]), [['feat/timon-thing', 'new']]);
     await typeTopic(r, 'taken');
     await until(() => /Created as feat\/taken-2/.test(branchSection()!.textContent!), 'the numbered name to show');
     assert.equal(launchButton().disabled, false);
     await r.launch();
-    assert.equal(r.answers[0]!.branch, 'feat/taken');
+    assert.deepEqual(r.answers[0]!.branch, { kind: 'new', name: 'feat/taken' });
   } finally { await r.unmount(); }
 });
 
 test('an empty name or a refused proposal opens the field with its error', async () => {
-  const r = await mount(landed({ ...LANDING, branch: 'feat/fix-bfd1c111de16', refusal: 'it carries an id' }));
+  const r = await mount(landed({ ...PR_LANDING, branch: 'feat/fix-bfd1c111de16', refusal: 'it carries an id' }));
   try {
-    assert.equal(branchSection()!.querySelector('button')!.getAttribute('aria-expanded'), 'true');
+    assert.equal(branchHeader().getAttribute('aria-expanded'), 'true');
     assert.match(branchSection()!.querySelector('[data-testid="plan-branch-error"]')!.textContent!, /it carries an id/);
     assert.equal(launchButton().disabled, true);
   } finally { await r.unmount(); }
-  const unnamed = await mount(landed({ ...LANDING, branch: 'feat/<topic>' }));
+  const unnamed = await mount(landed({ ...PR_LANDING, branch: 'feat/<topic>' }));
   try {
     assert.equal(branchInput().value, '');
     assert.match(branchSection()!.querySelector('[data-testid="plan-branch-error"]')!.textContent!, /Name the branch/);
   } finally { await unnamed.unmount(); }
 });
 
-test('a branch the job already started from is read-only and not sent back', async () => {
-  const r = await mount(landed({ ...LANDING, branch: 'feat/started', locked: true }));
-  try {
-    await r.click(branchSection()!.querySelector('button')!);
-    assert.equal(branchInput().readOnly, true);
-    assert.equal(branchInput().value, 'feat/started');
-    assert.match(branchSection()!.textContent!, /already started from this branch/);
-    await r.launch();
-    assert.equal('branch' in r.answers[0]!, false);
-  } finally { await r.unmount(); }
+test('"Existing" lists the repository\'s branches but the target, checks the pick and sends it as it is', async () => {
+  for (const landing of [LOCAL_LANDING, PR_LANDING]) {
+    branchChecks.length = 0;
+    branchRoute = (branch, kind) => (branch === 'fix/old'
+      ? Response.json({ error: 'landed', code: 'plan_branch_refused', params: { detail: 'fix/old already landed in main' } }, { status: 400 })
+      : Response.json({ ok: true, branch, kind }));
+    const r = await mount(landed(landing));
+    const React = await import('react');
+    const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);
+    try {
+      await r.click(branchHeader());
+      await r.click(segment('plan-branch-kind', 'existing'));
+      assert.equal(segment('plan-branch-kind', 'existing').getAttribute('aria-pressed'), 'true');
+      assert.deepEqual(listed().map((o) => o.textContent), ['feat/kanban-pr-landing', 'fix/old'], 'newest first, never the target');
+      assert.ok(!branchSection()!.querySelector('[data-testid="plan-branch-search"]'), 'a short list needs no search');
+      assert.match(branchSection()!.querySelector('[data-testid="plan-branch-error"]')!.textContent!, /Pick the branch/);
+      assert.equal(launchButton().disabled, true, 'nothing picked yet');
+      await r.click(listed()[1]!);
+      await until(() => branchSection()!.querySelector('[data-testid="plan-branch-error"]')?.textContent?.includes('already landed') === true, 'the refusal to show');
+      assert.equal(launchButton().disabled, true);
+      await r.click(listed()[0]!);
+      await until(() => !launchButton().disabled, 'the pick to be accepted');
+      assert.equal(listed()[0]!.getAttribute('aria-selected'), 'true');
+      assert.deepEqual(branchChecks.map((c) => [c.branch, c.kind]), [['fix/old', 'existing'], ['feat/kanban-pr-landing', 'existing']]);
+      assert.match(summary(), /^feat\/kanban-pr-landing · /);
+      await r.launch();
+      assert.deepEqual(r.answers[0]!.branch, { kind: 'existing', name: 'feat/kanban-pr-landing' });
+    } finally { await r.unmount(); }
+  }
 });
 
-test('"Resolves its issues entirely" sits under Advanced, off by default, and is sent only when ticked', async () => {
-  const r = await mount(landed(LANDING));
+test('a long branch list gets a search field; an empty one says so', async () => {
+  const many = Array.from({ length: 12 }, (_, i) => ({ name: `feat/topic-${i}`, committed_at: 100 - i }));
+  const r = await mount(landed({ ...LOCAL_LANDING, branches: [...many, { name: 'fix/needle', committed_at: 1 }] }));
+  try {
+    await r.click(branchHeader());
+    await r.click(segment('plan-branch-kind', 'existing'));
+    assert.equal(listed().length, 13);
+    const search = branchSection()!.querySelector<HTMLInputElement>('[data-testid="plan-branch-search"]')!;
+    await typeTopic(r, 'NEED', search);
+    assert.deepEqual(listed().map((o) => o.textContent), ['fix/needle']);
+    await typeTopic(r, 'nothing-like-it', search);
+    assert.equal(listed().length, 0);
+    assert.match(branchSection()!.textContent!, /No branch matches/);
+  } finally { await r.unmount(); }
+  const none = await mount(landed({ ...LOCAL_LANDING, branches: [{ name: 'main', committed_at: 1 }] }));
+  try {
+    await none.click(branchHeader());
+    await none.click(segment('plan-branch-kind', 'existing'));
+    assert.match(branchSection()!.querySelector('[data-testid="plan-branch-none"]')!.textContent!, /no other branch/);
+    assert.equal(launchButton().disabled, true);
+  } finally { await none.unmount(); }
+});
+
+test('"Keep on the branch" is sent, said in the summary, and drops the issues box', async () => {
+  for (const [landing, merged] of [[LOCAL_LANDING, 'merged into main'], [PR_LANDING, 'PR to main']] as const) {
+    const r = await mount(landed(landing));
+    try {
+      await r.click(branchHeader());
+      assert.equal(summary(), `feat/branch-job · ${merged}`);
+      if (landing.mode === 'pr') await r.click(branchSection()!.querySelector<HTMLInputElement>('[data-testid="plan-resolves-issues"]')!);
+      await r.click(segment('plan-finish', 'keep'));
+      assert.equal(segment('plan-finish', 'keep').getAttribute('aria-pressed'), 'true');
+      assert.equal(summary(), 'feat/branch-job · kept on the branch');
+      assert.ok(!branchSection()!.querySelector('[data-testid="plan-resolves-issues"]'));
+      await r.launch();
+      assert.equal(r.answers[0]!.finish, 'keep');
+      assert.equal('resolves_issues' in r.answers[0]!, false, 'no pull request, nothing to close');
+    } finally { await r.unmount(); }
+  }
+});
+
+test('a branch the job already started from is read-only, its kind fixed, and sent back as it is', async () => {
+  for (const landing of [PR_LANDING, LOCAL_LANDING]) {
+    const r = await mount(landed({ ...landing, branch: 'feat/started', locked: true, finish: 'keep' }));
+    try {
+      await r.click(branchHeader());
+      assert.equal(branchInput().readOnly, true);
+      assert.equal(branchInput().value, 'feat/started');
+      assert.equal(segment('plan-branch-kind', 'new').disabled, true);
+      assert.equal(segment('plan-branch-kind', 'existing').disabled, true);
+      assert.match(branchSection()!.textContent!, /already started from this branch/);
+      assert.equal(summary(), 'feat/started · kept on the branch', 'the destination the series chose');
+      await r.click(segment('plan-finish', 'merge'));
+      await r.launch();
+      // The daemon keeps the kind it recorded; a local project needs the name to keep the job on its branch.
+      assert.deepEqual(r.answers[0]!.branch, { kind: 'existing', name: 'feat/started' });
+      assert.equal(r.answers[0]!.finish, 'merge');
+    } finally { await r.unmount(); }
+  }
+});
+
+test('"Resolves its issues entirely" sits under Advanced, only for a pull request, off by default, and is sent only when ticked', async () => {
+  const r = await mount(landed(PR_LANDING));
   try {
     await r.launch();
     assert.equal('resolves_issues' in r.answers[0]!, false, 'untouched, the answer is the previous one');
   } finally { await r.unmount(); }
-  const ticked = await mount(landed(LANDING));
+  const ticked = await mount(landed(PR_LANDING));
   try {
-    await ticked.click(branchSection()!.querySelector('button')!);
+    await ticked.click(branchHeader());
     const box = branchSection()!.querySelector<HTMLInputElement>('[data-testid="plan-resolves-issues"]')!;
     assert.equal(box.checked, false);
     assert.match(box.closest('div')!.textContent!, /Resolves its issues entirely/);
-    const summary = () => branchSection()!.querySelector('[data-testid="plan-resolves-summary"]');
-    assert.ok(!summary(), 'unticked, the summary says nothing of it');
+    const resolves = () => branchSection()!.querySelector('[data-testid="plan-resolves-summary"]');
+    assert.ok(!resolves(), 'unticked, the summary says nothing of it');
     await ticked.click(box);
     // Folded again, the summary still shows the box is ticked.
-    await ticked.click(branchSection()!.querySelector('button')!);
+    await ticked.click(branchHeader());
     assert.ok(!branchSection()!.querySelector('[data-testid="plan-resolves-issues"]'), 'folded');
-    assert.equal(summary()?.textContent, 'resolves its issues');
+    assert.equal(resolves()?.textContent, 'resolves its issues');
     await ticked.launch();
     assert.equal(ticked.answers[0]!.resolves_issues, true);
   } finally { await ticked.unmount(); }
+});
+
+test('the session draft keeps the kind of branch, the pick and the destination', async () => {
+  const storage = tabStorage();
+  branchRoute = (branch) => Response.json({ ok: true, branch });
+  let r = await mount(landed(LOCAL_LANDING), { missionId: 'm1', storage });
+  const React = await import('react');
+  const until = (condition: () => boolean, what: string) => waitUntil(React.act, condition, what);
+  try {
+    await r.click(branchHeader());
+    await r.click(segment('plan-branch-kind', 'existing'));
+    await r.click(listed()[0]!);
+    await r.click(segment('plan-finish', 'keep'));
+  } finally { await r.unmount(); }
+
+  r = await mount(landed(LOCAL_LANDING), { missionId: 'm1', storage });
+  try {
+    assert.equal(summary(), 'feat/kanban-pr-landing · kept on the branch');
+    await until(() => !launchButton().disabled, 'the restored pick to be checked again');
+    await r.launch();
+    assert.deepEqual(r.answers[0]!.branch, { kind: 'existing', name: 'feat/kanban-pr-landing' });
+    assert.equal(r.answers[0]!.finish, 'keep');
+  } finally { await r.unmount(); }
 });
