@@ -85,6 +85,10 @@ export type AgentEventSnapshot = Readonly<{
   created_by: string | null;
 }>;
 
+/** What an `integration_changed` write touched. `checks` is the forge's stored
+ *  reading, compared without its read time. */
+export type IntegrationChange = 'created' | 'state' | 'pull_request' | 'checks' | 'landed';
+
 export type BusEvent =
   | { kind: 'plugin_realtime'; pluginId: string; topic: string; ownerUserId: string; payload: unknown }
   // `id`: the row of `events` the event was stored as, when the publisher has
@@ -213,6 +217,15 @@ export type BusEvent =
   | { kind: 'agent_deleted'; agent: AgentEventSnapshot }
   // Emitted when a BLOCKED task becomes active again (PENDING/IN_PROGRESS/DONE).
   | { kind: 'task_unblocked'; taskId: string }
+  /**
+   * A job's integration row moved (`integrations`, the landing of a Kanban
+   * job): created, its state, its pull request, its stored checks or its
+   * landing. Ids and the state only: a screen reads the job again through its
+   * scoped route. No `missionId`: the browser stream relays it on its own
+   * rule, the job's visibility (`integrationVisibleTo`).
+   */
+  | { kind: 'integration_changed'; integrationId: string; project: string | null; seriesId: string | null;
+      state: string; changed: readonly IntegrationChange[] }
   /**
    * Kanban lifecycle, for the plugins that mirror the board elsewhere
    * (`plugins/task-events.ts`). None of them carries a `missionId`, so the
