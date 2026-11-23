@@ -66,7 +66,9 @@ function Field({ label, children }: { label: string; children: ReactElement }): 
 
 const pushUrlOf = (r: GitRemoteEntry | undefined): string => r?.push_url ?? r?.url ?? '';
 
-function SetupDialog({ project, current, onClose, onSaved }: {
+/** The fields of the setting, in their own dialog: the row's "Set up", and the
+ *  Git stack's shortcut while a project merges its jobs locally (`local-landing.tsx`). */
+export function PullRequestSetupDialog({ project, current, onClose, onSaved }: {
   project: string;
   current: IntegrationRead;
   onClose: () => void;
@@ -321,7 +323,7 @@ export function PullRequestSetting(): ReactElement | null {
         </DropdownMenu>
       )}
       {editing && read && (
-        <SetupDialog
+        <PullRequestSetupDialog
           project={project}
           current={read}
           onClose={() => setEditing(false)}
