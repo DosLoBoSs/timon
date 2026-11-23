@@ -186,6 +186,9 @@ Pull requests (projects whose jobs land through one, see set-integration):
                                              checks the job's integration branch (account, remote URL,
                                              identity, messages, ignored files, public tree), pushes it
                                              without force and opens its pull request; sec/ is refused
+  timon pr branch <branch> [--series ID]       sequential job: cuts its integration branch from the remote's
+                                             target and gives the pilot a worktree on it (default: THIS
+                                             mission's series)
 
 Projects (agent roles per project):
   timon project list                           lists configured projects
@@ -837,6 +840,12 @@ usage: timon worktree dispose <task-id> [--force]
 
 ```text
 usage: timon worktree <info|create|dispose> <task-id> …
+```
+
+### timon pr branch branch [--series ID]
+
+```text
+usage: timon pr branch <branch> [--series ID]
 ```
 
 ### timon pr open task-id|series-id --title TEXT [--body TEXT | --body-file PATH]

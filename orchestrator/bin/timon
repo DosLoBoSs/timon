@@ -2599,14 +2599,12 @@ async function cmdPrOpen(argv) {
   process.stdout.write(JSON.stringify(j, null, 2) + '\n');
 }
 
-const PR_BRANCH_USAGE = 'usage: timon pr branch <branch> [--series ID]\n';
-
 /** The integration branch of a sequential job, and the pilot's worktree on it. */
 async function cmdPrBranch(argv) {
   const series = takeFlag(argv, 'series');
   const branch = argv[0];
   if (!branch || argv.length > 1) {
-    process.stderr.write(PR_BRANCH_USAGE);
+    process.stderr.write('usage: timon pr branch <branch> [--series ID]\n');
     process.exit(64);
   }
   const j = await http('POST', `/api/series/${encodeURIComponent(series || 'current')}/integration-branch`, { branch });
@@ -2619,7 +2617,8 @@ async function cmdPr(argv) {
     case 'open': return cmdPrOpen(rest);
     case 'branch': return cmdPrBranch(rest);
     default:
-      process.stderr.write('usage: timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]\n' + PR_BRANCH_USAGE);
+      process.stderr.write('usage: timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]\n');
+      process.stderr.write('usage: timon pr branch <branch> [--series ID]\n');
       process.exit(64);
   }
 }
