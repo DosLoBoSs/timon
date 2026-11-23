@@ -486,7 +486,9 @@ export async function previewIntegration(
 ): Promise<IntegrationPreview> {
   const repo = row.repo;
   const head = await refSha(repo, `refs/heads/${row.branch}`);
-  const target = await refSha(repo, `refs/remotes/${row.remote}/${row.target}`);
+  // A job of a project that merges locally has no remote: its target is the
+  // local branch.
+  const target = await refSha(repo, row.remote ? `refs/remotes/${row.remote}/${row.target}` : `refs/heads/${row.target}`);
   const stored = parseStoredChecks(row.checks);
   const draft = request.title?.trim()
     ? { title: request.title, body: request.body ?? '' }
@@ -505,7 +507,9 @@ export async function previewIntegration(
   if (!head || !target) {
     const problem = !head
       ? `${row.branch} does not exist in the repository`
-      : `${row.remote}/${row.target} was never fetched into the repository`;
+      : row.remote
+        ? `${row.remote}/${row.target} was never fetched into the repository`
+        : `${row.target} does not exist in the repository`;
     return { ...base, ...empty, problem };
   }
   const commits = await readCommits(repo, `${target}..${head}`);
