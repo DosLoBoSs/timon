@@ -17,7 +17,7 @@
 export const PRODUCT_SKILLS: ReadonlyArray<{ id: string; content: string; version?: number }> = [
   {
     id: 'timon-task',
-    version: 1,
+    version: 2,
     content: `---
 allowed_tools: ["Bash(timon:*)"]
 ---
@@ -182,7 +182,9 @@ timon task create --title "merge"  --type merge --agent <merger> --group-id "$GR
 - \`merge\` — integrates the approved branch into its base. Local only; a push
   needs an explicit authorisation in the project's instructions. With
   \`--landing pr\`, the last task of a job that lands through a pull request:
-  it opens the pull request instead (see below).
+  it opens the pull request instead; with \`--landing local\`, the last task
+  of a job on a branch of its own: it merges that branch into its local
+  target (see below).
 - \`research\`, \`doc\` — no worktree, free work in the agent's cwd.
 - \`chore\` — miscellaneous ops and cleanup.
 
@@ -341,6 +343,21 @@ merge into the target branch (\`main\`) on this machine:
 
 Never \`git push\`, never \`gh\`, never a merge into the target yourself. A
 task based on the target itself is refused at dispatch.
+
+### The branch the planner chose, and where it ends
+
+The person answering the planner may start the job from a branch the
+repository **already has**, and may **keep** the work on its branch: the
+plan's \`commands\` then have no last task, nothing is merged or pushed, and
+the job's TO DO ideas stay \`partial\` until the branch lands. Run the
+commands as given; never add the last task yourself.
+
+In a project that merges locally, a job the planner put on a branch of its own
+works the same way: every task starts from that branch (cut from the project's
+local target, or taken as it is), and the job ends on a \`merge\` task created
+with \`--landing local\` (or on nothing when the work is kept on the branch).
+That task merges the branch into the target on this machine and closes with the
+target's full sha; the daemon checks it with git, then closes the job's ideas.
 
 ### Series fallback plan (quota exhausted)
 
