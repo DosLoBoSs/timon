@@ -762,9 +762,6 @@ function collectRoles<R extends SeriesPlanRole>(
   return out;
 }
 
-/** The modes that create Kanban tasks: the only ones a branch applies to. */
-const KANBAN_MODES: ReadonlySet<SeriesPlanMode> = new Set(['kanban-full', 'kanban-code-self', 'kanban-code-group']);
-
 /** The placeholder the daemon writes when the title gives no usable name. */
 const UNNAMED_TOPIC = '<topic>';
 
@@ -995,7 +992,8 @@ export function SeriesPlanForm({
   const groupRoles = roles.filter(isGroupRole);
   const tile = useMemo(() => MODE_TILES.find((t) => t.mode === mode)!, [mode]);
   const disabled = !pending || busy;
-  const showsBranch = landing !== undefined && KANBAN_MODES.has(mode);
+  // Every mode: a sequential job lands through the same pull request.
+  const showsBranch = landing !== undefined;
   const branchRefused = showsBranch && !landing.locked && branchCheck.state === 'refused';
 
   const groupNames = useMemo(() => planGroupNames(form.volets), [form.volets]);
