@@ -11,11 +11,13 @@
  *
  * Everything here was written on the forge: React escapes it, the markdown is
  * rendered without raw HTML (`forgeMarkdownHtml`), and a link only leaves for
- * an https GitHub address, in a new tab. The gestures on the pull request stay
- * where they were: the header's "…" menu holds the row's own entries.
+ * an https GitHub address, in a new tab. The gestures on the pull request sit
+ * in the header: the one its state calls for filled, the frequent ones beside
+ * it, the rest in "…" (`pullRequestActions`, shared with the row's menu). A
+ * narrow window folds the ones beside it into "…"; the filled one stays.
  */
 
-import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import {
   ChevronRight, CircleAlert, CircleCheck, CircleDot, CircleMinus, ExternalLink, GitCommitHorizontal, GitMerge,
@@ -34,7 +36,8 @@ import {
   checkSeconds, forgeHref, forgeMarkdownHtml, getCheckLog, getPullRequestDiff, getPullRequestPage, placeThreads,
   splitDiffByFile, type CheckLog, type PageCheck, type PageThread, type PageTimelineItem, type PullRequestPage, type Read,
 } from './pull-request-page-api';
-import { branchChip, branchLock, reviewBadge, type PullRequestItem } from './pull-requests-model';
+import { branchChip, branchLock, reviewBadge, type PullActionId, type PullActions, type PullRequestItem } from './pull-requests-model';
+import { PullActionButton, PullActionMenuItems } from './pull-request-actions';
 
 const ISLAND = 'rounded-lg bg-foreground/[0.035]';
 const CHIP = 'inline-flex h-5 shrink-0 items-center gap-1 rounded-md px-1.5 text-[10.5px] font-medium tabular-nums';
@@ -43,6 +46,8 @@ const MUTED_CHIP = 'bg-foreground/[0.06] text-muted-foreground';
 /** Diff lines painted per file, and for the whole tab: a huge diff would freeze the window. */
 const FILE_LINES_SHOWN = 1500;
 const DIFF_LINES_SHOWN = 6000;
+/** Under this width (px) the window folds the gestures beside the filled one into "…". */
+export const NARROW_HEADER_PX = 640;
 
 const STATE_TONE: Record<string, string> = {
   open: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
@@ -559,15 +564,39 @@ function SidePanel({ page, repo, timon }: { page: PullRequestPage; repo: string 
 
 // ─── The window ────────────────────────────────────────────────────────────
 
+/**
+ * Whether the element is narrower than `px`. A width of 0 is no width read
+ * yet (a test's page lays nothing out): the window then counts as wide. The
+ * element comes from a callback ref: the dialog's portal mounts it a render
+ * after the window itself.
+ */
+function useNarrow(el: HTMLElement | null, px: number): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useLayoutEffect(() => {
+    if (!el) return;
+    const measure = (width: number) => setNarrow(width > 0 && width < px);
+    measure(el.getBoundingClientRect().width);
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) measure(entry.contentRect.width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [el, px]);
+  return narrow;
+}
+
 type PageLoad = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; page: PullRequestPage };
 
-export function PullRequestDialog({ project, repo, pull, menu, onOpenJob, onOpenTodo, onClose }: {
+export function PullRequestDialog({ project, repo, pull, actions, onAction, links, onOpenJob, onOpenTodo, onClose }: {
   project: string;
   repo: string | null;
   /** The row the window was opened from: its title shows at once, its chips and links come from the list. */
   pull: PullRequestItem;
-  /** The row's own "…" entries: the gestures stay the same from the list and from here. */
-  menu: ReactNode;
+  /** Its gestures, as `pullRequestActions` places them; the row's menu lists the same. */
+  actions: PullActions;
+  onAction: (id: PullActionId) => void;
+  /** The job and the ideas behind it, after the gestures in "…". */
+  links: ReactNode;
   /** Timon's links (job, ideas): the window closes before the one they open. */
   onOpenJob: (id: string) => void;
   onOpenTodo: (id: number) => void;
@@ -575,6 +604,10 @@ export function PullRequestDialog({ project, repo, pull, menu, onOpenJob, onOpen
 }): ReactElement {
   const [load, setLoad] = useState<PageLoad>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
+  const [header, setHeader] = useState<HTMLDivElement | null>(null);
+  const narrow = useNarrow(header, NARROW_HEADER_PX);
+  const beside = narrow ? [] : actions.secondary;
+  const folded = narrow ? [...actions.secondary, ...actions.overflow] : actions.overflow;
 
   useEffect(() => {
     let alive = true;
@@ -607,41 +640,48 @@ export function PullRequestDialog({ project, repo, pull, menu, onOpenJob, onOpen
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent data-pull-dialog={pull.number} className="flex h-[min(88vh,52rem)] max-w-[1000px] flex-col gap-3 overflow-hidden">
-        <DialogTitle className="flex min-w-0 items-center gap-2 pr-6 text-sm">
-          <StateIcon className={cn('size-4 shrink-0', state === 'open' ? 'text-emerald-600 dark:text-emerald-400' : state === 'merged' ? 'text-violet-600 dark:text-violet-400' : state === 'closed' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground')} aria-hidden />
-          <span className="min-w-0 truncate" title={page?.title ?? pull.title}>{page?.title ?? pull.title}</span>
-          <span className="shrink-0 font-normal tabular-nums text-muted-foreground">#{pull.number}</span>
-          <span className="ml-auto flex shrink-0 items-center gap-1">
-            <WidgetButton
-              data-pull-refresh=""
-              onClick={() => { void refresh(); }}
-              disabled={refreshing || load.kind === 'loading'}
-              title={t('pullRequests.detail.refresh')}
-              aria-label={t('pullRequests.detail.refresh')}
-              icon={<RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />}
-            />
-            {forgeHref(pull.url) && (
-              <a href={forgeHref(pull.url)!} target="_blank" rel="noopener noreferrer" data-pull-forge=""
-                title={t('pullRequests.openOnForge')} aria-label={t('pullRequests.openOnForge')}
-                className={widgetButtonClass({ iconOnly: true })}>
-                <ExternalLink className="size-3.5" />
-              </a>
-            )}
-            <Dropdown.Root modal={false}>
-              <Dropdown.Trigger asChild>
-                <button type="button" data-pull-dialog-menu="" title={t('pullRequests.more')} aria-label={t('pullRequests.more')} className={widgetButtonClass({ iconOnly: true })}>
-                  <MoreHorizontal className="size-3.5" />
-                </button>
-              </Dropdown.Trigger>
-              <Dropdown.Portal>
-                <Dropdown.Content sideOffset={6} align="end" className="z-[60] min-w-44 rounded-lg border border-border bg-popover p-1 text-xs text-popover-foreground shadow-elev-2">
-                  <NativeViewCover />
-                  {menu}
-                </Dropdown.Content>
-              </Dropdown.Portal>
-            </Dropdown.Root>
-          </span>
-        </DialogTitle>
+        <div ref={setHeader} className="flex min-w-0 items-center gap-2 pr-6">
+          <DialogTitle className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+            <StateIcon className={cn('size-4 shrink-0', state === 'open' ? 'text-emerald-600 dark:text-emerald-400' : state === 'merged' ? 'text-violet-600 dark:text-violet-400' : state === 'closed' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground')} aria-hidden />
+            <span className="min-w-0 truncate" title={page?.title ?? pull.title}>{page?.title ?? pull.title}</span>
+            <span className="shrink-0 font-normal tabular-nums text-muted-foreground">#{pull.number}</span>
+          </DialogTitle>
+          <div data-pull-actions="" role="group" aria-label={t('pullRequests.detail.actions')} className="flex shrink-0 items-center gap-1.5">
+            {beside.map((action) => <PullActionButton key={action.id} action={action} onRun={onAction} />)}
+            <PullActionButton action={actions.primary} primary onRun={onAction} />
+            <span className="flex items-center gap-0.5">
+              <WidgetButton
+                data-pull-refresh=""
+                onClick={() => { void refresh(); }}
+                disabled={refreshing || load.kind === 'loading'}
+                title={t('pullRequests.detail.refresh')}
+                aria-label={t('pullRequests.detail.refresh')}
+                icon={<RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />}
+              />
+              {forgeHref(pull.url) && (
+                <a href={forgeHref(pull.url)!} target="_blank" rel="noopener noreferrer" data-pull-forge=""
+                  title={t('pullRequests.openOnForge')} aria-label={t('pullRequests.openOnForge')}
+                  className={widgetButtonClass({ iconOnly: true })}>
+                  <ExternalLink className="size-3.5" />
+                </a>
+              )}
+              <Dropdown.Root modal={false}>
+                <Dropdown.Trigger asChild>
+                  <button type="button" data-pull-dialog-menu="" title={t('pullRequests.more')} aria-label={t('pullRequests.more')} className={widgetButtonClass({ iconOnly: true })}>
+                    <MoreHorizontal className="size-3.5" />
+                  </button>
+                </Dropdown.Trigger>
+                <Dropdown.Portal>
+                  <Dropdown.Content sideOffset={6} align="end" className="z-[60] min-w-44 rounded-lg border border-border bg-popover p-1 text-xs text-popover-foreground shadow-elev-2">
+                    <NativeViewCover />
+                    <PullActionMenuItems actions={folded} onRun={onAction} />
+                    {links}
+                  </Dropdown.Content>
+                </Dropdown.Portal>
+              </Dropdown.Root>
+            </span>
+          </div>
+        </div>
         <DialogDescription className="sr-only">{t('pullRequests.detail.description')}</DialogDescription>
 
         <div data-pull-header="" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-muted-foreground">

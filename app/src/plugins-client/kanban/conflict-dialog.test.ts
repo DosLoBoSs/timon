@@ -267,7 +267,13 @@ test('a contributor\'s branch the maintainers may not change says so, with only 
     await m.openMenu(58);
     assert.ok(document.querySelector('[data-menu-ask-contributor]'));
     assert.ok(!document.querySelector('[data-menu-update-branch]'));
-    assert.ok(!document.querySelector('[data-menu-resolve-conflict]'));
+    // The resolution its conflict calls for stays, greyed, with the reason on hover.
+    const resolve = document.querySelector('[data-menu-resolve-conflict]');
+    assert.ok(resolve);
+    assert.ok(resolve.hasAttribute('data-disabled'));
+    assert.match(resolve.getAttribute('title') ?? '', /does not let the maintainers change this branch/);
+    const reason = document.getElementById(resolve.getAttribute('aria-describedby') ?? '');
+    assert.match(reason?.textContent ?? '', /does not let the maintainers change this branch/);
   } finally {
     await m.unmount();
   }

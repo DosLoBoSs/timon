@@ -79,7 +79,8 @@ const PAGE = {
 /** How the widget is painted: alone by default, or as a tab of the Git stack. */
 type Self = { tabbed: boolean; selected: boolean };
 
-async function mount(list: PullRequestItem[], self?: Self, keepRead = false) {
+/** `width`: what a ResizeObserver reports of every element it watches (none by default). */
+async function mount(list: PullRequestItem[], self?: Self, keepRead = false, width?: number) {
   const { JSDOM } = await import('jsdom');
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
   const saved = new Map<string, PropertyDescriptor | undefined>();
@@ -96,7 +97,12 @@ async function mount(list: PullRequestItem[], self?: Self, keepRead = false) {
   }
   install('requestAnimationFrame', dom.window.requestAnimationFrame.bind(dom.window));
   install('cancelAnimationFrame', dom.window.cancelAnimationFrame.bind(dom.window));
-  install('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
+  install('ResizeObserver', class {
+    constructor(private readonly report: (entries: Array<{ contentRect: { width: number } }>) => void) {}
+    observe() { if (width !== undefined) this.report([{ contentRect: { width } }]); }
+    unobserve() {}
+    disconnect() {}
+  });
   install('IS_REACT_ACT_ENVIRONMENT', true);
   const opened: string[] = [];
   dom.window.open = ((href: string) => { opened.push(String(href)); return null; }) as typeof dom.window.open;
@@ -355,6 +361,86 @@ test('a click on a row opens its page in a window, at the mouse and at the keybo
     // Closed before the page goes: Radix's focus timers must not outlive the test.
     await m.key(document.activeElement ?? document.body, 'Escape');
     assert.equal(dialog(), null);
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    await m.unmount();
+  }
+});
+
+const conflicted = (extra: Partial<PullRequestItem> = {}) => pull({
+  mergeStateStatus: 'dirty', gestures: { update_branch: false, ask_contributor: true, resolve_conflict: true, locked: null }, ...extra,
+});
+
+test('the window shows its main gestures without opening "…": the one its state calls for filled, the frequent ones beside it', async () => {
+  const m = await mount([conflicted()]);
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const d = document.querySelector('[data-pull-dialog]');
+    assert.ok(d);
+    const primary = d.querySelector('[data-pull-action-primary]');
+    assert.equal(primary?.getAttribute('data-pull-action'), 'resolveConflict');
+    assert.equal(primary?.textContent, 'Resolve the conflict…');
+    assert.deepEqual(
+      Array.from(d.querySelectorAll('[data-pull-actions] [data-pull-action]:not([data-pull-action-primary])')).map((b) => b.getAttribute('data-pull-action')),
+      ['askContributor', 'review'],
+    );
+    assert.ok(!document.querySelector('[data-menu-comment]'), 'no menu was opened to see them');
+
+    // The rest, and the job's links, sit in "…".
+    await m.key(d.querySelector('[data-pull-dialog-menu]'), 'Enter');
+    assert.ok(document.querySelector('[data-menu-comment]'));
+    assert.ok(document.querySelector('[data-menu-forge]'));
+    assert.ok(!document.querySelector('[data-menu-resolve-conflict]'), 'a button beside is not repeated in the menu');
+    await m.key(document.activeElement ?? document.body, 'Escape');
+
+    // A gesture the daemon prepares closes the window once ready, onto what it opens.
+    await m.click(d.querySelector('[data-pull-action="review"]'));
+    assert.ok(m.calls.some((c) => c.method === 'POST' && c.url === '/api/ui/projects/acme/pull-requests/12/review'));
+    assert.ok(!document.querySelector('[data-pull-dialog]'));
+    assert.ok(document.querySelector('[data-pull-brief]'));
+    await m.click(Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Close') ?? null);
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('a refused gesture shows greyed with its reason, on hover and to a screen reader', async () => {
+  const m = await mount([conflicted({ gestures: { update_branch: false, ask_contributor: true, resolve_conflict: false, locked: 'not_allowed' } })]);
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const d = document.querySelector('[data-pull-dialog]');
+    assert.ok(d);
+    assert.equal(d.querySelector('[data-pull-action-primary]')?.getAttribute('data-pull-action'), 'review');
+    const resolve = d.querySelector('[data-pull-action="resolveConflict"]');
+    assert.ok(resolve);
+    assert.ok(resolve.hasAttribute('disabled'));
+    assert.match(d.querySelector('[data-pull-action-reason="resolveConflict"]')?.getAttribute('title') ?? '', /does not let the maintainers change this branch/);
+    const reason = document.getElementById(resolve.getAttribute('aria-describedby') ?? '');
+    assert.match(reason?.textContent ?? '', /does not let the maintainers change this branch/);
+    assert.equal(d.querySelector('[data-pull-action="askContributor"]')?.hasAttribute('disabled'), false);
+    await m.key(document.activeElement ?? document.body, 'Escape');
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('a narrow window folds the gestures beside the filled one into "…"; the filled one stays', async () => {
+  const m = await mount([conflicted()], undefined, false, 480);
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const d = document.querySelector('[data-pull-dialog]');
+    assert.ok(d);
+    assert.deepEqual(Array.from(d.querySelectorAll('[data-pull-actions] [data-pull-action]')).map((b) => b.getAttribute('data-pull-action')), ['resolveConflict']);
+    await m.key(d.querySelector('[data-pull-dialog-menu]'), 'Enter');
+    assert.ok(document.querySelector('[data-menu-ask-contributor]'));
+    assert.ok(document.querySelector('[data-menu-review]'));
+    await m.key(document.activeElement ?? document.body, 'Escape');
+    await m.key(document.activeElement ?? document.body, 'Escape');
     await new Promise((r) => setTimeout(r, 30));
   } finally {
     await m.unmount();
