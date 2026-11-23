@@ -2,6 +2,10 @@
   "desktop": {
     "menu": {
       "newWindow": "新しいウィンドウ",
+      "view": "表示",
+      "zoomReset": "実際のサイズ",
+      "zoomIn": "拡大",
+      "zoomOut": "縮小",
       "open": "{appName} を開く",
       "daemon": "デーモン: {state, select, running {実行中} other {接続できません}} ({origin})",
       "quit": "終了"

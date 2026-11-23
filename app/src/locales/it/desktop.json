@@ -2,6 +2,10 @@
   "desktop": {
     "menu": {
       "newWindow": "Nuova finestra",
+      "view": "Vista",
+      "zoomReset": "Dimensioni reali",
+      "zoomIn": "Ingrandisci",
+      "zoomOut": "Riduci",
       "open": "Apri {appName}",
       "daemon": "Daemon: {state, select, running {attivo} other {irraggiungibile}} ({origin})",
       "quit": "Esci"
