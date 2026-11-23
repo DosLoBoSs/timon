@@ -44,6 +44,7 @@ declare module '@deepseek-ai/cordis' {
     'timon/task_done'(ev: Extract<BusEvent, { kind: 'task_done' }>): void;
     'timon/task_started'(ev: Extract<BusEvent, { kind: 'task_started' }>): void;
     'timon/task_unblocked'(ev: Extract<BusEvent, { kind: 'task_unblocked' }>): void;
+    'timon/integration_changed'(ev: Extract<BusEvent, { kind: 'integration_changed' }>): void;
     'timon/task_created'(ev: Extract<BusEvent, { kind: 'task_created' }>): void;
     'timon/task_updated'(ev: Extract<BusEvent, { kind: 'task_updated' }>): void;
     'timon/task_assigned'(ev: Extract<BusEvent, { kind: 'task_assigned' }>): void;

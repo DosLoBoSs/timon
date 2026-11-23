@@ -33,8 +33,10 @@ import { getHost } from './host/index.js';
 import type { ExecResult } from './host/types.js';
 import { pullRequestSetting, runPrChecks, type PrCheck } from './pr-open.js';
 import { readProjectIntegration } from './project-integration.js';
-import { seriesVisibleTo } from './series-service.js';
-import { rowVisible, type DbViewer } from './users/owned.js';
+import type { DbViewer } from './users/owned.js';
+import { integrationVisibleTo } from './integration-visibility.js';
+
+export { integrationVisibleTo };
 
 /** The island asks every 60 s; a little less here, so its own call is never
  *  the one answered from the stored copy. */
@@ -193,19 +195,6 @@ export function integrationView(row: IntegrationRow): IntegrationView {
     checks_running: open && !!checks && checks.counts.pending > 0,
     pr_title: stored?.title || null,
   };
-}
-
-/**
- * Whether a caller may read a job's landing: the same rule as its series (the
- * pilot mission, or one of its tasks), else one of the tasks based on the
- * branch. "Not found" otherwise: a refusal would confirm the job exists.
- */
-export function integrationVisibleTo(viewer: DbViewer | null, row: IntegrationRow): boolean {
-  if (!viewer) return false;
-  if (viewer.isSuperadmin) return true;
-  if (row.series_id && seriesVisibleTo(viewer, row.series_id)) return true;
-  return dbApi.listTasksByBaseBranch(row.branch)
-    .some((t) => (row.project === null || t.project === row.project) && rowVisible(t, viewer, 'tasks') !== undefined);
 }
 
 /** `todo`: the jobs of one idea, oldest first, the way its badge finds them. */

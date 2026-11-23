@@ -42,7 +42,7 @@ import {
 import { prepareOwnerOnlyFile, tightenToOwner } from './host/owner-only.js';
 import { assertDataUpdateApproved, assertPackagedCliMayOpen, packagedCli, packagedDaemon, protectDataBeforeOpen, timonVersion, unpackagedDataNotice } from './data-version.js';
 import { holdDataOpenLock, releaseDataOpenLock } from './data-open-lock.js';
-import { bus, type TaskDeletedSnapshot } from './bus.js';
+import { bus, type IntegrationChange, type TaskDeletedSnapshot } from './bus.js';
 import {
   BACKEND_FALLBACK_REASONS,
   countsTowardCrashLoop,
@@ -3228,7 +3228,9 @@ const markIntegrationMergedStmt = db.prepare(`
 const claimIntegrationLandingStmt = db.prepare(
   `UPDATE integrations SET landed_at = ?, updated_at = ? WHERE id = ? AND state = 'merged' AND landed_at IS NULL`,
 );
-const releaseIntegrationLandingStmt = db.prepare(`UPDATE integrations SET landed_at = NULL, updated_at = ? WHERE id = ?`);
+const releaseIntegrationLandingStmt = db.prepare(
+  `UPDATE integrations SET landed_at = NULL, updated_at = ? WHERE id = ? AND landed_at IS NOT NULL`,
+);
 const listUnlandedIntegrationsStmt = db.prepare(
   `SELECT * FROM integrations WHERE state = 'merged' AND landed_at IS NULL ORDER BY updated_at ASC`,
 );
@@ -3481,6 +3483,34 @@ const TASK_WATCHED_COLUMNS = [
  * comparing the row read BEFORE the write with the row now. Synchronous, so the
  * origin store of the writer (`task-origin.ts`) is still the current one.
  */
+/**
+ * Publishes `integration_changed` for a write that moved the row `id`. The
+ * callers publish only when their statement changed something: a job's
+ * screens reload on it, and a write that changes nothing must not wake them.
+ */
+function publishIntegrationChange(id: string, changed: readonly IntegrationChange[]): void {
+  const row = getIntegrationByIdStmt.get(id) as IntegrationRow | undefined;
+  if (!row) return;
+  bus.publish({
+    kind: 'integration_changed', integrationId: row.id, project: row.project, seriesId: row.series_id,
+    state: row.state, changed,
+  });
+}
+
+/** The forge's stored reading without its read time (`integration-preview.ts`
+ *  stamps `read_at` on each one): two readings saying the same compare equal. */
+function checksSignature(checks: string | null): string | null {
+  if (checks === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(checks);
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return checks;
+    const { read_at: _readAt, ...rest } = parsed as Record<string, unknown>;
+    return JSON.stringify(rest);
+  } catch {
+    return checks;
+  }
+}
+
 function publishTaskDiff(prev: TaskRow | undefined): void {
   if (!prev) return;
   const next = getTaskStmt.get(prev.id) as TaskRow | undefined;
@@ -5840,11 +5870,15 @@ export const dbApi = {
     project?: string | null; seriesId?: string | null; baseSha?: string | null;
   }): IntegrationRow {
     const now = Date.now();
+    const id = randomUUID();
     upsertIntegrationStmt.run(
-      randomUUID(), row.repo, row.branch, row.remote, row.target, row.mode,
+      id, row.repo, row.branch, row.remote, row.target, row.mode,
       row.project ?? null, row.seriesId ?? null, row.baseSha ?? null, now, now,
     );
-    return getIntegrationStmt.get(row.repo, row.branch) as IntegrationRow;
+    const recorded = getIntegrationStmt.get(row.repo, row.branch) as IntegrationRow;
+    // Recording an existing branch again moves nothing a screen shows.
+    if (recorded.id === id) publishIntegrationChange(id, ['created']);
+    return recorded;
   },
   getIntegration(repo: string, branch: string): IntegrationRow | undefined {
     return getIntegrationStmt.get(repo, branch) as IntegrationRow | undefined;
@@ -5859,16 +5893,20 @@ export const dbApi = {
   /** Moves an integration to 'merged' (its work is in the target). False when
    *  it already was, or the row is gone. */
   markIntegrationMerged(id: string, mergeSha: string | null): boolean {
-    return markIntegrationMergedStmt.run(mergeSha, Date.now(), id).changes === 1;
+    const moved = markIntegrationMergedStmt.run(mergeSha, Date.now(), id).changes === 1;
+    if (moved) publishIntegrationChange(id, ['state']);
+    return moved;
   },
   /** Claims the landing replay of a merged integration: true for one caller only. */
   claimIntegrationLanding(id: string): boolean {
     const now = Date.now();
-    return claimIntegrationLandingStmt.run(now, now, id).changes === 1;
+    const claimed = claimIntegrationLandingStmt.run(now, now, id).changes === 1;
+    if (claimed) publishIntegrationChange(id, ['landed']);
+    return claimed;
   },
   /** Hands a failed landing replay back to the reconciliation. */
   releaseIntegrationLanding(id: string): void {
-    releaseIntegrationLandingStmt.run(Date.now(), id);
+    if (releaseIntegrationLandingStmt.run(Date.now(), id).changes === 1) publishIntegrationChange(id, ['landed']);
   },
   /** Merged integrations whose landing was never replayed. */
   listUnlandedIntegrations(): IntegrationRow[] {
@@ -5941,18 +5979,32 @@ export const dbApi = {
   listRecentIntegrations(limit = 100): IntegrationRow[] {
     return listRecentIntegrationsStmt.all(limit) as IntegrationRow[];
   },
+  /** Stores the forge's reading; publishes only when it says something new. */
   setIntegrationChecks(id: string, checks: string | null): void {
+    const before = getIntegrationByIdStmt.get(id) as IntegrationRow | undefined;
+    if (!before) return;
     setIntegrationChecksStmt.run(checks, id);
+    if (checksSignature(before.checks) !== checksSignature(checks)) publishIntegrationChange(id, ['checks']);
   },
   /** Records the pull request opened for an integration branch; false when
    *  the row is gone or already past the 'branch' state. */
   markIntegrationOpen(id: string, pr: { number: number; url: string; headSha: string }): boolean {
-    return markIntegrationOpenStmt.run(pr.number, pr.url, pr.headSha, Date.now(), id).changes > 0;
+    const opened = markIntegrationOpenStmt.run(pr.number, pr.url, pr.headSha, Date.now(), id).changes > 0;
+    if (opened) publishIntegrationChange(id, ['state', 'pull_request']);
+    return opened;
   },
   /** Records the head a repair pushed to the open pull request, and forgets
    *  the checks read before it; false unless the pull request is open. */
   setIntegrationHead(id: string, headSha: string): boolean {
-    return setIntegrationHeadStmt.run(headSha, Date.now(), id).changes === 1;
+    const before = getIntegrationByIdStmt.get(id) as IntegrationRow | undefined;
+    const moved = setIntegrationHeadStmt.run(headSha, Date.now(), id).changes === 1;
+    if (moved && before) {
+      const changed: IntegrationChange[] = [];
+      if (before.head_sha !== headSha) changed.push('pull_request');
+      if (before.checks !== null) changed.push('checks');
+      if (changed.length) publishIntegrationChange(id, changed);
+    }
+    return moved;
   },
   /** Records a repair asked for on a job's pull request, as 'running'. */
   insertLandingRepair(input: {
@@ -5985,7 +6037,9 @@ export const dbApi = {
   },
   /** The pull request was closed without a merge; false unless it was open. */
   markIntegrationClosed(id: string): boolean {
-    return markIntegrationClosedStmt.run(Date.now(), id).changes === 1;
+    const closed = markIntegrationClosedStmt.run(Date.now(), id).changes === 1;
+    if (closed) publishIntegrationChange(id, ['state']);
+    return closed;
   },
   touchIntegrationPolled(id: string): void {
     touchIntegrationPolledStmt.run(Date.now(), id);
