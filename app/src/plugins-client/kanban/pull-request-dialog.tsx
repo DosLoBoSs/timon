@@ -21,7 +21,7 @@ import { useEffect, useLayoutEffect, useMemo, useState, type ReactElement, type 
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import {
   ChevronRight, CircleAlert, CircleCheck, CircleDot, CircleMinus, ExternalLink, GitCommitHorizontal, GitMerge,
-  GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, LoaderCircle, MoreHorizontal, RefreshCw, ScrollText,
+  GitPullRequest, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, LoaderCircle, MoreHorizontal, RefreshCw, ScrollText,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -33,8 +33,8 @@ import { cn } from '@/lib/utils';
 import { diffLineKind, patchBody } from './landing-api';
 import { DIFF_LINE_CLASS } from './landing-preview-dialog';
 import {
-  checkSeconds, forgeHref, forgeMarkdownHtml, getCheckLog, getPullRequestDiff, getPullRequestPage, placeThreads,
-  splitDiffByFile, type CheckLog, type PageCheck, type PageThread, type PageTimelineItem, type PullRequestPage, type Read,
+  checkCounts, checkSeconds, forgeHref, forgeMarkdownHtml, getCheckLog, getPullRequestDiff, getPullRequestPage, mergeState, placeThreads,
+  splitDiffByFile, type CheckLog, type MergeState, type PageCheck, type PageThread, type PageTimelineItem, type PullRequestPage, type Read,
 } from './pull-request-page-api';
 import { branchChip, branchLock, reviewBadge, type PullActionId, type PullActions, type PullRequestItem } from './pull-requests-model';
 import { PullActionButton, PullActionMenuItems } from './pull-request-actions';
@@ -208,7 +208,93 @@ function Thread({ thread, showPath }: { thread: PageThread; showPath: boolean })
   );
 }
 
-function ConversationTab({ page }: { page: PullRequestPage }) {
+type BoxLine = { icon: typeof CircleCheck; tone: string };
+
+const TONE = {
+  good: 'text-emerald-600 dark:text-emerald-400',
+  warn: 'text-amber-600 dark:text-amber-400',
+  bad: 'text-red-600 dark:text-red-400',
+  quiet: 'text-muted-foreground',
+} as const;
+
+const BOX_CHECKS: Record<'none' | 'failed' | 'pending' | 'passed', BoxLine> = {
+  none: { icon: CircleMinus, tone: TONE.quiet },
+  failed: { icon: CircleAlert, tone: TONE.bad },
+  pending: { icon: CircleDot, tone: TONE.warn },
+  passed: { icon: CircleCheck, tone: TONE.good },
+};
+
+const BOX_MERGE: Record<MergeState, BoxLine> = {
+  ready: { icon: CircleCheck, tone: TONE.good },
+  conflict: { icon: CircleAlert, tone: TONE.warn },
+  behind: { icon: GitPullRequestArrow, tone: TONE.warn },
+  blocked: { icon: CircleAlert, tone: TONE.warn },
+  draft: { icon: GitPullRequestDraft, tone: TONE.quiet },
+  unknown: { icon: CircleDot, tone: TONE.quiet },
+  merged: { icon: GitMerge, tone: 'text-violet-600 dark:text-violet-400' },
+  closed: { icon: GitPullRequestClosed, tone: TONE.bad },
+};
+
+const BOX_DECISION: Record<NonNullable<PullRequestPage['reviewDecision']>, BoxLine> = {
+  approved: { icon: CircleCheck, tone: TONE.good },
+  changes_requested: { icon: CircleAlert, tone: TONE.warn },
+  review_required: { icon: CircleDot, tone: TONE.quiet },
+};
+
+function BoxIcon({ line }: { line: BoxLine }) {
+  const Icon = line.icon;
+  return <Icon className={cn('size-4 shrink-0', line.tone)} aria-hidden />;
+}
+
+/**
+ * Where the pull request stands, under its conversation as GitHub's merge box
+ * is: its checks (a click shows them), its merge state, the review decision,
+ * and the gestures its state calls for, the header's own. No merge button:
+ * a pull request merges on GitHub, by a person.
+ */
+function MergeBox({ page, actions, onAction, onShowChecks }: {
+  page: PullRequestPage;
+  actions: PullActions;
+  onAction: (id: PullActionId) => void;
+  onShowChecks: () => void;
+}) {
+  const counts = checkCounts(page.checks);
+  const checks = page.checks.length === 0 ? 'none' : counts.fail > 0 ? 'failed' : counts.pending > 0 ? 'pending' : 'passed';
+  const merge = mergeState(page);
+  return (
+    <section data-pull-merge-box="" aria-label={t('pullRequests.detail.box.label')} className={cn(ISLAND, 'flex flex-col gap-1 px-2 py-2')}>
+      <button type="button" data-pull-box-checks={checks} onClick={onShowChecks} title={t('pullRequests.detail.box.showChecks')}
+        className="flex min-w-0 items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <BoxIcon line={BOX_CHECKS[checks]} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-medium">{t(`pullRequests.detail.box.checks.${checks}`)}</span>
+          {checks !== 'none' && (
+            <span className="block text-[11px] tabular-nums text-muted-foreground">{t('pullRequests.detail.box.checksCount', counts)}</span>
+          )}
+        </span>
+        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      </button>
+      {page.reviewDecision && (
+        <div data-pull-box-decision={page.reviewDecision} className="flex min-w-0 items-center gap-2.5 px-1.5 py-1.5">
+          <BoxIcon line={BOX_DECISION[page.reviewDecision]} />
+          <span className="text-xs font-medium">{t(`pullRequests.detail.box.decision.${page.reviewDecision}`)}</span>
+        </div>
+      )}
+      <div data-pull-box-merge={merge} className="flex min-w-0 items-center gap-2.5 px-1.5 py-1.5">
+        <BoxIcon line={BOX_MERGE[merge]} />
+        <span className="text-xs font-medium">{t(`pullRequests.detail.box.merge.${merge}`)}</span>
+      </div>
+      {page.state === 'open' && (
+        <div data-pull-box-actions="" className="flex flex-wrap items-center justify-end gap-1.5 px-1.5 pb-0.5 pt-1">
+          {actions.secondary.map((action) => <PullActionButton key={action.id} action={action} onRun={onAction} />)}
+          <PullActionButton action={actions.primary} primary onRun={onAction} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ConversationTab({ page, box }: { page: PullRequestPage; box: ReactNode }) {
   return (
     <div className="flex flex-col gap-3">
       <section data-pull-body="" className={cn(ISLAND, 'flex flex-col gap-1.5 px-3 py-2.5')}>
@@ -243,6 +329,7 @@ function ConversationTab({ page }: { page: PullRequestPage }) {
           <More count={page.threadsMore} what="threads" />
         </section>
       )}
+      {box}
     </div>
   );
 }
@@ -339,8 +426,7 @@ const CHECK_ORDER: Record<PageCheck['status'], number> = { fail: 0, pending: 1, 
 function ChecksTab({ page, project }: { page: PullRequestPage; project: string }) {
   if (page.checks.length === 0) return <p className="text-xs text-muted-foreground">{t('pullRequests.detail.noChecks')}</p>;
   const sorted = [...page.checks].sort((a, b) => CHECK_ORDER[a.status] - CHECK_ORDER[b.status]);
-  const counts = { fail: 0, pending: 0, pass: 0, skipped: 0 };
-  for (const c of page.checks) counts[c.status] += 1;
+  const counts = checkCounts(page.checks);
   return (
     <div className="flex flex-col gap-2">
       <p className="text-[11.5px] tabular-nums text-muted-foreground">{t('pullRequests.detail.checksSummary', counts)}</p>
@@ -604,6 +690,7 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
 }): ReactElement {
   const [load, setLoad] = useState<PageLoad>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState('conversation');
   const [header, setHeader] = useState<HTMLDivElement | null>(null);
   const narrow = useNarrow(header, NARROW_HEADER_PX);
   const beside = narrow ? [] : actions.secondary;
@@ -728,7 +815,7 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
 
         {page && (
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_15rem]">
-            <Tabs defaultValue="conversation" className="flex min-h-0 min-w-0 flex-col gap-2">
+            <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 min-w-0 flex-col gap-2">
               <TabsList className="h-8 self-start">
                 <TabsTrigger value="conversation" data-pull-tab="conversation" className="text-xs">
                   {t('pullRequests.detail.tab.conversation')}
@@ -748,7 +835,10 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="conversation" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
-                <ConversationTab page={page} />
+                <ConversationTab
+                  page={page}
+                  box={<MergeBox page={page} actions={actions} onAction={onAction} onShowChecks={() => setTab('checks')} />}
+                />
               </TabsContent>
               <TabsContent value="commits" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
                 <CommitsTab page={page} />

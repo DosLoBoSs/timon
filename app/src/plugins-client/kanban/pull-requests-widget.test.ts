@@ -446,3 +446,33 @@ test('a narrow window folds the gestures beside the filled one into "…"; the f
     await m.unmount();
   }
 });
+
+test('under the conversation, a box says the checks, the merge state and the decision, with the header\'s gestures and no merge button', async () => {
+  const m = await mount([conflicted()]);
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const box = document.querySelector('[data-pull-dialog] [data-pull-merge-box]');
+    assert.ok(box);
+    const checks = box.querySelector('[data-pull-box-checks]');
+    assert.equal(checks?.getAttribute('data-pull-box-checks'), 'failed');
+    assert.match(checks?.textContent ?? '', /Some checks failed.*1 passed · 1 failed · 0 running/);
+    assert.equal(box.querySelector('[data-pull-box-merge]')?.getAttribute('data-pull-box-merge'), 'conflict');
+    assert.match(box.querySelector('[data-pull-box-merge]')?.textContent ?? '', /conflicts with the base branch/);
+    assert.equal(box.querySelector('[data-pull-box-decision]')?.textContent, 'Changes requested');
+    assert.deepEqual(
+      Array.from(box.querySelectorAll('[data-pull-box-actions] [data-pull-action]')).map((b) => b.getAttribute('data-pull-action')),
+      ['askContributor', 'review', 'resolveConflict'],
+    );
+    assert.ok(!Array.from(box.querySelectorAll('button')).some((b) => /merge/i.test(b.textContent ?? '')), 'a person merges on GitHub');
+
+    // Its checks line leads to the Checks tab.
+    assert.ok(!document.querySelector('[data-pull-dialog] [data-pull-check]'));
+    await m.click(checks);
+    assert.ok(document.querySelector('[data-pull-dialog] [data-pull-check="test"]'));
+    await m.key(document.activeElement ?? document.body, 'Escape');
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    await m.unmount();
+  }
+});
