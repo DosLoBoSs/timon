@@ -37,8 +37,10 @@
  *
  * Every job comes with its `links` (`forge-links.ts`): its ideas, their issues
  * and the ones its pull request closes, its series and pilot mission, each
- * through the caller's scope; and its `repairs`: how many were used, the one
- * under way, what the pull request's last known state calls for.
+ * through the caller's scope; its `repairs`: how many were used, the one
+ * under way, what the pull request's last known state calls for; and whether
+ * the planner kept it on its branch (`kept`, `under_way`, `last_merge`), for
+ * the widget's landing gesture.
  */
 import type { Request, Response, Router } from 'express';
 import { z } from 'zod';
@@ -49,7 +51,9 @@ import {
   type PreviewDeps,
 } from '../../integration-preview.js';
 import { withJobLinks } from '../../forge-links.js';
-import { isPrRefusal, landIntegrationBranch, type LandDeps, type LandRefusalCode } from '../../integration-land.js';
+import {
+  isPrRefusal, landIntegrationBranch, withKeptState, type LandDeps, type LandRefusalCode,
+} from '../../integration-land.js';
 import { resolveSeriesId } from '../../series-service.js';
 import { refusalBody as prRefusalBody } from './pr-routes.js';
 import {
@@ -163,7 +167,7 @@ export function registerLandingRoutes(app: Router, deps: PreviewDeps & RepairDep
     if (!query.success) { invalid(res, zodDetail(query.error)); return; }
     try {
       const viewer = viewerFromRequest(req);
-      res.json({ landings: withRepairs(withJobLinks(listIntegrationViews(query.data, viewer), viewer)) });
+      res.json({ landings: withKeptState(withRepairs(withJobLinks(listIntegrationViews(query.data, viewer), viewer))) });
     } catch (err) { failed(res, 'listing the landings', err); }
   });
 
@@ -171,7 +175,7 @@ export function registerLandingRoutes(app: Router, deps: PreviewDeps & RepairDep
     const row = landingForRoute(req, res);
     if (!row) return;
     try {
-      const [landing] = withRepairs(withJobLinks([integrationView(row)], viewerFromRequest(req)));
+      const [landing] = withKeptState(withRepairs(withJobLinks([integrationView(row)], viewerFromRequest(req))));
       res.json({ landing });
     } catch (err) { failed(res, 'reading the links of a job', err); }
   });
@@ -189,7 +193,7 @@ export function registerLandingRoutes(app: Router, deps: PreviewDeps & RepairDep
         res.status(status).json(apiError('landing_checks_unavailable', out.reason, { detail: out.reason }));
         return;
       }
-      const [landing] = withRepairs(withJobLinks([out.integration], viewerFromRequest(req)));
+      const [landing] = withKeptState(withRepairs(withJobLinks([out.integration], viewerFromRequest(req))));
       res.json({ landing, fresh: out.fresh });
     } catch (err) { failed(res, 'reading the checks of a pull request', err); }
   });
@@ -225,7 +229,7 @@ export function registerLandingRoutes(app: Router, deps: PreviewDeps & RepairDep
       if (!out.ok) { res.status(out.status).json(repairRefusal(out.code, out.reason)); return; }
       auditRequest(req, 'integration.repair_requested', `${row.branch}:${body.data.kind}`);
       const fresh = dbApi.getIntegrationById(row.id) ?? row;
-      const [landing] = withRepairs(withJobLinks([integrationView(fresh)], viewerFromRequest(req)));
+      const [landing] = withKeptState(withRepairs(withJobLinks([integrationView(fresh)], viewerFromRequest(req))));
       res.status(201).json({ repair: out.repair, task_id: out.task_id, landing });
     } catch (err) { failed(res, 'asking for a repair', err); }
   });
@@ -250,7 +254,7 @@ export function registerLandingRoutes(app: Router, deps: PreviewDeps & RepairDep
         auditRequest(req, out.outcome === 'merged' ? 'integration.landed' : 'integration.pr_opened', row.branch);
       }
       const fresh = dbApi.getIntegrationById(row.id) ?? row;
-      const [landing] = withRepairs(withJobLinks([integrationView(fresh)], viewerFromRequest(req)));
+      const [landing] = withKeptState(withRepairs(withJobLinks([integrationView(fresh)], viewerFromRequest(req))));
       res.json({ ...out, landing });
     } catch (err) { failed(res, 'landing a job', err); }
   });

@@ -8,7 +8,9 @@
  * carries, their issues, the mission that pilots it, its branch and target —
  * and its checks on the forge with the repair counter. The foot holds the
  * window's gestures: read the checks again, and the repair the forge calls
- * for (or, once the repairs are spent, the pull request to take it over).
+ * for (or, once the repairs are spent, the pull request to take it over); for
+ * a job the planner kept on its branch, its landing — "Merge into main", or
+ * "Open the pull request" with the title it will carry.
  *
  * Two islands rather than one long page: a branch of a few hundred files keeps
  * its commits, its verdict and its links one click away. A file's patch is
@@ -19,16 +21,18 @@ import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { ChevronRight, CircleAlert, CircleCheck, CircleDot, CircleMinus, ExternalLink, GitPullRequest, LoaderCircle, MessageSquare, RefreshCw } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
 import { WidgetButton, widgetButtonClass } from '@/components/widget-toolbar';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { safeHref } from './project-todo-links';
 import { useJobDialog, type JobDialogValue } from './job-dialog-context';
 import {
-  diffLineKind, mainRepair, NO_LINKS, patchBody, previewLanding, repairsSpent,
+  diffLineKind, landsInPlace, mainRepair, NO_LINKS, patchBody, previewLanding, repairsSpent,
   type CheckStatus, type DiffLineKind, type Landing, type LandingPreview, type LinkedIssue, type Precheck, type PreviewFile,
 } from './landing-api';
 import { RepairIcon, repairHint, repairLabel } from './landing-repair';
+import { LandIcon, landLabel, titleFromBranch } from './landing-land';
 
 /** How each kind of diff line is painted, here and in the open pull requests' dialog. */
 export const DIFF_LINE_CLASS: Record<DiffLineKind, string> = {
@@ -251,6 +255,47 @@ export function JobChecksIsland({ landing }: { landing: Landing }): ReactElement
   );
 }
 
+/**
+ * The foot of a kept job: its landing as the window's main action. A pull
+ * request needs a title: it starts from the branch's name, and the person
+ * writes the real one here (the pre-checks refuse an id or a French title).
+ */
+function JobLandFoot({ host, commits }: { host: JobDialogValue; commits: number | null }): ReactElement | null {
+  const { landing, busy, land, landBlocked: blocked } = host;
+  const local = landsInPlace(landing);
+  const [title, setTitle] = useState(() => titleFromBranch(landing.branch));
+  if (!land) return null;
+  const label = landLabel(landing);
+  const missingTitle = !local && !title.trim();
+  return (
+    <div data-job-land-foot="" className="flex flex-wrap items-center justify-end gap-2">
+      {!local && (
+        <Input
+          data-job-land-title=""
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={256}
+          aria-label={t('landings.land.titleLabel')}
+          placeholder={t('landings.land.titleLabel')}
+          className="h-7 min-w-0 flex-1 text-xs"
+        />
+      )}
+      {/* A disabled button takes no pointer events: the wrapper carries the reason's tooltip. */}
+      <span title={blocked ?? undefined} className="shrink-0">
+        <WidgetButton
+          primary
+          data-job-land=""
+          onClick={() => { void land(local ? {} : { title: title.trim() }, commits); }}
+          disabled={busy !== null || blocked !== null || missingTitle}
+          aria-busy={busy === 'land' || undefined}
+          icon={<LandIcon landing={landing} busy={busy === 'land'} />}
+          label={label}
+        />
+      </span>
+    </div>
+  );
+}
+
 /** The foot of the window: read the checks again, and the repair the forge calls for. */
 function JobDialogFoot({ host }: { host: JobDialogValue }): ReactElement {
   const { landing, busy } = host;
@@ -435,6 +480,7 @@ function JobDialogBody({ host }: { host: JobDialogValue }) {
           </div>
         </div>
         {landing.state === 'open' && <JobDialogFoot host={host} />}
+        {host.land && <JobLandFoot host={host} commits={preview && !preview.problem ? preview.commit_count : null} />}
       </DialogContent>
     </Dialog>
   );

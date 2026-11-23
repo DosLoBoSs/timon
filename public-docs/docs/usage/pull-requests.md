@@ -96,7 +96,7 @@ A job planned in the planner always names its branch, so in a project that merge
 
 ### Land a branch you kept
 
-When the job is done and you want its kept branch in the target after all, land it:
+When the job is done and you want its kept branch in the target after all, land it from its row in the **Jobs** tab of the chat's Git stack (**Merge into main**, or **Open the PR**: see [Jobs](git.md#jobs)), or from a terminal:
 
 ```bash
 timon pr land <job>
