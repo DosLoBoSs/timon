@@ -124,3 +124,107 @@ export function keepPullList(slug: string, list: PullRequestList, at = Date.now(
 export function forgetPullListsForTests(): void {
   lastRead.clear();
 }
+
+/** A gesture on a pull request, from its row's menu or from its window. */
+export type PullActionId = 'resolveConflict' | 'updateBranch' | 'review' | 'report' | 'askContributor' | 'comment' | 'forge';
+
+/** A branch gesture that runs a moment before its dialog opens. */
+export type PullBranchWork = 'updateBranch' | 'askContributor';
+
+/** Why a gesture shows greyed rather than not at all: a person must read why it is refused. */
+export type PullActionBlock = BranchLock | 'branch_busy' | 'review_running';
+
+export type PullAction = {
+  id: PullActionId;
+  /** Greyed, with this reason; null when it can be done. */
+  blocked: PullActionBlock | null;
+  /** This very gesture is under way: its button shows a spinner. */
+  busy: boolean;
+};
+
+/** One button filled, one or two beside it, the rest in "…". */
+export type PullActions = { primary: PullAction; secondary: PullAction[]; overflow: PullAction[] };
+
+/** What is under way on the pull request, as the widget knows it. */
+export type PullWork = { branch?: PullBranchWork | null; preparing?: boolean };
+
+const BRANCH_GESTURES: ReadonlySet<PullActionId> = new Set(['updateBranch', 'resolveConflict', 'askContributor']);
+/** The order of the "…" menu, from the row and from the window. */
+const OVERFLOW_ORDER: readonly PullActionId[] = ['review', 'report', 'updateBranch', 'resolveConflict', 'askContributor', 'comment', 'forge'];
+const MAX_SECONDARY = 2;
+
+/**
+ * Which gestures a pull request shows, and where: the one its state calls for
+ * as the filled button, the frequent others beside it, the rare ones and the
+ * duplicates in "…". The row's menu lists them in this same order.
+ *
+ * The primary is, in turn: resolving a conflict this person may resolve,
+ * updating a branch that is behind, talking to the author of a draft (not yet
+ * ready for a review), reading a review that still matches the code, and
+ * otherwise preparing one. A branch gesture refused by a lock stays, greyed
+ * beside it, so the person sees why it is missing.
+ */
+export function pullRequestActions(pull: PullRequestItem, work: PullWork = {}): PullActions {
+  const gestures = pull.gestures;
+  const lock = gestures?.locked ?? null;
+  const badge = reviewBadge(pull);
+  const conflict = pull.mergeStateStatus === 'dirty';
+  const behind = pull.mergeStateStatus === 'behind';
+  const hasReport = !!pull.review?.report;
+  const freshReport = hasReport && badge?.kind === 'verdict' && !badge.outdated;
+
+  const action = (id: PullActionId, refused: PullActionBlock | null = null): PullAction => {
+    const branchBusy = BRANCH_GESTURES.has(id) && !!work.branch;
+    const busy = (id === 'review' && !!work.preparing) || (BRANCH_GESTURES.has(id) && work.branch === id);
+    const blocked = refused
+      ?? (id === 'review' && badge?.kind === 'running' ? 'review_running' : null)
+      ?? (branchBusy && !busy ? 'branch_busy' : null);
+    return { id, blocked, busy };
+  };
+
+  const allowed: Record<PullActionId, boolean> = {
+    review: true,
+    report: hasReport,
+    updateBranch: !!gestures?.update_branch,
+    resolveConflict: !!gestures?.resolve_conflict,
+    askContributor: !!gestures?.ask_contributor,
+    comment: true,
+    forge: true,
+  };
+
+  const primaryId: PullActionId = conflict && allowed.resolveConflict ? 'resolveConflict'
+    : behind && allowed.updateBranch ? 'updateBranch'
+      : pull.isDraft ? 'comment'
+        : freshReport ? 'report'
+          : 'review';
+
+  // A branch gesture the state calls for but a lock refuses: greyed, with its reason.
+  const refused: PullAction[] = [];
+  if (lock && conflict && !allowed.resolveConflict) refused.push(action('resolveConflict', lock));
+  if (lock && behind && !allowed.updateBranch) refused.push(action('updateBranch', lock));
+
+  const reading: PullActionId = freshReport ? 'report' : 'review';
+  const candidates: PullActionId[] = [];
+  if (allowed.askContributor) candidates.push('askContributor');
+  if (BRANCH_GESTURES.has(primaryId) || primaryId === 'comment') candidates.push(reading);
+  candidates.push('comment');
+
+  const taken = new Set<PullActionId>([primaryId]);
+  const secondary: PullAction[] = [];
+  for (const a of refused) {
+    if (secondary.length < MAX_SECONDARY && !taken.has(a.id)) { secondary.push(a); taken.add(a.id); }
+  }
+  for (const id of candidates) {
+    if (secondary.length < MAX_SECONDARY && !taken.has(id)) { secondary.push(action(id)); taken.add(id); }
+  }
+  const overflow = [
+    ...refused.filter((a) => !taken.has(a.id)),
+    ...OVERFLOW_ORDER.filter((id) => allowed[id] && !taken.has(id)).map((id) => action(id)),
+  ];
+  return { primary: action(primaryId), secondary, overflow };
+}
+
+/** Everything the "…" menu of a pull request's row lists, in the window's order. */
+export function pullMenuActions(actions: PullActions): PullAction[] {
+  return [actions.primary, ...actions.secondary, ...actions.overflow];
+}

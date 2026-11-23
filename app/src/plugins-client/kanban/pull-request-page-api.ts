@@ -259,3 +259,28 @@ export function placeThreads(
   }
   return { at, unplaced };
 }
+
+/** How many checks of a pull request stand in each state. */
+export function checkCounts(checks: readonly PageCheck[]): Record<CheckStatus, number> {
+  const counts: Record<CheckStatus, number> = { fail: 0, pending: 0, pass: 0, skipped: 0 };
+  for (const c of checks) counts[c.status] += 1;
+  return counts;
+}
+
+/** Where a pull request stands against its base, as the box under its conversation says it. */
+export type MergeState = 'merged' | 'closed' | 'draft' | 'conflict' | 'behind' | 'blocked' | 'ready' | 'unknown';
+
+/**
+ * GitHub's merge state, read for a person: a conflict wins over everything
+ * open, `unstable` (a check that is not required failed) still merges, and
+ * `unknown` is GitHub still computing.
+ */
+export function mergeState(page: Pick<PullRequestPage, 'state' | 'isDraft' | 'mergeable' | 'mergeStateStatus'>): MergeState {
+  if (page.state !== 'open') return page.state;
+  if (page.isDraft) return 'draft';
+  if (page.mergeable === 'conflicting' || page.mergeStateStatus === 'dirty') return 'conflict';
+  if (page.mergeStateStatus === 'behind') return 'behind';
+  if (page.mergeStateStatus === 'blocked') return 'blocked';
+  if (['clean', 'has_hooks', 'unstable'].includes(page.mergeStateStatus)) return 'ready';
+  return 'unknown';
+}
