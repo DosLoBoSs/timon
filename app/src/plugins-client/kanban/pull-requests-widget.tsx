@@ -11,7 +11,8 @@
  * would not be confined, and nothing is ever posted on the forge. Opening the
  * pull request on the forge, or a past report, sit in the row's menu. A click
  * on the row opens its page, as GitHub shows it, in a window of the app
- * (`pull-request-dialog.tsx`), whose "…" menu holds the same entries.
+ * (`pull-request-dialog.tsx`), whose buttons and "…" menu offer the same
+ * gestures in the same order (`pullRequestActions`).
  *
  * A widget of the "Git" stack. The project comes from the chat rail when
  * there is one, else from a picker the jobs widget shares
@@ -24,10 +25,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  Copy, ExternalLink, Eye, FileText, GitMerge, GitPullRequest, GitPullRequestArrow, Loader2, MessageSquarePlus, MessageSquareWarning,
-  MoreHorizontal, ScanSearch,
-} from 'lucide-react';
+import { Copy, Eye, GitPullRequest, Loader2, MoreHorizontal, ScanSearch } from 'lucide-react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
 import { Tile } from '@/components/tile';
@@ -44,8 +42,9 @@ import type { WidgetProps } from '@/components/widget-host/widget-props';
 import { useWidgetAttention, useWidgetCount, useWidgetInFront } from '@/components/widget-host/widget-self';
 import { sharedGet } from '@/lib/shared-read';
 import {
-  anyReviewRunning, branchChip, branchLock, filterByAuthor, keepPullList, lastPullList, pullAuthors, reviewBadge, shouldReadPulls,
-  type PullRequestItem, type PullRequestList, type ReviewBadge,
+  anyReviewRunning, branchChip, branchLock, filterByAuthor, keepPullList, lastPullList, pullAuthors, pullMenuActions, pullRequestActions,
+  reviewBadge, shouldReadPulls, type PullActionId, type PullBranchWork, type PullRequestItem, type PullRequestList, type PullWork,
+  type ReviewBadge,
 } from './pull-requests-model';
 import { diffLineKind, getLanding, type Landing } from './landing-api';
 import { DIFF_LINE_CLASS } from './landing-preview-dialog';
@@ -63,6 +62,7 @@ import { useLandingChanges, useLandingFallbackPoll, type LandingChange } from '.
 import { landsLocally, LocalLandingEmpty, useProjectIntegration } from './local-landing';
 import { onIntegrationChanged } from './project-integration-api';
 import { PullRequestDialog } from './pull-request-dialog';
+import { PULL_MENU_ITEM, PullActionMenuItems } from './pull-request-actions';
 
 /** How often a running review is asked for its verdict. */
 const RUNNING_POLL_MS = 15_000;
@@ -102,20 +102,24 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
   // A proposal waiting on a row, or a new comment a person writes on a pull request.
   const [publishing, setPublishing] = useState<{ proposal?: ForgeProposal; proposalId?: string; target?: PublishTarget } | null>(null);
   const [resolving, setResolving] = useState<PullRequestItem | null>(null);
-  /** The branch gesture being prepared, so its row shows it and a second click waits. */
-  const [branchBusy, setBranchBusy] = useState<number | null>(null);
-  /** The pull request whose page is open; a gesture from its menu closes it
-   *  first, since two dialogs do not stack. */
+  /** The branch gesture being prepared, so its row and its window show it and a second click waits. */
+  const [branchBusy, setBranchBusy] = useState<{ number: number; work: PullBranchWork } | null>(null);
+  /** The pull request whose page is open. Two dialogs do not stack: a gesture
+   *  that opens one closes the window, once what it opens is ready. */
   const [detail, setDetail] = useState<PullRequestItem | null>(null);
 
   /** Prepares a write on a pull request's branch and opens it in "Publish on GitHub". */
-  const prepareWrite = async (pull: PullRequestItem, step: typeof proposeBranchUpdate, failure: string) => {
+  const prepareWrite = async (pull: PullRequestItem, work: PullBranchWork) => {
     if (!slug) return;
-    setBranchBusy(pull.number);
+    const [step, failure] = work === 'updateBranch'
+      ? [proposeBranchUpdate, t('pullRequests.updateBranchError')]
+      : [proposeAskContributor, t('pullRequests.askContributorError')];
+    setBranchBusy({ number: pull.number, work });
     const out = await step(slug, pull.number);
     setBranchBusy(null);
     if (!out.ok) { toast.error(failure, { description: out.message }); return; }
     proposals.reload();
+    setDetail(null);
     setPublishing({ proposal: out.value });
   };
 
@@ -201,6 +205,7 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
         return;
       }
       setDiff({ number: pull.number, kind: 'loading' });
+      setDetail(null);
       setDraft({ number: pull.number, title: pull.title, brief: json.brief });
       void readDiff(slug, pull.number);
     } catch (err) {
@@ -231,25 +236,27 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
     else toast.error(t('pullRequests.dialog.copyFailed'));
   };
 
-  /** What a pull request's menu does, from its row or from its window. */
-  const gesturesFor = (pull: PullRequestItem): PullGestures => ({
-    report: () => setReport(pull),
-    openJob: (id) => { void openJob(id); },
-    comment: () => setPublishing({
-      target: { type: 'pull', number: pull.number, url: pull.url, repo: load.kind === 'ready' ? load.list.repo : null },
-    }),
-    updateBranch: () => { void prepareWrite(pull, proposeBranchUpdate, t('pullRequests.updateBranchError')); },
-    askContributor: () => { void prepareWrite(pull, proposeAskContributor, t('pullRequests.askContributorError')); },
-    resolveConflict: () => setResolving(pull),
+  /** What is under way on a pull request, for its buttons and its menu. */
+  const workOn = (pull: PullRequestItem): PullWork => ({
+    branch: branchBusy?.number === pull.number ? branchBusy.work : null,
+    preparing: preparing === pull.number,
   });
-  /** The same gestures from the window: it closes before the dialog they open. */
-  const fromDetail = (g: PullGestures): PullGestures => {
-    const closing = <A extends unknown[]>(fn: (...args: A) => void) => (...args: A) => { setDetail(null); fn(...args); };
-    return {
-      report: closing(g.report), openJob: closing(g.openJob), comment: closing(g.comment),
-      updateBranch: closing(g.updateBranch), askContributor: closing(g.askContributor), resolveConflict: closing(g.resolveConflict),
-      review: closing(g.review ?? (() => {})),
-    };
+
+  /** Runs a gesture of a pull request, from its row's menu or from its window. */
+  const run = (pull: PullRequestItem, id: PullActionId) => {
+    // A gesture that opens its dialog at once closes the window first; one
+    // prepared by the daemon closes it once ready, its button spinning meanwhile.
+    const opens = (fn: () => void) => { setDetail(null); fn(); };
+    switch (id) {
+      case 'review': void prepare(pull); return;
+      case 'updateBranch': case 'askContributor': void prepareWrite(pull, id); return;
+      case 'report': opens(() => setReport(pull)); return;
+      case 'resolveConflict': opens(() => setResolving(pull)); return;
+      case 'comment':
+        opens(() => setPublishing({ target: { type: 'pull', number: pull.number, url: pull.url, repo } }));
+        return;
+      case 'forge': window.open(pull.url, '_blank', 'noopener,noreferrer'); return;
+    }
   };
 
   const projectPicker = (
@@ -294,12 +301,21 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
               key={pull.number}
               pull={pull}
               preparing={preparing === pull.number}
-              branchBusy={branchBusy === pull.number}
+              branchBusy={branchBusy?.number === pull.number}
               proposals={load.kind === 'ready' ? proposalsForPull(proposals.pending, load.list.repo, pull) : []}
               onOpenProposal={(proposal) => setPublishing({ proposal })}
               onOpen={() => setDetail(pull)}
               onReview={() => void prepare(pull)}
-              menu={<PullMenuItems pull={pull} branchBusy={branchBusy === pull.number} gestures={gesturesFor(pull)} onOpenTodo={openTodo} />}
+              menu={(
+                <PullMenuItems
+                  pull={pull}
+                  // The loupe beside the menu prepares the review: the menu leaves it out.
+                  actions={pullMenuActions(pullRequestActions(pull, workOn(pull))).filter((a) => a.id !== 'review')}
+                  onRun={(id) => run(pull, id)}
+                  onOpenJob={(id) => { void openJob(id); }}
+                  onOpenTodo={openTodo}
+                />
+              )}
             />
           ))}
         </ul>
@@ -314,13 +330,13 @@ export function PullRequestsWidget({ handle, className }: WidgetProps) {
           onClose={() => setDetail(null)}
           onOpenJob={(id) => { setDetail(null); void openJob(id); }}
           onOpenTodo={(id) => { setDetail(null); openTodo(id); }}
-          menu={(
-            <PullMenuItems
+          actions={pullRequestActions(detail, workOn(detail))}
+          onAction={(id) => run(detail, id)}
+          links={(
+            <PullLinkItems
               pull={detail}
-              branchBusy={branchBusy === detail.number}
-              gestures={fromDetail({ ...gesturesFor(detail), review: () => { void prepare(detail); } })}
+              onOpenJob={(id) => { setDetail(null); void openJob(id); }}
               onOpenTodo={(id) => { setDetail(null); openTodo(id); }}
-              reviewDisabled={reviewBadge(detail)?.kind === 'running' || preparing === detail.number}
             />
           )}
         />
@@ -458,77 +474,42 @@ function VerdictChip({ badge }: { badge: ReviewBadge }) {
   );
 }
 
-const MENU_ITEM = 'flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 outline-none focus:bg-muted';
-
 const BRANCH_CHIP_TONE = {
   conflict: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
   behind: 'bg-foreground/[0.06] text-muted-foreground',
 } as const;
 
-/** What a pull request's "…" menu does; `review` only from its window, where no loupe sits beside it. */
-type PullGestures = {
-  report: () => void;
-  openJob: (id: string) => void;
-  comment: () => void;
-  updateBranch: () => void;
-  askContributor: () => void;
-  resolveConflict: () => void;
-  review?: () => void;
-};
-
-/** The entries of a pull request's "…" menu, the same from its row and from its window. */
-function PullMenuItems({ pull, branchBusy, gestures, onOpenTodo, reviewDisabled = false }: {
+/** The way from a pull request to its job and its ideas, after its gestures in a "…" menu. */
+function PullLinkItems({ pull, onOpenJob, onOpenTodo }: {
   pull: PullRequestItem;
-  branchBusy: boolean;
-  gestures: PullGestures;
+  onOpenJob: (id: string) => void;
   onOpenTodo: (id: number) => void;
-  reviewDisabled?: boolean;
 }) {
   const jobId = pull.links?.job_id ?? null;
-  const allowed = pull.gestures;
   return (
     <>
-      {gestures.review && (
-        <Dropdown.Item data-menu-review="" disabled={reviewDisabled} onSelect={gestures.review} className={MENU_ITEM}>
-          <ScanSearch className="size-3.5" />{t('pullRequests.review')}
-        </Dropdown.Item>
-      )}
-      <Dropdown.Item
-        data-menu-forge=""
-        onSelect={() => { window.open(pull.url, '_blank', 'noopener,noreferrer'); }}
-        className={MENU_ITEM}
-      >
-        <ExternalLink className="size-3.5" />{t('pullRequests.openOnForge')}
-      </Dropdown.Item>
       {jobId && (
-        <Dropdown.Item data-menu-job={jobId} onSelect={() => gestures.openJob(jobId)} className={MENU_ITEM}>
+        <Dropdown.Item data-menu-job={jobId} onSelect={() => onOpenJob(jobId)} className={PULL_MENU_ITEM}>
           <Eye className="size-3.5" />{t('pullRequests.showJob')}
         </Dropdown.Item>
       )}
-      <JobLinksMenuItems links={pull.links} onOpenTodo={onOpenTodo} itemClassName={MENU_ITEM} />
-      {allowed?.update_branch && (
-        <Dropdown.Item data-menu-update-branch="" disabled={branchBusy} onSelect={gestures.updateBranch} className={MENU_ITEM}>
-          <GitPullRequestArrow className="size-3.5" />{t('pullRequests.updateBranch')}
-        </Dropdown.Item>
-      )}
-      {allowed?.resolve_conflict && (
-        <Dropdown.Item data-menu-resolve-conflict="" disabled={branchBusy} onSelect={gestures.resolveConflict} className={MENU_ITEM}>
-          <GitMerge className="size-3.5" />{t('pullRequests.resolveConflict')}
-        </Dropdown.Item>
-      )}
-      {allowed?.ask_contributor && (
-        <Dropdown.Item data-menu-ask-contributor="" disabled={branchBusy} onSelect={gestures.askContributor} className={MENU_ITEM}>
-          <MessageSquareWarning className="size-3.5" />{t('pullRequests.askContributor')}
-        </Dropdown.Item>
-      )}
-      <Dropdown.Item data-menu-comment="" onSelect={gestures.comment} className={MENU_ITEM}>
-        <MessageSquarePlus className="size-3.5" />{t('pullRequests.proposeComment')}
-      </Dropdown.Item>
-      {pull.review?.report && (
-        <Dropdown.Item data-menu-report="" onSelect={gestures.report} className={MENU_ITEM}>
-          <FileText className="size-3.5" />{t('pullRequests.showReport')}
-        </Dropdown.Item>
-      )}
+      <JobLinksMenuItems links={pull.links} onOpenTodo={onOpenTodo} itemClassName={PULL_MENU_ITEM} />
+    </>
+  );
+}
+
+/** The entries of a row's "…" menu: its gestures in the window's order, then its links. */
+function PullMenuItems({ pull, actions, onRun, onOpenJob, onOpenTodo }: {
+  pull: PullRequestItem;
+  actions: Parameters<typeof PullActionMenuItems>[0]['actions'];
+  onRun: (id: PullActionId) => void;
+  onOpenJob: (id: string) => void;
+  onOpenTodo: (id: number) => void;
+}) {
+  return (
+    <>
+      <PullActionMenuItems actions={actions} onRun={onRun} />
+      <PullLinkItems pull={pull} onOpenJob={onOpenJob} onOpenTodo={onOpenTodo} />
     </>
   );
 }
