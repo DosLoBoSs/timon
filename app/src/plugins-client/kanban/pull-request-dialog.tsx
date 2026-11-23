@@ -16,10 +16,11 @@
  * in the column's status card, which stays in view whatever the tab: the one
  * its state calls for filled, the frequent ones under it, the rest in the
  * header's "…" (`pullRequestActions`, shared with the row's menu). The header
- * keeps only icon buttons, so the title has the width.
+ * keeps only icon buttons, so the title has the width. A narrow window has no
+ * room for the column: the card moves above the tabs, across the window.
  */
 
-import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import {
   ChevronRight, CircleAlert, CircleCheck, CircleDot, CircleMinus, ExternalLink, GitCommitHorizontal, GitMerge,
@@ -48,6 +49,12 @@ const MUTED_CHIP = 'bg-foreground/[0.06] text-muted-foreground';
 /** Diff lines painted per file, and for the whole tab: a huge diff would freeze the window. */
 const FILE_LINES_SHOWN = 1500;
 const DIFF_LINES_SHOWN = 6000;
+/**
+ * Under this width (px) the window has no room for a column beside its tabs:
+ * the status card moves above them, across the window, and the people and
+ * links go to the end of the conversation.
+ */
+export const NARROW_WINDOW_PX = 640;
 
 const STATE_TONE: Record<string, string> = {
   open: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
@@ -255,21 +262,24 @@ const STATUS_LINE = 'flex min-w-0 items-start gap-2 px-1.5 py-1 text-xs font-med
  * do about it: its checks (a click shows them), its merge state, the review
  * decision, a lock on its branch, then the gesture its state calls for,
  * filled, and the frequent others under it. No merge button: a pull request
- * merges on GitHub, by a person.
+ * merges on GitHub, by a person. `across`: the card spans a narrow window
+ * above the tabs, its lines and its buttons side by side to stay short.
  */
-function StatusCard({ page, pull, actions, onAction, onShowChecks }: {
+function StatusCard({ page, pull, actions, onAction, onShowChecks, across = false }: {
   page: PullRequestPage;
   pull: PullRequestItem;
   actions: PullActions;
   onAction: (id: PullActionId) => void;
   onShowChecks: () => void;
+  across?: boolean;
 }) {
   const counts = checkCounts(page.checks);
   const checks = page.checks.length === 0 ? 'none' : counts.fail > 0 ? 'failed' : counts.pending > 0 ? 'pending' : 'passed';
   const merge = mergeState(page);
   const lock = branchLock(pull);
   return (
-    <section data-pull-status-card="" aria-label={t('pullRequests.detail.box.label')} className={cn(ISLAND, 'flex flex-col gap-0.5 p-2')}>
+    <section data-pull-status-card={across ? 'across' : 'column'} aria-label={t('pullRequests.detail.box.label')} className={cn(ISLAND, 'flex flex-col gap-0.5 p-2')}>
+      <div className={across ? 'flex flex-wrap gap-x-3 gap-y-0.5 [&>*]:min-w-48 [&>*]:flex-1' : 'contents'}>
       <button type="button" data-pull-box-checks={checks} onClick={onShowChecks} title={t('pullRequests.detail.box.showChecks')}
         className="flex min-w-0 items-start gap-2 rounded-md px-1.5 py-1 text-left hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <BoxIcon line={BOX_CHECKS[checks]} />
@@ -297,8 +307,10 @@ function StatusCard({ page, pull, actions, onAction, onShowChecks }: {
           <span className="min-w-0">{t(`pullRequests.locked.${lock}`)}</span>
         </div>
       )}
+      </div>
       {page.state === 'open' && (
-        <div data-pull-box-actions="" role="group" aria-label={t('pullRequests.detail.actions')} className="flex flex-col gap-1.5 px-1.5 pb-0.5 pt-2">
+        <div data-pull-box-actions="" role="group" aria-label={t('pullRequests.detail.actions')}
+          className={cn('px-1.5 pb-0.5 pt-2', across ? 'flex flex-wrap gap-1.5 [&>*]:flex-1 [&>*]:basis-40' : 'flex flex-col gap-1.5')}>
           <PullActionButton action={actions.primary} primary block onRun={onAction} />
           {actions.secondary.map((action) => <PullActionButton key={action.id} action={action} block onRun={onAction} />)}
         </div>
@@ -307,7 +319,7 @@ function StatusCard({ page, pull, actions, onAction, onShowChecks }: {
   );
 }
 
-function ConversationTab({ page }: { page: PullRequestPage }) {
+function ConversationTab({ page, end }: { page: PullRequestPage; end: ReactNode }) {
   return (
     <div className="flex flex-col gap-3">
       <section data-pull-body="" className={cn(ISLAND, 'flex flex-col gap-1.5 px-3 py-2.5')}>
@@ -342,6 +354,7 @@ function ConversationTab({ page }: { page: PullRequestPage }) {
           <More count={page.threadsMore} what="threads" />
         </section>
       )}
+      {end}
     </div>
   );
 }
@@ -618,17 +631,15 @@ function TimonLinks({ pull, onOpenJob, onOpenTodo }: {
 }
 
 /**
- * The column beside the tabs. Its status card sticks to the top: what the
- * person can do stays in view while the people and links scroll under it.
- * Only what the pull request has is listed: an empty field says nothing.
+ * The people, labels, milestone and issues of the pull request, then Timon's
+ * links. Only what the pull request has is listed: an empty field says
+ * nothing, and no field at all leaves no block.
  */
-function SidePanel({ page, repo, card, timon }: { page: PullRequestPage; repo: string | null; card: ReactNode; timon: ReactNode }) {
+function Metadata({ page, repo, timon }: { page: PullRequestPage; repo: string | null; timon: ReactNode }) {
   const hasMeta = page.reviewRequests.length + page.reviewRequestsMore + page.assignees.length + page.assigneesMore
     + page.labels.length + page.closingIssues.length > 0 || page.milestone !== null;
   return (
-    <div data-pull-side-column="" className="scrollbar-thin flex min-h-0 flex-col gap-3 md:overflow-y-auto">
-      {/* An opaque ground under the card: the rows scroll beneath it. */}
-      <div className="bg-popover md:sticky md:top-0 md:z-10">{card}</div>
+    <>
       {hasMeta && (
         <dl className={cn(ISLAND, 'flex flex-col gap-3 px-3 py-2.5')}>
           {page.reviewRequests.length + page.reviewRequestsMore > 0 && (
@@ -670,8 +681,42 @@ function SidePanel({ page, repo, card, timon }: { page: PullRequestPage; repo: s
         </dl>
       )}
       {timon}
+    </>
+  );
+}
+
+/**
+ * The column beside the tabs. Its status card sticks to the top: what the
+ * person can do stays in view while the rest scrolls under it.
+ */
+function SideColumn({ card, children }: { card: ReactNode; children: ReactNode }) {
+  return (
+    <div data-pull-side-column="" className="scrollbar-thin flex min-h-0 flex-col gap-3 overflow-y-auto">
+      {/* An opaque ground under the card: the rows scroll beneath it. */}
+      <div className="sticky top-0 z-10 bg-popover">{card}</div>
+      {children}
     </div>
   );
+}
+
+/**
+ * Whether the element is narrower than `px`. A width of 0 is no width read
+ * yet (a test's page lays nothing out): the window then counts as wide. The
+ * element comes from a callback ref: it mounts once the page is read.
+ */
+function useNarrow(el: HTMLElement | null, px: number): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useLayoutEffect(() => {
+    if (!el) return;
+    const measure = (width: number) => setNarrow(width > 0 && width < px);
+    measure(el.getBoundingClientRect().width);
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) measure(entry.contentRect.width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [el, px]);
+  return narrow;
 }
 
 // ─── The window ────────────────────────────────────────────────────────────
@@ -696,6 +741,8 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
   const [load, setLoad] = useState<PageLoad>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState('conversation');
+  const [body, setBody] = useState<HTMLDivElement | null>(null);
+  const narrow = useNarrow(body, NARROW_WINDOW_PX);
 
   useEffect(() => {
     let alive = true;
@@ -721,6 +768,12 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
   const lock = branchLock(pull);
   const badge = reviewBadge(pull);
   const author = page?.author ?? pull.author;
+  const statusCard = (across: boolean) => page && (
+    <StatusCard page={page} pull={pull} actions={actions} onAction={onAction} onShowChecks={() => setTab('checks')} across={across} />
+  );
+  const metadata = (shown: PullRequestPage) => (
+    <Metadata page={shown} repo={repo} timon={<TimonLinks pull={pull} onOpenJob={onOpenJob} onOpenTodo={onOpenTodo} />} />
+  );
   const head = page
     ? (page.isCrossRepository && page.headOwner ? `${page.headOwner}:${page.headRef}` : page.headRef)
     : null;
@@ -813,8 +866,11 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
         {load.kind === 'loading' && <p className="text-xs text-muted-foreground">{t('pullRequests.loading')}</p>}
 
         {page && (
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_16rem]">
-            <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 min-w-0 flex-col gap-2">
+          // `narrow &&` / `!narrow &&` keep the tabs at the same place: their state survives a resize.
+          <div ref={setBody} data-pull-body-layout={narrow ? 'narrow' : 'wide'}
+            className={cn('min-h-0 flex-1 gap-3', narrow ? 'flex flex-col' : 'grid grid-cols-[minmax(0,1fr)_16rem]')}>
+            {narrow && <div className="shrink-0">{statusCard(true)}</div>}
+            <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
               <TabsList className="h-8 self-start">
                 <TabsTrigger value="conversation" data-pull-tab="conversation" className="text-xs">
                   {t('pullRequests.detail.tab.conversation')}
@@ -834,7 +890,7 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="conversation" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
-                <ConversationTab page={page} />
+                <ConversationTab page={page} end={narrow ? metadata(page) : null} />
               </TabsContent>
               <TabsContent value="commits" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
                 <CommitsTab page={page} />
@@ -846,12 +902,7 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
                 <FilesTab page={page} project={project} />
               </TabsContent>
             </Tabs>
-            <SidePanel
-              page={page}
-              repo={repo}
-              card={<StatusCard page={page} pull={pull} actions={actions} onAction={onAction} onShowChecks={() => setTab('checks')} />}
-              timon={<TimonLinks pull={pull} onOpenJob={onOpenJob} onOpenTodo={onOpenTodo} />}
-            />
+            {!narrow && <SideColumn card={statusCard(false)}>{metadata(page)}</SideColumn>}
           </div>
         )}
       </DialogContent>

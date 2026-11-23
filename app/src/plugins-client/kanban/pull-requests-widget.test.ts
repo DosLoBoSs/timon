@@ -381,7 +381,7 @@ test('the window shows its main gestures in its column without opening "…": th
     await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
     const d = document.querySelector('[data-pull-dialog]');
     assert.ok(d);
-    const card = d.querySelector('[data-pull-side-column] [data-pull-status-card]');
+    const card = d.querySelector('[data-pull-side-column] [data-pull-status-card="column"]');
     assert.ok(card, 'the status card heads the column beside the tabs');
     const primary = card.querySelector('[data-pull-action-primary]');
     assert.equal(primary?.getAttribute('data-pull-action'), 'resolveConflict');
@@ -437,6 +437,42 @@ test('a refused gesture shows greyed with its reason, on hover and to a screen r
     const lock = d.querySelector('[data-pull-status-card] [data-pull-box-lock]');
     assert.equal(lock?.textContent, 'Changes not allowed');
     assert.match(lock?.getAttribute('title') ?? '', /does not let the maintainers change this branch/);
+    await m.key(document.activeElement ?? document.body, 'Escape');
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('a narrow window moves the card above the tabs, across the window; the header still has no labelled button', async () => {
+  const m = await mount([conflicted()], undefined, false, 480);
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const d = document.querySelector('[data-pull-dialog]');
+    assert.ok(d);
+    assert.equal(d.querySelector('[data-pull-body-layout]')?.getAttribute('data-pull-body-layout'), 'narrow');
+    assert.ok(!d.querySelector('[data-pull-side-column]'), 'no column beside the tabs');
+    const card = d.querySelector('[data-pull-status-card="across"]');
+    assert.ok(card);
+    assert.ok(card.compareDocumentPosition(d.querySelector('[data-pull-tab="conversation"]') as Node) & 4, 'the card comes before the tabs');
+    assert.deepEqual(
+      Array.from(card.querySelectorAll('[data-pull-action]')).map((b) => b.getAttribute('data-pull-action')),
+      ['resolveConflict', 'askContributor', 'review'],
+    );
+    assert.equal(card.querySelector('[data-pull-action-primary]')?.getAttribute('data-pull-action'), 'resolveConflict');
+    for (const b of Array.from(d.querySelectorAll('[data-pull-header-tools] button, [data-pull-header-tools] a'))) assert.equal(b.textContent, '');
+
+    // The people and the issues close the conversation.
+    const conversation = d.querySelector('[role="tabpanel"]');
+    assert.ok(conversation?.querySelector('[data-pull-side="reviewers"]'));
+
+    // "…" keeps the rest, never the card's gestures.
+    await m.key(d.querySelector('[data-pull-dialog-menu]'), 'Enter');
+    assert.ok(document.querySelector('[data-menu-comment]'));
+    assert.ok(!document.querySelector('[data-menu-ask-contributor]'));
+    assert.ok(!document.querySelector('[data-menu-review]'));
+    await m.key(document.activeElement ?? document.body, 'Escape');
     await m.key(document.activeElement ?? document.body, 'Escape');
     await new Promise((r) => setTimeout(r, 30));
   } finally {
