@@ -94,6 +94,22 @@ timon task create --type merge --landing local --agent my-app.merger --base feat
 
 A job planned in the planner always names its branch, so in a project that merges locally it runs on a branch of its own, merged into `main` at the end unless you keep it. Tasks you create by hand, without a branch, work as before. A sequential job uses the same choice: `timon pr branch` gives the agent a working folder on the chosen branch, existing or new, in either kind of project. A branch that was chosen as existing and has since been deleted blocks the job's tasks with the reason; it is never recreated.
 
+### Land a branch you kept
+
+When the job is done and you want its kept branch in the target after all, land it:
+
+```bash
+timon pr land <job>
+timon pr land <job> --title "Add CSV export" --body-file pr.md   # a project that lands through pull requests
+```
+
+Name the job by its series, or by the conversation that planned it (`current` from inside that conversation); when that series holds several jobs, give the job's own id, listed by `GET /api/kanban/landings?series=<series>`. Agents use the `pr_land` tool, which does the same. It needs the permission to manage projects, and it is refused while a task of the job still waits or runs.
+
+- **In a project that merges locally**, Timon merges the branch into the target branch on your machine, never by pushing. When the target has not moved since the branch was cut, it simply moves forward to the branch. Otherwise Timon writes the merge commit itself (`merge: integrate <branch> into <target>`, with your repository's commit identity), without creating a working folder and without running any hook. A conflict is refused with the list of files in conflict: nothing is merged and nothing is ever resolved for you; resolve it on the branch, then land again. When the target branch is checked out in a folder, your checkout follows it (a fast-forward), but only if that folder has no uncommitted change and no untracked file; otherwise the landing is refused and nothing moves.
+- **In a project that lands through pull requests**, landing opens the job's pull request, with the same checks as `timon pr open`; a title is then required. Nothing is merged on your machine: the job lands once the pull request is merged, as below.
+
+Once the branch is in the target, the job's TO DO ideas close and its documentation task is created, once. Running the command again on a job that already landed, or whose pull request is already open, says so and changes nothing. A branch under embargo (`sec/…`) never lands this way.
+
 ## Open the pull request
 
 When the job's work is merged into its integration branch, the agent (or you) asks Timon to open the pull request:

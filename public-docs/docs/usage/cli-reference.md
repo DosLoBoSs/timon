@@ -189,6 +189,10 @@ Pull requests (projects whose jobs land through one, see set-integration):
   timon pr branch <branch> [--series ID]       sequential job: cuts its integration branch from the remote's
                                              target and gives the pilot a worktree on it (default: THIS
                                              mission's series)
+  timon pr land <job-id|series-id> [--title TEXT] [--body TEXT | --body-file PATH]
+                                             lands a job kept on its branch: merged into the local target
+                                             (fast-forward or merge commit, refused on a conflict or a dirty
+                                             checkout of the target), or its pull request opened (title needed)
 
 Projects (agent roles per project):
   timon project list                           lists configured projects
@@ -852,6 +856,12 @@ usage: timon pr branch <branch> [--series ID]
 
 ```text
 usage: timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]
+```
+
+### timon pr land job-id|series-id [--title TEXT] [--body TEXT | --body-file PATH]
+
+```text
+usage: timon pr land <job-id|series-id> [--title TEXT] [--body TEXT | --body-file PATH]
 ```
 
 ### timon project roles slug

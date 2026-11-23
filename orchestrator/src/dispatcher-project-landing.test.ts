@@ -257,6 +257,8 @@ test('local project, a planned new branch: cut from the local target, without a 
     const merge = mkTask(project, 'merge', 'Its merge', { deps: [task.id], series });
     assert.equal(await blockIfBaseUnavailable(merge), false);
     assert.equal(dbApi.getTask(merge.id)!.integration_mode, 'branch');
+    // Recorded again by its merge: still one row, what the Jobs widget lists.
+    assert.equal(dbApi.listIntegrationsBySeries(series).length, 1);
     const outside = mkTask(project, 'code', 'Elsewhere', { base: 'main', series });
     assert.equal(await blockIfBaseUnavailable(outside), false);
     assert.equal(dbApi.getTask(outside.id)!.integration_mode, null);

@@ -122,6 +122,27 @@ export const tools = [
     },
   },
   {
+    name: 'pr_land',
+    title: 'Land a job kept on its branch',
+    description:
+      'Lands a Kanban job whose plan kept its work on its branch (CLI `timon pr land`). In a project that merges ' +
+      'locally, the daemon merges the branch into the local target: a fast-forward, else a merge commit written by git ' +
+      'without a working tree; a conflict is refused with its files, never resolved; when the target is checked out, ' +
+      'its working directory must be clean. In a project that lands through pull requests, it opens the job\'s pull ' +
+      'request with the checks of `pr_open` (a title is then required). The job\'s ideas close and its doc task is ' +
+      'created once the branch is in the target. Refused while a task of the job still waits or runs. A second call ' +
+      'answers that the job already landed. Needs projects:manage.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'The job\'s id (Jobs widget, `/api/kanban/landings`), or its series id when it has one job.' },
+        title: { type: 'string', description: 'Pull request projects: title of the pull request.' },
+        body: { type: 'string', description: 'Pull request projects: description (markdown).' },
+      },
+      required: ['id'],
+    },
+  },
+  {
     name: 'pr_branch',
     title: 'Prepare a sequential job\'s branch',
     description:
@@ -270,6 +291,12 @@ export const handlers = {
       if (!/ → 404 .*\[pr_target_not_found\]/.test(String(err?.message))) throw err;
       return await call('POST', `/api/series/${enc(args.id)}/pull-request`, payload);
     }
+  },
+  async pr_land(args, { call }) {
+    const payload = {};
+    if (args.title !== undefined) payload.title = args.title;
+    if (args.body !== undefined) payload.body = args.body;
+    return await call('POST', `/api/kanban/landings/${enc(args.id)}/land`, payload);
   },
   async pr_branch(args, { call }) {
     return await call('POST', `/api/series/${enc(args.series_id ?? 'current')}/integration-branch`, { branch: args.branch });

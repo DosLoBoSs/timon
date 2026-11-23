@@ -317,6 +317,34 @@ test('pr open: the series is asked only when no task has the id, never after ano
   }, refused);
 });
 
+test('pr land: the CLI takes the route of the MCP tool, with the same body', async () => {
+  await withDaemon(async (base, seen) => {
+    const posted = () => seen.filter((x) => x.method === 'POST' && x.url.endsWith('/land')).map((x) => [x.url, x.body]);
+    await session(base, [{ method: 'tools/call', params: { name: 'pr_land', arguments: { id: 'j1' } } }], true);
+    const bare = posted();
+    assert.deepEqual(bare, [['/api/kanban/landings/j1/land', {}]]);
+    seen.length = 0;
+    assert.equal((await cli(base, ['pr', 'land', 'j1'])).code, 0);
+    assert.deepEqual(posted(), bare);
+    seen.length = 0;
+    const body = 'Adds x.\n';
+    await session(base, [{ method: 'tools/call', params: { name: 'pr_land', arguments: { id: 'j1', title: 'Add x', body } } }], true);
+    const titled = posted();
+    assert.deepEqual(titled, [['/api/kanban/landings/j1/land', { title: 'Add x', body }]]);
+    seen.length = 0;
+    const file = join(mkdtempSync(join(tmpdir(), 'timon-pr-land-')), 'body.md');
+    writeFileSync(file, body);
+    assert.equal((await cli(base, ['pr', 'land', 'j1', '--title', 'Add x', '--body-file', file])).code, 0);
+    assert.deepEqual(posted(), titled);
+    seen.length = 0;
+    // No id, two ids, or two bodies: a usage error, never a request.
+    assert.equal((await cli(base, ['pr', 'land'])).code, 64);
+    assert.equal((await cli(base, ['pr', 'land', 'a', 'b'])).code, 64);
+    assert.equal((await cli(base, ['pr', 'land', 'j1', '--body', 'a', '--body-file', file])).code, 64);
+    assert.equal(seen.length, 0);
+  });
+});
+
 test('pr branch: the CLI takes the route of the MCP tool, THIS series by default', async () => {
   await withDaemon(async (base, seen) => {
     const posted = () => seen.filter((x) => x.method === 'POST' && x.url.endsWith('/integration-branch'));

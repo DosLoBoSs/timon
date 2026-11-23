@@ -50,8 +50,9 @@ export type PrCheckName = (typeof PR_CHECKS)[number];
 export type PrCheck = { name: PrCheckName; ok: boolean; skipped?: boolean; detail: string };
 
 export type PrOpenRequest = {
-  /** What `id` names: a task of the job, or its series. */
-  target: 'task' | 'series';
+  /** What `id` names: a task of the job, its series, or its integration row
+   *  (the landing gesture of the board, `integration-land.ts`). */
+  target: 'task' | 'series' | 'integration';
   id: string;
   title: string;
   body: string;
@@ -187,6 +188,14 @@ function resolveFromSeries(seriesId: string): Resolved | Refusal {
   }
   const row = rows[0]!;
   return { row, chainIds: chainIdsOf(seriesId, [seriesId]), project: row.project };
+}
+
+function resolveFromIntegration(id: string): Resolved | Refusal {
+  const row = dbApi.getIntegrationById(id);
+  if (!row) return refuse(404, 'pr_target_not_found', 'no job with an integration branch has this id');
+  const onBranch = dbApi.listTasksByBaseBranch(row.branch)
+    .filter((t) => !row.project || t.project === row.project).map((t) => t.id);
+  return { row, chainIds: chainIdsOf(row.series_id, row.series_id ? [row.series_id, ...onBranch] : onBranch), project: row.project };
 }
 
 // ─── Checks ─────────────────────────────────────────────────────────────────
@@ -489,8 +498,10 @@ export async function openPullRequest(request: PrOpenRequest, deps: PrOpenDeps =
     resolved = task
       ? resolveFromTask(task, deps.agentCwd ?? defaultAgentCwd)
       : refuse(404, 'pr_target_not_found', 'no task has this id');
-  } else {
+  } else if (request.target === 'series') {
     resolved = resolveFromSeries(request.id);
+  } else {
+    resolved = resolveFromIntegration(request.id);
   }
   if ('ok' in resolved) return resolved;
   const { row, chainIds, project } = resolved;
