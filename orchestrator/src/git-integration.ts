@@ -7,6 +7,11 @@
  * the remote's target (`origin/main`), never from the local `main`, which may
  * be stale or carry the user's unpublished work.
  *
+ * A project that merges locally may also give a job a branch of its own (the
+ * Kanban planner). That branch is cut from the project's local target, named
+ * as `refs/heads/<target>` in the chain's `base_ref`: a choice the planner
+ * recorded, never a fallback for a remote that cannot be reached.
+ *
  * Two rules hold every function here:
  *
  * - **Fail closed.** No remote, a remote that cannot be reached, a target the
@@ -86,6 +91,30 @@ export function integrationBranchName(
   return integrationBranchRefusal(name) ? null : name;
 }
 
+/**
+ * A local target, as a chain's `base_ref`: `refs/heads/main`. A project that
+ * merges locally may still give a job a branch of its own (the Kanban
+ * planner); that branch is cut from the project's local target, which the
+ * full ref names without any doubt. A remote's target is always
+ * `<remote>/<target>`, never this form, so a remote that is gone is still
+ * refused instead of being read as a local branch.
+ */
+export const LOCAL_BASE_REF_PREFIX = 'refs/heads/';
+
+export function localBaseRef(target: string): string {
+  return `${LOCAL_BASE_REF_PREFIX}${target}`;
+}
+
+/** The local target a `base_ref` names, or null for a remote's. */
+export function localTargetOf(baseRef: string | null | undefined): string | null {
+  return baseRef?.startsWith(LOCAL_BASE_REF_PREFIX) ? baseRef.slice(LOCAL_BASE_REF_PREFIX.length) || null : null;
+}
+
+/** `origin/main`, or `main` for a local target: how a person reads the base. */
+export function baseRefLabel(baseRef: string): string {
+  return localTargetOf(baseRef) ?? baseRef;
+}
+
 /** Why an integration branch could not be made ready. */
 export type IntegrationRefusalCode =
   | 'invalid_branch'
@@ -93,6 +122,7 @@ export type IntegrationRefusalCode =
   | 'no_remote'
   | 'remote_unreachable'
   | 'target_missing'
+  | 'branch_missing'
   | 'create_failed';
 
 export type EnsureIntegrationOutcome =
@@ -160,12 +190,22 @@ function tail(err: unknown): string {
  */
 export async function ensureIntegrationBranch(
   repo: string,
-  opts: { branch: string; baseRef: string },
+  opts: {
+    branch: string;
+    baseRef: string;
+    /** The job was planned on a branch the repository already has: never cut it. */
+    mustExist?: boolean;
+  },
 ): Promise<EnsureIntegrationOutcome> {
   const refusal = integrationBranchRefusal(opts.branch);
   if (refusal) return { ok: false, code: 'invalid_branch', reason: refusal };
   if (!isPlausibleGitRef(opts.baseRef)) {
     return { ok: false, code: 'invalid_base_ref', reason: `"${opts.baseRef}" is not a valid remote ref` };
+  }
+  const localTarget = localTargetOf(opts.baseRef);
+  if (localTarget !== null) return ensureLocalBranch(repo, opts.branch, localTarget, opts.mustExist === true);
+  if (opts.mustExist && !(await localBranchSha(repo, opts.branch))) {
+    return { ok: false, code: 'branch_missing', reason: `${opts.branch} does not exist in the repository` };
   }
   let remotes: string[];
   try {
@@ -231,6 +271,35 @@ export async function ensureIntegrationBranch(
   }
   await refreshLocalTarget(repo, remote, target);
   return { ok: true, created: true, sha: base, remote, target };
+}
+
+/**
+ * The branch of a job in a project that merges locally: cut from the local
+ * `target`, without a checkout and without a network call. A branch already
+ * there is kept as it is (a job resumed, or one planned on an existing branch).
+ */
+async function ensureLocalBranch(
+  repo: string,
+  branch: string,
+  target: string,
+  mustExist: boolean,
+): Promise<EnsureIntegrationOutcome> {
+  if (!isPlausibleGitRef(target)) {
+    return { ok: false, code: 'invalid_base_ref', reason: `"${target}" is not a valid branch name` };
+  }
+  const existing = await localBranchSha(repo, branch);
+  if (existing) return { ok: true, created: false, sha: existing, remote: '', target };
+  if (mustExist) return { ok: false, code: 'branch_missing', reason: `${branch} does not exist in the repository` };
+  const base = await localBranchSha(repo, target);
+  if (!base) return { ok: false, code: 'target_missing', reason: `the repository has no branch ${target} to cut ${branch} from` };
+  try {
+    await git(repo, ['branch', '--no-track', '--', branch, base]);
+  } catch (err) {
+    const raced = await localBranchSha(repo, branch);
+    if (raced) return { ok: true, created: false, sha: raced, remote: '', target };
+    return { ok: false, code: 'create_failed', reason: `cannot create ${branch}: ${tail(err)}` };
+  }
+  return { ok: true, created: true, sha: base, remote: '', target };
 }
 
 async function refSha(repo: string, ref: string): Promise<string | null> {

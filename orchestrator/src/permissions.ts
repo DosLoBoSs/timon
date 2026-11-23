@@ -40,13 +40,14 @@ import {
   validateSeriesPlanAnswer,
   seriesPlanCommands,
   planGroupNames,
+  planBranchChoice,
   PIPELINE_BY_MODE,
   type SeriesPlanAnswer,
   type SeriesPlanRoleConfig,
   type SeriesPlanVolet,
 } from './series-plan.js';
 import { seriesPlanDefaults } from './series-plan-defaults.js';
-import { planBranchName, planLanding } from './plan-landing.js';
+import { planBranchName, planLanding, planLandingForm } from './plan-landing.js';
 import type { ApprovalScope } from './backends/types.js';
 import { approvalMotif, findApproval, motifLabel, rememberApproval, rememberableScopes, shellCommandOfTool } from './approval-rules.js';
 import { loadConfig } from './agent-config.js';
@@ -664,27 +665,18 @@ function withSeriesPlanDefaults(input: RequestInput): unknown {
 }
 
 /**
- * The branch field of the planner, for a project that lands through pull
- * requests: the name the job would get, the prefix shown before it, whether
- * it is already fixed, and why the agent's proposal cannot be used. Nothing for
- * any other project, so its form stays what it was.
+ * The branch field of the planner, for any project the job is for: the name a
+ * new branch would get, the prefix shown before it, the project's mode and
+ * target, whether the branch is already fixed, why the agent's proposal cannot
+ * be used, and the branches the job may start from instead. Nothing when the
+ * job has no project.
  */
 function formLanding(input: RequestInput, form: Record<string, unknown>): { landing?: Record<string, unknown> } {
   try {
     const chantier = typeof form.chantier === 'string' ? form.chantier : '';
     const proposed = typeof form.branch === 'string' ? form.branch : null;
-    const landing = planLanding(input.agent, chantier, { branch: proposed, seriesId: input.mission_id });
-    if (!landing) return {};
-    return {
-      landing: {
-        project: landing.project,
-        prefix: landing.prefix,
-        branch: landing.branch,
-        base_ref: landing.baseRef,
-        locked: landing.locked,
-        ...(landing.refusal ? { refusal: landing.refusal } : {}),
-      },
-    };
+    const landing = planLandingForm(input.agent, chantier, proposed, input.mission_id);
+    return landing ? { landing } : {};
   } catch (err) {
     console.error(`[permissions] series plan branch unavailable: ${(err as Error).message}`);
     return {};
@@ -1279,20 +1271,25 @@ function withSeriesPlan(p: Omit<Pending, 'resolve'>, final: PermissionDecision):
   }
   const plan = updated.plan as SeriesPlanAnswer;
   // A project that lands through pull requests: every task on the job's
-  // integration branch, and a last task that opens the pull request. Nothing
-  // added for any other project, so its answer stays what it was.
+  // integration branch, and a last task that opens the pull request (or none,
+  // `finish: 'keep'`). A project that merges locally gets the same branch only
+  // when the answer chose one, with its kind. Nothing added otherwise, so the
+  // answer stays what it was.
   const chantier = typeof form.chantier === 'string' ? form.chantier : '';
-  // The name typed in the form, else the agent's proposal: checked again here,
-  // the form's own check being a convenience, not the guard.
+  // The branch chosen in the form, else the agent's proposal: checked again
+  // here, the form's own check being a convenience, not the guard.
   const proposed = plan.branch ?? (typeof form.branch === 'string' ? form.branch : null);
-  // A sequential job lands through a pull request too: its pilot asks for the
-  // branch, codes on it, and ends on the same pull request task.
+  // A sequential job lands the same way: its pilot asks for the branch, codes
+  // on it, and ends on the same last task.
   const landing = planLanding(p.agent, chantier, {
-    branch: proposed, seriesId: p.mission_id, sequential: !PIPELINE_BY_MODE[plan.mode],
+    branch: proposed, finish: plan.finish, seriesId: p.mission_id, sequential: !PIPELINE_BY_MODE[plan.mode],
   });
+  const chosen = planBranchChoice(plan.branch);
+  const chosenName = chosen && landing
+    ? (chosen.kind === 'existing' ? chosen.name.trim() : planBranchName(chosen.name, landing.prefix))
+    : null;
   const branchDefect = landing?.refusal
-    ?? (landing?.locked && plan.branch !== undefined && plan.branch.trim() !== ''
-      && planBranchName(plan.branch, landing.prefix) !== landing.branch
+    ?? (landing?.locked && chosenName && chosen!.name.trim() !== '' && chosenName !== landing.branch
       ? `the job already starts from ${landing.branch}; its name no longer changes`
       : null);
   if (branchDefect) {
@@ -1306,9 +1303,23 @@ function withSeriesPlan(p: Omit<Pending, 'resolve'>, final: PermissionDecision):
   }
   const commands = seriesPlanCommands(plan, volets, landing);
   // Read again by the pull request's `Fixes`/`Refs` (`issue-closing.ts`).
-  if (landing && typeof plan.resolves_issues === 'boolean') {
+  if (landing && landing.projectMode === 'pr' && typeof plan.resolves_issues === 'boolean') {
     try { dbApi.setSeriesResolvesIssues(p.mission_id, plan.resolves_issues); } catch (err) {
       console.error(`[permissions] series plan issue closing not recorded: ${(err as Error).message}`);
+    }
+  }
+  // What the dispatcher and `timon pr branch` read to cut or find the branch.
+  // A branch named with its kind, a project that merges locally, or a job kept
+  // on its branch; the earlier bare name keeps the earlier path.
+  if (landing && (landing.explicit || landing.projectMode === 'local' || landing.finish === 'keep')) {
+    try {
+      dbApi.setSeriesPlanLanding(p.mission_id, {
+        project: landing.project, repo: landing.repo, branch: landing.branch,
+        branch_kind: landing.explicit ? landing.kind : null, mode: landing.mode, base_ref: landing.baseRef,
+        finish: landing.finish,
+      });
+    } catch (err) {
+      console.error(`[permissions] series plan branch not recorded: ${(err as Error).message}`);
     }
   }
   return {
@@ -1316,7 +1327,13 @@ function withSeriesPlan(p: Omit<Pending, 'resolve'>, final: PermissionDecision):
     updatedInput: landing
       ? {
         ...updated, plan, commands,
-        integration: { mode: 'pr', branch: landing.branch, base_ref: landing.baseRef, note: landing.note },
+        integration: {
+          mode: landing.projectMode === 'local' ? 'branch' : 'pr',
+          branch: landing.branch, base_ref: landing.baseRef, note: landing.note,
+          ...(landing.explicit || landing.finish === 'keep' || landing.projectMode === 'local'
+            ? { kind: landing.kind, finish: landing.finish, target: landing.target }
+            : {}),
+        },
       }
       : { ...updated, plan, commands },
   };
@@ -1455,7 +1472,7 @@ export function buildContinuation(p: Omit<Pending, 'resolve'>, final: Permission
     const updated = final.updatedInput as
       | {
         answers?: Record<string, unknown>; note?: string; plan?: SeriesPlanAnswer; commands?: string[];
-        integration?: { note?: string };
+        integration?: { note?: string; mode?: string };
       }
       | undefined;
     // Typed form: the plan has no "questions" to replay, it has a mode and
@@ -1481,7 +1498,9 @@ export function buildContinuation(p: Omit<Pending, 'resolve'>, final: Permission
         `[series plan] The user chose mode \`${updated.plan.mode}\`.\n`
         + `${roles || '- (no explicit setting: everything inherits)'}\n`
         + (note ? `Note: ${note}\n` : '')
-        + (updated.integration?.note ? `Pull request: ${updated.integration.note}\n` : '')
+        + (updated.integration?.note
+          ? `${updated.integration.mode === 'branch' ? 'Branch' : 'Pull request'}: ${updated.integration.note}\n`
+          : '')
         + (cmds ? `Commands to run, in this order:\n${cmds}\n` : '')
         + `Apply this plan as-is, then resume the project.`
       );
