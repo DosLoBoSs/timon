@@ -751,6 +751,12 @@
   },
   "appearance": {
     "title": "Appearance",
+    "zoomTitle": "Interface size",
+    "zoomHint": "Makes text and controls larger or smaller in every Timon window on this computer. Shortcuts: Ctrl and +, Ctrl and −, and Ctrl and 0 to reset; on macOS, Cmd instead of Ctrl for all three. On Windows and Linux, Ctrl and the mouse wheel too.",
+    "zoomIn": "Larger",
+    "zoomOut": "Smaller",
+    "zoomReset": "Reset",
+    "zoomError": "The interface size could not be changed.",
     "theme": "Theme",
     "layout": "Layout",
     "themeHint": "Colour tokens painted for this account.",

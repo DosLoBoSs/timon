@@ -751,6 +751,12 @@
   },
   "appearance": {
     "title": "Apparence",
+    "zoomTitle": "Taille de l'interface",
+    "zoomHint": "Agrandit ou réduit le texte et les commandes dans toutes les fenêtres de Timon sur cet ordinateur. Raccourcis : Ctrl et +, Ctrl et −, et Ctrl et 0 pour revenir à la taille normale ; sur macOS, Cmd au lieu de Ctrl pour les trois. Sous Windows et Linux, aussi Ctrl et la molette de la souris.",
+    "zoomIn": "Plus grand",
+    "zoomOut": "Plus petit",
+    "zoomReset": "Réinitialiser",
+    "zoomError": "La taille de l'interface n'a pas pu être modifiée.",
     "theme": "Thème",
     "layout": "Disposition",
     "themeHint": "Les jetons de couleur peints pour ce compte.",

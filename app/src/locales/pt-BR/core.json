@@ -975,6 +975,12 @@
   },
   "appearance": {
     "title": "Aparência",
+    "zoomTitle": "Tamanho da interface",
+    "zoomHint": "Aumenta ou diminui o texto e os controles em todas as janelas do Timon neste computador. Atalhos: Ctrl e +, Ctrl e −, e Ctrl e 0 para redefinir; no macOS, Cmd em vez de Ctrl nos três. No Windows e no Linux, também Ctrl e a roda do mouse.",
+    "zoomIn": "Maior",
+    "zoomOut": "Menor",
+    "zoomReset": "Redefinir",
+    "zoomError": "Não foi possível alterar o tamanho da interface.",
     "theme": "Tema",
     "layout": "Layout",
     "themeHint": "Tokens de cor aplicados a esta conta.",
