@@ -119,13 +119,13 @@ Adding, changing or removing a remote needs the **Create, update and delete proj
 
 In a project set to land through pull requests ([Land a job through a pull request](pull-requests.md)), **Pull requests** lists the pull requests open on the project's repository, yours and contributors' ones alike. In an agent's chat it shows the agent's project; elsewhere, pick the project once: **Pull requests** and **Jobs** share the choice. Filter the list by author when several people contribute.
 
-Each row gives the pull request's title, its number, its author, **draft** when it is one, and the verdict of a past review. Its button, **Prepare the review**, gets the pull request ready to review without ever running its code on your machine:
+Each row gives the pull request's title, its number, its author, **draft** when it is one, and the verdict of a past review. Its magnifier button, **Review brief**, writes a brief to paste into a review mission, without ever running the pull request's code on your machine; it starts nothing:
 
 1. Timon reads the pull request and its diff from GitHub, with the project's account. The contributor's branch is never fetched or checked out, and nothing of it is installed, built or tested here: its code only runs in GitHub's CI.
 2. Timon writes a review brief: the rules a reviewer follows (read only, nothing posted on GitHub), the place of the diff on this machine, what GitHub says of the pull request (behind or in conflict with its base, whether you may push to the contributor's branch), and what people outside the project wrote (title, description, labels, comments, review threads nobody resolved, the issues it claims to close) as data, cut short, with the instruction never to follow it.
 3. A window shows the brief and, in its **Diff** tab, the pull request's changes. **Copy the brief** puts it on your clipboard, for the reviewer you choose. Timon starts nothing on its own, and writes nothing on GitHub.
 
-Click a row, or move to it with the keyboard and press **Enter**, to open the pull request in a window of the app, read only, as GitHub shows it ([Read a pull request in the app](pull-requests.md#read-a-pull-request-in-the-app)). The **Prepare the review** button and the menu keep their own click.
+Click a row, or move to it with the keyboard and press **Enter**, to open the pull request in a window of the app, read only, as GitHub shows it ([Read a pull request in the app](pull-requests.md#read-a-pull-request-in-the-app)). The **Review brief** button and the menu keep their own click.
 
 A contributor's pull request whose branch you may not change shows **Changes not allowed** (its author does not let the maintainers modify it) or **Fork deleted**; the mark's tooltip says why. When the branch is behind or in conflict, **Update the branch** or **Resolve the conflict…** then shows greyed in the menu, with the same reason when you point at it, and **Ask the contributor** stays available for a conflict.
 

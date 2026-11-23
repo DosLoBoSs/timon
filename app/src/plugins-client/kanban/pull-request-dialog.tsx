@@ -367,7 +367,7 @@ function StatusCard({ load, pull, actions, onAction, onShowChecks, onRetry, acro
       {(!page || page.state === 'open') && (
         <div data-pull-box-actions="" role="group" aria-label={t('pullRequests.detail.actions')}
           className={cn('px-1.5 pb-0.5 pt-2', across ? 'flex flex-wrap gap-1.5 [&>*]:flex-1 [&>*]:basis-40' : 'flex flex-col gap-1.5')}>
-          <PullActionButton action={actions.primary} primary block onRun={onAction} />
+          {actions.primary && <PullActionButton action={actions.primary} primary block onRun={onAction} />}
           {actions.secondary.map((action) => <PullActionButton key={action.id} action={action} block onRun={onAction} />)}
         </div>
       )}

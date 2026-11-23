@@ -222,12 +222,15 @@ test('the widget lists a project\'s pull requests, filters by author, and shows 
     await m.choose(document.querySelector('[data-pull-author-filter]'), '');
     assert.deepEqual(rows(), ['12', '13']);
 
+    // The loupe names what it does: it writes a brief, it starts nothing.
     const button = document.querySelector('[data-pull-row="12"] [data-pull-review]');
-    assert.equal(button?.getAttribute('aria-label'), 'Prepare the review');
+    assert.equal(button?.getAttribute('aria-label'), 'Review brief');
+    assert.equal(button?.getAttribute('title'), 'Review brief');
     await m.click(button);
     assert.ok(m.calls.some((c) => c.method === 'POST' && c.url === '/api/ui/projects/acme/pull-requests/12/review'));
     assert.ok(m.calls.some((c) => c.method === 'GET' && c.url === '/api/ui/projects/acme/pull-requests/12/diff'));
     assert.match(document.querySelector('[data-pull-brief]')?.textContent ?? '', /untrusted-data/);
+    assert.equal(document.querySelector('[data-pull-brief-description]')?.textContent, 'A brief to paste into a review mission: nothing is started.');
     assert.ok(!document.querySelector('[data-pull-send]'), 'no send button');
     assert.ok(!Array.from(document.querySelectorAll('button')).some((b) => /^Send/.test(b.textContent ?? '')));
 
@@ -467,7 +470,12 @@ test('a refused gesture shows greyed with its reason, on hover and to a screen r
     await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
     const d = document.querySelector('[data-pull-dialog]');
     assert.ok(d);
-    assert.equal(d.querySelector('[data-pull-action-primary]')?.getAttribute('data-pull-action'), 'review');
+    // Nothing this person can do unblocks it: no filled button, the brief first of the outlined ones.
+    assert.ok(!d.querySelector('[data-pull-action-primary]'));
+    assert.deepEqual(
+      Array.from(d.querySelectorAll('[data-pull-box-actions] [data-pull-action]')).map((b) => b.getAttribute('data-pull-action')),
+      ['review', 'resolveConflict', 'askContributor'],
+    );
     const resolve = d.querySelector('[data-pull-action="resolveConflict"]');
     assert.ok(resolve);
     assert.ok(resolve.hasAttribute('disabled'));
@@ -478,6 +486,24 @@ test('a refused gesture shows greyed with its reason, on hover and to a screen r
     const lock = d.querySelector('[data-pull-status-card] [data-pull-box-lock]');
     assert.equal(lock?.textContent, 'Changes not allowed');
     assert.match(lock?.getAttribute('title') ?? '', /does not let the maintainers change this branch/);
+    await m.key(document.activeElement ?? document.body, 'Escape');
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('a clean pull request\'s window fills no button: the review brief leads the outlined ones', async () => {
+  const m = await mount([pull({ mergeStateStatus: 'clean', gestures: { update_branch: false, ask_contributor: false, resolve_conflict: false, locked: null } })]);
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const d = document.querySelector('[data-pull-dialog]');
+    assert.ok(d);
+    assert.ok(!d.querySelector('[data-pull-action-primary]'));
+    const buttons = Array.from(d.querySelectorAll('[data-pull-box-actions] [data-pull-action]'));
+    assert.deepEqual(buttons.map((b) => b.getAttribute('data-pull-action')), ['review', 'comment']);
+    assert.equal(buttons[0]?.textContent, 'Review brief');
     await m.key(document.activeElement ?? document.body, 'Escape');
     await new Promise((r) => setTimeout(r, 30));
   } finally {

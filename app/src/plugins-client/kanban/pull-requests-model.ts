@@ -142,8 +142,12 @@ export type PullAction = {
   busy: boolean;
 };
 
-/** One button filled, one or two beside it, the rest in "…". */
-export type PullActions = { primary: PullAction; secondary: PullAction[]; overflow: PullAction[] };
+/**
+ * One button filled when the state calls for one, a few outlined beside it,
+ * the rest in "…". A pull request with nothing to unblock has no filled
+ * button: the review brief is a help, not the next step.
+ */
+export type PullActions = { primary: PullAction | null; secondary: PullAction[]; overflow: PullAction[] };
 
 /** What is under way on the pull request, as the widget knows it. */
 export type PullWork = { branch?: PullBranchWork | null; preparing?: boolean };
@@ -152,6 +156,8 @@ const BRANCH_GESTURES: ReadonlySet<PullActionId> = new Set(['updateBranch', 'res
 /** The order of the "…" menu, from the row and from the window. */
 const OVERFLOW_ORDER: readonly PullActionId[] = ['review', 'report', 'updateBranch', 'resolveConflict', 'askContributor', 'comment', 'forge'];
 const MAX_SECONDARY = 2;
+/** Without a filled button, the card keeps the same number of buttons. */
+const MAX_SECONDARY_ALONE = 3;
 
 /**
  * Which gestures a pull request shows, and where: the one its state calls for
@@ -161,8 +167,10 @@ const MAX_SECONDARY = 2;
  * The primary is, in turn: resolving a conflict this person may resolve,
  * updating a branch that is behind, talking to the author of a draft (not yet
  * ready for a review), reading a review that still matches the code, and
- * otherwise preparing one. A branch gesture refused by a lock stays, greyed
- * beside it, so the person sees why it is missing.
+ * otherwise none. The review brief only writes a brief to copy, nothing is
+ * sent to an agent: it is never the primary, and comes first of the outlined
+ * buttons when there is none. A branch gesture refused by a lock stays,
+ * greyed beside it, so the person sees why it is missing.
  */
 export function pullRequestActions(pull: PullRequestItem, work: PullWork = {}): PullActions {
   const gestures = pull.gestures;
@@ -192,11 +200,11 @@ export function pullRequestActions(pull: PullRequestItem, work: PullWork = {}): 
     forge: true,
   };
 
-  const primaryId: PullActionId = conflict && allowed.resolveConflict ? 'resolveConflict'
+  const primaryId: PullActionId | null = conflict && allowed.resolveConflict ? 'resolveConflict'
     : behind && allowed.updateBranch ? 'updateBranch'
       : pull.isDraft ? 'comment'
         : freshReport ? 'report'
-          : 'review';
+          : null;
 
   // A branch gesture the state calls for but a lock refuses: greyed, with its reason.
   const refused: PullAction[] = [];
@@ -206,25 +214,26 @@ export function pullRequestActions(pull: PullRequestItem, work: PullWork = {}): 
   const reading: PullActionId = freshReport ? 'report' : 'review';
   const candidates: PullActionId[] = [];
   if (allowed.askContributor) candidates.push('askContributor');
-  if (BRANCH_GESTURES.has(primaryId) || primaryId === 'comment') candidates.push(reading);
+  if (primaryId !== null && (BRANCH_GESTURES.has(primaryId) || primaryId === 'comment')) candidates.push(reading);
   candidates.push('comment');
 
-  const taken = new Set<PullActionId>([primaryId]);
-  const secondary: PullAction[] = [];
+  const max = primaryId === null ? MAX_SECONDARY_ALONE : MAX_SECONDARY;
+  const taken = new Set<PullActionId>(primaryId === null ? ['review'] : [primaryId]);
+  const secondary: PullAction[] = primaryId === null ? [action('review')] : [];
   for (const a of refused) {
-    if (secondary.length < MAX_SECONDARY && !taken.has(a.id)) { secondary.push(a); taken.add(a.id); }
+    if (secondary.length < max && !taken.has(a.id)) { secondary.push(a); taken.add(a.id); }
   }
   for (const id of candidates) {
-    if (secondary.length < MAX_SECONDARY && !taken.has(id)) { secondary.push(action(id)); taken.add(id); }
+    if (secondary.length < max && !taken.has(id)) { secondary.push(action(id)); taken.add(id); }
   }
   const overflow = [
     ...refused.filter((a) => !taken.has(a.id)),
     ...OVERFLOW_ORDER.filter((id) => allowed[id] && !taken.has(id)).map((id) => action(id)),
   ];
-  return { primary: action(primaryId), secondary, overflow };
+  return { primary: primaryId === null ? null : action(primaryId), secondary, overflow };
 }
 
 /** Everything the "…" menu of a pull request's row lists, in the window's order. */
 export function pullMenuActions(actions: PullActions): PullAction[] {
-  return [actions.primary, ...actions.secondary, ...actions.overflow];
+  return [...(actions.primary ? [actions.primary] : []), ...actions.secondary, ...actions.overflow];
 }

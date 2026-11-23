@@ -30,7 +30,7 @@ const ICON: Record<PullActionId, ComponentType<{ className?: string }>> = {
 };
 
 const LABEL: Record<PullActionId, string> = {
-  review: 'pullRequests.review',
+  review: 'pullRequests.reviewBrief',
   report: 'pullRequests.showReport',
   updateBranch: 'pullRequests.updateBranch',
   resolveConflict: 'pullRequests.resolveConflict',
@@ -51,7 +51,7 @@ const MENU_HOOK: Record<PullActionId, string> = {
 };
 
 export function pullActionLabel(action: PullAction): string {
-  if (action.busy) return t(action.id === 'review' ? 'pullRequests.preparing' : 'pullRequests.branchPreparing');
+  if (action.busy) return t(action.id === 'review' ? 'pullRequests.briefPreparing' : 'pullRequests.branchPreparing');
   return t(LABEL[action.id]);
 }
 

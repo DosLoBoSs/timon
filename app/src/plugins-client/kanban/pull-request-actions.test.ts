@@ -25,13 +25,13 @@ const review = (extra: Partial<NonNullable<PullRequestItem['review']>> = {}): No
 
 /** The layout as ids, a greyed gesture written `id!reason`, one under way `id*`. */
 function layout(a: PullActions) {
-  const word = (x: PullActions['primary']) => `${x.id}${x.blocked ? `!${x.blocked}` : ''}${x.busy ? '*' : ''}`;
-  return { primary: word(a.primary), secondary: a.secondary.map(word), overflow: a.overflow.map(word) };
+  const word = (x: PullActions['secondary'][number]) => `${x.id}${x.blocked ? `!${x.blocked}` : ''}${x.busy ? '*' : ''}`;
+  return { primary: a.primary ? word(a.primary) : null, secondary: a.secondary.map(word), overflow: a.overflow.map(word) };
 }
 
-test('a clean pull request offers the review, a comment beside it, the rest in "…"', () => {
+test('a clean pull request fills no button: the review brief leads the outlined ones, a comment beside it', () => {
   assert.deepEqual(layout(pullRequestActions(pull())), {
-    primary: 'review', secondary: ['comment'], overflow: ['forge'],
+    primary: null, secondary: ['review', 'comment'], overflow: ['forge'],
   });
 });
 
@@ -42,10 +42,10 @@ test('a conflict this person may resolve puts the resolution first, asking the c
   });
 });
 
-test('a conflict the project leaves to its author keeps the review first and asks the contributor beside it', () => {
+test('a conflict the project leaves to its author fills no button: the brief, then asking the contributor and a comment', () => {
   const p = pull({ mergeStateStatus: 'dirty', gestures: { update_branch: false, ask_contributor: true, resolve_conflict: false, locked: null } });
   assert.deepEqual(layout(pullRequestActions(p)), {
-    primary: 'review', secondary: ['askContributor', 'comment'], overflow: ['forge'],
+    primary: null, secondary: ['review', 'askContributor', 'comment'], overflow: ['forge'],
   });
 });
 
@@ -60,16 +60,16 @@ test('a locked branch shows the refused gesture greyed with its reason, never hi
   // In conflict, its author does not let the maintainers write it: no resolution here.
   const conflict = pull({ mergeStateStatus: 'dirty', gestures: { update_branch: false, ask_contributor: true, resolve_conflict: false, locked: 'not_allowed' } });
   assert.deepEqual(layout(pullRequestActions(conflict)), {
-    primary: 'review', secondary: ['resolveConflict!not_allowed', 'askContributor'], overflow: ['comment', 'forge'],
+    primary: null, secondary: ['review', 'resolveConflict!not_allowed', 'askContributor'], overflow: ['comment', 'forge'],
   });
   // Behind, its fork deleted: nothing left to update.
   const behind = pull({ mergeStateStatus: 'behind', gestures: { update_branch: false, ask_contributor: false, resolve_conflict: false, locked: 'fork_deleted' } });
   assert.deepEqual(layout(pullRequestActions(behind)), {
-    primary: 'review', secondary: ['updateBranch!fork_deleted', 'comment'], overflow: ['forge'],
+    primary: null, secondary: ['review', 'updateBranch!fork_deleted', 'comment'], overflow: ['forge'],
   });
   // Locked but neither behind nor in conflict: nothing is refused, nothing greyed.
   const idle = pull({ gestures: { update_branch: false, ask_contributor: false, resolve_conflict: false, locked: 'not_allowed' } });
-  assert.deepEqual(layout(pullRequestActions(idle)).secondary, ['comment']);
+  assert.deepEqual(layout(pullRequestActions(idle)).secondary, ['review', 'comment']);
 });
 
 test('a draft, not ready for a review, puts a comment to its author first', () => {
@@ -78,19 +78,19 @@ test('a draft, not ready for a review, puts a comment to its author first', () =
   });
 });
 
-test('a review concluded and still current shows its report first; once the code changed, the review again', () => {
+test('a review concluded and still current shows its report first; once the code changed, no filled button and the brief first', () => {
   assert.deepEqual(layout(pullRequestActions(pull({ review: review() }))), {
     primary: 'report', secondary: ['comment'], overflow: ['review', 'forge'],
   });
   const outdated = pull({ updatedAt: '2026-11-18T08:00:00Z', review: review() });
   assert.deepEqual(layout(pullRequestActions(outdated)), {
-    primary: 'review', secondary: ['comment'], overflow: ['report', 'forge'],
+    primary: null, secondary: ['review', 'comment'], overflow: ['report', 'forge'],
   });
 });
 
-test('without any branch gesture (an older daemon), the review and a comment remain', () => {
+test('without any branch gesture (an older daemon), the brief and a comment remain, none filled', () => {
   const p = pull({ mergeStateStatus: 'dirty', gestures: undefined });
-  assert.deepEqual(layout(pullRequestActions(p)), { primary: 'review', secondary: ['comment'], overflow: ['forge'] });
+  assert.deepEqual(layout(pullRequestActions(p)), { primary: null, secondary: ['review', 'comment'], overflow: ['forge'] });
 });
 
 test('a gesture under way spins, the other branch gestures grey; a running review greys its button', () => {
@@ -98,8 +98,8 @@ test('a gesture under way spins, the other branch gestures grey; a running revie
   assert.deepEqual(layout(pullRequestActions(p, { branch: 'askContributor' })), {
     primary: 'resolveConflict!branch_busy', secondary: ['askContributor*', 'review'], overflow: ['comment', 'forge'],
   });
-  assert.equal(layout(pullRequestActions(pull(), { preparing: true })).primary, 'review*');
-  assert.equal(layout(pullRequestActions(pull({ review: review({ state: 'running', verdict: null }) }))).primary, 'review!review_running');
+  assert.equal(layout(pullRequestActions(pull(), { preparing: true })).secondary[0], 'review*');
+  assert.equal(layout(pullRequestActions(pull({ review: review({ state: 'running', verdict: null }) }))).secondary[0], 'review!review_running');
 });
 
 test('the row\'s menu lists every gesture once, in the window\'s order', () => {
@@ -107,6 +107,8 @@ test('the row\'s menu lists every gesture once, in the window\'s order', () => {
   const ids = pullMenuActions(pullRequestActions(p)).map((a) => a.id);
   assert.deepEqual(ids, ['resolveConflict', 'askContributor', 'report', 'review', 'comment', 'forge']);
   assert.equal(new Set(ids).size, ids.length);
+  // Without a filled button, the menu starts with the brief.
+  assert.deepEqual(pullMenuActions(pullRequestActions(pull())).map((a) => a.id), ['review', 'comment', 'forge']);
 });
 
 const page = (extra: Partial<Parameters<typeof mergeState>[0]> = {}) => ({
