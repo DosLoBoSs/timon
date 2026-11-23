@@ -11,7 +11,7 @@ GitHub is the only forge Timon opens pull requests on for now, through the GitHu
 
 ### From the app
 
-Open the project's window (**Edit** on its card): under **Integrations**, the **Pull requests** row says how the project's jobs land, **Jobs merge locally** or the target branch and account of its pull requests (`Pull request to origin/main · account my-bot`). **Set up** (**Configure** once it is on) opens the fields:
+Open the project's window: **Edit** on its card in the agents grid, or, from a chat of the project, the project's name above the message box, then **Project settings…**. Under **Integrations**, the **Pull requests** row says how the project's jobs land, **Jobs merge locally** or the target branch and account of its pull requests (`Pull request to origin/main · account my-bot`). **Set up** (**Configure** once it is on) opens the fields:
 
 - **Remote** and **Push URL of the remote**: pick one of the repository's remotes; the URL it pushes to is filled in for you. A remote that later points elsewhere is refused.
 - **Target branch** (`main` by default) and **Branch prefix** (`feat/` by default).
@@ -20,7 +20,9 @@ Open the project's window (**Edit** on its card): under **Integrations**, the **
 
 **Check** asks `gh` which account it signs in as with the account and folder you typed, before anything is saved, and says why it could not answer (`gh` missing, not signed in, a folder Timon refuses). **Turn on** saves the setting. The row's menu (**…**) checks `gh`'s sign-in again later, and **Go back to the local merge** clears the setting.
 
-The row and its fields are for accounts that hold the `projects:manage` permission: the setting names a folder of your machine and the account Timon pushes as. Without it, the row says so and its action is greyed.
+The row and its fields are for accounts that hold the `projects:manage` permission: the setting names a folder of your machine and the account Timon pushes as. Without it, the row says so and its action is greyed, as is **Project settings…** in the chat.
+
+While a project merges its jobs locally, the **Pull requests** and **Jobs** tabs of the chat's [Git stack](git.md) say so in one line, with a settings icon (**Set up pull requests**) that opens the same fields directly.
 
 ### From the command line
 
