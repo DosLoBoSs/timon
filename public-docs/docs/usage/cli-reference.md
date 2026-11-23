@@ -136,7 +136,7 @@ Tasks (Kanban backlog):
   timon task list [--status PENDING|IN_PROGRESS|DONE|BLOCKED]   (TODO = deprecated alias of PENDING)
   timon task get <id>
   timon task create --title TEXT --agent NAME [--type code|review|merge|research|doc|chore] [--project SLUG] [--description D] [--priority 1-5]
-                   [--base BRANCH] [--todo TODO_ID] [--plan-group NAME] [--landing pr]
+                   [--base BRANCH] [--todo TODO_ID] [--plan-group NAME] [--landing pr|local]
                    [--model SLUG] [--permission-mode default|acceptEdits|bypassPermissions]
                    [--fallback-backend NAME|none] [--fallback-model SLUG]
                    [--deps id1,id2] [--scheduled ISO8601]
@@ -708,7 +708,7 @@ usage: timon task get <id>
 ```text
 usage: timon task create --title TEXT --agent NAME [--description D] [--priority 1-5]
        [--type code|review|merge|research|doc|chore] [--project SLUG] [--base BRANCH]
-       [--pipeline full|code-self|code-group] [--group-id ID] [--plan-group NAME] [--todo ID] [--landing pr]
+       [--pipeline full|code-self|code-group] [--group-id ID] [--plan-group NAME] [--todo ID] [--landing pr|local]
        [--backend NAME] [--model SLUG] [--permission-mode default|acceptEdits|bypassPermissions]
        [--fallback-backend NAME|none] [--fallback-model SLUG]
        [--deps id1,id2] [--scheduled ISO] [--extra-skills s1,s2] [--extra-mcp m1,m2]

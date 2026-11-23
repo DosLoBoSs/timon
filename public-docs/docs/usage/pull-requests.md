@@ -69,6 +69,24 @@ timon pr branch feat/add-csv-export
 
 Agents use the `pr_branch` tool, which does the same. Timon checks the name, creates the branch from the remote's target branch as it does for a Kanban job (refused, never cut from your local `main`, when the remote cannot be reached), fixes its name for the job, and answers with a working folder of the agent's own on that branch. The agent codes and commits only in that folder, never in your checkout, and moves the branch forward after each commit. When the work is done, it creates the same final task, **Pull request — <job title>**, which opens the pull request; the rest of the circuit is the same as for a Kanban job. Running the command again for the same job gives back the same branch and folder.
 
+## Choose the job's branch and where it ends
+
+The plan can name the job's branch in two ways: a **new branch** (the name Timon or the agent proposes, which you may change), or a branch the repository **already has**, picked among its local branches, newest first, so that the job continues work already under way instead of starting a new branch from `origin/main`. Timon checks the choice before the plan applies: an existing branch must be in the repository, and can be neither the target branch, nor one of Timon's own task branches (`timon/…`), nor a name carrying an id, nor the branch of a job that already landed or whose pull request was closed. A new name that the repository already has gets `-2`, `-3`…
+
+The plan also says where the branch ends up:
+
+- **Merge into the target** (the default): in a project that lands through pull requests, the last task opens the pull request, as described above.
+- **Keep on the branch**: no last task. The work stays on the branch, which is never pushed; the job's TO DO ideas stay partial (integrated into the branch) until the branch lands.
+
+A project that merges locally can use the same choice. A job planned on a branch then runs on that branch instead of your `main`: Timon creates a new branch from the project's target branch (`main` by default, the **Target branch** of the project's setting), on your machine, without touching your checkout, or starts from the existing one. Every task of the job merges into the branch, and the job's TO DO ideas stay partial. With **Merge into the target**, the plan ends with a task **Merge into main — <job title>**: once every part is merged into the branch, an agent merges the branch into `main` on your machine, never by pushing. Timon checks with git that the merge is in `main` and contains the whole branch, then closes the job's TO DO ideas and creates its documentation task. To add that task by hand:
+
+```bash
+timon task create --type merge --landing local --agent my-app.merger --base feat/add-csv-export \
+  --deps <ids of the code tasks> --title "Merge into main — Add CSV export"
+```
+
+Without a branch chosen in the plan, a project that merges locally works as before. A sequential job uses the same choice: `timon pr branch` gives the agent a working folder on the chosen branch, existing or new, in either kind of project. A branch that was chosen as existing and has since been deleted blocks the job's tasks with the reason; it is never recreated.
+
 ## Open the pull request
 
 When the job's work is merged into its integration branch, the agent (or you) asks Timon to open the pull request:
