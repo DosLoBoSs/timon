@@ -309,7 +309,7 @@ test('a click on a row opens its page in a window, at the mouse and at the keybo
 
     // Conversation: the description as markdown without raw HTML, the reviews and comments, the threads.
     const markdown = d.querySelector('[data-pull-body] [data-pull-markdown]')!;
-    assert.equal(markdown.querySelector('script'), null);
+    assert.ok(!markdown.querySelector('script'));
     assert.match(markdown.textContent ?? '', /The app hurts at night\./);
     assert.deepEqual(Array.from(markdown.querySelectorAll('a')).map((a) => a.getAttribute('href')), ['https://example.com/spec']);
     assert.deepEqual(Array.from(d.querySelectorAll('[data-pull-timeline]')).map((e) => e.getAttribute('data-pull-timeline')), ['review', 'comment']);

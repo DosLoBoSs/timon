@@ -77,9 +77,9 @@ test('markdown from the forge keeps no raw HTML, and a link leaves only for http
     '[docs](https://example.com/docs) [bad](javascript:alert(1)) [local](/etc/passwd)',
   ].join('\n'));
   const doc = new JSDOM(`<div>${html}</div>`).window.document;
-  assert.equal(doc.querySelector('script'), null);
-  assert.equal(doc.querySelector('img'), null);
-  assert.equal(doc.querySelector('b'), null, 'raw HTML is not rendered');
+  assert.ok(!doc.querySelector('script'));
+  assert.ok(!doc.querySelector('img'));
+  assert.ok(!doc.querySelector('b'), 'raw HTML is not rendered');
   // Its tags are dropped, its text kept.
   assert.match(doc.body.textContent ?? '', /bold\?/);
   assert.doesNotMatch(doc.body.textContent ?? '', /<b>|onerror/);
@@ -93,6 +93,6 @@ test('markdown from the forge keeps no raw HTML, and a link leaves only for http
   assert.equal(forgeMarkdownHtml('   '), '');
   // A bot's signature, as GitHub's CLA action writes it.
   const bot = new JSDOM(`<div>${forgeMarkdownHtml('All signed.<br/><sub>Posted by the **CLA Assistant**</sub>')}</div>`).window.document;
-  assert.equal(bot.querySelector('sub'), null);
+  assert.ok(!bot.querySelector('sub'));
   assert.match(bot.body.textContent ?? '', /All signed\. Posted by the CLA Assistant/);
 });

@@ -126,8 +126,8 @@ for (const widget of ['pulls', 'jobs'] as const) {
   test(`${widget}: no shortcut once the project lands through pull requests`, async () => {
     const view = await mount(widget, 'manager', PR);
     try {
-      assert.equal(view.document.querySelector('[data-local-landing]'), null);
-      assert.equal(view.document.querySelector('[data-local-landing-setup]'), null);
+      assert.ok(!view.document.querySelector('[data-local-landing]'));
+      assert.ok(!view.document.querySelector('[data-local-landing-setup]'));
     } finally {
       await view.unmount();
     }
@@ -136,7 +136,7 @@ for (const widget of ['pulls', 'jobs'] as const) {
   test(`${widget}: without projects:manage the setting is not asked and nothing is offered`, async () => {
     const view = await mount(widget, 'reader', LOCAL);
     try {
-      assert.equal(view.document.querySelector('[data-local-landing-setup]'), null);
+      assert.ok(!view.document.querySelector('[data-local-landing-setup]'));
       assert.ok(!view.calls.some((c) => c.url === '/api/ui/projects/acme/integration'), 'the setting is never read');
     } finally {
       await view.unmount();
@@ -154,8 +154,8 @@ test('the shortcut opens the setting\'s own dialog, and turning pull requests on
     await view.type(view.document.querySelector('[data-pr-setting-account]'), 'acme-bot');
     await view.click(view.document.querySelector('[data-pr-setting-save]')?.closest('button') ?? null);
     assert.ok(view.calls.some((c) => c.url === '/api/ui/projects/acme/integration' && c.method === 'PUT'), 'saved');
-    assert.equal(view.document.querySelector('[data-pr-setting-dialog]'), null, 'closed once saved');
-    assert.equal(view.document.querySelector('[data-local-landing]'), null, 'the local line is gone');
+    assert.ok(!view.document.querySelector('[data-pr-setting-dialog]'), 'closed once saved');
+    assert.ok(!view.document.querySelector('[data-local-landing]'), 'the local line is gone');
     assert.match(view.document.body.textContent ?? '', /No open pull request\./);
   } finally {
     await view.unmount();

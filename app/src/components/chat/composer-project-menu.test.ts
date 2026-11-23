@@ -95,7 +95,7 @@ test('the project pill opens a menu whose "Project settings…" opens the projec
     assert.ok(item, 'the entry');
     assert.equal(item.textContent, 'Project settings…');
     assert.equal(item.getAttribute('aria-disabled'), null);
-    assert.equal(view.document.querySelector('[data-composer-project-reason]'), null);
+    assert.ok(!view.document.querySelector('[data-composer-project-reason]'));
     await view.click(item);
     const title = Array.from(view.document.querySelectorAll('[role="dialog"] h2'), (h) => h.textContent);
     assert.ok(title.some((text) => text?.includes('acme')), `the project's window on acme (${title.join(' | ')})`);
@@ -117,7 +117,7 @@ test('without projects:manage the entry stays, greyed, with the reason under the
     assert.ok(describedBy);
     assert.equal(view.document.getElementById(describedBy)?.textContent, wrapper?.getAttribute('title'));
     await view.click(item);
-    assert.equal(view.document.querySelector('[role="dialog"]'), null, 'nothing opens');
+    assert.ok(!view.document.querySelector('[role="dialog"]'), 'nothing opens');
   } finally {
     await view.unmount();
   }
@@ -126,8 +126,8 @@ test('without projects:manage the entry stays, greyed, with the reason under the
 test('a conversation without a project paints no pill, so no entry', async () => {
   const view = await mount('manager', null);
   try {
-    assert.equal(view.document.querySelector('[data-composer-project]'), null);
-    assert.equal(view.document.querySelector('[data-composer-project-settings]'), null);
+    assert.ok(!view.document.querySelector('[data-composer-project]'));
+    assert.ok(!view.document.querySelector('[data-composer-project-settings]'));
   } finally {
     await view.unmount();
   }
