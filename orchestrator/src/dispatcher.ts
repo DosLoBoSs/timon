@@ -7,6 +7,7 @@ import {
   MAX_BLIND_QUOTA_DEATHS,
   MAX_SYSTEM_REQUEUES,
   type TaskInterruptionOutcome,
+  type SeriesPlanLandingRecord,
   type TaskRow,
   type TaskType,
 } from './db.js';
@@ -48,7 +49,8 @@ import { MissionFenceRefusedError, profileLimits } from './resources.js';
 import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal, pullRequestCloseRefusal } from './code-gate.js';
 import { GIT_MISSING_MESSAGE, GIT_MISSING_REASON, gitTaskRefusal } from './task-git.js';
 import {
-  ensureIntegrationBranch, integrationBranchName, integrationBranchRefusal, usesIntegrationBranch, type IntegrationMode,
+  ensureIntegrationBranch, integrationBranchName, integrationBranchRefusal, isIntegrationMode, usesIntegrationBranch,
+  type IntegrationMode,
 } from './git-integration.js';
 import { integrationBaseRef, readProjectIntegration } from './project-integration.js';
 import { chainLanding } from './chain-landing.js';
@@ -955,7 +957,17 @@ export type ProjectLanding =
  * setting that no longer validates, a base that is the target itself, a name
  * that is not a valid public branch.
  */
-export function projectLanding(task: Pick<TaskRow, 'project' | 'agent_name' | 'base_branch' | 'title'>): ProjectLanding {
+export function projectLanding(
+  task: Pick<TaskRow, 'project' | 'agent_name' | 'base_branch' | 'title'> & Partial<Pick<TaskRow, 'series_id'>>,
+): ProjectLanding {
+  // The branch the Kanban planner chose for the job comes first: it may give a
+  // job of a project that merges locally a branch of its own, or start a job
+  // of either kind from a branch the repository already has.
+  const planned = plannedLanding(task);
+  if (planned) {
+    const mode: Extract<IntegrationMode, 'branch' | 'pr'> = planned.mode === 'pr' ? 'pr' : 'branch';
+    return { kind: 'integration', mode, baseRef: planned.base_ref, branch: planned.branch };
+  }
   let cfg: AgentConfig | null = null;
   try { cfg = loadConfig(task.agent_name); } catch { /* unknown agent: no project from it */ }
   const slug = taskProjectSlug(task, cfg);
@@ -989,6 +1001,21 @@ export function projectLanding(task: Pick<TaskRow, 'project' | 'agent_name' | 'b
   const refusal = integrationBranchRefusal(branch);
   if (refusal) return { kind: 'refused', branch, baseRef, detail: refusal };
   return { kind: 'integration', mode: branch.startsWith('sec/') ? 'branch' : 'pr', baseRef, branch };
+}
+
+/**
+ * What the Kanban planner chose for the job of `task`'s series, when the task
+ * starts from that branch (or names none). A task on another base was created
+ * outside the plan: the plan does not decide for it.
+ */
+export function plannedLanding(
+  task: Pick<TaskRow, 'base_branch'> & Partial<Pick<TaskRow, 'series_id'>>,
+): SeriesPlanLandingRecord | null {
+  if (!task.series_id) return null;
+  const planned = dbApi.getSeriesPlanLanding(task.series_id);
+  if (!planned || !isIntegrationMode(planned.mode) || planned.mode === 'local') return null;
+  if (task.base_branch && task.base_branch !== planned.branch) return null;
+  return planned;
 }
 
 /**
@@ -1072,7 +1099,20 @@ export async function blockIfBaseUnavailable(task: TaskRow): Promise<boolean> {
       }));
       return true;
     }
-    const out = await ensureIntegrationBranch(cwd, { branch: base, baseRef });
+    // A branch the planner chose as existing is never cut; one chosen as new
+    // is never an unrelated branch the repository happens to have already.
+    const planned = plannedLanding({ base_branch: base, series_id: task.series_id });
+    const known = dbApi.getIntegration(cwd, base);
+    const out = await ensureIntegrationBranch(cwd, { branch: base, baseRef, mustExist: planned?.branch_kind === 'existing' });
+    if (out.ok && !out.created && !known && planned?.branch_kind === 'new') {
+      const detail = `${base} already exists in the repository, and the job was planned on a new branch; ` +
+        `plan it again on that existing branch or on another name`;
+      const reason =
+        `Integration branch ${base} is unavailable: ${detail}. The task was not started. Fix the branch name, ` +
+        `then retry the task.`;
+      blockTask(task, reason, daemonMessage('integration_branch_unavailable', { branch: base, baseRef, detail }));
+      return true;
+    }
     if (!out.ok) {
       const reason =
         `Integration branch ${base} is unavailable: ${out.reason}. The task was not started, and the ` +

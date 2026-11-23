@@ -115,6 +115,12 @@ export function baseRefLabel(baseRef: string): string {
   return localTargetOf(baseRef) ?? baseRef;
 }
 
+/** Where an integration row lands, as a person reads it: `origin/main`, or
+ *  `main` for a job of a project that merges locally (no remote). */
+export function integrationTargetLabel(row: { remote: string; target: string }): string {
+  return row.remote ? `${row.remote}/${row.target}` : row.target;
+}
+
 /** Why an integration branch could not be made ready. */
 export type IntegrationRefusalCode =
   | 'invalid_branch'
