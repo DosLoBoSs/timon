@@ -24,9 +24,9 @@ import { useEffect, useLayoutEffect, useMemo, useState, type ReactElement, type 
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import {
   ChevronRight, CircleAlert, CircleCheck, CircleDot, CircleMinus, ExternalLink, GitCommitHorizontal, GitMerge,
-  GitPullRequest, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, LoaderCircle, Lock, MoreHorizontal, RefreshCw, ScrollText,
+  GitPullRequest, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, LoaderCircle, Lock, MoreHorizontal, RefreshCw, ScrollText, X,
 } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WidgetButton, widgetButtonClass } from '@/components/widget-toolbar';
 import { t } from '@/lib/i18n';
@@ -55,6 +55,23 @@ const DIFF_LINES_SHOWN = 6000;
  * links go to the end of the conversation.
  */
 export const NARROW_WINDOW_PX = 640;
+
+/**
+ * The tab bar's height, shared with the place it keeps while the page is
+ * read: the column beside starts on the row below, so it must not move
+ * when the bar arrives.
+ */
+const TAB_BAR = 'h-8';
+
+/**
+ * A tab's scroll area. Beside the column, its scrollbar's room is kept even
+ * when nothing overflows: otherwise the gutter between the two narrows from
+ * one tab to the next.
+ */
+const tabPanel = (narrow: boolean) => cn(
+  'scrollbar-thin col-start-1 row-start-2 mt-0 min-h-0 flex-1 overflow-y-auto pr-1',
+  !narrow && '[scrollbar-gutter:stable]',
+);
 
 const STATE_TONE: Record<string, string> = {
   open: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
@@ -725,15 +742,17 @@ function Metadata({ page, repo, timon }: { page: PullRequestPage; repo: string |
 }
 
 /**
- * The column beside the tabs. Its status card sticks to the top: what the
- * person can do stays in view while the rest scrolls under it.
+ * The column beside the tabs, on the row of their content: its card starts
+ * level with the first block of every tab. The card stays put, what the
+ * person can do in view, and only the rows under it scroll. They scroll
+ * without a bar: a bar's width changes from one system to the next, and it
+ * would pull the rows' right edge off the card's and the header's.
  */
 function SideColumn({ card, children }: { card: ReactNode; children: ReactNode }) {
   return (
-    <div data-pull-side-column="" className="scrollbar-thin flex min-h-0 flex-col gap-3 overflow-y-auto">
-      {/* An opaque ground under the card: the rows scroll beneath it. */}
-      <div className="sticky top-0 z-10 bg-popover">{card}</div>
-      {children}
+    <div data-pull-side-column="" className="col-start-2 row-start-2 flex min-h-0 flex-col gap-3">
+      <div className="shrink-0">{card}</div>
+      <div data-pull-side-rows="" className="scrollbar-none flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">{children}</div>
     </div>
   );
 }
@@ -815,8 +834,10 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent data-pull-dialog={pull.number} className="flex h-[min(88vh,52rem)] max-w-[1000px] flex-col gap-3 overflow-hidden">
-        <div className="flex min-w-0 items-start gap-2 pr-6">
+      {/* Its own close button, last of the header's icons: the right edge of
+          that row is the column's. */}
+      <DialogContent hideClose data-pull-dialog={pull.number} className="flex h-[min(88vh,52rem)] max-w-[1000px] flex-col gap-3 overflow-hidden">
+        <div className="flex min-w-0 items-start gap-2">
           <DialogTitle className="flex min-w-0 flex-1 items-start gap-2 text-sm leading-5">
             <StateIcon className={cn('mt-0.5 size-4 shrink-0', state === 'open' ? 'text-emerald-600 dark:text-emerald-400' : state === 'merged' ? 'text-violet-600 dark:text-violet-400' : state === 'closed' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground')} aria-hidden />
             <span data-pull-title="" className="line-clamp-2 min-w-0 break-words" title={page?.title ?? pull.title}>{page?.title ?? pull.title}</span>
@@ -853,6 +874,11 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
                   </Dropdown.Content>
                 </Dropdown.Portal>
               </Dropdown.Root>
+              <DialogClose asChild>
+                <button type="button" data-pull-close="" title={t('common.close')} aria-label={t('common.close')} className={widgetButtonClass({ iconOnly: true })}>
+                  <X className="size-3.5" />
+                </button>
+              </DialogClose>
             </span>
           </div>
         </div>
@@ -874,13 +900,15 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
         </div>
 
         {/* `narrow &&` / `!narrow &&` keep the tabs at the same place: their state survives a resize.
-            The card shows from the start: its gestures need no page. */}
+            The card shows from the start: its gestures need no page.
+            Wide, two rows: the tab bar alone, then the tab's content beside the column. `Tabs`
+            lays out nothing there (`contents`), so its bar and panels are the grid's own cells. */}
         <div ref={setBody} data-pull-body-layout={narrow ? 'narrow' : 'wide'}
-          className={cn('min-h-0 flex-1 gap-3', narrow ? 'flex flex-col' : 'grid grid-cols-[minmax(0,1fr)_16rem]')}>
+          className={cn('min-h-0 flex-1', narrow ? 'flex flex-col gap-3' : 'grid grid-cols-[minmax(0,1fr)_16rem] grid-rows-[auto_minmax(0,1fr)] gap-x-3 gap-y-2')}>
           {narrow && <div className="shrink-0">{statusCard(true)}</div>}
           {page ? (
-            <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-              <TabsList className="h-8 self-start">
+            <Tabs value={tab} onValueChange={setTab} className={narrow ? 'flex min-h-0 min-w-0 flex-1 flex-col gap-2' : 'contents'}>
+              <TabsList className={cn(TAB_BAR, 'col-start-1 row-start-1 self-start justify-self-start')}>
                 <TabsTrigger value="conversation" data-pull-tab="conversation" className="text-xs">
                   {t('pullRequests.detail.tab.conversation')}
                   <span className="ml-1.5 tabular-nums text-muted-foreground">{page.timeline.length + page.timelineMore}</span>
@@ -898,20 +926,20 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
                   <span className="ml-1.5 tabular-nums text-muted-foreground">{page.changedFiles}</span>
                 </TabsTrigger>
               </TabsList>
-              <TabsContent value="conversation" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
+              <TabsContent value="conversation" className={tabPanel(narrow)}>
                 <ConversationTab page={page} end={narrow ? metadata(page) : null} />
               </TabsContent>
-              <TabsContent value="commits" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
+              <TabsContent value="commits" className={tabPanel(narrow)}>
                 <CommitsTab page={page} />
               </TabsContent>
-              <TabsContent value="checks" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
+              <TabsContent value="checks" className={tabPanel(narrow)}>
                 <ChecksTab page={page} project={project} />
               </TabsContent>
-              <TabsContent value="files" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
+              <TabsContent value="files" className={tabPanel(narrow)}>
                 <FilesTab page={page} project={project} />
               </TabsContent>
             </Tabs>
-          ) : <div aria-hidden className="min-h-0 flex-1" />}
+          ) : <div aria-hidden className={narrow ? 'min-h-0 flex-1' : cn(TAB_BAR, 'col-start-1 row-start-1')} />}
           {!narrow && <SideColumn card={statusCard(false)}>{page && metadata(page)}</SideColumn>}
         </div>
       </DialogContent>
