@@ -925,6 +925,9 @@ task and apply to the series only, including the tasks the dispatcher creates it
 In a project that lands through pull requests it also returns \`integration\`: every task starts from
 its \`branch\` (\`--base\`), the last command creates the \`--landing pr\` task that opens the pull
 request, and you never merge the job into the target branch yourself: a person merges the pull request.
+A sequential job there starts with \`timon pr branch <branch>\`: code and commit only in the
+\`worktree\` it returns (never in the shared checkout), move the branch by reference after each
+commit, and end with that same \`--landing pr\` task; \`integration.note\` gives the exact gestures.
 
 | \`plan.mode\` | what you do |
 |---------------|-------------|

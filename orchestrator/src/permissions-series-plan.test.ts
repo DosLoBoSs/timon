@@ -154,14 +154,30 @@ test('a project that lands through pull requests: the plan gives the job branch 
   const resumed = buildContinuation({ tool_name: 'ask_user', mission_id: 'plan-pr-1' } as never, { behavior: 'allow', updatedInput: pr });
   assert.match(resumed, /Pull request: Project plan-pr lands through a pull request/);
 
-  // A sequential mode creates no task: nothing about a pull request either.
-  assert.equal((await answer('plan-pr-2', 'plan-pr.main', 'sequential-here')).integration, undefined);
+  // A sequential job lands through the same pull request task: its pilot asks
+  // for the branch first, codes in a worktree on it, and ends on that task.
+  for (const [mission, mode] of [['plan-pr-2', 'sequential-here'], ['plan-pr-3', 'sequential-new-mission']] as const) {
+    const seq = await answer(mission, 'plan-pr.main', mode);
+    assert.equal(seq.integration?.branch, 'feat/big-feature-2', mode);
+    assert.deepEqual(seq.commands, [
+      'timon pr branch feat/big-feature-2',
+      "timon task create --type merge --landing pr --base feat/big-feature-2 --title 'Pull request — Big feature' "
+      + "--description '<what the pull request carries>'",
+    ], mode);
+    assert.match(seq.integration!.note, /coded in a mission/);
+    assert.match(seq.integration!.note, /git push \. HEAD:refs\/heads\/feat\/big-feature-2/);
+    assert.match(seq.integration!.note, /never on main/);
+  }
 
   // Non-regression: a project without the setting gets the previous answer.
   const local = await answer('plan-local-1', 'plan-local.main', 'kanban-full', { resolves_issues: true });
   assert.equal(local.integration, undefined);
   assert.equal(dbApi.seriesResolvesIssues('plan-local-1'), false, 'no pull request, nothing to close');
   assert.deepEqual(local.commands, seriesPlanCommands({ mode: 'kanban-full', roles: {} }, [{ title: 'Front' }]));
+  // A sequential job of a project that lands locally: the previous answer, no command.
+  const localSeq = await answer('plan-local-2', 'plan-local.main', 'sequential-here');
+  assert.equal(localSeq.integration, undefined);
+  assert.deepEqual(localSeq.commands, []);
 });
 
 /* The planner's branch field: the agent proposes, the person may change it,

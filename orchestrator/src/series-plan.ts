@@ -348,7 +348,10 @@ export type SeriesPlanLanding = {
  * carries `--base <branch>` (and `--project <slug>` when the planning agent is
  * not in that project), and a last `merge` task with `--landing pr`, which
  * depends on the code tasks (or on the grouped merge), opens the pull request.
- * Without it, the output is the previous one, to the byte.
+ * A sequential mode creates no task but that last one: its pilot first asks
+ * the daemon for the branch and a worktree on it (`timon pr branch`), codes
+ * there, and creates the pull request task, with no deps, once the work is in
+ * the branch. Without `landing`, the output is the previous one, to the byte.
  */
 export function seriesPlanCommands(
   answer: SeriesPlanAnswer,
@@ -386,6 +389,14 @@ export function seriesPlanCommands(
   }
 
   const pipeline = PIPELINE_BY_MODE[answer.mode];
+  if (!pipeline && landing) {
+    const project = landing.taskProject ? ` --project ${shellQuote(landing.taskProject)}` : '';
+    cmds.push(`timon pr branch ${shellQuote(landing.branch)}`);
+    cmds.push(
+      `timon task create --type merge --landing pr --base ${shellQuote(landing.branch)}${project} `
+      + `--title ${shellQuote(`Pull request — ${landing.chantier}`)} --description '<what the pull request carries>'`,
+    );
+  }
   if (pipeline) {
     const group = answer.mode === 'kanban-code-group' ? ' --group-id <GROUP>' : '';
     const base = (landing ? ` --base ${shellQuote(landing.branch)}` : '')

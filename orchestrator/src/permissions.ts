@@ -1285,9 +1285,11 @@ function withSeriesPlan(p: Omit<Pending, 'resolve'>, final: PermissionDecision):
   // The name typed in the form, else the agent's proposal: checked again here,
   // the form's own check being a convenience, not the guard.
   const proposed = plan.branch ?? (typeof form.branch === 'string' ? form.branch : null);
-  const landing = PIPELINE_BY_MODE[plan.mode]
-    ? planLanding(p.agent, chantier, { branch: proposed, seriesId: p.mission_id })
-    : null;
+  // A sequential job lands through a pull request too: its pilot asks for the
+  // branch, codes on it, and ends on the same pull request task.
+  const landing = planLanding(p.agent, chantier, {
+    branch: proposed, seriesId: p.mission_id, sequential: !PIPELINE_BY_MODE[plan.mode],
+  });
   const branchDefect = landing?.refusal
     ?? (landing?.locked && plan.branch !== undefined && plan.branch.trim() !== ''
       && planBranchName(plan.branch, landing.prefix) !== landing.branch
