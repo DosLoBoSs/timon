@@ -7,21 +7,24 @@
  * (description, comments, reviews, review threads by file), the commits, the
  * checks (the end of a failed job's log on demand) and the files (each one's
  * diff unfolded on demand, its review threads under their line) — and beside
- * them the people, labels, milestone, issues and Timon's own links.
+ * them a column: where the pull request stands with its gestures, then the
+ * people, labels, milestone, issues and Timon's own links.
  *
  * Everything here was written on the forge: React escapes it, the markdown is
  * rendered without raw HTML (`forgeMarkdownHtml`), and a link only leaves for
  * an https GitHub address, in a new tab. The gestures on the pull request sit
- * in the header: the one its state calls for filled, the frequent ones beside
- * it, the rest in "…" (`pullRequestActions`, shared with the row's menu). A
- * narrow window folds the ones beside it into "…"; the filled one stays.
+ * in the column's status card, which stays in view whatever the tab: the one
+ * its state calls for filled, the frequent ones under it, the rest in the
+ * header's "…" (`pullRequestActions`, shared with the row's menu). The header
+ * keeps only icon buttons, so the title has the width. A narrow window has no
+ * room for the column: the card moves above the tabs, across the window.
  */
 
 import { useEffect, useLayoutEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import {
   ChevronRight, CircleAlert, CircleCheck, CircleDot, CircleMinus, ExternalLink, GitCommitHorizontal, GitMerge,
-  GitPullRequest, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, LoaderCircle, MoreHorizontal, RefreshCw, ScrollText,
+  GitPullRequest, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, LoaderCircle, Lock, MoreHorizontal, RefreshCw, ScrollText,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -46,8 +49,12 @@ const MUTED_CHIP = 'bg-foreground/[0.06] text-muted-foreground';
 /** Diff lines painted per file, and for the whole tab: a huge diff would freeze the window. */
 const FILE_LINES_SHOWN = 1500;
 const DIFF_LINES_SHOWN = 6000;
-/** Under this width (px) the window folds the gestures beside the filled one into "…". */
-export const NARROW_HEADER_PX = 640;
+/**
+ * Under this width (px) the window has no room for a column beside its tabs:
+ * the status card moves above them, across the window, and the people and
+ * links go to the end of the conversation.
+ */
+export const NARROW_WINDOW_PX = 640;
 
 const STATE_TONE: Record<string, string> = {
   open: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
@@ -235,6 +242,8 @@ const BOX_MERGE: Record<MergeState, BoxLine> = {
   closed: { icon: GitPullRequestClosed, tone: TONE.bad },
 };
 
+const BOX_LOCK: BoxLine = { icon: Lock, tone: TONE.quiet };
+
 const BOX_DECISION: Record<NonNullable<PullRequestPage['reviewDecision']>, BoxLine> = {
   approved: { icon: CircleCheck, tone: TONE.good },
   changes_requested: { icon: CircleAlert, tone: TONE.warn },
@@ -246,55 +255,71 @@ function BoxIcon({ line }: { line: BoxLine }) {
   return <Icon className={cn('size-4 shrink-0', line.tone)} aria-hidden />;
 }
 
+const STATUS_LINE = 'flex min-w-0 items-start gap-2 px-1.5 py-1 text-xs font-medium leading-4';
+
 /**
- * Where the pull request stands, under its conversation as GitHub's merge box
- * is: its checks (a click shows them), its merge state, the review decision,
- * and the gestures its state calls for, the header's own. No merge button:
- * a pull request merges on GitHub, by a person.
+ * Where the pull request stands, as GitHub's merge box says it, and what to
+ * do about it: its checks (a click shows them), its merge state, the review
+ * decision, a lock on its branch, then the gesture its state calls for,
+ * filled, and the frequent others under it. No merge button: a pull request
+ * merges on GitHub, by a person. `across`: the card spans a narrow window
+ * above the tabs, its lines and its buttons side by side to stay short.
  */
-function MergeBox({ page, actions, onAction, onShowChecks }: {
+function StatusCard({ page, pull, actions, onAction, onShowChecks, across = false }: {
   page: PullRequestPage;
+  pull: PullRequestItem;
   actions: PullActions;
   onAction: (id: PullActionId) => void;
   onShowChecks: () => void;
+  across?: boolean;
 }) {
   const counts = checkCounts(page.checks);
   const checks = page.checks.length === 0 ? 'none' : counts.fail > 0 ? 'failed' : counts.pending > 0 ? 'pending' : 'passed';
   const merge = mergeState(page);
+  const lock = branchLock(pull);
   return (
-    <section data-pull-merge-box="" aria-label={t('pullRequests.detail.box.label')} className={cn(ISLAND, 'flex flex-col gap-1 px-2 py-2')}>
+    <section data-pull-status-card={across ? 'across' : 'column'} aria-label={t('pullRequests.detail.box.label')} className={cn(ISLAND, 'flex flex-col gap-0.5 p-2')}>
+      <div className={across ? 'flex flex-wrap gap-x-3 gap-y-0.5 [&>*]:min-w-48 [&>*]:flex-1' : 'contents'}>
       <button type="button" data-pull-box-checks={checks} onClick={onShowChecks} title={t('pullRequests.detail.box.showChecks')}
-        className="flex min-w-0 items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        className="flex min-w-0 items-start gap-2 rounded-md px-1.5 py-1 text-left hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <BoxIcon line={BOX_CHECKS[checks]} />
         <span className="min-w-0 flex-1">
-          <span className="block text-xs font-medium">{t(`pullRequests.detail.box.checks.${checks}`)}</span>
+          <span className="block text-xs font-medium leading-4">{t(`pullRequests.detail.box.checks.${checks}`)}</span>
           {checks !== 'none' && (
             <span className="block text-[11px] tabular-nums text-muted-foreground">{t('pullRequests.detail.box.checksCount', counts)}</span>
           )}
         </span>
-        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <ChevronRight className="size-3.5 shrink-0 self-center text-muted-foreground" aria-hidden />
       </button>
+      <div data-pull-box-merge={merge} className={STATUS_LINE}>
+        <BoxIcon line={BOX_MERGE[merge]} />
+        <span className="min-w-0">{t(`pullRequests.detail.box.merge.${merge}`)}</span>
+      </div>
       {page.reviewDecision && (
-        <div data-pull-box-decision={page.reviewDecision} className="flex min-w-0 items-center gap-2.5 px-1.5 py-1.5">
+        <div data-pull-box-decision={page.reviewDecision} className={STATUS_LINE}>
           <BoxIcon line={BOX_DECISION[page.reviewDecision]} />
-          <span className="text-xs font-medium">{t(`pullRequests.detail.box.decision.${page.reviewDecision}`)}</span>
+          <span className="min-w-0">{t(`pullRequests.detail.box.decision.${page.reviewDecision}`)}</span>
         </div>
       )}
-      <div data-pull-box-merge={merge} className="flex min-w-0 items-center gap-2.5 px-1.5 py-1.5">
-        <BoxIcon line={BOX_MERGE[merge]} />
-        <span className="text-xs font-medium">{t(`pullRequests.detail.box.merge.${merge}`)}</span>
+      {lock && (
+        <div data-pull-box-lock={lock} title={t(`pullRequests.lockedHint.${lock}`)} className={STATUS_LINE}>
+          <BoxIcon line={BOX_LOCK} />
+          <span className="min-w-0">{t(`pullRequests.locked.${lock}`)}</span>
+        </div>
+      )}
       </div>
       {page.state === 'open' && (
-        <div data-pull-box-actions="" className="flex flex-wrap items-center justify-end gap-1.5 px-1.5 pb-0.5 pt-1">
-          {actions.secondary.map((action) => <PullActionButton key={action.id} action={action} onRun={onAction} />)}
-          <PullActionButton action={actions.primary} primary onRun={onAction} />
+        <div data-pull-box-actions="" role="group" aria-label={t('pullRequests.detail.actions')}
+          className={cn('px-1.5 pb-0.5 pt-2', across ? 'flex flex-wrap gap-1.5 [&>*]:flex-1 [&>*]:basis-40' : 'flex flex-col gap-1.5')}>
+          <PullActionButton action={actions.primary} primary block onRun={onAction} />
+          {actions.secondary.map((action) => <PullActionButton key={action.id} action={action} block onRun={onAction} />)}
         </div>
       )}
     </section>
   );
 }
 
-function ConversationTab({ page, box }: { page: PullRequestPage; box: ReactNode }) {
+function ConversationTab({ page, end }: { page: PullRequestPage; end: ReactNode }) {
   return (
     <div className="flex flex-col gap-3">
       <section data-pull-body="" className={cn(ISLAND, 'flex flex-col gap-1.5 px-3 py-2.5')}>
@@ -329,7 +354,7 @@ function ConversationTab({ page, box }: { page: PullRequestPage; box: ReactNode 
           <More count={page.threadsMore} what="threads" />
         </section>
       )}
-      {box}
+      {end}
     </div>
   );
 }
@@ -563,7 +588,6 @@ function SideRow({ label, children, data }: { label: string; children: ReactNode
 }
 
 function People({ logins, more }: { logins: string[]; more: number }) {
-  if (logins.length === 0) return <span className="text-muted-foreground">{t('pullRequests.detail.none')}</span>;
   return (
     <>
       {logins.map((login) => (
@@ -606,55 +630,79 @@ function TimonLinks({ pull, onOpenJob, onOpenTodo }: {
   );
 }
 
-function SidePanel({ page, repo, timon }: { page: PullRequestPage; repo: string | null; timon: ReactNode }) {
+/**
+ * The people, labels, milestone and issues of the pull request, then Timon's
+ * links. Only what the pull request has is listed: an empty field says
+ * nothing, and no field at all leaves no block.
+ */
+function Metadata({ page, repo, timon }: { page: PullRequestPage; repo: string | null; timon: ReactNode }) {
+  const hasMeta = page.reviewRequests.length + page.reviewRequestsMore + page.assignees.length + page.assigneesMore
+    + page.labels.length + page.closingIssues.length > 0 || page.milestone !== null;
   return (
-    <div className="flex min-h-0 flex-col gap-3 md:overflow-y-auto">
-      <dl className={cn(ISLAND, 'flex flex-col gap-3 px-3 py-2.5')}>
-        <SideRow label={t('pullRequests.detail.reviewers')} data="reviewers">
-          <People logins={page.reviewRequests} more={page.reviewRequestsMore} />
-        </SideRow>
-        <SideRow label={t('pullRequests.detail.assignees')} data="assignees">
-          <People logins={page.assignees} more={page.assigneesMore} />
-        </SideRow>
-        <SideRow label={t('pullRequests.detail.labels')} data="labels">
-          {page.labels.length === 0
-            ? <span className="text-muted-foreground">{t('pullRequests.detail.none')}</span>
-            : page.labels.map((label) => (
-              <span key={label.name} className={cn(CHIP, MUTED_CHIP)}>
-                {label.color && /^[0-9a-f]{6}$/i.test(label.color) && (
-                  <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: `#${label.color}` }} />
-                )}
-                {label.name}
-              </span>
-            ))}
-        </SideRow>
-        <SideRow label={t('pullRequests.detail.milestone')} data="milestone">
-          {page.milestone
-            ? <ForgeLink href={page.milestone.url}>{page.milestone.title}</ForgeLink>
-            : <span className="text-muted-foreground">{t('pullRequests.detail.none')}</span>}
-        </SideRow>
-        <SideRow label={t('pullRequests.detail.issues')} data="issues">
-          {page.closingIssues.length === 0
-            ? <span className="text-muted-foreground">{t('pullRequests.detail.none')}</span>
-            : page.closingIssues.map((issue) => {
-              const same = issue.repo !== null && repo !== null && issue.repo.toLowerCase() === repo.toLowerCase();
-              const text = same || issue.repo === null ? `#${issue.number}` : `${issue.repo}#${issue.number}`;
-              return <ForgeLink key={text} href={issue.url} className="tabular-nums text-primary">{text}</ForgeLink>;
-            })}
-        </SideRow>
-      </dl>
+    <>
+      {hasMeta && (
+        <dl className={cn(ISLAND, 'flex flex-col gap-3 px-3 py-2.5')}>
+          {page.reviewRequests.length + page.reviewRequestsMore > 0 && (
+            <SideRow label={t('pullRequests.detail.reviewers')} data="reviewers">
+              <People logins={page.reviewRequests} more={page.reviewRequestsMore} />
+            </SideRow>
+          )}
+          {page.assignees.length + page.assigneesMore > 0 && (
+            <SideRow label={t('pullRequests.detail.assignees')} data="assignees">
+              <People logins={page.assignees} more={page.assigneesMore} />
+            </SideRow>
+          )}
+          {page.labels.length > 0 && (
+            <SideRow label={t('pullRequests.detail.labels')} data="labels">
+              {page.labels.map((label) => (
+                <span key={label.name} className={cn(CHIP, MUTED_CHIP)}>
+                  {label.color && /^[0-9a-f]{6}$/i.test(label.color) && (
+                    <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: `#${label.color}` }} />
+                  )}
+                  {label.name}
+                </span>
+              ))}
+            </SideRow>
+          )}
+          {page.milestone && (
+            <SideRow label={t('pullRequests.detail.milestone')} data="milestone">
+              <ForgeLink href={page.milestone.url}>{page.milestone.title}</ForgeLink>
+            </SideRow>
+          )}
+          {page.closingIssues.length > 0 && (
+            <SideRow label={t('pullRequests.detail.issues')} data="issues">
+              {page.closingIssues.map((issue) => {
+                const same = issue.repo !== null && repo !== null && issue.repo.toLowerCase() === repo.toLowerCase();
+                const text = same || issue.repo === null ? `#${issue.number}` : `${issue.repo}#${issue.number}`;
+                return <ForgeLink key={text} href={issue.url} className="tabular-nums text-primary">{text}</ForgeLink>;
+              })}
+            </SideRow>
+          )}
+        </dl>
+      )}
       {timon}
+    </>
+  );
+}
+
+/**
+ * The column beside the tabs. Its status card sticks to the top: what the
+ * person can do stays in view while the rest scrolls under it.
+ */
+function SideColumn({ card, children }: { card: ReactNode; children: ReactNode }) {
+  return (
+    <div data-pull-side-column="" className="scrollbar-thin flex min-h-0 flex-col gap-3 overflow-y-auto">
+      {/* An opaque ground under the card: the rows scroll beneath it. */}
+      <div className="sticky top-0 z-10 bg-popover">{card}</div>
+      {children}
     </div>
   );
 }
 
-// ─── The window ────────────────────────────────────────────────────────────
-
 /**
  * Whether the element is narrower than `px`. A width of 0 is no width read
  * yet (a test's page lays nothing out): the window then counts as wide. The
- * element comes from a callback ref: the dialog's portal mounts it a render
- * after the window itself.
+ * element comes from a callback ref: it mounts once the page is read.
  */
 function useNarrow(el: HTMLElement | null, px: number): boolean {
   const [narrow, setNarrow] = useState(false);
@@ -670,6 +718,8 @@ function useNarrow(el: HTMLElement | null, px: number): boolean {
   }, [el, px]);
   return narrow;
 }
+
+// ─── The window ────────────────────────────────────────────────────────────
 
 type PageLoad = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; page: PullRequestPage };
 
@@ -691,10 +741,8 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
   const [load, setLoad] = useState<PageLoad>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState('conversation');
-  const [header, setHeader] = useState<HTMLDivElement | null>(null);
-  const narrow = useNarrow(header, NARROW_HEADER_PX);
-  const beside = narrow ? [] : actions.secondary;
-  const folded = narrow ? [...actions.secondary, ...actions.overflow] : actions.overflow;
+  const [body, setBody] = useState<HTMLDivElement | null>(null);
+  const narrow = useNarrow(body, NARROW_WINDOW_PX);
 
   useEffect(() => {
     let alive = true;
@@ -720,6 +768,12 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
   const lock = branchLock(pull);
   const badge = reviewBadge(pull);
   const author = page?.author ?? pull.author;
+  const statusCard = (across: boolean) => page && (
+    <StatusCard page={page} pull={pull} actions={actions} onAction={onAction} onShowChecks={() => setTab('checks')} across={across} />
+  );
+  const metadata = (shown: PullRequestPage) => (
+    <Metadata page={shown} repo={repo} timon={<TimonLinks pull={pull} onOpenJob={onOpenJob} onOpenTodo={onOpenTodo} />} />
+  );
   const head = page
     ? (page.isCrossRepository && page.headOwner ? `${page.headOwner}:${page.headRef}` : page.headRef)
     : null;
@@ -727,15 +781,13 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent data-pull-dialog={pull.number} className="flex h-[min(88vh,52rem)] max-w-[1000px] flex-col gap-3 overflow-hidden">
-        <div ref={setHeader} className="flex min-w-0 items-center gap-2 pr-6">
-          <DialogTitle className="flex min-w-0 flex-1 items-center gap-2 text-sm">
-            <StateIcon className={cn('size-4 shrink-0', state === 'open' ? 'text-emerald-600 dark:text-emerald-400' : state === 'merged' ? 'text-violet-600 dark:text-violet-400' : state === 'closed' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground')} aria-hidden />
-            <span className="min-w-0 truncate" title={page?.title ?? pull.title}>{page?.title ?? pull.title}</span>
+        <div className="flex min-w-0 items-start gap-2 pr-6">
+          <DialogTitle className="flex min-w-0 flex-1 items-start gap-2 text-sm leading-5">
+            <StateIcon className={cn('mt-0.5 size-4 shrink-0', state === 'open' ? 'text-emerald-600 dark:text-emerald-400' : state === 'merged' ? 'text-violet-600 dark:text-violet-400' : state === 'closed' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground')} aria-hidden />
+            <span data-pull-title="" className="line-clamp-2 min-w-0 break-words" title={page?.title ?? pull.title}>{page?.title ?? pull.title}</span>
             <span className="shrink-0 font-normal tabular-nums text-muted-foreground">#{pull.number}</span>
           </DialogTitle>
-          <div data-pull-actions="" role="group" aria-label={t('pullRequests.detail.actions')} className="flex shrink-0 items-center gap-1.5">
-            {beside.map((action) => <PullActionButton key={action.id} action={action} onRun={onAction} />)}
-            <PullActionButton action={actions.primary} primary onRun={onAction} />
+          <div data-pull-header-tools="" className="-mt-0.5 flex shrink-0 items-center">
             <span className="flex items-center gap-0.5">
               <WidgetButton
                 data-pull-refresh=""
@@ -761,7 +813,7 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
                 <Dropdown.Portal>
                   <Dropdown.Content sideOffset={6} align="end" className="z-[60] min-w-44 rounded-lg border border-border bg-popover p-1 text-xs text-popover-foreground shadow-elev-2">
                     <NativeViewCover />
-                    <PullActionMenuItems actions={folded} onRun={onAction} />
+                    <PullActionMenuItems actions={actions.overflow} onRun={onAction} />
                     {links}
                   </Dropdown.Content>
                 </Dropdown.Portal>
@@ -814,8 +866,11 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
         {load.kind === 'loading' && <p className="text-xs text-muted-foreground">{t('pullRequests.loading')}</p>}
 
         {page && (
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_15rem]">
-            <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 min-w-0 flex-col gap-2">
+          // `narrow &&` / `!narrow &&` keep the tabs at the same place: their state survives a resize.
+          <div ref={setBody} data-pull-body-layout={narrow ? 'narrow' : 'wide'}
+            className={cn('min-h-0 flex-1 gap-3', narrow ? 'flex flex-col' : 'grid grid-cols-[minmax(0,1fr)_16rem]')}>
+            {narrow && <div className="shrink-0">{statusCard(true)}</div>}
+            <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
               <TabsList className="h-8 self-start">
                 <TabsTrigger value="conversation" data-pull-tab="conversation" className="text-xs">
                   {t('pullRequests.detail.tab.conversation')}
@@ -835,10 +890,7 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="conversation" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
-                <ConversationTab
-                  page={page}
-                  box={<MergeBox page={page} actions={actions} onAction={onAction} onShowChecks={() => setTab('checks')} />}
-                />
+                <ConversationTab page={page} end={narrow ? metadata(page) : null} />
               </TabsContent>
               <TabsContent value="commits" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
                 <CommitsTab page={page} />
@@ -850,7 +902,7 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
                 <FilesTab page={page} project={project} />
               </TabsContent>
             </Tabs>
-            <SidePanel page={page} repo={repo} timon={<TimonLinks pull={pull} onOpenJob={onOpenJob} onOpenTodo={onOpenTodo} />} />
+            {!narrow && <SideColumn card={statusCard(false)}>{metadata(page)}</SideColumn>}
           </div>
         )}
       </DialogContent>
