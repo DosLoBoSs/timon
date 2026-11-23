@@ -240,12 +240,13 @@ const TOOLS = [
         },
         landing: {
           type: 'string',
-          enum: ['pr'],
+          enum: ['pr', 'local'],
           description:
-            'Only on the final `merge` task of a job whose project lands through a pull ' +
-            'request (the `commands` of `kanban_plan` say when): "pr" makes it publish the ' +
-            'job\'s integration branch with `pr_open` instead of merging a task branch ' +
-            'into it. Leave unset on every other task.',
+            'Only on the final `merge` task of a job on a branch of its own (the `commands` ' +
+            'of `kanban_plan` say when): "pr" makes it publish the job\'s integration branch ' +
+            'with `pr_open` instead of merging a task branch into it; "local" makes it merge ' +
+            'that branch into the project\'s local target on this machine. Leave unset on ' +
+            'every other task.',
         },
         project: {
           type: 'string',

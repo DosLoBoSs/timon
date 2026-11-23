@@ -2168,6 +2168,18 @@ CREATE TABLE IF NOT EXISTS series_landing (
   updated_at INTEGER NOT NULL
 );
 `);
+// The branch and the destination the planner chose for the job
+// (`plan-landing.ts`): the dispatcher and `timon pr branch` read them to cut,
+// or find, the job's branch, so a project that merges locally can still work
+// on a branch of its own. `mode` is the tasks' `integration_mode` ('pr' or
+// 'branch'), `base_ref` what a new branch is cut from (`origin/main`, or
+// `refs/heads/main` for a local target), `branch_kind` 'new' or 'existing'
+// (NULL: the earlier bare name, checked as before), `finish` 'merge' or 'keep'.
+// NULL branch = the planner chose nothing.
+const seriesLandingCols = (db.prepare(`PRAGMA table_info(series_landing)`).all() as { name: string }[]).map((c) => c.name);
+for (const col of ['project', 'repo', 'branch', 'branch_kind', 'mode', 'base_ref', 'finish']) {
+  if (!seriesLandingCols.includes(col)) db.exec(`ALTER TABLE series_landing ADD COLUMN ${col} TEXT`);
+}
 // A repair a person asked for on the open pull request of one of our jobs
 // (`landing-repair.ts`): failing checks, review comments or a conflict with
 // the target, each one a `code` task on the job's branch. 'running' until the
@@ -2415,8 +2427,9 @@ export function isTaskType(v: unknown): v is TaskType {
 export const PIPELINES = ['full', 'code-self', 'code-group'] as const;
 
 /** Accepted values for `tasks.landing` (null = an ordinary task). Only a
- *  `merge` task carries one. */
-export const TASK_LANDINGS = ['pr'] as const;
+ *  `merge` task carries one: `pr` opens the job's pull request, `local`
+ *  merges the job's branch into its local target (`local-landing.ts`). */
+export const TASK_LANDINGS = ['pr', 'local'] as const;
 
 export type TaskRow = {
   id: string;
@@ -2819,6 +2832,21 @@ export type PipelineRunStepRow = {
   run_id: string;
   step_id: string;
   task_id: string;
+};
+
+/** What the planner chose for a series' branch (`series_landing`). */
+export type SeriesPlanLandingRecord = {
+  project: string | null;
+  repo: string | null;
+  branch: string;
+  /** 'new' | 'existing'; null for the earlier bare name. */
+  branch_kind: string | null;
+  /** The tasks' `integration_mode`: 'pr' | 'branch'. */
+  mode: string;
+  /** `origin/main`, or `refs/heads/<target>` for a local target. */
+  base_ref: string;
+  /** 'merge' | 'keep'. */
+  finish: string | null;
 };
 
 export type WorkflowRow = { id: string; slug: string; name: string; description: string | null; project: string | null; owner_user_id: string | null; draft: string; published_version: number | null; enabled: number; created_at: number; updated_at: number; agent_name: string | null };
@@ -3275,6 +3303,11 @@ const finishLandingRepairStmt = db.prepare(`
 `);
 const failLandingRepairAttemptStmt = db.prepare(
   `UPDATE landing_repairs SET attempts = attempts + 1, error = ?, updated_at = ? WHERE id = ? AND state = 'running'`,
+);
+// A job of a project that merges locally has no remote: its branch lands by
+// its `--landing local` task, never through a pull request.
+const listLocalIntegrationsToLandStmt = db.prepare(
+  `SELECT * FROM integrations WHERE state = 'branch' AND remote = '' ORDER BY repo ASC, created_at ASC`,
 );
 const listOpenIntegrationsStmt = db.prepare(
   `SELECT * FROM integrations WHERE state = 'open' ORDER BY repo ASC, created_at ASC`,
@@ -6035,6 +6068,10 @@ export const dbApi = {
   listOpenIntegrations(): IntegrationRow[] {
     return listOpenIntegrationsStmt.all() as IntegrationRow[];
   },
+  /** Local integration branches (no remote) that have not landed yet. */
+  listLocalIntegrationsToLand(): IntegrationRow[] {
+    return listLocalIntegrationsToLandStmt.all() as IntegrationRow[];
+  },
   /** The pull request was closed without a merge; false unless it was open. */
   markIntegrationClosed(id: string): boolean {
     const closed = markIntegrationClosedStmt.run(Date.now(), id).changes === 1;
@@ -6217,6 +6254,24 @@ export const dbApi = {
       `INSERT INTO series_landing (series_id, resolves_issues, updated_at) VALUES (?, ?, ?)
        ON CONFLICT (series_id) DO UPDATE SET resolves_issues = excluded.resolves_issues, updated_at = excluded.updated_at`,
     ).run(seriesId, resolves ? 1 : 0, Date.now());
+  },
+  /** Records the branch and destination the planner chose for the series. */
+  setSeriesPlanLanding(seriesId: string, plan: SeriesPlanLandingRecord): void {
+    db.prepare(
+      `INSERT INTO series_landing (series_id, resolves_issues, updated_at, project, repo, branch, branch_kind, mode, base_ref, finish)
+       VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (series_id) DO UPDATE SET updated_at = excluded.updated_at, project = excluded.project,
+         repo = excluded.repo, branch = excluded.branch, branch_kind = excluded.branch_kind, mode = excluded.mode,
+         base_ref = excluded.base_ref, finish = excluded.finish`,
+    ).run(seriesId, Date.now(), plan.project, plan.repo, plan.branch, plan.branch_kind, plan.mode, plan.base_ref, plan.finish);
+  },
+  /** The branch and destination the planner chose for the series, if it chose one. */
+  getSeriesPlanLanding(seriesId: string): SeriesPlanLandingRecord | undefined {
+    const row = db.prepare(
+      `SELECT project, repo, branch, branch_kind, mode, base_ref, finish FROM series_landing
+       WHERE series_id = ? AND branch IS NOT NULL AND mode IS NOT NULL AND base_ref IS NOT NULL`,
+    ).get(seriesId) as SeriesPlanLandingRecord | undefined;
+    return row;
   },
   /** The series resolves its issues entirely: true only when the planner said so. */
   seriesResolvesIssues(seriesId: string): boolean {

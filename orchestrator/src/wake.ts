@@ -106,7 +106,7 @@ import { settingNum } from './settings.js';
 import { admitAgentMessage, clearAgentPairs, isHumanInput, resetAgentPairs } from './agent-pair-breaker.js';
 import { isMirrorTask } from './task-mirror.js';
 import { integrationOfTask } from './chain-landing.js';
-import { usesIntegrationBranch } from './git-integration.js';
+import { integrationTargetLabel, usesIntegrationBranch } from './git-integration.js';
 
 /** Aggregation window before a wake — absorbs bursts of task completions.
  *  Short (1 s) to keep the SLA "every inbox processed within a minute" while
@@ -1591,15 +1591,16 @@ export function notifyIntegrationOutcome(
     const agent = integrationPilot(tasks, anchor);
     const body = outcome === 'merged'
       ? [
-          pr ? `Pull request merged: ${pr}` : `Integration branch landed by hand: ${row.branch}`,
-          `Branch \`${row.branch}\` landed in \`${row.remote}/${row.target}\`${row.merge_sha ? ` (merge commit \`${row.merge_sha}\`)` : ''}.`,
+          pr ? `Pull request merged: ${pr}`
+            : row.remote ? `Integration branch landed by hand: ${row.branch}` : `Branch merged on this machine: ${row.branch}`,
+          `Branch \`${row.branch}\` landed in \`${integrationTargetLabel(row)}\`${row.merge_sha ? ` (merge commit \`${row.merge_sha}\`)` : ''}.`,
           ...lines,
           ``,
           `The job's TO DO ideas and doc tasks follow on their own. Nothing to decide unless the plan goes on.`,
         ]
       : [
           `Pull request closed without a merge: ${pr ?? row.branch}`,
-          `Branch \`${row.branch}\` did not land in \`${row.remote}/${row.target}\`: no TO DO idea closes, no doc task is created, the branches are kept.`,
+          `Branch \`${row.branch}\` did not land in \`${integrationTargetLabel(row)}\`: no TO DO idea closes, no doc task is created, the branches are kept.`,
           ...lines,
           ``,
           `Decide what comes next: reopen it on the forge, plan a new pull request, or abandon the job.`,
@@ -1617,7 +1618,7 @@ export function notifyIntegrationOutcome(
   // After the claim holds: a card that fails must not hand the notice back,
   // or the recap would leave twice.
   try {
-    const target = `${row.remote}/${row.target}`;
+    const target = integrationTargetLabel(row);
     createNotification({
       type: outcome === 'merged' ? 'report' : 'alert',
       urgent: false,

@@ -21,6 +21,7 @@ const {
   validateSeriesPlanForm,
   validateSeriesPlanAnswer,
   seriesPlanCommands,
+  planBranchChoice,
   fallbackScopeForRole,
   seriesPlanPipelineDrift,
   planGroupNames,
@@ -335,12 +336,55 @@ test('commands: a group name with a space or a quote is quoted', () => {
   assert.ok(!cmds.find((c) => c.includes('--type merge'))!.includes('--plan-group'));
 });
 
-test('the branch field: a short string on the form and on the answer, nothing else', () => {
+test('the branch field: a short string on the form, a string or a kind and a name on the answer', () => {
   const form = { kind: 'series_plan', chantier: 'Job', volets: [{ title: 'a' }] };
   assert.equal(validateSeriesPlanForm({ ...form, branch: 'feat/topic' }), null);
   assert.match(validateSeriesPlanForm({ ...form, branch: 3 }) ?? '', /`branch` is not a string/);
   assert.match(validateSeriesPlanForm({ ...form, branch: 'a\nb' }) ?? '', /control character/);
   assert.match(validateSeriesPlanForm({ ...form, branch: 'x'.repeat(201) }) ?? '', /maximum 200/);
   assert.equal(validateSeriesPlanAnswer({ mode: 'kanban-full', roles: {}, branch: 'topic' }), null);
-  assert.match(validateSeriesPlanAnswer({ mode: 'kanban-full', roles: {}, branch: ['x'] }) ?? '', /`branch` is not a string/);
+  assert.match(validateSeriesPlanAnswer({ mode: 'kanban-full', roles: {}, branch: ['x'] }) ?? '', /`branch` is neither a string nor an object/);
+  // The kind and the name of the branch, and where it ends up.
+  const answer = (extra: Record<string, unknown>) => validateSeriesPlanAnswer({ mode: 'kanban-full', roles: {}, ...extra });
+  assert.equal(answer({ branch: { kind: 'new', name: 'topic' }, finish: 'merge' }), null);
+  assert.equal(answer({ branch: { kind: 'existing', name: 'feat/x' }, finish: 'keep' }), null);
+  assert.match(answer({ branch: { kind: 'old', name: 'x' } }) ?? '', /`branch.kind` must be one of new, existing/);
+  assert.match(answer({ branch: { kind: 'new' } }) ?? '', /`branch.name` missing or empty/);
+  assert.match(answer({ branch: { kind: 'new', name: ' ' } }) ?? '', /`branch.name` missing or empty/);
+  assert.match(answer({ branch: { kind: 'new', name: 'a\nb' } }) ?? '', /`branch.name` holds a control character/);
+  assert.match(answer({ branch: { kind: 'new', name: 'x'.repeat(201) } }) ?? '', /`branch.name` of 201 characters/);
+  assert.match(answer({ branch: { kind: 'new', name: 'x', base: 'main' } }) ?? '', /`branch.base` is unknown/);
+  assert.match(answer({ finish: 'push' }) ?? '', /`finish` must be one of merge, keep/);
+});
+
+test('planBranchChoice: the earlier bare name is a new branch, flagged as such', () => {
+  assert.equal(planBranchChoice(undefined), null);
+  assert.equal(planBranchChoice('  '), null);
+  assert.deepEqual(planBranchChoice('topic'), { kind: 'new', name: 'topic', legacy: true });
+  assert.deepEqual(planBranchChoice({ kind: 'existing', name: 'feat/x' }), { kind: 'existing', name: 'feat/x', legacy: false });
+});
+
+test('the last task follows where the branch ends up', () => {
+  const plan = { mode: 'kanban-full' as const, roles: {} };
+  const landing = { branch: 'feat/topic', chantier: 'Job' };
+  const pr = seriesPlanCommands(plan, [{ title: 'Front' }], landing);
+  // `last: 'pr'` is the default: the earlier commands, to the byte.
+  assert.deepEqual(seriesPlanCommands(plan, [{ title: 'Front' }], { ...landing, last: 'pr' }), pr);
+  assert.match(pr.at(-1)!, /--landing pr/);
+  const local = seriesPlanCommands(plan, [{ title: 'Front' }], { ...landing, last: 'local', target: 'main' });
+  assert.equal(local.length, pr.length);
+  assert.equal(local.at(-1),
+    "timon task create --type merge --landing local --base feat/topic --deps <IDS of the code tasks> "
+    + "--title 'Merge into main — Job' --description '<what the job carries>'");
+  const kept = seriesPlanCommands(plan, [{ title: 'Front' }], { ...landing, last: 'none' });
+  assert.deepEqual(kept, pr.slice(0, -1));
+  // A grouped job merges its group first, then the branch.
+  const grouped = seriesPlanCommands({ mode: 'kanban-code-group', roles: {} }, [{ title: 'Front' }], { ...landing, last: 'local', target: 'dev' });
+  assert.match(grouped.at(-1)!, /--landing local --group-id <GROUP> --base feat\/topic --deps <ID of the grouped merge> --title 'Merge into dev — Job'/);
+  // Sequential: the branch first, then the last task with no deps, or nothing.
+  assert.deepEqual(seriesPlanCommands({ mode: 'sequential-here', roles: {} }, [], { ...landing, last: 'local', target: 'main' }), [
+    'timon pr branch feat/topic',
+    "timon task create --type merge --landing local --base feat/topic --title 'Merge into main — Job' --description '<what the job carries>'",
+  ]);
+  assert.deepEqual(seriesPlanCommands({ mode: 'sequential-here', roles: {} }, [], { ...landing, last: 'none' }), ['timon pr branch feat/topic']);
 });

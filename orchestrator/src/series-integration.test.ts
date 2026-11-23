@@ -139,6 +139,56 @@ test('a project that lands locally, or an unknown series, gets no branch', async
   assert.equal(!unknown.ok && unknown.code, 'series_not_found');
 });
 
+test('a project that lands locally, with a branch the plan chose: cut from the local main, worktree given', async () => {
+  dbApi.createMission('seq-local-2', 'seq-local.main', 'job');
+  dbApi.setSeriesPlanLanding('seq-local-2', {
+    project: 'seq-local', repo, branch: 'feat/local-seq', branch_kind: 'new', mode: 'branch',
+    base_ref: 'refs/heads/main', finish: 'merge',
+  });
+  const out = await prepareSeriesBranch('seq-local-2', 'local-seq');
+  assert.ok(out.ok, JSON.stringify(out));
+  assert.equal(out.branch, 'feat/local-seq');
+  assert.equal(out.base_ref, 'refs/heads/main');
+  assert.equal(git(repo, 'rev-parse', 'feat/local-seq'), git(repo, 'rev-parse', 'main'), 'cut from the local main, unpublished work included');
+  const row = dbApi.getIntegration(repo, 'feat/local-seq');
+  assert.deepEqual(row && { mode: row.mode, remote: row.remote, target: row.target }, { mode: 'branch', remote: '', target: 'main' });
+  // Another name than the plan's: still no branch for a project that lands locally.
+  dbApi.createMission('seq-local-3', 'seq-local.main', 'job');
+  dbApi.setSeriesPlanLanding('seq-local-3', {
+    project: 'seq-local', repo, branch: 'feat/planned', branch_kind: 'new', mode: 'branch',
+    base_ref: 'refs/heads/main', finish: 'keep',
+  });
+  const other = await prepareSeriesBranch('seq-local-3', 'not-planned');
+  assert.equal(!other.ok && other.code, 'series_branch_not_pr');
+});
+
+test('a branch the plan chose as existing is taken as it is, and refused when it is gone', async () => {
+  git(repo, 'branch', 'feat/ongoing-seq', 'main');
+  const tip = git(repo, 'rev-parse', 'feat/ongoing-seq');
+  dbApi.createMission('seq-existing', 'seq-pr.main', 'job');
+  dbApi.setSeriesPlanLanding('seq-existing', {
+    project: 'seq-pr', repo, branch: 'feat/ongoing-seq', branch_kind: 'existing', mode: 'pr',
+    base_ref: 'origin/main', finish: 'keep',
+  });
+  const out = await prepareSeriesBranch('seq-existing', 'feat/ongoing-seq', {
+    // No network for a branch the repository has.
+    ensureBranch: (at, opts) => (opts.mustExist ? ensureIntegrationBranch(at, opts) : Promise.reject(new Error('cut'))),
+  });
+  assert.ok(out.ok, JSON.stringify(out));
+  assert.equal(out.created, false);
+  assert.equal(out.sha, tip);
+
+  dbApi.createMission('seq-gone', 'seq-local.main', 'job');
+  dbApi.setSeriesPlanLanding('seq-gone', {
+    project: 'seq-local', repo, branch: 'feat/gone', branch_kind: 'existing', mode: 'branch',
+    base_ref: 'refs/heads/main', finish: 'merge',
+  });
+  const gone = await prepareSeriesBranch('seq-gone', 'feat/gone');
+  assert.equal(!gone.ok && gone.code, 'series_branch_refused');
+  assert.match(!gone.ok ? gone.reason : '', /feat\/gone does not exist in the repository/);
+  assert.throws(() => git(repo, 'rev-parse', '--verify', '--quiet', 'refs/heads/feat/gone'));
+});
+
 test('the route: anonymous 401, no kanban:write 403, a series the caller cannot see 404', async () => {
   const app = express();
   app.use(express.json());

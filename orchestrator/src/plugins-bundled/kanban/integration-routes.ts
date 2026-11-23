@@ -18,15 +18,16 @@
  * caller learns why, and a person's choice is never undone behind them.
  *
  * One exception, `POST …/integration/branch`: the Kanban planner checks the
- * branch name of a new job while the person types it. It needs `kanban:write`
- * (the plan creates Kanban tasks) and answers nothing of the setting beyond
- * the name the job would get.
+ * branch of a new job while the person types or picks it, a new one or one
+ * the repository has (`kind`), in any project. It needs `kanban:write` (the
+ * plan creates Kanban tasks) and answers nothing of the setting beyond the
+ * name the job would get.
  */
 import type { Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { apiError } from '../../api-error.js';
 import { ghLogin, type GhLoginOutcome } from '../../host/gh.js';
-import { checkPlanBranch, MAX_PLAN_BRANCH_CHARS, prLandingSetting } from '../../plan-landing.js';
+import { checkPlanBranch, landingSetting, MAX_PLAN_BRANCH_CHARS } from '../../plan-landing.js';
 import { announceProjectUpdated } from '../../project-service.js';
 import {
   changedPushTargetFields, checkProjectIntegration, clearProjectIntegration, ProjectIntegrationError, ProjectIntegrationPatchSchema,
@@ -89,6 +90,8 @@ const CheckDraftBody = ProjectIntegrationPatchSchema.pick({ account: true, gh_co
 
 const PlanBranchBody = z.object({
   branch: z.string().max(MAX_PLAN_BRANCH_CHARS),
+  /** `new` (default) cuts a branch, `existing` starts from one the repository has. */
+  kind: z.enum(['new', 'existing']).optional(),
 }).strict();
 
 /** Auth, permission and a valid slug for the planner's branch check. */
@@ -192,7 +195,8 @@ export function registerIntegrationRoutes(app: Router, deps: IntegrationRouteDep
   });
 
   // The planner's check: the same rules and numbering as the plan's answer
-  // (`checkPlanBranch`), so the field never accepts a name the daemon refuses.
+  // (`checkPlanBranch`, a branch named with its kind), so the field never
+  // accepts a name the daemon refuses.
   app.post('/api/projects/:slug/integration/branch', (req, res) => {
     const slug = plannerProject(req, res);
     if (!slug) return;
@@ -202,12 +206,14 @@ export function registerIntegrationRoutes(app: Router, deps: IntegrationRouteDep
       res.status(400).json(apiError('plan_branch_refused', detail, { detail }));
       return;
     }
-    const found = prLandingSetting(slug);
+    const found = landingSetting(slug);
     if (!found) {
-      res.status(409).json(apiError('plan_branch_unavailable', `project ${slug} does not land through pull requests`));
+      res.status(409).json(apiError('plan_branch_unavailable', `the integration setting of project ${slug} cannot be read`));
       return;
     }
-    const out = checkPlanBranch(parsed.data.branch, found.setting, found.repo);
+    const out = checkPlanBranch(parsed.data.branch, found.setting, found.repo, {
+      kind: parsed.data.kind ?? 'new', strict: true, local: found.setting.mode !== 'pr',
+    });
     if (!out.ok) {
       res.status(400).json({
         ...apiError('plan_branch_refused', out.refusal, { detail: out.refusal }),

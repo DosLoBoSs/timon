@@ -20,6 +20,7 @@ import { startDispatcher } from '../../dispatcher.js';
 import { startTaskChain } from '../../task-chain.js';
 import { startWake } from '../../wake.js';
 import { startIntegrationPoller } from '../../integration-poller.js';
+import { watchLocalLandings } from '../../local-landing.js';
 import { settingInt } from '../../settings.js';
 import { todoApi, type TodoApi } from './todo-api.js';
 import { registerAttachmentRoutes } from './attachment-routes.js';
@@ -86,6 +87,9 @@ export function apply(ctx: Context): void {
   // Learns when the pull request of a job is merged or closed; reaches the
   // network only while one is open.
   ctx.effect(() => startIntegrationPoller());
+  // A job of a project that merges locally lands when its `--landing local`
+  // task is DONE, not through the forge.
+  ctx.effect(() => watchLocalLandings());
   // Brings the verdict of a pull request's relecture back to its row.
   ctx.effect(() => watchReviewMissions());
   // A pull request's page read a moment ago is dropped when its job moves.

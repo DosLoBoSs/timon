@@ -214,7 +214,8 @@ test('the branch field: proposal, typed name, refusal and lock', async () => {
   // The agent's proposal is shown, prefixed, and reaches every command.
   const proposed = open('branch-1', 'planner-branch');
   assert.deepEqual(proposed.landing, {
-    project: 'branch-pr', prefix: 'feat/', branch: 'feat/planner-branch', base_ref: 'origin/main', locked: false,
+    project: 'branch-pr', mode: 'pr', prefix: 'feat/', branch: 'feat/planner-branch', kind: 'new', finish: 'merge',
+    target: 'main', base_ref: 'origin/main', locked: false, branches: [],
   });
   const kept = await proposed.answer({});
   assert.equal(kept.behavior, 'allow');

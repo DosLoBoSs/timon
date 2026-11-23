@@ -27,11 +27,13 @@
 
 import { PIPELINES, isTaskType, type FallbackScope, type TaskType } from './db.js';
 import type {
-  SeriesPlanAnswer, SeriesPlanGroupRole as ContractGroupRole, SeriesPlanMode as ContractMode,
-  SeriesPlanRole as ContractRole, SeriesPlanRoleConfig,
+  SeriesPlanAnswer, SeriesPlanBranch, SeriesPlanFinish, SeriesPlanGroupRole as ContractGroupRole,
+  SeriesPlanMode as ContractMode, SeriesPlanRole as ContractRole, SeriesPlanRoleConfig,
 } from './plugins/contract/questions.js';
 import type { Assert, Equals } from './type-equality.js';
-export type { SeriesPlanAnswer, SeriesPlanGroupConfig, SeriesPlanRoleConfig } from './plugins/contract/questions.js';
+export type {
+  SeriesPlanAnswer, SeriesPlanBranch, SeriesPlanFinish, SeriesPlanGroupConfig, SeriesPlanRoleConfig,
+} from './plugins/contract/questions.js';
 
 /** An execution mode = a tile of the grid, on the UI side. */
 export const SERIES_PLAN_MODES = [
@@ -128,6 +130,38 @@ function branchFieldDefect(value: unknown): string | null {
   }
   if (GROUP_NAME_CONTROL_CHARS.test(value)) return 'field `branch` holds a control character';
   return null;
+}
+
+export const SERIES_PLAN_BRANCH_KINDS = ['new', 'existing'] as const;
+export const SERIES_PLAN_FINISHES = ['merge', 'keep'] as const;
+type _SeriesPlanBranchKindsMatchContract = Assert<Equals<(typeof SERIES_PLAN_BRANCH_KINDS)[number], SeriesPlanBranch['kind']>>;
+type _SeriesPlanFinishesMatchContract = Assert<Equals<(typeof SERIES_PLAN_FINISHES)[number], SeriesPlanFinish>>;
+
+/** Defect of the answer's `branch`: the earlier string, or `{ kind, name }`. */
+function answerBranchDefect(value: unknown): string | null {
+  if (value === undefined || typeof value === 'string') return branchFieldDefect(value);
+  if (!isRecord(value)) return 'field `branch` is neither a string nor an object';
+  if (!(SERIES_PLAN_BRANCH_KINDS as readonly unknown[]).includes(value.kind)) {
+    return `field \`branch.kind\` must be one of ${SERIES_PLAN_BRANCH_KINDS.join(', ')}`;
+  }
+  for (const key of Object.keys(value)) {
+    if (key !== 'kind' && key !== 'name') return `field \`branch.${key}\` is unknown`;
+  }
+  if (typeof value.name !== 'string' || value.name.trim() === '') return 'field `branch.name` missing or empty';
+  return branchFieldDefect(value.name)?.replace('`branch`', '`branch.name`') ?? null;
+}
+
+/**
+ * The branch the answer chose, in one shape. The earlier bare string is a new
+ * branch; `legacy` says so, since that form only ever applied to a project
+ * that lands through pull requests.
+ */
+export function planBranchChoice(
+  branch: SeriesPlanAnswer['branch'],
+): (SeriesPlanBranch & { legacy: boolean }) | null {
+  if (branch === undefined) return null;
+  if (typeof branch === 'string') return branch.trim() ? { kind: 'new', name: branch, legacy: true } : null;
+  return { kind: branch.kind, name: branch.name, legacy: false };
 }
 
 const MAX_VOLETS = 12;
@@ -268,7 +302,10 @@ export function validateSeriesPlanAnswer(answer: unknown, knownGroups: Iterable<
   if (answer.resolves_issues !== undefined && typeof answer.resolves_issues !== 'boolean') {
     return 'field `resolves_issues` is not a boolean';
   }
-  return branchFieldDefect(answer.branch);
+  if (answer.finish !== undefined && !(SERIES_PLAN_FINISHES as readonly unknown[]).includes(answer.finish)) {
+    return `field \`finish\` must be one of ${SERIES_PLAN_FINISHES.join(', ')}`;
+  }
+  return answerBranchDefect(answer.branch);
 }
 
 /** Roles of the form whose main model is set for the series: those that
@@ -323,7 +360,27 @@ export type SeriesPlanLanding = {
   /** The job's project, given to every task (`--project`) when the agent
    *  creating them is not in it. */
   taskProject?: string | null;
+  /** The job's last task: `pr` (absent) opens the pull request, `local`
+   *  merges the branch into `target` on this machine, `none` leaves the work
+   *  on the branch. */
+  last?: 'pr' | 'local' | 'none';
+  /** The local branch a `local` last task merges into. */
+  target?: string;
 };
+
+/** The task that ends the job, or null when the work stays on its branch. */
+function lastTaskCommand(landing: SeriesPlanLanding, flags: string, deps: string | null): string | null {
+  const last = landing.last ?? 'pr';
+  if (last === 'none') return null;
+  const after = deps ? ` --deps ${deps}` : '';
+  if (last === 'local') {
+    const into = landing.target ?? '<target>';
+    return `timon task create --type merge --landing local${flags}${after} `
+      + `--title ${shellQuote(`Merge into ${into} — ${landing.chantier}`)} --description '<what the job carries>'`;
+  }
+  return `timon task create --type merge --landing pr${flags}${after} `
+    + `--title ${shellQuote(`Pull request — ${landing.chantier}`)} --description '<what the pull request carries>'`;
+}
 
 /**
  * Translates the plan into `timon` commands ready to run, in order.
@@ -352,6 +409,10 @@ export type SeriesPlanLanding = {
  * the daemon for the branch and a worktree on it (`timon pr branch`), codes
  * there, and creates the pull request task, with no deps, once the work is in
  * the branch. Without `landing`, the output is the previous one, to the byte.
+ *
+ * `landing.last` changes only that last task: `local` merges the branch into
+ * the project's local target (`--landing local`), `none` creates none and the
+ * work stays on the branch.
  */
 export function seriesPlanCommands(
   answer: SeriesPlanAnswer,
@@ -392,10 +453,8 @@ export function seriesPlanCommands(
   if (!pipeline && landing) {
     const project = landing.taskProject ? ` --project ${shellQuote(landing.taskProject)}` : '';
     cmds.push(`timon pr branch ${shellQuote(landing.branch)}`);
-    cmds.push(
-      `timon task create --type merge --landing pr --base ${shellQuote(landing.branch)}${project} `
-      + `--title ${shellQuote(`Pull request — ${landing.chantier}`)} --description '<what the pull request carries>'`,
-    );
+    const last = lastTaskCommand(landing, ` --base ${shellQuote(landing.branch)}${project}`, null);
+    if (last) cmds.push(last);
   }
   if (pipeline) {
     const group = answer.mode === 'kanban-code-group' ? ' --group-id <GROUP>' : '';
@@ -418,10 +477,8 @@ export function seriesPlanCommands(
     }
     if (landing) {
       const deps = answer.mode === 'kanban-code-group' ? '<ID of the grouped merge>' : '<IDS of the code tasks>';
-      cmds.push(
-        `timon task create --type merge --landing pr${group}${base} --deps ${deps} `
-        + `--title ${shellQuote(`Pull request — ${landing.chantier}`)} --description '<what the pull request carries>'`,
-      );
+      const last = lastTaskCommand(landing, `${group}${base}`, deps);
+      if (last) cmds.push(last);
     }
   }
   return cmds;

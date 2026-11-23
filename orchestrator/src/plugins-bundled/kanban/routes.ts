@@ -29,7 +29,7 @@ import { readRoles, type RoleSpec, type TaskRole } from '../../projects.js';
 import { isTemplateBackend, llmOfMission, previewRoleAgent, roleForTaskType } from '../../agent-seed.js';
 import { taskProjectSlug } from '../../task-project.js';
 import { codeAwaitsMerge } from '../../merge-gate.js';
-import { usesIntegrationBranch } from '../../git-integration.js';
+import { integrationTargetLabel, usesIntegrationBranch } from '../../git-integration.js';
 import { chainLanding, integrationOfTask } from '../../chain-landing.js';
 import { concludeMerged, type Notify } from '../../integration-poller.js';
 import { applyTodoClosure } from '../../todo-closure.js';
@@ -843,8 +843,9 @@ export type KanbanRouteDeps = {
 
 /**
  * `mark-merged` for a chain whose base is an integration branch (`pr`, or
- * `branch` under embargo): the sha is the commit of the target that brought
- * the branch in, so it is checked against `<remote>/<target>`, and the whole
+ * `branch` under embargo or in a project that merges locally): the sha is the
+ * commit of the target that brought the branch in, so it is checked against
+ * `<remote>/<target>` (the local target when there is no remote), and the whole
  * job lands through the same gate as the poller's (`concludeMerged`). The
  * task itself closes like a local one when it was BLOCKED or had no sha.
  */
@@ -869,7 +870,8 @@ async function markIntegrationMerged(
     res.status(409).json(apiError('integration_already_landed', `${row.branch} has already landed.`, { branch: row.branch }));
     return;
   }
-  const target = `${row.remote}/${row.target}`;
+  // `origin/main`, or the local `main` of a job that merges locally.
+  const target = integrationTargetLabel(row);
   const found = shaInBase(row.repo, target, sha);
   if (found === 'not_contained') {
     res.status(409).json(apiError('sha_not_in_base', `Commit ${sha} is not in ${target} of this repository. Check the sha of the merge.`, { sha, base: target }));

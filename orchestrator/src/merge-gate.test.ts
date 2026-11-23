@@ -373,6 +373,10 @@ test('the merge that opens a pull request waits for the merges of its code deps'
   // code-self volets integrate themselves: DONE is enough, as for any dependent.
   const self = codeDep('c2', { pipeline: 'code-self' });
   assert.deepEqual(evaluateDeps({ ...pr, deps: '["c2"]' }, lookup(self), wholeChain(self)), { ok: true });
+  // The merge that lands a job's branch locally waits the same way.
+  const local = { ...pr, landing: 'local' };
+  assert.match(waiting(evaluateDeps(local, lookup(c1), wholeChain(c1, r1))), /merge/);
+  assert.deepEqual(evaluateDeps(local, lookup(c1), wholeChain(c1, r1, mergeOf('m1', 'r1'))), { ok: true });
 });
 
 test('non-regression: code dep without a branch or worktree (agent outside git) → DONE is enough', () => {

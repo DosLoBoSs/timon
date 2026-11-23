@@ -76,10 +76,12 @@ function mkTask(
   project: { slug: string; agent: string },
   type: TaskRow['type'],
   title: string,
-  opts: { deps?: string[]; base?: string } = {},
+  opts: { deps?: string[]; base?: string; series?: string } = {},
 ): TaskRow {
   const id = randomUUID();
-  dbApi.createTask(id, title, project.agent, { type, project: project.slug, deps: opts.deps ?? [], baseBranch: opts.base });
+  dbApi.createTask(id, title, project.agent, {
+    type, project: project.slug, deps: opts.deps ?? [], baseBranch: opts.base, ...(opts.series ? { seriesId: opts.series } : {}),
+  });
   return dbApi.getTask(id)!;
 }
 
@@ -218,6 +220,111 @@ test('a chain already under way keeps its local mode when the project switches t
     const row = dbApi.getTask(merge.id)!;
     assert.equal(row.integration_mode, null);
     assert.equal(row.base_branch, null);
+  } finally {
+    cleanup();
+  }
+});
+
+/* The branch the Kanban planner chose for the series (`series_landing`). */
+function plan(series: string, project: { slug: string }, repo: string, branch: string, kind: 'new' | 'existing', mode: 'pr' | 'branch'): void {
+  dbApi.setSeriesPlanLanding(series, {
+    project: project.slug, repo, branch, branch_kind: kind, mode,
+    base_ref: mode === 'branch' ? 'refs/heads/main' : 'origin/main', finish: 'merge',
+  });
+}
+
+test('local project, a planned new branch: cut from the local target, without a remote', async () => {
+  const { repo, remoteMain, cleanup } = mkRepo();
+  try {
+    const project = mkProject(repo);
+    const series = randomUUID();
+    plan(series, project, repo, 'feat/local-job', 'new', 'branch');
+    const localMain = git(repo, 'rev-parse', 'main');
+    const task = mkTask(project, 'code', 'Volet', { base: 'feat/local-job', series });
+    assert.equal(await blockIfBaseUnavailable(task), false);
+    const row = dbApi.getTask(task.id)!;
+    assert.equal(row.integration_mode, 'branch');
+    assert.equal(row.base_ref, 'refs/heads/main');
+    // The local main, not the remote's, which is one commit ahead.
+    assert.equal(git(repo, 'rev-parse', 'feat/local-job'), localMain);
+    assert.notEqual(localMain, remoteMain);
+    assert.equal(git(repo, 'branch', '--show-current'), 'main');
+    const integration = dbApi.getIntegration(repo, 'feat/local-job');
+    assert.deepEqual(integration && { mode: integration.mode, remote: integration.remote, target: integration.target, series: integration.series_id },
+      { mode: 'branch', remote: '', target: 'main', series });
+
+    // Its merge inherits the mode; a task outside the plan keeps the project's.
+    const merge = mkTask(project, 'merge', 'Its merge', { deps: [task.id], series });
+    assert.equal(await blockIfBaseUnavailable(merge), false);
+    assert.equal(dbApi.getTask(merge.id)!.integration_mode, 'branch');
+    const outside = mkTask(project, 'code', 'Elsewhere', { base: 'main', series });
+    assert.equal(await blockIfBaseUnavailable(outside), false);
+    assert.equal(dbApi.getTask(outside.id)!.integration_mode, null);
+    // A task of another mission on the job's branch (a sequential job's last
+    // task) carries on in the job's mode.
+    const last = mkTask(project, 'merge', 'Merge into main', { base: 'feat/local-job', series: randomUUID() });
+    assert.equal(await blockIfBaseUnavailable(last), false);
+    assert.equal(dbApi.getTask(last.id)!.integration_mode, 'branch');
+    assert.equal(dbApi.getTask(last.id)!.base_ref, 'refs/heads/main');
+  } finally {
+    cleanup();
+  }
+});
+
+test('a planned existing branch is taken as it is, and never cut when it is gone', async () => {
+  const { repo, cleanup } = mkRepo();
+  try {
+    const project = mkProject(repo);
+    git(repo, 'branch', 'feat/ongoing');
+    const ongoing = git(repo, 'rev-parse', 'feat/ongoing');
+    const series = randomUUID();
+    plan(series, project, repo, 'feat/ongoing', 'existing', 'branch');
+    const task = mkTask(project, 'code', 'Volet', { base: 'feat/ongoing', series });
+    assert.equal(await blockIfBaseUnavailable(task), false);
+    assert.equal(git(repo, 'rev-parse', 'feat/ongoing'), ongoing);
+    assert.equal(dbApi.getTask(task.id)!.integration_mode, 'branch');
+
+    const gone = randomUUID();
+    plan(gone, project, repo, 'feat/deleted', 'existing', 'branch');
+    const orphan = mkTask(project, 'code', 'Volet', { base: 'feat/deleted', series: gone });
+    assert.equal(await blockIfBaseUnavailable(orphan), true);
+    const refusal = blocked(orphan.id);
+    assert.equal(refusal.code, 'integration_branch_unavailable');
+    assert.match(refusal.reason, /feat\/deleted does not exist in the repository/);
+    assert.throws(() => git(repo, 'rev-parse', '--verify', '--quiet', 'refs/heads/feat/deleted'));
+  } finally {
+    cleanup();
+  }
+});
+
+test('pr project, a planned existing branch: kept, no new branch from the remote', async () => {
+  const { repo, cleanup } = mkRepo();
+  try {
+    const project = mkProject(repo, { pr: true });
+    git(repo, 'branch', 'feat/kanban-ongoing');
+    const tip = git(repo, 'rev-parse', 'feat/kanban-ongoing');
+    const series = randomUUID();
+    plan(series, project, repo, 'feat/kanban-ongoing', 'existing', 'pr');
+    const task = mkTask(project, 'code', 'Retouch', { base: 'feat/kanban-ongoing', series });
+    assert.equal(await blockIfBaseUnavailable(task), false);
+    assert.equal(dbApi.getTask(task.id)!.integration_mode, 'pr');
+    assert.equal(dbApi.getTask(task.id)!.base_ref, 'origin/main');
+    assert.equal(git(repo, 'rev-parse', 'feat/kanban-ongoing'), tip);
+  } finally {
+    cleanup();
+  }
+});
+
+test('a planned new branch the repository already has, unrecorded, blocks the task', async () => {
+  const { repo, cleanup } = mkRepo();
+  try {
+    const project = mkProject(repo);
+    git(repo, 'branch', 'feat/someone-else');
+    const series = randomUUID();
+    plan(series, project, repo, 'feat/someone-else', 'new', 'branch');
+    const task = mkTask(project, 'code', 'Volet', { base: 'feat/someone-else', series });
+    assert.equal(await blockIfBaseUnavailable(task), true);
+    assert.match(blocked(task.id).reason, /already exists in the repository, and the job was planned on a new branch/);
   } finally {
     cleanup();
   }

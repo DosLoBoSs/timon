@@ -208,9 +208,10 @@ function isCodeOnlyPipeline(pipeline: string | null | undefined): boolean {
  *  - code-self / code-group pipeline: the coder, or a group merge, integrates;
  *  - `review`, `merge` or `doc` dependent: it is the chain itself (the review
  *    depends on the code, the merge on the review, the doc on the merge) — waiting for it here
- *    would be a deadlock. Not the `merge` that opens a job's pull request
- *    (`landing = 'pr'`): it depends on the job's code tasks and publishes what
- *    their chains merged, so it waits for those merges like any dependent;
+ *    would be a deadlock. Not the `merge` that ends a job on its branch
+ *    (`landing = 'pr'` opens the pull request, `'local'` merges the branch into
+ *    its target): it depends on the job's code tasks and lands what their
+ *    chains merged, so it waits for those merges like any dependent;
  *  - dependency without a branch or worktree (agent outside git): the verification-loop
  *    creates neither review nor merge (no diff);
  *  - `code` task of the chain marked merged (`merged_commit_sha`): integrated
@@ -223,7 +224,7 @@ function codeChainGate(
 ): DepGate | null {
   if (dep.type !== 'code') return null;
   if (task.type === 'review' || task.type === 'doc') return null;
-  if (task.type === 'merge' && task.landing !== 'pr') return null;
+  if (task.type === 'merge' && !task.landing) return null;
   if (isCodeOnlyPipeline(dep.pipeline)) return null;
   if (!dep.branch_name && !dep.worktree_path) return null;
   // Marked merged (TIM-0109): the branch landed outside the chain — a PR
