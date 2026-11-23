@@ -49,8 +49,8 @@ import { MissionFenceRefusedError, profileLimits } from './resources.js';
 import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal, pullRequestCloseRefusal } from './code-gate.js';
 import { GIT_MISSING_MESSAGE, GIT_MISSING_REASON, gitTaskRefusal } from './task-git.js';
 import {
-  ensureIntegrationBranch, integrationBranchName, integrationBranchRefusal, isIntegrationMode, localTargetOf,
-  usesIntegrationBranch, type IntegrationMode,
+  ensureIntegrationBranch, integrationBranchName, integrationBranchRefusal, isIntegrationMode, localBaseRef,
+  localTargetOf, usesIntegrationBranch, type IntegrationMode,
 } from './git-integration.js';
 import { integrationBaseRef, readProjectIntegration } from './project-integration.js';
 import { chainLanding } from './chain-landing.js';
@@ -1025,7 +1025,16 @@ export function projectLanding(
     };
   }
   const setting = read.integration;
-  if (setting.mode !== 'pr') return { kind: 'local' };
+  if (setting.mode !== 'pr') {
+    // A task on the branch of a job this project runs on a branch of its own
+    // (a task created outside the plan's series, a sequential job's last task
+    // created by another mission) carries on in that job's mode.
+    const row = task.base_branch && cfg?.cwd ? dbApi.getIntegration(cfg.cwd, task.base_branch) : undefined;
+    if (row && row.remote === '' && row.state === 'branch') {
+      return { kind: 'integration', mode: 'branch', baseRef: localBaseRef(row.target), branch: row.branch };
+    }
+    return { kind: 'local' };
+  }
   const baseRef = integrationBaseRef(setting);
   const branch = task.base_branch ?? integrationBranchName(task.title, { prefix: setting.branch_prefix });
   if (!branch) {

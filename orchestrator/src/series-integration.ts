@@ -1,14 +1,16 @@
 /**
  * The integration branch of a SEQUENTIAL job (`kanban_plan` modes
  * `sequential-here` and `sequential-new-mission`) in a project that lands
- * through pull requests (`docs/KANBAN-PR-PIPELINE.md` §2.2).
+ * through pull requests (`docs/KANBAN-PR-PIPELINE.md` §2.2), or in a project
+ * that merges locally when the planner gave the job a branch of its own.
  *
  * A Kanban job gets its branch from the dispatcher, at the first task. A
  * sequential job has no task before its very end: its pilot codes in a
  * mission. So the pilot asks the daemon for the branch (`timon pr branch`),
  * which does what the dispatcher does, through the same functions: the name
  * the plan gave is checked again, the branch is cut from the remote's target
- * without a checkout, fail-closed, and recorded for the series (the lock a
+ * (or the local one) without a checkout, fail-closed, or taken as it is when
+ * the plan chose an existing branch, and recorded for the series (the lock a
  * reopened plan reads). Then the daemon gives the pilot a worktree of its own,
  * detached on the branch's tip: the shared checkout is never written, and the
  * branch itself is checked out nowhere, so the job's last task can still move
@@ -20,10 +22,10 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { dbApi } from './db.js';
-import { ensureIntegrationBranch, type IntegrationRefusalCode } from './git-integration.js';
+import { baseRefLabel, ensureIntegrationBranch, type IntegrationRefusalCode } from './git-integration.js';
 import { execFileHost } from './host/index.js';
 import { TIMON_HOME } from './paths.js';
-import { checkPlanBranch, planBranchName, planProject, prLandingSetting } from './plan-landing.js';
+import { checkPlanBranch, landingSetting, planBranchName, planProject } from './plan-landing.js';
 import { integrationBaseRef } from './project-integration.js';
 import { isGitRepo, prepareWorktreeDependencies } from './worktree.js';
 
@@ -94,15 +96,23 @@ export async function prepareSeriesBranch(
   const pilot = dbApi.getMission(seriesId);
   if (!pilot) return refused(404, 'series_not_found', 'series not found');
   const target = planProject(pilot.agent_name, seriesId);
-  const found = target ? prLandingSetting(target.slug, target.cwd) : null;
-  if (!target || !found || !found.repo) {
+  const found = target ? landingSetting(target.slug, target.cwd) : null;
+  // What the planner chose for this job, when it chose this very branch.
+  const recorded = dbApi.getSeriesPlanLanding(seriesId);
+  const local = found?.setting.mode !== 'pr';
+  const planned = recorded && found && (recorded.project === target?.slug || recorded.repo === found.repo)
+    && (recorded.branch === proposed.trim() || recorded.branch === planBranchName(proposed, found.setting.branch_prefix))
+    ? recorded : undefined;
+  if (!target || !found || !found.repo || (local && planned?.mode !== 'branch')) {
     return refused(409, 'series_branch_not_pr',
-      'the job\'s project does not land through pull requests: code as usual, there is no integration branch');
+      'the job\'s project does not land through pull requests and its plan gave it no branch: code as usual, ' +
+      'there is no integration branch');
   }
   const { setting, repo } = found;
   const slug = target.slug;
-  const baseRef = integrationBaseRef(setting);
-  const wanted = planBranchName(proposed, setting.branch_prefix);
+  const kind = planned?.branch_kind === 'existing' ? 'existing' : 'new';
+  const baseRef = planned?.base_ref ?? integrationBaseRef(setting);
+  const wanted = kind === 'existing' ? proposed.trim() : planBranchName(proposed, setting.branch_prefix);
   const held = dbApi.listIntegrationsBySeries(seriesId).find((r) => r.project === slug || r.repo === repo);
   let branch: string;
   if (held) {
@@ -111,7 +121,7 @@ export async function prepareSeriesBranch(
     }
     branch = held.branch;
   } else {
-    const checked = checkPlanBranch(proposed, setting, repo);
+    const checked = checkPlanBranch(proposed, setting, repo, { kind, strict: planned?.branch_kind === 'new', local });
     if (!checked.ok) return refused(400, 'series_branch_refused', checked.refusal);
     if (checked.branch !== wanted) {
       return refused(409, 'series_branch_refused',
@@ -120,11 +130,11 @@ export async function prepareSeriesBranch(
     branch = checked.branch;
   }
 
-  const out = await (deps.ensureBranch ?? ensureIntegrationBranch)(repo, { branch, baseRef });
+  const out = await (deps.ensureBranch ?? ensureIntegrationBranch)(repo, { branch, baseRef, mustExist: kind === 'existing' });
   if (!out.ok) {
     return {
       ok: false, status: 409, code: 'series_branch_unavailable', detail: out.code,
-      reason: `integration branch ${branch} is unavailable: ${out.reason}; it is never cut from the local base instead of ${baseRef}`,
+      reason: `integration branch ${branch} is unavailable: ${out.reason}; it is never cut from the local base instead of ${baseRefLabel(baseRef)}`,
     };
   }
   dbApi.recordIntegration({
@@ -132,8 +142,9 @@ export async function prepareSeriesBranch(
     branch,
     remote: out.remote,
     target: out.target,
-    // Same rule as the dispatcher (`projectLanding`): an embargoed branch lands by hand.
-    mode: branch.startsWith('sec/') ? 'branch' : 'pr',
+    // Same rule as the dispatcher (`projectLanding`): an embargoed branch, or
+    // a project that merges locally, lands by hand or by its last task.
+    mode: local || branch.startsWith('sec/') ? 'branch' : 'pr',
     project: slug,
     seriesId,
     baseSha: out.created ? out.sha : null,

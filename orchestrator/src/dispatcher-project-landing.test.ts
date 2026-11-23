@@ -260,6 +260,12 @@ test('local project, a planned new branch: cut from the local target, without a 
     const outside = mkTask(project, 'code', 'Elsewhere', { base: 'main', series });
     assert.equal(await blockIfBaseUnavailable(outside), false);
     assert.equal(dbApi.getTask(outside.id)!.integration_mode, null);
+    // A task of another mission on the job's branch (a sequential job's last
+    // task) carries on in the job's mode.
+    const last = mkTask(project, 'merge', 'Merge into main', { base: 'feat/local-job', series: randomUUID() });
+    assert.equal(await blockIfBaseUnavailable(last), false);
+    assert.equal(dbApi.getTask(last.id)!.integration_mode, 'branch');
+    assert.equal(dbApi.getTask(last.id)!.base_ref, 'refs/heads/main');
   } finally {
     cleanup();
   }
