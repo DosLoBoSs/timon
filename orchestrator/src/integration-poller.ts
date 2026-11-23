@@ -95,7 +95,7 @@ async function ancestry(repo: string, ancestor: string, descendant: string): Pro
  * first-parent line that descends from `head`, or `head` itself when it sits
  * on that line (a fast-forward). Null when git cannot say.
  */
-async function mergeCommitOf(repo: string, head: string, target: string): Promise<string | null> {
+export async function mergeCommitOf(repo: string, head: string, target: string): Promise<string | null> {
   if (head === target) return head;
   const r = await gitRead(repo, ['rev-list', '--first-parent', '--ancestry-path', '--reverse', `${head}..${target}`]);
   const first = r.code === 0 ? r.stdout.split('\n')[0]?.trim() ?? '' : '';

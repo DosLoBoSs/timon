@@ -12,6 +12,14 @@
  * - `POST /api/kanban/landings/:id/repairs` (`{ kind }`): a person asks to fix
  *   the failing checks, the review comments or the conflict of the job's open
  *   pull request (`landing-repair.ts`): one `code` task, at most three per job.
+ * - `POST /api/kanban/landings/:id/land` (`{ title?, body? }`): lands a job kept
+ *   on its branch (`integration-land.ts`): merged into the local target in a
+ *   project that merges locally, its pull request opened in one that lands
+ *   through pull requests (the title is then required). `:id` is the job's id,
+ *   or its series (`current` included) when the series has exactly one job.
+ *   `projects:manage`, as opening a pull request: it moves the target branch,
+ *   or pushes and writes on the forge. The daemon token passes: the CLI
+ *   (`timon pr land`) and the MCP tool (`pr_land`) call it.
  *
  * Not under `/api/integrations`: that prefix belongs to the messaging
  * integrations of plugins (`/api/integrations/receipts`…).
@@ -41,6 +49,9 @@ import {
   type PreviewDeps,
 } from '../../integration-preview.js';
 import { withJobLinks } from '../../forge-links.js';
+import { isPrRefusal, landIntegrationBranch, type LandDeps, type LandRefusalCode } from '../../integration-land.js';
+import { resolveSeriesId } from '../../series-service.js';
+import { refusalBody as prRefusalBody } from './pr-routes.js';
 import {
   REPAIR_KINDS, requestRepair, withRepairs, type RepairDeps, type RepairRefusalCode,
 } from '../../landing-repair.js';
@@ -63,6 +74,11 @@ const PreviewBody = z.object({
 const EmptyBody = z.object({}).strict();
 
 const RepairBody = z.object({ kind: z.enum(REPAIR_KINDS) }).strict();
+
+const LandBody = z.object({
+  title: z.string().trim().min(1).max(256).optional(),
+  body: z.string().max(16_000).optional(),
+}).strict();
 
 function zodDetail(err: z.ZodError): string {
   return err.issues.map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message)).join('; ');
@@ -97,13 +113,50 @@ function repairRefusal(code: RepairRefusalCode, reason: string) {
   }
 }
 
+/** The row `:id` names for the landing gesture: the job itself, else the
+ *  only job of the series it names, through the caller's scope. */
+function landingToLand(req: Request, res: Response): IntegrationRow | null {
+  const id = Id.safeParse(req.params.id);
+  if (!id.success) { invalid(res, zodDetail(id.error)); return null; }
+  const viewer = viewerFromRequest(req);
+  const notFound = (): null => {
+    res.status(404).json(apiError('landing_not_found', 'no job with this id'));
+    return null;
+  };
+  const direct = dbApi.getIntegrationById(id.data);
+  if (direct) return integrationVisibleTo(viewer, direct) ? direct : notFound();
+  const seriesId = resolveSeriesId(id.data, req.header('X-TIMON-Mission') ?? undefined);
+  const rows = seriesId ? dbApi.listIntegrationsBySeries(seriesId).filter((r) => integrationVisibleTo(viewer, r)) : [];
+  if (rows.length === 0) return notFound();
+  if (rows.length > 1) {
+    const reason = `the series has several jobs (${rows.map((r) => r.branch).join(', ')}): land one by its id`;
+    res.status(409).json(apiError('landing_refused', reason, { detail: reason }));
+    return null;
+  }
+  return rows[0]!;
+}
+
+/** One literal per code, so the webview's messages can be checked against them. */
+function landRefusal(code: LandRefusalCode, reason: string, files?: string[]) {
+  const params = { detail: reason };
+  const extra = files ? { files } : {};
+  switch (code) {
+    case 'landing_refused': return { ...apiError('landing_refused', reason, params), ...extra };
+    case 'landing_busy': return { ...apiError('landing_busy', reason, params), ...extra };
+    case 'landing_job_running': return { ...apiError('landing_job_running', reason, params), ...extra };
+    case 'landing_conflict': return { ...apiError('landing_conflict', reason, params), ...extra };
+    case 'landing_target_dirty': return { ...apiError('landing_target_dirty', reason, params), ...extra };
+    case 'landing_move_failed': return { ...apiError('landing_move_failed', reason, params), ...extra };
+  }
+}
+
 function failed(res: Response, what: string, err: unknown): void {
   // Not echoed: an unexpected failure may quote a path of this machine.
   console.error(`[kanban] ${what} failed:`, (err as Error).message);
   res.status(500).json(apiError('landing_request_failed', 'the landing of the job could not be read'));
 }
 
-export function registerLandingRoutes(app: Router, deps: PreviewDeps & RepairDeps = {}): void {
+export function registerLandingRoutes(app: Router, deps: PreviewDeps & RepairDeps & LandDeps = {}): void {
   app.get('/api/kanban/landings', (req, res) => {
     if (!requireAuth(req, res)) return;
     const query = ListQuery.safeParse(req.query);
@@ -175,5 +228,30 @@ export function registerLandingRoutes(app: Router, deps: PreviewDeps & RepairDep
       const [landing] = withRepairs(withJobLinks([integrationView(fresh)], viewerFromRequest(req)));
       res.status(201).json({ repair: out.repair, task_id: out.task_id, landing });
     } catch (err) { failed(res, 'asking for a repair', err); }
+  });
+  app.post('/api/kanban/landings/:id/land', async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    if (rejectIfDenied(req, res, 'projects:manage')) return;
+    const row = landingToLand(req, res);
+    if (!row) return;
+    const body = LandBody.safeParse(req.body ?? {});
+    if (!body.success) { invalid(res, zodDetail(body.error)); return; }
+    try {
+      const out = await landIntegrationBranch(row, body.data, deps);
+      if (!out.ok) {
+        if (isPrRefusal(out)) {
+          res.status(out.status).json({ ...prRefusalBody(out.code, out.reason), ...(out.checks ? { checks: out.checks } : {}) });
+        } else {
+          res.status(out.status).json(landRefusal(out.code, out.reason, out.files));
+        }
+        return;
+      }
+      if (!out.already) {
+        auditRequest(req, out.outcome === 'merged' ? 'integration.landed' : 'integration.pr_opened', row.branch);
+      }
+      const fresh = dbApi.getIntegrationById(row.id) ?? row;
+      const [landing] = withRepairs(withJobLinks([integrationView(fresh)], viewerFromRequest(req)));
+      res.json({ ...out, landing });
+    } catch (err) { failed(res, 'landing a job', err); }
   });
 }

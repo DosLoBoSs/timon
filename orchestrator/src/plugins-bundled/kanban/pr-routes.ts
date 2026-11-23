@@ -42,8 +42,9 @@ function zodDetail(err: z.ZodError): string {
   return err.issues.map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message)).join('; ');
 }
 
-/** One literal per code, so the webview's messages can be checked against them. */
-function refusalBody(code: PrOpenRefusalCode, reason: string) {
+/** One literal per code, so the webview's messages can be checked against them.
+ *  Also answers the landing gesture of a job that opens its pull request. */
+export function refusalBody(code: PrOpenRefusalCode, reason: string) {
   const params = { detail: reason };
   switch (code) {
     case 'pr_target_not_found': return apiError('pr_target_not_found', reason, params);
