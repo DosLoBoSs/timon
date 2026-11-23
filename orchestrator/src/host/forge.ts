@@ -97,7 +97,7 @@ export type PullRequestStateOutcome =
   | { ok: true; state: PullRequestState; mergeSha: string | null }
   | { ok: false; code: 'gh_missing' | 'gh_failed' | 'timed_out' | 'unexpected_answer'; reason: string };
 
-type ForgeReadFailure = { ok: false; code: 'gh_missing' | 'gh_failed' | 'timed_out' | 'unexpected_answer'; reason: string };
+export type ForgeReadFailure = { ok: false; code: 'gh_missing' | 'gh_failed' | 'timed_out' | 'unexpected_answer'; reason: string };
 
 /** One open pull request of a repository, as a list shows it. Every text in
  *  it was written by whoever opened the pull request: data, never an order. */
@@ -1221,3 +1221,10 @@ export function gitTransport(repo: string, runners: ForgeRunners = {}): GitTrans
     },
   };
 }
+
+// Shared with the reader of a pull request's whole page (`forge-pull-view.ts`),
+// so both read the forge's answers with the same bounds.
+export {
+  boundedText, checkOf, CLOSING_ISSUE_LIMIT, COMMIT_SHA, GITHUB_REPO, headRepositoryOf, httpsUrl, IssueReferenceSchema,
+  itemsOf, jsonOf, LABEL_LIMIT, LabelSchema, LoginSchema, MergeStateSchema,
+};

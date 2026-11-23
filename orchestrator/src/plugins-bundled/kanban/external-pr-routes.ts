@@ -3,7 +3,9 @@
  * (`external-pr-review.ts`):
  *
  *   GET  /api/projects/:slug/pull-requests                 the list, with each one's review and links
+ *   GET  /api/projects/:slug/pull-requests/:number         its page, as GitHub shows it (`pull-request-page.ts`)
  *   GET  /api/projects/:slug/pull-requests/:number/diff    the diff, as text
+ *   GET  /api/projects/:slug/pull-requests/:number/check-log?url=…  the end of a failed check's log
  *   POST /api/projects/:slug/pull-requests/:number/review  prepares the brief (starts nothing)
  *
  * No route starts a relecture: its mission would run unconfined.
@@ -28,6 +30,7 @@ import {
 } from '../../external-pr-review.js';
 import { branchGestures } from '../../forge-branch-update.js';
 import { pullRequestLinks } from '../../forge-links.js';
+import { readCheckLog, readPullRequestPage, type PageDeps } from '../../pull-request-page.js';
 import { readProjectIntegration } from '../../project-integration.js';
 import { rejectIfDenied, requireAuth, viewerFromRequest } from '../../users/identity.js';
 
@@ -37,6 +40,19 @@ const Params = z.object({
 });
 
 const PrepareBody = z.object({}).strict();
+
+/** `fresh=1` skips the short cache; `updated` is the pull request's last
+ *  change as the list showed it: a cached page older than it is read again. */
+const PageQuery = z.object({
+  fresh: z.enum(['0', '1']).optional(),
+  updated: z.string().max(40).regex(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z?$/).optional(),
+});
+
+/** A check's address, as the page gave it: `failedCheckLog` only reads a job
+ *  of the repository's own CI. */
+const CheckLogQuery = z.object({
+  url: z.string().max(500).url().refine((u) => u.startsWith('https://'), 'an https address'),
+});
 
 function zodDetail(err: z.ZodError): string {
   return err.issues.map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message)).join('; ');
@@ -85,7 +101,15 @@ function failed(res: Response, err: unknown): void {
   res.status(500).json(apiError('pr_read_failed', 'the pull request could not be read'));
 }
 
-export function registerExternalPrRoutes(app: Router, deps: ExternalPrDeps = {}): void {
+function query<T>(req: Request, res: Response, schema: z.ZodType<T>): T | null {
+  const parsed = schema.safeParse(req.query);
+  if (parsed.success) return parsed.data;
+  const detail = zodDetail(parsed.error);
+  res.status(400).json(apiError('pr_request_invalid', detail, { detail }));
+  return null;
+}
+
+export function registerExternalPrRoutes(app: Router, deps: ExternalPrDeps & PageDeps = {}): void {
   app.get('/api/projects/:slug/pull-requests', async (req, res) => {
     const p = guard(req, res);
     if (!p) return;
@@ -100,6 +124,35 @@ export function registerExternalPrRoutes(app: Router, deps: ExternalPrDeps = {})
           ...pull, links: links.get(pull.number)!, gestures: branchGestures(out.repo, pull, setting),
         })),
       });
+    } catch (err) { failed(res, err); }
+  });
+
+  app.get('/api/projects/:slug/pull-requests/:number', async (req, res) => {
+    const p = guard(req, res);
+    if (!p || p.number === undefined) return;
+    const q = query(req, res, PageQuery);
+    if (!q) return;
+    try {
+      const out = await readPullRequestPage(p.slug, p.number, deps, { fresh: q.fresh === '1', updatedAt: q.updated ?? null });
+      if (!out.ok) { res.status(out.status).json(refusalBody(out)); return; }
+      res.json({ pull: out.view, cached: out.cached });
+    } catch (err) { failed(res, err); }
+  });
+
+  app.get('/api/projects/:slug/pull-requests/:number/check-log', async (req, res) => {
+    const p = guard(req, res);
+    if (!p || p.number === undefined) return;
+    const q = query(req, res, CheckLogQuery);
+    if (!q) return;
+    try {
+      const out = await readCheckLog(p.slug, q.url, deps);
+      if (out.ok) { res.json({ log: out.log }); return; }
+      if (out.code === 'check_log_unavailable') {
+        // Not a job of the repository's own CI: GitHub keeps no log gh can read.
+        res.status(out.status).json(apiError('forge_read_failed', out.reason, { detail: out.reason }));
+        return;
+      }
+      res.status(out.status).json(refusalBody(out));
     } catch (err) { failed(res, err); }
   });
 

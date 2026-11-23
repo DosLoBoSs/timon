@@ -27,6 +27,7 @@ import { registerIntegrationRoutes } from './integration-routes.js';
 import { registerPrRoutes } from './pr-routes.js';
 import { registerExternalPrRoutes } from './external-pr-routes.js';
 import { watchReviewMissions } from '../../external-pr-review.js';
+import { watchPullRequestPages } from '../../pull-request-page.js';
 import { registerLandingRoutes } from './landing-routes.js';
 import { registerForgeProposalRoutes } from './forge-proposal-routes.js';
 import { registerForgeBranchRoutes } from './forge-branch-routes.js';
@@ -87,6 +88,8 @@ export function apply(ctx: Context): void {
   ctx.effect(() => startIntegrationPoller());
   // Brings the verdict of a pull request's relecture back to its row.
   ctx.effect(() => watchReviewMissions());
+  // A pull request's page read a moment ago is dropped when its job moves.
+  ctx.effect(() => watchPullRequestPages());
   // A publication cut by a stop is failed, and looked for on the forge before
   // it is written again.
   recoverInterruptedPublications();
