@@ -575,7 +575,6 @@ function SideRow({ label, children, data }: { label: string; children: ReactNode
 }
 
 function People({ logins, more }: { logins: string[]; more: number }) {
-  if (logins.length === 0) return <span className="text-muted-foreground">{t('pullRequests.detail.none')}</span>;
   return (
     <>
       {logins.map((login) => (
@@ -621,46 +620,55 @@ function TimonLinks({ pull, onOpenJob, onOpenTodo }: {
 /**
  * The column beside the tabs. Its status card sticks to the top: what the
  * person can do stays in view while the people and links scroll under it.
+ * Only what the pull request has is listed: an empty field says nothing.
  */
 function SidePanel({ page, repo, card, timon }: { page: PullRequestPage; repo: string | null; card: ReactNode; timon: ReactNode }) {
+  const hasMeta = page.reviewRequests.length + page.reviewRequestsMore + page.assignees.length + page.assigneesMore
+    + page.labels.length + page.closingIssues.length > 0 || page.milestone !== null;
   return (
     <div data-pull-side-column="" className="scrollbar-thin flex min-h-0 flex-col gap-3 md:overflow-y-auto">
       {/* An opaque ground under the card: the rows scroll beneath it. */}
       <div className="bg-popover md:sticky md:top-0 md:z-10">{card}</div>
-      <dl className={cn(ISLAND, 'flex flex-col gap-3 px-3 py-2.5')}>
-        <SideRow label={t('pullRequests.detail.reviewers')} data="reviewers">
-          <People logins={page.reviewRequests} more={page.reviewRequestsMore} />
-        </SideRow>
-        <SideRow label={t('pullRequests.detail.assignees')} data="assignees">
-          <People logins={page.assignees} more={page.assigneesMore} />
-        </SideRow>
-        <SideRow label={t('pullRequests.detail.labels')} data="labels">
-          {page.labels.length === 0
-            ? <span className="text-muted-foreground">{t('pullRequests.detail.none')}</span>
-            : page.labels.map((label) => (
-              <span key={label.name} className={cn(CHIP, MUTED_CHIP)}>
-                {label.color && /^[0-9a-f]{6}$/i.test(label.color) && (
-                  <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: `#${label.color}` }} />
-                )}
-                {label.name}
-              </span>
-            ))}
-        </SideRow>
-        <SideRow label={t('pullRequests.detail.milestone')} data="milestone">
-          {page.milestone
-            ? <ForgeLink href={page.milestone.url}>{page.milestone.title}</ForgeLink>
-            : <span className="text-muted-foreground">{t('pullRequests.detail.none')}</span>}
-        </SideRow>
-        <SideRow label={t('pullRequests.detail.issues')} data="issues">
-          {page.closingIssues.length === 0
-            ? <span className="text-muted-foreground">{t('pullRequests.detail.none')}</span>
-            : page.closingIssues.map((issue) => {
-              const same = issue.repo !== null && repo !== null && issue.repo.toLowerCase() === repo.toLowerCase();
-              const text = same || issue.repo === null ? `#${issue.number}` : `${issue.repo}#${issue.number}`;
-              return <ForgeLink key={text} href={issue.url} className="tabular-nums text-primary">{text}</ForgeLink>;
-            })}
-        </SideRow>
-      </dl>
+      {hasMeta && (
+        <dl className={cn(ISLAND, 'flex flex-col gap-3 px-3 py-2.5')}>
+          {page.reviewRequests.length + page.reviewRequestsMore > 0 && (
+            <SideRow label={t('pullRequests.detail.reviewers')} data="reviewers">
+              <People logins={page.reviewRequests} more={page.reviewRequestsMore} />
+            </SideRow>
+          )}
+          {page.assignees.length + page.assigneesMore > 0 && (
+            <SideRow label={t('pullRequests.detail.assignees')} data="assignees">
+              <People logins={page.assignees} more={page.assigneesMore} />
+            </SideRow>
+          )}
+          {page.labels.length > 0 && (
+            <SideRow label={t('pullRequests.detail.labels')} data="labels">
+              {page.labels.map((label) => (
+                <span key={label.name} className={cn(CHIP, MUTED_CHIP)}>
+                  {label.color && /^[0-9a-f]{6}$/i.test(label.color) && (
+                    <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: `#${label.color}` }} />
+                  )}
+                  {label.name}
+                </span>
+              ))}
+            </SideRow>
+          )}
+          {page.milestone && (
+            <SideRow label={t('pullRequests.detail.milestone')} data="milestone">
+              <ForgeLink href={page.milestone.url}>{page.milestone.title}</ForgeLink>
+            </SideRow>
+          )}
+          {page.closingIssues.length > 0 && (
+            <SideRow label={t('pullRequests.detail.issues')} data="issues">
+              {page.closingIssues.map((issue) => {
+                const same = issue.repo !== null && repo !== null && issue.repo.toLowerCase() === repo.toLowerCase();
+                const text = same || issue.repo === null ? `#${issue.number}` : `${issue.repo}#${issue.number}`;
+                return <ForgeLink key={text} href={issue.url} className="tabular-nums text-primary">{text}</ForgeLink>;
+              })}
+            </SideRow>
+          )}
+        </dl>
+      )}
       {timon}
     </div>
   );

@@ -79,8 +79,11 @@ const PAGE = {
 /** How the widget is painted: alone by default, or as a tab of the Git stack. */
 type Self = { tabbed: boolean; selected: boolean };
 
-/** `width`: what a ResizeObserver reports of every element it watches (none by default). */
-async function mount(list: PullRequestItem[], self?: Self, keepRead = false, width?: number) {
+/**
+ * `width`: what a ResizeObserver reports of every element it watches (none by
+ * default). `page`: what the daemon answers for pull request #12.
+ */
+async function mount(list: PullRequestItem[], self?: Self, keepRead = false, width?: number, page: object = PAGE) {
   const { JSDOM } = await import('jsdom');
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
   const saved = new Map<string, PropertyDescriptor | undefined>();
@@ -125,7 +128,7 @@ async function mount(list: PullRequestItem[], self?: Self, keepRead = false, wid
     }
     if (url.endsWith('/diff')) return Response.json({ diff: DETAIL_DIFF, truncated: false });
     if (url.startsWith('/api/ui/projects/acme/pull-requests/12/check-log?')) return Response.json({ log: { tail: 'Error: boom', truncated: false } });
-    if (/^\/api\/ui\/projects\/acme\/pull-requests\/12(\?|$)/.test(url)) return Response.json({ pull: PAGE, cached: false });
+    if (/^\/api\/ui\/projects\/acme\/pull-requests\/12(\?|$)/.test(url)) return Response.json({ pull: page, cached: false });
     return Response.json({ error: 'not_found' }, { status: 404 });
   });
 
@@ -474,5 +477,40 @@ test('the column\'s card says the checks, the merge state and the decision over 
     await new Promise((r) => setTimeout(r, 30));
   } finally {
     await m.unmount();
+  }
+});
+
+test('the column lists only the fields a pull request has, and no block when it has none', async () => {
+  const bare = {
+    ...PAGE, labels: [], milestone: null, assignees: [], assigneesMore: 0, reviewRequests: [], reviewRequestsMore: 0, closingIssues: [],
+  };
+  const m = await mount([pull()], undefined, false, undefined, bare);
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const column = document.querySelector('[data-pull-dialog] [data-pull-side-column]');
+    assert.ok(column);
+    assert.ok(column.querySelector('[data-pull-status-card]'));
+    assert.equal(column.querySelectorAll('[data-pull-side]').length, 0);
+    assert.equal(column.querySelectorAll('dl').length, 0, 'no empty block under the card');
+    assert.doesNotMatch(column.textContent ?? '', /None/);
+    await m.key(document.activeElement ?? document.body, 'Escape');
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    await m.unmount();
+  }
+
+  const some = await mount([pull()], undefined, false, undefined, { ...bare, labels: [{ name: 'ui', color: 'a2eeef' }] });
+  try {
+    await some.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await some.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    assert.deepEqual(
+      Array.from(document.querySelectorAll('[data-pull-dialog] [data-pull-side]')).map((e) => e.getAttribute('data-pull-side')),
+      ['labels'],
+    );
+    await some.key(document.activeElement ?? document.body, 'Escape');
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    await some.unmount();
   }
 });
