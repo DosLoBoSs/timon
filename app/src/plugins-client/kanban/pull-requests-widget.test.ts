@@ -371,27 +371,37 @@ const conflicted = (extra: Partial<PullRequestItem> = {}) => pull({
   mergeStateStatus: 'dirty', gestures: { update_branch: false, ask_contributor: true, resolve_conflict: true, locked: null }, ...extra,
 });
 
-test('the window shows its main gestures without opening "…": the one its state calls for filled, the frequent ones beside it', async () => {
+test('the window shows its main gestures in its column without opening "…": the one its state calls for filled, the frequent ones under it', async () => {
   const m = await mount([conflicted()]);
   try {
     await m.choose(document.querySelector('[data-stack-project]'), 'acme');
     await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
     const d = document.querySelector('[data-pull-dialog]');
     assert.ok(d);
-    const primary = d.querySelector('[data-pull-action-primary]');
+    const card = d.querySelector('[data-pull-side-column] [data-pull-status-card]');
+    assert.ok(card, 'the status card heads the column beside the tabs');
+    const primary = card.querySelector('[data-pull-action-primary]');
     assert.equal(primary?.getAttribute('data-pull-action'), 'resolveConflict');
     assert.equal(primary?.textContent, 'Resolve the conflict…');
     assert.deepEqual(
-      Array.from(d.querySelectorAll('[data-pull-actions] [data-pull-action]:not([data-pull-action-primary])')).map((b) => b.getAttribute('data-pull-action')),
+      Array.from(card.querySelectorAll('[data-pull-action]:not([data-pull-action-primary])')).map((b) => b.getAttribute('data-pull-action')),
       ['askContributor', 'review'],
     );
+    assert.equal(d.querySelectorAll('[data-pull-action]').length, 3, 'each gesture shows once');
     assert.ok(!document.querySelector('[data-menu-comment]'), 'no menu was opened to see them');
+
+    // The header keeps its icon buttons only: the title has the width.
+    const tools = Array.from(d.querySelectorAll('[data-pull-header-tools] button, [data-pull-header-tools] a'));
+    assert.deepEqual(tools.map((b) => b.getAttribute('aria-label')), ['Read again from GitHub', 'Open on GitHub', 'More actions']);
+    for (const b of tools) assert.equal(b.textContent, '', `${b.getAttribute('aria-label')} has no visible label`);
+    assert.equal(d.querySelector('[data-pull-title]')?.getAttribute('title'), 'Add a dark theme');
 
     // The rest, and the job's links, sit in "…".
     await m.key(d.querySelector('[data-pull-dialog-menu]'), 'Enter');
     assert.ok(document.querySelector('[data-menu-comment]'));
     assert.ok(document.querySelector('[data-menu-forge]'));
-    assert.ok(!document.querySelector('[data-menu-resolve-conflict]'), 'a button beside is not repeated in the menu');
+    assert.ok(!document.querySelector('[data-menu-resolve-conflict]'), 'a button of the card is not repeated in the menu');
+    assert.ok(!document.querySelector('[data-menu-ask-contributor]'));
     await m.key(document.activeElement ?? document.body, 'Escape');
 
     // A gesture the daemon prepares closes the window once ready, onto what it opens.
@@ -421,6 +431,9 @@ test('a refused gesture shows greyed with its reason, on hover and to a screen r
     const reason = document.getElementById(resolve.getAttribute('aria-describedby') ?? '');
     assert.match(reason?.textContent ?? '', /does not let the maintainers change this branch/);
     assert.equal(d.querySelector('[data-pull-action="askContributor"]')?.hasAttribute('disabled'), false);
+    const lock = d.querySelector('[data-pull-status-card] [data-pull-box-lock]');
+    assert.equal(lock?.textContent, 'Changes not allowed');
+    assert.match(lock?.getAttribute('title') ?? '', /does not let the maintainers change this branch/);
     await m.key(document.activeElement ?? document.body, 'Escape');
     await new Promise((r) => setTimeout(r, 30));
   } finally {
@@ -428,32 +441,18 @@ test('a refused gesture shows greyed with its reason, on hover and to a screen r
   }
 });
 
-test('a narrow window folds the gestures beside the filled one into "…"; the filled one stays', async () => {
-  const m = await mount([conflicted()], undefined, false, 480);
-  try {
-    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
-    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
-    const d = document.querySelector('[data-pull-dialog]');
-    assert.ok(d);
-    assert.deepEqual(Array.from(d.querySelectorAll('[data-pull-actions] [data-pull-action]')).map((b) => b.getAttribute('data-pull-action')), ['resolveConflict']);
-    await m.key(d.querySelector('[data-pull-dialog-menu]'), 'Enter');
-    assert.ok(document.querySelector('[data-menu-ask-contributor]'));
-    assert.ok(document.querySelector('[data-menu-review]'));
-    await m.key(document.activeElement ?? document.body, 'Escape');
-    await m.key(document.activeElement ?? document.body, 'Escape');
-    await new Promise((r) => setTimeout(r, 30));
-  } finally {
-    await m.unmount();
-  }
-});
-
-test('under the conversation, a box says the checks, the merge state and the decision, with the header\'s gestures and no merge button', async () => {
+test('the column\'s card says the checks, the merge state and the decision over its gestures, with no merge button and no box under the conversation', async () => {
   const m = await mount([conflicted()]);
   try {
     await m.choose(document.querySelector('[data-stack-project]'), 'acme');
     await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
-    const box = document.querySelector('[data-pull-dialog] [data-pull-merge-box]');
+    const box = document.querySelector('[data-pull-dialog] [data-pull-status-card]');
     assert.ok(box);
+    assert.equal(document.querySelectorAll('[data-pull-dialog] [data-pull-status-card]').length, 1);
+    const conversation = document.querySelector('[data-pull-dialog] [role="tabpanel"]');
+    assert.ok(conversation);
+    assert.ok(conversation.querySelector('[data-pull-body]'));
+    assert.ok(!conversation.querySelector('[data-pull-status-card], [data-pull-action]'), 'the conversation ends on its threads');
     const checks = box.querySelector('[data-pull-box-checks]');
     assert.equal(checks?.getAttribute('data-pull-box-checks'), 'failed');
     assert.match(checks?.textContent ?? '', /Some checks failed.*1 passed · 1 failed · 0 running/);
@@ -462,7 +461,7 @@ test('under the conversation, a box says the checks, the merge state and the dec
     assert.equal(box.querySelector('[data-pull-box-decision]')?.textContent, 'Changes requested');
     assert.deepEqual(
       Array.from(box.querySelectorAll('[data-pull-box-actions] [data-pull-action]')).map((b) => b.getAttribute('data-pull-action')),
-      ['askContributor', 'review', 'resolveConflict'],
+      ['resolveConflict', 'askContributor', 'review'],
     );
     assert.ok(!Array.from(box.querySelectorAll('button')).some((b) => /merge/i.test(b.textContent ?? '')), 'a person merges on GitHub');
 
@@ -470,6 +469,7 @@ test('under the conversation, a box says the checks, the merge state and the dec
     assert.ok(!document.querySelector('[data-pull-dialog] [data-pull-check]'));
     await m.click(checks);
     assert.ok(document.querySelector('[data-pull-dialog] [data-pull-check="test"]'));
+    assert.ok(document.querySelector('[data-pull-dialog] [data-pull-status-card] [data-pull-action-primary]'), 'the card stays on every tab');
     await m.key(document.activeElement ?? document.body, 'Escape');
     await new Promise((r) => setTimeout(r, 30));
   } finally {

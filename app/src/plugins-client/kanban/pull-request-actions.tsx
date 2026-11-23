@@ -2,8 +2,9 @@
 
 /**
  * How a pull request's gestures are painted, from the choice
- * `pullRequestActions` makes: as buttons in its window (the filled one and
- * those beside it), as entries of a "…" menu (its window's and its row's).
+ * `pullRequestActions` makes: as buttons of its window's status card (the
+ * filled one and those under it), as entries of a "…" menu (its window's and
+ * its row's).
  * A refused gesture keeps its place, greyed, its reason on hover and read by
  * a screen reader; one under way shows a spinner.
  */
@@ -70,18 +71,21 @@ function ActionIcon({ action, className }: { action: PullAction; className: stri
 
 /**
  * One gesture as a button of the window: `primary` filled, the others
- * outlined. Greyed, a disabled button takes no pointer events: the wrapper
- * carries the reason's tooltip, the button names it for a screen reader.
+ * outlined; `block` spans the width it is given. Greyed, a disabled button
+ * takes no pointer events: the wrapper carries the reason's tooltip, the
+ * button names it for a screen reader.
  */
-export function PullActionButton({ action, primary = false, onRun }: {
+export function PullActionButton({ action, primary = false, block = false, onRun }: {
   action: PullAction;
   primary?: boolean;
+  block?: boolean;
   onRun: (id: PullActionId) => void;
 }): ReactElement {
   const reasonId = useId();
   const reason = pullActionReason(action.blocked);
+  const label = pullActionLabel(action);
   return (
-    <span title={reason ?? undefined} data-pull-action-reason={reason ? action.id : undefined} className="inline-flex shrink-0">
+    <span title={reason ?? undefined} data-pull-action-reason={reason ? action.id : undefined} className={block ? 'flex min-w-0' : 'inline-flex shrink-0'}>
       <Button
         type="button"
         size="sm"
@@ -92,10 +96,10 @@ export function PullActionButton({ action, primary = false, onRun }: {
         aria-busy={action.busy || undefined}
         aria-describedby={reason ? reasonId : undefined}
         onClick={() => onRun(action.id)}
-        className="h-7 gap-1.5 px-2.5 text-[11.5px] [&_svg]:size-3.5"
+        className={cn('h-7 gap-1.5 px-2.5 text-[11.5px] [&_svg]:size-3.5', block && 'w-full min-w-0')}
       >
         <ActionIcon action={action} className="size-3.5" />
-        {pullActionLabel(action)}
+        <span className="min-w-0 truncate">{label}</span>
       </Button>
       {reason && <span id={reasonId} className="sr-only">{reason}</span>}
     </span>

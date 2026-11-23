@@ -7,21 +7,23 @@
  * (description, comments, reviews, review threads by file), the commits, the
  * checks (the end of a failed job's log on demand) and the files (each one's
  * diff unfolded on demand, its review threads under their line) — and beside
- * them the people, labels, milestone, issues and Timon's own links.
+ * them a column: where the pull request stands with its gestures, then the
+ * people, labels, milestone, issues and Timon's own links.
  *
  * Everything here was written on the forge: React escapes it, the markdown is
  * rendered without raw HTML (`forgeMarkdownHtml`), and a link only leaves for
  * an https GitHub address, in a new tab. The gestures on the pull request sit
- * in the header: the one its state calls for filled, the frequent ones beside
- * it, the rest in "…" (`pullRequestActions`, shared with the row's menu). A
- * narrow window folds the ones beside it into "…"; the filled one stays.
+ * in the column's status card, which stays in view whatever the tab: the one
+ * its state calls for filled, the frequent ones under it, the rest in the
+ * header's "…" (`pullRequestActions`, shared with the row's menu). The header
+ * keeps only icon buttons, so the title has the width.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import {
   ChevronRight, CircleAlert, CircleCheck, CircleDot, CircleMinus, ExternalLink, GitCommitHorizontal, GitMerge,
-  GitPullRequest, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, LoaderCircle, MoreHorizontal, RefreshCw, ScrollText,
+  GitPullRequest, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, LoaderCircle, Lock, MoreHorizontal, RefreshCw, ScrollText,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -46,8 +48,6 @@ const MUTED_CHIP = 'bg-foreground/[0.06] text-muted-foreground';
 /** Diff lines painted per file, and for the whole tab: a huge diff would freeze the window. */
 const FILE_LINES_SHOWN = 1500;
 const DIFF_LINES_SHOWN = 6000;
-/** Under this width (px) the window folds the gestures beside the filled one into "…". */
-export const NARROW_HEADER_PX = 640;
 
 const STATE_TONE: Record<string, string> = {
   open: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
@@ -235,6 +235,8 @@ const BOX_MERGE: Record<MergeState, BoxLine> = {
   closed: { icon: GitPullRequestClosed, tone: TONE.bad },
 };
 
+const BOX_LOCK: BoxLine = { icon: Lock, tone: TONE.quiet };
+
 const BOX_DECISION: Record<NonNullable<PullRequestPage['reviewDecision']>, BoxLine> = {
   approved: { icon: CircleCheck, tone: TONE.good },
   changes_requested: { icon: CircleAlert, tone: TONE.warn },
@@ -246,14 +248,18 @@ function BoxIcon({ line }: { line: BoxLine }) {
   return <Icon className={cn('size-4 shrink-0', line.tone)} aria-hidden />;
 }
 
+const STATUS_LINE = 'flex min-w-0 items-start gap-2 px-1.5 py-1 text-xs font-medium leading-4';
+
 /**
- * Where the pull request stands, under its conversation as GitHub's merge box
- * is: its checks (a click shows them), its merge state, the review decision,
- * and the gestures its state calls for, the header's own. No merge button:
- * a pull request merges on GitHub, by a person.
+ * Where the pull request stands, as GitHub's merge box says it, and what to
+ * do about it: its checks (a click shows them), its merge state, the review
+ * decision, a lock on its branch, then the gesture its state calls for,
+ * filled, and the frequent others under it. No merge button: a pull request
+ * merges on GitHub, by a person.
  */
-function MergeBox({ page, actions, onAction, onShowChecks }: {
+function StatusCard({ page, pull, actions, onAction, onShowChecks }: {
   page: PullRequestPage;
+  pull: PullRequestItem;
   actions: PullActions;
   onAction: (id: PullActionId) => void;
   onShowChecks: () => void;
@@ -261,40 +267,47 @@ function MergeBox({ page, actions, onAction, onShowChecks }: {
   const counts = checkCounts(page.checks);
   const checks = page.checks.length === 0 ? 'none' : counts.fail > 0 ? 'failed' : counts.pending > 0 ? 'pending' : 'passed';
   const merge = mergeState(page);
+  const lock = branchLock(pull);
   return (
-    <section data-pull-merge-box="" aria-label={t('pullRequests.detail.box.label')} className={cn(ISLAND, 'flex flex-col gap-1 px-2 py-2')}>
+    <section data-pull-status-card="" aria-label={t('pullRequests.detail.box.label')} className={cn(ISLAND, 'flex flex-col gap-0.5 p-2')}>
       <button type="button" data-pull-box-checks={checks} onClick={onShowChecks} title={t('pullRequests.detail.box.showChecks')}
-        className="flex min-w-0 items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        className="flex min-w-0 items-start gap-2 rounded-md px-1.5 py-1 text-left hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <BoxIcon line={BOX_CHECKS[checks]} />
         <span className="min-w-0 flex-1">
-          <span className="block text-xs font-medium">{t(`pullRequests.detail.box.checks.${checks}`)}</span>
+          <span className="block text-xs font-medium leading-4">{t(`pullRequests.detail.box.checks.${checks}`)}</span>
           {checks !== 'none' && (
             <span className="block text-[11px] tabular-nums text-muted-foreground">{t('pullRequests.detail.box.checksCount', counts)}</span>
           )}
         </span>
-        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <ChevronRight className="size-3.5 shrink-0 self-center text-muted-foreground" aria-hidden />
       </button>
+      <div data-pull-box-merge={merge} className={STATUS_LINE}>
+        <BoxIcon line={BOX_MERGE[merge]} />
+        <span className="min-w-0">{t(`pullRequests.detail.box.merge.${merge}`)}</span>
+      </div>
       {page.reviewDecision && (
-        <div data-pull-box-decision={page.reviewDecision} className="flex min-w-0 items-center gap-2.5 px-1.5 py-1.5">
+        <div data-pull-box-decision={page.reviewDecision} className={STATUS_LINE}>
           <BoxIcon line={BOX_DECISION[page.reviewDecision]} />
-          <span className="text-xs font-medium">{t(`pullRequests.detail.box.decision.${page.reviewDecision}`)}</span>
+          <span className="min-w-0">{t(`pullRequests.detail.box.decision.${page.reviewDecision}`)}</span>
         </div>
       )}
-      <div data-pull-box-merge={merge} className="flex min-w-0 items-center gap-2.5 px-1.5 py-1.5">
-        <BoxIcon line={BOX_MERGE[merge]} />
-        <span className="text-xs font-medium">{t(`pullRequests.detail.box.merge.${merge}`)}</span>
-      </div>
+      {lock && (
+        <div data-pull-box-lock={lock} title={t(`pullRequests.lockedHint.${lock}`)} className={STATUS_LINE}>
+          <BoxIcon line={BOX_LOCK} />
+          <span className="min-w-0">{t(`pullRequests.locked.${lock}`)}</span>
+        </div>
+      )}
       {page.state === 'open' && (
-        <div data-pull-box-actions="" className="flex flex-wrap items-center justify-end gap-1.5 px-1.5 pb-0.5 pt-1">
-          {actions.secondary.map((action) => <PullActionButton key={action.id} action={action} onRun={onAction} />)}
-          <PullActionButton action={actions.primary} primary onRun={onAction} />
+        <div data-pull-box-actions="" role="group" aria-label={t('pullRequests.detail.actions')} className="flex flex-col gap-1.5 px-1.5 pb-0.5 pt-2">
+          <PullActionButton action={actions.primary} primary block onRun={onAction} />
+          {actions.secondary.map((action) => <PullActionButton key={action.id} action={action} block onRun={onAction} />)}
         </div>
       )}
     </section>
   );
 }
 
-function ConversationTab({ page, box }: { page: PullRequestPage; box: ReactNode }) {
+function ConversationTab({ page }: { page: PullRequestPage }) {
   return (
     <div className="flex flex-col gap-3">
       <section data-pull-body="" className={cn(ISLAND, 'flex flex-col gap-1.5 px-3 py-2.5')}>
@@ -329,7 +342,6 @@ function ConversationTab({ page, box }: { page: PullRequestPage; box: ReactNode 
           <More count={page.threadsMore} what="threads" />
         </section>
       )}
-      {box}
     </div>
   );
 }
@@ -606,9 +618,15 @@ function TimonLinks({ pull, onOpenJob, onOpenTodo }: {
   );
 }
 
-function SidePanel({ page, repo, timon }: { page: PullRequestPage; repo: string | null; timon: ReactNode }) {
+/**
+ * The column beside the tabs. Its status card sticks to the top: what the
+ * person can do stays in view while the people and links scroll under it.
+ */
+function SidePanel({ page, repo, card, timon }: { page: PullRequestPage; repo: string | null; card: ReactNode; timon: ReactNode }) {
   return (
-    <div className="flex min-h-0 flex-col gap-3 md:overflow-y-auto">
+    <div data-pull-side-column="" className="scrollbar-thin flex min-h-0 flex-col gap-3 md:overflow-y-auto">
+      {/* An opaque ground under the card: the rows scroll beneath it. */}
+      <div className="bg-popover md:sticky md:top-0 md:z-10">{card}</div>
       <dl className={cn(ISLAND, 'flex flex-col gap-3 px-3 py-2.5')}>
         <SideRow label={t('pullRequests.detail.reviewers')} data="reviewers">
           <People logins={page.reviewRequests} more={page.reviewRequestsMore} />
@@ -650,27 +668,6 @@ function SidePanel({ page, repo, timon }: { page: PullRequestPage; repo: string 
 
 // ─── The window ────────────────────────────────────────────────────────────
 
-/**
- * Whether the element is narrower than `px`. A width of 0 is no width read
- * yet (a test's page lays nothing out): the window then counts as wide. The
- * element comes from a callback ref: the dialog's portal mounts it a render
- * after the window itself.
- */
-function useNarrow(el: HTMLElement | null, px: number): boolean {
-  const [narrow, setNarrow] = useState(false);
-  useLayoutEffect(() => {
-    if (!el) return;
-    const measure = (width: number) => setNarrow(width > 0 && width < px);
-    measure(el.getBoundingClientRect().width);
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) measure(entry.contentRect.width);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [el, px]);
-  return narrow;
-}
-
 type PageLoad = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; page: PullRequestPage };
 
 export function PullRequestDialog({ project, repo, pull, actions, onAction, links, onOpenJob, onOpenTodo, onClose }: {
@@ -691,10 +688,6 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
   const [load, setLoad] = useState<PageLoad>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState('conversation');
-  const [header, setHeader] = useState<HTMLDivElement | null>(null);
-  const narrow = useNarrow(header, NARROW_HEADER_PX);
-  const beside = narrow ? [] : actions.secondary;
-  const folded = narrow ? [...actions.secondary, ...actions.overflow] : actions.overflow;
 
   useEffect(() => {
     let alive = true;
@@ -727,15 +720,13 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent data-pull-dialog={pull.number} className="flex h-[min(88vh,52rem)] max-w-[1000px] flex-col gap-3 overflow-hidden">
-        <div ref={setHeader} className="flex min-w-0 items-center gap-2 pr-6">
-          <DialogTitle className="flex min-w-0 flex-1 items-center gap-2 text-sm">
-            <StateIcon className={cn('size-4 shrink-0', state === 'open' ? 'text-emerald-600 dark:text-emerald-400' : state === 'merged' ? 'text-violet-600 dark:text-violet-400' : state === 'closed' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground')} aria-hidden />
-            <span className="min-w-0 truncate" title={page?.title ?? pull.title}>{page?.title ?? pull.title}</span>
+        <div className="flex min-w-0 items-start gap-2 pr-6">
+          <DialogTitle className="flex min-w-0 flex-1 items-start gap-2 text-sm leading-5">
+            <StateIcon className={cn('mt-0.5 size-4 shrink-0', state === 'open' ? 'text-emerald-600 dark:text-emerald-400' : state === 'merged' ? 'text-violet-600 dark:text-violet-400' : state === 'closed' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground')} aria-hidden />
+            <span data-pull-title="" className="line-clamp-2 min-w-0 break-words" title={page?.title ?? pull.title}>{page?.title ?? pull.title}</span>
             <span className="shrink-0 font-normal tabular-nums text-muted-foreground">#{pull.number}</span>
           </DialogTitle>
-          <div data-pull-actions="" role="group" aria-label={t('pullRequests.detail.actions')} className="flex shrink-0 items-center gap-1.5">
-            {beside.map((action) => <PullActionButton key={action.id} action={action} onRun={onAction} />)}
-            <PullActionButton action={actions.primary} primary onRun={onAction} />
+          <div data-pull-header-tools="" className="-mt-0.5 flex shrink-0 items-center">
             <span className="flex items-center gap-0.5">
               <WidgetButton
                 data-pull-refresh=""
@@ -761,7 +752,7 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
                 <Dropdown.Portal>
                   <Dropdown.Content sideOffset={6} align="end" className="z-[60] min-w-44 rounded-lg border border-border bg-popover p-1 text-xs text-popover-foreground shadow-elev-2">
                     <NativeViewCover />
-                    <PullActionMenuItems actions={folded} onRun={onAction} />
+                    <PullActionMenuItems actions={actions.overflow} onRun={onAction} />
                     {links}
                   </Dropdown.Content>
                 </Dropdown.Portal>
@@ -814,7 +805,7 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
         {load.kind === 'loading' && <p className="text-xs text-muted-foreground">{t('pullRequests.loading')}</p>}
 
         {page && (
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_15rem]">
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_16rem]">
             <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 min-w-0 flex-col gap-2">
               <TabsList className="h-8 self-start">
                 <TabsTrigger value="conversation" data-pull-tab="conversation" className="text-xs">
@@ -835,10 +826,7 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="conversation" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
-                <ConversationTab
-                  page={page}
-                  box={<MergeBox page={page} actions={actions} onAction={onAction} onShowChecks={() => setTab('checks')} />}
-                />
+                <ConversationTab page={page} />
               </TabsContent>
               <TabsContent value="commits" className="scrollbar-thin mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
                 <CommitsTab page={page} />
@@ -850,7 +838,12 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
                 <FilesTab page={page} project={project} />
               </TabsContent>
             </Tabs>
-            <SidePanel page={page} repo={repo} timon={<TimonLinks pull={pull} onOpenJob={onOpenJob} onOpenTodo={onOpenTodo} />} />
+            <SidePanel
+              page={page}
+              repo={repo}
+              card={<StatusCard page={page} pull={pull} actions={actions} onAction={onAction} onShowChecks={() => setTab('checks')} />}
+              timon={<TimonLinks pull={pull} onOpenJob={onOpenJob} onOpenTodo={onOpenTodo} />}
+            />
           </div>
         )}
       </DialogContent>
