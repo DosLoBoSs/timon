@@ -289,7 +289,8 @@ function CheckRow({ check, project, number }: { check: PageCheck; project: strin
   };
   return (
     <li data-pull-check={check.name} data-status={check.status} className={cn(ISLAND, 'flex flex-col gap-1.5 px-2.5 py-1.5')}>
-      <div className="flex min-w-0 items-center gap-2">
+      {/* min-h: a row without a link keeps the height of one that has its button. */}
+      <div className="flex min-h-7 min-w-0 items-center gap-2">
         <Icon className={cn('size-3.5 shrink-0', CHECK_TONE[check.status])} aria-label={t(`landings.checksIsland.status.${check.status}`)} />
         <span className="min-w-0 flex-1 truncate text-xs" title={check.name}>
           {check.workflow && <span className="text-muted-foreground">{check.workflow} · </span>}
@@ -605,7 +606,7 @@ export function PullRequestDialog({ project, repo, pull, menu, onOpenJob, onOpen
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent data-pull-dialog={pull.number} className="flex max-h-[88vh] max-w-[1000px] flex-col gap-3 overflow-hidden">
+      <DialogContent data-pull-dialog={pull.number} className="flex h-[min(88vh,52rem)] max-w-[1000px] flex-col gap-3 overflow-hidden">
         <DialogTitle className="flex min-w-0 items-center gap-2 pr-6 text-sm">
           <StateIcon className={cn('size-4 shrink-0', state === 'open' ? 'text-emerald-600 dark:text-emerald-400' : state === 'merged' ? 'text-violet-600 dark:text-violet-400' : state === 'closed' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground')} aria-hidden />
           <span className="min-w-0 truncate" title={page?.title ?? pull.title}>{page?.title ?? pull.title}</span>

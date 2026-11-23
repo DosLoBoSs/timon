@@ -79,8 +79,10 @@ test('markdown from the forge keeps no raw HTML, and a link leaves only for http
   const doc = new JSDOM(`<div>${html}</div>`).window.document;
   assert.equal(doc.querySelector('script'), null);
   assert.equal(doc.querySelector('img'), null);
-  assert.equal(doc.querySelector('b'), null, 'raw HTML is shown as text, not rendered');
-  assert.match(doc.body.textContent ?? '', /<b>bold\?<\/b>/);
+  assert.equal(doc.querySelector('b'), null, 'raw HTML is not rendered');
+  // Its tags are dropped, its text kept.
+  assert.match(doc.body.textContent ?? '', /bold\?/);
+  assert.doesNotMatch(doc.body.textContent ?? '', /<b>|onerror/);
   assert.doesNotMatch(doc.body.textContent ?? '', /template comment/);
   const links = Array.from(doc.querySelectorAll('a'));
   assert.deepEqual(links.map((a) => a.getAttribute('href')), ['https://example.com/docs']);
@@ -89,4 +91,8 @@ test('markdown from the forge keeps no raw HTML, and a link leaves only for http
   assert.match(links[0]!.getAttribute('rel') ?? '', /noreferrer/);
   assert.match(doc.body.textContent ?? '', /bad/);
   assert.equal(forgeMarkdownHtml('   '), '');
+  // A bot's signature, as GitHub's CLA action writes it.
+  const bot = new JSDOM(`<div>${forgeMarkdownHtml('All signed.<br/><sub>Posted by the **CLA Assistant**</sub>')}</div>`).window.document;
+  assert.equal(bot.querySelector('sub'), null);
+  assert.match(bot.body.textContent ?? '', /All signed\. Posted by the CLA Assistant/);
 });

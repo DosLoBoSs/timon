@@ -197,14 +197,23 @@ export function checkSeconds(check: PageCheck): number | null {
   return Number.isFinite(ms) && ms >= 0 ? Math.round(ms / 1000) : null;
 }
 
-// A markdown engine of its own: a text from the forge keeps no raw HTML
-// (escaped, comments dropped), and only an http(s) link stays a link, opened
+/** What is left of a piece of raw HTML: its text, without a tag or a comment. */
+export function htmlText(html: string): string {
+  return html
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/?[A-Za-z][^>]*>/g, '');
+}
+
+// A markdown engine of its own: a text from the forge keeps no raw HTML (its
+// tags and comments are dropped, their text kept, escaped: GitHub's bots
+// write `<sub>` and `<br/>`), and only an http(s) link stays a link, opened
 // apart from the app.
 const forgeMarked = new Marked({ gfm: true, breaks: false });
 forgeMarked.use({
   renderer: {
     html({ text }: Tokens.HTML | Tokens.Tag): string {
-      return /^\s*<!--[\s\S]*-->\s*$/.test(text) ? '' : escapeHtml(text);
+      return escapeHtml(htmlText(text));
     },
     link(this: { parser: { parseInline: (tokens: Tokens.Link['tokens']) => string } }, token: Tokens.Link): string {
       const label = this.parser.parseInline(token.tokens);

@@ -310,7 +310,8 @@ test('a click on a row opens its page in a window, at the mouse and at the keybo
     // Conversation: the description as markdown without raw HTML, the reviews and comments, the threads.
     const markdown = d.querySelector('[data-pull-body] [data-pull-markdown]')!;
     assert.equal(markdown.querySelector('script'), null);
-    assert.match(markdown.textContent ?? '', /<script>/);
+    assert.match(markdown.textContent ?? '', /The app hurts at night\./);
+    assert.deepEqual(Array.from(markdown.querySelectorAll('a')).map((a) => a.getAttribute('href')), ['https://example.com/spec']);
     assert.deepEqual(Array.from(d.querySelectorAll('[data-pull-timeline]')).map((e) => e.getAttribute('data-pull-timeline')), ['review', 'comment']);
     assert.equal(d.querySelector('[data-pull-review-state]')?.textContent, 'Changes requested');
     assert.match(d.querySelector('[data-pull-more="timeline"]')?.textContent ?? '', /3 earlier entries/);
@@ -350,6 +351,11 @@ test('a click on a row opens its page in a window, at the mouse and at the keybo
 
     // Reads only: the window posts nothing.
     assert.deepEqual(m.calls.filter((c) => c.method !== 'GET').map((c) => c.url), ['/api/ui/projects/acme/pull-requests/12/review']);
+
+    // Closed before the page goes: Radix's focus timers must not outlive the test.
+    await m.key(document.activeElement ?? document.body, 'Escape');
+    assert.equal(dialog(), null);
+    await new Promise((r) => setTimeout(r, 30));
   } finally {
     await m.unmount();
   }
