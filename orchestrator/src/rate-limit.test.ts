@@ -11,7 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { rateLimitFromEvent, isRateLimitText, isExhaustedText } from './rate-limit.js';
+import { bestRateLimit, rateLimitFromEvent, isRateLimitText, isExhaustedText } from './rate-limit.js';
 
 const QUOTA_MSG =
   'You’ve reached your free Grok Build usage limit for now. '
@@ -148,4 +148,82 @@ test('a model at capacity is recognised, and is not read as a quota', async () =
   assert.equal(isOverloadedEvent('result', { is_error: false, error: 'at capacity' }), false);
   assert.equal(isOverloadedEvent('assistant', { is_error: true, error: 'at capacity' }), false);
   assert.equal(isOverloadedEvent('result', { is_error: true, error: 'TypeError: x is undefined' }), false);
+});
+
+/** A turn that ended without an error flag, as a codec with no status to
+ *  translate emits it. */
+const answered = (result: string): Record<string, unknown> => ({
+  type: 'result', subtype: 'success', is_error: false, result, stop_reason: 'end_turn', total_cost_usd: 0,
+});
+
+test('a quota notice printed as the answer of a turn that did not fail is a hit', () => {
+  const at = Date.UTC(2026, 10, 21, 12, 0, 0);
+  // Antigravity, as persisted on 2026-11-21: 31 turns closed as successes.
+  const notices: Array<[string, number]> = [
+    ['\n⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 29m12s.\n', (29 * 60 + 12) * 1000],
+    ['\n⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 1h18m49s.\n', (3600 + 18 * 60 + 49) * 1000],
+    ['\n⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 36m0s.\n', 36 * 60 * 1000],
+  ];
+  for (const [text, delay] of notices) {
+    const hit = rateLimitFromEvent('result', answered(text), at);
+    assert.equal(hit?.kind, 'rate_limit', text);
+    assert.equal(hit?.source, 'text');
+    assert.equal(hit?.pending, false);
+    // The duration is counted from the event, which is what makes the retry exact.
+    assert.equal(hit?.resetsAt, at + delay);
+  }
+  // Other wordings of the same notice, with or without a reopening time.
+  for (const text of [
+    'Error: rate limit exceeded. Try again later.',
+    'Usage limit reached.',
+    'Warning - quota exhausted, resets at 3pm',
+    "You've hit your usage limit. Upgrade your plan to continue.",
+    'Request refused by the provider: too many requests, try again in 30s.',
+  ]) {
+    assert.equal(rateLimitFromEvent('result', answered(text), at)?.kind, 'rate_limit', text);
+  }
+  // No duration named: the reopening stays unknown, never guessed.
+  assert.equal(rateLimitFromEvent('result', answered('Usage limit reached.'), at)?.resetsAt, null);
+  assert.equal(rateLimitFromEvent('result', answered('Quota reached. Resets in 2d 3h.'), at)?.resetsAt, at + 51 * 3600 * 1000);
+  // A dry account announced the same way is not downgraded to a window.
+  assert.equal(
+    rateLimitFromEvent('result', answered('Quota exceeded: insufficient credits. Upgrade your plan.'), at)?.kind,
+    'exhausted',
+  );
+});
+
+test('an answer that merely talks about a quota is not a hit', () => {
+  const report = [
+    '## Summary',
+    'I traced the stalled tasks to the provider notice. The log shows',
+    '"⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 29m12s."',
+    'thirty-one times that day, each closing its turn as a success.',
+    'The detector now reads that text, and the fallback backend takes over.',
+    'x'.repeat(200),
+  ].join('\n');
+  for (const text of [
+    report,
+    'Added rate limiting middleware to the API.',
+    'Done. The quota check now runs before each request.',
+    'Quota exceeded means that the account has used up its allowance for the period.',
+    'The rate limit is reached after 100 requests per minute, as configured in limits.ts.',
+    'I fixed the handler that returned "too many requests" for every call.',
+    '',
+  ]) {
+    assert.equal(rateLimitFromEvent('result', answered(text)), null, text.slice(0, 60));
+  }
+  // Only the closing `result` is read: the assistant message carrying the same
+  // text is the model's voice as far as this module knows.
+  assert.equal(rateLimitFromEvent('assistant', answered('⚠ Individual quota reached. Resets in 29m12s.')), null);
+  // No text at all (a codec that does not copy the answer): nothing to read.
+  assert.equal(rateLimitFromEvent('result', { type: 'result', subtype: 'success', is_error: false }), null);
+});
+
+test('a persisted notice counts its reopening from the date of the event', () => {
+  const at = Date.UTC(2026, 10, 21, 12, 0, 0);
+  // The autopsy runs when the reaper finalises the mission, minutes later.
+  const hit = bestRateLimit([
+    { type: 'result', payload: answered('⚠ Individual quota reached. Resets in 29m12s.'), timestamp: at },
+  ]);
+  assert.equal(hit?.resetsAt, at + (29 * 60 + 12) * 1000);
 });
