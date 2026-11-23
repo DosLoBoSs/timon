@@ -3,7 +3,7 @@
 /**
  * The detail window of a pull request, opened by a click on its row in the
  * Pull requests widget: what GitHub's page shows, read only. The header (state,
- * author, branches, the chips of the row), then four tabs — the conversation
+ * author, branches, date), then four tabs — the conversation
  * (description, comments, reviews, review threads by file), the commits, the
  * checks (the end of a failed job's log on demand) and the files (each one's
  * diff unfolded on demand, its review threads under their line) — and beside
@@ -39,7 +39,7 @@ import {
   checkCounts, checkSeconds, forgeHref, forgeMarkdownHtml, getCheckLog, getPullRequestDiff, getPullRequestPage, mergeState, placeThreads,
   splitDiffByFile, type CheckLog, type MergeState, type PageCheck, type PageThread, type PageTimelineItem, type PullRequestPage, type Read,
 } from './pull-request-page-api';
-import { branchChip, branchLock, reviewBadge, type PullActionId, type PullActions, type PullRequestItem } from './pull-requests-model';
+import { branchLock, reviewBadge, type PullActionId, type PullActions, type PullRequestItem } from './pull-requests-model';
 import { PullActionButton, PullActionMenuItems } from './pull-request-actions';
 
 const ISLAND = 'rounded-lg bg-foreground/[0.035]';
@@ -245,6 +245,7 @@ const BOX_MERGE: Record<MergeState, BoxLine> = {
 };
 
 const BOX_LOCK: BoxLine = { icon: Lock, tone: TONE.quiet };
+const BOX_VERDICT: BoxLine = { icon: ScrollText, tone: TONE.quiet };
 
 const BOX_DECISION: Record<NonNullable<PullRequestPage['reviewDecision']>, BoxLine> = {
   approved: { icon: CircleCheck, tone: TONE.good },
@@ -314,6 +315,7 @@ function StatusCard({ load, pull, actions, onAction, onShowChecks, onRetry, acro
 }) {
   const page = load.kind === 'ready' ? load.page : null;
   const lock = branchLock(pull);
+  const badge = reviewBadge(pull);
   return (
     <section data-pull-status-card={across ? 'across' : 'column'} aria-label={t('pullRequests.detail.box.label')} className={cn(ISLAND, 'flex flex-col gap-0.5 p-2')}>
       <div className={across ? 'flex flex-wrap gap-x-3 gap-y-0.5 [&>*]:min-w-48 [&>*]:flex-1' : 'contents'}>
@@ -335,6 +337,12 @@ function StatusCard({ load, pull, actions, onAction, onShowChecks, onRetry, acro
         <div data-pull-box-lock={lock} title={t(`pullRequests.lockedHint.${lock}`)} className={STATUS_LINE}>
           <BoxIcon line={BOX_LOCK} />
           <span className="min-w-0">{t(`pullRequests.locked.${lock}`)}</span>
+        </div>
+      )}
+      {badge?.kind === 'verdict' && (
+        <div data-pull-box-verdict={badge.verdict ?? 'none'} title={badge.outdated ? t('pullRequests.outdated') : undefined} className={STATUS_LINE}>
+          <BoxIcon line={BOX_VERDICT} />
+          <span className="min-w-0">{t('pullRequests.detail.timonVerdict', { verdict: t(`pullRequests.verdict.${badge.verdict ?? 'none'}`) })}</span>
         </div>
       )}
       </div>
@@ -793,9 +801,6 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
   const page = load.kind === 'ready' ? load.page : null;
   const state = stateOf(page ?? { state: 'open', isDraft: pull.isDraft });
   const StateIcon = STATE_ICON[state];
-  const chip = branchChip(pull);
-  const lock = branchLock(pull);
-  const badge = reviewBadge(pull);
   const author = page?.author ?? pull.author;
   const statusCard = (across: boolean) => (
     <StatusCard load={load} pull={pull} actions={actions} onAction={onAction} onShowChecks={() => setTab('checks')}
@@ -853,6 +858,7 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
         </div>
         <DialogDescription className="sr-only">{t('pullRequests.detail.description')}</DialogDescription>
 
+        {/* What the pull request is; where it stands is the card's, said once. */}
         <div data-pull-header="" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-muted-foreground">
           <span data-pull-state={state} className={cn(CHIP, STATE_TONE[state])}>{t(`pullRequests.detail.state.${state}`)}</span>
           <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -865,26 +871,6 @@ export function PullRequestDialog({ project, repo, pull, actions, onAction, link
             </span>
           )}
           {page?.createdAt && <span>{t('pullRequests.detail.opened')} <When iso={page.createdAt} /></span>}
-          {page?.mergeable === 'mergeable' && !chip && (
-            <span data-pull-mergeable="" className={cn(CHIP, 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300')}>{t('pullRequests.detail.mergeable')}</span>
-          )}
-          {chip && (
-            <span data-pull-branch={chip} className={cn(CHIP, chip === 'conflict' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : MUTED_CHIP)}>
-              {t(`pullRequests.branch.${chip}`)}
-            </span>
-          )}
-          {!chip && page?.mergeable === 'conflicting' && (
-            <span data-pull-branch="conflict" className={cn(CHIP, 'bg-amber-500/15 text-amber-700 dark:text-amber-300')}>{t('pullRequests.branch.conflict')}</span>
-          )}
-          {page?.reviewDecision && (
-            <span data-pull-decision={page.reviewDecision} className={cn(CHIP, REVIEW_TONE[page.reviewDecision])}>
-              {t(`pullRequests.detail.decision.${page.reviewDecision}`)}
-            </span>
-          )}
-          {lock && <span data-pull-locked={lock} title={t(`pullRequests.lockedHint.${lock}`)} className={cn(CHIP, MUTED_CHIP)}>{t(`pullRequests.locked.${lock}`)}</span>}
-          {badge && badge.kind === 'verdict' && (
-            <span className={cn(CHIP, MUTED_CHIP)}>{t('pullRequests.detail.timonVerdict', { verdict: t(`pullRequests.verdict.${badge.verdict ?? 'none'}`) })}</span>
-          )}
         </div>
 
         {/* `narrow &&` / `!narrow &&` keep the tabs at the same place: their state survives a resize.

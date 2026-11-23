@@ -318,8 +318,8 @@ test('a click on a row opens its page in a window, at the mouse and at the keybo
     assert.match(text, /Add a dark theme/);
     assert.match(text, /wants to merge 1 commit into main from stranger:dark-theme/);
     assert.equal(d.querySelector('[data-pull-state]')?.getAttribute('data-pull-state'), 'open');
-    assert.equal(d.querySelector('[data-pull-decision]')?.textContent, 'Changes requested');
-    assert.ok(d.querySelector('[data-pull-branch="conflict"]'));
+    assert.equal(d.querySelector('[data-pull-status-card] [data-pull-box-decision]')?.textContent, 'Changes requested');
+    assert.equal(d.querySelector('[data-pull-status-card] [data-pull-box-merge]')?.getAttribute('data-pull-box-merge'), 'conflict');
 
     // Conversation: the description as markdown without raw HTML, the reviews and comments, the threads.
     const markdown = d.querySelector('[data-pull-body] [data-pull-markdown]')!;
@@ -623,6 +623,38 @@ test('when GitHub\'s page cannot be read, the card keeps every gesture, says why
     assert.ok(!d.querySelector('[data-pull-box-error]'));
     assert.equal(d.querySelector('[data-pull-status-card] [data-pull-box-merge]')?.getAttribute('data-pull-box-merge'), 'conflict');
     await m.key(document.activeElement ?? document.body, 'Escape');
+    await m.key(document.activeElement ?? document.body, 'Escape');
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    await m.unmount();
+  }
+});
+
+test('the line under the title says what the pull request is; where it stands is said once, in the card', async () => {
+  const m = await mount([conflicted({
+    gestures: { update_branch: false, ask_contributor: true, resolve_conflict: false, locked: 'not_allowed' },
+    review: review({ verdict: 'changes_requested' }),
+  })]);
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const d = document.querySelector('[data-pull-dialog]');
+    assert.ok(d);
+    const header = d.querySelector('[data-pull-header]');
+    assert.ok(header);
+    assert.equal(header.querySelector('[data-pull-state]')?.textContent, 'Open');
+    assert.match(header.textContent ?? '', /stranger/);
+    assert.match(header.textContent ?? '', /wants to merge 1 commit into main from stranger:dark-theme/);
+    assert.match(header.textContent ?? '', /opened/);
+    assert.ok(!header.querySelector('[data-pull-locked], [data-pull-branch], [data-pull-decision], [data-pull-mergeable]'));
+    assert.doesNotMatch(header.textContent ?? '', /Changes not allowed|conflict|Changes requested|Timon:/i);
+
+    const card = d.querySelector('[data-pull-status-card]');
+    assert.ok(card);
+    assert.equal(card.querySelector('[data-pull-box-lock]')?.textContent, 'Changes not allowed');
+    assert.equal(card.querySelector('[data-pull-box-merge]')?.getAttribute('data-pull-box-merge'), 'conflict');
+    assert.equal(card.querySelector('[data-pull-box-decision]')?.textContent, 'Changes requested');
+    assert.equal(card.querySelector('[data-pull-box-verdict]')?.textContent, 'Timon: Changes requested');
     await m.key(document.activeElement ?? document.body, 'Escape');
     await new Promise((r) => setTimeout(r, 30));
   } finally {
