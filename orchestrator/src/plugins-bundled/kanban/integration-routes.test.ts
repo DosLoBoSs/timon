@@ -212,8 +212,36 @@ test('the branch check refuses an id, timon/, the target and an invalid ref with
   await refused('plan-release', 'main', /targets release\/main/);
 });
 
-test('the branch check of a project that does not land through pull requests is 409', async () => {
-  const res = await call('POST', '/api/projects/plan-local/integration/branch', 'reader', { branch: 'topic' });
+test('the branch check of a project that merges locally: a new branch or one the repository has', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const gitRepo = join(home, 'code', 'plan-git');
+  mkdirSync(gitRepo, { recursive: true });
+  const git = (...args: string[]) => execFileSync('git', ['-C', gitRepo, '-c', 'user.name=T', '-c', 'user.email=t@example.invalid', ...args], { stdio: 'pipe' });
+  git('init', '-q', '-b', 'main');
+  git('commit', '-q', '--allow-empty', '-m', 'init');
+  git('branch', 'feat/ongoing');
+  dbApi.upsertProject('plan-git', { cwd: gitRepo });
+  const url = '/api/projects/plan-git/integration/branch';
+  assert.deepEqual(await (await call('POST', url, 'reader', { branch: 'topic' })).json(), { ok: true, branch: 'feat/topic' });
+  // A new branch skips a name the repository has; an existing one is taken as named.
+  assert.deepEqual(await (await call('POST', url, 'reader', { branch: 'ongoing' })).json(), { ok: true, branch: 'feat/ongoing-2' });
+  assert.deepEqual(await (await call('POST', url, 'reader', { branch: 'feat/ongoing', kind: 'existing' })).json(), { ok: true, branch: 'feat/ongoing' });
+  const missing = await call('POST', url, 'reader', { branch: 'feat/missing', kind: 'existing' });
+  assert.equal(missing.status, 400);
+  assert.match((await missing.json() as { refusal: string }).refusal, /does not exist in the repository/);
+  const target = await call('POST', url, 'reader', { branch: 'main', kind: 'existing' });
+  assert.match((await target.json() as { refusal: string }).refusal, /the job merges into main/);
+  // A folder git cannot read refuses an existing branch rather than guess.
+  const unread = await call('POST', '/api/projects/plan-local/integration/branch', 'reader', { branch: 'feat/x', kind: 'existing' });
+  assert.match((await unread.json() as { refusal: string }).refusal, /cannot be read/);
+  assert.equal((await call('POST', url, 'anonymous', { branch: 'topic' })).status, 401);
+  assert.equal((await call('POST', url, 'viewer', { branch: 'topic' })).status, 403);
+});
+
+test('the branch check of a project whose setting no longer validates is 409', async () => {
+  dbApi.upsertProject('plan-broken', { cwd: planRepo });
+  dbApi.setProjectIntegration('plan-broken', JSON.stringify({ mode: 'pr', remote: 'origin' }));
+  const res = await call('POST', '/api/projects/plan-broken/integration/branch', 'reader', { branch: 'topic' });
   assert.equal(res.status, 409);
   assert.equal((await res.json() as { code: string }).code, 'plan_branch_unavailable');
 });
@@ -221,4 +249,5 @@ test('the branch check of a project that does not land through pull requests is 
 test('the branch check takes a strict body', async () => {
   assert.equal((await call('POST', BRANCH, 'reader', { branch: 'topic', extra: 1 })).status, 400);
   assert.equal((await call('POST', BRANCH, 'reader', {})).status, 400);
+  assert.equal((await call('POST', BRANCH, 'reader', { branch: 'topic', kind: 'old' })).status, 400);
 });
