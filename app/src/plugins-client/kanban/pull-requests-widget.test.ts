@@ -40,6 +40,42 @@ test('a row shows the verdict, outdated once the pull request changed; a draft s
 
 type Call = { url: string; method: string; body: string | null };
 
+const DETAIL_DIFF = 'diff --git a/x b/x\n@@ -1 +1 @@\n-old\n+new';
+
+/** A pull request's page as the daemon answers it (`pull-request-page.ts`). */
+const PAGE = {
+  number: 12, title: 'Add a dark theme', url: 'https://github.com/acme/widgets/pull/12', state: 'open', isDraft: false,
+  author: 'stranger', createdAt: '2026-11-17T10:00:00Z', updatedAt: '2026-11-17T10:00:00Z', mergedAt: null, closedAt: null,
+  baseRef: 'main', headRef: 'dark-theme', headSha: 'a'.repeat(40), headOwner: 'stranger', headRepository: 'stranger/widgets',
+  isCrossRepository: true, maintainerCanModify: true, mergeable: 'conflicting', mergeStateStatus: 'dirty',
+  reviewDecision: 'changes_requested', additions: 1, deletions: 1, changedFiles: 1,
+  body: 'The app hurts at night. [spec](https://example.com/spec) [x](javascript:alert(1)) <script>alert(1)</script>',
+  bodyTruncated: false,
+  labels: [{ name: 'ui', color: 'a2eeef' }], milestone: { title: '0.2', url: 'https://github.com/acme/widgets/milestone/3' },
+  assignees: ['maintainer'], assigneesMore: 0, reviewRequests: ['reviewer', 'acme/core'], reviewRequestsMore: 2,
+  closingIssues: [{ repo: 'acme/widgets', number: 7, url: 'https://github.com/acme/widgets/issues/7' }],
+  timeline: [
+    { kind: 'review', author: 'reviewer', state: 'changes_requested', body: 'A few things.', bodyTruncated: false, createdAt: '2026-11-17T11:00:00Z' },
+    { kind: 'comment', author: 'maintainer', body: 'Thanks!', bodyTruncated: false, createdAt: '2026-11-17T12:00:00Z', url: 'http://github.com/insecure', hidden: false },
+  ],
+  timelineMore: 3,
+  commits: [{ sha: 'b'.repeat(40), headline: 'feat: dark theme', author: 'stranger', date: '2026-11-17T09:00:00Z', url: `https://github.com/acme/widgets/commit/${'b'.repeat(40)}` }],
+  commitsMore: 0,
+  files: [{ path: 'x', additions: 1, deletions: 1 }],
+  filesMore: 0,
+  checks: [
+    { name: 'test', status: 'fail', url: 'https://github.com/acme/widgets/actions/runs/1/job/2', workflow: 'CI', startedAt: '2026-11-17T09:01:00Z', completedAt: '2026-11-17T09:04:30Z' },
+    { name: 'lint', status: 'pass', url: null, workflow: 'CI', startedAt: null, completedAt: null },
+  ],
+  checksMore: 0,
+  threads: [{
+    path: 'x', line: 1, resolved: false, outdated: false, commentsMore: 0,
+    comments: [{ author: 'reviewer', body: 'Rename this.', bodyTruncated: false, createdAt: '2026-11-17T11:00:00Z', url: 'https://github.com/acme/widgets/pull/12#discussion_r1' }],
+  }],
+  threadsMore: 0,
+  threadsError: null,
+};
+
 /** How the widget is painted: alone by default, or as a tab of the Git stack. */
 type Self = { tabbed: boolean; selected: boolean };
 
@@ -62,6 +98,8 @@ async function mount(list: PullRequestItem[], self?: Self, keepRead = false) {
   install('cancelAnimationFrame', dom.window.cancelAnimationFrame.bind(dom.window));
   install('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   install('IS_REACT_ACT_ENVIRONMENT', true);
+  const opened: string[] = [];
+  dom.window.open = ((href: string) => { opened.push(String(href)); return null; }) as typeof dom.window.open;
   const copied: string[] = [];
   Object.defineProperty(dom.window.navigator, 'clipboard', {
     value: { writeText: async (text: string) => { copied.push(text); } }, configurable: true,
@@ -79,7 +117,9 @@ async function mount(list: PullRequestItem[], self?: Self, keepRead = false) {
         brief: 'Review pull request #12 of acme/widgets…\n<untrusted-data>\n{}\n</untrusted-data>',
       });
     }
-    if (url.endsWith('/diff')) return Response.json({ diff: 'diff --git a/x b/x\n@@ -1 +1 @@\n-old\n+new', truncated: false });
+    if (url.endsWith('/diff')) return Response.json({ diff: DETAIL_DIFF, truncated: false });
+    if (url.startsWith('/api/ui/projects/acme/pull-requests/12/check-log?')) return Response.json({ log: { tail: 'Error: boom', truncated: false } });
+    if (/^\/api\/ui\/projects\/acme\/pull-requests\/12(\?|$)/.test(url)) return Response.json({ pull: PAGE, cached: false });
     return Response.json({ error: 'not_found' }, { status: 404 });
   });
 
@@ -130,6 +170,11 @@ async function mount(list: PullRequestItem[], self?: Self, keepRead = false) {
     });
     await settle();
   };
+  const key = async (el: Element | null, k: string) => {
+    assert.ok(el);
+    await React.act(async () => { (el as HTMLElement).dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: k, bubbles: true })); });
+    await settle();
+  };
   const unmount = async () => {
     await React.act(async () => { root.unmount(); });
     setLocale(previousLocale);
@@ -139,7 +184,7 @@ async function mount(list: PullRequestItem[], self?: Self, keepRead = false) {
       else delete (globalThis as Record<string, unknown>)[k];
     }
   };
-  return { calls, copied, counts, repaint, choose, click, pressTab, settle, unmount };
+  return { calls, copied, counts, opened, repaint, choose, click, key, pressTab, settle, unmount };
 }
 
 test('the widget lists a project\'s pull requests, filters by author, and shows the brief and the diff without starting anything', async () => {
@@ -224,4 +269,88 @@ test('in the Git stack, a hidden PR tab reads the pull requests only when its co
   assert.equal(shouldReadPulls(false, 1_000, 60_999), false);
   assert.equal(shouldReadPulls(false, 1_000, 61_000), true, 'a minute later, a hidden tab reads again');
   assert.equal(shouldReadPulls(false, null, 1_000), true);
+});
+
+test('a click on a row opens its page in a window, at the mouse and at the keyboard; its buttons keep their own click', async () => {
+  const m = await mount([pull({ review: review({ verdict: 'changes_requested' }) }), pull({ number: 13, title: 'Tidy the docs' })]);
+  const pageReads = () => m.calls.filter((c) => /\/pull-requests\/12(\?|$)/.test(c.url)).length;
+  const dialog = () => document.querySelector('[data-pull-dialog]');
+  try {
+    await m.choose(document.querySelector('[data-stack-project]'), 'acme');
+
+    // The loupe and the menu do not open the window.
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-review]'));
+    assert.equal(dialog(), null);
+    await m.click(Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Close') ?? null);
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-menu]'));
+    assert.equal(dialog(), null);
+    assert.equal(pageReads(), 0);
+
+    // The keyboard: the row's main zone is a button that takes Enter and Space.
+    const zone = document.querySelector('[data-pull-row="12"] [data-pull-open]')!;
+    assert.equal(zone.getAttribute('role'), 'button');
+    assert.equal(zone.getAttribute('tabindex'), '0');
+    await m.key(zone, 'Enter');
+    assert.equal(dialog()?.getAttribute('data-pull-dialog'), '12');
+    assert.equal(pageReads(), 1);
+    assert.ok(m.calls.some((c) => c.url === '/api/ui/projects/acme/pull-requests/12?updated=2026-11-17T10%3A00%3A00Z'));
+    await m.key(document.activeElement ?? document.body, 'Escape');
+
+    // The mouse.
+    await m.click(document.querySelector('[data-pull-row="12"] [data-pull-open]'));
+    const d = dialog()!;
+    assert.ok(d);
+    const text = d.textContent ?? '';
+    assert.match(text, /Add a dark theme/);
+    assert.match(text, /wants to merge 1 commit into main from stranger:dark-theme/);
+    assert.equal(d.querySelector('[data-pull-state]')?.getAttribute('data-pull-state'), 'open');
+    assert.equal(d.querySelector('[data-pull-decision]')?.textContent, 'Changes requested');
+    assert.ok(d.querySelector('[data-pull-branch="conflict"]'));
+
+    // Conversation: the description as markdown without raw HTML, the reviews and comments, the threads.
+    const markdown = d.querySelector('[data-pull-body] [data-pull-markdown]')!;
+    assert.equal(markdown.querySelector('script'), null);
+    assert.match(markdown.textContent ?? '', /<script>/);
+    assert.deepEqual(Array.from(d.querySelectorAll('[data-pull-timeline]')).map((e) => e.getAttribute('data-pull-timeline')), ['review', 'comment']);
+    assert.equal(d.querySelector('[data-pull-review-state]')?.textContent, 'Changes requested');
+    assert.match(d.querySelector('[data-pull-more="timeline"]')?.textContent ?? '', /3 earlier entries/);
+    assert.ok(d.querySelector('[data-pull-thread-state="open"]'));
+    assert.match(d.querySelector('[data-pull-side="reviewers"]')?.textContent ?? '', /reviewer.*acme\/core.*and 2 more/);
+    assert.match(d.querySelector('[data-pull-side="issues"]')?.textContent ?? '', /#7/);
+
+    // Commits.
+    await m.pressTab(d.querySelector('[data-pull-tab="commits"]'));
+    assert.match(d.querySelector(`[data-pull-commit="${'b'.repeat(40)}"]`)?.textContent ?? '', /feat: dark theme.*bbbbbbb/);
+
+    // Checks: failures first, the end of a failed job's log on demand.
+    await m.pressTab(d.querySelector('[data-pull-tab="checks"]'));
+    assert.deepEqual(Array.from(d.querySelectorAll('[data-pull-check]')).map((e) => e.getAttribute('data-status')), ['fail', 'pass']);
+    await m.click(d.querySelector('[data-pull-check="test"] [data-pull-check-log]'));
+    assert.match(d.querySelector('[data-pull-check-tail]')?.textContent ?? '', /Error: boom/);
+
+    // Files: the diff read at the first unfolding, the thread under its line.
+    // (The loupe clicked above read it once, for the brief's dialog.)
+    const diffReads = () => m.calls.filter((c) => c.url.endsWith('/12/diff')).length;
+    const before = diffReads();
+    await m.pressTab(d.querySelector('[data-pull-tab="files"]'));
+    assert.equal(diffReads(), before, 'no diff before a file is unfolded');
+    await m.click(d.querySelector('[data-pull-file="x"] button'));
+    assert.equal(diffReads(), before + 1);
+    assert.match(d.querySelector('[data-pull-file-diff]')?.textContent ?? '', /\+new/);
+    assert.match(d.querySelector('[data-pull-inline-thread]')?.textContent ?? '', /Rename this\./);
+
+    // Every link out of the window is https, and opens apart from the app.
+    const links = Array.from(document.querySelectorAll('[data-pull-dialog] a[href]'));
+    assert.ok(links.length > 0);
+    for (const a of links) {
+      assert.match(a.getAttribute('href') ?? '', /^https:\/\//, a.outerHTML);
+      assert.equal(a.getAttribute('target'), '_blank');
+      assert.match(a.getAttribute('rel') ?? '', /noopener/);
+    }
+
+    // Reads only: the window posts nothing.
+    assert.deepEqual(m.calls.filter((c) => c.method !== 'GET').map((c) => c.url), ['/api/ui/projects/acme/pull-requests/12/review']);
+  } finally {
+    await m.unmount();
+  }
 });
