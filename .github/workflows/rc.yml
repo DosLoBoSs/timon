@@ -211,6 +211,18 @@ jobs:
           sudo ln -sfn /usr/include/x86_64-linux-gnu/asm "$musl_include/asm"
           x86_64-linux-musl-gcc --version | head -n 1
 
+      # A self-hosted runner (the Mac) keeps its workspace between runs, and the
+      # build never overwrites installers: a run started again for the same
+      # version would stop on the output of the one before. Hosted runners
+      # start empty. Only this version and this system are cleared.
+      - name: Clear what an earlier run left on a self-hosted runner
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          OS: ${{ matrix.os }}
+        run: rm -rf "rc-output/$VERSION/$OS" "rc-output/$VERSION/.work-$OS"
+
       - name: Build the package
         shell: bash
         working-directory: src
