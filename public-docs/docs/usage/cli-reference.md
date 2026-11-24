@@ -136,7 +136,7 @@ Tasks (Kanban backlog):
   timon task list [--status PENDING|IN_PROGRESS|DONE|BLOCKED]   (TODO = deprecated alias of PENDING)
   timon task get <id>
   timon task create --title TEXT --agent NAME [--type code|review|merge|research|doc|chore] [--project SLUG] [--description D] [--priority 1-5]
-                   [--base BRANCH] [--todo TODO_ID] [--plan-group NAME]
+                   [--base BRANCH] [--todo TODO_ID] [--plan-group NAME] [--landing pr|local]
                    [--model SLUG] [--permission-mode default|acceptEdits|bypassPermissions]
                    [--fallback-backend NAME|none] [--fallback-model SLUG]
                    [--deps id1,id2] [--scheduled ISO8601]
@@ -186,6 +186,13 @@ Pull requests (projects whose jobs land through one, see set-integration):
                                              checks the job's integration branch (account, remote URL,
                                              identity, messages, ignored files, public tree), pushes it
                                              without force and opens its pull request; sec/ is refused
+  timon pr branch <branch> [--series ID]       sequential job: cuts its integration branch from the remote's
+                                             target and gives the pilot a worktree on it (default: THIS
+                                             mission's series)
+  timon pr land <job-id|series-id> [--title TEXT] [--body TEXT | --body-file PATH]
+                                             lands a job kept on its branch: merged into the local target
+                                             (fast-forward or merge commit, refused on a conflict or a dirty
+                                             checkout of the target), or its pull request opened (title needed)
 
 Projects (agent roles per project):
   timon project list                           lists configured projects
@@ -705,7 +712,7 @@ usage: timon task get <id>
 ```text
 usage: timon task create --title TEXT --agent NAME [--description D] [--priority 1-5]
        [--type code|review|merge|research|doc|chore] [--project SLUG] [--base BRANCH]
-       [--pipeline full|code-self|code-group] [--group-id ID] [--plan-group NAME] [--todo ID]
+       [--pipeline full|code-self|code-group] [--group-id ID] [--plan-group NAME] [--todo ID] [--landing pr|local]
        [--backend NAME] [--model SLUG] [--permission-mode default|acceptEdits|bypassPermissions]
        [--fallback-backend NAME|none] [--fallback-model SLUG]
        [--deps id1,id2] [--scheduled ISO] [--extra-skills s1,s2] [--extra-mcp m1,m2]
@@ -839,10 +846,22 @@ usage: timon worktree dispose <task-id> [--force]
 usage: timon worktree <info|create|dispose> <task-id> …
 ```
 
+### timon pr branch branch [--series ID]
+
+```text
+usage: timon pr branch <branch> [--series ID]
+```
+
 ### timon pr open task-id|series-id --title TEXT [--body TEXT | --body-file PATH]
 
 ```text
 usage: timon pr open <task-id|series-id> --title TEXT [--body TEXT | --body-file PATH]
+```
+
+### timon pr land job-id|series-id [--title TEXT] [--body TEXT | --body-file PATH]
+
+```text
+usage: timon pr land <job-id|series-id> [--title TEXT] [--body TEXT | --body-file PATH]
 ```
 
 ### timon project roles slug

@@ -19,6 +19,7 @@ import { dbApi } from './db.js';
 import type { Forge, GitTransport } from './host/forge.js';
 import type { GhLoginOutcome } from './host/gh.js';
 import { leakProblems, openPullRequest, type PrOpenDeps, type PublicTreeOutcome } from './pr-open.js';
+import { withoutClosingKeywords } from './issue-closing.js';
 import { updateProjectIntegration } from './project-integration.js';
 
 const root = realpathSync(mkdtempSync(join(tmpdir(), 'timon-pr-open-')));
@@ -334,6 +335,73 @@ test('a push the remote rejects is reported and nothing is recorded', async () =
   assert.equal(out.ok ? '' : out.code, 'pr_push_failed');
   assert.deepEqual(calls.created, []);
   assert.equal(dbApi.getIntegration(f.repo, f.branch)?.state, 'branch');
+});
+
+/** An idea of the fixture's project tied to `ref`, carried by the task `taskId`. */
+function ideaFor(f: Fixture, ref: string, taskId = f.taskId): number {
+  const id = dbApi.insertProjectTodo({ text: `idea for ${ref}`, project: f.slug }).id;
+  dbApi.putTodoExternalRef({
+    todoId: id, provider: 'github', ref, url: `https://github.com/${ref.replace('#', '/issues/')}`, label: null, pluginId: 'github-issues',
+  });
+  dbApi.setTaskTodoId(taskId, id);
+  return id;
+}
+
+test('the description gets Fixes for an idea of this job alone, Refs for one several jobs carry, and loses the agent\'s own', async () => {
+  const f = fixture();
+  ideaFor(f, 'acme/app#212');
+  // A second task of the job on another idea, which an earlier job carried too.
+  const second = randomUUID();
+  dbApi.createTask(second, 'Part two', 'acme.coder', {
+    type: 'code', project: f.slug, baseBranch: f.branch, integrationMode: 'pr', baseRef: 'origin/main', seriesId: f.seriesId,
+  });
+  const shared = ideaFor(f, 'acme/app#300', second);
+  const earlier = randomUUID();
+  dbApi.createTask(earlier, 'Earlier part', 'acme.coder', {
+    type: 'code', project: f.slug, baseBranch: 'feat/earlier', integrationMode: 'pr', baseRef: 'origin/main',
+  });
+  dbApi.setTaskTodoId(earlier, shared);
+  dbApi.recordIntegration({ repo: f.repo, branch: 'feat/earlier', remote: 'origin', target: 'main', mode: 'pr', project: f.slug });
+
+  const body = 'Adds x.\n\nCloses #999 and fixes: acme/other#4, see also https://github.com/acme/app/issues/7.\nResolved https://github.com/acme/app/issues/8';
+  const out = await openPullRequest({ target: 'task', id: f.taskId, title: 'Add x', body }, deps(f.repo));
+  assert.ok(out.ok, JSON.stringify(out));
+  assert.deepEqual(out.issues, ['Fixes acme/app#212', 'Refs acme/app#300']);
+  assert.equal(calls.created[0]!.body, [
+    'Adds x.',
+    '',
+    'Refs #999 and Refs: acme/other#4, see also https://github.com/acme/app/issues/7.',
+    'Refs https://github.com/acme/app/issues/8',
+    '',
+    'Fixes acme/app#212',
+    'Refs acme/app#300',
+  ].join('\n'));
+});
+
+test('a job the planner said resolves its issues entirely fixes them all', async () => {
+  const f = fixture();
+  const shared = ideaFor(f, 'acme/app#301');
+  const earlier = randomUUID();
+  dbApi.createTask(earlier, 'Earlier part', 'acme.coder', {
+    type: 'code', project: f.slug, baseBranch: 'feat/earlier', integrationMode: 'pr', baseRef: 'origin/main',
+  });
+  dbApi.setTaskTodoId(earlier, shared);
+  dbApi.recordIntegration({ repo: f.repo, branch: 'feat/earlier', remote: 'origin', target: 'main', mode: 'pr', project: f.slug });
+  dbApi.setSeriesResolvesIssues(f.seriesId, true);
+  const out = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo));
+  assert.ok(out.ok, JSON.stringify(out));
+  assert.deepEqual(out.issues, ['Fixes acme/app#301']);
+  assert.equal(calls.created[0]!.body, `${REQUEST.body}\n\nFixes acme/app#301`);
+});
+
+test('a job without ideas tied to an issue keeps its description', async () => {
+  const f = fixture();
+  dbApi.setTaskTodoId(f.taskId, dbApi.insertProjectTodo({ text: 'plain idea', project: f.slug }).id);
+  const out = await openPullRequest({ target: 'task', id: f.taskId, ...REQUEST }, deps(f.repo));
+  assert.ok(out.ok);
+  assert.deepEqual(out.issues, []);
+  assert.equal(calls.created[0]!.body, REQUEST.body);
+  assert.equal(withoutClosingKeywords('Prefix #3 and a fix for #4'), 'Prefix #3 and a fix for #4');
 });
 
 test('leak rules: ids, TODO numbers and attribution lines', () => {

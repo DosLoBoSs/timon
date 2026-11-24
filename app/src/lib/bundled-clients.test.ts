@@ -159,6 +159,11 @@ test('the cockpit cards keep their placement id, title, rail and heights', () =>
       // it was in the days of `@timon/backlog`.
       ['plugin:@timon/kanban:todo', 'All-projects TO DO', 'droite', 320, 160],
       ['plugin:@timon/kanban:project-todo', 'Project TO DO', 'droite', 300, 160],
+      // A project's open pull requests and their read-only review, next to
+      // its notebook.
+      ['plugin:@timon/kanban:pull-requests', 'Pull requests', 'droite', 320, 160],
+      // The jobs that land through a pull request, and their preview.
+      ['plugin:@timon/kanban:landings', 'Jobs', 'droite', 320, 160],
       // No Dreams tile: the module holds back its surfaces for the beta
       // as long as its `ui` option is not true (see the dedicated test below).
       ['plugin:@timon/agent-chat:new', 'New agent chat', 'gauche', 520, 280],
@@ -228,10 +233,11 @@ test('the notebook is a Kanban column, with no setting to move it out', () => {
     [['@timon/kanban', 'todo']],
   );
   // Part 4/4: the two notebook tiles are widgets, next to the
-  // column and no longer in its place. They do not occupy `kanban.column`.
+  // column and no longer in its place. They do not occupy `kanban.column`,
+  // and neither do the two pull request widgets the module added since.
   assert.deepEqual(
     slotEntries('cockpit.widget').filter((e) => e.pluginId === '@timon/kanban').map((e) => e.key),
-    ['todo', 'project-todo'],
+    ['todo', 'project-todo', 'pull-requests', 'landings'],
   );
 });
 

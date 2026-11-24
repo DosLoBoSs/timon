@@ -10,6 +10,7 @@ import {
   startStoppedServiceFailureMessage, stopServiceCopy, stopServiceFailureMessage,
   WINDOWS_SERVICE_REVISION, WINDOWS_TASK, windowsLauncher, windowsRepairDeclinedFile, windowsRestartRunner, windowsTaskNeverRan,
   windowsRestartSeams, windowsServiceRevisionFile, windowsSessionWitnessFile, windowsTaskState, windowsTaskRunning, endWindowsLauncher, serviceHeldOutFile, serviceHeldOutSince,
+  readWindowsTaskShape, disableWindowsTask,
 } from './service.js';
 import type { DesktopConfig } from './config.js';
 
@@ -258,8 +259,11 @@ test('windows: the handover ends only the launcher of this home, and its tree', 
   await endWindowsLauncher("C:\\Users\\O'Neil\\.timon", async (args) => { commands.push(args.at(-1)!); return { stdout: '' }; });
   assert.equal(commands.length, 1);
   assert.ok(commands[0]!.includes("c:\\users\\o''neil\\.timon"), commands[0]);
-  assert.ok(commands[0]!.includes('timon-service.cmd'));
-  assert.match(commands[0]!, /\$_.Name -eq 'cmd\.exe'/);
+  // Revision 6 names its configuration; a revision-5 task still runs the batch until it is rewritten.
+  assert.ok(commands[0]!.includes('timon-service.json'), commands[0]);
+  assert.ok(commands[0]!.includes('timon-service.cmd'), commands[0]);
+  for (const program of ['cmd.exe', 'node.exe', 'timon.exe']) assert.ok(commands[0]!.includes(`'${program}'`), program);
+  assert.match(commands[0]!, /\$_\.ProcessId -ne \$PID/);
   assert.match(commands[0]!, /taskkill\.exe \/F \/T \/PID/);
 });
 
@@ -475,4 +479,23 @@ test('quit and stop: the prompt names the permission step of the OS, in the user
   assert.doesNotMatch(stopServiceCopy('en', 'linux').detail, /permission|password/, 'systemd asks nothing');
   assert.match(stopServiceFailureMessage(new Error('boom'), 'en').detail, /keeps running[\s\S]*boom/);
   assert.match(startStoppedServiceFailureMessage(new Error('refused'), '/h', 'fr').detail, /timon service start[\s\S]*\/h[\s\S]*refused/);
+});
+
+test('windows #116: the task\'s shape is read with schtasks /XML, and an unreadable one is null', async () => {
+  const calls: string[][] = [];
+  const xml = '<Task><Triggers><BootTrigger/></Triggers><Principals><Principal><LogonType>InteractiveToken</LogonType></Principal></Principals>'
+    + '<Actions><Exec><Command>cmd.exe</Command></Exec></Actions></Task>';
+  const shape = await readWindowsTaskShape(async (args) => { calls.push(args); return { stdout: xml }; });
+  assert.deepEqual(calls, [['/Query', '/TN', WINDOWS_TASK, '/XML', 'ONE']]);
+  assert.equal(shape?.consoleVisible, true);
+  assert.deepEqual(shape?.triggers, ['Boot']);
+  assert.equal(await readWindowsTaskShape(async () => { throw new Error('ERROR: The system cannot find the file specified.'); }), null);
+  assert.equal(await readWindowsTaskShape(async () => ({ stdout: '' })), null);
+});
+
+test('windows #116: a task Windows never starts is disabled with schtasks, and a refusal is reported', async () => {
+  const calls: string[][] = [];
+  await disableWindowsTask(async (args) => { calls.push(args); return { stdout: 'SUCCESS' }; });
+  assert.deepEqual(calls, [['/Change', '/TN', WINDOWS_TASK, '/DISABLE']]);
+  await assert.rejects(disableWindowsTask(async () => { throw new Error('ERROR: Access is denied.'); }), /Access is denied/);
 });

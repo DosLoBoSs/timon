@@ -9,7 +9,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { PIPELINES, dbApi, isTaskType, type ProjectTodoRow, type TaskType } from '../../db.js';
+import { PIPELINES, dbApi, isTaskType, type DbViewer, type ProjectTodoRow, type TaskType } from '../../db.js';
 import { loadConfig } from '../../agent-config.js';
 import { gitTaskRefusal, isPlausibleGitRef } from '../../task-git.js';
 import { scopedDb } from '../../users/scoped-db.js';
@@ -56,6 +56,8 @@ export function alreadyPromoted(item: ProjectTodoRow): PromotionRefusal | null {
  */
 export function promoteTodoItem(
   item: ProjectTodoRow,
+  /** Whose view the returned idea's landing is read through. */
+  viewer: DbViewer | null | undefined,
   requestedProject: string | undefined,
   createTask: (spec: PromotionTaskSpec) => PromotionRefusal & { json: { task?: unknown } },
 ): PromotionOutcome {
@@ -92,7 +94,7 @@ export function promoteTodoItem(
   }
   const promoted = dbApi.markProjectTodoPromoted(item.id, task.id);
   if (promoted) publishTodoChanged(promoted);
-  return { ok: true, task, item: promoted ? withLinksOne(promoted) : undefined };
+  return { ok: true, task, item: promoted ? withLinksOne(promoted, viewer) : undefined };
 }
 
 /**
@@ -147,7 +149,7 @@ export function promoteTodoFor(
   if (gitRefusal) throw new TodoLinkError(`invalid promotion: ${gitRefusal}`, 'invalid');
 
   const db = scopedDb(scope.viewer);
-  const outcome = withTodoOrigin({ kind: 'plugin', id: scope.pluginId }, () => promoteTodoItem(item, undefined, (spec) => {
+  const outcome = withTodoOrigin({ kind: 'plugin', id: scope.pluginId }, () => promoteTodoItem(item, scope.viewer, undefined, (spec) => {
     beforeCreate?.();
     const taskId = randomUUID();
     db.createTask(taskId, spec.title, agent, {
@@ -163,5 +165,5 @@ export function promoteTodoFor(
   }));
   if (!outcome.ok) throw new TodoLinkError(String(outcome.json.error), 'invalid');
   const fresh = dbApi.getProjectTodo(id, scope.viewer);
-  return { task: outcome.task, item: outcome.item ?? withLinksOne(fresh ?? item) };
+  return { task: outcome.task, item: outcome.item ?? withLinksOne(fresh ?? item, scope.viewer) };
 }

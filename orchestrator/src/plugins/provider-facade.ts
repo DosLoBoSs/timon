@@ -16,6 +16,7 @@
  * same services with less in them; each service says what.
  */
 import { openProviderCredentialStore } from '../backends/provider-credential-store.js';
+import { createHash } from 'node:crypto';
 import { isAbsolute } from 'node:path';
 import type { ProviderRuntime } from '../backends/provider-runtime.js';
 import { providerRuntime } from '../backends/provider-runtime.js';
@@ -31,7 +32,9 @@ import { envCredentialRoots, missionScratchPath, openMissionScratch, openProfile
 import { accountConfigDir } from '../backends/accounts.js';
 import { adoptGeneratedMedia, allowShowFrom } from '../backends/provider-media.js';
 import { gitWritableRoots } from '../backends/provider-git.js';
-import { readOsCredential, resetOsCredentialMisses } from '../host/os-credentials.js';
+import { readOsCredential, readOsCredentialNow, removeOsCredentialIf, resetOsCredentialMisses } from '../host/os-credentials.js';
+import { accountSigningIn } from '../backends/account-signin.js';
+import { accountCredentialHold } from '../mission-fence-state.js';
 import { getHost } from '../host/index.js';
 import { ensurePrivateDir } from '../host/private-dir.js';
 import { runtimeAccount } from '../backends/instance-id.js';
@@ -39,7 +42,7 @@ import { redactDeep, redactText } from '../secrets/redact.js';
 import { baseBackendId, isAccountInstanceId } from '../backends/instance-id.js';
 import { assertProviderExecAllowed, PluginPolicyError } from './policy.js';
 import { createProviderBinary } from '../backends/provider-binary.js';
-import type { ProviderBinary, ProviderGeneratedMedia } from '../backends/provider-services.js';
+import type { ProviderAccountOsCredentialHold, ProviderBinary, ProviderGeneratedMedia } from '../backends/provider-services.js';
 import type { NativeProviderDefinition } from '../backends/engine/definition.js';
 
 /** The contract version `ctx.provider` appeared in. */
@@ -47,6 +50,18 @@ export const PROVIDER_FACADE_API_VERSION = 12;
 
 /** The contract version `ctx.provider.scratch.profile` appeared in. */
 export const PROVIDER_PROFILE_SCRATCH_API_VERSION = 18;
+
+/** The contract version `ctx.provider.account.osCredential` appeared in. */
+export const PROVIDER_ACCOUNT_OS_CREDENTIAL_API_VERSION = 18;
+
+/**
+ * The suffix a CLI that keys its keychain entry on its config folder puts after the service name
+ * (Claude Code: the first 8 hex of sha256 of the folder, NFC). Computed here from the account's own
+ * folder, so a provider reaches that account's entry and no other, another user's included.
+ */
+export function accountEntrySuffix(configDir: string): string {
+  return `-${createHash('sha256').update(configDir.normalize('NFC')).digest('hex').slice(0, 8)}`;
+}
 
 /** A plugin that declared an older contract calls a member it was not promised. */
 export class PluginApiVersionError extends Error {
@@ -204,6 +219,47 @@ export function providerServicesFor(scope: ProviderFacadeScope): ProviderService
         }
         const account = runtimeAccount(profile);
         return account ? { id: account.id, name: account.name, configDir: ensurePrivateDir(account.configDir) } : undefined;
+      },
+      osCredential(profile, service, missionId) {
+        gate('account.osCredential', PROVIDER_ACCOUNT_OS_CREDENTIAL_API_VERSION);
+        if (!ownsBackend(scope.pluginId, profile.id)) {
+          throw new PluginPolicyError(scope.pluginId, 'provider-account', `\`${profile.id}\` is not a backend this plugin registered`);
+        }
+        if (typeof missionId !== 'string' || !missionId) {
+          throw new PluginPolicyError(scope.pluginId, 'provider-os-credentials', '`osCredential(profile, service, missionId)` takes the id of the launch being built');
+        }
+        const account = runtimeAccount(profile);
+        if (!account) return undefined;
+        // A declared name plus THIS account's suffix: never the host's sign-in, another account's or another provider's.
+        const suffix = accountEntrySuffix(account.configDir);
+        const declared = typeof service === 'string'
+          ? scope.osCredentials.find((entry) => !entry.account && service === `${entry.service}${suffix}`)
+          : undefined;
+        if (!declared) {
+          throw new PluginPolicyError(scope.pluginId, 'provider-os-credentials',
+            'An account entry is a service this manifest declares (`provider.osCredentials`), followed by the suffix of this account\'s folder');
+        }
+        const entry = { service };
+        const accountId = account.id;
+        const held = (): ProviderAccountOsCredentialHold | null =>
+          accountSigningIn(accountId) ? 'signing-in' : accountCredentialHold(accountId, missionId);
+        return {
+          held,
+          async read() { return readOsCredentialNow(getHost(), entry); },
+          async remove(expected) {
+            if (typeof expected !== 'string' || !expected) {
+              throw new PluginPolicyError(scope.pluginId, 'provider-os-credentials', '`remove(expected)` takes the value that was read and copied');
+            }
+            // The invariant of the move: from this check to the delete, nothing is awaited.
+            // `removeOsCredentialIf` runs `security` synchronously (`host.exec`), so no process
+            // Timon launches can start in between: a sign-in flow, a launch outside the fence
+            // or a one-shot is either recorded already, and seen here, or starts after the
+            // delete. Moving this to `execAsync` would open that window.
+            const hold = held();
+            if (hold) return hold;
+            return removeOsCredentialIf(getHost(), entry, expected);
+          },
+        };
       },
     },
     media: {

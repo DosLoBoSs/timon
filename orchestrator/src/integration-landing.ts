@@ -20,7 +20,7 @@ import { dbApi, type IntegrationRow, type TaskRow } from './db.js';
 import { maybeCreateDocTask } from './doc-task.js';
 import { applyTodoClosure, type TodoClosure } from './todo-closure.js';
 import { integrationOfTask } from './chain-landing.js';
-import { usesIntegrationBranch } from './git-integration.js';
+import { integrationTargetLabel, usesIntegrationBranch } from './git-integration.js';
 
 export type LandingOutcome = {
   /** False when the landing had already been replayed (or is being). */
@@ -55,7 +55,7 @@ export async function replayLanding(row: IntegrationRow): Promise<LandingOutcome
     for (const task of tasks) await maybeCreateDocTask(task);
     const docs = dbApi.listTasksByBaseBranch(row.branch).filter((t) => t.type === 'doc' && !before.has(t.id)).length;
     console.log(
-      `[landing] ${row.branch} landed in ${row.remote}/${row.target}: ${tasks.length} task(s), ` +
+      `[landing] ${row.branch} landed in ${integrationTargetLabel(row)}: ${tasks.length} task(s), ` +
       `${closures.length} TO DO move(s), ${docs} doc task(s)`,
     );
     return { replayed: true, tasks: tasks.length, closures, docs };

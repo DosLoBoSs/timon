@@ -975,6 +975,12 @@
   },
   "appearance": {
     "title": "Darstellung",
+    "zoomTitle": "Oberflächengröße",
+    "zoomHint": "Vergrößert oder verkleinert Text und Bedienelemente in allen Timon-Fenstern auf diesem Computer. Tastenkürzel: Strg und +, Strg und − sowie Strg und 0 zum Zurücksetzen; unter macOS bei allen dreien Cmd statt Strg. Unter Windows und Linux auch Strg und Mausrad.",
+    "zoomIn": "Größer",
+    "zoomOut": "Kleiner",
+    "zoomReset": "Zurücksetzen",
+    "zoomError": "Die Oberflächengröße konnte nicht geändert werden.",
     "theme": "Design",
     "layout": "Layout",
     "themeHint": "Farbtokens für dieses Konto.",
@@ -1067,6 +1073,13 @@
     "mascotsStyle2dHint": "Die flache Zeichnung, leichter für ältere Computer.",
     "mascotsStyleNoWebgl": "Dieser Browser kann nicht in 3D zeichnen (WebGL2 ist deaktiviert oder fehlt): Maskottchen werden in 2D gezeichnet.",
     "mascotsStyleShared": "Gilt für alle Maskottchen. Du kannst es später unter {settingsPath} ändern.",
+    "dockIconTitle": "Dock-Symbol",
+    "dockIconHint": "Das Symbol, das macOS für Timon im Dock zeigt, solange die App läuft. Der Finder und das Dock vor dem Start behalten das klassische.",
+    "dockIconClassic": "Klassisch",
+    "dockIconClassicHint": "Die Farben von Timon.",
+    "dockIconDark": "Dunkel",
+    "dockIconDarkHint": "Schwarz-weiß.",
+    "dockIconError": "Das Dock-Symbol konnte nicht geändert werden.",
     "variants": {
       "coral": {
         "name": "Koralle",
@@ -2553,9 +2566,17 @@
       "title": "Dateien",
       "description": "Dateien im Arbeitsordner des Projekts durchsuchen und bearbeiten."
     },
-    "git": {
-      "title": "Git",
-      "description": "Branches, Commit-Graph und Veröffentlichung des Projekts: Branch wechseln, Verlauf und Worktrees ansehen, pushen."
+    "gitBranches": {
+      "title": "Branches",
+      "description": "Arbeitsverzeichnis und Branches des Repositorys: Änderungen ansehen, Branch wechseln."
+    },
+    "gitGraph": {
+      "title": "Graph",
+      "description": "Der Commit-Graph des Repositorys mit seinen Branches und Worktrees."
+    },
+    "gitPublish": {
+      "title": "Veröffentlichen",
+      "description": "Stand der Veröffentlichung des Repositorys: Remote, zu pushende Commits, Push und Fetch."
     },
     "agentTasks": {
       "title": "Aufgabenliste des Agenten",

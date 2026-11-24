@@ -10,8 +10,8 @@ import { z } from 'zod';
 import { AgentConfig, killAgent, listAgents } from '../../agent.js';
 import { backendIdForModel, catalogClaimsModel } from '../../backends/catalog.js';
 import { asBackendName } from '../../backends/index.js';
-import { codeCloseRefusal, effectiveMergeSha, evaluateCodeDone, inspectGitBranch, mergeCloseRefusal, shaInBase, taskRepo } from '../../code-gate.js';
-export { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal } from '../../code-gate.js';
+import { codeCloseRefusal, effectiveMergeSha, evaluateCodeDone, inspectGitBranch, mergeCloseRefusal, pullRequestCloseRefusal, shaInBase, taskRepo } from '../../code-gate.js';
+export { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal, pullRequestCloseRefusal } from '../../code-gate.js';
 import { config } from '../../config/load.js';
 import { FALLBACK_SCOPES, TASK_TYPES, db, dbApi, isCodeOnlyPipeline, isFallbackScope, isTaskType, normalizeTaskStatusInput, rowVisible, type TaskDeleteOutcome, type TaskDeleteResult, type TaskRow, type TaskType } from '../../db.js';
 import { forbidden, forbiddenBody, isPersonAuth, rejectIfDenied, requireAuth, viewerFromRequest } from '../../users/identity.js';
@@ -29,8 +29,9 @@ import { readRoles, type RoleSpec, type TaskRole } from '../../projects.js';
 import { isTemplateBackend, llmOfMission, previewRoleAgent, roleForTaskType } from '../../agent-seed.js';
 import { taskProjectSlug } from '../../task-project.js';
 import { codeAwaitsMerge } from '../../merge-gate.js';
-import { usesIntegrationBranch } from '../../git-integration.js';
-import { chainLanding } from '../../chain-landing.js';
+import { integrationTargetLabel, usesIntegrationBranch } from '../../git-integration.js';
+import { chainLanding, integrationOfTask } from '../../chain-landing.js';
+import { concludeMerged, type Notify } from '../../integration-poller.js';
 import { applyTodoClosure } from '../../todo-closure.js';
 import { checkScheduledAtPlausibility, validateScheduledAt } from '../../task-guards.js';
 import { delegatingAgent, delegationRefusal } from '../../delegation-guard.js';
@@ -46,7 +47,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { gitTaskRefusal, isPlausibleGitRef } from '../../task-git.js';
 import { taskOriginFromRequest, withTaskOrigin } from '../../task-origin.js';
-import { backendRefusal, pipelineRefusal, planGroupRefusal, projectRefusal } from './task-field-guards.js';
+import { backendRefusal, landingRefusal, pipelineRefusal, planGroupRefusal, projectRefusal } from './task-field-guards.js';
 import { isClosingOnly, parseTaskUpdateBody } from './task-update-body.js';
 import { parseAttachSeriesBody, parseMarkMergedBody, parseTaskCloseBody } from './task-write-bodies.js';
 import { parsePipelineCreateBody, parsePipelineRunBody, parsePipelineUpdateBody } from './pipeline-body.js';
@@ -382,6 +383,9 @@ export function mergedShaRefusal(task: TaskRow, sha: string): string | null {
 
 /** Answers 409 when a `merge` or `full` code task may not go DONE yet; true if it did. */
 function rejectUnprovenClose(res: express.Response, task: TaskRow, sha: string | null): boolean {
+  // First: until its pull request is open, the PR task has nothing to prove.
+  const prRefusal = pullRequestCloseRefusal(task);
+  if (prRefusal) { res.status(409).json(apiError('pr_not_opened', prRefusal, { detail: prRefusal })); return true; }
   const mergeRefusal = mergeCloseRefusal(task, sha);
   if (mergeRefusal) { res.status(409).json(apiError('merge_not_proven', mergeRefusal, { detail: mergeRefusal })); return true; }
   const codeRefusal = codeCloseRefusal(task);
@@ -716,6 +720,8 @@ export function createTaskFromBody(
     }
     type = body.type;
   }
+  const landing = landingRefusal(body.landing, type);
+  if (landing) return { status: 400, json: { ...apiError('task_field_invalid', landing, { detail: landing }) } };
   // Refused here rather than BLOCKED at dispatch: the caller learns at once
   // that this host cannot run it (TODO #275).
   const gitRefusal = gitTaskRefusal(type, { cwd: agentCwd(body.agent_name) });
@@ -790,6 +796,7 @@ export function createTaskFromBody(
     pipeline: body.pipeline ?? null,
     project: body.project || null,
     traceId: typeof body.trace_id === 'string' ? body.trace_id : null,
+    landing: body.landing || null,
   });
   if (base) dbApi.setTaskBaseBranch(id, base);
   if (todo.value) dbApi.setTaskTodoId(id, todo.value);
@@ -829,7 +836,79 @@ function rejectReadOnlyPipeline(req: express.Request, res: express.Response, p: 
   return true;
 }
 
-export function registerRoutes(app: Router): void {
+export type KanbanRouteDeps = {
+  /** How a landing reaches the series pilot; the wake loop by default. */
+  notifyLanding?: Notify;
+};
+
+/**
+ * `mark-merged` for a chain whose base is an integration branch (`pr`, or
+ * `branch` under embargo or in a project that merges locally): the sha is the
+ * commit of the target that brought the branch in, so it is checked against
+ * `<remote>/<target>` (the local target when there is no remote), and the whole
+ * job lands through the same gate as the poller's (`concludeMerged`). The
+ * task itself closes like a local one when it was BLOCKED or had no sha.
+ */
+async function markIntegrationMerged(
+  req: express.Request, res: express.Response, task: TaskRow, sha: string, comment: string | undefined,
+  deps: KanbanRouteDeps,
+): Promise<void> {
+  // A PENDING or running task still belongs to its agent.
+  if (task.status !== 'BLOCKED' && task.status !== 'DONE') {
+    res.status(409).json(apiError('task_still_running', 'The task is still running: wait for it to finish before marking it merged.'));
+    return;
+  }
+  // Keyed by the agent's repository, as the dispatcher recorded it: never the
+  // task's worktree.
+  const row = integrationOfTask(task);
+  if (!row) {
+    const branch = task.base_branch ?? '';
+    res.status(409).json(apiError('integration_not_found', `Timon has no record of the integration branch ${branch}: dispatch the job first.`, { branch }));
+    return;
+  }
+  if (row.state === 'merged') {
+    res.status(409).json(apiError('integration_already_landed', `${row.branch} has already landed.`, { branch: row.branch }));
+    return;
+  }
+  // `origin/main`, or the local `main` of a job that merges locally.
+  const target = integrationTargetLabel(row);
+  const found = shaInBase(row.repo, target, sha);
+  if (found === 'not_contained') {
+    res.status(409).json(apiError('sha_not_in_base', `Commit ${sha} is not in ${target} of this repository. Check the sha of the merge.`, { sha, base: target }));
+    return;
+  }
+  await concludeMerged(row.id, sha, deps.notifyLanding);
+  const note = found === 'contained'
+    ? `Marked as merged outside Timon: ${row.branch} landed as ${sha} (found in ${target}).`
+    : `Marked as merged outside Timon: ${row.branch} landed as ${sha} (not found in the local ${target}: not verified, fetch to check).`;
+  const trimmed = comment?.trim();
+  const report = trimmed ? `${note}\n\n${trimmed}` : note;
+  const scope = scopedDb(viewerFromRequest(req));
+  if (task.status === 'BLOCKED') {
+    dbApi.setTaskMergedSha(task.id, sha);
+    task.merged_commit_sha = sha;
+    closeTask(task.id, task, 'DONE', { doneComment: report });
+  } else {
+    // A DONE task keeps the sha of its merge into the integration branch;
+    // one without any gets the target's, as in a local chain.
+    if (!task.merged_commit_sha) dbApi.setTaskMergedSha(task.id, sha);
+    dbApi.appendTaskDoneComment(task.id, report);
+    try {
+      applyTodoClosure(scope.getTask(task.id) ?? task);
+    } catch (err) {
+      console.error(`[kanban] TO DO closure failed for ${task.id}: ${(err as Error).message}`);
+    }
+  }
+  auditRequest(req, 'task.mark_merged', `${task.id} ${sha} ${row.branch}`);
+  const landed = dbApi.getIntegrationById(row.id);
+  res.json({
+    task: scope.getTask(task.id),
+    verified: found === 'contained',
+    integration: { id: row.id, branch: row.branch, state: landed?.state ?? row.state, merge_sha: landed?.merge_sha ?? sha },
+  });
+}
+
+export function registerRoutes(app: Router, deps: KanbanRouteDeps = {}): void {
   // The writer of every task write below, for the `origin` that the lifecycle
   // events carry: without it a change made from the board would read as the
   // daemon's, and a sync plugin could not tell it from its own echo.
@@ -1234,8 +1313,11 @@ export function registerRoutes(app: Router): void {
    * A task already DONE without a sha (a `full` code task whose review or
    * merge never came, its PR merged elsewhere) only records the sha and a
    * note: it is not closed again, so its return and follow-ups do not replay.
+   *
+   * A chain on an integration branch (`integration_mode` 'pr' or 'branch')
+   * lands its whole job instead: `markIntegrationMerged`.
    */
-  app.post('/api/tasks/:id/mark-merged', (req, res) => {
+  app.post('/api/tasks/:id/mark-merged', async (req, res) => {
     if (!requireAuth(req, res)) return;
     // A human gesture of the board: no exception for a mission (TODO #787).
     if (rejectIfDenied(req, res, 'kanban:write')) return;
@@ -1253,6 +1335,16 @@ export function registerRoutes(app: Router): void {
     if (!task) { res.status(404).json(apiError('task_not_found', 'Task not found.')); return; }
     if (task.type !== 'code' && task.type !== 'merge') {
       res.status(400).json(apiError('task_not_mergeable', 'Only a code or merge task can be marked merged.'));
+      return;
+    }
+    if (usesIntegrationBranch(task.integration_mode)) {
+      try {
+        await markIntegrationMerged(req, res, task, rawSha.toLowerCase(), parsed.value.comment, deps);
+      } catch (err) {
+        // Not echoed: an unexpected failure may quote a path of this machine.
+        console.error(`[kanban] marking ${task.id} merged failed: ${(err as Error).message}`);
+        if (!res.headersSent) res.status(500).json(apiError('task_mark_merged_failed', 'The task could not be marked merged.'));
+      }
       return;
     }
     // A PENDING or running task still belongs to its agent.
