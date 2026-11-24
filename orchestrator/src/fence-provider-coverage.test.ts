@@ -101,11 +101,12 @@ const EXPECTED = [
   'pack-codex', 'user-claude-key', ...PROCESS_DIALECTS.map((d) => `user-${d}`),
 ];
 /**
- * Dialects whose launch names no folder of the Timon home: the ACP agents get their instructions
- * and MCP servers over the protocol and keep their state in their own folders of the user's home.
+ * Dialects whose launch names no folder of the Timon home: Hermes gets its instructions and MCP
+ * servers over the protocol and keeps its state in its own folder of the user's home. opencode is
+ * not here: its cache and state live in the profile folder, which the fence must open.
  * Their missions are still checked for what they must not reach.
  */
-const NO_TIMON_FOLDER = new Set(['opencode', 'hermes']);
+const NO_TIMON_FOLDER = new Set(['hermes']);
 
 const PROJECT = realpathSync.native(mkdtempSync(join(tmpdir(), 'timon-fence-project-')));
 process.on('exit', () => rmSync(PROJECT, { recursive: true, force: true }));
