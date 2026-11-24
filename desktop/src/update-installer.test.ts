@@ -12,8 +12,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   CHECKSUM_EXIT, MAC_ADMIN_SCRIPT, NSIS_SERVICE_PAUSE_FAILED, NSIS_SERVICE_STILL_RUNNING, NSIS_SILENT_ARGS, ROOT_INSTALL_SCRIPT, WINDOWS_NOT_STARTED, WINDOWS_RESULT_FILE,
-  WINDOWS_WATCHER, debCommand, debOutcome, macCommand, macOutcome, silentInstall, takeWindowsInstallFailure, windowsCommand,
-  windowsInstallFailureReason, windowsResultFile,
+  WINDOWS_LAUNCHER, WINDOWS_LAUNCH_CANCELLED, WINDOWS_LAUNCH_STANDARD_ACCOUNT, WINDOWS_WATCHER, debCommand, debOutcome, macCommand,
+  macOutcome, silentInstall, takeWindowsInstallFailure, windowHandle, windowsCommand, windowsInstallFailureReason, windowsOutcome,
+  windowsResultFile, windowsWatcherScript,
   type Command, type CommandResult, type InstallerSystem,
 } from './update-installer.js';
 
@@ -23,38 +24,100 @@ const HOSTILE = `Timon Setup 'x' "y" $(id) \`id\` ; & | %PATH% !z`;
 
 function fakeSystem(platform: NodeJS.Platform, overrides: Partial<InstallerSystem> = {}) {
   const ran: Command[] = [];
-  const detached: Command[] = [];
   const system: InstallerSystem = {
     platform,
     env: { SystemRoot: 'D:\\Win', ELECTRON_RUN_AS_NODE: '1', TIMON_HOME: 'C:\\Users\\Ana\\.timon' },
     appExe: platform === 'win32' ? 'C:\\Users\\Ana\\AppData\\Local\\Programs\\Timon\\Timon.exe' : '/opt/Timon/timon-desktop',
     executable: () => true,
     run: async (command) => { ran.push(command); return { code: 0, stderr: '' }; },
-    spawnDetached: async (command) => { detached.push(command); },
+    ownerWindow: () => '197322',
     ...overrides,
   };
-  return { system, ran, detached };
+  return { system, ran };
 }
 
-test('Windows: a detached PowerShell watcher, by absolute path, runs the installer with the silent update flags', async () => {
+/** The values `windowsWatcherScript` put in front of the watcher, decoded as PowerShell would. */
+function watcherValues(script: string): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const line of script.split('\n')) {
+    const literal = /^\$(installer|app|result) = \[Text\.Encoding\]::UTF8\.GetString\(\[Convert\]::FromBase64String\('([A-Za-z0-9+/=]*)'\)\)$/.exec(line);
+    if (literal) values[literal[1]!] = Buffer.from(literal[2]!, 'base64').toString('utf8');
+    const sha = /^\$sha = '([a-f0-9]{64})'$/.exec(line);
+    if (sha) values.sha = sha[1]!;
+  }
+  return values;
+}
+
+test('Windows: the shell waits for a PowerShell launcher, by absolute path, which starts the elevated watcher', async () => {
   const path = `C:\\Users\\Ana\\.timon\\updates\\0.1.9\\${HOSTILE}.exe`;
-  const { system, detached, ran } = fakeSystem('win32');
+  const { system, ran } = fakeSystem('win32');
   assert.deepEqual(await silentInstall({ format: 'nsis', path, sha256: SHA, prompt: '' }, system), { status: 'handed_over' });
-  assert.deepEqual(ran, []);
-  const [command] = detached;
+  assert.equal(ran.length, 1, 'run to completion: the shell is still open while the permission is asked');
+  const [command] = ran;
   assert.equal(command!.file, 'D:\\Win\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
   // I6 of audit-packaged-os: no profile, no prompt, no policy in the way.
   assert.deepEqual(command!.args.slice(0, 7), ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-EncodedCommand']);
-  const script = Buffer.from(command!.args[7]!, 'base64').toString('utf16le');
-  assert.equal(script, WINDOWS_WATCHER);
-  assert.ok(!script.includes(path) && !script.includes('Ana'), 'the path travels in the environment only');
-  assert.equal(command!.env!.TIMON_UPDATE_INSTALLER, path);
-  assert.equal(command!.env!.TIMON_UPDATE_SHA256, SHA);
-  assert.equal(command!.env!.TIMON_UPDATE_APP, system.appExe);
-  assert.equal(command!.env!.TIMON_UPDATE_RESULT, `C:\\Users\\Ana\\.timon\\updates\\0.1.9\\${WINDOWS_RESULT_FILE}`, 'the verdict stays in the update\'s own folder');
-  assert.equal(command!.env!.ELECTRON_RUN_AS_NODE, undefined, 'Timon started again is the application, never Node');
-  assert.equal(command!.env!.TIMON_HOME, 'C:\\Users\\Ana\\.timon');
-  assert.equal(command!.cwd, 'C:\\Users\\Ana\\.timon\\updates\\0.1.9', 'never inside the folder being replaced');
+  assert.equal(Buffer.from(command!.args[7]!, 'base64').toString('utf16le'), WINDOWS_LAUNCHER);
+  const env = command!.env!;
+  assert.equal(env.TIMON_UPDATE_POWERSHELL, command!.file, 'the elevated watcher runs on the same system PowerShell');
+  assert.equal(env.TIMON_UPDATE_OWNER, '197322', 'the prompt is owned by the window the person clicked in');
+  assert.equal(env.TIMON_UPDATE_DIR, 'C:\\Users\\Ana\\.timon\\updates\\0.1.9', 'never inside the folder being replaced');
+  assert.equal(env.ELECTRON_RUN_AS_NODE, undefined, 'nothing started from here is Node');
+  assert.equal(env.TIMON_HOME, 'C:\\Users\\Ana\\.timon');
+  assert.equal(command!.cwd, 'C:\\Users\\Ana\\.timon\\updates\\0.1.9');
+  // The elevated command line: the same flags, then the watcher with its values as base64 literals.
+  const elevated = env.TIMON_UPDATE_ELEVATED!.split(' ');
+  assert.deepEqual(elevated.slice(0, 7), [...command!.args.slice(0, 7)]);
+  assert.equal(elevated.length, 8);
+  const script = Buffer.from(elevated[7]!, 'base64').toString('utf16le');
+  assert.ok(script.endsWith(WINDOWS_WATCHER));
+  assert.ok(!script.includes(path) && !script.includes('Ana'), 'no character of a name reaches the program text');
+  assert.deepEqual(watcherValues(script), {
+    installer: path,
+    sha: SHA,
+    app: system.appExe,
+    result: `C:\\Users\\Ana\\.timon\\updates\\0.1.9\\${WINDOWS_RESULT_FILE}`,
+  });
+});
+
+test('Windows: only a granted permission lets the shell quit', async () => {
+  const input = { format: 'nsis' as const, path: 'C:\\u\\Timon Setup 0.1.9.exe', sha256: SHA, prompt: '' };
+  const outcome = async (code: number | null, stderr = '') => silentInstall(input, fakeSystem('win32', { run: async () => ({ code, stderr }) }).system);
+  assert.deepEqual(await outcome(0), { status: 'handed_over' });
+  assert.deepEqual(await outcome(WINDOWS_LAUNCH_CANCELLED), { status: 'cancelled' }, 'a "No" on the prompt keeps Timon open');
+  const standard = await outcome(WINDOWS_LAUNCH_STANDARD_ACCOUNT);
+  assert.equal(standard.status, 'unavailable', 'a standard account gets the visible installer');
+  assert.deepEqual(await outcome(1, 'Access is denied.\r\n'), { status: 'failed', reason: 'Access is denied.' });
+  assert.equal((await outcome(null)).status, 'failed');
+  assert.deepEqual(windowsOutcome({ code: 0, stderr: '' }), { status: 'handed_over' });
+});
+
+test('Windows: the launcher checks the account, asks for the permission owned by the window, and tells a refusal apart', () => {
+  const admin = WINDOWS_LAUNCHER.indexOf("Select-String -SimpleMatch 'S-1-5-32-544')) { exit 3 }");
+  const runas = WINDOWS_LAUNCHER.indexOf("$info.Verb = 'runas'");
+  assert.ok(admin > 0 && admin < runas, 'a standard account is sent to the installer before any prompt');
+  assert.ok(WINDOWS_LAUNCHER.includes("[IO.Path]::Combine($env:SystemRoot, 'System32', 'whoami.exe')"), 'whoami by absolute path');
+  assert.ok(WINDOWS_LAUNCHER.includes('$info.ErrorDialog = $true; $info.ErrorDialogParentHandle = [IntPtr][Int64]$env:TIMON_UPDATE_OWNER'));
+  assert.ok(WINDOWS_LAUNCHER.includes('$info.Arguments = $env:TIMON_UPDATE_ELEVATED'));
+  assert.match(WINDOWS_LAUNCHER, /NativeErrorCode -eq 1223\) \{ exit 4 \}/, 'ERROR_CANCELLED is the person saying no');
+  assert.doesNotMatch(WINDOWS_LAUNCHER, /Start-Process|Invoke-Expression|iex /);
+});
+
+test('Windows: the owner window is a plain number or nothing', () => {
+  const base = { path: 'C:\\u\\Timon Setup 0.1.9.exe', sha256: SHA, appExe: 'C:\\Timon\\Timon.exe' };
+  assert.equal(windowsCommand({ ...base, env: { TIMON_UPDATE_OWNER: '12' }, owner: null }).env!.TIMON_UPDATE_OWNER, undefined, 'never inherited');
+  assert.equal(windowsCommand({ ...base, env: {}, owner: '1; calc' }).env!.TIMON_UPDATE_OWNER, undefined);
+  assert.equal(windowsCommand({ ...base, env: {}, owner: '4242' }).env!.TIMON_UPDATE_OWNER, '4242');
+  const handle = Buffer.alloc(8);
+  handle.writeBigUInt64LE(0x2_0a_3cn);
+  assert.equal(windowHandle(handle), String(0x2_0a_3c));
+  const short = Buffer.alloc(4);
+  short.writeUInt32LE(77);
+  assert.equal(windowHandle(short), '77');
+  assert.equal(windowHandle(Buffer.alloc(8)), null);
+  assert.equal(windowHandle(Buffer.alloc(2)), null);
+  assert.equal(windowHandle(undefined), null);
+  assert.throws(() => windowsWatcherScript({ installer: 'C:\\u.exe', sha256: "a' ; calc", app: 'C:\\t.exe', result: 'C:\\r.txt' }));
 });
 
 test('Windows: the watcher hashes the file it holds, starts it with the flags, and starts Timon again when nothing runs', () => {
@@ -66,11 +129,14 @@ test('Windows: the watcher hashes the file it holds, starts it with the flags, a
   const start = WINDOWS_WATCHER.indexOf('[Diagnostics.Process]::Start($info)');
   const release = WINDOWS_WATCHER.indexOf('$hold.Dispose()');
   assert.ok(hold > 0 && hold < hash && hash < start && start < WINDOWS_WATCHER.indexOf('WaitForExit()') && WINDOWS_WATCHER.indexOf('WaitForExit()') < release);
-  assert.match(WINDOWS_WATCHER, /\$actual -ne \$env:TIMON_UPDATE_SHA256\) \{ throw/);
+  assert.match(WINDOWS_WATCHER, /\$actual -ne \$sha\) \{ throw/);
   // Literal paths: no wildcard or provider interpretation of what comes from the environment.
   assert.doesNotMatch(WINDOWS_WATCHER, /Start-Process|Invoke-Expression|iex /);
   assert.match(WINDOWS_WATCHER, /\$running\.Count -eq 0 -and \[IO\.File\]::Exists\(\$app\)/);
   assert.match(WINDOWS_WATCHER, /SessionId -eq \$session/, 'only a Timon of this session counts');
+  // Elevated: Timon started again goes through Explorer, which starts it as the person.
+  assert.ok(WINDOWS_WATCHER.includes("$again.FileName = [IO.Path]::Combine($env:SystemRoot, 'explorer.exe')"));
+  assert.doesNotMatch(WINDOWS_WATCHER, /\$env:TIMON_UPDATE_/, 'an elevated process does not get the shell\'s environment');
 });
 
 test('macOS: the administrator prompt runs root\'s script; the file, its hash and the prompt are arguments, never script', async () => {
@@ -133,8 +199,8 @@ test('no tool, a program that cannot start, a bad checksum or another system: ne
   assert.equal((await silentInstall(deb, enoent.system)).status, 'unavailable');
   const noPowershell = fakeSystem('win32', { executable: () => false });
   assert.equal((await silentInstall({ format: 'nsis', path: 'C:\\u.exe', sha256: SHA, prompt: '' }, noPowershell.system)).status, 'unavailable');
-  assert.deepEqual(noPowershell.detached, []);
-  const spawnFails = fakeSystem('win32', { spawnDetached: async () => { throw new Error('EPERM'); } });
+  assert.deepEqual(noPowershell.ran, []);
+  const spawnFails = fakeSystem('win32', { run: async () => { throw new Error('EPERM'); } });
   assert.deepEqual(await silentInstall({ format: 'nsis', path: 'C:\\u.exe', sha256: SHA, prompt: '' }, spawnFails.system), { status: 'unavailable', reason: 'EPERM' });
   const other = fakeSystem('linux');
   assert.equal((await silentInstall({ ...deb, format: 'pkg' }, other.system)).status, 'unavailable');
@@ -143,7 +209,7 @@ test('no tool, a program that cannot start, a bad checksum or another system: ne
   assert.deepEqual(other.ran, []);
 });
 
-test('the watcher is detached and never runs from the install folder', () => {
+test('the launcher never runs from the install folder', () => {
   const command = windowsCommand({ path: 'C:\\Users\\Ana\\.timon\\updates\\0.1.9\\Timon Setup 0.1.9.exe', sha256: SHA, appExe: 'C:\\Program Files\\Timon\\Timon.exe', env: {} });
   assert.equal(command.file, 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
   assert.equal(command.cwd, 'C:\\Users\\Ana\\.timon\\updates\\0.1.9');
@@ -163,7 +229,6 @@ test('Windows: the watcher writes how the installer ended, unless it ended well'
   assert.ok(WINDOWS_WATCHER.includes(`$outcome = '${WINDOWS_NOT_STARTED}'`));
   const cleared = WINDOWS_WATCHER.indexOf('if ($result) { try { [IO.File]::Delete($result) } catch { } }');
   assert.ok(cleared > 0 && cleared < started);
-  assert.ok(WINDOWS_WATCHER.includes('$result = $env:TIMON_UPDATE_RESULT'), 'the path travels in the environment only');
   assert.equal(windowsResultFile('D:\\Data\\updates\\0.1.9\\Timon Setup 0.1.9.exe'), `D:\\Data\\updates\\0.1.9\\${WINDOWS_RESULT_FILE}`);
 });
 
