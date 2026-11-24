@@ -45,7 +45,8 @@ import {
   type InterruptionDetail,
   type InterruptionReason,
 } from './interruption.js';
-import { MissionFenceRefusedError, profileLimits } from './resources.js';
+import { MissionFenceBlockedError, MissionFenceRefusedError, profileLimits } from './resources.js';
+import { fenceMechanismName } from './fence-refusal.js';
 import { codeCloseRefusal, effectiveMergeSha, mergeCloseRefusal, pullRequestCloseRefusal } from './code-gate.js';
 import { GIT_MISSING_MESSAGE, GIT_MISSING_REASON, gitTaskRefusal } from './task-git.js';
 import {
@@ -1679,6 +1680,13 @@ async function dispatch(): Promise<void> {
         blockOnUnusableCwd(task, err);
         continue;
       }
+      // The fence refuses a path the CLI is told to use: no replay and no backend does
+      // better until Timon or the setting changes. A plain block that names the path.
+      if (err instanceof MissionFenceBlockedError) {
+        spawnFailures.delete(taskId);
+        blockOnFenceRefusal(task, err);
+        continue;
+      }
       // `enforce` without a fence refuses every launch the same way until
       // someone changes the machine or the setting: retrying is noise.
       const fails = err instanceof MissionFenceRefusedError ? MAX_SPAWN_FAILURES : (spawnFailures.get(taskId) ?? 0) + 1;
@@ -1719,6 +1727,23 @@ export function blockOnUnusableCwd(task: TaskRow, err: CwdUnusableError): void {
       cause: err.error.replaceAll('-', '_'),
       path: err.path,
       errno: err.code,
+    }),
+  });
+}
+
+/** The block a launch the fence refused leads to (`fencePreflight`): like a missing
+ *  working directory, it waits for a person, never for an automatic replay. */
+export function blockOnFenceRefusal(task: TaskRow, err: MissionFenceBlockedError): void {
+  const { refusal } = err;
+  console.warn(`[dispatcher] task ${task.id} → BLOCKED: ${err.message}`);
+  dbApi.updateTaskStatus(task.id, 'BLOCKED', {
+    blockedReason: `${err.message} Then retry the task.`,
+    blockedReasonCode: daemonMessage('task_fence_refused', {
+      access: refusal.access,
+      path: refusal.display,
+      mechanism: fenceMechanismName(refusal.mechanism),
+      // ICU select keys: `timon_home` is a defect of Timon, `grantable` an exception to add.
+      kind: refusal.timonHome ? 'timon_home' : refusal.grantable ? 'grantable' : 'protected',
     }),
   });
 }

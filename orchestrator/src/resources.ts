@@ -89,9 +89,10 @@ import { daemonRuntimePaths } from './mission-fence-target.js';
 import { FENCE_EXIT, fenceLaunchDecision, type FenceStatus } from './host/fence.js';
 import {
   agentPackageCacheDir, fenceConfigWritesCredentialStore, fenceWritesCredentialStore, isFenceAgent, isFenceSegment, missionTmpDir, resolveFence,
-  type FenceMode, type FenceTarget, type IsolationTarget,
+  type FenceMode, type FencePolicy, type FenceTarget, type IsolationTarget,
 } from './host/isolation.js';
 import type { FenceMechanism, HostFence, HostFenceWitness } from './host/types.js';
+import { fenceRefusalMessage, type FenceRefusal } from './fence-refusal.js';
 import { argsUnderFence, type NestedSandboxDeclaration } from './backends/permission-models.js';
 import { hasSystemd, systemctl, systemctlCallCount } from './host/systemd.js';
 import {
@@ -437,6 +438,8 @@ export type MissionFenceOutcome =
     readonly packageCacheDir: string | null;
     /** A `writable` grant reaches the macOS login keychain (`fenceWritesCredentialStore`): the CLI can renew its sign-in there. */
     readonly credentialStoreWritable: boolean;
+    /** The policy the launcher applies: what a refusal is checked against (`fence-refusal.ts`). */
+    readonly policy: FencePolicy;
   }
   /** `warning` is null only when the configuration turned the fence off. */
   | { readonly state: 'unfenced'; readonly warning: string | null; readonly tampered: boolean };
@@ -448,6 +451,21 @@ export class MissionFenceRefusedError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'MissionFenceRefusedError';
+  }
+}
+
+/**
+ * The fence applies, and refuses a path the launch hands the CLI
+ * (`fencePreflight`): the CLI would only fail on it, turn after turn. A
+ * refusal like `enforce`'s for whoever retries (no launch does better until
+ * the setting or Timon changes), with the path it is about.
+ */
+export class MissionFenceBlockedError extends MissionFenceRefusedError {
+  readonly refusal: FenceRefusal;
+  constructor(refusal: FenceRefusal) {
+    super(fenceRefusalMessage(refusal));
+    this.name = 'MissionFenceBlockedError';
+    this.refusal = refusal;
   }
 }
 
@@ -470,6 +488,10 @@ export function launchErrorStatus(err: unknown, otherwise: number): number {
 }
 
 export function missionLaunchErrorBody(err: unknown): { error: string; code?: string } {
+  if (err instanceof MissionFenceBlockedError) {
+    const { path, access, mechanism, stage } = err.refusal;
+    return { ...apiError('mission_fence_refused', err.message, { path, access, mechanism, stage }) };
+  }
   if (err instanceof MissionFenceRefusedError) return { ...apiError('mission_fence_refused', err.message) };
   if (err instanceof CwdUnusableError) return { ...apiError('cwd_unusable', err.message, { path: err.path }) };
   return { error: err instanceof Error ? err.message : String(err) };
@@ -695,7 +717,7 @@ export function fenceMissionCommand(
   try {
     const wrapped = fence.wrap(policy, cmd, nested.args, policyFile);
     reportFenceReady(fence.mechanism, status.abi);
-    return { ...wrapped, fence: { state: 'fenced', mechanism: fence.mechanism, policyFile, tmpDir, workspace, packageCacheDir, credentialStoreWritable } };
+    return { ...wrapped, fence: { state: 'fenced', mechanism: fence.mechanism, policyFile, tmpDir, workspace, packageCacheDir, credentialStoreWritable, policy } };
   } catch (err) {
     return unfenced({ state: 'unsupported', reason: `the fence policy cannot be applied (${(err as Error).message})`, abi: status.abi });
   }

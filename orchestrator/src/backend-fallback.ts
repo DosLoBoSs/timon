@@ -53,6 +53,7 @@ import { providerSignedOut } from './backends/sign-in-state.js';
 import { messageDateTime, messageTime } from './message-dates.js';
 import { bus } from './bus.js';
 import { daemonMessage } from './daemon-message.js';
+import { fenceMechanismName, fenceRefusalMessage } from './fence-refusal.js';
 
 export type FallbackTarget = { backend: BackendName; model: string | null };
 
@@ -202,7 +203,8 @@ export function noteBackendUnavailable(trip: BreakerTrip): void {
   console.warn(
     `[breaker] backend ${name}: ${trip.failures} sterile turn(s) in ${Math.round(trip.spanMs / 1000)} s ` +
     `(threshold ${trip.threshold}, window ${Math.round(trip.windowMs / 60_000)} min, last ${trip.signature}) ` +
-    `— ${trip.cause === 'auth' ? 'authentication failed' : 'structurally unavailable'}, ${informed ? `already sidelined as ${known!.kind}` : `sidelined until ${messageTime(until)}`}`,
+    `— ${trip.cause === 'auth' ? 'authentication failed' : 'structurally unavailable'}, ${informed ? `already sidelined as ${known!.kind}` : `sidelined until ${messageTime(until)}`}`
+    + (trip.fence ? `. Cause found: ${fenceRefusalMessage(trip.fence)}` : ''),
   );
   if (informed) return;
   const alreadyTripped = known?.kind === 'unavailable' && known.until > Date.now();
@@ -219,8 +221,10 @@ export function noteBackendUnavailable(trip: BreakerTrip): void {
       `\`${name}\` has returned ${trip.failures} mission(s) in a row without producing a single turn ` +
       `(${trip.signature}), inside ${Math.round(trip.spanMs / 1000)} s.`,
       '',
-      '**The cause is unknown** — no usable error message. This signature matches a broken login, ' +
-      'an account with no credit, or a dead endpoint. Worth checking the backend CLI by hand.',
+      trip.fence
+        ? `**Cause found** — ${fenceRefusalMessage(trip.fence)}`
+        : '**The cause is unknown** — no usable error message. This signature matches a broken login, ' +
+          'an account with no credit, or a dead endpoint. Worth checking the backend CLI by hand.',
       ...(proven ? [] : [
         '',
         `This backend has not completed a single turn since the daemon started, so a setup problem is the ` +
@@ -240,6 +244,11 @@ export function noteBackendUnavailable(trip: BreakerTrip): void {
         // 0 for a proven backend: the message then leaves out the setup paragraph.
         minutes: proven ? 0 : Math.max(1, Math.round((until - Date.now()) / 60_000)),
         until,
+        // `none` keeps the message's "cause unknown" paragraph; a refusal of the fence replaces it.
+        fenceAccess: trip.fence?.access ?? 'none',
+        fencePath: trip.fence?.display ?? '',
+        fenceMechanism: trip.fence ? fenceMechanismName(trip.fence.mechanism) : '',
+        fenceTimonHome: trip.fence?.timonHome ? 1 : 0,
       }),
     },
   );

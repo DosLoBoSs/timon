@@ -78,11 +78,14 @@ async function endLaunch(outcome: MissionFenceOutcome, fence: HostFence | undefi
   return read;
 }
 
+/** A launch outcome's policy where none is read. */
+const FENCE_OFF: FencePolicy = { mode: 'off', enabled: false, ro: [], rw: [], exec: [], deny: [], denyUnderTimonHome: [], unixSockets: 'allow', ignored: [] };
+
 function fencedOutcome(name: string, mechanism: 'landlock' | 'seatbelt' = 'landlock'): MissionFenceOutcome & { state: 'fenced' } {
   const policyFile = join(TH, 'run', 'fence', `${name}.policy`);
   mkdirSync(join(TH, 'run', 'fence'), { recursive: true });
   writeFileSync(policyFile, 'x');
-  return { state: 'fenced', mechanism, policyFile, tmpDir: null, workspace: 'rw', packageCacheDir: null, credentialStoreWritable: false };
+  return { state: 'fenced', mechanism, policyFile, tmpDir: null, workspace: 'rw', packageCacheDir: null, credentialStoreWritable: false, policy: FENCE_OFF };
 }
 
 test('a fence that answers wraps the CLI, with the policy under the folder no mission reaches', () => {
@@ -94,7 +97,11 @@ test('a fence that answers wraps the CLI, with the policy under the folder no mi
   assert.deepEqual(launch, {
     cmd: '/opt/timon/timon-fence',
     args: ['--policy', policyFile, '--', '/usr/bin/claude', '-p'],
-    fence: { state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: join(TH, 'tmp', 'missions', MISSION), workspace: 'rw', packageCacheDir: null, credentialStoreWritable: false },
+    fence: {
+      state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: join(TH, 'tmp', 'missions', MISSION), workspace: 'rw', packageCacheDir: null, credentialStoreWritable: false,
+      // The very policy the launcher got: what a refusal is checked against.
+      policy: fence.policies[0],
+    },
   });
   assert.equal(fence.policies[0]?.enabled, true);
   assert.ok(fence.policies[0]?.rw.includes(TARGET.cwd), 'the policy is the daemon\'s own projection of the target');

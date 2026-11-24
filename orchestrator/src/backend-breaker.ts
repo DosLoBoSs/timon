@@ -44,6 +44,7 @@
  * say anything about what happens after it.
  */
 import { settingBool, settingInt } from './settings.js';
+import type { FenceRefusal } from './fence-refusal.js';
 
 /** Why a trip fired. `burst` is the historical verdict — N shapeless bounces
  *  inside the window. `auth` is the CLI saying, in a structured field, that it
@@ -64,6 +65,11 @@ export type BreakerTrip = {
   /** The last observed signature, in plain words (`0 turn / 0 token / 295 ms`). */
   signature: string;
   cause: BreakerCause;
+  /**
+   * The mission fence refused a path the bouncing turn named (`fence-refusal.ts`):
+   * then the cause is known, and the breaker's line says it.
+   */
+  fence?: FenceRefusal;
 };
 
 /** Sliding window of sterile turns, per backend. */
