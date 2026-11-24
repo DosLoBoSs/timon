@@ -1,6 +1,7 @@
 {
   "apiErrors": {
     "mission_fence_refused": "Timon refused to start this mission: the mission isolation is set to required, and this machine cannot fence it. Change the mode in the Security settings, or fix what the diagnostic reports.",
+    "mission_fence_blocked": "Timon did not start this mission: the mission fence ({mechanism}) does not let it {access, select, read {read} other {write to}} {path}, which its CLI needs. See Mission isolation in Settings › System › Security.",
     "cwd_unusable": "Timon could not start this mission: its working directory {path} is missing or cannot be opened. Restore the folder, or change the folder of the agent or of its project.",
     "unknown": "Something went wrong.",
     "http_status": "HTTP {status}",

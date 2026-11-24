@@ -92,7 +92,7 @@ import {
   type FenceMode, type FencePolicy, type FenceTarget, type IsolationTarget,
 } from './host/isolation.js';
 import type { FenceMechanism, HostFence, HostFenceWitness } from './host/types.js';
-import { fenceRefusalMessage, type FenceRefusal } from './fence-refusal.js';
+import { fenceMechanismName, fenceRefusalMessage, type FenceRefusal } from './fence-refusal.js';
 import { argsUnderFence, type NestedSandboxDeclaration } from './backends/permission-models.js';
 import { hasSystemd, systemctl, systemctlCallCount } from './host/systemd.js';
 import {
@@ -489,8 +489,8 @@ export function launchErrorStatus(err: unknown, otherwise: number): number {
 
 export function missionLaunchErrorBody(err: unknown): { error: string; code?: string } {
   if (err instanceof MissionFenceBlockedError) {
-    const { path, access, mechanism, stage } = err.refusal;
-    return { ...apiError('mission_fence_refused', err.message, { path, access, mechanism, stage }) };
+    const { display, access, mechanism } = err.refusal;
+    return { ...apiError('mission_fence_blocked', err.message, { path: display, access, mechanism: fenceMechanismName(mechanism) }) };
   }
   if (err instanceof MissionFenceRefusedError) return { ...apiError('mission_fence_refused', err.message) };
   if (err instanceof CwdUnusableError) return { ...apiError('cwd_unusable', err.message, { path: err.path }) };
