@@ -24,6 +24,7 @@
  * it. A refusal the user cannot act on is a dead end, and this screen blocks
  * the product.
  */
+import { hostSignInView, type HostSignInView } from './backends/host-sign-in-view.js';
 import { serviceOptsFromEnvironment as serviceOptsFor } from './host/service-environment.js';
 import { installWithRuntime } from './host/packaged-install.js';
 import { statSync, type Stats } from 'node:fs';
@@ -221,6 +222,8 @@ export type SetupBackend = {
   signInThen: string | null;
   /** A fresh install can seed its main agent on it: the providers the onboarding's chat can start on. */
   seedsMainAgent: boolean;
+  /** The host's own sign-in, when Timon can keep it: signed in from the browser, a long-lived token. */
+  host: HostSignInView | null;
 } & CliVersionInfo;
 
 type ProviderCli = {
@@ -307,6 +310,7 @@ export function setupBackends(
       signInCommand: signInLine([invocation(programPath, program, platform), ...rest].join(' '), cli.signInEnv, platform),
       signInThen: cli.signInThen ?? null,
       seedsMainAgent: cli.seedsMainAgent,
+      host: path ? hostSignInView(cli.provider) : null,
       ...version,
     };
   });

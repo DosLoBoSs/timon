@@ -7,7 +7,7 @@ const { mountOfficialProviders, stubCliBinaries } = await import('../../tests/he
 await stubCliBinaries('claude', 'codex');
 await mountOfficialProviders();
 const {
-  noteProviderSignedIn, noteProviderSignedOut, onProviderSignInChanged, primeProviderSignIn, providerSignedIn, providerSignedOut,
+  noteProviderSignedIn, noteProviderSignedInByPerson, noteProviderSignedOut, onProviderSignInChanged, primeProviderSignIn, providerSignedIn, providerSignedOut,
   refreshProviderSignIn, resetProviderSignInForTest, setSignInEnv,
 } = await import('./sign-in-state.js');
 const { tryDefaultBackendName } = await import('./index.js');
@@ -17,6 +17,8 @@ const { agentDir } = await import('../paths.js');
 const { mkdirSync, writeFileSync } = await import('node:fs');
 const { join } = await import('node:path');
 const { invalidateSettingsCache } = await import('../settings.js');
+const { mkdtempSync } = await import('node:fs');
+const { tmpdir } = await import('node:os');
 
 test('nothing is asked before the boot wires the environment: the verdict stays unknown', async () => {
   resetProviderSignInForTest();
@@ -136,4 +138,53 @@ test('a flip of the sign-in is announced once, a turn that only confirms it is n
   noteProviderSignedOut('claude');
   assert.equal(calls, 2, 'an unsubscribed listener hears nothing');
   resetProviderSignInForTest();
+});
+
+test('a person signing in makes the provider usable at once, whatever check was running', async () => {
+  resetProviderSignInForTest();
+  // A config folder with nothing in it: the provider's own check says signed out.
+  const empty = mkdtempSync(join(tmpdir(), 'timon-signin-'));
+  let signInDuringCheck = false;
+  setSignInEnv(() => {
+    // The check has started (its environment is being read) when the sign-in lands.
+    if (signInDuringCheck) { signInDuringCheck = false; noteProviderSignedInByPerson('claude'); }
+    return { CLAUDE_CONFIG_DIR: empty, HOME: empty };
+  });
+  try {
+    assert.equal(await refreshProviderSignIn('claude', true), false, 'known signed out before');
+    assert.equal(providerSignedOut('claude'), true);
+    assert.equal(tryDefaultBackendName(), 'codex', 'a signed-out claude is passed over');
+
+    // A person asked again (setup's Try again): that explicit check is in flight when the sign-in succeeds.
+    signInDuringCheck = true;
+    const stale = refreshProviderSignIn('claude', true);
+    assert.equal(await stale, true, 'the check that started before the sign-in reports the sign-in, not what it read');
+    assert.equal(providerSignedIn('claude'), true, 'the stale check did not undo the sign-in');
+    assert.equal(tryDefaultBackendName(), 'claude', 'claude is picked again at once');
+
+    // Without a check in flight, the sign-in is read synchronously: nothing to wait for.
+    noteProviderSignedOut('claude');
+    noteProviderSignedInByPerson('claude');
+    assert.equal(providerSignedIn('claude'), true);
+    await refreshProviderSignIn('claude');
+    assert.equal(providerSignedIn('claude'), true, 'a background check does not overturn a sign-in the person just made');
+  } finally {
+    resetProviderSignInForTest();
+  }
+});
+
+test('a sign-in that lands while a check runs lets the next refresh start afresh', async () => {
+  resetProviderSignInForTest();
+  const empty = mkdtempSync(join(tmpdir(), 'timon-signin-'));
+  setSignInEnv(() => ({ CLAUDE_CONFIG_DIR: empty, HOME: empty }));
+  try {
+    const first = refreshProviderSignIn('claude', true);
+    noteProviderSignedInByPerson('claude');
+    const second = refreshProviderSignIn('claude', true);
+    assert.notEqual(first, second, 'the refresh after the sign-in is not the stale one');
+    assert.equal(await first, true);
+    assert.equal(await second, false, 'an explicit check after the sign-in still says what it reads');
+  } finally {
+    resetProviderSignInForTest();
+  }
 });

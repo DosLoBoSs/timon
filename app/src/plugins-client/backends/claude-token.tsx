@@ -4,9 +4,11 @@
  * The long-lived claude token (`claude setup-token`), a section of the Claude
  * provider's page only: the client half of that provider registers it
  * (`plugins-client/provider-claude.tsx`), since the token is its own setting.
- * One row — whether a token is stored — and "Set" or "Replace" opening a
- * dialog that carries the field and the explanation. Write-only like the
- * vault: the daemon never sends the value back.
+ * One row — whether a token is stored. Its action mints one in the app
+ * (`claude setup-token` run by the daemon, page and code in a dialog) when the
+ * daemon offers it; pasting a token printed in a terminal and removing it stay
+ * in the "…" menu. Write-only like the vault: the daemon never sends the
+ * value back.
  */
 
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
@@ -20,6 +22,8 @@ import { t } from '@/lib/i18n';
 import { settingsPath } from '@/lib/settings-path';
 import { apiErrorMessage } from '@/lib/api-error';
 import { SecretValueDialog } from './secret-value-dialog';
+import { HostSignInDialog } from '@/components/provider-cli/host-sign-in-dialog';
+import { useProviderPage } from '@/components/provider-page/provider-page-context';
 
 const API = '/api/ui/backends/claude-token';
 
@@ -51,7 +55,12 @@ export function claudeTokenStatusKey(state: ClaudeTokenState): string {
 export function ClaudeTokenPanel(): ReactElement | null {
   const [state, setState] = useState<ClaudeTokenState | null>(null);
   const [editing, setEditing] = useState(false);
+  const [minting, setMinting] = useState(false);
   const [busy, setBusy] = useState(false);
+  const page = useProviderPage();
+  // The daemon mints one in the app (`/api/backends/host-sign-in/claude/token`); an older one only takes a pasted token.
+  const host = page?.provider.connection.host ?? null;
+  const inApp = host?.token != null;
 
   const load = useCallback(async () => {
     const res = await fetch(API, { cache: 'no-store' }).catch(() => null);
@@ -85,18 +94,33 @@ export function ClaudeTokenPanel(): ReactElement | null {
         data-claude-token={claudeTokenTone(state)}
         title={t('providerPage.claudeToken.title')}
         status={<TonePill tone={claudeTokenTone(state)} className="flex">{t(claudeTokenStatusKey(state))}</TonePill>}
-        action={(
+        action={inApp ? (
+          <Button type="button" size="sm" variant="outline" className="h-8" disabled={busy} onClick={() => setMinting(true)} data-host-sign-in-offer="token">
+            {t(state.configured ? 'hostSignIn.token.renew' : 'hostSignIn.token.create')}
+          </Button>
+        ) : (
           <Button type="button" size="sm" variant="outline" className="h-8" disabled={busy} onClick={() => setEditing(true)}>
             {t(state.configured ? 'providerPage.claudeToken.replace' : 'providerPage.claudeToken.set')}
           </Button>
         )}
-        menu={state.configured ? (
-          <DropdownMenuItem className="text-destructive focus:text-destructive" disabled={busy}
-            onSelect={() => { void send('DELETE').catch(() => {}); }}>
-            {t('backendsSettings.claudeToken.clear')}
-          </DropdownMenuItem>
+        menu={inApp || state.configured ? (
+          <>
+            {inApp ? (
+              <DropdownMenuItem disabled={busy} onSelect={() => setEditing(true)}>{t('hostSignIn.token.paste')}</DropdownMenuItem>
+            ) : null}
+            {state.configured ? (
+              <DropdownMenuItem className="text-destructive focus:text-destructive" disabled={busy}
+                onSelect={() => { void send('DELETE').catch(() => {}); }}>
+                {t('backendsSettings.claudeToken.clear')}
+              </DropdownMenuItem>
+            ) : null}
+          </>
         ) : null}
       />
+      {host && page ? (
+        <HostSignInDialog backend={host.backend} name={page.provider.name} kind="token" open={minting}
+          onOpenChange={setMinting} onDone={() => { void load(); void page.refresh(); }} />
+      ) : null}
       <SecretValueDialog
         open={editing}
         onOpenChange={setEditing}

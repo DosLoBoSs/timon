@@ -7,6 +7,12 @@
 
 ## Properties
 
+### host?
+
+> `readonly` `optional` **host?**: [`ProviderHostSignInDeclaration`](ProviderHostSignInDeclaration.md)
+
+***
+
 ### login
 
 > `readonly` **login**: [`ProviderLoginDriver`](ProviderLoginDriver.md)
