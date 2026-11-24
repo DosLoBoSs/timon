@@ -17,7 +17,7 @@ test('a path of the Timon home: a defect of Timon, with the workaround', () => {
   assert.match(notice, /Landlock/);
   assert.match(notice, /read ~\/\.timon\/provider-runs\/p\/m\/config\.toml/);
   assert.match(notice, /defect of Timon/);
-  assert.match(notice, /Settings › System › Security/);
+  assert.match(notice, /Settings → System → Security/);
   assert.doesNotMatch(notice, /chatPage\./, 'unresolved i18n key');
   assert.equal(fenceRefusalEndsTurn({ stage: 'launch' }), true);
 });

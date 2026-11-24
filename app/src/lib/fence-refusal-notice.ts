@@ -7,6 +7,7 @@
  * path, or Settings › System › Security, where it is changed.
  */
 import { t } from './i18n';
+import { settingsPath } from './settings-path';
 
 /** Payload of the `fence_refused` event: the daemon's `FenceRefusal`. Read defensively. */
 export type FenceRefusedPayload = {
@@ -36,6 +37,7 @@ export function fenceRefusalNotice(payload: FenceRefusedPayload): string {
     mechanism: payload.mechanism === 'seatbelt' ? 'seatbelt' : 'landlock',
     backend: text(payload.backend, '?'),
     stage: payload.stage === 'launch' ? 'launch' : 'run',
+    settingsPath: settingsPath('system', 'security'),
   };
   // The gesture depends on where the path is: a defect of Timon has a workaround,
   // a credential folder none, any other folder an exception.
