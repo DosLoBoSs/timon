@@ -170,7 +170,9 @@ jobs:
         # (docs/internal/scripts/build-all.mjs builds one mac package, for the
         # host's architecture).
         include:
-          - { os: linux, runner: ubuntu-latest }
+          # Pinned: Ubuntu 26.04 builds its musl for x86-64-v3, and the fence
+          # launcher must run on a baseline x86-64 CPU (24.04 musl is baseline).
+          - { os: linux, runner: ubuntu-24.04 }
           # macOS builds run on the project's own Mac (org runner group
           # `release-mac`, open to this workflow on main only): hosted
           # macOS arm64 runners were not acquired under capacity limits.
