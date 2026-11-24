@@ -113,7 +113,7 @@ import { UpdateDownloader } from './update-download.js';
 import { UPDATE_CHANNELS, UpdateController, localDaemonGet, registerUpdateIpc } from './update-ipc.js';
 import { checkLocalUpdatesIfStale } from './update-freshness.js';
 import { missionsAtStake, previousAppImage, readMissionCount, removeAppImageBackup, rollBackAppImage } from './update-install.js';
-import { nodeInstallerSystem, silentInstall, takeWindowsInstallFailure } from './update-installer.js';
+import { nodeInstallerSystem, silentInstall, takeWindowsInstallFailure, windowHandle } from './update-installer.js';
 import { aboutCopy, readThirdPartyNotices, registerAboutIpc, thirdPartyNoticesPath } from './about.js';
 import { showAboutWindow } from './about-window.js';
 import { appMenuTemplate, newWindowCopy, newWindowShortcut } from './app-menu.js';
@@ -2146,7 +2146,8 @@ if (!app.requestSingleInstanceLock({ build: ownBuild } satisfies LaunchData)) {
       appImage: process.platform === 'linux' ? process.env.APPIMAGE ?? null : null,
       relaunchAppImage: (appImage) => queueAppImageRelaunch(appImage, relaunchOptions(process.platform, process.env, process.argv).args, desktopHome),
       quit: () => app.quit(),
-      silentInstall: (input) => silentInstall(input, nodeInstallerSystem(process.execPath)),
+      // The window the person clicked "Update" in owns the Windows permission prompt, which then shows in front.
+      silentInstall: (input) => silentInstall(input, nodeInstallerSystem(process.execPath, process.env, process.platform, () => windowHandle(BrowserWindow.getFocusedWindow()?.getNativeWindowHandle()))),
       adminPrompt: (version) => shellText(uiLocale())('update.adminPrompt', { version }),
       relaunch: () => { app.relaunch({ args: relaunchOptions(process.platform, process.env, process.argv).args }); },
       consent: {

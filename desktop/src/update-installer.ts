@@ -6,9 +6,11 @@ import { dirname, isAbsolute, join, win32 } from 'node:path';
  * The silent installation of a verified update, from inside the app
  * (docs/AUTO-UPDATE.md §10, volet F), without any certificate:
  *
- *  - Windows: the NSIS installer runs with `/S --updated --force-run`, from a
- *    detached watcher; the shell quits, and the installer starts the new
- *    Timon itself (`--force-run`). Every OS command of this file lives here.
+ *  - Windows: the shell, still open, asks Windows for the administrator
+ *    permission (UAC) on behalf of its own window; once granted, an elevated
+ *    watcher runs the NSIS installer with `/S --updated --force-run`, the shell
+ *    quits, and the installer starts the new Timon itself (`--force-run`, as
+ *    the user, never elevated). Every OS command of this file lives here.
  *  - macOS: `installer -pkg … -target /` behind the system's administrator
  *    prompt (`osascript … with administrator privileges`).
  *  - Linux `.deb`: `pkexec`, then `apt-get` (or `dpkg` without apt).
@@ -23,7 +25,9 @@ import { dirname, isAbsolute, join, win32 } from 'node:path';
  *
  * Nothing from the network is ever interpreted by a shell: every program text
  * below is a constant, and the file, its sha256 and the prompt reach it as
- * arguments (`$1`, `item 1 of argv`) or environment variables.
+ * arguments (`$1`, `item 1 of argv`), environment variables, or (for the
+ * elevated Windows watcher, whose environment Windows rebuilds) base64
+ * literals that no character of a name can break out of.
  *
  * Anything that does not end in an installation answers `cancelled` (the
  * person dismissed the prompt: nothing to report) or `unavailable` / `failed`
@@ -36,7 +40,7 @@ export type SilentFormat = 'nsis' | 'pkg' | 'deb';
 export type SilentOutcome =
   /** macOS, Linux: the new version is installed; the shell restarts into it. */
   | { status: 'installed' }
-  /** Windows: the watcher runs the silent installer; the shell must quit now, the installer starts Timon again. */
+  /** Windows: the permission was granted and the elevated watcher runs the silent installer; the shell must quit now, the installer starts Timon again. */
   | { status: 'handed_over' }
   /** The person dismissed the system's password prompt: the verified file stays ready. */
   | { status: 'cancelled' }
@@ -57,8 +61,12 @@ export type InstallerSystem = {
   executable: (path: string) => boolean;
   /** Runs to completion; never rejects for a non-zero exit, only when the program cannot start. */
   run: (command: Command) => Promise<CommandResult>;
-  /** Starts a process that outlives this one; resolves once it runs. */
-  spawnDetached: (command: Command) => Promise<void>;
+  /**
+   * Windows: the handle of the window the person clicked "Update" in, as a
+   * decimal string, or null. The UAC prompt is owned by it, so Windows shows
+   * it in front instead of flashing it in the taskbar.
+   */
+  ownerWindow?: () => string | null;
 };
 
 export type SilentInput = {
@@ -109,26 +117,28 @@ export const WINDOWS_RESULT_FILE = 'install-result.txt';
 export const WINDOWS_NOT_STARTED = 'not-started';
 
 /**
- * Windows watcher, run by PowerShell from a constant text: the installer, its
- * sha256 and Timon's executable come from the environment, as strings that
- * are never parsed. The file is held with read-only sharing from its hash
- * until the installer has exited, so nothing can rewrite or rename it in
- * between. Once the installer is done, if no Timon runs in this session (a
- * refused elevation, a failed install), the installed Timon is started again:
- * the person is never left without the app.
+ * Windows watcher, run ELEVATED by PowerShell (`windowsWatcherScript` puts the
+ * installer, its sha256, Timon's executable and the verdict file in front of
+ * it, as base64 literals: Windows rebuilds the environment of an elevated
+ * process, so nothing travels there). The file is held with read-only sharing
+ * from its hash until the installer has exited, so nothing can rewrite or
+ * rename it in between. Running elevated, the installer's own service pause
+ * asks for nothing more.
  *
- * A silent installer says nothing on screen, and this shell has quit by then:
- * the watcher writes how the installer ended to `TIMON_UPDATE_RESULT` unless
- * it ended with 0, and the Timon that starts next reports it
- * (`takeWindowsInstallFailure`). Without that, an update the installer refused
- * (the previous service could not be stopped) only looked like an app that
- * closed and opened again on the same version.
+ * Once the installer is done, if no Timon runs in this session (a failed
+ * install), the installed Timon is started again through Explorer, which
+ * starts it as the person and not as administrator: the person is never left
+ * without the app.
+ *
+ * A silent installer says nothing on screen, and the shell has quit by then:
+ * the watcher writes how the installer ended to `$result` unless it ended with
+ * 0, and the Timon that starts next reports it (`takeWindowsInstallFailure`).
+ * Without that, an update the installer refused (the previous service could
+ * not be stopped) only looked like an app that closed and opened again on the
+ * same version.
  */
 export const WINDOWS_WATCHER = [
   "$ErrorActionPreference = 'Stop'",
-  '$installer = $env:TIMON_UPDATE_INSTALLER',
-  '$app = $env:TIMON_UPDATE_APP',
-  '$result = $env:TIMON_UPDATE_RESULT',
   `$outcome = '${WINDOWS_NOT_STARTED}'`,
   // An earlier attempt's verdict must not be read as this one's.
   'if ($result) { try { [IO.File]::Delete($result) } catch { } }',
@@ -137,7 +147,7 @@ export const WINDOWS_WATCHER = [
   '  $hold = [IO.File]::Open($installer, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)',
   '  $digest = [Security.Cryptography.SHA256]::Create().ComputeHash($hold)',
   "  $actual = -join ($digest | ForEach-Object { $_.ToString('x2') })",
-  "  if ($actual -ne $env:TIMON_UPDATE_SHA256) { throw 'checksum' }",
+  "  if ($actual -ne $sha) { throw 'checksum' }",
   '  $info = New-Object System.Diagnostics.ProcessStartInfo',
   '  $info.FileName = $installer',
   `  $info.Arguments = '${NSIS_SILENT_ARGS.join(' ')}'`,
@@ -157,11 +167,71 @@ export const WINDOWS_WATCHER = [
   '$session = (Get-Process -Id $PID).SessionId',
   '$running = @(Get-Process -Name $name -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $session })',
   'if ($running.Count -eq 0 -and [IO.File]::Exists($app)) {',
+  // Explorer runs what it is given as the signed-in person, never with this process's rights.
   '  $again = New-Object System.Diagnostics.ProcessStartInfo',
-  '  $again.FileName = $app',
-  '  $again.UseShellExecute = $true',
-  '  $again.WorkingDirectory = [IO.Path]::GetDirectoryName($app)',
+  "  $again.FileName = [IO.Path]::Combine($env:SystemRoot, 'explorer.exe')",
+  `  $again.Arguments = '"' + $app + '"'`,
+  '  $again.UseShellExecute = $false',
   '  [Diagnostics.Process]::Start($again) | Out-Null',
+  '}',
+].join('\n');
+
+/** A string as a PowerShell expression that no character of it can break out of. */
+function powershellLiteral(value: string): string {
+  return `[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${Buffer.from(value, 'utf8').toString('base64')}'))`;
+}
+
+/** The elevated watcher with its four values in front. */
+export function windowsWatcherScript(input: { installer: string; sha256: string; app: string; result: string }): string {
+  if (!SHA256.test(input.sha256)) throw new Error('Unexpected checksum.');
+  return [
+    `$installer = ${powershellLiteral(input.installer)}`,
+    `$sha = '${input.sha256}'`,
+    `$app = ${powershellLiteral(input.app)}`,
+    `$result = ${powershellLiteral(input.result)}`,
+    WINDOWS_WATCHER,
+  ].join('\n');
+}
+
+/** Exit status of `WINDOWS_LAUNCHER` when the account cannot approve a UAC prompt (not an administrator). */
+export const WINDOWS_LAUNCH_STANDARD_ACCOUNT = 3;
+/** Exit status of `WINDOWS_LAUNCHER` when the person said no to the UAC prompt (ERROR_CANCELLED). */
+export const WINDOWS_LAUNCH_CANCELLED = 4;
+
+/**
+ * Run by the shell, which waits for it while its window is still open: the
+ * UAC prompt is asked for here, owned by the window the person clicked in, so
+ * Windows shows it in front. Until 0.1.10 the prompt came from the installer,
+ * after the shell had quit, from processes without any window: Windows only
+ * flashed it in the taskbar, nobody saw it, the installer waited forever and
+ * Timon never came back.
+ *
+ * A standard account would have to type another account's password, and the
+ * installer would then run as that other person and update their copy of
+ * Timon: such an account gets the visible installer instead (exit 3).
+ */
+export const WINDOWS_LAUNCHER = [
+  "$ErrorActionPreference = 'Stop'",
+  // Administrators (S-1-5-32-544): a filtered administrator token lists it as deny-only, a standard account not at all.
+  "$whoami = [IO.Path]::Combine($env:SystemRoot, 'System32', 'whoami.exe')",
+  `if (-not (& $whoami /groups /fo csv | Select-String -SimpleMatch 'S-1-5-32-544')) { exit ${WINDOWS_LAUNCH_STANDARD_ACCOUNT} }`,
+  'try {',
+  '  $info = New-Object System.Diagnostics.ProcessStartInfo',
+  '  $info.FileName = $env:TIMON_UPDATE_POWERSHELL',
+  '  $info.Arguments = $env:TIMON_UPDATE_ELEVATED',
+  "  $info.Verb = 'runas'",
+  '  $info.UseShellExecute = $true',
+  "  $info.WindowStyle = 'Hidden'",
+  '  $info.WorkingDirectory = $env:TIMON_UPDATE_DIR',
+  // .NET Framework hands the owner window to ShellExecuteEx only when ErrorDialog is set.
+  '  if ($env:TIMON_UPDATE_OWNER) { $info.ErrorDialog = $true; $info.ErrorDialogParentHandle = [IntPtr][Int64]$env:TIMON_UPDATE_OWNER }',
+  '  [Diagnostics.Process]::Start($info) | Out-Null',
+  '  exit 0',
+  '} catch {',
+  '  $e = $_.Exception',
+  `  while ($e) { if ($e.NativeErrorCode -eq 1223) { exit ${WINDOWS_LAUNCH_CANCELLED} }; $e = $e.InnerException }`,
+  '  [Console]::Error.WriteLine($_.Exception.Message)',
+  '  exit 1',
   '}',
 ].join('\n');
 
@@ -256,26 +326,58 @@ export function takeWindowsInstallFailure(updatesRoot: string): WindowsInstallFa
   return found;
 }
 
-/** Windows: the detached watcher that verifies and starts the silent installer. */
-export function windowsCommand(input: { path: string; sha256: string; appExe: string; env: NodeJS.ProcessEnv }): Command {
+/** How PowerShell runs both Windows scripts: no profile, no prompt, no policy in the way (I6 of audit-packaged-os). */
+const POWERSHELL_FLAGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden'] as const;
+
+/** Encoded: a multi-line script survives the Windows command line intact. */
+function encodedScript(script: string): string {
+  return Buffer.from(script, 'utf16le').toString('base64');
+}
+
+/** A window handle (`getNativeWindowHandle()`, little-endian) as the decimal string the launcher reads, or null. */
+export function windowHandle(buffer: Buffer | null | undefined): string | null {
+  if (!buffer) return null;
+  let value: bigint;
+  if (buffer.length >= 8) value = buffer.readBigUInt64LE(0);
+  else if (buffer.length >= 4) value = BigInt(buffer.readUInt32LE(0));
+  else return null;
+  return value > 0n && value < 2n ** 63n ? value.toString() : null;
+}
+
+/**
+ * Windows: the launcher the shell runs and waits for, which asks for the
+ * administrator permission and starts the elevated watcher once granted.
+ */
+export function windowsCommand(input: { path: string; sha256: string; appExe: string; env: NodeJS.ProcessEnv; owner?: string | null }): Command {
+  const powershell = windowsPowershell(input.env);
+  const watcher = windowsWatcherScript({ installer: input.path, sha256: input.sha256, app: input.appExe, result: windowsResultFile(input.path) });
   const env: NodeJS.ProcessEnv = {
     ...input.env,
-    TIMON_UPDATE_INSTALLER: input.path,
-    TIMON_UPDATE_SHA256: input.sha256,
-    TIMON_UPDATE_APP: input.appExe,
-    TIMON_UPDATE_RESULT: windowsResultFile(input.path),
-  };
-  // Timon started again by the watcher is the application, never Node (I2 of audit-packaged-os).
-  delete env.ELECTRON_RUN_AS_NODE;
-  // Encoded: a multi-line script survives the Windows command line intact.
-  const encoded = Buffer.from(WINDOWS_WATCHER, 'utf16le').toString('base64');
-  return {
-    file: windowsPowershell(input.env),
-    args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded],
-    env,
+    TIMON_UPDATE_POWERSHELL: powershell,
+    TIMON_UPDATE_ELEVATED: [...POWERSHELL_FLAGS, '-EncodedCommand', encodedScript(watcher)].join(' '),
     // Never the install folder: a process whose current folder is in it keeps the installer from replacing it.
+    TIMON_UPDATE_DIR: win32.dirname(input.path),
+  };
+  delete env.TIMON_UPDATE_OWNER;
+  if (input.owner && /^\d{1,19}$/.test(input.owner)) env.TIMON_UPDATE_OWNER = input.owner;
+  // Nothing started from here is Node (I2 of audit-packaged-os).
+  delete env.ELECTRON_RUN_AS_NODE;
+  return {
+    file: powershell,
+    args: [...POWERSHELL_FLAGS, '-EncodedCommand', encodedScript(WINDOWS_LAUNCHER)],
+    env,
     cwd: win32.dirname(input.path),
   };
+}
+
+/** The launcher's verdict: only a granted permission lets the shell quit. */
+export function windowsOutcome(result: CommandResult): SilentOutcome {
+  if (result.code === 0) return { status: 'handed_over' };
+  if (result.code === WINDOWS_LAUNCH_CANCELLED) return { status: 'cancelled' };
+  if (result.code === WINDOWS_LAUNCH_STANDARD_ACCOUNT) {
+    return { status: 'unavailable', reason: 'This Windows account is not an administrator: the installer opens instead.' };
+  }
+  return { status: 'failed', reason: reasonOf(result.stderr, `the update launcher exited with ${String(result.code)}`) };
 }
 
 /** macOS: the administrator prompt, then root's copy, hash and `installer -pkg`. */
@@ -336,10 +438,9 @@ export async function silentInstall(input: SilentInput, system: InstallerSystem)
   }
   try {
     if (format === 'nsis' && system.platform === 'win32') {
-      const command = windowsCommand({ path, sha256, appExe: system.appExe, env: system.env });
+      const command = windowsCommand({ path, sha256, appExe: system.appExe, env: system.env, owner: system.ownerWindow?.() ?? null });
       if (!system.executable(command.file)) return { status: 'unavailable', reason: 'PowerShell is not available.' };
-      await system.spawnDetached(command);
-      return { status: 'handed_over' };
+      return windowsOutcome(await system.run(command));
     }
     if (format === 'pkg' && system.platform === 'darwin') {
       if (!system.executable(OSASCRIPT)) return { status: 'unavailable', reason: 'osascript is not available.' };
@@ -362,11 +463,17 @@ export async function silentInstall(input: SilentInput, system: InstallerSystem)
 const STDERR_TAIL = 8 * 1024;
 
 /** The real system: `child_process`, with nothing inherited but what each command names. */
-export function nodeInstallerSystem(appExe: string, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): InstallerSystem {
+export function nodeInstallerSystem(
+  appExe: string,
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  ownerWindow?: () => string | null,
+): InstallerSystem {
   return {
     platform,
     env,
     appExe,
+    ownerWindow,
     executable: (path) => {
       try {
         accessSync(path, platform === 'win32' ? constants.F_OK : constants.X_OK);
@@ -383,14 +490,6 @@ export function nodeInstallerSystem(appExe: string, env: NodeJS.ProcessEnv = pro
       child.stderr?.on('data', (chunk: Buffer) => { stderr = (stderr + chunk.toString('utf8')).slice(-STDERR_TAIL); });
       child.once('error', rejectRun);
       child.once('close', (code) => { resolveRun({ code, stderr }); });
-    }),
-    spawnDetached: (command) => new Promise((resolveSpawn, rejectSpawn) => {
-      // Detached: outside the shell's job object, so the shell can quit while it runs.
-      const child = spawn(command.file, command.args, {
-        cwd: command.cwd, env: command.env ?? env, stdio: 'ignore', detached: true, windowsHide: true,
-      });
-      child.once('error', rejectSpawn);
-      child.once('spawn', () => { child.unref(); resolveSpawn(); });
     }),
   };
 }
