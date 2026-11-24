@@ -86,7 +86,7 @@ import { CwdUnusableError } from './cwd-check.js';
 import { getHost } from './host/index.js';
 import { nodeRuntime } from './host/node-runtime.js';
 import { daemonRuntimePaths } from './mission-fence-target.js';
-import { FENCE_EXIT, fenceLaunchDecision, type FenceStatus } from './host/fence.js';
+import { FENCE_EXIT, fenceLaunchDecision, launcherCpuIncompatible, type FenceStatus } from './host/fence.js';
 import {
   agentPackageCacheDir, fenceConfigWritesCredentialStore, fenceWritesCredentialStore, isFenceAgent, isFenceSegment, missionTmpDir, resolveFence,
   type FenceMode, type FencePolicy, type FenceTarget, type IsolationTarget,
@@ -768,8 +768,8 @@ const LAUNCHER_SPAWN_FAILURES: ReadonlySet<string> = new Set(['ENOENT', 'EACCES'
  * the fence cannot be applied on this machine, or null when it proves nothing
  * of the kind — the launcher applied it, or gave no conclusive answer (no
  * answer in time, a spawn error that is not the launcher's, an end by a
- * signal). The payload prints nothing and exits 0, so a failure here is the
- * launcher's. Under Landlock, 127 means every fence step succeeded and only
+ * signal other than SIGILL). The payload prints nothing and exits 0, so a
+ * failure here is the launcher's. Under Landlock, 127 means every fence step succeeded and only
  * the payload could not run; 78 and 64 are the daemon's bugs, not the
  * machine's (as for a launch). Under Seatbelt, only a numeric non-zero exit
  * is a failure: `sandbox-exec` reports a refused profile that way, while a
@@ -781,6 +781,9 @@ export function fenceWitnessFailure(mechanism: FenceMechanism, witness: HostFenc
     return `the fence launcher cannot run (${witness.reason})`;
   }
   if (mechanism === 'landlock') {
+    // The payload is a system binary that runs anywhere: an illegal
+    // instruction is the launcher's own, built for a newer CPU than this one.
+    if (witness.signal === 'SIGILL') return launcherCpuIncompatible();
     if (witness.status !== FENCE_EXIT.unavailable && witness.status !== FENCE_EXIT.osError) return null;
     return launcherLine(witness.stderr, 'timon-fence: ') ?? `timon-fence exited with ${witness.status}`;
   }
@@ -836,7 +839,7 @@ const FENCE_STDERR_PEEK = 4096;
  * way. Removes the launch's policy once all is done; the promise settles then.
  */
 export function watchFencedLaunch(
-  proc: { stderr: NodeJS.ReadableStream | null; once(event: 'close', listener: (code: number | null) => void): unknown },
+  proc: { stderr: NodeJS.ReadableStream | null; once(event: 'close', listener: (code: number | null, signal?: NodeJS.Signals | null) => void): unknown },
   outcome: MissionFenceOutcome | null,
   options: { fence?: HostFence | undefined } = {},
 ): Promise<void> {
@@ -857,14 +860,17 @@ export function watchFencedLaunch(
   };
   stderr?.on('newListener', arm);
   return new Promise((resolve) => {
-    proc.once('close', (code) => {
+    proc.once('close', (code, signal) => {
       stderr?.removeListener('newListener', arm);
       stderr?.removeListener('data', peek);
       const done = (): void => {
         releaseFencePolicy(outcome);
         resolve();
       };
-      const suspected = fenceLaunchFailure(outcome.mechanism, code, head.slice(0, FENCE_STDERR_PEEK)) !== null;
+      // A launcher built for a newer CPU dies with SIGILL before it says a
+      // word; so can the CLI itself, which the witness tells apart.
+      const suspected = fenceLaunchFailure(outcome.mechanism, code, head.slice(0, FENCE_STDERR_PEEK)) !== null
+        || (outcome.mechanism === 'landlock' && signal === 'SIGILL');
       if (!suspected || fenceBrokenAtLaunch !== null || fenceWitnessInFlight) {
         done();
         return;
