@@ -126,6 +126,8 @@ const SETTINGS_PLACES: Readonly<Record<string, readonly [SettingsCategoryId, str
   integration_gave_up: ['secrets', 'connections'],
   backend_launch_unauthorized: ['models', 'backends'],
   device_paired: ['network', 'devices'],
+  task_fence_refused: ['system', 'security'],
+  backend_breaker_fence: ['system', 'security'],
 };
 
 /** Params the reader adds to a stored code's own: the daemon never sends them. Exported for the code scanner. */

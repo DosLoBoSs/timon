@@ -25,6 +25,12 @@
 
 ***
 
+### extraDirs?
+
+> `optional` **extraDirs?**: `ReadonlyArray`\<\{ `mode`: `"read"` \| `"write"`; `path`: `string`; \}\>
+
+***
+
 ### images?
 
 > `optional` **images?**: [`ImageAttachment`](ImageAttachment.md)[]

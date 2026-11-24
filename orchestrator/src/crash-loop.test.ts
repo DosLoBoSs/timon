@@ -249,3 +249,20 @@ test('a CLI that could not start is named, not described as a crash', () => {
   assert.equal(lastMissionError(missionId), 'the claude CLI could not start (missing).');
   assert.equal(lastMissionError(randomUUID()), null);
 });
+
+test('a refusal of the mission fence is the last error, named, rather than the CLI\'s "Operation not permitted"', () => {
+  const missionId = randomUUID();
+  dbApi.createMission(missionId, 'worker', 'attempt', undefined, owner.id);
+  dbApi.insertEvent(missionId, 'backend_failed', {
+    type: 'backend_failed', backend: 'codex', exitCode: 1, missionId, sessionId: null, stderr: 'Operation not permitted (os error 1)',
+  });
+  dbApi.insertEvent(missionId, 'fence_refused', {
+    type: 'fence_refused', path: '/h/.timon/provider-runs/p/m/config.toml', display: '~/.timon/provider-runs/p/m/config.toml',
+    access: 'read', mechanism: 'landlock', stage: 'run', missionId, agent: 'worker', backend: 'codex',
+    timonHome: true, grantable: false, dropped: null, setting: { category: 'system', tab: 'security' },
+  });
+  assert.equal(
+    lastMissionError(missionId),
+    'the mission fence (Landlock) did not let it read ~/.timon/provider-runs/p/m/config.toml; see Settings › System › Security.',
+  );
+});

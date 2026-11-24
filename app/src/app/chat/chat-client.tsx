@@ -150,6 +150,9 @@ import {
 } from '@/lib/provider-retry-line';
 import { ProviderRetryNotice } from '@/components/chat/provider-retry-notice';
 import { backendFailureNotice, type BackendFailedPayload } from '@/lib/backend-failure-notice';
+import { fenceRefusalEndsTurn, fenceRefusalNotice, type FenceRefusedPayload } from '@/lib/fence-refusal-notice';
+import { applyFenceGrantResolution, FENCE_GRANT_RESOLVED_EVENT, parseFenceGrant, parseFenceGrantResolution, type FenceGrantView } from '@/lib/fence-grant';
+import { ChatFenceGrantSlot } from '@/components/chat/fence-grant-card';
 import { backendSwitchFailureNotice, type BackendSwitchFailedPayload } from '@/lib/backend-switch-failure-notice';
 import { modelNotAppliedNotice, type ModelNotAppliedPayload } from '@/lib/model-not-applied-notice';
 import { sessionlessTurnNotice, type SessionlessTurnPayload } from '@/lib/sessionless-turn-notice';
@@ -459,7 +462,7 @@ type CommittedChat = {
 
 type Msg = {
   id: string;
-  role: 'user' | 'agent' | 'permission' | 'command' | 'proposal' | 'notice' | 'avatar' | 'ui' | 'secret';
+  role: 'user' | 'agent' | 'permission' | 'command' | 'proposal' | 'notice' | 'avatar' | 'ui' | 'secret' | 'fence';
   tag?: 'mission' | 'routine';
   /** Set when the `user` turn was injected by an agent or the daemon: the
    *  bubble then shows that sender, on the agent side, not "you". */
@@ -540,6 +543,8 @@ type Msg = {
   uiDocument?: UiDocumentBlock;
   /** A secret the agent asks the user for (role === 'secret'). Never a value. */
   secretRequest?: SecretRequestView;
+  /** A path the mission fence refused, with a folder the daemon offers to open (role === 'fence'). */
+  fenceGrant?: FenceGrantView;
   /** The picture the main agent asks for in its setup conversation (role === 'avatar'). */
   avatarRequest?: SetupAvatarRequest;
   /** Out-of-conversation info line (role === 'notice'): a model change
@@ -3169,7 +3174,7 @@ export function ChatClient({
     if (!target) return;
     // A card older than the mounted window has no node to scroll to yet:
     // widen the window first, this effect runs again once it is mounted.
-    const index = messages.findIndex((m) => m.perm?.request_id === target || m.cmd?.id === target || m.proposal?.id === target || m.secretRequest?.id === target);
+    const index = messages.findIndex((m) => m.perm?.request_id === target || m.cmd?.id === target || m.proposal?.id === target || m.secretRequest?.id === target || m.fenceGrant?.id === target);
     // Older than the loaded history: read back until it is in, page by page
     // (each page lands in `messages`, which runs this effect again).
     if (index < 0 && hasOlderHistory) {
@@ -3628,6 +3633,36 @@ export function ChatClient({
       turnSeq.current += 1;
       setThinking(false);
       setThinkingHint(null);
+      return;
+    }
+    // The mission fence refused a path the CLI needed: name the fence, the path and the
+    // setting. Refused at launch, the mission never started and the turn ends here.
+    if (meta.type === 'fence_refused') {
+      const refusal = payload as FenceRefusedPayload;
+      // A folder the daemon offers to open (TODO #1162): a card that answers it, in place
+      // of the notice. Never for the Timon home or a credential folder: those keep the notice.
+      const grant = parseFenceGrant(payload);
+      setMessages((m) => {
+        if (grant && m.some((x) => x.fenceGrant?.id === grant.id)) return m;
+        return [
+          ...m,
+          grant
+            ? { id: 'fence:' + grant.id, role: 'fence', t: fmtTimeAt(meta.timestamp), content: '', fenceGrant: grant }
+            : { id: crypto.randomUUID(), role: 'notice', t: fmtTimeAt(meta.timestamp), content: '', notice: fenceRefusalNotice(refusal) },
+        ];
+      });
+      if (fenceRefusalEndsTurn(refusal)) {
+        turnSeq.current += 1;
+        setThinking(false);
+        setThinkingHint(null);
+      }
+      return;
+    }
+    // The person's answer to a fence card, here or in another window: the card shows it.
+    if (meta.type === FENCE_GRANT_RESOLVED_EVENT) {
+      const resolution = parseFenceGrantResolution(payload);
+      if (!resolution) return;
+      setMessages((m) => m.map((x) => (x.fenceGrant?.id === resolution.id ? { ...x, fenceGrant: applyFenceGrantResolution(x.fenceGrant, resolution) } : x)));
       return;
     }
     // The backend started, then ended its turn without a word (TIM-0049): say so, with what it wrote.
@@ -6172,7 +6207,7 @@ export function ChatClient({
                   agentName={agent.name}
                   accent={accentColor}
                   highlighted={Boolean(
-                    highlightedPermId && (m.perm?.request_id ?? m.cmd?.id ?? m.proposal?.id ?? m.secretRequest?.id) === highlightedPermId,
+                    highlightedPermId && (m.perm?.request_id ?? m.cmd?.id ?? m.proposal?.id ?? m.secretRequest?.id ?? m.fenceGrant?.id) === highlightedPermId,
                   )}
                   terminalScope={terminalScope}
                   iconUrl={avatarIconUrl}
@@ -7033,6 +7068,21 @@ function MessageBody({
         {compact ? null : <BubbleAvatar color={accent} iconUrl={iconUrl} fallback={iconFallback} roleKey={roleKey} agent={agentName} />}
         <div className="flex min-w-0 flex-col gap-1">
           <ChatSecretRequestSlot request={msg.secretRequest} highlighted={highlighted} />
+          <span className="text-[10.5px] tabular-nums text-muted-foreground/60">{msg.t}</span>
+        </div>
+      </div>
+    );
+  }
+  if (msg.role === 'fence' && msg.fenceGrant) {
+    return (
+      <div
+        // Same columns as the bubbles above and below; the card is Timon's, not the agent's: no avatar.
+        className={cn('grid w-full min-w-0 grid-cols-1 items-start gap-3 scroll-mt-24', !compact && 'sm:grid-cols-[34px_minmax(0,1fr)_34px]')}
+        data-perm-id={msg.fenceGrant.id}
+      >
+        {compact ? null : <span aria-hidden />}
+        <div className="flex min-w-0 flex-col gap-1">
+          <ChatFenceGrantSlot grant={msg.fenceGrant} highlighted={highlighted} />
           <span className="text-[10.5px] tabular-nums text-muted-foreground/60">{msg.t}</span>
         </div>
       </div>

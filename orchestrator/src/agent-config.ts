@@ -178,6 +178,14 @@ export type AgentConfig = {
    * copy made through the API never inherits another agent's id.
    */
   uid?: string;
+  /**
+   * Folders outside `cwd` the agent's missions may read (`read`) or read and
+   * write (`write`), set by a person (`agent-extra-dirs.ts`). Protected key:
+   * written only by `setAgentExtraDirs`, behind the routes that take a person
+   * or `agents:privileged-config`, never by an agent write, an import or a
+   * prompt rewrite.
+   */
+  extra_dirs?: Array<{ path: string; mode: 'read' | 'write' }>;
 };
 
 /**
@@ -190,7 +198,7 @@ export type AgentConfig = {
  * Set internally by `createEphemeralAgent` (ephemeral) or by manual
  * editing of the config.json on disk (orchestrator for a custom agent).
  */
-const PROTECTED_CONFIG_KEYS = ['ephemeral', 'orchestrator', 'orchestrates', 'created_by', 'uid'] as const;
+const PROTECTED_CONFIG_KEYS = ['ephemeral', 'orchestrator', 'orchestrates', 'created_by', 'uid', 'extra_dirs'] as const;
 
 
 export function stripProtectedKeys(cfg: AgentConfig): AgentConfig {

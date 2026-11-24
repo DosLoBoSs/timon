@@ -65,7 +65,7 @@ function fakeFence(
 }
 
 /** A fenced launch the test ends by hand: what its CLI wrote on stderr, then its exit code. */
-async function endLaunch(outcome: MissionFenceOutcome, fence: HostFence | undefined, stderrText: string, code: number | null): Promise<string> {
+async function endLaunch(outcome: MissionFenceOutcome, fence: HostFence | undefined, stderrText: string, code: number | null, signal: NodeJS.Signals | null = null): Promise<string> {
   const stderr = new PassThrough();
   const proc = Object.assign(new EventEmitter(), { stderr });
   const settled = watchFencedLaunch(proc, outcome, { fence });
@@ -73,16 +73,19 @@ async function endLaunch(outcome: MissionFenceOutcome, fence: HostFence | undefi
   stderr.on('data', (chunk: Buffer) => { read += chunk.toString(); }); // the mission's own reader
   stderr.write(stderrText);
   await new Promise((resolve) => setImmediate(resolve));
-  proc.emit('close', code);
+  proc.emit('close', code, signal);
   await settled;
   return read;
 }
+
+/** A launch outcome's policy where none is read. */
+const FENCE_OFF: FencePolicy = { mode: 'off', enabled: false, ro: [], rw: [], exec: [], deny: [], denyUnderTimonHome: [], unixSockets: 'allow', ignored: [] };
 
 function fencedOutcome(name: string, mechanism: 'landlock' | 'seatbelt' = 'landlock'): MissionFenceOutcome & { state: 'fenced' } {
   const policyFile = join(TH, 'run', 'fence', `${name}.policy`);
   mkdirSync(join(TH, 'run', 'fence'), { recursive: true });
   writeFileSync(policyFile, 'x');
-  return { state: 'fenced', mechanism, policyFile, tmpDir: null, workspace: 'rw', packageCacheDir: null, credentialStoreWritable: false };
+  return { state: 'fenced', mechanism, policyFile, tmpDir: null, workspace: 'rw', packageCacheDir: null, credentialStoreWritable: false, policy: FENCE_OFF };
 }
 
 test('a fence that answers wraps the CLI, with the policy under the folder no mission reaches', () => {
@@ -94,7 +97,11 @@ test('a fence that answers wraps the CLI, with the policy under the folder no mi
   assert.deepEqual(launch, {
     cmd: '/opt/timon/timon-fence',
     args: ['--policy', policyFile, '--', '/usr/bin/claude', '-p'],
-    fence: { state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: join(TH, 'tmp', 'missions', MISSION), workspace: 'rw', packageCacheDir: null, credentialStoreWritable: false },
+    fence: {
+      state: 'fenced', mechanism: 'landlock', policyFile, tmpDir: join(TH, 'tmp', 'missions', MISSION), workspace: 'rw', packageCacheDir: null, credentialStoreWritable: false,
+      // The very policy the launcher got: what a refusal is checked against.
+      policy: fence.policies[0],
+    },
   });
   assert.equal(fence.policies[0]?.enabled, true);
   assert.ok(fence.policies[0]?.rw.includes(TARGET.cwd), 'the policy is the daemon\'s own projection of the target');
@@ -578,6 +585,45 @@ test('a CLI that fails on its own leaves the fence on, without asking the launch
   assert.equal(hostFenceStatus(fence).state, 'ready');
 });
 
+test('a launch ended by SIGILL asks the launcher, and only its own SIGILL turns the fence off', async () => {
+  const original = console.error;
+  console.error = () => {};
+  try {
+    // The CLI itself died on an instruction this CPU lacks: the launcher runs fine.
+    const cliOnly = fakeFence({ available: true, abi: 6 });
+    await endLaunch(fencedOutcome('sigill-cli'), cliOnly, '', null, 'SIGILL');
+    assert.equal(cliOnly.witnessed.length, 1, 'a SIGILL is enough to ask the launcher');
+    assert.equal(hostFenceStatus(cliOnly).state, 'ready');
+
+    const launcher = fakeFence({ available: true, abi: 6 }, undefined, { ran: true, status: null, signal: 'SIGILL', stderr: '' });
+    await endLaunch(fencedOutcome('sigill-launcher'), launcher, '', null, 'SIGILL');
+    const status = hostFenceStatus(launcher);
+    assert.equal(status.state, 'unsupported');
+    assert.match(status.state === 'unsupported' ? status.reason : '', /not compatible with this processor.*not altered/);
+    assert.throws(
+      () => fenceMissionCommand('/usr/bin/claude', [], 'unit-sigill', TARGET, { mode: 'enforce', fence: launcher, warn: () => {} }),
+      (err: unknown) => err instanceof MissionFenceRefusedError && /not compatible with this processor/.test(err.message),
+    );
+    const warnings: string[] = [];
+    const auto = fenceMissionCommand('/usr/bin/claude', [], 'unit-sigill', TARGET, { mode: 'auto', fence: launcher, warn: (l) => warnings.push(l) });
+    assert.ok(auto.fence?.state === 'unfenced' && !auto.fence.tampered);
+    assert.match(warnings.join('\n'), /launched unfenced: .*not compatible with this processor/);
+  } finally {
+    console.error = original;
+    resetFenceLaunchFailureForTest();
+  }
+});
+
+test('a witness run names the signal that ended the launcher', { skip: process.platform === 'win32' && 'a stand-in launcher is a shell script' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fence-sigill-'));
+  const launcher = join(dir, 'timon-fence');
+  writeFileSync(launcher, '#!/bin/sh\nkill -ILL $$\n');
+  chmodSync(launcher, 0o755);
+  const witness = await runFenceWitness(launcher, []);
+  assert.ok(witness.ran && witness.status === null && witness.signal === 'SIGILL', JSON.stringify(witness));
+  assert.match(fenceWitnessFailure('landlock', witness) ?? '', /not compatible with this processor/);
+});
+
 test('what a witness run proves', () => {
   assert.equal(fenceWitnessFailure('landlock', { ran: true, status: 0, stderr: '' }), null);
   assert.equal(fenceWitnessFailure('landlock', { ran: true, status: 127, stderr: 'timon-fence: cannot execute /bin/true: No such file or directory' }), null,
@@ -593,6 +639,9 @@ test('what a witness run proves', () => {
   assert.equal(fenceWitnessFailure('seatbelt', { ran: true, status: null, stderr: '' }), null, 'a signal comes from outside sandbox-exec');
   assert.equal(fenceWitnessFailure('seatbelt', { ran: true, status: null, stderr: 'sandbox-exec: sandbox_apply: Operation not permitted\n' }), null);
   assert.equal(fenceWitnessFailure('landlock', { ran: true, status: null, stderr: '' }), null);
+  assert.match(fenceWitnessFailure('landlock', { ran: true, status: null, signal: 'SIGILL', stderr: '' }) ?? '', /not compatible with this processor/);
+  assert.equal(fenceWitnessFailure('landlock', { ran: true, status: null, signal: 'SIGKILL', stderr: '' }), null, 'killed from outside');
+  assert.equal(fenceWitnessFailure('seatbelt', { ran: true, status: null, signal: 'SIGILL', stderr: '' }), null, 'sandbox-exec is the OS\'s own binary');
   for (const code of ['ENOENT', 'EACCES', 'ENOEXEC', 'EPERM']) {
     assert.equal(fenceWitnessFailure('seatbelt', { ran: false, reason: `spawn /usr/bin/sandbox-exec ${code}`, timedOut: false, code }),
       `the fence launcher cannot run (spawn /usr/bin/sandbox-exec ${code})`, code);
@@ -857,4 +906,23 @@ test('a launch is expected fenced against the keychain only with a ready fence a
   assert.equal(missionFenceExpected({ agent: 'coder' }, on(isolation('auto', { writable: ['~/'] }))), false, 'the whole home, globally');
   assert.equal(missionFenceExpected({ agent: 'coder' }, on(isolation('auto', { writable: ['~/Library/Caches'] }))), true, 'a sibling folder');
   assert.equal(missionFenceExpected({ agent: 'coder' }, { ...on(byAgent), platform: 'linux' }), true, 'no such store off macOS');
+});
+
+test('an exception on a folder that does not exist is said once, naming the setting', async () => {
+  const { config, setConfig } = await import('./config/load.js');
+  const previous = config();
+  const missing = join(tmpdir(), `timon-fence-missing-${process.pid}`, 'cache');
+  setConfig({ ...previous, host: { ...previous.host, isolation: { ...previous.host.isolation, writable: [missing] } } });
+  const warnings: string[] = [];
+  try {
+    for (const unit of ['unit-missing-1', 'unit-missing-2']) {
+      fenceMissionCommand('/usr/bin/claude', ['-p'], unit, TARGET, { mode: 'auto', fence: fakeFence({ available: true, abi: 6 }), warn: (l) => warnings.push(l) });
+    }
+  } finally {
+    setConfig(previous);
+  }
+  const said = warnings.filter((line) => line.includes(missing));
+  assert.equal(said.length, 1, 'once per path, not at every launch');
+  assert.match(said[0] ?? '', /opens nothing: the folder does not exist/);
+  assert.match(said[0] ?? '', /Settings › System › Security/);
 });

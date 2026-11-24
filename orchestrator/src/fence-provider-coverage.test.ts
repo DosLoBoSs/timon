@@ -83,6 +83,12 @@ for (const dialect of PROCESS_DIALECTS) {
   // Data only, the way `~/.timon/backends/<id>.json` is loaded: the dialect's plugin runs it.
   registerFileProfile('local-file', { id: `user-${dialect}`, dialect, label: `User ${dialect}`, models: [], defaultModel: null });
 }
+// An API-key profile on the claude dialect, as a user's file writes one (TODO #1104): an env of its
+// own, unlike `user-claude`, must not send its CLI back to the user's `~/.claude`.
+registerFileProfile('local-file', {
+  id: 'user-claude-key', dialect: 'claude', label: 'User claude, API key', models: [], defaultModel: null,
+  env: { ANTHROPIC_BASE_URL: 'https://llm.invalid/anthropic', ANTHROPIC_API_KEY: 'test-only-key' },
+});
 // A provider pack's entry: data again, on another plugin's dialect.
 registerPackProfile('acme-pack', { id: 'pack-codex', dialect: 'codex', label: 'Pack', models: [], defaultModel: null });
 
@@ -92,14 +98,15 @@ registerPackProfile('acme-pack', { id: 'pack-codex', dialect: 'codex', label: 'P
  */
 const EXPECTED = [
   'claude', 'codex', 'grok', 'copilot', 'pi', 'kimi', 'ollama-cloud', 'opencode', 'hermes',
-  'pack-codex', ...PROCESS_DIALECTS.map((d) => `user-${d}`),
+  'pack-codex', 'user-claude-key', ...PROCESS_DIALECTS.map((d) => `user-${d}`),
 ];
 /**
- * Dialects whose launch names no folder of the Timon home: the ACP agents get their instructions
- * and MCP servers over the protocol and keep their state in their own folders of the user's home.
+ * Dialects whose launch names no folder of the Timon home: Hermes gets its instructions and MCP
+ * servers over the protocol and keeps its state in its own folder of the user's home. opencode is
+ * not here: its cache and state live in the profile folder, which the fence must open.
  * Their missions are still checked for what they must not reach.
  */
-const NO_TIMON_FOLDER = new Set(['opencode', 'hermes']);
+const NO_TIMON_FOLDER = new Set(['hermes']);
 
 const PROJECT = realpathSync.native(mkdtempSync(join(tmpdir(), 'timon-fence-project-')));
 process.on('exit', () => rmSync(PROJECT, { recursive: true, force: true }));

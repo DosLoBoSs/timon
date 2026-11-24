@@ -5626,18 +5626,26 @@ async function cmdDoctor(argv) {
   }
   const { diagnose, formatDoctor } = doctor;
   const report = diagnose();
+  const local = isLocalDaemonUrl(timonHome(), API, { packaged: packagedCli() });
   const backendProfiles = await backendProfilesReport({
     // A section read through the route, not `diagnose()`: a CLI process loads
     // no provider, so only the daemon can tell which profiles really run.
-    local: isLocalDaemonUrl(timonHome(), API, { packaged: packagedCli() }),
+    local,
     fetchListing: () => httpRaw('GET', '/api/backends/custom', undefined, 5000),
     loadLocalProfiles: () => loadDist('backends/local-profiles'),
   });
+  // Same reason: the daemon knows the profiles and owns the fence launcher. Each
+  // profile runs that launcher once, under the policy its missions get.
+  const fence = await fenceCoverageSection(local);
   if (argv.includes('--json')) {
-    process.stdout.write(JSON.stringify({ ...report, backendProfiles }, null, 2) + '\n');
+    process.stdout.write(JSON.stringify({ ...report, backendProfiles, fenceCoverage: fence.report }, null, 2) + '\n');
   } else {
     process.stdout.write(formatDoctor(report));
     process.stdout.write(`\n${formatBackendProfiles(backendProfiles)}`);
+    try {
+      const { formatFenceCoverage } = await loadDist('fence-coverage-report');
+      process.stdout.write(`\n${formatFenceCoverage(fence.report, fence.why)}`);
+    } catch { /* an older build without the section */ }
     // The named traps of the support report (TODO #343): unmarked service,
     // a task that never ran, data behind the version, a foreign port.
     const { findings } = await diagnosticReport();
@@ -5652,6 +5660,18 @@ async function cmdDoctor(argv) {
       : '\nFindings: none detected.\n');
   }
   if (!report.ok) process.exit(1);
+}
+
+/** `timon doctor`'s fence coverage, read from the local daemon; `why` says why it is missing. */
+async function fenceCoverageSection(local) {
+  if (!local) return { report: null, why: 'the CLI targets another daemon, whose fence covers another machine' };
+  try {
+    const response = await httpRaw('GET', '/api/doctor/fence-coverage', undefined, 60_000);
+    if (response.ok && response.body && typeof response.body === 'object') return { report: response.body, why: null };
+    return { report: null, why: `the daemon refused the check (${response.status})` };
+  } catch {
+    return { report: null, why: 'the daemon does not answer' };
+  }
 }
 
 /** The report the app's error boxes copy, built here without the database:

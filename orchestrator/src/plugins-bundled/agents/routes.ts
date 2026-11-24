@@ -20,7 +20,7 @@ import { agentAvatarSchema, applyAgentAvatar } from '../../agent-avatar.js';
 import { recordWriteOrigin } from '../../write-origin.js';
 import { GLOBAL_INSTRUCTIONS_FILE } from '../../paths.js';
 import { GLOBAL_INSTRUCTIONS_MAX_CHARS, readGlobalInstructions, writeGlobalInstructions } from '../../global-instructions.js';
-import { agentConfigRefusal, agentWideningDenied, canonicalizePermissionMode, isPrivilegedCaller, overrideAuthority, promptRewriteRefusal, rejectOverride, skillWideningDenied } from '../../users/privileged-overrides.js';
+import { agentConfigRefusal, agentWideningDenied, canonicalizePermissionMode, isPrivilegedCaller, overrideAuthority, PRIVILEGED_CONFIG_PERMISSION, promptRewriteRefusal, rejectOverride, skillWideningDenied } from '../../users/privileged-overrides.js';
 import { listSkillAttachments } from '../../skill-attachments.js';
 import { scopedDb } from '../../users/scoped-db.js';
 import { browseAgentFiles, deleteAgentPath, mkdirAgentPath, moveAgentPath, openAgentFileRaw, openExternalFileRaw, readExternalFile, renameAgentPath, writeAgentFile, writeExternalFile } from '../../files.js';
@@ -57,6 +57,7 @@ import {
 } from '../../users/skills-mcp-guard.js';
 import { AGENT_ICON_URL_PREFIX, isServedIconUrl, readAgentIcon } from '../../uploads.js';
 import { registerSkillAttachmentRoutes } from './skill-attachment-routes.js';
+import { registerExtraDirsRoutes } from './extra-dirs-routes.js';
 import { checkReasoningEffort } from './reasoning-effort.js';
 import { agentConfigWarnings } from '../../auto-mode-preallow.js';
 import { migrateTrashedAgentSkills } from '../../agent-skills-migration.js';
@@ -345,6 +346,11 @@ function trashRestoreRefusal(req: express.Request, id: string, cfg: Record<strin
   }
   const widening = agentWideningDenied(req, cfg, null);
   if (widening) return `restoring this agent brings its tools and MCP servers back: ${widening}`;
+  // Its extra folders come back with it: only who may set them may restore them.
+  const folders = Array.isArray(cfg.extra_dirs) && cfg.extra_dirs.length > 0;
+  if (folders && !privileged && !requestHasPermission(req, PRIVILEGED_CONFIG_PERMISSION)) {
+    return `the trashed agent may reach extra folders: restoring it needs the ${PRIVILEGED_CONFIG_PERMISSION} permission`;
+  }
   // Its skill attachments come back with it: a skill that pre-authorises a tool
   // is judged as if a new agent were given it.
   const held = (trashedAgentSkills(id) ?? []).filter((s) => !s.exclude).map((s) => s.skill);
@@ -1528,6 +1534,7 @@ export function registerRoutes(app: express.IRouter): void {
   });
 
   registerSkillAttachmentRoutes(app);
+  registerExtraDirsRoutes(app);
 
   app.get('/api/skills', (req, res) => {
     const cwd = typeof req.query.cwd === 'string' && req.query.cwd ? req.query.cwd : undefined;

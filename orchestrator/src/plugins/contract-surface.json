@@ -2258,7 +2258,8 @@
         "timonMcp?": "boolean | undefined",
         "readOnlyTools?": "boolean | undefined",
         "agentCommand?": "boolean | undefined",
-        "oneShot?": "boolean | undefined"
+        "oneShot?": "boolean | undefined",
+        "extraDirs?": "readonly { path: string; mode: \"read\" | \"write\"; }[] | undefined"
       }
     },
     "SpawnResult": {

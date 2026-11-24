@@ -24,6 +24,7 @@ import { settingNum } from '../../settings.js';
 import { startEgressProxy } from '../../egress/service.js';
 import { pruneEgressJournal } from '../../egress/journal.js';
 import { registerEgressRoutes } from '../../egress/routes.js';
+import { registerFenceGrantRoutes } from './fence-grant-routes.js';
 
 export const manifest: ModuleManifest = {
   name: '@timon/missions',
@@ -109,6 +110,7 @@ export function apply(ctx: Context): void {
   // moving them would break the front proxy, the CLI and the agents.
   registerRoutes(ctx.http.router());
   registerEgressRoutes(ctx.http.router());
+  registerFenceGrantRoutes(ctx.http.router());
 
   // Expiry of the permission cards must be armed BEFORE the sweep of
   // zombie missions (done by `boot.ts` after the audit): otherwise the cards of

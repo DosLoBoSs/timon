@@ -16,6 +16,8 @@ A mission is a coding CLI that Timon starts on your computer, under your own ope
 
 Most current Linux distributions ship a kernel with Landlock turned on. `timon doctor` and **Settings › System › Security** say which case applies to your computer, and why when missions are not fenced.
 
+On Linux, the fence is applied by a small launcher that ships with Timon and runs on any 64-bit x86 or ARM processor. If `timon doctor` or the Security tab says the fence launcher **is not compatible with this processor**, your Timon version shipped a launcher built for newer processors (some packages needed AVX2): the package is not damaged, and reinstalling the same version changes nothing. Update Timon. Until then, missions follow the mode: **Automatic** starts them unfenced, **Required** refuses them.
+
 ## What the fence does
 
 Inside the fence, a mission:
@@ -73,11 +75,45 @@ Every exception widens what a mission can do: allowing Unix sockets lets that mi
 
 Every object of the `host.isolation` block is strict: a key Timon does not know, or a misspelt one (`writeable`, `unixSocket`), makes the configuration invalid, and the daemon refuses to start rather than run missions with a fence other than the one you wrote. `timon doctor` prints the error with the key at fault, as does the daemon log ([Configuration](../installation/configuration.md)).
 
-A write that the fence refuses shows up as an error in the mission ("permission denied"). If a tool you trust needs a folder of your home, add it as writable for its agent.
+A write that the fence refuses shows up as an error in the mission ("permission denied"). If a tool you trust needs a folder of your home, add it as writable for its agent. An exception on a folder that does not exist yet opens nothing: create the folder first. The daemon log and `timon doctor` name such an exception.
+
+## When the fence refuses a path
+
+When the fence keeps a mission from a path its command-line tool needs, the chat says so in a notice that names the fence (Landlock, or the macOS sandbox), the path, and whether it was a read or a write:
+
+- **Before the mission starts.** Timon checks every path inside its data folder that it hands the tool (its settings, its instructions, its own folders). If the fence would refuse one, the mission is not started, rather than failing the same way turn after turn. A Kanban task is blocked with the same sentence, for you to retry once it is solved.
+- **When a turn fails.** If the tool's error names a path the fence refuses while your account could reach it, the notice names it too, as does the last error of a Kanban task. A backend set aside after such failures says the fence was the cause, instead of an unknown one.
+
+What to do depends on the path:
+
+- **A path inside Timon's data folder**: it is a defect of Timon, not of your setup. Please report it. Until it is fixed, setting the **Mode** to **Off** lets missions run, without the protection.
+- **A folder of your home**: the chat offers it in a card instead of a notice, described below. You can also add it to the agent's [extra folders](#an-agents-extra-folders), or as writable for the agent under **Exceptions**. Either applies from the next mission: the fence of a running mission does not change.
+- **A credential folder** (`~/.ssh`, other tools' sign-ins, or a path of `host.isolation.deny`): the fence always keeps it from missions, and no exception opens it.
+
+### Allow a folder from the chat
+
+When the refused path is one an agent may be given, the chat shows a card instead of the notice: the path, whether it was a read or a write, and the folder Timon offers to open, with **Allow for this agent** and **Refuse**.
+
+- **Allow for this agent** adds the folder to the agent's [extra folders](#an-agents-extra-folders), read-only or read-write as the refusal needed, then starts the mission again: since the fence of a running mission cannot change, Timon stops its process and sends it a message that resumes the same conversation with the folder open. The folder stays open for the agent's next missions; remove it from the **Workspace** tab of the agent's page.
+- **Refuse** closes the card and changes nothing.
+
+The folder offered is the refused folder itself, or the folder of a refused file. Timon offers no card for its own data folder, a credential folder, a path of `host.isolation.deny`, a whole home folder or the root of a disk: those keep the notice above. Only a person signed in to the app can answer the card; an agent, a script or the `timon` command cannot. Allowing takes the same rights as changing the agent's extra folders on its page.
+
+`timon doctor` checks each active backend against this computer's fence: for each one, it has the fence open the folders a mission of that backend uses, and the private files of Timon a mission must never read, under the policy such a mission gets. A line marked ✗ names the path and whether the policy or the kernel refused it.
+
+## An agent's extra folders
+
+An agent can be given folders outside its working folder, in its **Workspace** tab under **Extra folders** (see [Agents](./agents.md#extra-folders)). The fence opens each one at the access you chose: **Read and write**, or **Read only**, which stays read-only even when the folder sits inside a folder the mission may write, so a mission cannot change it. The AI CLI is told as well: Claude Code gets the folders with `--add-dir` and refuses edits in a read-only one, Codex gets the writable ones in its sandbox.
+
+These folders never open what the fence protects: Timon's own folder, a folder that contains it, a whole home folder or disk, and folders of credentials are refused when you add them, and checked again at every mission, since the agent's file can be edited by hand; a folder that no longer passes is left out, and the agent's page says so. A mission cannot give its own agent a folder. The fence is set when a mission starts: a mission already running keeps the folders it started with.
+
+Without a fence (Windows, or **Off**), a read-only folder is only a request to the AI CLI: Claude Code is not given it at all, so an edit there stays a question for you, and nothing stops a shell command from writing in it.
 
 ## Package caches
 
 Inside the fence your home folder is read-only, including the caches of npm and the other package managers. A fenced mission's package managers therefore use a cache that belongs to its agent, inside Timon's data folder: the first `npx -y` MCP server an agent starts downloads its package once, and later missions of that agent reuse it. Missions of other agents can neither read nor write it, and your own cache is never written. Deleting or renaming the agent removes it.
+
+opencode keeps its own cache and state in a folder of Timon's data folder too, one per opencode profile ([opencode](opencode.md#where-missions-keep-opencodes-cache)).
 
 Covered: `npx`, `pnpm dlx` and `uvx`. Not covered: `yarn dlx`, `bunx`, Deno's `npm:` packages, and the Python versions uv would have to download. They can fail inside the fence; adding their cache folder as writable for that agent is the way around it.
 

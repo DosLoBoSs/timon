@@ -126,6 +126,13 @@ export type BuildSpawnOpts = {
   /** Resolved memory directory to inject via --add-dir, or undefined if
    *  memory_scope is NONE or not set. */
   memoryDir?: string;
+  /** Folders outside the working directory a person gave the agent
+   *  (`agent-extra-dirs.ts`), each checked by the daemon at this launch:
+   *  `read` to read, `write` to read and write. The fence enforces both when
+   *  it applies; a dialect tells its CLI (Claude `--add-dir`, Codex
+   *  `writable_roots` for `write`) and must never make a `read` one writable.
+   *  Absent = none. */
+  extraDirs?: ReadonlyArray<{ path: string; mode: 'read' | 'write' }>;
   /** `false` when the backend declares `capabilities.timonMcp: false`: the
    *  dialect declares none of Timon's own MCP servers (`timon`, `timon_ask`)
    *  to the agent. Absent = declare them, as always. */

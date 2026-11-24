@@ -118,6 +118,32 @@ test('buildSpawn: opencode and Antigravity are launched as `acp`, Hermes as laun
   }
 });
 
+test('opencode keeps its cache and state in the profile\'s folder, which the fence lets its missions write', async () => {
+  const { TIMON_HOME } = await import('../paths.js');
+  const { resolveFence, fenceAccess } = await import('../host/isolation.js');
+  const { config } = await import('../config/load.js');
+  const cfg = config();
+  const o = opts();
+  const spawn = await buildUnderSeal('opencode', o);
+  const folder = join(TIMON_HOME, 'provider-cache', 'provider-acp', 'profiles', 'opencode');
+  assert.equal(spawn.env?.XDG_CACHE_HOME, join(folder, 'cache'));
+  assert.equal(spawn.env?.XDG_STATE_HOME, join(folder, 'state'));
+  assert.equal(spawn.env?.XDG_CONFIG_HOME, undefined, 'its configuration stays the user\'s');
+  assert.equal(spawn.env?.XDG_DATA_HOME, undefined, 'its sign-in and sessions stay the user\'s');
+  const policy = resolveFence(
+    { ...cfg, host: { ...cfg.host, isolation: { ...cfg.host.isolation, filesystem: 'enforce' } } },
+    { timonHome: TIMON_HOME, cwd: o.cfg.cwd, backend: 'opencode', missionId: o.missionId, providerPlugin: 'provider-acp', providerProfile: 'opencode' },
+  );
+  for (const variable of ['XDG_CACHE_HOME', 'XDG_STATE_HOME'] as const) {
+    assert.equal(fenceAccess(policy, join(spawn.env?.[variable] ?? '/', 'opencode', 'x')).write, true, `${variable} is writable under the fence`);
+  }
+  for (const id of ['hermes', 'antigravity'] as const) {
+    const other = await buildUnderSeal(id, opts());
+    assert.equal(other.env?.XDG_CACHE_HOME, undefined, id);
+    assert.equal(other.env?.XDG_STATE_HOME, undefined, id);
+  }
+});
+
 test('a daemon one-shot on opencode carries the deny config; a mission, and the agents without the lever, do not', async () => {
   const oneShot = await buildUnderSeal('opencode', opts({ oneShot: true }));
   const config = JSON.parse(oneShot.env?.OPENCODE_CONFIG_CONTENT ?? '{}') as { permission?: Record<string, unknown> };

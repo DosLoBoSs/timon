@@ -224,3 +224,51 @@ test('deleting or renaming an agent removes its package cache', () => {
   assert.equal(existsSync(cache('fence.new')), false);
   assert.ok(existsSync(cache('fence.witness')), 'the other agents keep theirs');
 });
+
+test('a path of the Timon home the CLI is told to use and the fence refuses stops the launch, named', async () => {
+  // `run/` holds the daemon's private state: no mission ever reaches it, even as its working directory.
+  const refused = join(TIMON_HOME, 'run', 'fence-preflight');
+  mkdirSync(refused, { recursive: true });
+  upsertAgent({ name: 'fence.walled', system_prompt: 'witness', config: { backend: 'codex', cwd: refused, skills: [], memory_scope: 'NONE' } });
+  const host = getHost();
+  const original = { spawn: host.spawn, fence: host.fence };
+  let spawned = false;
+  host.fence = {
+    mechanism: 'landlock',
+    probe: () => ({ available: true, abi: 6 }),
+    wrap: (_policy, cmd, args, policyFile) => ({ cmd: LAUNCHER, args: ['--policy', policyFile, '--', cmd, ...args] }),
+    witness: async () => ({ ran: true, status: 0, stderr: '' }),
+  };
+  host.spawn = (() => { spawned = true; throw new Error('never'); }) as typeof host.spawn;
+  const { MissionFenceBlockedError } = await import('./resources.js');
+  const { dbApi } = await import('./db.js');
+  let caught: unknown = null;
+  try {
+    await spawnAgent('fence.walled', 'ping');
+  } catch (err) {
+    caught = err;
+  } finally {
+    host.spawn = original.spawn;
+    host.fence = original.fence;
+  }
+  assert.equal(spawned, false, 'no CLI started');
+  assert.ok(caught instanceof MissionFenceBlockedError, `refused by the preflight, got ${String(caught)}`);
+  const { refusal } = caught;
+  assert.equal(refusal.stage, 'launch');
+  assert.equal(refusal.access, 'write');
+  assert.equal(refusal.timonHome, true);
+  assert.equal(refusal.grantable, false, 'a folder of the Timon home is never offered to a person');
+  assert.equal(refusal.agent, 'fence.walled');
+  assert.equal(refusal.mechanism, 'landlock');
+  assert.deepEqual(refusal.setting, { category: 'system', tab: 'security' });
+  assert.match(caught.message, /mission fence \(Landlock\)/);
+  assert.match(caught.message, /Settings › System › Security/);
+  // The thread carries the same object, for its notice and an access card.
+  const event = dbApi.listEvents(refusal.missionId).find((e) => e.type === 'fence_refused');
+  assert.ok(event, 'a fence_refused event is recorded on the mission');
+  const payload = JSON.parse(event.payload) as Record<string, unknown>;
+  assert.equal(payload.path, refusal.path);
+  assert.equal(payload.access, 'write');
+  assert.equal(payload.missionId, refusal.missionId);
+  assert.equal(dbApi.getMission(refusal.missionId)?.status, 'failed');
+});

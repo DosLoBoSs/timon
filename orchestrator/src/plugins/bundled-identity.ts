@@ -169,7 +169,7 @@ export const BUNDLED_IDENTITY: Readonly<Record<string, BundledIdentity>> = Objec
   // The official connectors: a section at the head of the MCP tab, and the
   // `apps.card` slot its cards are painted by. `/apps` is gone (it redirects).
   '@timon/mcp-apps': identity('behavior', { slots: ['mcp.featured', 'apps.card'] }),
-  '@timon/missions': identity(['page', 'widget'], { route: '/missions', slots: ['nav.item', 'cockpit.widget', 'chat.media'] }),
+  '@timon/missions': identity(['page', 'widget'], { route: '/missions', slots: ['nav.item', 'cockpit.widget', 'chat.media', 'chat.fence'] }),
   '@timon/projects': identity(['page', 'widget'], { route: '/projects', slots: ['nav.item', 'cockpit.widget'] }),
   // The bell (top bar) and the same list as a movable card.
   '@timon/notifications': identity(['page', 'widget'], { route: '/notifications', slots: ['cockpit.widget'] }),

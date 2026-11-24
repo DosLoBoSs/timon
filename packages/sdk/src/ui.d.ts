@@ -444,6 +444,45 @@ declare module '@timon/ui' {
     refuse(): Promise<boolean>;
   } | null;
 
+  /**
+   * A path the mission fence refused, with the folder Timon offers to open to
+   * the agent, as the `chat.fence` slot receives it (client API 19). Never the
+   * Timon home nor a credential folder: Timon offers no card for those.
+   */
+  export type FenceGrantView = {
+    /** The refusal's id, which the answer names. */
+    id: string;
+    missionId: string;
+    agent: string;
+    /** The refused path, with the home folded to `~`. */
+    display: string;
+    access: 'read' | 'write';
+    mechanism: 'landlock' | 'seatbelt';
+    /** `launch`: refused before the CLI ran. `run`: read from a turn that bounced. */
+    stage: 'launch' | 'run';
+    /** The folder an accord adds to the agent's extra folders, and the access it gives. */
+    folder: { path: string; display: string; mode: 'read' | 'write' };
+    status: 'pending' | 'allowed' | 'refused';
+    /** After an accord given in this window: whether the mission started again; `null` otherwise. */
+    relaunched: boolean | null;
+  };
+  /** What a `chat.fence` occupant is rendered for, and its two answers (client API 19). */
+  export type FenceGrantValue = {
+    grant: FenceGrantView;
+    busy: boolean;
+    highlighted: boolean;
+    /**
+     * Opens the folder to the agent and relaunches the mission, from the
+     * person's session; Timon checks the folder again first. Resolves `true`
+     * once recorded.
+     */
+    allow(): Promise<boolean>;
+    /** Closes the card; nothing is opened. */
+    refuse(): Promise<boolean>;
+  };
+  /** The card a `chat.fence` occupant is rendered for; `null` outside that slot (client API 19). */
+  export function useFenceGrant(): FenceGrantValue | null;
+
   /** One installer of a published Timon version (client API 15). `key` is `<os>-<arch>-<format>`. */
   export type UpdateArtifact = {
     key: string;

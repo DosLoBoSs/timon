@@ -94,7 +94,13 @@ import { resolvedPermissionModeFor } from './backends/catalog.js';
 import { reportInertShellPreallow } from './auto-mode-preallow.js';
 import { nestedSandboxOf } from './backends/capabilities.js';
 import { settingBool, settingNum } from './settings.js';
-import { missionFenceExpected, profileLimits, watchFencedLaunch, wrapMissionLaunch } from './resources.js';
+import {
+  MissionFenceBlockedError, missionFenceExpected, profileLimits, releaseFencePolicy, watchFencedLaunch, wrapMissionLaunch,
+  type MissionFenceOutcome,
+} from './resources.js';
+import {
+  fencePreflight, fenceRefusal, fenceRefusalInOutput, fenceRefusalMessage, launchFenceNeeds, type FenceRefusal,
+} from './fence-refusal.js';
 import { getHost, type Host } from './host/index.js';
 import {
   backgroundDescendants, cliBaseline, cliProcessPid, readProcessTable, type ProcessEntry,
@@ -119,6 +125,8 @@ import { parkProviderScratch } from './backends/provider-scratch.js';
 import { packageCacheEnv } from './backends/package-cache-env.js';
 import { launchBackendName, launchForMission, replaceMissionLaunch, resolveLaunchBackend } from './backends/account-launch.js';
 import { servedIconUrl } from './uploads.js';
+import { launchExtraDirs, storedExtraDirs, type AgentExtraDir } from './agent-extra-dirs.js';
+import { withFenceGrantOffer } from './fence-grant.js';
 import {
   systemEnv, secretsEnvFor, inheritEnvEnabled,
   injectedSecretsFor, journalInjectedSecrets,
@@ -388,6 +396,10 @@ export type RunningAgent = {
   /** Last bytes the backend wrote on stderr: the only explanation a CLI gives
    *  when it dies without a `result` (auth refusal, policy denial, crash). */
   stderrTail?: string;
+  /** What the fence of this process applies; null for an unfenced or remote launch. */
+  fence?: MissionFenceOutcome | null;
+  /** Fence refusals already recorded for this process, by path (`noteFenceRefusalIn`). */
+  fenceRefusals?: Map<string, FenceRefusal>;
   /** Model requested DURING an active turn, to apply at `result`. A hot
    *  switch during a turn would only take effect on the next CLI turn,
    *  while mixing both models in `result.modelUsage` would muddy the trace.
@@ -1840,7 +1852,8 @@ export async function spawnAgent(
  * relaunch and the steer restart, so none of them reads it as a crash.
  */
 function launchFailureCause(err: unknown): InterruptionReason | null {
-  return err instanceof CwdUnusableError ? null : 'crash';
+  // Same for a path the fence refuses (`fencePreflight`): the thread's `fence_refused` names it.
+  return err instanceof CwdUnusableError || err instanceof MissionFenceBlockedError ? null : 'crash';
 }
 
 /**
@@ -1864,7 +1877,13 @@ export class BackendExhaustedError extends Error {
  *  none) before giving the conversation back to the backend it was leaving. */
 const HANDOVER_START_TIMEOUT_MS = 120_000;
 
-type MissionLaunch = { spec: SpawnResult; proc: ChildProcessWithoutNullStreams; procEnv: NodeJS.ProcessEnv; missionToken: string };
+type MissionLaunch = {
+  spec: SpawnResult;
+  proc: ChildProcessWithoutNullStreams;
+  procEnv: NodeJS.ProcessEnv;
+  missionToken: string;
+  fence: MissionFenceOutcome | null;
+};
 
 /** The mission's attachments folder, made if missing; `null` when the home refuses it, the fence then leaving it closed. */
 function chatAttachmentsFolder(missionId: string): string | null {
@@ -1922,7 +1941,16 @@ export function missionFenceTarget(input: {
     gitDirs: git.dirs,
     pluginDirs: pluginPackageDirs(commandLines, TIMON_HOME),
     timonRead: attachments ? [attachments] : [],
+    // Read again from the agent's config file, like `agentCwd`: the folders a
+    // person gave the agent, each checked again at this launch.
+    extraDirs: launchExtraDirs(input.agentName),
   };
+}
+
+/** The agent's extra folders for `BuildSpawnOpts`, each checked again; nothing when it has none. */
+function extraDirsOpt(agentName: string, missionId: string): Pick<BuildSpawnOpts, 'extraDirs'> {
+  const dirs = launchExtraDirs(agentName, (message) => console.warn(`[agent] mission ${missionId.slice(0, 8)}: ${message}`));
+  return dirs.length > 0 ? { extraDirs: dirs } : {};
 }
 
 /** Builds the backend's command and spawns it, confined and with the
@@ -2068,6 +2096,21 @@ async function spawnMissionProcess(
     // to the MCP servers it starts (claude, grok), or the names to pass
     // (codex, `serializeCodexMcpToml`).
     if (launch.fence.packageCacheDir) Object.assign(procEnv, packageCacheEnv(launch.fence.packageCacheDir));
+    // A path of the Timon home the CLI is told to use and the fence keeps from it would only
+    // come back as `Operation not permitted`, turn after turn, until the breaker sidelines the
+    // backend (TIM-0159). Refused here instead, naming the fence, the path and the setting.
+    const needs = launchFenceNeeds({ cmd: backendBin, args: spec.args, env: spec.env, cwd, workspace: launch.fence.workspace }, TIMON_HOME);
+    const missing = fencePreflight(launch.fence.policy, needs);
+    if (missing) {
+      releaseFencePolicy(launch.fence);
+      const refusal = fenceRefusal({
+        path: missing.path, access: missing.access, stage: 'launch', policy: launch.fence.policy,
+        mechanism: launch.fence.mechanism, missionId, agent: agentName, backend: backend.name,
+        timonHome: TIMON_HOME, dropped: missing.dropped,
+      });
+      logFenceRefused(missionId, refusal, missing.why);
+      throw new MissionFenceBlockedError(refusal);
+    }
   }
   // Issued once: a second call would revoke the row the first one handed out.
   const missionToken = seal ? seal.token() : procEnv.TIMON_API_TOKEN ?? '';
@@ -2113,7 +2156,7 @@ async function spawnMissionProcess(
       proc.once('error', reject);
     });
   }
-  return { spec, proc, procEnv, missionToken };
+  return { spec, proc, procEnv, missionToken, fence: launch.fence };
 }
 
 /**
@@ -2347,6 +2390,8 @@ async function spawnTurn(args: {
     cfg,
     missionId,
     memoryDir,
+    // A mission that reads no file is handed no folder either.
+    ...(readOnlyTools ? {} : extraDirsOpt(agentName, missionId)),
     // A backend that cannot use Timon's MCP servers is not handed them.
     ...(backendCapabilities(backend.name).timonMcp ? {} : { timonMcp: false }),
     ...(readOnlyTools ? { readOnlyTools: true } : {}),
@@ -2378,6 +2423,7 @@ async function spawnTurn(args: {
     sessionNotFound: false,
     spans: loadSpanState(missionId),
     permissionMode: cfg.permission_mode,
+    fence: launched?.fence ?? null,
   };
   running.set(missionId, agent);
   if (!reattach) bus.publish({ kind: 'turn_started', missionId, at: agent.turnSince });
@@ -2543,11 +2589,13 @@ async function spawnTurn(args: {
     // the provider bouncing.
     if (failed && agent.turnActive && !agent.interruptedBy
         && !agent.terminationIntent && !agent.sessionNotFound) {
+      // A path the fence refused, named in what the CLI wrote: the thread says so, and the breaker's line too.
+      const fenced = noteFenceRefusalIn(agent, agent.stderrTail ?? '');
       const signature = sterileExitSignature(Date.now() - agent.turnSince);
       const trip = signature ? noteSterileTurn(agent.backend.name, signature) : null;
       if (trip) {
         agent.interruptedBy = 'backend_unavailable';
-        noteBackendUnavailable(trip);
+        noteBackendUnavailable(fenced ? { ...trip, fence: fenced } : trip);
       }
     }
     // A backend the breaker just sidelined must NOT go through the pause below:
@@ -4224,6 +4272,47 @@ function logBackendFailed(missionId: string, backendName: string, exitCode: numb
   }
 }
 
+/**
+ * Persisted trace of a path the mission fence refused, rendered as a notice in the
+ * thread: the event's payload is the structured `FenceRefusal`, the contract a card
+ * offering to open the folder reads. `why` says where the launch named the path.
+ */
+function logFenceRefused(missionId: string, refusal: FenceRefusal, why: string | null = null): void {
+  console.warn(`[fence] mission ${missionId.slice(0, 8)}: ${fenceRefusalMessage(refusal)}${why ? ` (${why})` : ''}`);
+  // The id and the offer of "Allow for this agent" (TODO #1162): the card reads them, the answer names the id.
+  withFenceGrantOffer(refusal);
+  const body = { type: 'fence_refused', ...refusal };
+  try {
+    const row = dbApi.insertEvent(missionId, 'fence_refused', body);
+    bus.publish({ kind: 'event', missionId, type: 'fence_refused', timestamp: row.timestamp, payload: body });
+  } catch (insertErr) {
+    console.warn(`[agent] could not record the fence refusal: ${(insertErr as Error).message}`);
+  }
+}
+
+/**
+ * The fence refusal a bounced turn's output names, recorded once per path and
+ * process. Null when the launch was not fenced, or when nothing in the output
+ * is a path the fence refuses and the daemon may reach (`fenceRefusalInOutput`).
+ */
+function noteFenceRefusalIn(agent: RunningAgent, output: string): FenceRefusal | null {
+  const fence = agent.fence;
+  if (fence?.state !== 'fenced') return null;
+  const found = fenceRefusalInOutput(output, fence.policy);
+  if (!found) return null;
+  const seen = agent.fenceRefusals ?? new Map<string, FenceRefusal>();
+  agent.fenceRefusals = seen;
+  const known = seen.get(found.path);
+  if (known) return known;
+  const refusal = fenceRefusal({
+    ...found, stage: 'run', policy: fence.policy, mechanism: fence.mechanism, missionId: agent.missionId,
+    agent: agent.agentName, backend: agent.backend.name, timonHome: TIMON_HOME,
+  });
+  seen.set(found.path, refusal);
+  logFenceRefused(agent.missionId, refusal);
+  return refusal;
+}
+
 export function isRunning(missionId: string): boolean {
   return running.has(missionId);
 }
@@ -4271,6 +4360,31 @@ function notifyParentOnComplete(
  *
  * Returns the number of processes signalled.
  */
+/** How many processes of `agentName` run now, with the configuration they were launched with. */
+export function runningCountForAgent(agentName: string): number {
+  let n = 0;
+  for (const ra of running.values()) if (ra.agentName === agentName) n++;
+  return n;
+}
+
+/**
+ * Stops the process of one mission so that its next turn starts a new one,
+ * resuming the same conversation: the fence of a process is fixed when it
+ * starts, so a folder opened since only reaches a new process. Resolves once
+ * the process is gone (or after `waitMs`), true when there was one.
+ */
+export async function restartMissionProcess(missionId: string, waitMs = 10_000): Promise<boolean> {
+  const ra = running.get(missionId);
+  if (!ra) return false;
+  ra.terminationIntent = 'stopped'; // a relaunch, not an error
+  ra.handle.kill('SIGTERM');
+  const deadline = Date.now() + waitMs;
+  while (running.get(missionId) === ra && Date.now() < deadline) {
+    await new Promise((done) => setTimeout(done, 50));
+  }
+  return true;
+}
+
 export function killRunningForAgent(agentName: string): number {
   let n = 0;
   for (const [missionId, ra] of running) {
@@ -4835,6 +4949,8 @@ export type AgentSummary = {
   reasoning_effort: string | null;
   /** `plugin:<id>` when a plugin created the agent, null otherwise. */
   created_by: string | null;
+  /** Folders outside `cwd` its missions may read or write (`agent-extra-dirs.ts`), as stored. */
+  extra_dirs: AgentExtraDir[];
 };
 
 export type AgentDetails = AgentSummary & { system_prompt: string };
@@ -4880,6 +4996,7 @@ export function getAgent(name: string): AgentDetails | null {
     directives: cfg.directives ?? null,
     reasoning_effort: cfg.reasoningEffort ?? null,
     created_by: cfg.created_by ?? null,
+    extra_dirs: storedExtraDirs(cfg),
   };
 }
 
@@ -4925,7 +5042,7 @@ function changedConfigKeys(before: AgentConfig, after: AgentConfig): string[] {
     .sort();
 }
 
-function publishAgentUpdated(name: string, changed: readonly string[], previousName: string | null = null): void {
+export function publishAgentUpdated(name: string, changed: readonly string[], previousName: string | null = null): void {
   if (changed.length === 0) return;
   const agent = agentEventSnapshot(name);
   if (agent) bus.publish({ kind: 'agent_updated', agent, changed, previousName });
@@ -4967,7 +5084,7 @@ export function upsertAgent(input: {
     // them would take the delegation rights away without anyone asking.
     // The mascot look and the avatar mode are picked elsewhere too
     // (onboarding, the Avatar tab, `agent_update look`, `agent_set_look`).
-    for (const key of ['reports_to', 'team', 'orchestrator', 'orchestrates', 'directives', 'created_by', 'uid', 'look', 'avatar'] as const) {
+    for (const key of ['reports_to', 'team', 'orchestrator', 'orchestrates', 'directives', 'created_by', 'uid', 'look', 'avatar', 'extra_dirs'] as const) {
       if (!(key in config) && current[key] !== undefined) (config as Record<string, unknown>)[key] = current[key];
     }
   }
@@ -5909,6 +6026,7 @@ export function listAgents(): AgentSummary[] {
       directives: cfg.directives ?? null,
       reasoning_effort: cfg.reasoningEffort ?? null,
       created_by: cfg.created_by ?? null,
+      extra_dirs: storedExtraDirs(cfg),
     });
   }
   return out;
@@ -6335,12 +6453,13 @@ function processEvent(agent: RunningAgent, ev: NormalizedEvent): void {
     } else if (sterile) {
       // The CLI said so itself: the next choice of a default or fallback backend skips it.
       if (agent.authFailed) noteProviderSignedOut(agent.backend.name);
+      const fenced = noteFenceRefusalIn(agent, `${resultFailureText(payload)}\n${agent.stderrTail ?? ''}`);
       const trip = noteSterileTurn(
         agent.backend.name, sterile, Date.now(), agent.authFailed ? 'auth' : 'burst',
       );
       if (trip) {
         agent.interruptedBy = 'backend_unavailable';
-        noteBackendUnavailable(trip);
+        noteBackendUnavailable(fenced ? { ...trip, fence: fenced } : trip);
       }
     } else if (transient) {
       // A turn the provider dropped got nowhere: it does not break the burst

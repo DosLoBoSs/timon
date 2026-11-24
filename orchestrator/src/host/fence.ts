@@ -101,6 +101,21 @@ export interface FenceProbe {
   readonly seccomp: boolean;
   /** Why it is unavailable, in English, for doctor and the logs. */
   readonly reason?: string;
+  /**
+   * The launcher died on an instruction this CPU lacks (SIGILL): a build of
+   * the launcher for a newer processor, not a launcher someone altered.
+   */
+  readonly cpuIncompatible?: boolean;
+}
+
+/**
+ * Why a launcher that died with SIGILL cannot fence here. Worded apart from an
+ * altered package on purpose: the file is the one the release signed, it was
+ * only built for a newer CPU, and reinstalling the same version changes nothing.
+ */
+export function launcherCpuIncompatible(binary?: string): string {
+  return `the fence launcher${binary ? ` (${binary})` : ''} is not compatible with this processor: it stopped on an instruction this CPU lacks (SIGILL). `
+    + 'The package is not altered; a Timon update with a launcher built for older processors fixes it';
 }
 
 /** Parses `timon-fence --probe`: `landlock-abi=N seccomp=yes|no`. */
@@ -120,6 +135,7 @@ export function parseFenceProbe(stdout: string, status: number | null): FencePro
 export function probeFence(binary: string): FenceProbe {
   const result = spawnSync(binary, ['--probe'], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
   if (result.error) return { available: false, answered: false, abi: 0, seccomp: false, reason: `the fence launcher cannot run (${result.error.message})` };
+  if (result.signal === 'SIGILL') return { available: false, answered: false, abi: 0, seccomp: false, cpuIncompatible: true, reason: launcherCpuIncompatible(binary) };
   return parseFenceProbe(result.stdout, result.status);
 }
 
@@ -168,9 +184,9 @@ export function runFenceWitness(file: string, args: readonly string[], timeoutMs
       if (stderr.length < WITNESS_STDERR_MAX) stderr += chunk.toString('utf8');
     });
     child.once('error', (err) => settle(spawnFailure(err)));
-    child.once('close', (status) => settle(timedOut
+    child.once('close', (status, signal) => settle(timedOut
       ? { ran: false, reason: `no answer within ${timeoutMs} ms`, timedOut: true }
-      : { ran: true, status, stderr: stderr.slice(0, WITNESS_STDERR_MAX) }));
+      : { ran: true, status, stderr: stderr.slice(0, WITNESS_STDERR_MAX), ...(signal ? { signal } : {}) }));
   });
 }
 
@@ -183,7 +199,10 @@ export function runFenceWitness(file: string, args: readonly string[], timeoutMs
    manifest lists `native/timon-fence` — whose launcher is gone, no longer
    executable, replaced or unable to run is a sign the package was altered
    after the boot check: `auto` still launches, by design, but says
-   so in those words, and `enforce` refuses. A machine whose release does not
+   so in those words, and `enforce` refuses. A signed launcher that dies on
+   an instruction this CPU lacks (SIGILL) is neither: the file is intact, it
+   was built for a newer processor, and it reads as such ("unsupported" with
+   its own reason). A machine whose release does not
    list the launcher (an older package, another OS, a source checkout) keeps
    the plain "unsupported" outcome.
    ────────────────────────────────────────────────────────────────────────── */
@@ -275,6 +294,8 @@ export function fenceStatus(options: FenceStatusOptions = {}): FenceStatus {
     if (problem) return { state: 'tampered', reason: `the fence launcher this release ships (${binary}) is ${problem}`, abi: 0 };
     const result = probe(binary);
     if (result.available) return { state: 'ready', binary, abi: result.abi, seccomp: result.seccomp };
+    // The digest above matched: a launcher that dies with SIGILL is the one the release signed.
+    if (result.cpuIncompatible) return { state: 'unsupported', reason: result.reason ?? launcherCpuIncompatible(binary), abi: 0 };
     if (!result.answered) return { state: 'tampered', reason: `the fence launcher this release ships (${binary}) does not run: ${result.reason ?? 'no answer'}`, abi: 0 };
     return { state: 'unsupported', reason: result.reason ?? 'no fence on this kernel', abi: result.abi };
   }
