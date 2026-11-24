@@ -145,9 +145,11 @@ export function registerExtraDirsRoutes(app: express.IRouter): void {
     }
     const { path, mode } = body.data;
     write(req, res, (current) => {
+      // A folder already listed changes mode in place: the list keeps its order.
       const key = resolve(path);
-      const kept = current.filter((d) => resolve(d.path) !== key);
-      return [...kept, { path, mode }];
+      return current.some((d) => resolve(d.path) === key)
+        ? current.map((d) => (resolve(d.path) === key ? { path: d.path, mode } : d))
+        : [...current, { path, mode }];
     }, body.data.restart);
   });
 
