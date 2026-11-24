@@ -99,7 +99,7 @@ test('allowing posts the decision for this refusal of this mission, then shows t
   await w.click('[data-decision="allow"]');
   await w.until(() => Boolean(document.querySelector('[data-fence-grant-state="allowed"]')), 'the card to show the accord');
   assert.deepEqual(w.calls, [{ method: 'POST', url: '/api/ui/missions/m1/fence-grants/refusal-1', body: { decision: 'allow' } }]);
-  assert.equal(document.querySelector('[data-decision="allow"]'), null, 'an answered card offers no answer');
+  assert.ok(!document.querySelector('[data-decision="allow"]'), 'an answered card offers no answer');
   assert.match(document.body.textContent ?? '', /~\/\.cache\/tool is open to lib\.coder/);
 });
 
@@ -119,7 +119,7 @@ test('a plugin that takes the slot reads the same card and answers through the h
   const undo = w.slots.register({ slot: w.slots.CHAT_FENCE_GRANT_SLOT, pluginId: 'acme' }, Replacement);
   t.after(undo);
   await w.render(view());
-  assert.equal(document.querySelector('[data-decision="allow"]'), null, 'the product card gave way');
+  assert.ok(!document.querySelector('[data-decision="allow"]'), 'the product card gave way');
   await w.click('[data-replacement="/home/u/.cache/tool"]');
   await w.until(() => w.calls.length === 1, 'the replacement to answer');
   assert.deepEqual(w.calls[0]!.body, { decision: 'refuse' });
