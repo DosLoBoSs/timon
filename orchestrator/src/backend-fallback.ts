@@ -216,7 +216,7 @@ export function noteBackendUnavailable(trip: BreakerTrip): void {
     return;
   }
   notifyUser(
-    `Backend ${name}: sidelined by the circuit breaker`,
+    `Backend ${name}: sidelined by the circuit breaker${trip.fence ? ', the mission fence refused a path' : ''}`,
     [
       `\`${name}\` has returned ${trip.failures} mission(s) in a row without producing a single turn ` +
       `(${trip.signature}), inside ${Math.round(trip.spanMs / 1000)} s.`,
@@ -236,20 +236,30 @@ export function noteBackendUnavailable(trip: BreakerTrip): void {
       '- Missions and tasks that depend on it switch onto their fallback plan.',
     ].join('\n'),
     {
-      message: daemonMessage('backend_breaker_tripped', {
-        backend: name,
-        failures: trip.failures,
-        signature: trip.signature,
-        seconds: Math.round(trip.spanMs / 1000),
-        // 0 for a proven backend: the message then leaves out the setup paragraph.
-        minutes: proven ? 0 : Math.max(1, Math.round((until - Date.now()) / 60_000)),
-        until,
-        // `none` keeps the message's "cause unknown" paragraph; a refusal of the fence replaces it.
-        fenceAccess: trip.fence?.access ?? 'none',
-        fencePath: trip.fence?.display ?? '',
-        fenceMechanism: trip.fence ? fenceMechanismName(trip.fence.mechanism) : '',
-        fenceTimonHome: trip.fence?.timonHome ? 1 : 0,
-      }),
+      // A trip the fence caused has a known cause: its own message, so that the
+      // cards stored before it still read under the code they were written with.
+      message: trip.fence
+        ? daemonMessage('backend_breaker_fence', {
+          backend: name,
+          failures: trip.failures,
+          signature: trip.signature,
+          seconds: Math.round(trip.spanMs / 1000),
+          minutes: proven ? 0 : Math.max(1, Math.round((until - Date.now()) / 60_000)),
+          until,
+          access: trip.fence.access,
+          path: trip.fence.display,
+          mechanism: fenceMechanismName(trip.fence.mechanism),
+          timonHome: trip.fence.timonHome ? 1 : 0,
+        })
+        : daemonMessage('backend_breaker_tripped', {
+          backend: name,
+          failures: trip.failures,
+          signature: trip.signature,
+          seconds: Math.round(trip.spanMs / 1000),
+          // 0 for a proven backend: the message then leaves out the setup paragraph.
+          minutes: proven ? 0 : Math.max(1, Math.round((until - Date.now()) / 60_000)),
+          until,
+        }),
     },
   );
 }
