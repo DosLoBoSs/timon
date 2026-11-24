@@ -43,6 +43,10 @@ Replies stream into the chat, tool calls appear with their results, and the mode
 
 These short sessions do not trust the project's `opencode.json`, which an agent could have written: a provider declared there only keeps its model names, an address on this machine and a key written out in full. A local model keeps working. A provider on another machine, or one whose key is written `{env:…}` or `{file:…}`, belongs in your global `~/.config/opencode/opencode.json`: if the project's file points a provider elsewhere, the compaction fails in seconds and the daemon log names the provider, rather than sending the conversation to another one.
 
+## Where missions keep opencode's cache
+
+opencode's sign-in, configuration and sessions stay where your own opencode keeps them. Its cache (the models list, the packages of its providers, the tools it downloads) and its state (its locks, recent models, prompt history) go to a folder of Timon's data folder instead, one per opencode profile: inside the [mission fence](mission-isolation.md) your home folder is read-only, and opencode could neither take its locks nor install a provider it had not used yet. The first mission therefore downloads the models list again, and the prompts of missions no longer appear in the history of the opencode you use in a terminal.
+
 ## Limitations
 
 - **Permissions are opencode's.** No Allow / Deny cards, and the agent's permission mode does not narrow what opencode may do: set them in the `permission` key of `opencode.json`.
