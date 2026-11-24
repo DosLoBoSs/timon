@@ -904,3 +904,64 @@ test('a fence lets a mission write the macOS login keychain only through a grant
   assert.equal(fenceWritesCredentialStore(policy([`${home}/Library/Keychains`]), 'darwin', home), true);
   assert.equal(fenceWritesCredentialStore(policy([`${home}/Library`]), 'linux', home), false, 'no such store elsewhere');
 });
+
+/* ── An agent's extra folders (`extraDirs`, `extraDirFenceProblem`) ─────────── */
+
+const { extraDirFenceProblem } = await import('./isolation.js');
+
+test('fence: an extra folder is granted at its mode, `read` staying read-only even inside the working tree', { skip: POSIX_FIXTURES }, () => {
+  const policy = resolveFence(cfg(), fullTarget({
+    cwd: `${FAKE_HOME}/code/app`,
+    extraDirs: [
+      { path: `${FAKE_HOME}/notes`, mode: 'write' },
+      { path: `${FAKE_HOME}/library`, mode: 'read' },
+      { path: `${FAKE_HOME}/code/app/vendor`, mode: 'read' },
+    ],
+  }));
+  assert.equal(access(policy, `${FAKE_HOME}/notes/today.md`), 'rw');
+  assert.equal(access(policy, `${FAKE_HOME}/library/book.md`), 'rx');
+  assert.equal(access(policy, `${FAKE_HOME}/code/app/vendor/lib.js`), 'rx', 'a read folder below a writable one stays read-only');
+  assert.equal(access(policy, `${FAKE_HOME}/code/app/src/a.ts`), 'rw', 'the rest of the working tree stays writable');
+  assert.equal(access(policy, `${FAKE_HOME}/elsewhere/f`), 'rx', 'an unlisted folder of the home stays read-only');
+});
+
+test('fence: an extra folder never opens the Timon home, its ancestors, a whole home or a credentials folder', { skip: POSIX_FIXTURES }, () => {
+  const wanted = [
+    `${TH}/agents/timon.coder`, TH, FAKE_HOME, '/', `${FAKE_HOME}/.ssh`, `${FAKE_HOME}/.ssh/keys`, `${FAKE_HOME}/.codex`,
+  ];
+  const policy = resolveFence(cfg(), fullTarget({ extraDirs: wanted.map((path) => ({ path, mode: 'write' })) }));
+  assert.deepEqual(policy.ignored.map((i) => i.path).filter((p) => wanted.includes(p)).sort(), [...wanted].sort());
+  assert.equal(access(policy, `${FAKE_HOME}/.ssh/id_ed25519`), 'none');
+  assert.equal(access(policy, `${TH}/daemon-token`), 'none');
+  assert.equal(access(policy, `${TH}/agents/timon.coder/config.json`), 'r', 'the agent folder keeps its own read-only grant');
+  assert.equal(access(policy, `${FAKE_HOME}/.codex/auth.json`), 'none');
+});
+
+test('extraDirFenceProblem: the refusal names the reason, `fenceAccess` gives the verdict', { skip: POSIX_FIXTURES }, () => {
+  const check = (path: string, isolation: Record<string, unknown> = {}) => extraDirFenceProblem(cfg(isolation), path, {
+    timonHome: TH, home: FAKE_HOME, platform: 'linux', realpath: (p: string) => p, timonHomeEntries: [],
+  });
+  assert.equal(check(`${FAKE_HOME}/projects/library`), null);
+  assert.equal(check('/srv/shared'), null);
+  assert.match(check('relative/dir') ?? '', /absolute/);
+  assert.match(check(`${TH}/workspace/x`) ?? '', /Timon home/);
+  assert.match(check(FAKE_HOME) ?? '', /whole home/);
+  assert.match(check('/') ?? '', /root of a disk/);
+  assert.match(check(`${FAKE_HOME}/.ssh`) ?? '', /credentials/);
+  assert.match(check(`${FAKE_HOME}/.aws/sso`) ?? '', /credentials/);
+  // Every backend's sign-in counts, whichever one the agent runs on.
+  assert.match(check(`${FAKE_HOME}/.claude`) ?? '', /credentials/);
+  // `host.isolation.deny` of the user, too.
+  assert.match(check(`${FAKE_HOME}/private/diary`, { deny: [`${FAKE_HOME}/private`] }) ?? '', /credentials/);
+  // A link to the Timon home is the Timon home.
+  const linked = extraDirFenceProblem(cfg(), `${FAKE_HOME}/to-timon`, {
+    timonHome: TH, home: FAKE_HOME, platform: 'linux', timonHomeEntries: [],
+    realpath: (p: string) => (p === `${FAKE_HOME}/to-timon` ? `${TH}/workspace` : p),
+  });
+  assert.match(linked ?? '', /Timon home/);
+  const missing = extraDirFenceProblem(cfg(), `${FAKE_HOME}/gone`, {
+    timonHome: TH, home: FAKE_HOME, platform: 'linux', timonHomeEntries: [],
+    realpath: () => { throw new Error('ENOENT'); },
+  });
+  assert.match(missing ?? '', /does not exist/);
+});
