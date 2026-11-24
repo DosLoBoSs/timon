@@ -84,6 +84,15 @@ test('the sandbox is opened to the git folders the daemon computed, and the toke
   assert.equal(spec.initialStdin, '# Instructions\nsp\n\n# Task\nm');
 });
 
+test('an agent\'s `write` extra folders join the writable roots, its `read` ones never do', async () => {
+  const extraDirs = [{ path: join(TMP_HOME, 'notes'), mode: 'write' as const }, { path: join(TMP_HOME, 'library'), mode: 'read' as const }];
+  const spec = await provider.launch(opts({ extraDirs }), PROFILE);
+  const toml = readFileSync(join(spec.env!.CODEX_HOME!, 'config.toml'), 'utf8');
+  const line = toml.split('\n').find((l) => l.startsWith('writable_roots')) ?? '';
+  assert.ok(line.includes(JSON.stringify(join(TMP_HOME, 'notes'))), line);
+  assert.ok(!line.includes(JSON.stringify(join(TMP_HOME, 'library'))), 'a read folder is never made writable');
+});
+
 test('golden: the arguments of a launch, unfenced as the provider builds them and fenced as the core rewrites them', async () => {
   const declaration = provider.permission.nestedSandbox;
   assert.deepEqual(declaration, { level: { flag: '--sandbox', off: 'danger-full-access', readOnly: ['read-only'] } });

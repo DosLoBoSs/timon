@@ -16,6 +16,28 @@ import { manifestBackend } from './manifest.js';
  */
 export const NO_TOOLS_ARGS = Object.freeze(['--tools=', '--strict-mcp-config']);
 
+/**
+ * The agent's extra folders (`opts.extraDirs`, checked by the daemon) as Claude reads them:
+ * `--add-dir` for each, so its tools reach the folder without a card, and for a `read` one an
+ * `Edit` rule refused on it (Claude's `Edit` rules cover every tool that edits a file), so
+ * `acceptEdits` does not let the CLI write there. The fence is what really keeps a `read`
+ * folder read-only, a shell command included. With no fence at all (Windows), a `read` folder
+ * gets no `--add-dir`: an edit there stays a question for the permission classifier. A path
+ * the comma- or space-separated `--disallowedTools` cannot carry gets no rule, only the fence.
+ */
+export function extraDirArgs(extraDirs, platform = process.platform) {
+    const args = [];
+    const denied = [];
+    for (const dir of extraDirs ?? []) {
+        if (dir.mode === 'read' && platform === 'win32')
+            continue;
+        args.push('--add-dir', dir.path);
+        if (dir.mode === 'read' && dir.path.startsWith('/') && !/[\s,()]/.test(dir.path))
+            denied.push(`Edit(/${dir.path.replace(/\/+$/, '')}/**)`);
+    }
+    return { args, denied };
+}
+
 /** What the core reads about this provider (C1, C2); why its values are what they are: `profile.js`. */
 const CLAUDE = manifestBackend('claude');
 
@@ -80,6 +102,7 @@ async function buildArgs(opts, thinkingArgs) {
    ...(cfg.disallowed_tools ?? []),
    'AskUserQuestion', 'Task', 'Agent', 'advisor',
    'ListAgents', 'SendMessage', 'RemoteTrigger', 'PushNotification',
+   ...extraDirArgs(opts.extraDirs, platform).denied,
  ]);
  for (const name of plan.excludedServers ?? []) {
    const slug = name.replace(/[.\s]+/g, '_').replace(/[^A-Za-z0-9_-]/g, '');
@@ -142,6 +165,7 @@ const legacy = {
             args.push('--resume', opts.resumeSession);
         if (opts.memoryDir)
             args.push('--add-dir', opts.memoryDir);
+        args.push(...extraDirArgs(opts.extraDirs, platform).args);
         const account = services.account.of(profile);
         // macOS keeps an account's sign-in in the keychain, which the fence lets the CLI read but
         // not update: for a fenced launch it moves into the account's folder first (`account-keychain.js`).
