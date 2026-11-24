@@ -139,7 +139,12 @@ function server(over: Partial<Server> = {}): Server {
   return {
     overview: {
       providers: [
-        provider('claude', { name: 'Claude', status: 'connected', isDefault: true, updateAvailable: true }),
+        provider('claude', {
+          name: 'Claude', status: 'connected', isDefault: true, updateAvailable: true,
+          // A terminal session without a long-lived token: the page offers one, never the list's row.
+          connection: { signedIn: true, signInCommand: null, signInThen: null, acceptsAccounts: true, accounts: [],
+            host: { backend: 'claude', kept: false, identity: null, browser: true, token: { stored: false }, signedIn: true } },
+        }),
         provider('codex', { name: 'Codex', status: 'not-installed' }),
         provider('user:local', { name: 'Local', status: 'available' }),
       ],
@@ -172,6 +177,7 @@ test('the list paints the default provider, both groups and the rows; the search
     assert.match(document.querySelector('[data-provider-row="codex"]')?.textContent ?? '', /Not downloaded/);
     assert.ok(document.querySelector('[data-provider-row="claude"] [data-provider-update]'), 'the update chip');
     assert.ok(!document.querySelector('[data-provider-row="codex"] [data-provider-update]'));
+    assert.ok(!document.querySelector('[data-provider-row] [data-host-sign-in-offer]'), 'a provider\'s sign-in and token live on its page, not on its row');
     await m.until(() => /Automatic \(Claude\)/.test(document.querySelector('[data-default-provider]')?.textContent ?? ''), 'the resolved default');
 
     const search = document.querySelector('input[type="search"]') as HTMLInputElement;

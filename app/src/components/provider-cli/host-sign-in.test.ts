@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { waitUntil } from '../../lib/test-wait';
-import { hostSignInOffer, type HostSignInView } from '@/lib/host-sign-in';
+import type { HostSignInView } from '@/lib/host-sign-in';
 import type { ProviderCli } from '@/lib/provider-clis';
 
 const AUTHORIZE = 'https://claude.com/cai/oauth/authorize?code=true&state=abc';
@@ -25,20 +25,6 @@ function cli(over: Partial<ProviderCli> = {}): ProviderCli {
     version: '2.1.322', latest: null, updateAvailable: false, unsupportedVersion: false, host: view(), ...over,
   };
 }
-
-test('what a row offers: sign in when nothing is, a token beside a terminal session, then nothing', () => {
-  assert.equal(hostSignInOffer(view()), 'login');
-  assert.equal(hostSignInOffer(view({ browser: false })), null);
-  assert.equal(hostSignInOffer(view({ signedIn: true })), 'token');
-  assert.equal(hostSignInOffer(view({ signedIn: true, token: { stored: true } })), null);
-  assert.equal(hostSignInOffer(view({ signedIn: true, kept: true, identity: 'a@b.example' })), null);
-  // Just signed in from the browser while the verdict still lags: no "Sign in" again.
-  assert.equal(hostSignInOffer(view({ signedIn: false, kept: true, identity: 'a@b.example' })), null);
-  assert.equal(hostSignInOffer(view({ signedIn: null, kept: true })), null);
-  assert.equal(hostSignInOffer(view({ signedIn: true, token: null })), null);
-  assert.equal(hostSignInOffer(view({ signedIn: null })), null);
-  assert.equal(hostSignInOffer(null), null);
-});
 
 type Flow = { state: string; prompt: { kind: 'paste-code'; url: string } | null; codeSent: boolean; identity: string | null; failure: string | null };
 type Server = { list: ProviderCli[]; flows: Record<string, Flow>; calls: string[]; codes: string[] };
@@ -159,25 +145,20 @@ test('setup: "Sign in" opens the page-and-code dialog, no terminal, and the flow
   }
 });
 
-test('setup: a terminal session without a token offers one; with a token, or kept by Timon, nothing', async () => {
-  for (const [host, expected] of [
-    [view({ signedIn: true }), true],
-    [view({ signedIn: true, token: { stored: true } }), false],
-    [view({ signedIn: true, kept: true, identity: 'a@b.example' }), false],
-  ] as const) {
+test('setup: a signed-in row offers no token, whatever the session: the token lives on the provider\'s page', async () => {
+  for (const host of [
+    view({ signedIn: true }),
+    view({ signedIn: true, token: { stored: true } }),
+    view({ signedIn: true, kept: true, identity: 'a@b.example' }),
+  ]) {
     const server: Server = { list: [cli({ signedIn: true, host })], flows: {}, calls: [], codes: [] };
     const m = await mount(server);
     try {
       const { ProviderCliCards } = await import('./provider-cli-cards');
       await m.render(m.React.createElement(ProviderCliCards, { mode: 'onboarding' }));
       await m.until(() => document.querySelector('[data-state="ready"]') !== null, 'the ready row');
-      assert.equal(offer('token') !== null, expected, JSON.stringify(host));
+      assert.equal(offer('token'), null, JSON.stringify(host));
       assert.equal(offer('login'), null);
-      if (expected) {
-        await m.click(offer('token'));
-        await m.until(() => dialog()?.getAttribute('data-host-sign-in') === 'token', 'the token dialog');
-        await m.until(() => server.calls.includes('POST token'), 'the token flow started');
-      }
     } finally {
       await m.unmount();
     }
@@ -209,28 +190,6 @@ test('a CLI whose host sign-in Timon cannot keep still signs in with its termina
     await m.click(document.querySelector('[data-state="signIn"] button'));
     await m.until(() => m.typed.length === 1, 'the command typed in the terminal');
     assert.equal(dialog(), null);
-  } finally {
-    await m.unmount();
-  }
-});
-
-test('the providers list row: "Sign in" opens the dialog, closing it early cancels the flow', async () => {
-  const server: Server = { list: [], flows: {}, calls: [], codes: [] };
-  const m = await mount(server);
-  try {
-    const { HostSignInAction } = await import('./host-sign-in-action');
-    let done = 0;
-    await m.render(m.React.createElement(HostSignInAction, { host: view(), name: 'Claude', onDone: () => { done += 1; } }));
-    await m.click(offer('login'));
-    await m.until(linkShown, 'the sign-in page link');
-    const cancel = Array.from(document.querySelectorAll('[data-host-sign-in] button')).find((b) => b.textContent === 'Cancel the sign-in');
-    await m.click(cancel);
-    await m.until(() => server.calls.includes('DELETE login'), 'the flow cancelled');
-    assert.equal(dialog(), null);
-    assert.equal(done, 0);
-    // A sign-in Timon keeps offers nothing on the row, even with a verdict that says signed out.
-    await m.render(m.React.createElement(HostSignInAction, { host: view({ kept: true, identity: 'a@b.example' }), name: 'Claude', onDone: () => {} }));
-    assert.ok(!document.querySelector('[data-host-sign-in-offer]'));
   } finally {
     await m.unmount();
   }

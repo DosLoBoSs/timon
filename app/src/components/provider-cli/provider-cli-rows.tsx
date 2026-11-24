@@ -11,16 +11,16 @@
  * opens a line under its row, with what to run by hand.
  *
  * A provider whose host sign-in Timon can keep (Claude) signs in in the app
- * instead: "Sign in" opens the page-and-code dialog, no terminal. Once a
- * terminal session is found, the row offers a long-lived token, never more.
+ * instead: "Sign in" opens the page-and-code dialog, no terminal. The rest of
+ * its configuration (long-lived token, reconnecting) lives on its own page.
  */
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
-import { ExternalLink, KeyRound, Loader2, LogIn, RefreshCw } from 'lucide-react';
+import { ExternalLink, Loader2, LogIn, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CommandToRun } from '@/components/command-to-run';
 import { ProviderRow } from '@/components/provider-list/provider-row';
 import { onboardingProvider, providerCliState, type InstallJob, type ProviderCli } from '@/lib/provider-clis';
-import { hostSignInOffer, type HostFlowKind } from '@/lib/host-sign-in';
+import type { HostFlowKind } from '@/lib/host-sign-in';
 import { HostSignInDialog } from './host-sign-in-dialog';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -187,13 +187,6 @@ function OnboardingProviderRow({ cli, job, chained, unfound, outcome, onInstall,
       <Button type="button" size="sm" variant="secondary" className="gap-1.5" disabled={blocked}
         onClick={inApp ? () => setDialog('login') : onSignIn} data-host-sign-in-offer={inApp ? 'login' : undefined}>
         <LogIn className="size-3.5" aria-hidden />{t('providerClis.signIn')}
-      </Button>
-    );
-  } else if (state === 'ready' && hostSignInOffer(cli.host) === 'token') {
-    action = (
-      <Button type="button" size="sm" variant="ghost" className="gap-1.5 text-muted-foreground" disabled={blocked}
-        onClick={() => setDialog('token')} data-host-sign-in-offer="token" title={t('hostSignIn.token.offerHint')}>
-        <KeyRound className="size-3.5" aria-hidden />{t('hostSignIn.token.offer')}
       </Button>
     );
   } else if (canInstall) {
