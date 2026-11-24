@@ -27,4 +27,4 @@
 
 ### status?
 
-> `optional` **status?**: `string`
+> `optional` **status?**: `string` \| `string`[]
