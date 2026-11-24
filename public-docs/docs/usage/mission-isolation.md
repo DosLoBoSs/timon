@@ -16,6 +16,8 @@ A mission is a coding CLI that Timon starts on your computer, under your own ope
 
 Most current Linux distributions ship a kernel with Landlock turned on. `timon doctor` and **Settings › System › Security** say which case applies to your computer, and why when missions are not fenced.
 
+On Linux, the fence is applied by a small launcher that ships with Timon and runs on any 64-bit x86 or ARM processor. If `timon doctor` or the Security tab says the fence launcher **is not compatible with this processor**, your Timon version shipped a launcher built for newer processors (some packages needed AVX2): the package is not damaged, and reinstalling the same version changes nothing. Update Timon. Until then, missions follow the mode: **Automatic** starts them unfenced, **Required** refuses them.
+
 ## What the fence does
 
 Inside the fence, a mission:
