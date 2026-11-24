@@ -564,6 +564,8 @@ let reportedFence: string | null = null;
 
 /** Causes of an unfenced launch already told to the log in this daemon life. */
 const warnedUnfenced = new Set<string>();
+/** Configured fence grants already named in the log as leading nowhere: once per path. */
+const warnedMissingGrants = new Set<string>();
 /** Agents already named in the log as running in the whole `workspace` folder: once per agent. */
 const notedSharedWorkspace = new Set<string>();
 
@@ -703,8 +705,15 @@ export function fenceMissionCommand(
     { ...cfg, host: { ...cfg.host, isolation: { ...cfg.host.isolation, filesystem: mode } } },
     { ...target, workspace, runtime },
   );
-  for (const { path, reason } of policy.ignored) {
+  for (const { path, reason, config: configured } of policy.ignored) {
     if (reason !== UNRESOLVED_GRANT) warn(`${label} fence grant on ${path} dropped: ${reason}`);
+    // An exception a person wrote on a folder not made yet opens nothing, and the
+    // missions that count on it fail on it: said once per path, not at every turn.
+    else if (configured && !warnedMissingGrants.has(path)) {
+      warnedMissingGrants.add(path);
+      warn(`${label} fence exception on ${path} opens nothing: the folder does not exist. `
+        + 'Create it, or remove it from Settings › System › Security; it applies from the next mission.');
+    }
   }
   const sharedKey = target.agent ?? '';
   if (policy.sharedWorkspace && !notedSharedWorkspace.has(sharedKey)) {

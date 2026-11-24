@@ -865,3 +865,22 @@ test('a launch is expected fenced against the keychain only with a ready fence a
   assert.equal(missionFenceExpected({ agent: 'coder' }, on(isolation('auto', { writable: ['~/Library/Caches'] }))), true, 'a sibling folder');
   assert.equal(missionFenceExpected({ agent: 'coder' }, { ...on(byAgent), platform: 'linux' }), true, 'no such store off macOS');
 });
+
+test('an exception on a folder that does not exist is said once, naming the setting', async () => {
+  const { config, setConfig } = await import('./config/load.js');
+  const previous = config();
+  const missing = join(tmpdir(), `timon-fence-missing-${process.pid}`, 'cache');
+  setConfig({ ...previous, host: { ...previous.host, isolation: { ...previous.host.isolation, writable: [missing] } } });
+  const warnings: string[] = [];
+  try {
+    for (const unit of ['unit-missing-1', 'unit-missing-2']) {
+      fenceMissionCommand('/usr/bin/claude', ['-p'], unit, TARGET, { mode: 'auto', fence: fakeFence({ available: true, abi: 6 }), warn: (l) => warnings.push(l) });
+    }
+  } finally {
+    setConfig(previous);
+  }
+  const said = warnings.filter((line) => line.includes(missing));
+  assert.equal(said.length, 1, 'once per path, not at every launch');
+  assert.match(said[0] ?? '', /opens nothing: the folder does not exist/);
+  assert.match(said[0] ?? '', /Settings › System › Security/);
+});
