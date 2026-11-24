@@ -719,6 +719,10 @@
       "useWidgetInFront": {
         "type": "export",
         "since": 19
+      },
+      "useFenceGrant": {
+        "type": "export",
+        "since": 19
       }
     },
     "api.js": {

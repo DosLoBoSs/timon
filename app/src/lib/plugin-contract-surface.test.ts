@@ -29,6 +29,7 @@ import { useJobDialog } from '../plugins-client/kanban/job-dialog-context';
 import { usePublishDialog } from '../plugins-client/kanban/publish-dialog-context';
 import { GitStackProjectPicker, useGitStackProject } from '../plugins-client/kanban/git-stack-project';
 import { useTodoOpener } from '../plugins-client/kanban/todo-opener';
+import { useFenceGrant } from '../components/chat/fence-grant-card';
 import { useProjectSettings } from '../components/project-settings-slot';
 import { useWidgetAttention, useWidgetCount, useWidgetInFront, useWidgetMenu } from '../components/widget-host/widget-self';
 import { platformModuleExports } from './plugin-host/platform-modules';
@@ -263,6 +264,15 @@ test('a widget\'s tab count, dot, menu and front state join wave 19, still unrel
   assert.ok(declarations.includes('export function useWidgetAttention(label: string | null | undefined): boolean;'));
   assert.ok(declarations.includes('export function useWidgetMenu(items: readonly WidgetMenuItem[]): boolean;'));
   assert.ok(declarations.includes('export function useWidgetInFront(): boolean;'));
+});
+
+test('the fence card joins wave 19, still unreleased', () => {
+  // A host 18 paints no `chat.fence` card: a plugin that redraws it declares 19.
+  assert.equal(UI_KIT.useFenceGrant, useFenceGrant);
+  assert.ok(platformModuleExports('ui.js').includes('useFenceGrant'));
+  assert.equal(snapshot.modules['ui.js']?.useFenceGrant?.since, 19);
+  const declarations = readFileSync(join(process.cwd(), '../packages/sdk/src/ui.d.ts'), 'utf8');
+  assert.ok(declarations.includes('export function useFenceGrant(): FenceGrantValue | null;'));
 });
 
 /** Platform names a client bundle imports, per module file (`ui.js`, …). */
