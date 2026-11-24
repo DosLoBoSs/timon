@@ -22,6 +22,7 @@ import { getBackendUsage } from '../../usage.js';
 import { splitBackendInstance } from '../../backends/instance-id.js';
 import { getBackendAccountFor } from '../../backends/accounts.js';
 import { diagnose } from '../../doctor.js';
+import { fenceCoverage } from '../../fence-coverage.js';
 import { webUiAccess } from '../../web-access.js';
 import { applySetup, isFirstRun, noProviderForSetup, SetupError, type SetupInput } from '../../setup.js';
 import { OnboardingError, parseOnboardingAction, runOnboardingAction } from '../../onboarding.js';
@@ -86,6 +87,22 @@ export function registerRoutes(app: Router): void {
    */
   app.get('/api/doctor', (_req, res) => {
     res.json({ ...diagnose(), desktop: process.env.TIMON_DESKTOP_EMBEDDED === '1' || process.env.TIMON_DESKTOP_SERVICE === '1' });
+  });
+
+  /**
+   * Fence coverage, the section of `timon doctor` only the daemon can compute: it
+   * knows which provider profiles run, and the launcher it hands missions to.
+   * Superadmin only, never anonymous: it runs that launcher and names the
+   * folders of the Timon home. Slow by design (one launcher run per profile),
+   * hence a route of its own rather than a field of `/api/doctor`.
+   */
+  app.get('/api/doctor/fence-coverage', async (req, res) => {
+    if (!requireSuperadmin(req, res)) return;
+    try {
+      res.json(await fenceCoverage());
+    } catch (err) {
+      res.status(500).json(apiError('fence_coverage_failed', (err as Error).message));
+    }
   });
 
   /**
