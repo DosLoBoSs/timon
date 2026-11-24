@@ -90,6 +90,14 @@ What to do depends on the path:
 
 `timon doctor` checks each active backend against this computer's fence: for each one, it has the fence open the folders a mission of that backend uses, and the private files of Timon a mission must never read, under the policy such a mission gets. A line marked ✗ names the path and whether the policy or the kernel refused it.
 
+## An agent's extra folders
+
+An agent can be given folders outside its working folder, in its **Workspace** tab under **Extra folders** (see [Agents](./agents.md#extra-folders)). The fence opens each one at the access you chose: **Read and write**, or **Read only**, which stays read-only even when the folder sits inside a folder the mission may write, so a mission cannot change it. The AI CLI is told as well: Claude Code gets the folders with `--add-dir` and refuses edits in a read-only one, Codex gets the writable ones in its sandbox.
+
+These folders never open what the fence protects: Timon's own folder, a folder that contains it, a whole home folder or disk, and folders of credentials are refused when you add them, and checked again at every mission, since the agent's file can be edited by hand; a folder that no longer passes is left out, and the agent's page says so. A mission cannot give its own agent a folder. The fence is set when a mission starts: a mission already running keeps the folders it started with.
+
+Without a fence (Windows, or **Off**), a read-only folder is only a request to the AI CLI: Claude Code is not given it at all, so an edit there stays a question for you, and nothing stops a shell command from writing in it.
+
 ## Package caches
 
 Inside the fence your home folder is read-only, including the caches of npm and the other package managers. A fenced mission's package managers therefore use a cache that belongs to its agent, inside Timon's data folder: the first `npx -y` MCP server an agent starts downloads its package once, and later missions of that agent reuse it. Missions of other agents can neither read nor write it, and your own cache is never written. Deleting or renaming the agent removes it.
