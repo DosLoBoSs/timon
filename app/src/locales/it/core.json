@@ -2566,9 +2566,17 @@
       "title": "File",
       "description": "Sfoglia e modifica i file della cartella di lavoro del progetto."
     },
-    "git": {
-      "title": "Git",
-      "description": "I branch del progetto, il grafo dei commit e la pubblicazione: cambia branch, vedi la cronologia e i worktree, fai push."
+    "gitBranches": {
+      "title": "Branch",
+      "description": "L'albero di lavoro e i branch del repository: vedi le modifiche, cambia branch."
+    },
+    "gitGraph": {
+      "title": "Grafo",
+      "description": "Il grafo dei commit del repository, con i suoi branch e worktree."
+    },
+    "gitPublish": {
+      "title": "Pubblica",
+      "description": "Lo stato di pubblicazione del repository: remote, commit da inviare, push e fetch."
     },
     "agentTasks": {
       "title": "Elenco attività dell’agente",

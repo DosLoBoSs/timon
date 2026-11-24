@@ -30,6 +30,13 @@ import { isPlausibleGitRef } from './task-git.js';
 export const PROJECT_INTEGRATION_MODES = ['local', 'pr'] as const;
 export type ProjectIntegrationMode = (typeof PROJECT_INTEGRATION_MODES)[number];
 
+/** What Timon may do when a contributor's pull request conflicts with its
+ *  base (`forge-conflicts.ts`): `ask` the contributor (a comment proposed to a
+ *  person, the default), or also let a person `resolve` it here, without a
+ *  working tree, and push the resolution to the contributor's branch. */
+export const CONTRIBUTOR_CONFLICT_MODES = ['ask', 'resolve'] as const;
+export type ContributorConflictMode = (typeof CONTRIBUTOR_CONFLICT_MODES)[number];
+
 /** Forges the daemon knows how to open a pull request on. Others land by hand
  *  (`mark-merged`). */
 export const INTEGRATION_FORGES = ['github'] as const;
@@ -68,6 +75,8 @@ export const ProjectIntegrationSchema = z.object({
   branch_prefix: BranchPrefix,
   // Added after the first stored settings: a row without it reads as unset.
   remote_url: RemoteUrl.nullable().default(null),
+  // Added later still: a row without it asks the contributor.
+  contributor_conflicts: z.enum(CONTRIBUTOR_CONFLICT_MODES).default('ask'),
 }).strict();
 
 export type ProjectIntegration = z.infer<typeof ProjectIntegrationSchema>;
@@ -83,6 +92,7 @@ export const ProjectIntegrationPatchSchema = z.object({
   gh_config_dir: GhConfigDir.nullable().optional(),
   branch_prefix: BranchPrefix.optional(),
   remote_url: RemoteUrl.nullable().optional(),
+  contributor_conflicts: z.enum(CONTRIBUTOR_CONFLICT_MODES).optional(),
 }).strict();
 
 export type ProjectIntegrationPatch = z.infer<typeof ProjectIntegrationPatchSchema>;
@@ -96,6 +106,7 @@ export const DEFAULT_PROJECT_INTEGRATION: Readonly<ProjectIntegration> = Object.
   gh_config_dir: null,
   branch_prefix: 'feat/',
   remote_url: null,
+  contributor_conflicts: 'ask',
 });
 
 export class ProjectIntegrationError extends Error {
@@ -207,17 +218,33 @@ export function readProjectIntegration(slug: string): ProjectIntegrationRead {
  * the default when there is none or it no longer validates, checks the result
  * as a whole and stores it.
  */
-export function updateProjectIntegration(slug: string, body: unknown, opts: GhConfigDirOptions = {}): ProjectIntegration {
+export function updateProjectIntegration(
+  slug: string, body: unknown, opts: GhConfigDirOptions & {
+    /** Sees the setting as it is and as it would be stored; throws to refuse the write. */
+    guard?: (current: ProjectIntegration, next: ProjectIntegration) => void;
+  } = {},
+): ProjectIntegration {
   const current = readProjectIntegration(slug);
   const patch = ProjectIntegrationPatchSchema.safeParse(body ?? {});
   if (!patch.success) throw new ProjectIntegrationError('invalid', zodMessage(patch.error));
   const merged = ProjectIntegrationSchema.safeParse({ ...current.integration, ...patch.data });
   if (!merged.success) throw new ProjectIntegrationError('invalid', zodMessage(merged.error));
-  const value = checkProjectIntegration(merged.data, opts);
+  const { guard, ...checkOpts } = opts;
+  const value = checkProjectIntegration(merged.data, checkOpts);
+  guard?.(current.integration, value);
   if (!dbApi.setProjectIntegration(slug, JSON.stringify(value))) {
     throw new ProjectIntegrationError('not_found', `project not found: "${slug}"`);
   }
   return value;
+}
+
+/** The fields that decide where a contributor's conflict resolution is
+ *  fetched from and pushed to, and as whom (`forge-conflicts.ts`). */
+export const PUSH_TARGET_FIELDS = ['remote_url', 'account', 'gh_config_dir', 'mode', 'remote'] as const;
+
+/** The push-target fields `next` changes from `current`. */
+export function changedPushTargetFields(current: ProjectIntegration, next: ProjectIntegration): string[] {
+  return PUSH_TARGET_FIELDS.filter((field) => current[field] !== next[field]);
 }
 
 /** Back to the local merge. */

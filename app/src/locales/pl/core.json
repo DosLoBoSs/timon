@@ -2566,9 +2566,17 @@
       "title": "Pliki",
       "description": "Przeglądaj i edytuj pliki folderu roboczego projektu."
     },
-    "git": {
-      "title": "Git",
-      "description": "Gałęzie projektu, graf commitów i publikacja: przełączaj gałęzie, przeglądaj historię i worktree, wypychaj."
+    "gitBranches": {
+      "title": "Gałęzie",
+      "description": "Drzewo robocze i gałęzie repozytorium: zobacz zmiany, przełącz gałąź."
+    },
+    "gitGraph": {
+      "title": "Graf",
+      "description": "Graf commitów repozytorium wraz z gałęziami i worktree."
+    },
+    "gitPublish": {
+      "title": "Publikuj",
+      "description": "Stan publikacji repozytorium: zdalne, commity do wypchnięcia, push i fetch."
     },
     "agentTasks": {
       "title": "Lista zadań agenta",

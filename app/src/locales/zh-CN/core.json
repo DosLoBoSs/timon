@@ -2628,9 +2628,17 @@
       "title": "文件",
       "description": "浏览和编辑项目工作目录中的文件。"
     },
-    "git": {
-      "title": "Git",
-      "description": "查看项目的分支、提交关系图和发布状态；可切换分支、查看历史和工作树，以及推送更改。"
+    "gitBranches": {
+      "title": "分支",
+      "description": "仓库的工作区和分支：查看更改，切换分支。"
+    },
+    "gitGraph": {
+      "title": "提交图",
+      "description": "仓库的提交关系图，以及其分支和工作树。"
+    },
+    "gitPublish": {
+      "title": "发布",
+      "description": "仓库的发布状态：远程、待推送的提交、推送和拉取。"
     },
     "agentTasks": {
       "title": "智能体任务清单",

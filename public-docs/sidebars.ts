@@ -99,6 +99,7 @@ const sidebars: SidebarsConfig = {
         "plugins/questions-notifications",
         "plugins/memory",
         "plugins/projects-series-worktrees",
+        "plugins/forge",
         "plugins/agents",
         "plugins/missions-control",
         "plugins/screen-and-chat",

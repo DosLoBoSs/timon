@@ -2566,9 +2566,17 @@
       "title": "Arquivos",
       "description": "Navegue e edite os arquivos da pasta de trabalho do projeto."
     },
-    "git": {
-      "title": "Git",
-      "description": "Os branches, o grafo de commits e a publicação do projeto: troque de branch, veja o histórico e os worktrees, faça push."
+    "gitBranches": {
+      "title": "Branches",
+      "description": "A árvore de trabalho e os branches do repositório: veja as mudanças, troque de branch."
+    },
+    "gitGraph": {
+      "title": "Grafo",
+      "description": "O grafo de commits do repositório, com seus branches e worktrees."
+    },
+    "gitPublish": {
+      "title": "Publicar",
+      "description": "Como está a publicação do repositório: remoto, commits a enviar, push e fetch."
     },
     "agentTasks": {
       "title": "Lista de tarefas do agente",

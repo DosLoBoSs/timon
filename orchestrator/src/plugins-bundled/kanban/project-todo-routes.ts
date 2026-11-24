@@ -30,6 +30,7 @@ import {
 import { todoExtensionFields } from '../../project-todo-extensions.js';
 import { apiError } from '../../api-error.js';
 import { z } from 'zod';
+import { TODO_LANDING_STATES } from '../../todo-landing.js';
 
 /** Hard ceiling of one page: a client after more narrows the filters instead. */
 export const PROJECT_TODO_LIST_MAX_LIMIT = 1000;
@@ -46,6 +47,9 @@ const LIST_QUERY = z.object({
   urgency: z.string().transform(splitComma)
     .pipe(z.array(z.enum([...TODO_URGENCIES, 'none'])).min(1))
     .optional(),
+  // The idea's landing badge (its worst job): `open` = pull request open,
+  // `pending` = not created yet.
+  landing: z.enum(TODO_LANDING_STATES).optional(),
 });
 
 /**
@@ -90,6 +94,8 @@ export function registerRoutes(app: Router): void {
         const field = query.error.issues[0]?.path[0];
         res.status(400).json(field === 'urgency'
           ? apiError('todo_urgency_filter_invalid', `urgency must be ${[...TODO_URGENCIES, 'none'].join('|')}, comma-separated for several`)
+          : field === 'landing'
+            ? apiError('todo_landing_filter_invalid', `landing must be ${TODO_LANDING_STATES.join('|')}`)
           : field === 'limit'
             ? apiError('todo_limit_invalid', `limit must be an integer from 1 to ${PROJECT_TODO_LIST_MAX_LIMIT}`, { max: PROJECT_TODO_LIST_MAX_LIMIT })
             : apiError('todo_ids_invalid', 'ids must be comma-separated positive integers'));
@@ -102,7 +108,7 @@ export function registerRoutes(app: Router): void {
       }
       const scope = scopedDb(viewerFromRequest(req));
       const status = rawStatus === 'all' ? undefined : parseTodoStatusFilter(rawStatus);
-      const filter = { project, urgencies: query.data.urgency, progress, ids: query.data.ids };
+      const filter = { project, urgencies: query.data.urgency, progress, ids: query.data.ids, landing: query.data.landing };
       const items = scope.listProjectTodo({ ...filter, status, limit: query.data.limit });
       // Counted in SQL with the list's own filters: a client that counted the
       // rows it received stopped at the limit (200 open ideas, 0 done).
@@ -112,7 +118,7 @@ export function registerRoutes(app: Router): void {
         : counts.byStatus.open + counts.byStatus.done + counts.byStatus.promoted;
       res.json({
         // Links ride on the rows the caller may see: no second visibility rule.
-        items: withLinks(items),
+        items: withLinks(items, viewerFromRequest(req)),
         counts,
         truncated: items.length < matching,
         // Kept for older clients: the caller's open ideas across EVERY
@@ -165,7 +171,7 @@ export function registerRoutes(app: Router): void {
         author: resolveTodoAuthor(req, body.author),
       });
       publishTodoChanged(item);
-      res.status(201).json({ item: withLinksOne(item) });
+      res.status(201).json({ item: withLinksOne(item, viewerFromRequest(req)) });
     } catch (err) { res.status(500).json(apiError('todo_request_failed', (err as Error).message, { detail: (err as Error).message })); }
   });
 
@@ -252,7 +258,7 @@ export function registerRoutes(app: Router): void {
       // The writer rides along: a connector tells its own echo by it.
       const item = withTodoOrigin(todoOriginFromRequest(req), () => patchTodo(existing, fields, req.body ?? {}));
       if (!item) { res.status(404).json(apiError('todo_not_found', 'project-todo item not found')); return; }
-      res.json({ item: withLinksOne(item) });
+      res.json({ item: withLinksOne(item, viewerFromRequest(req)) });
     } catch (err) {
       if (err instanceof TodoExtensionError) { res.status(err.status).json(apiError('todo_field_refused', err.message, { detail: err.message })); return; }
       res.status(500).json(apiError('todo_request_failed', (err as Error).message, { detail: (err as Error).message }));
@@ -294,6 +300,7 @@ export function registerRoutes(app: Router): void {
       const agentName = body.agent_name.trim();
       const outcome = promoteTodoItem(
         item,
+        viewerFromRequest(req),
         typeof body.project === 'string' && body.project.trim() ? body.project.trim() : undefined,
         (spec) => createTaskFromBody(req, {
           title: spec.title,

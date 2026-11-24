@@ -72,3 +72,44 @@ Removes the temporary folders `scratch.mission` and `scratch.profile` created.
 #### Returns
 
 `void`
+
+### setAccountInUse()
+
+> **setAccountInUse**(`accountId`, `inUse`): `void`
+
+Stands in for a process on the account starting (true) or ending (false) outside the fence.
+
+#### Parameters
+
+##### accountId
+
+`string`
+
+##### inUse
+
+`boolean`
+
+#### Returns
+
+`void`
+
+### setOsCredential()
+
+> **setOsCredential**(`key`, `value`): `void`
+
+Stands in for a CLI that writes the keychain while the plugin works (a sign-in, a renewal
+outside any fence): sets the entry `key` (`service` or `service|account`), or deletes it on null.
+
+#### Parameters
+
+##### key
+
+`string`
+
+##### value
+
+`string` \| `null`
+
+#### Returns
+
+`void`

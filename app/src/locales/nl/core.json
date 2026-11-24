@@ -2566,9 +2566,17 @@
       "title": "Bestanden",
       "description": "De bestanden van de werkmap van het project doorbladeren en bewerken."
     },
-    "git": {
-      "title": "Git",
-      "description": "De branches, de commitgraaf en de publicatie van het project: van branch wisselen, de geschiedenis en worktrees bekijken, pushen."
+    "gitBranches": {
+      "title": "Branches",
+      "description": "De werkmap en de branches van de repository: wijzigingen bekijken, van branch wisselen."
+    },
+    "gitGraph": {
+      "title": "Graaf",
+      "description": "De commitgraaf van de repository, met zijn branches en worktrees."
+    },
+    "gitPublish": {
+      "title": "Publiceren",
+      "description": "Hoe de publicatie van de repository ervoor staat: remote, te pushen commits, push en fetch."
     },
     "agentTasks": {
       "title": "Takenlijst van de agent",

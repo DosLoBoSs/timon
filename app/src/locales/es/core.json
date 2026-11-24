@@ -2566,9 +2566,17 @@
       "title": "Archivos",
       "description": "Explora y edita los archivos de la carpeta de trabajo del proyecto."
     },
-    "git": {
-      "title": "Git",
-      "description": "Las ramas, el grafo de commits y la publicación del proyecto: cambia de rama, consulta el historial y los worktrees, haz push."
+    "gitBranches": {
+      "title": "Ramas",
+      "description": "El árbol de trabajo y las ramas del repositorio: ver los cambios, cambiar de rama."
+    },
+    "gitGraph": {
+      "title": "Grafo",
+      "description": "El grafo de commits del repositorio, con sus ramas y worktrees."
+    },
+    "gitPublish": {
+      "title": "Publicar",
+      "description": "El estado de publicación del repositorio: remoto, commits por enviar, push y fetch."
     },
     "agentTasks": {
       "title": "Lista de tareas del agente",

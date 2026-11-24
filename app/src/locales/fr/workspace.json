@@ -34,7 +34,7 @@
       "confirm": "Supprimer le projet"
     },
     "imageOnly": "Image uniquement", "imageTooLarge": "Image trop lourde (max 8 Mo)", "invalidUploadResponse": "Réponse d’upload invalide", "iconUploaded": "Icône uploadée", "create": "Créer", "refresh": "Rafraîchir", "projectCount": "{count, plural, one {# projet} other {# projets}}", "empty": "Aucun projet. Crée le premier.", "edit": "Modifier", "delete": "Supprimer", "editTitle": "Modifier « {slug} »", "createTitle": "Créer un projet", "name": "Nom", "slug": "Slug", "logo": "Logo", "color": "Couleur", "workspace": "Espace de travail", "workingDirectory": "Répertoire de travail", "speech": "Description", "uploading": "Upload…", "chooseImage": "Choisir une image", "clearLogo": "Effacer le logo", "logoHint": "Clique le rond pour parcourir, colle (Ctrl/Cmd+V) ou dépose une image — ou choisis un emoji.", "logoPlaceholder": "Emoji ou texte court", "autoColor": "Générer depuis le nom", "auto": "auto", "saving": "Enregistrement…", "save": "Enregistrer",
-    "deleting": "Suppression…", "dangerZone": "Zone danger", "dangerZoneHint": "La suppression d’un projet est définitive."
+    "deleting": "Suppression…", "dangerZone": "Zone danger", "dangerZoneHint": "La suppression d’un projet est définitive.", "integrations": "Intégrations"
   },
   "memoryPage": {
     "saveError": "Impossible d’enregistrer {title} : {error}",
@@ -42,7 +42,6 @@
     "browseByProject": "Parcourir par projet"
   },
   "gitWidget": {
-    "tabs": {"branches": "Branches", "graph": "Graphe", "publish": "Publication"},
     "detached": "HEAD détaché",
     "noProject": "Cet agent n’a pas de projet : aucun dépôt à afficher.",
     "repos": {"label": "Dépôt", "root": "{name} (racine)", "otherToPush": "{name} : {count} à pousser"},

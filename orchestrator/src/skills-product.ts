@@ -6,13 +6,18 @@
  * They used to exist only in the home of the machine Timon was built on: a
  * fresh install spawned its tasks without the closing protocol and without the
  * `allowed_tools` these skills grant, with nothing but a `[skills] … not found`
- * warning in the daemon log. Shipped here, seeded like every bundled skill, and
- * never overwritten once present (no `version`): an operator who edited one
- * keeps their copy.
+ * warning in the daemon log. Shipped here, seeded like every bundled skill.
+ *
+ * `timon-task` and `timon-worktree` carry a `version`: their wording is the
+ * protocol of every task, so a change to it (the pull-request landing) must
+ * reach the installs that already seeded them. Raise it with every change to
+ * their text. A copy edited at the current version is kept; an older one is
+ * replaced (`seedBundledSkills`).
  */
 export const PRODUCT_SKILLS: ReadonlyArray<{ id: string; content: string; version?: number }> = [
   {
     id: 'timon-task',
+    version: 2,
     content: `---
 allowed_tools: ["Bash(timon:*)"]
 ---
@@ -175,7 +180,11 @@ timon task create --title "merge"  --type merge --agent <merger> --group-id "$GR
 - \`review\` — audit of the diff of a \`code\` task (put it in \`--deps\`).
   Inherits the same worktree. Read-only.
 - \`merge\` — integrates the approved branch into its base. Local only; a push
-  needs an explicit authorisation in the project's instructions.
+  needs an explicit authorisation in the project's instructions. With
+  \`--landing pr\`, the last task of a job that lands through a pull request:
+  it opens the pull request instead; with \`--landing local\`, the last task
+  of a job on a branch of its own: it merges that branch into its local
+  target (see below).
 - \`research\`, \`doc\` — no worktree, free work in the agent's cwd.
 - \`chore\` — miscellaneous ops and cleanup.
 
@@ -304,6 +313,52 @@ Your branch may have been **brought up to date** on its base before you
 started. If conflicts are open, your brief says so first: resolve and commit
 them BEFORE anything else.
 
+### Projects that land through a pull request
+
+A project can be set to land its jobs through pull requests
+(\`timon project set-integration <slug> --mode pr …\`). Its jobs then never
+merge into the target branch (\`main\`) on this machine:
+
+- every task of the job starts from the job's **integration branch**
+  (\`feat/<topic>\`), which the daemon cuts from the remote's target
+  (\`origin/main\`) at the first dispatch. The series planner (\`kanban_plan\`)
+  names it and gives it to every task with \`--base\` (plus \`--project <slug>\`
+  when you are not in the job's project: keep it); a task created without a
+  base gets one named after its title;
+- reviews and merges run as usual, into that branch;
+- the job ends on a \`merge\` task created with \`--landing pr\`, in deps on the
+  job's code tasks (or on the grouped merge in \`code-group\`). It opens the
+  pull request with \`timon pr open\` (MCP \`pr_open\`): the daemon checks the
+  account, the remote, the commits and the public tree, pushes the branch and
+  opens it. A person merges it on the forge; Timon notices it afterwards,
+  closes the job's TO DO ideas, and the job's pilot gets one message when the
+  pull request is merged, or closed without a merge;
+- a job the planner runs **sequentially** (coded in a mission, no task) gets
+  the same branch through \`timon pr branch <branch>\` (MCP \`pr_branch\`):
+  the daemon cuts it and returns a worktree detached on it. The pilot codes
+  and commits only there, moves the branch by reference after each commit
+  (\`git push . HEAD:refs/heads/<branch>\` from the worktree), then creates the
+  same \`--landing pr\` task, with no deps and with \`--todo <id>\` when the job
+  carries a TO DO idea, and removes the worktree.
+
+Never \`git push\`, never \`gh\`, never a merge into the target yourself. A
+task based on the target itself is refused at dispatch.
+
+### The branch the planner chose, and where it ends
+
+The person answering the planner may start the job from a branch the
+repository **already has**, and may **keep** the work on its branch: the
+plan's \`commands\` then have no last task, nothing is merged or pushed, and
+the job's TO DO ideas stay \`partial\` until the branch lands. Run the
+commands as given; never add the last task yourself.
+
+In a project that merges locally, a job the planner put on a branch of its own
+works the same way: every task starts from that branch (cut from the project's
+local target, or taken as it is), and the job ends on a \`merge\` task created
+with \`--landing local\` (or on nothing when the work is kept on the branch).
+That task merges the branch into the target on this machine and closes with the
+target's full sha; the daemon checks it with git, then closes the job's ideas.
+
 ### Series fallback plan (quota exhausted)
 
 A series of tasks can carry a fallback plan **per scope**: who takes over when
@@ -393,6 +448,7 @@ timon task update <TASK_ID> --priority 5 --title "New title"
   },
   {
     id: 'timon-worktree',
+    version: 1,
     content: `---
 allowed_tools: ["Bash(timon:*)", "Bash(git:*)"]
 ---
@@ -482,6 +538,7 @@ You have YOUR worktree (branch \`timon/merge/<TASK_ID>\`). You integrate
    test "$MERGED_SHA" = "$(git rev-parse HEAD)"   # the base really moved
    \`\`\`
 5. **Only if a push is authorised**: \`git push\`. Say so in the close comment.
+   A job that lands through a pull request never pushes from here: see below.
 6. Close with the sha:
    \`\`\`bash
    timon task done <TASK_ID> --merged-sha "$MERGED_SHA" --comment "merged into <base>, push=<yes|no>"
@@ -489,6 +546,26 @@ You have YOUR worktree (branch \`timon/merge/<TASK_ID>\`). You integrate
 7. Cleanup, last: \`timon worktree dispose <TASK_ID>\` removes the worktree and
    the local branch. Your \`cwd\` no longer exists afterwards: finish
    everything else before.
+
+### \`type=merge\` with \`landing: pr\` (the job's pull request)
+
+You merge no task branch: the job's work is already in its integration branch
+(your base, \`feat/<topic>\`), and it reaches the target through a pull
+request. Your brief gives the exact commands:
+
+1. In your worktree, bring the target in if it moved
+   (\`git fetch --no-tags <remote> <target>\`, then
+   \`git merge --no-edit -m "merge: bring <remote>/<target> into the task branch" <remote>/<target>\`),
+   resolve, run the checks of the packages the job touched.
+2. If that created a commit, move the integration branch by reference
+   (\`git -C <main-repository> push . <your-branch>:<base>\`).
+3. Write the title and the description in English: what changes, why, how it
+   was checked. No task or mission id, no TODO number, no attribution line, no
+   \`Fixes #n\` for now.
+4. \`timon pr open <TASK_ID> --title "…" --body-file <file>\`. The daemon checks,
+   pushes and opens; a refusal lists the failed checks. Fix what you can with
+   new commits (never rewrite one), or block the task with the checks.
+5. \`timon task done <TASK_ID> --merged-sha <full sha of the base> --comment "pull request <url> opened"\`.
 
 ## Hard rules
 

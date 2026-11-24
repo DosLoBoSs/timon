@@ -52,6 +52,9 @@ export type {
   PluginTodoInput,
   PluginTodoAttachment,
   PluginTodoAttachmentInput,
+  PluginTodoLanding,
+  PluginTodoLandingJob,
+  PluginTodoLandingState,
   PluginTodoLink,
   PluginTodoLinkInput,
   PluginTodoListFilter,
@@ -293,6 +296,19 @@ export type {
 } from '../../../orchestrator/src/plugins/contract/worktrees.js';
 
 /**
+ * The GitHub repository of a project, API 19 — host half. `ctx.forge` reads a
+ * project's issues, open pull requests and checks (`forge:read`) and proposes a
+ * comment that a signed-in person publishes or discards (`forge:propose`); the
+ * plugin never holds `gh` nor the project's account. Both sensitive. Every
+ * text from the forge is data written by someone else. Errors carry a `code`.
+ */
+export type {
+  PluginForgeCheck, PluginForgeChecks, PluginForgeErrorCode, PluginForgeIssue, PluginForgeIssueDetails,
+  PluginForgeIssueRef, PluginForgeLabel, PluginForgeMergeState, PluginForgeProposal, PluginForgeProposalInput,
+  PluginForgeProposalState, PluginForgeProposeResult, PluginForgePull, PluginForgePullDetails, PluginForgeRepository,
+} from '../../../orchestrator/src/plugins/contract/forge.js';
+
+/**
  * The screen and the conversation, API 10 — host half. `ctx.layout`
  * (`layout:read`, `layout:propose`, `layout:presets`) reads the arrangement of
  * the account of the request and asks its owner to change it; `ctx.ui.navigate`
@@ -489,6 +505,18 @@ export type WidgetOptions = {
    * registration. A place saved under one of them is handed down to the widget.
    */
   formerKeys?: readonly string[];
+  /**
+   * Name on the widget's tab when it is stacked, where `title` would not fit
+   * ("PR" for "Pull requests"); the tab's tooltip keeps `title`. Client API 19.
+   */
+  tabTitle?: string;
+  /**
+   * The widget publishes a count or a dot for its tab (`useWidgetCount`,
+   * `useWidgetAttention` from `@timon/ui`): in a stack it stays mounted,
+   * hidden, behind the tab in front, so its tab stays true. Keep it quiet
+   * while hidden: read `useWidgetInFront()` before any costly call. Client API 19.
+   */
+  liveCount?: boolean;
   /**
    * One sentence on what the widget does, shown under its name in the widget
    * window: what it shows or lets you do, not how it is built.
