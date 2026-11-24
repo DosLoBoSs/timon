@@ -2,6 +2,12 @@
   "apiErrors": {
     "mission_fence_refused": "Timon refused to start this mission: the mission isolation is set to required, and this machine cannot fence it. Change the mode in the Security settings, or fix what the diagnostic reports.",
     "mission_fence_blocked": "Timon did not start this mission: the mission fence ({mechanism}) does not let it {access, select, read {read} other {write to}} {path}, which its CLI needs. See Mission isolation in the Security settings.",
+    "extra_dir_refused": "Timon cannot open {path} to an agent: the folder is missing, too wide (a whole home folder or disk), or holds the Timon home or credentials.",
+    "extra_dirs_invalid": "This list of folders is not valid: each folder needs an absolute path and an access, read or write.",
+    "fence_grant_session_required": "Only a person signed in to the app can answer this card.",
+    "fence_grant_invalid": "This answer is not valid: allow or refuse.",
+    "fence_refusal_not_found": "This card no longer offers a folder to open.",
+    "fence_grant_settled": "This card was already answered.",
     "fence_coverage_failed": "The fence coverage check failed: see the daemon log.",
     "cwd_unusable": "Timon could not start this mission: its working directory {path} is missing or cannot be opened. Restore the folder, or change the folder of the agent or of its project.",
     "unknown": "Something went wrong.",

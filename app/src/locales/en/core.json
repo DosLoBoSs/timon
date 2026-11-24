@@ -4174,6 +4174,19 @@
       "network": "The request could not be sent."
     }
   },
+  "fenceGrant": {
+    "title": "{stage, select, launch {Mission not started: the} other {The}} mission fence ({mechanism, select, seatbelt {the macOS sandbox} other {Landlock}}) does not let this mission {access, select, write {write to} other {read}} {path}.",
+    "question": "Allow {agent} to {mode, select, write {read and write} other {read}} {folder}?",
+    "detail": "The folder joins this agent's extra folders, and the mission starts again with it open. Remove it any time from the agent's page.",
+    "allow": "Allow for this agent",
+    "refuse": "Refuse",
+    "state": {
+      "allowed": "Allowed: {folder} is open to {agent}",
+      "refused": "Refused"
+    },
+    "relaunchFailed": "The folder is open, but the mission did not start again: send it a message to resume.",
+    "failed": "The answer could not be sent. Try again."
+  },
   "uiDocument": {
     "unavailable": "Documents are switched off on this Timon: this one cannot be shown.",
     "expired": "This document is no longer kept: its conversation ended a while ago.",

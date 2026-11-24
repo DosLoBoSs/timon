@@ -4174,6 +4174,19 @@
       "network": "La demande n'a pas pu être envoyée."
     }
   },
+  "fenceGrant": {
+    "title": "{stage, select, launch {Mission non lancée : la} other {La}} clôture des missions ({mechanism, select, seatbelt {le bac à sable de macOS} other {Landlock}}) ne laisse pas cette mission {access, select, write {écrire dans} other {lire}} {path}.",
+    "question": "Autoriser {agent} à {mode, select, write {lire et écrire dans} other {lire}} {folder} ?",
+    "detail": "Le dossier rejoint les dossiers supplémentaires de cet agent, et la mission repart avec ce dossier ouvert. Vous pouvez le retirer à tout moment depuis la page de l’agent.",
+    "allow": "Autoriser pour cet agent",
+    "refuse": "Refuser",
+    "state": {
+      "allowed": "Autorisé : {folder} est ouvert à {agent}",
+      "refused": "Refusé"
+    },
+    "relaunchFailed": "Le dossier est ouvert, mais la mission n’est pas repartie : envoyez-lui un message pour la reprendre.",
+    "failed": "La réponse n’a pas pu être envoyée. Réessayez."
+  },
   "uiDocument": {
     "unavailable": "Les documents sont désactivés sur ce Timon : celui-ci ne peut pas s'afficher.",
     "expired": "Ce document n'est plus conservé : sa conversation est terminée depuis un moment.",

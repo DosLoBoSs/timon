@@ -2,6 +2,12 @@
   "apiErrors": {
     "mission_fence_refused": "Timon a refusé de lancer cette mission : l'isolation des missions est réglée sur obligatoire, et cette machine ne peut pas la clôturer. Changez le mode dans les réglages de sécurité, ou corrigez ce que signale le diagnostic.",
     "mission_fence_blocked": "Timon n’a pas lancé cette mission : la clôture des missions ({mechanism}) ne la laisse pas {access, select, read {lire} other {écrire dans}} {path}, dont sa CLI a besoin. Voir l’isolation des missions dans les réglages de sécurité.",
+    "extra_dir_refused": "Timon ne peut pas ouvrir {path} à un agent : le dossier est absent, trop large (un dossier personnel ou un disque entier), ou contient le home Timon ou des identifiants.",
+    "extra_dirs_invalid": "Cette liste de dossiers n’est pas valide : chaque dossier demande un chemin absolu et un accès, lecture ou écriture.",
+    "fence_grant_session_required": "Seule une personne connectée à l’application peut répondre à cette carte.",
+    "fence_grant_invalid": "Cette réponse n’est pas valide : autoriser ou refuser.",
+    "fence_refusal_not_found": "Cette carte ne propose plus de dossier à ouvrir.",
+    "fence_grant_settled": "Cette carte a déjà reçu une réponse.",
     "fence_coverage_failed": "Le contrôle de couverture de la clôture a échoué : voir le journal du daemon.",
     "cwd_unusable": "Timon n'a pas pu lancer cette mission : son dossier de travail {path} est introuvable ou ne peut pas être ouvert. Restaurez le dossier, ou changez celui de l'agent ou de son projet.",
     "unknown": "Une erreur est survenue.",
