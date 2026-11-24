@@ -975,6 +975,12 @@
   },
   "appearance": {
     "title": "Wygląd",
+    "zoomTitle": "Rozmiar interfejsu",
+    "zoomHint": "Powiększa lub pomniejsza tekst i elementy sterujące we wszystkich oknach Timon na tym komputerze. Skróty: Ctrl i +, Ctrl i − oraz Ctrl i 0, aby przywrócić; w macOS we wszystkich trzech Cmd zamiast Ctrl. W systemach Windows i Linux także Ctrl i kółko myszy.",
+    "zoomIn": "Większy",
+    "zoomOut": "Mniejszy",
+    "zoomReset": "Przywróć",
+    "zoomError": "Nie udało się zmienić rozmiaru interfejsu.",
     "theme": "Motyw",
     "layout": "Układ",
     "themeHint": "Tokeny kolorów stosowane dla tego konta.",

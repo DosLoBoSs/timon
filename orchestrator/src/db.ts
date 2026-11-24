@@ -6569,7 +6569,7 @@ export const dbApi = {
     // THREE known forms (dedicated event, `result` as
     // 429, text message). This last case was missing
     // here, so a mission killed by quota on
-    const hit = bestRateLimit(recent.map((r) => ({ type: r.type, payload: parse(r) })));
+    const hit = bestRateLimit(recent.map((r) => ({ type: r.type, payload: parse(r), timestamp: r.timestamp })));
     if (hit) {
       // A 402 is not a quota window (`kind`, cf. rate-limit.ts): flattening the
       // two wrote "quota reopens at HH:MM" onto the Kanban for an account that

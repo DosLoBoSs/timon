@@ -40,9 +40,10 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep, win32 as winPath } from 'node:path';
 import { runtimeDir } from './packaged-service.js';
 import type { ExecResult } from './types.js';
-import { isBundledNode } from './bundled-node.js';
-import { readServiceSessionMode, sessionModeSupported, writeServiceSessionMode, type ServiceSessionMode } from './service-session-mode.js';
+import { isBundledNode, packagedRuntime } from './bundled-node.js';
+import { readServiceSessionMode, serviceS4uRefusedPath, sessionModeSupported, writeServiceSessionMode, type ServiceSessionMode } from './service-session-mode.js';
 import { parseLauncherConfig, WINDOWS_LAUNCHER_FORMAT, type WindowsLauncherConfig } from './windows-service-launcher.js';
+import { windowsTaskShape, type WindowsTaskShape } from './windows-task-shape.js';
 
 export const LINUX_UNIT = 'timon-orchestrator';
 export const MACOS_LABEL = 'com.timon.daemon';
@@ -162,6 +163,18 @@ export type ServiceResult = {
    * definition that would be refused the same way.
    */
   refused?: boolean;
+  /**
+   * Windows `install` and restore: the task was asked to run off session (S4U)
+   * but Windows kept it for the session only, so the session task was
+   * registered instead (`WINDOWS_SESSION_FALLBACK_NOTICE`, which `lines`
+   * carries). The service works, and stops at logout.
+   */
+  sessionFallback?: boolean;
+  /**
+   * Windows `status` only: what the registered task runs (`windowsTaskShape`),
+   * absent when its definition could not be read.
+   */
+  taskShape?: WindowsTaskShape;
   /**
    * `status` only: does the registered service keep running once the user
    * logs out? Linux: lingering is on for the account. macOS: the LaunchDaemon.
@@ -296,6 +309,12 @@ ${Object.entries(environment).map(([key, value]) => `    <key>${escapeXml(key)}<
  *  Never under `TIMON_HOME`: that directory belongs to the user's data. */
 export function taskXmlPath(dir: string = tmpdir()): string {
   return join(dir, `${WINDOWS_TASK}.xml`);
+}
+
+/** Where the session task is staged next to an off-session one, for the
+ *  fallback of `logonCheckStep` and `verifyTaskStartedStep`. */
+export function sessionTaskXmlPath(dir: string = tmpdir()): string {
+  return join(dir, `${WINDOWS_TASK}-session.xml`);
 }
 
 /** Marks an exit code in the elevated transcript; `runElevated` reads them back. */
@@ -456,6 +475,12 @@ export function windowsServiceFiles(timonHome: string, joinPath: (...parts: stri
     revision: joinPath(run, 'service-revision'),
     /** Written by the desktop when the user declines the offer to reinstall the task. */
     repairDeclined: joinPath(run, 'service-repair-declined'),
+    /** Written by the desktop when the rewrite that repairs a task changed
+     *  outside Timon (#116) is declined or fails at launch, with the app's
+     *  version: the same version stops asking. Removed by an install that
+     *  succeeds (Settings › Installation, `timon service install`) and by an
+     *  uninstall. */
+    rewriteDeclined: joinPath(run, 'service-rewrite-declined'),
     /** Written when Windows registered the task but never started it for this
      *  account (`verifyTaskStartedStep`); removed by an install whose task runs
      *  and by an uninstall. */
@@ -783,10 +808,18 @@ export function windowsTaskOffSession(opts: Pick<ServiceOpts, 'exec'>): boolean 
  * A task registered but unreadable is kept off session: every release before
  * the question registered the boot task, and silently turning an upgraded
  * user's night tasks off is the worse mistake.
+ *
+ * A task in place that opens a console was switched by hand to "Run only when
+ * user is logged on" (#116): its logon type no longer says what the user
+ * wanted, its boot trigger still does. Same rule as the desktop's rewrite
+ * (`windowsSessionIntent`, desktop `upgrade.ts`), so a reinstall from the CLI
+ * and a repair from the app register the same task.
  */
-function windowsKeepsRunning(opts: ServiceOpts): boolean {
+function windowsWantsOffSession(opts: ServiceOpts): boolean {
   const mode = sessionModeOf(opts);
   if (mode !== null) return mode === 'always';
+  const shape = readWindowsTaskShape(opts);
+  if (shape?.consoleVisible) return shape.triggers.includes('Boot');
   const found = windowsTaskOffSession(opts);
   if (found !== null) return found;
   try {
@@ -794,6 +827,32 @@ function windowsKeepsRunning(opts: ServiceOpts): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Off session (S4U) or not, once a past refusal is counted: Windows already
+ * kept the S4U task for the session only on this account (`service-s4u-refused`),
+ * so trying again would only fall back the same way, after the same wait. The
+ * explicit "always" (`writeServiceSessionMode`) removes the marker first.
+ */
+function windowsKeepsRunning(opts: ServiceOpts, lines: string[]): boolean {
+  if (!windowsWantsOffSession(opts)) return false;
+  const marker = serviceS4uRefusedPath(opts.timonHome);
+  if (!existsSync(marker)) return true;
+  let since = '';
+  try {
+    since = readFileSync(marker, 'utf8').trim();
+  } catch {
+    // Unreadable: the refusal still holds, only its date is lost.
+  }
+  lines.push(`Windows kept the ${WINDOWS_TASK} task for the session only on this account before${since ? ` (recorded ${since})` : ''}: `
+    + 'registering the session task directly. Run `timon service session-mode always` to try running with no session open again.');
+  return false;
+}
+
+/** Remembers that this account refuses the S4U task (`windowsKeepsRunning`). */
+function recordS4uRefused(opts: ServiceOpts, lines: string[]): void {
+  write(serviceS4uRefusedPath(opts.timonHome), `${new Date().toISOString()}\n`, opts.dryRun ?? false, lines);
 }
 
 function powershellLiteral(value: string): string {
@@ -970,28 +1029,87 @@ export const TASK_NEVER_RAN_KEPT = 4;
 export const TASK_VERIFY_SECONDS = 15;
 
 /**
+ * `logonCheckStep` and `verifyTaskStartedStep` exit codes: the off-session
+ * task was replaced by the session task, which runs; the stored logon could
+ * not be read (the task is kept as registered); the session task could not
+ * be registered over a task stored for the session, which was then deleted.
+ */
+export const TASK_SESSION_FALLBACK = 6;
+export const TASK_LOGON_UNREADABLE = 7;
+export const TASK_LOGON_FALLBACK_FAILED = 8;
+
+/**
+ * PowerShell that sets `$l` to the logon type of the registered task, `''`
+ * when it cannot be read. `schtasks /XML` as `windowsTaskOffSession` reads it:
+ * the logon type is ASCII, and the ScheduledTasks module names it differently
+ * (`Interactive`).
+ */
+function storedLogonStatements(task: string): string {
+  return `$x = (& schtasks.exe /Query /TN ${task} /XML ONE) -join ' '; $l = ''; `
+    + `if ($LASTEXITCODE -eq 0 -and $x -match '<LogonType>\\s*(\\w+)\\s*</LogonType>') { $l = $Matches[1] }`;
+}
+
+/** PowerShell that waits up to `TASK_VERIFY_SECONDS` for the task to start, and sets `$ran`. */
+function taskStartedStatements(task: string): string {
+  return `$end = (Get-Date).AddSeconds(${TASK_VERIFY_SECONDS}); $ran = $false; do { `
+    + `$i = Get-ScheduledTaskInfo -TaskName ${task} -TaskPath '\\' -ErrorAction SilentlyContinue; `
+    + `if (-not $i -or $i.LastTaskResult -ne ${WINDOWS_TASK_NEVER_RAN} -or ($i.LastRunTime -and $i.LastRunTime.Year -ge 2000)) { $ran = $true; break }; `
+    + 'Start-Sleep -Milliseconds 500 } while ((Get-Date) -lt $end)';
+}
+
+/**
+ * Right after `/Create` of an off-session task, before `/Run`: reads back
+ * the logon Windows stored. Stored for the session, the task would start its
+ * console program on the user's desktop (issue #116), so the session task
+ * staged at `sessionFile` is registered over it, in the same elevation. A
+ * logon it cannot read or does not judge passes, and nothing is deleted:
+ * the install goes on with the task as registered.
+ */
+export function logonCheckStep(sessionFile: string): ElevatedStep {
+  const task = powershellLiteral(WINDOWS_TASK);
+  return {
+    label: 'logon',
+    program: 'powershell',
+    args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
+      `${storedLogonStatements(task)}; if ($l -eq 'S4U' -or $l -eq 'Password') { exit 0 }; `
+      + `if ($l -ne 'InteractiveToken') { exit ${TASK_LOGON_UNREADABLE} }; `
+      + `& schtasks.exe /Create /TN ${task} /XML ${powershellLiteral(sessionFile)} /F | Out-Null; if ($LASTEXITCODE -eq 0) { exit ${TASK_SESSION_FALLBACK} }; `
+      + `& schtasks.exe /Delete /TN ${task} /F | Out-Null; exit ${TASK_LOGON_FALLBACK_FAILED}`],
+  };
+}
+
+/**
  * After `/Run`, proves the task really started: `/Run` answers "SUCCESS:
  * Attempted" even when Windows then refuses the S4U logon, and the task
  * stays Ready with `LastTaskResult` 0x41303 and `LastRunTime` in 1999 — on
  * a PC joined to Microsoft Entra ID, every 5-minute repetition silently
- * skipped (TODO #342). Never started within `TASK_VERIFY_SECONDS`: the task
- * is deleted in the same elevation, so nothing is left that the desktop would
- * wait on. Both signals are required, and an unreadable state passes: a
- * false verdict would delete a working task.
+ * skipped (TODO #342). Both signals are required, and an unreadable state
+ * passes: a false verdict would replace a working task.
+ *
+ * An off-session task that never started is replaced, in the same elevation,
+ * by the session task staged at `sessionFile`, which Windows runs on any
+ * account: such an account then gets a service that stops at logout instead
+ * of the built-in daemon. Only a task that still runs off session is
+ * replaced. When that one does not start either, or there is no fallback,
+ * the task is deleted, so nothing is left that the desktop would wait on.
  */
-export function verifyTaskStartedStep(): ElevatedStep {
+export function verifyTaskStartedStep(sessionFile?: string): ElevatedStep {
   const task = powershellLiteral(WINDOWS_TASK);
+  const fallback = sessionFile === undefined ? '' : `${storedLogonStatements(task)}; if ($l -eq 'S4U' -or $l -eq 'Password') { `
+    + `& schtasks.exe /Create /TN ${task} /XML ${powershellLiteral(sessionFile)} /F | Out-Null; if ($LASTEXITCODE -eq 0) { `
+    + `& schtasks.exe /Run /TN ${task} | Out-Null; ${taskStartedStatements(task)}; if ($ran) { exit ${TASK_SESSION_FALLBACK} } } }; `;
   return {
     label: 'verify',
     program: 'powershell',
     args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
-      `$end = (Get-Date).AddSeconds(${TASK_VERIFY_SECONDS}); do { `
-      + `$i = Get-ScheduledTaskInfo -TaskName ${task} -TaskPath '\\' -ErrorAction SilentlyContinue; if (-not $i) { exit 0 }; `
-      + `if ($i.LastTaskResult -ne ${WINDOWS_TASK_NEVER_RAN} -or ($i.LastRunTime -and $i.LastRunTime.Year -ge 2000)) { exit 0 }; `
-      + `Start-Sleep -Milliseconds 500 } while ((Get-Date) -lt $end); `
+      `${taskStartedStatements(task)}; if ($ran) { exit 0 }; ${fallback}`
       + `& schtasks.exe /Delete /TN ${task} /F | Out-Null; if ($LASTEXITCODE -eq 0) { exit ${TASK_NEVER_RAN_REMOVED} }; exit ${TASK_NEVER_RAN_KEPT}`],
   };
 }
+
+/** What `lines` carries when the session task replaced the off-session one (`ServiceResult.sessionFallback`). */
+export const WINDOWS_SESSION_FALLBACK_NOTICE = `Windows did not keep the ${WINDOWS_TASK} task running without an open session for this account, `
+  + 'so Timon registered it for your session instead: it stops at logout and starts again at your next logon.';
 
 /** What a user reads when Windows will not start the task for their account. */
 export const WINDOWS_TASK_REFUSED_REASON = `Windows registered the ${WINDOWS_TASK} task but never started it for this account. `
@@ -1058,12 +1176,19 @@ function installWindows(opts: ServiceOpts, lines: string[]): ServiceResult {
     return { ok: false, code: 1, lines, written: false };
   }
   const file = taskXmlPath();
-  const offSession = windowsKeepsRunning(opts);
+  const offSession = windowsKeepsRunning(opts, lines);
+  const userId = windowsTaskUserId(opts);
   // UTF-16 with a BOM: `schtasks /XML` rejects a UTF-8 file with a parse error
   // that names neither the encoding nor the file.
-  writeTaskXml(file, renderTaskXml({ ...opts, userId: windowsTaskUserId(opts), offSession }), opts.dryRun ?? false, lines);
+  writeTaskXml(file, renderTaskXml({ ...opts, userId, offSession }), opts.dryRun ?? false, lines);
+  // Staged before the elevation so the batch can fall back to it without a
+  // second prompt: stored for the session, or never started, the off-session
+  // task is replaced by this one (`logonCheckStep`, `verifyTaskStartedStep`).
+  const sessionFile = offSession ? sessionTaskXmlPath() : null;
+  if (sessionFile) writeTaskXml(sessionFile, renderTaskXml({ ...opts, userId, offSession: false }), opts.dryRun ?? false, lines);
   const { codes, output, cancelled } = runElevated(opts, lines, [
     { label: 'create', args: ['/Create', '/TN', WINDOWS_TASK, '/XML', file, '/F'], stopOnFailure: true },
+    ...(sessionFile ? [logonCheckStep(sessionFile)] : []),
     // A reinstall replaces a daemon this launcher already holds: `/Run` alone
     // would be dropped by IgnoreNew and leave the old one serving.
     stopLauncherStep(opts.timonHome),
@@ -1072,7 +1197,7 @@ function installWindows(opts: ServiceOpts, lines: string[]): ServiceResult {
     // wizard, whose request then failed ("Failed to fetch", 0.1.2-rc.5).
     ...(opts.replacePortOwner ? [stopPortOwnerStep(opts)] : []),
     { label: 'run', args: ['/Run', '/TN', WINDOWS_TASK], stopOnFailure: true },
-    verifyTaskStartedStep(),
+    verifyTaskStartedStep(sessionFile ?? undefined),
   ]);
   if (cancelled) {
     lines.push(`elevation refused: Windows will not register a ${offSession ? 'boot' : 'logon'} task for a caller that is not elevated`);
@@ -1083,7 +1208,19 @@ function installWindows(opts: ServiceOpts, lines: string[]): ServiceResult {
     lines.push(`schtasks refused: ${output.trim() || `exit ${created ?? 'unknown'}`}`);
     return { ok: false, code: 1, lines, written: false };
   }
+  const logon = codes.get('logon');
+  if (logon === TASK_LOGON_FALLBACK_FAILED) {
+    // A task stored for the session would have opened its console on the
+    // user's desktop at every start: it was deleted rather than started.
+    lines.push(`scheduled task ${WINDOWS_TASK} was stored to run only in the session, and the session task could not replace it: it was removed`);
+    clearRevision(opts);
+    return { ok: false, code: 1, lines, reason: `Windows stored the ${WINDOWS_TASK} task for the session only, and Timon could not register its session task instead. Try again, or run \`timon service install\` from the app's terminal.` };
+  }
+  if (logon === TASK_LOGON_UNREADABLE) {
+    lines.push(`could not read back the logon type of scheduled task ${WINDOWS_TASK}: it is kept as registered`);
+  }
   const verified = codes.get('verify');
+  const fellBack = logon === TASK_SESSION_FALLBACK || verified === TASK_SESSION_FALLBACK;
   if (codes.get('run') === 0 && verified === undefined) {
     // The batch was cut before its check (the outer call timed out): it may
     // still delete the task. No revision, so the desktop does not wait on a
@@ -1117,12 +1254,19 @@ function installWindows(opts: ServiceOpts, lines: string[]): ServiceResult {
     lines.push(`scheduled task ${WINDOWS_TASK} was created but could not be started: ${output.trim() || `exit ${started ?? 'unknown'}`}`);
     return { ok: false, code: 1, lines };
   }
-  if (!opts.dryRun) rmSync(files.refused, { force: true });
+  if (!opts.dryRun) {
+    rmSync(files.refused, { force: true });
+    // The task is now the one this release writes: nothing is left to decline.
+    rmSync(files.rewriteDeclined, { force: true });
+  }
   // An upgrade keeps it until its new task answers (`keepBatchLauncher`).
   if (!opts.keepBatchLauncher) retireBatchLauncher(opts, lines);
-  const when = offSession ? 'starts at boot and keeps running after logoff' : 'starts at logon and stops when you log off';
+  const when = offSession && !fellBack ? 'starts at boot and keeps running after logoff' : 'starts at logon and stops when you log off';
   lines.push(`${opts.dryRun ? '(dry-run) would install and start the service' : 'service installed and started'} (scheduled task ${WINDOWS_TASK}, ${when})`);
-  return { ok: true, code: 0, lines };
+  if (!fellBack) return { ok: true, code: 0, lines };
+  recordS4uRefused(opts, lines);
+  lines.push(WINDOWS_SESSION_FALLBACK_NOTICE);
+  return { ok: true, code: 0, lines, sessionFallback: true };
 }
 
 function uninstallWindows(opts: ServiceOpts, lines: string[]): ServiceResult | null {
@@ -1155,11 +1299,44 @@ function uninstallWindows(opts: ServiceOpts, lines: string[]): ServiceResult | n
   // task back after a reinstall of the very version that was declined. So does
   // `refused`: kept, doctor would report no supervisor and the setup would
   // offer only the portable mode, after the very command the notice names.
-  for (const file of [files.launcher, files.batchLauncher, files.legacyLauncher, files.sessionWitness, files.revision, files.repairDeclined, files.refused]) {
+  for (const file of [files.launcher, files.batchLauncher, files.legacyLauncher, files.sessionWitness, files.revision, files.repairDeclined, files.rewriteDeclined, files.refused]) {
     if (!opts.dryRun) rmSync(file, { force: true });
   }
   lines.push(`${opts.dryRun ? '(dry-run) would remove' : 'removed'} the task launcher and its session witness`);
   return null;
+}
+
+/**
+ * The shape of the registered task (`windowsTaskShape`), `null` when none is
+ * registered or its definition cannot be read. `schtasks /XML`, as
+ * `windowsTaskOffSession`: what the shape reads is ASCII.
+ */
+export function readWindowsTaskShape(opts: Pick<ServiceOpts, 'exec'>): WindowsTaskShape | null {
+  let res: ExecResult;
+  try {
+    res = opts.exec('schtasks', ['/Query', '/TN', WINDOWS_TASK, '/XML', 'ONE']);
+  } catch {
+    return null;
+  }
+  return res.code === 0 ? windowsTaskShape(res.stdout) : null;
+}
+
+/** What a reader of `timon service status` and the diagnostic report should do about a task that shows a console. */
+export function windowsConsoleTaskAdvice(shape: WindowsTaskShape): string {
+  return `${WINDOWS_TASK} starts ${shape.program ?? 'a console program'} in your session: Windows opens a console window at every start, `
+    + 'and closing it stops Timon. It was switched to "Run only when user is logged on" after Timon registered it. '
+    + 'Reinstall the service (Settings > Installation, or `timon service install` from the app\'s terminal): Timon then registers a task that opens no window.';
+}
+
+/**
+ * Is a console this task opens the trap of #116, which a reinstall fixes?
+ * A source checkout has no `Timon.exe`: its session task is a hidden
+ * PowerShell by design (`windowsTaskAction`), and reinstalling would register
+ * the same one. A package never starts PowerShell. Shared by
+ * `timon service status` and the diagnostic report, so both say the same.
+ */
+export function windowsConsoleTaskTrap(shape: WindowsTaskShape, packaged: boolean = packagedRuntime()): boolean {
+  return shape.consoleVisible && (packaged || shape.program !== 'powershell.exe');
 }
 
 function statusWindows(opts: ServiceOpts): ServiceResult {
@@ -1172,16 +1349,17 @@ function statusWindows(opts: ServiceOpts): ServiceResult {
   const statusLine = res.stdout.split('\n').find((l) => /^\s*(status|statut|état)\s*:/i.test(l));
   const state = statusLine?.split(':').slice(1).join(':').trim() || (installed ? 'unknown' : 'not installed');
   const running = /running|en cours/i.test(state);
-  return {
-    ok: running,
-    code: running ? 0 : 3,
-    installed,
-    lines: [
-      `task      : ${WINDOWS_TASK}`,
-      `registered: ${installed ? 'yes' : 'no'}`,
-      `state     : ${state}`,
-    ],
-  };
+  const lines = [
+    `task      : ${WINDOWS_TASK}`,
+    `registered: ${installed ? 'yes' : 'no'}`,
+    `state     : ${state}`,
+  ];
+  const shape = installed ? readWindowsTaskShape(opts) : null;
+  if (shape) {
+    lines.push(`logon     : ${shape.logon}`, `action    : ${shape.program ?? 'unknown'}`);
+    if (windowsConsoleTaskTrap(shape)) lines.push(`console   : visible - ${windowsConsoleTaskAdvice(shape)}`);
+  }
+  return { ok: running, code: running ? 0 : 3, installed, lines, ...(shape ? { taskShape: shape } : {}) };
 }
 
 /**
@@ -1195,16 +1373,67 @@ function readWindowsDefinition(opts: ServiceOpts): string | null {
   return res.code === 0 && res.stdout.includes('<Task') ? res.stdout : null;
 }
 
+/**
+ * What a rollback registers in place of `previous`. Never a task that starts
+ * a console program in the user's session (issue #116): it would open a
+ * window at every start, so the session task of this installation, which
+ * opens none, goes in its place (`windowsConsoleTaskTrap`: a source
+ * checkout's hidden PowerShell is no such task). A shape that cannot be read is put back as
+ * it was. `sessionFile`: the session task to fall back to when the previous
+ * task asks for S4U and Windows stores it for the session only.
+ */
+function windowsRestoreDefinition(opts: ServiceOpts, previous: string, lines: string[]): { definition: string; sessionFile: string | null } {
+  const shape = windowsTaskShape(previous);
+  if (!shape || shape.logon === 'unknown') {
+    lines.push(`could not read the logon of the previous ${WINDOWS_TASK} task: it is put back as it was`);
+    return { definition: previous, sessionFile: null };
+  }
+  let session: string;
+  try {
+    session = renderTaskXml({ ...opts, userId: windowsTaskUserId(opts), offSession: false });
+  } catch (error) {
+    lines.push(`could not render the session task (${(error as Error).message}): the previous ${WINDOWS_TASK} task is put back as it was`);
+    return { definition: previous, sessionFile: null };
+  }
+  // The shared rule, not `consoleVisible` alone: the session task of a source
+  // checkout is a hidden PowerShell, and replacing it would register the same.
+  if (windowsConsoleTaskTrap(shape)) {
+    lines.push(`the previous ${WINDOWS_TASK} task started ${shape.program} in the session, which opens a console window: the session task is registered instead`);
+    return { definition: session, sessionFile: null };
+  }
+  if (shape.logon === 'InteractiveToken') return { definition: previous, sessionFile: null };
+  const sessionFile = sessionTaskXmlPath();
+  writeTaskXml(sessionFile, session, opts.dryRun ?? false, lines);
+  return { definition: previous, sessionFile };
+}
+
 function restoreWindowsDefinition(opts: ServiceOpts, previous: string, lines: string[]): ServiceResult {
   const file = taskXmlPath();
-  writeTaskXml(file, previous, opts.dryRun ?? false, lines);
+  const { definition, sessionFile } = windowsRestoreDefinition(opts, previous, lines);
+  writeTaskXml(file, definition, opts.dryRun ?? false, lines);
   const { codes, output, cancelled } = runElevated(opts, lines, [
     { label: 'create', args: ['/Create', '/TN', WINDOWS_TASK, '/XML', file, '/F'], stopOnFailure: true },
+    ...(sessionFile ? [logonCheckStep(sessionFile)] : []),
     stopLauncherStep(opts.timonHome),
     { label: 'run', args: ['/Run', '/TN', WINDOWS_TASK] },
   ]);
   if (cancelled) return { ok: false, code: 1, lines, reason: 'elevation refused' };
   if (codes.get('create') !== 0) return { ok: false, code: 1, lines, reason: output.trim() || 'schtasks refused the previous task' };
+  const logon = codes.get('logon');
+  if (logon === TASK_LOGON_FALLBACK_FAILED) {
+    // Removed rather than left to open a console at every start.
+    clearRevision(opts);
+    lines.push(`the previous ${WINDOWS_TASK} task was stored for the session only, and the session task could not replace it: it was removed`);
+    return { ok: false, code: 1, lines, reason: `Windows stored the previous ${WINDOWS_TASK} task for the session only, and Timon could not register its session task instead` };
+  }
+  if (logon === TASK_LOGON_UNREADABLE) {
+    lines.push(`could not read back the logon type of scheduled task ${WINDOWS_TASK}: it is kept as restored`);
+  }
+  const fellBack = logon === TASK_SESSION_FALLBACK;
+  if (fellBack) {
+    recordS4uRefused(opts, lines);
+    lines.push(WINDOWS_SESSION_FALLBACK_NOTICE);
+  }
   // The revision `installWindows` just recorded describes the definition that
   // was taken away: left, the migration would never run again. Not cleared
   // either: to the desktop, no revision file means no task at all — a
@@ -1213,7 +1442,11 @@ function restoreWindowsDefinition(opts: ServiceOpts, previous: string, lines: st
   // desktop tries again at its next launch.
   write(windowsServiceFiles(opts.timonHome, join).revision, `${WINDOWS_REVISION_RESTORED}\n`, opts.dryRun ?? false, lines);
   const ok = codes.get('run') === 0;
-  return { ok, code: ok ? 0 : 1, lines, ...(ok ? {} : { reason: output.trim() || 'the previous task could not be started' }) };
+  return {
+    ok, code: ok ? 0 : 1, lines,
+    ...(fellBack ? { sessionFallback: true } : {}),
+    ...(ok ? {} : { reason: output.trim() || 'the previous task could not be started' }),
+  };
 }
 
 function removeWindowsDefinition(opts: ServiceOpts, lines: string[]): ServiceResult {
@@ -2278,6 +2511,13 @@ function lingerEnabled(opts: ServiceOpts): boolean | null {
   return value === 'yes' ? true : value === 'no' ? false : null;
 }
 
+/** Same answer as `windowsTaskOffSession`, from a shape already read. */
+function shapeKeepsRunning(shape: WindowsTaskShape): boolean | null {
+  if (shape.logon === 'InteractiveToken') return false;
+  if (shape.logon === 'S4U' || shape.logon === 'Password') return true;
+  return null;
+}
+
 /** What the registered supervisor does at logout, read from the machine (see `ServiceResult.offSession`). */
 function keepsRunningLoggedOut(opts: ServiceOpts): boolean | null {
   if (opts.platform === 'win32') return windowsTaskOffSession(opts);
@@ -2328,7 +2568,10 @@ export function statusService(opts: ServiceOpts): ServiceResult {
     if (lingering !== null) res.lingering = lingering;
   }
   if (res.installed) {
-    const offSession = opts.platform === 'linux' ? res.lingering ?? null : keepsRunningLoggedOut(opts);
+    // Windows: read from the shape `statusWindows` already queried, not twice.
+    const offSession = opts.platform === 'linux' ? res.lingering ?? null
+      : opts.platform === 'win32' && res.taskShape ? shapeKeepsRunning(res.taskShape)
+        : keepsRunningLoggedOut(opts);
     if (offSession !== null) {
       res.offSession = offSession;
       res.lines.push(`logged out: ${offSession ? 'keeps running' : 'stops when you log out'}`);
@@ -2474,6 +2717,8 @@ export type ServiceDiagnostics = {
   lastTaskResult: number | null;
   /** What the supervisor says about the last run, a few `key: value` lines. */
   lines: string[];
+  /** Windows only: what the registered task runs, `null` when unreadable. */
+  shape?: WindowsTaskShape | null;
 };
 
 function readIfPresent(path: string): string | null {
@@ -2536,6 +2781,7 @@ export function serviceDiagnostics(opts: ServiceOpts): ServiceDiagnostics {
   const marked = serviceDefinitionMarked(opts);
   const lines: string[] = [];
   let lastTaskResult: number | null = null;
+  let shape: WindowsTaskShape | null = null;
   try {
     if (opts.platform === 'win32') {
       const res = opts.exec('powershell', ['-NoProfile', '-NonInteractive', '-Command',
@@ -2556,6 +2802,10 @@ export function serviceDiagnostics(opts: ServiceOpts): ServiceDiagnostics {
           }
         }
       }
+      shape = readWindowsTaskShape(opts);
+      if (shape) {
+        lines.push(`Action: ${shape.program ?? '—'}`, `ConsoleVisible: ${shape.consoleVisible ? 'yes' : 'no'}`);
+      }
       lines.push(...windowsServiceNotes(opts));
     } else if (opts.platform === 'darwin') {
       const target = existsSync(daemonPlistOf(opts)) ? SYSTEM_TARGET : guiTarget(opts.uid);
@@ -2574,5 +2824,5 @@ export function serviceDiagnostics(opts: ServiceOpts): ServiceDiagnostics {
       }
     }
   } catch { /* A supervisor that cannot be queried: what we have. */ }
-  return { marked, lastTaskResult, lines };
+  return { marked, lastTaskResult, lines, ...(opts.platform === 'win32' ? { shape } : {}) };
 }

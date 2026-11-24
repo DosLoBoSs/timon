@@ -2,6 +2,10 @@
   "desktop": {
     "menu": {
       "newWindow": "Nieuw venster",
+      "view": "Weergave",
+      "zoomReset": "Ware grootte",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom uit",
       "open": "{appName} openen",
       "daemon": "Daemon: {state, select, running {actief} other {onbereikbaar}} ({origin})",
       "quit": "Afsluiten"

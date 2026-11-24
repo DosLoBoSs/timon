@@ -10,6 +10,7 @@ import {
   startStoppedServiceFailureMessage, stopServiceCopy, stopServiceFailureMessage,
   WINDOWS_SERVICE_REVISION, WINDOWS_TASK, windowsLauncher, windowsRepairDeclinedFile, windowsRestartRunner, windowsTaskNeverRan,
   windowsRestartSeams, windowsServiceRevisionFile, windowsSessionWitnessFile, windowsTaskState, windowsTaskRunning, endWindowsLauncher, serviceHeldOutFile, serviceHeldOutSince,
+  readWindowsTaskShape, disableWindowsTask,
 } from './service.js';
 import type { DesktopConfig } from './config.js';
 
@@ -478,4 +479,23 @@ test('quit and stop: the prompt names the permission step of the OS, in the user
   assert.doesNotMatch(stopServiceCopy('en', 'linux').detail, /permission|password/, 'systemd asks nothing');
   assert.match(stopServiceFailureMessage(new Error('boom'), 'en').detail, /keeps running[\s\S]*boom/);
   assert.match(startStoppedServiceFailureMessage(new Error('refused'), '/h', 'fr').detail, /timon service start[\s\S]*\/h[\s\S]*refused/);
+});
+
+test('windows #116: the task\'s shape is read with schtasks /XML, and an unreadable one is null', async () => {
+  const calls: string[][] = [];
+  const xml = '<Task><Triggers><BootTrigger/></Triggers><Principals><Principal><LogonType>InteractiveToken</LogonType></Principal></Principals>'
+    + '<Actions><Exec><Command>cmd.exe</Command></Exec></Actions></Task>';
+  const shape = await readWindowsTaskShape(async (args) => { calls.push(args); return { stdout: xml }; });
+  assert.deepEqual(calls, [['/Query', '/TN', WINDOWS_TASK, '/XML', 'ONE']]);
+  assert.equal(shape?.consoleVisible, true);
+  assert.deepEqual(shape?.triggers, ['Boot']);
+  assert.equal(await readWindowsTaskShape(async () => { throw new Error('ERROR: The system cannot find the file specified.'); }), null);
+  assert.equal(await readWindowsTaskShape(async () => ({ stdout: '' })), null);
+});
+
+test('windows #116: a task Windows never starts is disabled with schtasks, and a refusal is reported', async () => {
+  const calls: string[][] = [];
+  await disableWindowsTask(async (args) => { calls.push(args); return { stdout: 'SUCCESS' }; });
+  assert.deepEqual(calls, [['/Change', '/TN', WINDOWS_TASK, '/DISABLE']]);
+  await assert.rejects(disableWindowsTask(async () => { throw new Error('ERROR: Access is denied.'); }), /Access is denied/);
 });

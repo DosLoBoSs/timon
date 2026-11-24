@@ -975,6 +975,12 @@
   },
   "appearance": {
     "title": "外観",
+    "zoomTitle": "インターフェースのサイズ",
+    "zoomHint": "このコンピューター上のすべての Timon ウィンドウで、文字と操作部品を拡大または縮小します。ショートカット: Ctrl と +、Ctrl と −、Ctrl と 0 でリセット（macOS では 3 つとも Ctrl の代わりに Cmd）。Windows と Linux では Ctrl とマウスホイールも使えます。",
+    "zoomIn": "大きく",
+    "zoomOut": "小さく",
+    "zoomReset": "リセット",
+    "zoomError": "インターフェースのサイズを変更できませんでした。",
     "theme": "テーマ",
     "layout": "レイアウト",
     "themeHint": "このアカウントに適用する色トークン。",

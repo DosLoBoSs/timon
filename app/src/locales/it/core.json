@@ -975,6 +975,12 @@
   },
   "appearance": {
     "title": "Aspetto",
+    "zoomTitle": "Dimensione dell'interfaccia",
+    "zoomHint": "Ingrandisce o riduce testo e controlli in tutte le finestre di Timon su questo computer. Scorciatoie: Ctrl e +, Ctrl e −, e Ctrl e 0 per ripristinare; su macOS, Cmd al posto di Ctrl per tutte e tre. Su Windows e Linux, anche Ctrl e la rotellina del mouse.",
+    "zoomIn": "Più grande",
+    "zoomOut": "Più piccola",
+    "zoomReset": "Ripristina",
+    "zoomError": "Impossibile cambiare la dimensione dell'interfaccia.",
     "theme": "Tema",
     "layout": "Layout",
     "themeHint": "Token di colore applicati per questo account.",

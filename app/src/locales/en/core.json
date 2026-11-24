@@ -751,6 +751,12 @@
   },
   "appearance": {
     "title": "Appearance",
+    "zoomTitle": "Interface size",
+    "zoomHint": "Makes text and controls larger or smaller in every Timon window on this computer. Shortcuts: Ctrl and +, Ctrl and −, and Ctrl and 0 to reset; on macOS, Cmd instead of Ctrl for all three. On Windows and Linux, Ctrl and the mouse wheel too.",
+    "zoomIn": "Larger",
+    "zoomOut": "Smaller",
+    "zoomReset": "Reset",
+    "zoomError": "The interface size could not be changed.",
     "theme": "Theme",
     "layout": "Layout",
     "themeHint": "Colour tokens painted for this account.",
@@ -2826,6 +2832,7 @@
       "unsupported": "No supported service manager on this machine",
       "absent": "Not installed",
       "stale": "Installed, out of date",
+      "console": "A console window opens: repair the background task",
       "stopped": "Installed, not running",
       "running": "Installed and running"
     },

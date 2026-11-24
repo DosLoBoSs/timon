@@ -975,6 +975,12 @@
   },
   "appearance": {
     "title": "Weergave",
+    "zoomTitle": "Interfacegrootte",
+    "zoomHint": "Maakt tekst en bedieningselementen groter of kleiner in alle Timon-vensters op deze computer. Sneltoetsen: Ctrl en +, Ctrl en −, en Ctrl en 0 om terug te zetten; op macOS Cmd in plaats van Ctrl bij alle drie. Op Windows en Linux ook Ctrl en het muiswiel.",
+    "zoomIn": "Groter",
+    "zoomOut": "Kleiner",
+    "zoomReset": "Herstellen",
+    "zoomError": "De interfacegrootte kon niet worden gewijzigd.",
     "theme": "Thema",
     "layout": "Indeling",
     "themeHint": "Kleurtokens voor dit account.",
