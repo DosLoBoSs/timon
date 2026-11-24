@@ -86,7 +86,8 @@ export interface HostFence {
 
 /** One witness run of the fence launcher (`HostFence.witness`). */
 export type HostFenceWitness =
-  | { readonly ran: true; readonly status: number | null; readonly stderr: string }
+  /** `signal` names the signal that ended the launcher when `status` is null. */
+  | { readonly ran: true; readonly status: number | null; readonly stderr: string; readonly signal?: string }
   /**
    * The launcher could not be started, or gave no answer in time. `code` is
    * the spawn error's errno code (`ENOENT`, `EAGAIN`…) when there was one: it

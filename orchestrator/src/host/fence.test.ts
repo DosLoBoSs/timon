@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import {
   encodeFencePolicy, fenceBinaryCandidates, fenceDeclaredByRelease, FENCE_EXIT, FENCE_POLICY_HEADER, FENCE_RELEASE_FILE,
-  fenceLaunchDecision, fenceStatus, findFenceBinary, parseFenceProbe, probeFence, type FencePolicy, type FenceProbe,
+  fenceLaunchDecision, fenceStatus, findFenceBinary, launcherCpuIncompatible, parseFenceProbe, probeFence, type FencePolicy, type FenceProbe,
 } from './fence.js';
 
 test('the policy is NUL-separated: header, socket option, then one pair per path', () => {
@@ -125,6 +125,40 @@ test('a declared, intact launcher on a kernel without Landlock is the machine, n
   const ready = fenceStatus({ ...LINUX, orchestratorRoot: root, release: signed(digest), probe: () => READY });
   assert.equal(ready.state, 'ready');
   assert.deepEqual(fenceLaunchDecision('enforce', ready), { action: 'fence', binary: join(root, 'native', 'timon-fence') });
+});
+
+const SIGILL_SCRIPT = '#!/bin/sh\nkill -ILL $$\n';
+
+test('a launcher that dies on an illegal instruction is said incompatible with this processor', { skip: process.platform === 'win32' && 'a stand-in launcher is a shell script' }, () => {
+  const { binary } = shippedRoot(SIGILL_SCRIPT);
+  const probe = probeFence(binary);
+  assert.equal(probe.available, false);
+  assert.equal(probe.cpuIncompatible, true);
+  assert.match(probe.reason ?? '', /not compatible with this processor.*SIGILL.*not altered/);
+  assert.ok(probe.reason?.includes(binary));
+});
+
+test('a declared, intact launcher built for a newer CPU is not an alteration: warned in auto, refused in enforce', () => {
+  const { root, binary, digest } = shippedRoot('launcher');
+  const cpu: FenceProbe = { available: false, answered: false, abi: 0, seccomp: false, cpuIncompatible: true, reason: launcherCpuIncompatible(binary) };
+  const status = fenceStatus({ ...LINUX, orchestratorRoot: root, release: signed(digest), probe: () => cpu });
+  assert.deepEqual(status, { state: 'unsupported', reason: launcherCpuIncompatible(binary), abi: 0 });
+
+  const auto = fenceLaunchDecision('auto', status);
+  assert.ok(auto.action === 'unfenced' && !auto.tampered);
+  assert.match(auto.action === 'unfenced' ? auto.warning ?? '' : '', /^Mission launched unfenced: .*not compatible with this processor/);
+  assert.doesNotMatch(auto.action === 'unfenced' ? auto.warning ?? '' : '', /may have been altered: reinstall/);
+
+  const enforce = fenceLaunchDecision('enforce', status);
+  assert.ok(enforce.action === 'refuse' && !enforce.tampered);
+  assert.match(enforce.action === 'refuse' ? enforce.error : '', /"enforce".*not compatible with this processor/);
+  assert.doesNotMatch(enforce.action === 'refuse' ? enforce.error : '', /may have been altered: reinstall/);
+
+  // A replaced file is still an alteration, whatever it does when run.
+  const swapped = fenceStatus({ ...LINUX, orchestratorRoot: root, release: signed('0'.repeat(64)), probe: () => cpu });
+  assert.equal(swapped.state, 'tampered');
+  // A checkout's own build that dies the same way reads the same.
+  assert.deepEqual(fenceStatus({ ...LINUX, orchestratorRoot: root, release: null, probe: () => cpu }).state, 'unsupported');
 });
 
 test('the release manifest file declares the launcher even when no verified inventory was handed over', () => {
