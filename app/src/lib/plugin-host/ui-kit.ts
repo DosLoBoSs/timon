@@ -53,6 +53,7 @@ import { createTranslator } from '@/lib/plugin-translator';
 import { UiDocumentFrame, useUiDocument } from '@/components/chat/ui-document-block';
 import { uiDocumentUrl } from '@/lib/ui-documents';
 import { useSecretRequest } from '@/components/chat/secret-request-card';
+import { useFenceGrant } from '@/components/chat/fence-grant-card';
 import { useUpdateStatus } from '@/components/updates/update-status-context';
 import { useNotice, useNotices } from '@/components/notices/notice-context';
 import { useUpdateDialog } from '@/components/updates/update-dialog-context';
@@ -127,6 +128,9 @@ export const UI_KIT = {
   // A secret an agent asks its user for (client API 15): what a
   // `chat.secret` occupant renders, and its two gestures.
   useSecretRequest,
+  // A path the mission fence refused, with the folder offered to the agent (client API 19):
+  // what a `chat.fence` occupant renders, and its two answers.
+  useFenceGrant,
   // Deprecated since client API 17: the `updates.banner` slot is no longer
   // painted, so this answers `null`. Kept so an API 15 plugin still loads.
   useUpdateStatus,

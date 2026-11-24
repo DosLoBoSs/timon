@@ -588,6 +588,17 @@ export const APP_CARD_SLOT = 'apps.card';
 export const CHAT_SECRET_REQUEST_SLOT = 'chat.secret';
 
 /**
+ * Slot of the "Allow for this agent" card (TODO #1162): a path the mission
+ * fence refused, and the folder the daemon offers to open to the agent. A
+ * boot slot like `chat.secret`: a replacement registers when the plugins load,
+ * before any refusal is in a thread. The occupant reads `useFenceGrant()` and
+ * answers through it; the host sends the answer from the person's session,
+ * and the daemon checks the folder again before it opens anything. No card is
+ * drawn for the Timon home or a credential folder: the daemon offers none.
+ */
+export const CHAT_FENCE_GRANT_SLOT = 'chat.fence';
+
+/**
  * Slot of a Kanban item's tile (TODO #837): one TO DO idea or one task, in a
  * board column (`card`) or a TO DO widget's list (`row`). One slot for both
  * natures — the occupant reads `useKanbanCard()`, a union on `kind`. A boot
@@ -772,6 +783,7 @@ function declareBootSlots(): void {
   declareSlot(PAGE_TOC_SLOT, 'single');
   declareSlot(PROJECT_SETTINGS_SLOT, 'list');
   declareSlot(CHAT_SECRET_REQUEST_SLOT, 'single');
+  declareSlot(CHAT_FENCE_GRANT_SLOT, 'single');
   // Deprecated, never painted: declared so that its former occupants still load.
   declareSlot(UPDATES_BANNER_SLOT, 'single');
   declareSlot(NOTICES_SLOT, 'list');

@@ -19,7 +19,8 @@ import { ChatTabIcon } from './missions/chat-tab-icon';
 import { CHAT_ISLAND_KEY, parseChatIslandParams } from '@/lib/chat-island-params';
 import { CHAT_COLUMNS_EXCLUSIVE } from '@/components/chat/chat-island-host';
 import { ChatMediaCard } from '@/components/chat/media-block';
-import { CHAT_MEDIA_SLOT } from '@/lib/plugin-host/slots';
+import { FenceGrantCard } from '@/components/chat/fence-grant-card';
+import { CHAT_FENCE_GRANT_SLOT, CHAT_MEDIA_SLOT } from '@/lib/plugin-host/slots';
 import { EGRESS_ISLAND_KEY, parseEgressIslandParams } from '@/lib/egress';
 
 // Loaded on demand (docs/BUNDLE-SIZE.md): statically imported, every page of the app paid for it.
@@ -42,6 +43,9 @@ export const coreMissionsClient: BundledClientPlugin = {
     // Default occupant of `chat.media` (a boot slot): mounted with the module, not
     // with the cards, so a plugin's replacement keeps the slot across conversations.
     ctx.register({ slot: CHAT_MEDIA_SLOT, fallback: true }, ChatMediaCard);
+    // The "Allow for this agent" card of a path the mission fence refused (TODO #1162),
+    // the default occupant of its boot slot, like the media card.
+    ctx.register({ slot: CHAT_FENCE_GRANT_SLOT, fallback: true }, FenceGrantCard);
     registerWidget(ctx, { key: 'recent', widget: { title: t('widgetCatalog.recentMissions.title'), icon: widgetPicto('recentMissions'), description: t('widgetCatalog.recentMissions.description'), zone: 'gauche', height: 300, minHeight: 150 }, Component: RecentMissions });
     // Delegated missions still owed a return. Registered like any other card
     // (`cockpit.widget`), so it is movable into the chat rails as well as the

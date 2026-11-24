@@ -126,6 +126,7 @@ import { packageCacheEnv } from './backends/package-cache-env.js';
 import { launchBackendName, launchForMission, replaceMissionLaunch, resolveLaunchBackend } from './backends/account-launch.js';
 import { servedIconUrl } from './uploads.js';
 import { launchExtraDirs, storedExtraDirs, type AgentExtraDir } from './agent-extra-dirs.js';
+import { withFenceGrantOffer } from './fence-grant.js';
 import {
   systemEnv, secretsEnvFor, inheritEnvEnabled,
   injectedSecretsFor, journalInjectedSecrets,
@@ -4278,6 +4279,8 @@ function logBackendFailed(missionId: string, backendName: string, exitCode: numb
  */
 function logFenceRefused(missionId: string, refusal: FenceRefusal, why: string | null = null): void {
   console.warn(`[fence] mission ${missionId.slice(0, 8)}: ${fenceRefusalMessage(refusal)}${why ? ` (${why})` : ''}`);
+  // The id and the offer of "Allow for this agent" (TODO #1162): the card reads them, the answer names the id.
+  withFenceGrantOffer(refusal);
   const body = { type: 'fence_refused', ...refusal };
   try {
     const row = dbApi.insertEvent(missionId, 'fence_refused', body);
@@ -4362,6 +4365,24 @@ export function runningCountForAgent(agentName: string): number {
   let n = 0;
   for (const ra of running.values()) if (ra.agentName === agentName) n++;
   return n;
+}
+
+/**
+ * Stops the process of one mission so that its next turn starts a new one,
+ * resuming the same conversation: the fence of a process is fixed when it
+ * starts, so a folder opened since only reaches a new process. Resolves once
+ * the process is gone (or after `waitMs`), true when there was one.
+ */
+export async function restartMissionProcess(missionId: string, waitMs = 10_000): Promise<boolean> {
+  const ra = running.get(missionId);
+  if (!ra) return false;
+  ra.terminationIntent = 'stopped'; // a relaunch, not an error
+  ra.handle.kill('SIGTERM');
+  const deadline = Date.now() + waitMs;
+  while (running.get(missionId) === ra && Date.now() < deadline) {
+    await new Promise((done) => setTimeout(done, 50));
+  }
+  return true;
 }
 
 export function killRunningForAgent(agentName: string): number {

@@ -27,7 +27,7 @@ export const PLATFORM_MODULE_SOURCES: Record<string, string> = {
     + 'cn=u.cn,t=u.t,getLocale=u.getLocale,createTranslator=u.createTranslator,useTodoItem=u.useTodoItem,useTodoDetail=u.useTodoDetail,useMissionItem=u.useMissionItem,useAgentMenuItem=u.useAgentMenuItem,useConnectionForm=u.useConnectionForm,'
     + 'useIslandContent=u.useIslandContent,startIslandDrag=u.startIslandDrag,openInIsland=u.openInIsland,'
     + 'useUiDocument=u.useUiDocument,UiDocumentFrame=u.UiDocumentFrame,uiDocumentUrl=u.uiDocumentUrl,'
-    + 'useSecretRequest=u.useSecretRequest,useUpdateStatus=u.useUpdateStatus,'
+    + 'useSecretRequest=u.useSecretRequest,useFenceGrant=u.useFenceGrant,useUpdateStatus=u.useUpdateStatus,'
     + 'usePromptHistory=u.usePromptHistory,canRecallPrompt=u.canRecallPrompt,isTextareaWrapped=u.isTextareaWrapped,'
     + 'useChatMessage=u.useChatMessage,useComposerReply=u.useComposerReply,MessageActionButton=u.MessageActionButton,'
     + 'useBrowserChrome=u.useBrowserChrome,useBrowserRecording=u.useBrowserRecording,useBrowserSurface=u.useBrowserSurface,useBrowserAnnotations=u.useBrowserAnnotations,'

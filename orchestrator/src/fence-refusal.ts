@@ -25,6 +25,7 @@ import { homedir } from 'node:os';
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fenceAccess, type FencePolicy } from './host/isolation.js';
 import type { FenceMechanism } from './host/types.js';
+import type { FenceGrantOffer } from './fence-grant.js';
 
 export type FenceAccessKind = 'read' | 'write';
 
@@ -59,6 +60,10 @@ export type FenceRefusal = {
   /** Why the fence dropped its own grant on this path (a folder not made before the launch), when it did. */
   dropped: string | null;
   setting: typeof FENCE_SETTING;
+  /** Set when the thread records it (`withFenceGrantOffer`): what a person's answer names. */
+  id?: string;
+  /** The folder "Allow for this agent" would add, or null when no card may be offered (`fence-grant.ts`). */
+  grant?: FenceGrantOffer | null;
 };
 
 /** `parent` is `child` or contains it. Pure path arithmetic. */

@@ -558,3 +558,19 @@ test('paging reads no mission the caller cannot see, and nothing for an anonymou
   assert.equal((await get(`/api/missions/${secret}?tail=5`)).status, 200, 'the daemon token still reads it');
   assert.equal((await get(`/api/missions/${secret}?after=1`)).json.events?.length, 3, 'and its delta');
 });
+
+test('a fence refusal that offers a folder waits like a card until answered; a notice without offer never does', async () => {
+  const fenced = newMission();
+  const offered = fenced.ins('fence_refused', { type: 'fence_refused', id: 'fence-offer', path: '/x/state.db', grant: { path: '/x', display: '/x', mode: 'write' } });
+  fenced.ins('fence_refused', { type: 'fence_refused', id: 'fence-notice', path: '/home/u/.ssh/id', grant: null });
+  for (let i = 0; i < 4; i++) fenced.ins('assistant', says(`after ${i}`));
+  const waiting = (await get(`/api/missions/${fenced.id}?tail=2`)).json.prelude!;
+  assert.deepEqual(waiting.events.map((e) => `${e.type}:${String(e.payload.id)}`), ['fence_refused:fence-offer']);
+  assert.equal(waiting.events[0]!.id, offered);
+  fenced.ins('fence_grant_resolved', { type: 'fence_grant_resolved', id: 'fence-offer', status: 'refused', path: null, mode: null, resolvedAt: 1 });
+  forgetFolds();
+  const settled = (await get(`/api/missions/${fenced.id}?tail=2`)).json.prelude!;
+  assert.deepEqual(settled.events.filter((e) => e.type === 'fence_refused'), []);
+  const older = (await get(`/api/missions/${fenced.id}?tail=10&before=${offered + 1}`)).json;
+  assert.deepEqual((older.resolutions ?? []).map((e) => `${e.type}:${String(e.payload.id)}`), ['fence_grant_resolved:fence-offer']);
+});
