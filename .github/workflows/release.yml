@@ -168,7 +168,9 @@ jobs:
       matrix:
         # macOS: Apple Silicon only, as the release candidates.
         include:
-          - { os: linux, runner: ubuntu-latest }
+          # Pinned: Ubuntu 26.04 builds its musl for x86-64-v3, and the fence
+          # launcher must run on a baseline x86-64 CPU (24.04 musl is baseline).
+          - { os: linux, runner: ubuntu-24.04 }
           # macOS builds run on the project's own Mac (org runner group
           # `release-mac`, open to this workflow on main only): hosted
           # macOS arm64 runners were not acquired under capacity limits.
@@ -229,6 +231,18 @@ jobs:
           sudo ln -sfn /usr/include/asm-generic "$musl_include/asm-generic"
           sudo ln -sfn /usr/include/x86_64-linux-gnu/asm "$musl_include/asm"
           x86_64-linux-musl-gcc --version | head -n 1
+
+      # A self-hosted runner (the Mac) keeps its workspace between runs, and the
+      # build never overwrites installers: a run started again for the same
+      # version would stop on the output of the one before. Hosted runners
+      # start empty. Only this version and this system are cleared.
+      - name: Clear what an earlier run left on a self-hosted runner
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          OS: ${{ matrix.os }}
+        run: rm -rf "release-output/$VERSION/$OS" "release-output/$VERSION/.work-$OS"
 
       - name: Build the package
         working-directory: src
