@@ -975,6 +975,12 @@
   },
   "appearance": {
     "title": "Aparência",
+    "zoomTitle": "Tamanho da interface",
+    "zoomHint": "Aumenta ou diminui o texto e os controles em todas as janelas do Timon neste computador. Atalhos: Ctrl e +, Ctrl e −, e Ctrl e 0 para redefinir; no macOS, Cmd em vez de Ctrl nos três. No Windows e no Linux, também Ctrl e a roda do mouse.",
+    "zoomIn": "Maior",
+    "zoomOut": "Menor",
+    "zoomReset": "Redefinir",
+    "zoomError": "Não foi possível alterar o tamanho da interface.",
     "theme": "Tema",
     "layout": "Layout",
     "themeHint": "Tokens de cor aplicados a esta conta.",
@@ -1067,6 +1073,13 @@
     "mascotsStyle2dHint": "O desenho plano, mais leve para computadores antigos.",
     "mascotsStyleNoWebgl": "Este navegador não consegue desenhar em 3D (o WebGL2 está desativado ou ausente): os mascotes são desenhados em 2D.",
     "mascotsStyleShared": "Vale para todos os mascotes. Você pode mudar isso depois em {settingsPath}.",
+    "dockIconTitle": "Ícone do Dock",
+    "dockIconHint": "O ícone que o macOS mostra para o Timon no Dock enquanto o app está aberto. O Finder e o Dock antes da abertura mantêm o clássico.",
+    "dockIconClassic": "Clássico",
+    "dockIconClassicHint": "As cores do Timon.",
+    "dockIconDark": "Escuro",
+    "dockIconDarkHint": "Em preto e branco.",
+    "dockIconError": "Não foi possível alterar o ícone do Dock.",
     "variants": {
       "coral": {
         "name": "Coral",
@@ -2553,9 +2566,17 @@
       "title": "Arquivos",
       "description": "Navegue e edite os arquivos da pasta de trabalho do projeto."
     },
-    "git": {
-      "title": "Git",
-      "description": "Os branches, o grafo de commits e a publicação do projeto: troque de branch, veja o histórico e os worktrees, faça push."
+    "gitBranches": {
+      "title": "Branches",
+      "description": "A árvore de trabalho e os branches do repositório: veja as mudanças, troque de branch."
+    },
+    "gitGraph": {
+      "title": "Grafo",
+      "description": "O grafo de commits do repositório, com seus branches e worktrees."
+    },
+    "gitPublish": {
+      "title": "Publicar",
+      "description": "Como está a publicação do repositório: remoto, commits a enviar, push e fetch."
     },
     "agentTasks": {
       "title": "Lista de tarefas do agente",

@@ -2,6 +2,10 @@
   "desktop": {
     "menu": {
       "newWindow": "New window",
+      "view": "View",
+      "zoomReset": "Actual Size",
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
       "open": "Open {appName}",
       "daemon": "Daemon: {state, select, running {running} other {unreachable}} ({origin})",
       "quit": "Quit"
@@ -103,7 +107,9 @@
       "repairConfirm": "Reinstall the service",
       "repairLater": "Not now",
       "repairFailed": "The background service could not be reinstalled.",
-      "repairFailedDetail": "Timon runs its built-in daemon for this session and will offer it again at the next launch. Your data in {home} was not modified."
+      "repairFailedDetail": "Timon runs its built-in daemon for this session and will offer it again at the next launch. Your data in {home} was not modified.",
+      "sessionFallback": "The Timon background service now runs only while you are signed in.",
+      "sessionFallbackDetail": "Windows would not keep the TimonOrchestrator task running with nobody signed in for this account, so Timon registered it for your session instead, without a console window. It stops when you sign out and starts again at your next sign-in."
     },
     "staleShell": {
       "message": "Another version of {appName} was launched.",

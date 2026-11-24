@@ -85,6 +85,16 @@ Timon to restore it. The window remains usable without the tray icon; closing
 it quits the desktop app. A daemon running as a service stays running, while
 a daemon running in portable mode stops with the app.
 
+## Text too small or blurry in the desktop app
+
+Use **Interface size** in **Settings › Interface › Appearance**, or **Ctrl** and **+** (**Cmd** and **+** on macOS): it enlarges Timon itself, sharply, in every window, and is remembered. See [Appearance and plugin settings](../usage/settings.md#appearance-and-plugin-settings).
+
+On Linux, text that looks blurry rather than small usually comes from display scaling:
+
+- **Wayland with fractional scaling** (125%, 150%): the desktop app runs as an X11 app by default, and the compositor stretches it. Start it with the environment variable `ELECTRON_OZONE_PLATFORM_HINT=auto` to run it as a Wayland app, drawn at the screen's own scale. Run that way, windows keep their size from one launch to the next but not their position: Wayland does not let an app place its own windows.
+- **KDE Plasma**: alternatively, in **System Settings › Display & Monitor**, set **Legacy applications (X11)** to **Apply scaling themselves**.
+- **A scale that is still wrong**, on X11 without a scale set for example: start Timon with `--force-device-scale-factor=1.2`, or the factor of your choice, added to the command or launcher that opens it.
+
 ## Forgot your password
 
 **Forgot password** on the sign-in screen sends a 6-digit code to the e-mail address of your account. Type the code, then your new password twice. Resetting a password signs that account out everywhere. It needs an internet connection, and works only if your address was confirmed; if no code arrives within a few minutes, use one of the ways below.
@@ -337,6 +347,28 @@ Excluding the Timon folders from real-time scanning shortens the start. The chec
 | `%USERPROFILE%\.timon` | Your data, and the copy of the daemon the background service runs |
 
 With Microsoft Defender: **Windows Security › Virus & threat protection › Manage settings › Exclusions › Add or remove exclusions › Add an exclusion › Folder**, once per folder. On a PC managed by your organisation, exclusions are usually set by the IT department: send them these two folders. On macOS and Linux, the same applies to a third-party antivirus: exclude `Timon.app` (or `/opt/Timon`) and `~/.timon`.
+
+## Windows: an antivirus quarantined the background task
+
+Up to version 0.1.9, Avast and AVG could flag the `TimonOrchestrator` task (the file `C:\Windows\System32\Tasks\TimonOrchestrator`, with a detection name such as `CMD:Heur.BZC.WBO.Boxter`) and move it to quarantine. Timon then no longer starts at boot or when you sign in, and runs only while its window is open.
+
+The versions that follow start the task without any script, which these antiviruses do not flag. If yours removed the task:
+
+1. Update Timon, and open it once: it updates the task, with one Windows permission prompt.
+2. In the antivirus, open its quarantine (in Avast or AVG: **Menu › Quarantine**). Restore the `TimonOrchestrator` file, or add an exception for it, so the antivirus does not remove it again. If you prefer an exception for a folder, add the Timon installation folder (`%LOCALAPPDATA%\Programs\Timon` by default).
+3. Run `timon service install` in Timon's terminal, or in PowerShell, and allow the permission prompt. It writes the task again and starts it. Opening Timon also offers to reinstall a missing task.
+
+To check the result, open **Task Scheduler**: `TimonOrchestrator` is listed and **Running**. `%USERPROFILE%\.timon\tmp\daemon.log` then ends with a `starting the daemon` line.
+
+## Windows: a console window opens every few minutes
+
+A black console window (Command Prompt, PowerShell or `node.exe`) opens on its own, about every five minutes, and closing it stops Timon. The `TimonOrchestrator` task was changed after Timon registered it, usually with **Run only when user is logged on** selected in Task Scheduler: it then starts a console program in your session.
+
+1. Run `timon doctor`. Its **Findings** list has a line that starts with "A console window opens on this PC" when the task is in this state (`windows-task-console` in the diagnostic report). `timon service status` shows the same verdict on its `console` line, next to the task's `logon` and `action`.
+2. Repair the task from **Settings › System › Installation**: the service status reads "A console window opens: repair the background task". Choose **Repair the service** and allow the Windows permission prompt. When the daemon the app is connected to is that task itself, the page shows the command to run instead: run `timon service install` in Timon's terminal or in PowerShell, and allow the prompt. Either way, Timon registers a task that opens no window. Opening Timon also offers this repair at launch, once per version: if you declined it, Timon asks again only after the next update.
+3. Choose when the task runs with `timon service session-mode session` (it starts when you sign in and stops when you sign out) or `timon service session-mode always` (it starts at boot and keeps running after you sign out). If Windows does not keep `always` for your account, as on some work or school PCs, Timon registers the session task instead and says so; see [Windows](windows.md#desktop-installer).
+
+Do not change the task in Task Scheduler afterwards: switch with `timon service session-mode` or **Settings › System › Installation** instead.
 
 ## Windows: updating while the background service runs
 

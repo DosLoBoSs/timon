@@ -975,6 +975,12 @@
   },
   "appearance": {
     "title": "外観",
+    "zoomTitle": "インターフェースのサイズ",
+    "zoomHint": "このコンピューター上のすべての Timon ウィンドウで、文字と操作部品を拡大または縮小します。ショートカット: Ctrl と +、Ctrl と −、Ctrl と 0 でリセット（macOS では 3 つとも Ctrl の代わりに Cmd）。Windows と Linux では Ctrl とマウスホイールも使えます。",
+    "zoomIn": "大きく",
+    "zoomOut": "小さく",
+    "zoomReset": "リセット",
+    "zoomError": "インターフェースのサイズを変更できませんでした。",
     "theme": "テーマ",
     "layout": "レイアウト",
     "themeHint": "このアカウントに適用する色トークン。",
@@ -1067,6 +1073,13 @@
     "mascotsStyle2dHint": "平面のイラスト。古いパソコンでも軽く動きます。",
     "mascotsStyleNoWebgl": "このブラウザーは 3D で描画できません（WebGL2 がオフか未対応）。マスコットは 2D で表示されます。",
     "mascotsStyleShared": "すべてのマスコットに適用されます。あとから「{settingsPath}」で変更できます。",
+    "dockIconTitle": "Dock のアイコン",
+    "dockIconHint": "アプリの実行中に macOS が Dock に表示する Timon のアイコンです。Finder と起動前の Dock ではクラシックのままです。",
+    "dockIconClassic": "クラシック",
+    "dockIconClassicHint": "Timon のカラー。",
+    "dockIconDark": "ダーク",
+    "dockIconDarkHint": "白黒。",
+    "dockIconError": "Dock のアイコンを変更できませんでした。",
     "variants": {
       "coral": {
         "name": "コーラル",
@@ -2553,9 +2566,17 @@
       "title": "ファイル",
       "description": "プロジェクトの作業フォルダーのファイルを閲覧・編集します。"
     },
-    "git": {
-      "title": "Git",
-      "description": "プロジェクトのブランチ、コミットグラフ、公開: ブランチの切り替え、履歴とワークツリーの確認、プッシュ。"
+    "gitBranches": {
+      "title": "ブランチ",
+      "description": "リポジトリの作業ツリーとブランチ: 変更の確認、ブランチの切り替え。"
+    },
+    "gitGraph": {
+      "title": "グラフ",
+      "description": "リポジトリのコミットグラフとブランチ、ワークツリー。"
+    },
+    "gitPublish": {
+      "title": "公開",
+      "description": "リポジトリの公開状況: リモート、プッシュ待ちのコミット、プッシュとフェッチ。"
     },
     "agentTasks": {
       "title": "エージェントのタスクリスト",

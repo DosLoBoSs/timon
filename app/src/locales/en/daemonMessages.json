@@ -301,6 +301,38 @@
     "layout_proposal_to_review": {
       "title": "{kind, select, widgets {Widget arrangement} islands {Island layout} island_arrangement {Island arrangement} nav {Menu} navigate {Navigation} trigger {Trigger} other {Arrangement}} to review: {agent}",
       "body": "{mission}{project, select, none {} other { ({project})}}{note, select, none {} other { — {note}}}"
+    },
+    "forge_proposal_pending": {
+      "title": "A GitHub comment waits for your approval",
+      "body": "Read and publish, edit or discard the comment proposed on {target}."
+    },
+    "forge_branch_update_pending": {
+      "title": "A branch update waits for your approval",
+      "body": "Publish or discard the update of the branch of {target} on GitHub."
+    },
+    "forge_conflict_push_pending": {
+      "title": "A conflict resolution waits for your approval",
+      "body": "Read the resolution prepared for {target}, then publish or discard it."
+    },
+    "landing_repair_pushed": {
+      "title": "Repair pushed to {pr}",
+      "body": "The repair of {branch} was pushed to its pull request {pr}; GitHub runs its checks again."
+    },
+    "landing_repair_unchanged": {
+      "title": "Repair of {pr} changed nothing",
+      "body": "The repair of {branch} ended without a new commit: nothing was pushed. Read its task's closing comment."
+    },
+    "landing_repair_failed": {
+      "title": "Repair of {pr} not pushed",
+      "body": "The repair of {branch} was not pushed: {reason}"
+    },
+    "integration_merged": {
+      "title": "{pr, select, none {Integration branch merged: {branch}} other {Pull request merged: {branch}}}",
+      "body": "{branch} landed in {target}. Its TO DO ideas and doc tasks follow on their own."
+    },
+    "integration_closed": {
+      "title": "{pr, select, none {Integration branch closed: {branch}} other {Pull request closed: {branch}}}",
+      "body": "{branch} did not land in {target}: nothing closes and the branches are kept. Its pilot decides what comes next."
     }
   }
 }

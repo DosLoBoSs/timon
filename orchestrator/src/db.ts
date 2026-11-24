@@ -1,4 +1,5 @@
 import { migrateTodoOutcomeColumns } from './todo-outcome-migration.js';
+import { landingRankSql, TODO_LANDING_RANK, type TodoIntegrationRow, type TodoLandingState } from './todo-landing.js';
 import { permissionsFromSource } from './users/permission-source.js';
 import { emitAccountChange } from './users/account-changes.js';
 import Database from 'better-sqlite3';
@@ -41,7 +42,7 @@ import {
 import { prepareOwnerOnlyFile, tightenToOwner } from './host/owner-only.js';
 import { assertDataUpdateApproved, assertPackagedCliMayOpen, packagedCli, packagedDaemon, protectDataBeforeOpen, timonVersion, unpackagedDataNotice } from './data-version.js';
 import { holdDataOpenLock, releaseDataOpenLock } from './data-open-lock.js';
-import { bus, type TaskDeletedSnapshot } from './bus.js';
+import { bus, type IntegrationChange, type TaskDeletedSnapshot } from './bus.js';
 import {
   BACKEND_FALLBACK_REASONS,
   countsTowardCrashLoop,
@@ -2003,6 +2004,11 @@ if (!taskCols.includes('blocked_reason_code')) db.exec(`ALTER TABLE tasks ADD CO
 // project setting changed mid-way never splits one chain across two modes.
 if (!taskCols.includes('integration_mode')) db.exec(`ALTER TABLE tasks ADD COLUMN integration_mode TEXT`);
 if (!taskCols.includes('base_ref')) db.exec(`ALTER TABLE tasks ADD COLUMN base_ref TEXT`);
+// 'pr' marks the final task of a job that lands through a pull request: a
+// `merge` task that publishes the integration branch (`timon pr open`) instead
+// of merging a task branch into it (`docs/KANBAN-PR-PIPELINE.md` §2.4). Set at
+// creation, never inherited by another task. NULL = an ordinary task.
+if (!taskCols.includes('landing')) db.exec(`ALTER TABLE tasks ADD COLUMN landing TEXT`);
 // One row per integration branch of a repository. The branch is created here
 // (state 'branch'); the later steps of the pull request pipeline fill the PR
 // columns and move the state to 'open', 'merged' or 'closed'. Keyed by the
@@ -2038,6 +2044,166 @@ CREATE TABLE IF NOT EXISTS integrations (
 // replays it. NULL = not replayed yet.
 const integrationCols = (db.prepare(`PRAGMA table_info(integrations)`).all() as { name: string }[]).map((c) => c.name);
 if (!integrationCols.includes('landed_at')) db.exec(`ALTER TABLE integrations ADD COLUMN landed_at INTEGER`);
+// The last outcome of the pull request ('merged' or 'closed') its series pilot
+// was told about (`integration-poller.ts`): one notice per outcome, across
+// restarts. Rows already concluded when the column appears count as told, so
+// adding it never replays old news. NULL = nothing told yet.
+if (!integrationCols.includes('notified_state')) {
+  db.exec(`ALTER TABLE integrations ADD COLUMN notified_state TEXT`);
+  db.exec(`UPDATE integrations SET notified_state = state WHERE state IN ('merged', 'closed')`);
+}
+// The relecture of a contributor's pull request (`external-pr-review.ts`): one
+// row per pull request, the latest one. 'draft' holds the brief the person
+// reads before sending it; 'running' names the reviewer's mission; 'done' or
+// 'failed' keep the verdict it came back with.
+db.exec(`
+CREATE TABLE IF NOT EXISTS external_pr_reviews (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  repo TEXT NOT NULL,
+  pr_number INTEGER NOT NULL,
+  state TEXT NOT NULL,
+  agent TEXT NOT NULL,
+  brief TEXT NOT NULL,
+  diff_path TEXT,
+  head_sha TEXT,
+  pr_updated_at TEXT,
+  mission_id TEXT,
+  verdict TEXT,
+  report TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (project, repo, pr_number)
+);
+CREATE INDEX IF NOT EXISTS external_pr_reviews_mission ON external_pr_reviews(mission_id);
+`);
+// The last concluded relecture, kept while a new draft waits on the row: a
+// brief prepared then never sent must not erase the verdict the person had.
+{
+  const reviewCols = (db.prepare(`PRAGMA table_info(external_pr_reviews)`).all() as { name: string }[]).map((c) => c.name);
+  for (const [col, type] of [
+    ['last_state', 'TEXT'], ['last_agent', 'TEXT'], ['last_verdict', 'TEXT'], ['last_report', 'TEXT'],
+    ['last_mission_id', 'TEXT'], ['last_pr_updated_at', 'TEXT'], ['last_concluded_at', 'INTEGER'],
+  ] as const) {
+    if (!reviewCols.includes(col)) db.exec(`ALTER TABLE external_pr_reviews ADD COLUMN ${col} ${type}`);
+  }
+}
+// A write on the forge that waits for a person (`forge-proposals.ts`): the
+// daemon or a person's click prepares it, a signed-in person reads, edits and
+// publishes it. `idem_key` makes one trigger give one proposal, whatever the
+// number of times it fires; 'publishing' is held while `gh` runs, so a second
+// click never posts twice.
+db.exec(`
+CREATE TABLE IF NOT EXISTS forge_proposals (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  repo TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_number INTEGER NOT NULL,
+  body TEXT NOT NULL,
+  state TEXT NOT NULL,
+  trigger TEXT NOT NULL,
+  idem_key TEXT NOT NULL,
+  source_ref TEXT,
+  created_by TEXT,
+  edited_by TEXT,
+  published_by TEXT,
+  account TEXT,
+  result_url TEXT,
+  error_code TEXT,
+  error TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  published_at INTEGER,
+  UNIQUE (project, idem_key)
+);
+CREATE INDEX IF NOT EXISTS forge_proposals_project_state ON forge_proposals(project, state);
+`);
+// What a write other than a comment needs to run as it was shown (the head a
+// branch update expects, the commit a conflict resolution pushes): JSON the
+// daemon writes, never a person's or a plugin's text.
+{
+  const proposalCols = (db.prepare(`PRAGMA table_info(forge_proposals)`).all() as { name: string }[]).map((c) => c.name);
+  if (!proposalCols.includes('payload')) db.exec(`ALTER TABLE forge_proposals ADD COLUMN payload TEXT`);
+}
+// The resolution of a contributor's conflict, prepared without a working tree
+// (`forge-conflicts.ts`): the heads it merged, the merged tree, the files in
+// conflict with each one's resolution, and once proposed the commit to push.
+// `scratch_dir` holds the objects until the resolution is published or dropped.
+db.exec(`
+CREATE TABLE IF NOT EXISTS forge_conflicts (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  repo TEXT NOT NULL,
+  pr_number INTEGER NOT NULL,
+  head_repo TEXT NOT NULL,
+  head_ref TEXT NOT NULL,
+  head_sha TEXT NOT NULL,
+  base_ref TEXT NOT NULL,
+  base_sha TEXT NOT NULL,
+  merged_tree TEXT NOT NULL,
+  files TEXT NOT NULL,
+  state TEXT NOT NULL,
+  scratch_dir TEXT,
+  proposal_id TEXT,
+  resolved_tree TEXT,
+  commit_sha TEXT,
+  commit_time INTEGER,
+  created_by TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS forge_conflicts_pull ON forge_conflicts(project, repo, pr_number, state);
+`);
+// What the person who launched a job said of its issues in the Kanban
+// planner (`kanban_plan`, `resolves_issues`): the job resolves them entirely,
+// so its pull request says `Fixes` even for an idea carried by several jobs
+// (`issue-closing.ts`). Keyed by the series; absent = not said.
+db.exec(`
+CREATE TABLE IF NOT EXISTS series_landing (
+  series_id TEXT PRIMARY KEY,
+  resolves_issues INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+`);
+// The branch and the destination the planner chose for the job
+// (`plan-landing.ts`): the dispatcher and `timon pr branch` read them to cut,
+// or find, the job's branch, so a project that merges locally can still work
+// on a branch of its own. `mode` is the tasks' `integration_mode` ('pr' or
+// 'branch'), `base_ref` what a new branch is cut from (`origin/main`, or
+// `refs/heads/main` for a local target), `branch_kind` 'new' or 'existing'
+// (NULL: the earlier bare name, checked as before), `finish` 'merge' or 'keep'.
+// NULL branch = the planner chose nothing.
+const seriesLandingCols = (db.prepare(`PRAGMA table_info(series_landing)`).all() as { name: string }[]).map((c) => c.name);
+for (const col of ['project', 'repo', 'branch', 'branch_kind', 'mode', 'base_ref', 'finish']) {
+  if (!seriesLandingCols.includes(col)) db.exec(`ALTER TABLE series_landing ADD COLUMN ${col} TEXT`);
+}
+// A repair a person asked for on the open pull request of one of our jobs
+// (`landing-repair.ts`): failing checks, review comments or a conflict with
+// the target, each one a `code` task on the job's branch. 'running' until the
+// daemon pushed what its chain integrated ('pushed'), found nothing new
+// ('unchanged') or gave up ('failed'). Every row counts toward the cap, so a
+// job never loops on its pull request.
+db.exec(`
+CREATE TABLE IF NOT EXISTS landing_repairs (
+  id TEXT PRIMARY KEY,
+  integration_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  state TEXT NOT NULL,
+  head_before TEXT,
+  head_after TEXT,
+  error TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS landing_repairs_integration ON landing_repairs(integration_id, created_at);
+CREATE INDEX IF NOT EXISTS landing_repairs_state ON landing_repairs(state);
+`);
 if (!notifCols.includes('message_code')) db.exec(`ALTER TABLE notifications ADD COLUMN message_code TEXT`);
 // A writer that changes the reason without naming its code (an agent's own
 // reason, a statement written before the column) must not leave
@@ -2260,6 +2426,11 @@ export function isTaskType(v: unknown): v is TaskType {
  *  review. */
 export const PIPELINES = ['full', 'code-self', 'code-group'] as const;
 
+/** Accepted values for `tasks.landing` (null = an ordinary task). Only a
+ *  `merge` task carries one: `pr` opens the job's pull request, `local`
+ *  merges the job's branch into its local target (`local-landing.ts`). */
+export const TASK_LANDINGS = ['pr', 'local'] as const;
+
 export type TaskRow = {
   id: string;
   title: string;
@@ -2354,6 +2525,8 @@ export type TaskRow = {
   integration_mode?: string | null;
   /** Remote-tracking ref the integration branch was cut from (`origin/main`). */
   base_ref?: string | null;
+  /** see migration: 'pr' = the `merge` task that opens the job's pull request. */
+  landing?: string | null;
 };
 
 /** One integration branch (see the `integrations` migration). */
@@ -2376,6 +2549,24 @@ export type IntegrationRow = {
   last_polled_at: number | null;
   /** Landing replayed on the chains (see the `landed_at` migration). */
   landed_at: number | null;
+  /** Outcome the series pilot was told about (see the `notified_state` migration). */
+  notified_state?: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
+/** One repair of a job's pull request (see the `landing_repairs` migration). */
+export type LandingRepairRow = {
+  id: string;
+  integration_id: string;
+  kind: 'checks' | 'comments' | 'conflict';
+  task_id: string;
+  state: 'running' | 'pushed' | 'unchanged' | 'failed';
+  head_before: string | null;
+  head_after: string | null;
+  error: string | null;
+  attempts: number;
+  created_by: string | null;
   created_at: number;
   updated_at: number;
 };
@@ -2641,6 +2832,21 @@ export type PipelineRunStepRow = {
   run_id: string;
   step_id: string;
   task_id: string;
+};
+
+/** What the planner chose for a series' branch (`series_landing`). */
+export type SeriesPlanLandingRecord = {
+  project: string | null;
+  repo: string | null;
+  branch: string;
+  /** 'new' | 'existing'; null for the earlier bare name. */
+  branch_kind: string | null;
+  /** The tasks' `integration_mode`: 'pr' | 'branch'. */
+  mode: string;
+  /** `origin/main`, or `refs/heads/<target>` for a local target. */
+  base_ref: string;
+  /** 'merge' | 'keep'. */
+  finish: string | null;
 };
 
 export type WorkflowRow = { id: string; slug: string; name: string; description: string | null; project: string | null; owner_user_id: string | null; draft: string; published_version: number | null; enabled: number; created_at: number; updated_at: number; agent_name: string | null };
@@ -3025,6 +3231,9 @@ const setTaskBaseBranchStmt = db.prepare(
 const setTaskIntegrationStmt = db.prepare(
   `UPDATE tasks SET integration_mode = ?, base_ref = ?, updated_at = ? WHERE id = ?`,
 );
+const setTaskLandingStmt = db.prepare(
+  `UPDATE tasks SET landing = ?, updated_at = ? WHERE id = ?`,
+);
 // A row already there keeps its id, state and PR columns: recording the branch
 // again on a later dispatch must not reset what the PR steps wrote.
 const upsertIntegrationStmt = db.prepare(`
@@ -3047,7 +3256,9 @@ const markIntegrationMergedStmt = db.prepare(`
 const claimIntegrationLandingStmt = db.prepare(
   `UPDATE integrations SET landed_at = ?, updated_at = ? WHERE id = ? AND state = 'merged' AND landed_at IS NULL`,
 );
-const releaseIntegrationLandingStmt = db.prepare(`UPDATE integrations SET landed_at = NULL, updated_at = ? WHERE id = ?`);
+const releaseIntegrationLandingStmt = db.prepare(
+  `UPDATE integrations SET landed_at = NULL, updated_at = ? WHERE id = ? AND landed_at IS NOT NULL`,
+);
 const listUnlandedIntegrationsStmt = db.prepare(
   `SELECT * FROM integrations WHERE state = 'merged' AND landed_at IS NULL ORDER BY updated_at ASC`,
 );
@@ -3057,10 +3268,67 @@ const listTasksByBaseBranchStmt = db.prepare(
 const listIntegrationsBySeriesStmt = db.prepare(
   `SELECT * FROM integrations WHERE series_id = ? ORDER BY created_at ASC`,
 );
+const listIntegrationsByProjectStmt = db.prepare(
+  `SELECT * FROM integrations WHERE project = ? ORDER BY created_at DESC LIMIT ?`,
+);
+const listRecentIntegrationsStmt = db.prepare(
+  `SELECT * FROM integrations ORDER BY created_at DESC LIMIT ?`,
+);
+// What the forge last said of the pull request (JSON, `integration-preview.ts`).
+// Never moves the state: the poller alone concludes a merge or a closing.
+const setIntegrationChecksStmt = db.prepare(`UPDATE integrations SET checks = ? WHERE id = ?`);
 // Only from 'branch': a pull request recorded once is never replaced by another.
 const markIntegrationOpenStmt = db.prepare(`
   UPDATE integrations SET state = 'open', pr_number = ?, pr_url = ?, head_sha = ?, updated_at = ?
   WHERE id = ? AND state = 'branch'
+`);
+// A pushed repair moves the head the poller compares with the target; the
+// checks read before it describe a commit the pull request no longer ends on.
+const setIntegrationHeadStmt = db.prepare(`
+  UPDATE integrations SET head_sha = ?, checks = NULL, updated_at = ? WHERE id = ? AND state = 'open'
+`);
+const insertLandingRepairStmt = db.prepare(`
+  INSERT INTO landing_repairs (id, integration_id, kind, task_id, state, head_before, created_by, created_at, updated_at)
+  VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?)
+`);
+const listLandingRepairsStmt = db.prepare(
+  `SELECT * FROM landing_repairs WHERE integration_id = ? ORDER BY created_at ASC, rowid ASC`,
+);
+const listRunningLandingRepairsStmt = db.prepare(
+  `SELECT * FROM landing_repairs WHERE state = 'running' ORDER BY created_at ASC`,
+);
+// Only from 'running': a concluded repair is never concluded again.
+const finishLandingRepairStmt = db.prepare(`
+  UPDATE landing_repairs SET state = ?, head_after = ?, error = ?, updated_at = ? WHERE id = ? AND state = 'running'
+`);
+const failLandingRepairAttemptStmt = db.prepare(
+  `UPDATE landing_repairs SET attempts = attempts + 1, error = ?, updated_at = ? WHERE id = ? AND state = 'running'`,
+);
+// A job of a project that merges locally has no remote: its branch lands by
+// its `--landing local` task, never through a pull request.
+const listLocalIntegrationsToLandStmt = db.prepare(
+  `SELECT * FROM integrations WHERE state = 'branch' AND remote = '' ORDER BY repo ASC, created_at ASC`,
+);
+const listOpenIntegrationsStmt = db.prepare(
+  `SELECT * FROM integrations WHERE state = 'open' ORDER BY repo ASC, created_at ASC`,
+);
+// Only from 'open': a pull request merged is never taken back by a stale poll,
+// and a branch never opened has no pull request to close.
+const markIntegrationClosedStmt = db.prepare(
+  `UPDATE integrations SET state = 'closed', updated_at = ? WHERE id = ? AND state = 'open'`,
+);
+const touchIntegrationPolledStmt = db.prepare(`UPDATE integrations SET last_polled_at = ? WHERE id = ?`);
+const claimIntegrationNoticeStmt = db.prepare(`
+  UPDATE integrations SET notified_state = ?, updated_at = ?
+  WHERE id = ? AND state = ? AND (notified_state IS NULL OR notified_state != ?)
+`);
+const releaseIntegrationNoticeStmt = db.prepare(
+  `UPDATE integrations SET notified_state = NULL, updated_at = ? WHERE id = ? AND notified_state = ?`,
+);
+const listUnnotifiedIntegrationsStmt = db.prepare(`
+  SELECT * FROM integrations
+  WHERE state IN ('merged', 'closed') AND (notified_state IS NULL OR notified_state != state)
+  ORDER BY updated_at ASC
 `);
 const setTaskTodoIdStmt = db.prepare(
   `UPDATE tasks SET todo_id = ?, updated_at = ? WHERE id = ?`,
@@ -3248,6 +3516,34 @@ const TASK_WATCHED_COLUMNS = [
  * comparing the row read BEFORE the write with the row now. Synchronous, so the
  * origin store of the writer (`task-origin.ts`) is still the current one.
  */
+/**
+ * Publishes `integration_changed` for a write that moved the row `id`. The
+ * callers publish only when their statement changed something: a job's
+ * screens reload on it, and a write that changes nothing must not wake them.
+ */
+function publishIntegrationChange(id: string, changed: readonly IntegrationChange[]): void {
+  const row = getIntegrationByIdStmt.get(id) as IntegrationRow | undefined;
+  if (!row) return;
+  bus.publish({
+    kind: 'integration_changed', integrationId: row.id, project: row.project, seriesId: row.series_id,
+    state: row.state, changed,
+  });
+}
+
+/** The forge's stored reading without its read time (`integration-preview.ts`
+ *  stamps `read_at` on each one): two readings saying the same compare equal. */
+function checksSignature(checks: string | null): string | null {
+  if (checks === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(checks);
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return checks;
+    const { read_at: _readAt, ...rest } = parsed as Record<string, unknown>;
+    return JSON.stringify(rest);
+  } catch {
+    return checks;
+  }
+}
+
 function publishTaskDiff(prev: TaskRow | undefined): void {
   if (!prev) return;
   const next = getTaskStmt.get(prev.id) as TaskRow | undefined;
@@ -4213,6 +4509,8 @@ export interface ProjectTodoFilter {
   urgencies?: readonly ProjectTodoUrgencyKey[];
   progress?: TodoProgress;
   ids?: readonly number[];
+  /** Ideas whose badge (`todo-landing.ts`, worst job) is this state. */
+  landing?: TodoLandingState;
   viewer?: DbViewer | null;
 }
 
@@ -4816,6 +5114,18 @@ function urgencySelection(f: ProjectTodoFilter): Set<ProjectTodoUrgencyKey> | nu
   return keep;
 }
 
+/**
+ * Tasks (`t`) of an idea joined to the integration row (`i`) of their branch.
+ * Matched on the branch within the task's project, as `chain-landing.ts` does
+ * when it cannot read the agent's repository: the agent's config is a file,
+ * and a list must stay one query. A task in local mode has no row, even if its
+ * base happens to bear an integration branch's name.
+ */
+const TODO_INTEGRATION_JOIN = `tasks t JOIN integrations i
+  ON i.branch = t.base_branch
+  AND t.integration_mode IN ('branch', 'pr')
+  AND (i.project IS NULL OR t.project IS NULL OR i.project = t.project)`;
+
 function projectTodoWhere(f: ProjectTodoFilter): { sql: string[]; args: unknown[] } {
   const sql: string[] = [];
   const args: unknown[] = [];
@@ -4835,6 +5145,15 @@ function projectTodoWhere(f: ProjectTodoFilter): { sql: string[]; args: unknown[
   if (f.ids) {
     sql.push(f.ids.length ? `id IN (${f.ids.map(() => '?').join(', ')})` : '0');
     args.push(...f.ids);
+  }
+  if (f.landing) {
+    // Grouped like the badge: the idea's worst job decides, through the
+    // tasks the caller may see, so the filter never reveals a job the badge hides.
+    const tasksOwner = ownerSql(f.viewer, 'tasks', 't.owner_user_id');
+    sql.push(`id IN (SELECT t.todo_id FROM ${TODO_INTEGRATION_JOIN}
+      WHERE t.todo_id IS NOT NULL AND ${tasksOwner.sql}
+      GROUP BY t.todo_id HAVING MAX(${landingRankSql('i')}) = ?)`);
+    args.push(...tasksOwner.params, TODO_LANDING_RANK[f.landing]);
   }
   const owner = ownerSql(f.viewer, 'project_todo');
   if (owner.sql !== '1=1') { sql.push(owner.sql); args.push(...owner.params); }
@@ -5021,6 +5340,9 @@ export const dbApi = {
        *  pass their root's. */
       integrationMode?: string | null;
       baseRef?: string | null;
+      /** 'pr' for the task that opens the job's pull request (see the `landing`
+       *  migration). Never passed to the chain's children. */
+      landing?: string | null;
     } = {},
   ): void {
     const now = Date.now();
@@ -5060,6 +5382,7 @@ export const dbApi = {
     if (opts.integrationMode || opts.baseRef) {
       setTaskIntegrationStmt.run(opts.integrationMode ?? null, opts.baseRef ?? null, now, id);
     }
+    if (opts.landing) setTaskLandingStmt.run(opts.landing, now, id);
     if (opts.parentTaskId) setTaskParentStmt.run(opts.parentTaskId, id);
     bus.publish({ kind: 'task_created', taskId: id });
   },
@@ -5580,11 +5903,15 @@ export const dbApi = {
     project?: string | null; seriesId?: string | null; baseSha?: string | null;
   }): IntegrationRow {
     const now = Date.now();
+    const id = randomUUID();
     upsertIntegrationStmt.run(
-      randomUUID(), row.repo, row.branch, row.remote, row.target, row.mode,
+      id, row.repo, row.branch, row.remote, row.target, row.mode,
       row.project ?? null, row.seriesId ?? null, row.baseSha ?? null, now, now,
     );
-    return getIntegrationStmt.get(row.repo, row.branch) as IntegrationRow;
+    const recorded = getIntegrationStmt.get(row.repo, row.branch) as IntegrationRow;
+    // Recording an existing branch again moves nothing a screen shows.
+    if (recorded.id === id) publishIntegrationChange(id, ['created']);
+    return recorded;
   },
   getIntegration(repo: string, branch: string): IntegrationRow | undefined {
     return getIntegrationStmt.get(repo, branch) as IntegrationRow | undefined;
@@ -5599,16 +5926,20 @@ export const dbApi = {
   /** Moves an integration to 'merged' (its work is in the target). False when
    *  it already was, or the row is gone. */
   markIntegrationMerged(id: string, mergeSha: string | null): boolean {
-    return markIntegrationMergedStmt.run(mergeSha, Date.now(), id).changes === 1;
+    const moved = markIntegrationMergedStmt.run(mergeSha, Date.now(), id).changes === 1;
+    if (moved) publishIntegrationChange(id, ['state']);
+    return moved;
   },
   /** Claims the landing replay of a merged integration: true for one caller only. */
   claimIntegrationLanding(id: string): boolean {
     const now = Date.now();
-    return claimIntegrationLandingStmt.run(now, now, id).changes === 1;
+    const claimed = claimIntegrationLandingStmt.run(now, now, id).changes === 1;
+    if (claimed) publishIntegrationChange(id, ['landed']);
+    return claimed;
   },
   /** Hands a failed landing replay back to the reconciliation. */
   releaseIntegrationLanding(id: string): void {
-    releaseIntegrationLandingStmt.run(Date.now(), id);
+    if (releaseIntegrationLandingStmt.run(Date.now(), id).changes === 1) publishIntegrationChange(id, ['landed']);
   },
   /** Merged integrations whose landing was never replayed. */
   listUnlandedIntegrations(): IntegrationRow[] {
@@ -5618,13 +5949,150 @@ export const dbApi = {
   listTasksByBaseBranch(branch: string): TaskRow[] {
     return listTasksByBaseBranchStmt.all(branch) as TaskRow[];
   },
+  /**
+   * The integration rows of the ideas `todoIds`, reached through the tasks
+   * `viewer` may see: one query for a whole list. A row per (idea, task):
+   * `aggregateTodoLandings` counts a job once.
+   */
+  listTodoIntegrations(todoIds: readonly number[], viewer?: DbViewer | null): TodoIntegrationRow[] {
+    if (!todoIds.length) return [];
+    const owner = ownerSql(viewer, 'tasks', 't.owner_user_id');
+    return db.prepare(
+      `SELECT t.todo_id AS todo_id, i.id AS id, i.mode AS mode, i.state AS state, i.branch AS branch,
+              i.pr_number AS pr_number, i.pr_url AS pr_url, i.created_at AS created_at
+       FROM ${TODO_INTEGRATION_JOIN}
+       WHERE t.todo_id IN (${todoIds.map(() => '?').join(', ')}) AND ${owner.sql}`,
+    ).all(...todoIds, ...owner.params) as TodoIntegrationRow[];
+  },
+  /**
+   * The other way round: the ideas and series of the integrations `ids`,
+   * through the tasks `viewer` may see. Same join as `listTodoIntegrations`,
+   * so a job and its idea always point at each other. A task without an idea
+   * still brings its series.
+   */
+  listIntegrationTaskLinks(ids: readonly string[], viewer?: DbViewer | null): Array<{
+    integration_id: string; todo_id: number | null; series_id: string | null;
+  }> {
+    if (!ids.length) return [];
+    const owner = ownerSql(viewer, 'tasks', 't.owner_user_id');
+    return db.prepare(
+      `SELECT DISTINCT i.id AS integration_id, t.todo_id AS todo_id, t.series_id AS series_id
+       FROM ${TODO_INTEGRATION_JOIN}
+       WHERE i.id IN (${ids.map(() => '?').join(', ')}) AND ${owner.sql}
+       ORDER BY t.created_at ASC`,
+    ).all(...ids, ...owner.params) as Array<{ integration_id: string; todo_id: number | null; series_id: string | null }>;
+  },
+  /**
+   * The links of `provider` whose ref is one of `refs`, ignoring case (a
+   * forge's owner and repository names do), on ideas `viewer` may see.
+   */
+  findTodoExternalRefs(provider: string, refs: readonly string[], viewer?: DbViewer | null): TodoExternalRefRow[] {
+    if (!refs.length) return [];
+    const owner = ownerSql(viewer, 'project_todo', 'p.owner_user_id');
+    return db.prepare(
+      `SELECT r.* FROM todo_external_ref r JOIN project_todo p ON p.id = r.todo_id
+       WHERE r.provider = ? AND lower(r.ref) IN (${refs.map(() => '?').join(', ')}) AND ${owner.sql}
+       ORDER BY r.created_at, r.id`,
+    ).all(provider, ...refs.map((r) => r.toLowerCase()), ...owner.params) as TodoExternalRefRow[];
+  },
+  /** The integrations of `project` whose pull request is `prNumber`, newest first. */
+  listIntegrationsByPullRequest(project: string, prNumber: number): IntegrationRow[] {
+    return db.prepare(
+      `SELECT * FROM integrations WHERE project = ? AND pr_number = ? ORDER BY created_at DESC`,
+    ).all(project, prNumber) as IntegrationRow[];
+  },
   listIntegrationsBySeries(seriesId: string): IntegrationRow[] {
     return listIntegrationsBySeriesStmt.all(seriesId) as IntegrationRow[];
+  },
+  /** A project's integration branches, newest first. */
+  listIntegrationsByProject(project: string, limit = 100): IntegrationRow[] {
+    return listIntegrationsByProjectStmt.all(project, limit) as IntegrationRow[];
+  },
+  /** Every integration branch, newest first. Unscoped: routes filter. */
+  listRecentIntegrations(limit = 100): IntegrationRow[] {
+    return listRecentIntegrationsStmt.all(limit) as IntegrationRow[];
+  },
+  /** Stores the forge's reading; publishes only when it says something new. */
+  setIntegrationChecks(id: string, checks: string | null): void {
+    const before = getIntegrationByIdStmt.get(id) as IntegrationRow | undefined;
+    if (!before) return;
+    setIntegrationChecksStmt.run(checks, id);
+    if (checksSignature(before.checks) !== checksSignature(checks)) publishIntegrationChange(id, ['checks']);
   },
   /** Records the pull request opened for an integration branch; false when
    *  the row is gone or already past the 'branch' state. */
   markIntegrationOpen(id: string, pr: { number: number; url: string; headSha: string }): boolean {
-    return markIntegrationOpenStmt.run(pr.number, pr.url, pr.headSha, Date.now(), id).changes > 0;
+    const opened = markIntegrationOpenStmt.run(pr.number, pr.url, pr.headSha, Date.now(), id).changes > 0;
+    if (opened) publishIntegrationChange(id, ['state', 'pull_request']);
+    return opened;
+  },
+  /** Records the head a repair pushed to the open pull request, and forgets
+   *  the checks read before it; false unless the pull request is open. */
+  setIntegrationHead(id: string, headSha: string): boolean {
+    const before = getIntegrationByIdStmt.get(id) as IntegrationRow | undefined;
+    const moved = setIntegrationHeadStmt.run(headSha, Date.now(), id).changes === 1;
+    if (moved && before) {
+      const changed: IntegrationChange[] = [];
+      if (before.head_sha !== headSha) changed.push('pull_request');
+      if (before.checks !== null) changed.push('checks');
+      if (changed.length) publishIntegrationChange(id, changed);
+    }
+    return moved;
+  },
+  /** Records a repair asked for on a job's pull request, as 'running'. */
+  insertLandingRepair(input: {
+    id: string; integrationId: string; kind: LandingRepairRow['kind']; taskId: string;
+    headBefore: string | null; createdBy: string | null;
+  }): void {
+    const now = Date.now();
+    insertLandingRepairStmt.run(input.id, input.integrationId, input.kind, input.taskId, input.headBefore, input.createdBy, now, now);
+  },
+  /** The repairs of one job, oldest first. */
+  listLandingRepairs(integrationId: string): LandingRepairRow[] {
+    return listLandingRepairsStmt.all(integrationId) as LandingRepairRow[];
+  },
+  listRunningLandingRepairs(): LandingRepairRow[] {
+    return listRunningLandingRepairsStmt.all() as LandingRepairRow[];
+  },
+  /** Concludes a running repair; false when it was concluded already. */
+  finishLandingRepair(id: string, state: 'pushed' | 'unchanged' | 'failed', opts: { headAfter?: string | null; error?: string | null } = {}): boolean {
+    return finishLandingRepairStmt.run(state, opts.headAfter ?? null, opts.error ?? null, Date.now(), id).changes === 1;
+  },
+  /** One more failed push of a running repair; the attempts after it. */
+  failLandingRepairAttempt(id: string, error: string): number {
+    failLandingRepairAttemptStmt.run(error, Date.now(), id);
+    const row = db.prepare(`SELECT attempts FROM landing_repairs WHERE id = ?`).get(id) as { attempts: number } | undefined;
+    return row?.attempts ?? 0;
+  },
+  /** Integrations whose pull request is open: what the landing poller reads. */
+  listOpenIntegrations(): IntegrationRow[] {
+    return listOpenIntegrationsStmt.all() as IntegrationRow[];
+  },
+  /** Local integration branches (no remote) that have not landed yet. */
+  listLocalIntegrationsToLand(): IntegrationRow[] {
+    return listLocalIntegrationsToLandStmt.all() as IntegrationRow[];
+  },
+  /** The pull request was closed without a merge; false unless it was open. */
+  markIntegrationClosed(id: string): boolean {
+    const closed = markIntegrationClosedStmt.run(Date.now(), id).changes === 1;
+    if (closed) publishIntegrationChange(id, ['state']);
+    return closed;
+  },
+  touchIntegrationPolled(id: string): void {
+    touchIntegrationPolledStmt.run(Date.now(), id);
+  },
+  /** Claims the notice of `state` ('merged' | 'closed'): true for one caller
+   *  only, and only while the row is in that state. */
+  claimIntegrationNotice(id: string, state: 'merged' | 'closed'): boolean {
+    return claimIntegrationNoticeStmt.run(state, Date.now(), id, state, state).changes === 1;
+  },
+  /** Hands back a notice that could not be sent. */
+  releaseIntegrationNotice(id: string, state: 'merged' | 'closed'): void {
+    releaseIntegrationNoticeStmt.run(Date.now(), id, state);
+  },
+  /** Concluded integrations whose pilot was not told yet. */
+  listUnnotifiedIntegrations(): IntegrationRow[] {
+    return listUnnotifiedIntegrationsStmt.all() as IntegrationRow[];
   },
   /** Repoint ONE requeued task at another backend and release it now. Unlike
    *  `updateTask`, a null model is written as null: COALESCE would keep the slug
@@ -5780,6 +6248,36 @@ export const dbApi = {
    * otherwise takes the "spawn a new mission" path, i.e. exactly the dispersion we
    * want to eliminate.
    */
+  /** Records what the planner's answer said of the series' issues. */
+  setSeriesResolvesIssues(seriesId: string, resolves: boolean): void {
+    db.prepare(
+      `INSERT INTO series_landing (series_id, resolves_issues, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT (series_id) DO UPDATE SET resolves_issues = excluded.resolves_issues, updated_at = excluded.updated_at`,
+    ).run(seriesId, resolves ? 1 : 0, Date.now());
+  },
+  /** Records the branch and destination the planner chose for the series. */
+  setSeriesPlanLanding(seriesId: string, plan: SeriesPlanLandingRecord): void {
+    db.prepare(
+      `INSERT INTO series_landing (series_id, resolves_issues, updated_at, project, repo, branch, branch_kind, mode, base_ref, finish)
+       VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (series_id) DO UPDATE SET updated_at = excluded.updated_at, project = excluded.project,
+         repo = excluded.repo, branch = excluded.branch, branch_kind = excluded.branch_kind, mode = excluded.mode,
+         base_ref = excluded.base_ref, finish = excluded.finish`,
+    ).run(seriesId, Date.now(), plan.project, plan.repo, plan.branch, plan.branch_kind, plan.mode, plan.base_ref, plan.finish);
+  },
+  /** The branch and destination the planner chose for the series, if it chose one. */
+  getSeriesPlanLanding(seriesId: string): SeriesPlanLandingRecord | undefined {
+    const row = db.prepare(
+      `SELECT project, repo, branch, branch_kind, mode, base_ref, finish FROM series_landing
+       WHERE series_id = ? AND branch IS NOT NULL AND mode IS NOT NULL AND base_ref IS NOT NULL`,
+    ).get(seriesId) as SeriesPlanLandingRecord | undefined;
+    return row;
+  },
+  /** The series resolves its issues entirely: true only when the planner said so. */
+  seriesResolvesIssues(seriesId: string): boolean {
+    const row = db.prepare(`SELECT resolves_issues FROM series_landing WHERE series_id = ?`).get(seriesId) as { resolves_issues: number } | undefined;
+    return row?.resolves_issues === 1;
+  },
   /** The mission piloting this series now, or null when none of its tasks names one. */
   seriesPilotMission(seriesId: string): string | null {
     const row = seriesPilotStmt.get(seriesId) as { creator_mission_id: string | null } | undefined;
@@ -6071,7 +6569,7 @@ export const dbApi = {
     // THREE known forms (dedicated event, `result` as
     // 429, text message). This last case was missing
     // here, so a mission killed by quota on
-    const hit = bestRateLimit(recent.map((r) => ({ type: r.type, payload: parse(r) })));
+    const hit = bestRateLimit(recent.map((r) => ({ type: r.type, payload: parse(r), timestamp: r.timestamp })));
     if (hit) {
       // A 402 is not a quota window (`kind`, cf. rate-limit.ts): flattening the
       // two wrote "quota reopens at HH:MM" onto the Kanban for an account that

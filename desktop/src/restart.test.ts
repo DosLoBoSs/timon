@@ -5,6 +5,7 @@ import ts from 'typescript';
 import { APP_INFO_CHANNEL } from './app-info.js';
 import { ABOUT_CHANNEL } from './about.js';
 import { OPEN_LOGS_CHANNEL } from './diagnostic-dialog.js';
+import { UI_ZOOM_CHANNELS } from './ui-zoom.js';
 import {
   canRestartFromSetup, handoverKeptMessage, handoverRoute, relaunchOptions, serviceHandover, serviceHandoverNeeded, setupRestarter,
   setupRestartPending, SETUP_HANDOVER_CHANNEL, SETUP_RESTART_CHANNEL, SETUP_RESTART_STATUS_CHANNEL, waitWhileBooting, lateHandover, type WaitClock,
@@ -119,6 +120,14 @@ test('the sandbox preload exposes narrow restart, directory and browser presenta
     windowMachine: { set: (...args: unknown[]) => Promise<unknown> };
     openWindow: (...args: unknown[]) => Promise<unknown>;
     windowScheme: (...args: unknown[]) => Promise<unknown>;
+    dockIcon: { get: (...args: unknown[]) => Promise<unknown>; set: (...args: unknown[]) => Promise<unknown> };
+    zoom: {
+      current: () => number;
+      get: (...args: unknown[]) => Promise<unknown>;
+      set: (...args: unknown[]) => Promise<unknown>;
+      step: (...args: unknown[]) => Promise<unknown>;
+      onChange: (listener: (factor: number) => void) => () => void;
+    };
     tailscale: { openInstaller: (...args: unknown[]) => Promise<unknown>; openApp: (...args: unknown[]) => Promise<unknown> };
     updates: {
       state: (...args: unknown[]) => Promise<unknown>;
@@ -143,6 +152,7 @@ test('the sandbox preload exposes narrow restart, directory and browser presenta
   const calls: unknown[][] = [];
   const sent: unknown[][] = [];
   const listeners = new Map<string, (event: unknown, payload: unknown) => void>();
+  let blinkZoom = 1.25;
   runInNewContext(compiled, {
     exports: {},
     require: (name: string) => {
@@ -157,10 +167,11 @@ test('the sandbox preload exposes narrow restart, directory and browser presenta
           on: (channel: string, fn: (event: unknown, payload: unknown) => void) => { listeners.set(channel, fn); },
           removeListener: (channel: string, fn: unknown) => { if (listeners.get(channel) === fn) listeners.delete(channel); },
         },
+        webFrame: { getZoomFactor: () => blinkZoom },
       };
     },
   });
-  assert.deepEqual(Object.keys(bridge), ['selectDirectory', 'selectPluginSource', 'selectExecutable', 'revealPath', 'setupRestartPending', 'restartAfterSetup', 'handOverToService', 'appInfo', 'openLogsFolder', 'openAbout', 'uninstall', 'speech', 'windowMachine', 'windowScheme', 'openWindow', 'browser', 'updates', 'tailscale']);
+  assert.deepEqual(Object.keys(bridge), ['selectDirectory', 'selectPluginSource', 'selectExecutable', 'revealPath', 'setupRestartPending', 'restartAfterSetup', 'handOverToService', 'appInfo', 'openLogsFolder', 'openAbout', 'uninstall', 'speech', 'windowMachine', 'windowScheme', 'dockIcon', 'zoom', 'openWindow', 'browser', 'updates', 'tailscale']);
   assert.deepEqual(Object.keys(bridge.browser), ['attach', 'detach']);
   // Multi-window V3: an id crosses, nothing else; the main process checks it is one.
   assert.deepEqual(Object.keys(bridge.windowMachine), ['set']);
@@ -174,6 +185,34 @@ test('the sandbox preload exposes narrow restart, directory and browser presenta
   // Multi-window V5: one object crosses, as given; the main process checks it is { route, machineId? }.
   await bridge.openWindow({ route: '/kanban', machineId: 'vps' }, 'https://evil.example');
   assert.deepEqual(calls.pop(), ['timon:open-window', { route: '/kanban', machineId: 'vps' }]);
+  // The Dock icon: a name crosses, never a path; the main process checks it is one it knows.
+  assert.deepEqual(Object.keys(bridge.dockIcon), ['get', 'set']);
+  await bridge.dockIcon.get('untrusted extra option');
+  assert.deepEqual(calls.pop(), ['timon:dock-icon-get']);
+  await bridge.dockIcon.set('dark', '/Users/example/evil.png');
+  assert.equal(JSON.stringify(calls.pop()), '["timon:dock-icon-set",{"icon":"dark"}]');
+  // The interface size: a number or a direction crosses, nothing else; the main process snaps and checks it.
+  const callsBefore = calls.length;
+  assert.deepEqual(Object.keys(bridge.zoom), ['current', 'get', 'set', 'step', 'onChange']);
+  // The factor Blink lays the page out at, read synchronously: no IPC, so a measure never waits or races.
+  assert.equal(bridge.zoom.current(), 1.25);
+  blinkZoom = 0.9;
+  assert.equal(bridge.zoom.current(), 0.9, 'read live, not cached');
+  assert.equal(calls.length, callsBefore, 'current() calls nothing in the main process');
+  await bridge.zoom.get('untrusted extra option');
+  assert.deepEqual(calls.pop(), [UI_ZOOM_CHANNELS.get]);
+  await bridge.zoom.set(1.25, { factor: 9 });
+  assert.equal(JSON.stringify(calls.pop()), `["${UI_ZOOM_CHANNELS.set}",{"factor":1.25}]`);
+  await bridge.zoom.step('in', 'untrusted extra option');
+  assert.equal(JSON.stringify(calls.pop()), `["${UI_ZOOM_CHANNELS.step}",{"direction":"in"}]`);
+  const factors: number[] = [];
+  const stopZoom = bridge.zoom.onChange((factor) => factors.push(factor));
+  listeners.get(UI_ZOOM_CHANNELS.changed)?.({}, { factor: 1.5 });
+  listeners.get(UI_ZOOM_CHANNELS.changed)?.({}, { factor: 'huge' });
+  listeners.get(UI_ZOOM_CHANNELS.changed)?.({}, null);
+  assert.deepEqual(factors, [1.5], 'only a number reaches the page');
+  stopZoom();
+  assert.equal(listeners.has(UI_ZOOM_CHANNELS.changed), false);
   assert.deepEqual(Object.keys(bridge.tailscale), ['openInstaller', 'openApp']);
   await bridge.restartAfterSetup('untrusted executable', 'another home');
   await bridge.selectDirectory('/Users/example/My Project', 'untrusted extra option');

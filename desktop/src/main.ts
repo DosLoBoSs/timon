@@ -22,9 +22,12 @@ import {
   controlDesktopService, daemonLogHint, forgetMissingWindowsService, forgetServiceStopped, hasDesktopService, repairSessionWitness,
   restartDesktopService, serviceStoppedByUser, startDesktopService, startStoppedServiceFailureMessage, stopServiceCopy, stopServiceFailureMessage,
   endWindowsLauncher, serviceHeldOutSince, windowsRestartSeams, windowsServiceRefusedFile, windowsTaskRunning, windowsTaskState,
+  readWindowsTaskShape, disableWindowsTask,
 } from './service.js';
+import { HELD_OUT_WINDOW_MS, windowsStartBranch, type WindowsRewrite, type WindowsStartVerdict } from './windows-branch.js';
 import { app, BrowserWindow, Menu, Tray, WebContentsView, clipboard, dialog, shell, nativeImage, ipcMain, screen, session, systemPreferences, webContents } from 'electron';
 import { parseWindowSchemeReport, recordMachineScheme, WINDOW_BACKGROUND, WINDOW_SCHEME_CHANNEL, windowScheme, type Scheme } from './appearance.js';
+import { DOCK_ICON_CHANNELS, dockIconPath, parseDockIconRequest, readDockIcon, writeDockIcon, type DockIcon } from './dock-icon.js';
 import {
   cascadeFrom, placeSavedWindows, readWindowLayout, routeOfUrl, WindowLayoutKeeper, writeWindowLayout, type DisplayArea, type SavedWindow, type WindowOpening,
 } from './window-layout.js';
@@ -59,12 +62,18 @@ import { StartupView, probeUi } from './startup-view.js';
 import { DaemonRevival, giveUpBox, recordingExec, requestAppRearm, serviceProgram, type GiveUpVerdict, type RelaunchOutcome } from './app-rearm.js';
 import { reportDesktopOpened } from './telemetry-ping.js';
 import { reloadShortcut } from './reload-shortcuts.js';
+import {
+  DEFAULT_UI_ZOOM, UI_ZOOM_CHANNELS, UI_ZOOM_STEPS, parseUiZoomSetRequest, parseUiZoomStepRequest, readUiZoom, stepUiZoom,
+  writeUiZoom, zoomShortcut, type UiZoomFactor,
+} from './ui-zoom.js';
 import { externalUrl, navigationAction } from './external-links.js';
 import { keepDictionariesLocal } from './spellcheck.js';
 import {
   clearServiceRefused, declineServiceRepair, markServiceRefusedNotice, recordServiceRefused, serviceRefusedMessage, serviceRefusedNoticeDue,
   serviceRepairFailureMessage, serviceRepairPrompt, serviceRepairVerdict,
-  serviceUpgradeNeeded, upgradeFailureMessage, upgradeNeedsFallback, upgradePackagedService,
+  serviceUpgradeNeeded, upgradeFailureMessage, upgradeNeedsFallback, upgradePackagedService, windowsSessionIntent,
+  declineWindowsRewrite, windowsRewriteDeclined, windowsTaskRepair,
+  sessionFallbackMessage,
 } from './upgrade.js';
 import {
   selectDirectory, selectExecutable, selectPluginSource, SELECT_DIRECTORY_CHANNEL, SELECT_EXECUTABLE_CHANNEL, SELECT_PLUGIN_SOURCE_CHANNEL,
@@ -94,6 +103,7 @@ import { diagnosticCopy, fallbackReport, OPEN_LOGS_CHANNEL, runDiagnosticRunner,
 import { canUninstall, cleanupCopy, cleanupPlan, uninstallRequest, removalInstructions, UNINSTALL_CHANNEL, UNINSTALL_INFO_CHANNEL, UNINSTALL_HELPER_FLAG } from './uninstall.js';
 import { performUninstall, prepareCleanup, stopInstalledService, verifyStopped } from './uninstall-controller.js';
 import { runUninstallHelper } from './uninstall-helper.js';
+import { runWindowsServiceShell, WINDOWS_SERVICE_FLAG } from './windows-service-shell.js';
 import { BROWSER_ATTACH_CHANNEL, BROWSER_DETACH_CHANNEL, trustedBrowserSender } from './native-browser-protocol.js';
 
 import { DaemonStartTimeoutError, updateOffer, finishUpdate, finishUpdateDeps, updateCopy, updateFailureDialog, unmanagedDaemon, type UpdateOffer, type UpdateStage } from './data-update.js';
@@ -150,6 +160,8 @@ let updateApproved = false;
 /** What the failure dialog of an approved update may claim happened. */
 let updateStage: UpdateStage = 'none';
 let desktopHome = '';
+/** The size of the interface on this screen, every page of every window alike; read from `ui-zoom.json` at launch. */
+let currentUiZoom: UiZoomFactor = DEFAULT_UI_ZOOM;
 /**
  * A packaged install without `timon.config.json`: the onboarding comes next.
  * The windows then wait in its look rather than with the startup diagnostic.
@@ -391,6 +403,30 @@ function watchDisplays(): void {
   screen.on('display-metrics-changed', () => { for (const record of liveWindows()) layoutPages(record); });
 }
 
+/**
+ * Sizes every interface page of every window at `factor`; the native browser
+ * panel and its overlays are other views, and keep the site's own size.
+ * Every page hears the factor before any page changes: Chromium keeps one
+ * zoom per host, so zooming one page can resize another window's page of the
+ * same host before it was told. The size it already has (a wheel tick held at
+ * an end, Ctrl+0 at 100 %) changes nothing, sends nothing and writes nothing.
+ */
+function applyUiZoom(factor: UiZoomFactor, persist: boolean): UiZoomFactor {
+  if (factor === currentUiZoom) return currentUiZoom;
+  currentUiZoom = factor;
+  if (persist && !writeUiZoom(desktopHome, factor)) console.warn('[desktop] Could not save the interface size.');
+  const pages: Electron.WebContents[] = [];
+  for (const record of liveWindows()) {
+    for (const page of record.pages.list()) {
+      const contents = contentsOf(page);
+      if (!contents.isDestroyed()) pages.push(contents);
+    }
+  }
+  for (const contents of pages) contents.send(UI_ZOOM_CHANNELS.changed, { factor });
+  for (const contents of pages) contents.setZoomFactor(factor);
+  return factor;
+}
+
 /** Every page of a window covers its whole content area; Electron sizes views in DIPs, so a change of display density needs nothing more. */
 function layoutPages(record: AppWindow): void {
   if (record.window.isDestroyed()) return;
@@ -551,6 +587,8 @@ function createPage(record: AppWindow, machineId: string | null, url: string): P
       sandbox: true,
       nodeIntegration: false,
       contextIsolation: true,
+      // The first paint is at the interface size, not at 100 % then resized.
+      zoomFactor: currentUiZoom,
     },
   });
   view.setBackgroundColor(windowBackground(scheme));
@@ -574,9 +612,27 @@ function createPage(record: AppWindow, machineId: string | null, url: string): P
   if (process.env.TIMON_RENDERER_DIAGNOSTICS === '1') {
     startRendererDiagnostic(contents.debugger, (line) => console.log(line));
   }
+  // Chromium keeps a zoom per origin: going from the waiting page to the
+  // interface lands on the interface's, so the size is set again on each
+  // commit, a cross-origin one included, and on each load.
+  contents.setZoomFactor(currentUiZoom);
+  contents.on('did-navigate', () => { contents.setZoomFactor(currentUiZoom); });
+  contents.on('dom-ready', () => { contents.setZoomFactor(currentUiZoom); });
+  contents.on('did-finish-load', () => {
+    contents.setZoomFactor(currentUiZoom);
+    contents.send(UI_ZOOM_CHANNELS.changed, { factor: currentUiZoom });
+  });
+  // Ctrl+wheel: one stop at a time, for every page. A canvas or terminal
+  // that takes the wheel for itself prevents it first.
+  contents.on('zoom-changed', (_event, zoomDirection) => {
+    applyUiZoom(stepUiZoom(currentUiZoom, zoomDirection === 'in' ? 'in' : 'out'), true);
+  });
   // No menu bar carries the reload keys: the page handles them itself.
   contents.on('before-input-event', (event, input) => {
     if (newWindowShortcut(input, process.platform)) { event.preventDefault(); openNewWindow(); return; }
+    // Prevented here so the key does not also reach the page.
+    const zoom = zoomShortcut(input, process.platform);
+    if (zoom) { event.preventDefault(); applyUiZoom(stepUiZoom(currentUiZoom, zoom), true); return; }
     const reload = reloadShortcut(input, process.platform);
     if (!reload) return;
     event.preventDefault();
@@ -967,10 +1023,11 @@ function openAbout(): void {
   });
 }
 
-/** macOS: "About Timon" in the menu bar leads to the same window (TODO #641). */
+/** The menu bar: on macOS "About Timon" leads to the same window (TODO #641); everywhere, View sizes the interface. */
 function installAppMenu(): void {
   const template = appMenuTemplate({
     platform: process.platform, appName: app.name, locale: uiLocale(), onAbout: openAbout, onNewWindow: () => openNewWindow(),
+    onZoom: (direction) => { applyUiZoom(stepUiZoom(currentUiZoom, direction), true); },
   });
   if (template) Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   // macOS never sends a second launch to a running app: the Dock menu is where "New window" is looked for.
@@ -1429,6 +1486,12 @@ function paintPageScheme(caller: Caller, scheme: Scheme): void {
   if (caller.record.pages.isActive(caller.page.contentsId)) caller.record.window.setBackgroundColor(windowBackground(scheme));
 }
 
+/** Throws unless the IPC call comes from the main frame of a page of an interface window, on its own origin. */
+function zoomCaller(event: Electron.IpcMainInvokeEvent): void {
+  const caller = senderPage(event);
+  if (!caller || !canReadAppInfo(senderOf(event), caller.record.origin)) throw new Error('Only a Timon window sizes its interface.');
+}
+
 /** The interface window an IPC call came from, whichever of its pages sent it. */
 function senderWindow(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): AppWindow | null {
   return senderPage(event)?.record ?? null;
@@ -1491,6 +1554,23 @@ async function returnToPreviousAppImage(offer: UpdateOffer): Promise<void> {
   app.quit();
 }
 
+/**
+ * Shows `choice` in the Dock (macOS). A damaged picture must not abort
+ * startup before the tray fallback can report it, nor fail a choice made in
+ * Settings: the Dock then keeps what it shows. `true` when it changed.
+ */
+function applyDockIcon(choice: DockIcon): boolean {
+  try {
+    const icon = nativeImage.createFromPath(dockIconPath(APP_ICON_PATH, choice));
+    if (icon.isEmpty()) return false;
+    app.dock?.setIcon(icon);
+    return true;
+  } catch (error) {
+    console.warn('[desktop] Could not load the dock icon.', error);
+    return false;
+  }
+}
+
 async function main(): Promise<void> {
   // Also here: whether `session-created` reports the default session is not documented.
   keepDictionariesLocal(session.defaultSession, process.platform);
@@ -1512,15 +1592,7 @@ async function main(): Promise<void> {
   // Known before the release check: its window, the first one shown, already takes the onboarding's look.
   firstRun = packagedFirstRun(desktopHome, app.isPackaged);
   if (app.isPackaged) await verifyInstalledRelease();
-  if (process.platform === 'darwin') {
-    // A damaged app icon must not abort startup before the tray fallback can report it.
-    try {
-      const icon = nativeImage.createFromPath(APP_ICON_PATH);
-      if (!icon.isEmpty()) app.dock?.setIcon(icon);
-    } catch (error) {
-      console.warn('[desktop] Could not load the dock icon.', error);
-    }
-  }
+  if (process.platform === 'darwin') applyDockIcon(readDockIcon(desktopHome));
   const cfg = loadDesktopConfig(desktopHome, { packaged: app.isPackaged });
   firstRun = cfg.packagedDefaults;
   let offer = app.isPackaged ? updateOffer(cfg.home, app.getVersion()) : null;
@@ -1588,6 +1660,7 @@ async function main(): Promise<void> {
   // Asked before anything reads the revision file: a task deleted outside
   // Timon leaves it behind, and everything below would believe in a service.
   const winService = app.isPackaged && process.platform === 'win32';
+  const launchedAt = Date.now();
   const taskState = winService ? await windowsTaskState() : null;
   if (taskState) {
     console.log(`[desktop] boot task: schtasks ${taskState.schtasks ? 'sees' : 'does not see'} it, ScheduledTasks says ${taskState.lookup}`);
@@ -1595,6 +1668,12 @@ async function main(): Promise<void> {
       const forgotten = forgetMissingWindowsService(cfg.home);
       if (forgotten.length > 0) console.log(`[desktop] the boot task was deleted outside Timon: forgot ${forgotten.join(', ')}`);
     }
+  }
+  // What the task runs: one changed by hand to the interactive token opens a
+  // console at every start (#116), and is rewritten below.
+  const taskShape = taskState?.exists ? await readWindowsTaskShape() : null;
+  if (taskShape) {
+    console.log(`[desktop] boot task: logon ${taskShape.logon}, program ${taskShape.program ?? 'none'}, triggers ${taskShape.triggers.join('+') || 'none'}${taskShape.consoleVisible ? ', opens a console' : ''}`);
   }
   const serviceInstalled = hasDesktopService(cfg.home);
   // The session witness the launcher waits on can go stale (password reset):
@@ -1609,8 +1688,29 @@ async function main(): Promise<void> {
   const upgradeNeeded = serviceUpgradeNeeded(cfg.home, app.getVersion(), {
     packaged: app.isPackaged,
     serviceInstalled,
+    ...(taskState ? { taskExists: taskState.exists, taskShape } : {}),
   });
   console.log(`[desktop] service installed: ${serviceInstalled}; upgrade needed: ${upgradeNeeded}`);
+  // Not a revision upgrade but the repair of a task changed outside Timon (#116):
+  // declining its elevation must not fail an approved update, the task in place serves.
+  const windowsRepair = winService && windowsTaskRepair(cfg.home, { ...(taskState ? { taskExists: taskState.exists } : {}), taskShape });
+  const repairDeclined = windowsRepair && windowsRewriteDeclined(cfg.home, app.getVersion());
+  if (repairDeclined) {
+    console.log(`[desktop] the repair of the boot task was declined for ${app.getVersion()}: not asked again before the next version (Settings > Installation or timon service install ask now)`);
+  }
+  // Windows: one daemon per home, decided from the task itself (`windows-branch.ts`).
+  let rewrite: WindowsRewrite = upgradeNeeded ? 'pending' : repairDeclined ? 'declined' : 'none';
+  const decideWindows = (start?: 'started' | 'needs-repair' | 'never-ran'): WindowsStartVerdict => {
+    const verdict = windowsStartBranch({
+      taskExists: taskState?.exists ?? false,
+      revisionRecorded: hasDesktopService(cfg.home),
+      rewrite,
+      heldOut: serviceHeldOutSince(cfg.home, launchedAt - HELD_OUT_WINDOW_MS),
+      ...(start ? { start } : {}),
+    });
+    console.log(`[desktop] branch: ${verdict.branch} (${verdict.reason})`);
+    return verdict;
+  };
   const repair = serviceRepairVerdict(cfg.home, app.getVersion(), {
     packaged: app.isPackaged,
     // A portable install chose no supervisor: nothing was lost there.
@@ -1627,19 +1727,34 @@ async function main(): Promise<void> {
   }
   if (upgradeNeeded) {
     if (updateApproved) updateStage = 'service';
+    if (winService) decideWindows();
     try {
-      await upgradePackagedService(cfg, {
+      const upgraded = await upgradePackagedService(cfg, {
         execPath: shellDaemonRuntime().execPath,
         runtimeEnv: shellDaemonRuntime().env,
         resourcesPath: process.resourcesPath,
         version: app.getVersion(),
+        sessionIntent: windowsSessionIntent(taskShape),
       });
+      rewrite = 'done';
+      // Said once: the rewrite that kept the task for the session only happens once.
+      if (upgraded.sessionFallback) {
+        console.log('[desktop] the rewritten boot task runs only while the user is signed in (session fallback)');
+        void dialog.showMessageBox({ type: 'info', title: DISPLAY_NAME, ...sessionFallbackMessage(uiLocale()) });
+      }
     } catch (error) {
       // Boot on whatever the runner left rather than refusing to start, and
       // say so instead of silently serving the old UI.
       console.error('[desktop] service upgrade failed', error);
-      if (updateApproved && !upgradeNeedsFallback(error)) throw error;
+      if (updateApproved && !upgradeNeedsFallback(error) && !windowsRepair) throw error;
       serviceUnusable = upgradeNeedsFallback(error);
+      rewrite = serviceUnusable ? 'unusable' : 'failed';
+      // Asked at every launch, a declined repair would be as tiresome as the
+      // console it fixes: this version stops asking, the task in place serves.
+      if (windowsRepair && !serviceUnusable) {
+        declineWindowsRewrite(cfg.home, app.getVersion());
+        console.log('[desktop] the repair of the boot task was declined or failed: not asked again before the next version');
+      }
       const unsaved = snapshotFailure(cfg.home, app.getVersion());
       void reportProblem({
         type: 'warning',
@@ -1666,6 +1781,8 @@ async function main(): Promise<void> {
 
   if (!updateWindow) buildTray(cfg, uiUrl);
 
+  // Asked only when no daemon answers: an answering one is used whatever the task says.
+  const windowsVerdict = winService && !daemonUp && !health.ok && !serviceUnusable ? decideWindows() : null;
   if (daemonUp) {
     console.log('[desktop] branch: daemon already up');
     // Started again by other means (`timon service start`, a boot): the marker
@@ -1680,7 +1797,7 @@ async function main(): Promise<void> {
   } else if (serviceUnusable) {
     console.log('[desktop] branch: service unusable, embedded daemon');
     await startEmbeddedDaemon(cfg, uiUrl);
-  } else if (hasDesktopService(cfg.home)) {
+  } else if (windowsVerdict ? windowsVerdict.branch === 'service' : hasDesktopService(cfg.home)) {
     showStartingWindow(uiUrl);
     if (serviceStoppedByUser(cfg.home)) {
       // "Quit and stop the background service" disabled the Windows task
@@ -1700,12 +1817,21 @@ async function main(): Promise<void> {
     const service = await startDesktopService(cfg.home, cfg.packagedDefaults, undefined, process.platform, undefined, {},
       existsSync(windowsServiceRefusedFile(cfg.home)) ? { budgetMs: 2_000 } : {});
     console.log(`[desktop] branch: start the service → ${service}`);
+    const after = windowsVerdict ? decideWindows(service) : null;
     if (service === 'needs-repair') {
       await startEmbeddedDaemon(cfg, uiUrl);
     } else if (service === 'never-ran') {
       // Windows will not run the task for this account (TODO #342): waiting
       // on it would end in "does not answer" with no log to read.
       recordServiceRefused(cfg.home);
+      // Switched off before the embedded daemon takes the home: its trigger
+      // would knock on it every five minutes (#116). Tried once, never insisted on.
+      if (after?.branch === 'disable-task') {
+        await disableWindowsTask().then(
+          () => console.log('[desktop] the boot task was disabled'),
+          (error: unknown) => console.warn(`[desktop] the boot task could not be disabled: ${(error as Error).message}`),
+        );
+      }
       await startEmbeddedDaemon(cfg, uiUrl);
       if (serviceRefusedNoticeDue(cfg.home, app.getVersion())) {
         markServiceRefusedNotice(cfg.home, app.getVersion());
@@ -1724,7 +1850,7 @@ async function main(): Promise<void> {
       else offerServiceInstall(cfg);
     }
   } else if (cfg.daemon.supervisor === 'none' || app.isPackaged) {
-    console.log('[desktop] branch: embedded daemon');
+    console.log(`[desktop] branch: embedded daemon${windowsVerdict ? ` (${windowsVerdict.reason})` : ''}`);
     await startEmbeddedDaemon(cfg, uiUrl);
   } else {
     console.log('[desktop] branch: no service, no embedded daemon');
@@ -1747,7 +1873,10 @@ async function main(): Promise<void> {
   app.setLoginItemSettings({ openAtLogin: true });
 }
 
-if (process.argv.includes(UNINSTALL_HELPER_FLAG)) {
+// The Windows logon task's launch (`windows-service-shell.ts`): nothing of the application runs.
+if (process.platform === 'win32' && process.argv.includes(WINDOWS_SERVICE_FLAG)) {
+  void runWindowsServiceShell(app, process.argv).catch(() => app.exit(1));
+} else if (process.argv.includes(UNINSTALL_HELPER_FLAG)) {
   void runUninstallHelper().catch(error => { dialog.showErrorBox(DISPLAY_NAME, String(error)); app.exit(1); });
 } else {
 // Before any window: the class the dock matches its launcher against (`linux-desktop.ts`).
@@ -1763,6 +1892,7 @@ if (process.platform === 'win32' && app.isPackaged) app.setAppUserModelId(WINDOW
 const requestedHome = resolve(resolveTimonHome());
 mkdirSync(requestedHome, { recursive: true });
 desktopHome = realpathSync(requestedHome);
+currentUiZoom = readUiZoom(desktopHome);
 installDesktopLog(desktopHome);
 console.log(`[desktop] Timon ${app.getVersion()} starting on ${process.platform} (packaged: ${app.isPackaged}), home ${desktopHome}`);
 const configuredAtLaunch = existsSync(join(desktopHome, 'timon.config.json'));
@@ -2236,6 +2366,43 @@ if (!app.requestSingleInstanceLock({ build: ownBuild } satisfies LaunchData)) {
     if (!report) throw new Error('A mode is light or dark.');
     paintPageScheme(caller, report.scheme);
     return { recorded: recordMachineScheme(desktopHome, caller.page.machineId ?? report.machineId, report.scheme) };
+  });
+
+  // The Dock icon (macOS): a preference of this computer's shell, so a page
+  // of another machine neither reads nor changes it. `null`: no Dock here.
+  ipcMain.handle(DOCK_ICON_CHANNELS.get, (event) => {
+    const caller = senderPage(event);
+    if (!caller || !localPage(caller) || !canReadAppInfo(senderOf(event), caller.record.origin)) throw new Error('Only a Timon window of this computer reads its Dock icon.');
+    return process.platform === 'darwin' ? { icon: readDockIcon(desktopHome) } : null;
+  });
+  ipcMain.handle(DOCK_ICON_CHANNELS.set, (event, input: unknown) => {
+    const caller = senderPage(event);
+    if (!caller || !localPage(caller) || !canReadAppInfo(senderOf(event), caller.record.origin)) throw new Error('Only a Timon window of this computer chooses its Dock icon.');
+    if (process.platform !== 'darwin') throw new Error('The Dock icon is a macOS setting.');
+    const icon = parseDockIconRequest(input);
+    if (!icon) throw new Error('Unknown Dock icon.');
+    if (!applyDockIcon(icon)) throw new Error('The Dock icon could not be loaded.');
+    if (!writeDockIcon(desktopHome, icon)) throw new Error('The Dock icon choice could not be saved.');
+    return { icon };
+  });
+
+  // The interface size: a preference of this screen, not of a machine, so a
+  // page of another machine reads and changes it like a local one.
+  ipcMain.handle(UI_ZOOM_CHANNELS.get, (event) => {
+    zoomCaller(event);
+    return { factor: currentUiZoom, steps: [...UI_ZOOM_STEPS] };
+  });
+  ipcMain.handle(UI_ZOOM_CHANNELS.set, (event, input: unknown) => {
+    zoomCaller(event);
+    const factor = parseUiZoomSetRequest(input);
+    if (factor === null) throw new Error('An interface size is a factor between 0.5 and 3.');
+    return { factor: applyUiZoom(factor, true) };
+  });
+  ipcMain.handle(UI_ZOOM_CHANNELS.step, (event, input: unknown) => {
+    zoomCaller(event);
+    const direction = parseUiZoomStepRequest(input);
+    if (!direction) throw new Error('An interface size steps in, out or back to 100 %.');
+    return { factor: applyUiZoom(stepUiZoom(currentUiZoom, direction), true) };
   });
 
   // A page opens one of its routes in a new window (V5): a route and the

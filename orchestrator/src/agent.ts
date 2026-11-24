@@ -923,6 +923,12 @@ user can then pick models per group, the general settings staying the default â€
 It returns \`{plan, commands, note?}\`: run \`commands\` as they are, filling the \`<...>\` templates;
 read \`note\`, it can contradict the ticked boxes. Models and fallbacks are set before the first
 task and apply to the series only, including the tasks the dispatcher creates itself.
+In a project that lands through pull requests it also returns \`integration\`: every task starts from
+its \`branch\` (\`--base\`), the last command creates the \`--landing pr\` task that opens the pull
+request, and you never merge the job into the target branch yourself: a person merges the pull request.
+A sequential job there starts with \`timon pr branch <branch>\`: code and commit only in the
+\`worktree\` it returns (never in the shared checkout), move the branch by reference after each
+commit, and end with that same \`--landing pr\` task; \`integration.note\` gives the exact gestures.
 
 | \`plan.mode\` | what you do |
 |---------------|-------------|

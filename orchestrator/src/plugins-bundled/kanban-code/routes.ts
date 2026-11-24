@@ -16,7 +16,7 @@ import { scopedDb } from '../../users/scoped-db.js';
 import { createTaskWorktree, detachTaskWorktree, disposeTaskWorktree, WorktreeServiceError } from '../../worktree-service.js';
 import { rejectIfDenied, requireAuth, viewerFromRequest } from '../../users/identity.js';
 import { isOwnMissionTask } from '../kanban/own-task.js';
-import { mergeCloseRefusal } from '../kanban/routes.js';
+import { mergeCloseRefusal, pullRequestCloseRefusal } from '../kanban/routes.js';
 import { parseEmptyBody, parseMergedShaBody, parseWorktreeCreateBody } from '../kanban/task-write-bodies.js';
 import { apiError } from '../../api-error.js';
 
@@ -87,6 +87,9 @@ export function registerRoutes(app: Router): void {
     }
     // `timon task done --merged-sha` records here first: a merge that is not
     // proven is refused before a wrong sha lands on the task (TODO #1012).
+    // The sha of a PR task is the tip it published: none before `pr open`.
+    const prRefusal = pullRequestCloseRefusal(task);
+    if (prRefusal) { res.status(409).json(apiError('pr_not_opened', prRefusal, { detail: prRefusal })); return; }
     const refusal = mergeCloseRefusal(task, sha);
     if (refusal) { res.status(409).json(apiError('merge_not_proven', refusal, { detail: refusal })); return; }
     dbApi.setTaskMergedSha(task.id, sha);
