@@ -7,6 +7,40 @@ slug: /changelog
 
 Published Timon releases. Preview changes are shown in the app when you install a release candidate.
 
+## 0.1.11 — 2026-11-24
+
+### Highlights
+- **Windows:** installing an update now asks for permission while Timon is still open, so it no longer closes and then seems to do nothing; saying No keeps Timon open.
+
+### Fixed
+- Windows: installing an update from the app now asks for permission in front of Timon before it closes, so the update no longer closes Timon and then seems to do nothing; refusing keeps Timon open.
+
+### Known issues
+- A Kanban task that depends on a `code` task which never gets a merge (no changes to review, or no reviewer) waits indefinitely; remove that dependency to release it.
+- An agent's island card applied to a page other than the one on screen removes the tabs it replaces, but a replaced terminal keeps running: end it from the Terminal page.
+- Chat: pressing Escape to close a dialog while dictating also cancels the dictation and puts the message back as it was before you clicked the mic.
+- Chat: while a turn is being prepared, a tool the previous turn left unfinished can show as still running, with its old duration, until the new turn starts.
+- The desktop app still embeds Electron 33, which no longer receives security updates; the move to a supported Electron release is planned for the next version.
+- Linux: a Hermes agent stops with "Gateway could not start" in a fenced mission; an exception that allows Unix sockets for its agent lets it answer, but then opens every Unix socket of your session to that mission.
+- If your organisation disables third-party MCP servers in Copilot, agents on Copilot cannot use Timon's tools and fall back to the `timon` command.
+- macOS: the usage of a Claude subscription account is not shown in the LLM quotas widget nor under the chat composer; Codex accounts are.
+- macOS: while Timon runs with no session open, Git over HTTPS and `gh` fail in missions; Git over SSH works.
+- MCP servers you add over HTTP are not passed to opencode and Hermes agents; Timon's own tools and stdio servers are.
+- Onboarding form details are still in English outside English, French and Simplified Chinese; the step titles are translated.
+- opencode and Hermes have not yet been tried on a tester's own account, so a first mission (Hermes especially) may still fail.
+- opencode decides its own tool permissions: Timon shows no Allow/Deny card for it and cannot restrict what it does. The agent editor says so.
+- Opening the model list of opencode or Hermes leaves one empty session per agent in that agent's own history.
+- Pi has not been tried with a tester's own model provider yet, so a first mission may fail.
+- **Sign in with Chrome** copies cookies only: a site that keeps its sign-in in the page's own storage (many apps built on Firebase) is not signed in by it.
+- **Sign in with Chrome** copies the sign-in into the built-in browser; whether Google keeps it valid there over time has not been verified, and a password or 2FA step has not been tried. Run it again if the session is lost.
+- **TIM-0034** — The installers are not code-signed: Windows SmartScreen or Smart App Control and macOS Gatekeeper warn about them or block them. On Windows, choose **More info → Run anyway** (turn Smart App Control off in Windows Security if it blocks); on macOS, allow the app in **System Settings → Privacy & Security**.
+- Windows: a CLI installed with pnpm or yarn can keep running after Timon stops or crashes; end it from Task Manager, or install it with npm.
+- Windows: a Codex agent in auto or acceptEdits mode cannot `git commit` (Codex keeps `.git` read-only); give its code and merge tasks the bypassPermissions mode, or run them on another backend.
+- Windows: installing a new version of the app closes the built-in terminal's shells.
+- Windows, and Linux without Landlock: missions are not fenced and can read Timon's private files; on an installation with several accounts, set the mission isolation to Required, or give the Spawn missions permission only to people you trust with the whole installation.
+- Windows: on a work or school account of a PC joined to Microsoft Entra ID, Windows may refuse to run Timon's background task; Timon then runs only while its window is open.
+- With Pi as the only backend, conversations keep their default title.
+
 ## 0.1.10 — 2026-11-24
 
 ### Highlights
