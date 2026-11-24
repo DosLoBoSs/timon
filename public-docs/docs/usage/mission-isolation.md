@@ -73,7 +73,22 @@ Every exception widens what a mission can do: allowing Unix sockets lets that mi
 
 Every object of the `host.isolation` block is strict: a key Timon does not know, or a misspelt one (`writeable`, `unixSocket`), makes the configuration invalid, and the daemon refuses to start rather than run missions with a fence other than the one you wrote. `timon doctor` prints the error with the key at fault, as does the daemon log ([Configuration](../installation/configuration.md)).
 
-A write that the fence refuses shows up as an error in the mission ("permission denied"). If a tool you trust needs a folder of your home, add it as writable for its agent.
+A write that the fence refuses shows up as an error in the mission ("permission denied"). If a tool you trust needs a folder of your home, add it as writable for its agent. An exception on a folder that does not exist yet opens nothing: create the folder first. The daemon log and `timon doctor` name such an exception.
+
+## When the fence refuses a path
+
+When the fence keeps a mission from a path its command-line tool needs, the chat says so in a notice that names the fence (Landlock, or the macOS sandbox), the path, and whether it was a read or a write:
+
+- **Before the mission starts.** Timon checks every path inside its data folder that it hands the tool (its settings, its instructions, its own folders). If the fence would refuse one, the mission is not started, rather than failing the same way turn after turn. A Kanban task is blocked with the same sentence, for you to retry once it is solved.
+- **When a turn fails.** If the tool's error names a path the fence refuses while your account could reach it, the notice names it too, as does the last error of a Kanban task. A backend set aside after such failures says the fence was the cause, instead of an unknown one.
+
+What to do depends on the path:
+
+- **A path inside Timon's data folder**: it is a defect of Timon, not of your setup. Please report it. Until it is fixed, setting the **Mode** to **Off** lets missions run, without the protection.
+- **A folder of your home**: add it as writable for the agent, under **Exceptions**. It applies from the next mission: the fence of a running mission does not change.
+- **A credential folder** (`~/.ssh`, other tools' sign-ins, or a path of `host.isolation.deny`): the fence always keeps it from missions, and no exception opens it.
+
+`timon doctor` checks each active backend against this computer's fence: for each one, it has the fence open the folders a mission of that backend uses, and the private files of Timon a mission must never read, under the policy such a mission gets. A line marked ✗ names the path and whether the policy or the kernel refused it.
 
 ## Package caches
 
