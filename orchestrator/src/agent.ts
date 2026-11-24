@@ -94,7 +94,13 @@ import { resolvedPermissionModeFor } from './backends/catalog.js';
 import { reportInertShellPreallow } from './auto-mode-preallow.js';
 import { nestedSandboxOf } from './backends/capabilities.js';
 import { settingBool, settingNum } from './settings.js';
-import { missionFenceExpected, profileLimits, watchFencedLaunch, wrapMissionLaunch } from './resources.js';
+import {
+  MissionFenceBlockedError, missionFenceExpected, profileLimits, releaseFencePolicy, watchFencedLaunch, wrapMissionLaunch,
+  type MissionFenceOutcome,
+} from './resources.js';
+import {
+  fencePreflight, fenceRefusal, fenceRefusalInOutput, fenceRefusalMessage, launchFenceNeeds, type FenceRefusal,
+} from './fence-refusal.js';
 import { getHost, type Host } from './host/index.js';
 import {
   backgroundDescendants, cliBaseline, cliProcessPid, readProcessTable, type ProcessEntry,
@@ -389,6 +395,10 @@ export type RunningAgent = {
   /** Last bytes the backend wrote on stderr: the only explanation a CLI gives
    *  when it dies without a `result` (auth refusal, policy denial, crash). */
   stderrTail?: string;
+  /** What the fence of this process applies; null for an unfenced or remote launch. */
+  fence?: MissionFenceOutcome | null;
+  /** Fence refusals already recorded for this process, by path (`noteFenceRefusalIn`). */
+  fenceRefusals?: Map<string, FenceRefusal>;
   /** Model requested DURING an active turn, to apply at `result`. A hot
    *  switch during a turn would only take effect on the next CLI turn,
    *  while mixing both models in `result.modelUsage` would muddy the trace.
@@ -1841,7 +1851,8 @@ export async function spawnAgent(
  * relaunch and the steer restart, so none of them reads it as a crash.
  */
 function launchFailureCause(err: unknown): InterruptionReason | null {
-  return err instanceof CwdUnusableError ? null : 'crash';
+  // Same for a path the fence refuses (`fencePreflight`): the thread's `fence_refused` names it.
+  return err instanceof CwdUnusableError || err instanceof MissionFenceBlockedError ? null : 'crash';
 }
 
 /**
@@ -1865,7 +1876,13 @@ export class BackendExhaustedError extends Error {
  *  none) before giving the conversation back to the backend it was leaving. */
 const HANDOVER_START_TIMEOUT_MS = 120_000;
 
-type MissionLaunch = { spec: SpawnResult; proc: ChildProcessWithoutNullStreams; procEnv: NodeJS.ProcessEnv; missionToken: string };
+type MissionLaunch = {
+  spec: SpawnResult;
+  proc: ChildProcessWithoutNullStreams;
+  procEnv: NodeJS.ProcessEnv;
+  missionToken: string;
+  fence: MissionFenceOutcome | null;
+};
 
 /** The mission's attachments folder, made if missing; `null` when the home refuses it, the fence then leaving it closed. */
 function chatAttachmentsFolder(missionId: string): string | null {
@@ -2078,6 +2095,21 @@ async function spawnMissionProcess(
     // to the MCP servers it starts (claude, grok), or the names to pass
     // (codex, `serializeCodexMcpToml`).
     if (launch.fence.packageCacheDir) Object.assign(procEnv, packageCacheEnv(launch.fence.packageCacheDir));
+    // A path of the Timon home the CLI is told to use and the fence keeps from it would only
+    // come back as `Operation not permitted`, turn after turn, until the breaker sidelines the
+    // backend (TIM-0159). Refused here instead, naming the fence, the path and the setting.
+    const needs = launchFenceNeeds({ cmd: backendBin, args: spec.args, env: spec.env, cwd, workspace: launch.fence.workspace }, TIMON_HOME);
+    const missing = fencePreflight(launch.fence.policy, needs);
+    if (missing) {
+      releaseFencePolicy(launch.fence);
+      const refusal = fenceRefusal({
+        path: missing.path, access: missing.access, stage: 'launch', policy: launch.fence.policy,
+        mechanism: launch.fence.mechanism, missionId, agent: agentName, backend: backend.name,
+        timonHome: TIMON_HOME, dropped: missing.dropped,
+      });
+      logFenceRefused(missionId, refusal, missing.why);
+      throw new MissionFenceBlockedError(refusal);
+    }
   }
   // Issued once: a second call would revoke the row the first one handed out.
   const missionToken = seal ? seal.token() : procEnv.TIMON_API_TOKEN ?? '';
@@ -2123,7 +2155,7 @@ async function spawnMissionProcess(
       proc.once('error', reject);
     });
   }
-  return { spec, proc, procEnv, missionToken };
+  return { spec, proc, procEnv, missionToken, fence: launch.fence };
 }
 
 /**
@@ -2390,6 +2422,7 @@ async function spawnTurn(args: {
     sessionNotFound: false,
     spans: loadSpanState(missionId),
     permissionMode: cfg.permission_mode,
+    fence: launched?.fence ?? null,
   };
   running.set(missionId, agent);
   if (!reattach) bus.publish({ kind: 'turn_started', missionId, at: agent.turnSince });
@@ -2555,11 +2588,13 @@ async function spawnTurn(args: {
     // the provider bouncing.
     if (failed && agent.turnActive && !agent.interruptedBy
         && !agent.terminationIntent && !agent.sessionNotFound) {
+      // A path the fence refused, named in what the CLI wrote: the thread says so, and the breaker's line too.
+      const fenced = noteFenceRefusalIn(agent, agent.stderrTail ?? '');
       const signature = sterileExitSignature(Date.now() - agent.turnSince);
       const trip = signature ? noteSterileTurn(agent.backend.name, signature) : null;
       if (trip) {
         agent.interruptedBy = 'backend_unavailable';
-        noteBackendUnavailable(trip);
+        noteBackendUnavailable(fenced ? { ...trip, fence: fenced } : trip);
       }
     }
     // A backend the breaker just sidelined must NOT go through the pause below:
@@ -4234,6 +4269,45 @@ function logBackendFailed(missionId: string, backendName: string, exitCode: numb
   } catch (insertErr) {
     console.warn(`[agent] could not record the backend failure: ${(insertErr as Error).message}`);
   }
+}
+
+/**
+ * Persisted trace of a path the mission fence refused, rendered as a notice in the
+ * thread: the event's payload is the structured `FenceRefusal`, the contract a card
+ * offering to open the folder reads. `why` says where the launch named the path.
+ */
+function logFenceRefused(missionId: string, refusal: FenceRefusal, why: string | null = null): void {
+  console.warn(`[fence] mission ${missionId.slice(0, 8)}: ${fenceRefusalMessage(refusal)}${why ? ` (${why})` : ''}`);
+  const body = { type: 'fence_refused', ...refusal };
+  try {
+    const row = dbApi.insertEvent(missionId, 'fence_refused', body);
+    bus.publish({ kind: 'event', missionId, type: 'fence_refused', timestamp: row.timestamp, payload: body });
+  } catch (insertErr) {
+    console.warn(`[agent] could not record the fence refusal: ${(insertErr as Error).message}`);
+  }
+}
+
+/**
+ * The fence refusal a bounced turn's output names, recorded once per path and
+ * process. Null when the launch was not fenced, or when nothing in the output
+ * is a path the fence refuses and the daemon may reach (`fenceRefusalInOutput`).
+ */
+function noteFenceRefusalIn(agent: RunningAgent, output: string): FenceRefusal | null {
+  const fence = agent.fence;
+  if (fence?.state !== 'fenced') return null;
+  const found = fenceRefusalInOutput(output, fence.policy);
+  if (!found) return null;
+  const seen = agent.fenceRefusals ?? new Map<string, FenceRefusal>();
+  agent.fenceRefusals = seen;
+  const known = seen.get(found.path);
+  if (known) return known;
+  const refusal = fenceRefusal({
+    ...found, stage: 'run', policy: fence.policy, mechanism: fence.mechanism, missionId: agent.missionId,
+    agent: agent.agentName, backend: agent.backend.name, timonHome: TIMON_HOME,
+  });
+  seen.set(found.path, refusal);
+  logFenceRefused(agent.missionId, refusal);
+  return refusal;
 }
 
 export function isRunning(missionId: string): boolean {
@@ -6358,12 +6432,13 @@ function processEvent(agent: RunningAgent, ev: NormalizedEvent): void {
     } else if (sterile) {
       // The CLI said so itself: the next choice of a default or fallback backend skips it.
       if (agent.authFailed) noteProviderSignedOut(agent.backend.name);
+      const fenced = noteFenceRefusalIn(agent, `${resultFailureText(payload)}\n${agent.stderrTail ?? ''}`);
       const trip = noteSterileTurn(
         agent.backend.name, sterile, Date.now(), agent.authFailed ? 'auth' : 'burst',
       );
       if (trip) {
         agent.interruptedBy = 'backend_unavailable';
-        noteBackendUnavailable(trip);
+        noteBackendUnavailable(fenced ? { ...trip, fence: fenced } : trip);
       }
     } else if (transient) {
       // A turn the provider dropped got nowhere: it does not break the burst

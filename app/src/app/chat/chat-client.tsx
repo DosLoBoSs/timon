@@ -150,6 +150,7 @@ import {
 } from '@/lib/provider-retry-line';
 import { ProviderRetryNotice } from '@/components/chat/provider-retry-notice';
 import { backendFailureNotice, type BackendFailedPayload } from '@/lib/backend-failure-notice';
+import { fenceRefusalEndsTurn, fenceRefusalNotice, type FenceRefusedPayload } from '@/lib/fence-refusal-notice';
 import { backendSwitchFailureNotice, type BackendSwitchFailedPayload } from '@/lib/backend-switch-failure-notice';
 import { modelNotAppliedNotice, type ModelNotAppliedPayload } from '@/lib/model-not-applied-notice';
 import { sessionlessTurnNotice, type SessionlessTurnPayload } from '@/lib/sessionless-turn-notice';
@@ -3628,6 +3629,27 @@ export function ChatClient({
       turnSeq.current += 1;
       setThinking(false);
       setThinkingHint(null);
+      return;
+    }
+    // The mission fence refused a path the CLI needed: name the fence, the path and the
+    // setting. Refused at launch, the mission never started and the turn ends here.
+    if (meta.type === 'fence_refused') {
+      const refusal = payload as FenceRefusedPayload;
+      setMessages((m) => [
+        ...m,
+        {
+          id: crypto.randomUUID(),
+          role: 'notice',
+          t: fmtTimeAt(meta.timestamp),
+          content: '',
+          notice: fenceRefusalNotice(refusal),
+        },
+      ]);
+      if (fenceRefusalEndsTurn(refusal)) {
+        turnSeq.current += 1;
+        setThinking(false);
+        setThinkingHint(null);
+      }
       return;
     }
     // The backend started, then ended its turn without a word (TIM-0049): say so, with what it wrote.

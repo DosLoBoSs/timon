@@ -448,8 +448,12 @@ export type FencePolicy = {
   /** The refused entries of the Timon home, named, for renderers that can only mask. */
   denyUnderTimonHome: readonly string[];
   unixSockets: 'deny' | 'allow';
-  /** Grants dropped because they would open what a mission never reaches, with the reason. */
-  ignored: ReadonlyArray<{ path: string; reason: string }>;
+  /**
+   * Grants dropped because they would open what a mission never reaches, or lead
+   * nowhere, with the reason. `config` marks a grant the configuration asked for
+   * (an exception, `allow`, `readOnly`): one a person wrote and may fix.
+   */
+  ignored: ReadonlyArray<{ path: string; reason: string; config?: true }>;
   /**
    * The Timon home's `workspace` folder when it was granted whole, because it
    * is the agent's configured folder (`FenceTarget.agentCwd`): the agent then
@@ -681,7 +685,7 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
     : (path: string) => path;
   const foldedHome = fold(timonHome);
   const exceptions = fenceExceptions(iso, target);
-  const ignored: Array<{ path: string; reason: string }> = [];
+  const ignored: Array<{ path: string; reason: string; config?: true }> = [];
   const ro = new Set<string>([parse(home).root]);
   const rw = new Set<string>(SYSTEM_WRITABLE[platform] ?? []);
   const exec = new Set<string>([parse(home).root]);
@@ -699,8 +703,9 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
     handed?: (folded: string) => string | null,
   ): string | null => {
     const resolved = resolveLinks(path);
+    const fromConfig = source === 'config' ? { config: true as const } : {};
     if (resolved === null) {
-      ignored.push({ path, reason: 'the path does not resolve to an existing file or folder' });
+      ignored.push({ path, reason: 'the path does not resolve to an existing file or folder', ...fromConfig });
       return null;
     }
     const folded = fold(resolved);
@@ -713,7 +718,7 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
       ? 'a link leads it elsewhere in the Timon home'
       : (handed?.(folded) ?? timonGrantProblem(foldedHome, folded, access, source));
     if (problem) {
-      ignored.push({ path, reason: resolved === path ? problem : `${problem} (resolves to ${resolved})` });
+      ignored.push({ path, reason: resolved === path ? problem : `${problem} (resolves to ${resolved})`, ...fromConfig });
       return null;
     }
     (access === 'rw' ? rw : ro).add(resolved);

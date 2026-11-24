@@ -140,6 +140,25 @@ test('a signed-out backend raises a coded card; the breaker a coded notice', asy
   assert.equal((payload.params as Record<string, unknown>).failures, 3);
 });
 
+test('a breaker trip caused by the mission fence names it, the path and the setting', async () => {
+  const { clearBackendCooldown, noteBackendUnavailable } = await import('./backend-fallback.js');
+  clearBackendCooldown('grok');
+  const fence = {
+    path: '/home/u/.timon/provider-runs/x/m/config.toml', display: '~/.timon/provider-runs/x/m/config.toml',
+    access: 'read' as const, mechanism: 'landlock' as const, stage: 'run' as const, missionId: 'm', agent: 'a', backend: 'grok',
+    timonHome: true, grantable: false, dropped: null, setting: { category: 'system', tab: 'security' } as const,
+  };
+  noteBackendUnavailable({ failures: 3, threshold: 3, windowMs: 600_000, spanMs: 9_000, signature: 'no result / 80 ms', backend: 'grok', cause: 'burst', fence });
+  const payload = lastNotification();
+  assert.match(String(payload.title), /grok: sidelined by the circuit breaker, the mission fence refused a path/);
+  assert.equal(payload.code, 'backend_breaker_fence');
+  const params = payload.params as Record<string, unknown>;
+  assert.equal(params.access, 'read');
+  assert.equal(params.path, '~/.timon/provider-runs/x/m/config.toml');
+  assert.equal(params.mechanism, 'Landlock');
+  assert.equal(params.timonHome, 1);
+});
+
 test('the blocked-task card reads the coded reason as its body, and the return card carries it', async () => {
   const { startNotificationResolver } = await import('./notifications.js');
   const { daemonMessage } = await import('./daemon-message.js');
