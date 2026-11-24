@@ -225,11 +225,11 @@ export interface HistoryPrelude {
 const TODO_TOOLS = ['TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskStop'] as const;
 
 /** Card requests and what settles them; ids are the payload's `id`. */
-const CARD_REQUESTS = ['permission_request', 'command_request', 'ui_document', 'layout_proposal', 'setup_avatar_request', 'secret_request'] as const;
+const CARD_REQUESTS = ['permission_request', 'command_request', 'ui_document', 'layout_proposal', 'setup_avatar_request', 'secret_request', 'fence_refused'] as const;
 const CARD_RESOLUTIONS = [
   'permission_resolved', 'permission_expired', 'command_request_resolved',
   'ui_document_resolved', 'layout_proposal_resolved', 'setup_avatar_answered',
-  'secret_request_resolved',
+  'secret_request_resolved', 'fence_grant_resolved',
 ] as const;
 /** Updates that move a card without settling it. */
 const CARD_UPDATES = ['permission_timeout_adapted'] as const;
@@ -448,11 +448,14 @@ export function clearPreludeFolds(): void {
 
 /** Cards requested before `cut` and settled nowhere in the journal, with their updates. */
 function pendingCards(missionId: string, cut: number): EventRow[] {
-  type Req = { id: number; card: string | null; status: string | null };
+  type Req = { id: number; type: string; card: string | null; status: string | null; offer: string | null };
   const requests = scan<Req>(missionId, `id < ? AND type IN (${sqlList(CARD_REQUESTS)})`, [cut], 'ASC', {
-    columns: `id, json_extract(payload, '$.id') AS card, json_extract(payload, '$.status') AS status`,
+    columns: `id, type, json_extract(payload, '$.id') AS card, json_extract(payload, '$.status') AS status,
+      json_extract(payload, '$.grant.path') AS offer`,
   });
-  const open = requests.filter((r) => typeof r.card === 'string' && (r.status === null || r.status === 'pending'));
+  // A fence refusal is a card only when it offers a folder: the others are a notice, never waiting.
+  const open = requests.filter((r) => typeof r.card === 'string' && (r.status === null || r.status === 'pending')
+    && (r.type !== 'fence_refused' || typeof r.offer === 'string'));
   if (!open.length) return [];
   const settled = new Set(scan<{ card: unknown }>(missionId, `type IN (${sqlList(CARD_RESOLUTIONS)})`, [], 'ASC', {
     columns: `id, json_extract(payload, '$.id') AS card`,
