@@ -85,8 +85,17 @@ When the fence keeps a mission from a path its command-line tool needs, the chat
 What to do depends on the path:
 
 - **A path inside Timon's data folder**: it is a defect of Timon, not of your setup. Please report it. Until it is fixed, setting the **Mode** to **Off** lets missions run, without the protection.
-- **A folder of your home**: add it as writable for the agent, under **Exceptions**. It applies from the next mission: the fence of a running mission does not change.
+- **A folder of your home**: the chat offers it in a card instead of a notice, described below. You can also add it to the agent's [extra folders](#an-agents-extra-folders), or as writable for the agent under **Exceptions**. Either applies from the next mission: the fence of a running mission does not change.
 - **A credential folder** (`~/.ssh`, other tools' sign-ins, or a path of `host.isolation.deny`): the fence always keeps it from missions, and no exception opens it.
+
+### Allow a folder from the chat
+
+When the refused path is one an agent may be given, the chat shows a card instead of the notice: the path, whether it was a read or a write, and the folder Timon offers to open, with **Allow for this agent** and **Refuse**.
+
+- **Allow for this agent** adds the folder to the agent's [extra folders](#an-agents-extra-folders), read-only or read-write as the refusal needed, then starts the mission again: since the fence of a running mission cannot change, Timon stops its process and sends it a message that resumes the same conversation with the folder open. The folder stays open for the agent's next missions; remove it from the **Workspace** tab of the agent's page.
+- **Refuse** closes the card and changes nothing.
+
+The folder offered is the refused folder itself, or the folder of a refused file. Timon offers no card for its own data folder, a credential folder, a path of `host.isolation.deny`, a whole home folder or the root of a disk: those keep the notice above. Only a person signed in to the app can answer the card; an agent, a script or the `timon` command cannot. Allowing takes the same rights as changing the agent's extra folders on its page.
 
 `timon doctor` checks each active backend against this computer's fence: for each one, it has the fence open the folders a mission of that backend uses, and the private files of Timon a mission must never read, under the policy such a mission gets. A line marked ✗ names the path and whether the policy or the kernel refused it.
 
