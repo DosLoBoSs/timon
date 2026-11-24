@@ -44,6 +44,108 @@ ask for it. Electron builds are made far more often than that — one is
 regularly produced just to check that everything holds — and those carry no
 bump. Until a release is called, everything accumulates in `changes/`.
 
+## [0.1.10] — 2026-11-24
+
+### Highlights
+- When the mission fence blocks an agent, the chat names the folder and offers **Allow for this agent**, which opens it and restarts the mission; an agent can also be given extra folders, read-only or writable, from its page.
+- The Git stack gains Pull requests and Issues tabs: open a pull request in a window as GitHub shows it, update or resolve a contributor's branch, and import labelled issues as TO DO ideas.
+- Kanban jobs can land through a GitHub pull request: one branch per job, a Jobs widget that follows its checks, and one-click **Fix the checks** or **Resolve the conflict**.
+- Claude signs in from the app with no terminal, and Claude's page creates a long-lived token so missions never have to renew the sign-in.
+- The built-in terminal keeps its shells when Timon's service restarts or updates.
+
+### Added
+- Agents installed from the ACP registry now show their own logo in the provider list and the model picker, readable in the light and the dark theme.
+- An agent can be given extra folders outside its working folder, read-only or read-write, from the Workspace tab of its page; a project's settings list those of all its agents, and Timon's own folder and folders of credentials are refused.
+- Claude signs in from the app, with no terminal: **Sign in** on the setup screen or on Claude's page in Settings › AI models › Providers opens the sign-in page and takes back its code, and that page creates a long-lived token the same way.
+- From a pull request's menu, a contributor's branch that is behind or in conflict can be updated on GitHub, its author asked to resolve the conflict, or, if you allow it in the project's window, its conflict resolved in Timon file by file without its code ever running on your machine; every one of these waits in **Publish on GitHub** until you publish it, and a branch its author does not let you change says so on its row.
+- When the mission fence refuses a folder an agent may be given, the chat now offers it in a card: **Allow for this agent** adds it to the agent's extra folders and starts the mission again with it open, **Refuse** closes the card.
+- When the mission fence keeps a mission from a file its command-line tool needs, the chat, the Kanban task and `timon doctor` now name the fence, the path and the setting to change, instead of a bare "Operation not permitted", and a mission that would fail this way is not started.
+- A built-in GitHub issues plugin lists the open issues of a project's repository that carry its label (`accepted` by default) and imports the one you pick as a TO DO idea, once, with the issue's text kept as outside data.
+- The Git stack gains an Issues tab: the project's labelled GitHub issues, each imported as a TO DO idea on a click, with its text shown as outside data before you import it, "+" to import one by its number, and the label set per project under Integrations in the project's window.
+- The desktop app can make its text and controls larger or smaller in every window at once, from Settings › Interface › Appearance › Interface size, with Ctrl and +, − or 0 (Cmd and +, − or 0 on macOS), or, on Windows and Linux, with Ctrl and the mouse wheel.
+- A job's window now lists its links (the TO DO ideas it carries, their GitHub issues, the mission that pilots it, its branch and target), the menus of the Jobs and Pull requests widgets lead back to the idea and the mission, and a TO DO idea shows its GitHub issue number and an "external" mark when a connector wrote it.
+- A Kanban job can start from a branch the repository already has and stay on its branch instead of being merged, and a project that merges locally can run a job on a branch of its own, merged into `main` by a final task (`timon task create --landing local`). A branch kept this way shows in the **Jobs** widget and lands later from its row (**Merge into main**, after a confirmation with its commit count) or with `timon pr land`: merged into the local target, or its pull request opened.
+- A job whose pull request has a failing check, a conflict or review comments offers **Fix the checks**, **Resolve the conflict** or **Address the comments**: one click hands it back to the job's agent, Timon pushes the result to the pull request, and the job's window counts the repairs, three at most.
+- In a project set to land through pull requests, the Kanban planner now gives every task of a job one integration branch cut from the remote, and ends the job on a task that opens its pull request.
+- In every project, the Kanban planner shows the job's branch under Advanced: a new one, renamed before launch with an immediate check of the name, or one the repository already has, picked from its branches; and where it ends: merged into the target (through the pull request in a pull request project) or kept on the branch.
+- When a Kanban job's pull request is merged, or closed without a merge, a notification says so and the conversation that planned the job gets one message about it.
+- A Jobs widget lists the Kanban jobs that land through a pull request, grouped by what they wait for (needs action, in review, in progress, landed this week), with each pull request's checks and conflicts, and previews a job's commits, diff and pre-checks before anything is pushed.
+- On macOS, Settings › Interface › Appearance › Dock icon chooses between the classic icon and a black-and-white one for Timon in the Dock.
+- **Plugins**: a mascot pack can draw its own heads: an agent that wears one is drawn by the pack, every other agent stays Timon's mascot, several packs can be installed side by side, and a head that fails or whose pack is removed gives way to Timon's (template `examples/plugin-mascot-head`).
+- Plugins can read the issues, pull requests and checks of a project's GitHub repository and propose a comment, which you read and publish or discard in **Publish on GitHub**; they never get the project's account (plugin API 19, permissions `forge:read` and `forge:propose`).
+- A plugin can now list Kanban tasks of several statuses in one call, for example `ctx.kanban.list({ status: ['PENDING', 'BLOCKED'] })`.
+- Plugins can replace a job's window and the "Publish on GitHub" window through the `kanban.job.dialog` and `forge.publish.dialog` slots; publishing still takes your click and goes through your own session.
+- Plugins can now read and set which agent one of their agents reports to, for example to attach a project's agents to its orchestrator.
+- A plugin's widget stacked with others can give its tab a short name, a count and a dot while something waits for the user, and move its header actions to the widget's menu, as Timon's own Git stack tabs do.
+- A project's window has a Pull requests row, under Integrations, that turns on landing its Kanban jobs through a GitHub pull request (remote, target branch, account, gh folder, branch prefix), checks which account gh signs in as, and goes back to the local merge.
+- A project's settings open from a chat, through the project's name above the message box, and the Git stack's Pull requests and Jobs tabs offer to set up pull requests while the project merges its jobs locally.
+- A comment Timon would post on GitHub now waits in a "Publish on GitHub" window that shows the exact text, where it goes and the account it would be posted as, and posts nothing until you click Publish; rows of the Jobs and Pull requests widgets and TO DO ideas say "to approve" when one waits, with a dot on the PR or Jobs tab, its notification opens it, and a pull request's menu lets you propose a comment of your own.
+- A click on a row of the Pull requests widget opens the pull request in a window of the app, read only, with its conversation, commits, checks and files, as GitHub shows them, and beside them a card that says where it stands with the gestures its state calls for, always in view.
+- A job's pull request now ends with `Fixes` (or `Refs`, when other jobs carry the same idea) for each GitHub issue of its ideas, and once it is merged Timon prepares a resolution comment for each fixed issue, which you publish from the Publish on GitHub window.
+- A Pull requests widget lists the pull requests open on a project's repository and, for each one, its **Review brief** button shows its diff and a brief to paste into a review mission, without ever running its code on your machine; nothing is started.
+- A routine can give MCP servers, skills and pre-allowed tools to every task it opens, so an agent outside any project role keeps its tools at each run instead of needing each task edited by hand.
+- In a project set to land through pull requests, a job the Kanban planner runs sequentially now also works on its own integration branch and ends on a task that opens its pull request, instead of merging locally.
+- Ctrl+, (Cmd+, on macOS) opens Settings from any page, in the browser and in the desktop app.
+- A TO DO idea whose job lands through a pull request shows its state beside its progress (not created, open, merged, closed); a click on it opens the job's preview, and the TO DO widgets can filter on an open or a missing pull request.
+
+### Fixed
+- Codex agents running on a third-party provider, such as Ollama Cloud, no longer show an "unrecognized configuration setting" error above every answer.
+- **TIM-0159** — When missions are fenced (Linux with Landlock, macOS), a mission running on a provider you added yourself (or one from a provider pack) no longer fails with a permission error on its system prompt.
+- **TIM-0159** — Kimi and custom backends on the Claude dialect no longer fail with a permission error under mission isolation.
+- When missions are fenced (Linux with Landlock, macOS), the agent can read the first file you attach to a conversation without the mission being restarted.
+- **TIM-0162** — On Linux, missions are fenced again on processors without AVX2, and a fence launcher that cannot run on the processor now says so instead of reporting an altered package.
+- **TIM-0159** — The Hermes card's **Sign in** now copies `hermes setup` instead of `hermes-acp`, and a mission waiting for a Hermes sign-in names `hermes setup`, or `hermes portal` for Nous, instead of `hermes --setup`, which Hermes refuses.
+- On macOS, a Claude subscription account added in Timon no longer stops working a few hours after it was signed in, with a "can't save to the Keychain" error, when missions are isolated.
+- In a fenced mission, opencode can install a provider it has not used yet and refresh its models list: it keeps its cache and state in Timon's data folder instead of your read-only home folder.
+- A backend that reports its exhausted quota as the plain answer of a turn, without failing it (Antigravity's "Individual quota reached… Resets in 29m"), is now recognised as out of quota: the task waits for the announced reopening or leaves on its fallback backend, instead of stalling and closing with no work done.
+- On a Linux install from a package, the restart command Timon suggests now names the app's own service instead of `timon-orchestrator`, and the restart from the setup wizard reaches that service.
+- A scheduled trigger that runs a workflow and was missed while the computer was off now runs once when Timon starts, instead of being skipped; a scheduled run that fails sends you a notification.
+- **TIM-0158** — At the end of setup, a background service that is slow to start on Windows no longer triggers "The Timon background service did not answer": the window waits for it, then hands over to it by itself once it is ready, with no need to quit and reopen Timon.
+- An agent that pre-allows every shell command (`Bash`) while it runs in auto mode, where Claude Code ignores that rule, now gets a warning when it is saved and a notification when one of its missions starts, or when its task runs on another agent, instead of permission cards that an unattended task loses after five minutes.
+- The built-in terminal's own settings (turning it on or off, its shell, closing a detached terminal) now appear in Settings › Interface › Terminal, where the "terminal unavailable" message sends you, instead of under Plugins.
+- Restarting or updating Timon's service no longer closes the shells open in its terminal: the window reconnects to them once the service is back, and a command typed before the restart runs to the end.
+- On Windows, an antivirus such as Avast or AVG no longer flags the Timon background task and moves it to quarantine; the first launch after the update rewrites the task once, with one permission prompt.
+- **TIM-0160** — On Windows, the one-line install now works from an administrator PowerShell as well as from a normal one: File Explorer opens the installer, as a double-click would, instead of it failing with code -1073741819.
+- On Windows, a console window no longer opens every few minutes when the Timon background task was changed in Task Scheduler: Timon repairs the task at launch with one permission prompt, and asks again only after the next update if you decline. On a work or school account where Windows does not keep the task running after sign-out, Timon now registers it for your session instead of falling back to the app window.
+- On Windows, finishing or removing a Kanban task's worktree no longer empties the `node_modules` folders of your project's main checkout.
+- A scheduled, webhook or event run of a workflow no longer also starts its Manual trigger, so a pause after the schedule is no longer skipped; a node wired from two triggers now runs from either one.
+
+### Changed
+- Antigravity is now off by default, because Google's terms forbid using it through an orchestrator and accounts have been suspended; you can switch it on from its provider page at your own risk, ideally only for chats you drive yourself.
+- The chat's Git card is now a Git stack of separate widgets, Branches, Graph, Publish, Pull requests and Jobs, each of which can be moved out of the stack or removed on its own; a Git card you had placed becomes the stack, at the same place and height. Its tabs fit a 300 px column, the Issues, PR and Jobs tabs carry their count, and Publish no longer runs past the card.
+- A plugin can now write back an MCP server it read with `ctx.mcpServers.get`: the fields Timon fills in itself are ignored instead of refused, and a misspelt field is still refused.
+- The Settings categories are grouped under Agents and This computer, and on a phone your account comes at the end of the page instead of staying under every tab.
+- The Chrome used to sign in is now set in Settings › Access & network › Browser and the dispatcher interval in Settings › Missions › Execution; System › Diagnostics, which keeps only the log and retention settings, is now called Logs & retention.
+- Settings › Memory opens on Injection, where memory is switched on or off, with the Obsidian vault as its last tab, and Settings › Instructions opens on your global instructions.
+- Settings rows are easier to read: on/off settings are switches, a setting shows its default only once you change it, and its key appears when you hover over its name instead of under every row.
+- Anonymous usage statistics now also say which setup screen people stop on, whether the confirmation code for the first account was sent (or why not), and how the account was made, all from fixed lists: never the address, the code or a key ([Privacy](https://docs.timon-ai.com/usage/privacy)).
+
+### Known issues
+- A Kanban task that depends on a `code` task which never gets a merge (no changes to review, or no reviewer) waits indefinitely; remove that dependency to release it.
+- An agent's island card applied to a page other than the one on screen removes the tabs it replaces, but a replaced terminal keeps running: end it from the Terminal page.
+- Chat: pressing Escape to close a dialog while dictating also cancels the dictation and puts the message back as it was before you clicked the mic.
+- Chat: while a turn is being prepared, a tool the previous turn left unfinished can show as still running, with its old duration, until the new turn starts.
+- The desktop app still embeds Electron 33, which no longer receives security updates; the move to a supported Electron release is planned for the next version.
+- Linux: a Hermes agent stops with "Gateway could not start" in a fenced mission; an exception that allows Unix sockets for its agent lets it answer, but then opens every Unix socket of your session to that mission.
+- If your organisation disables third-party MCP servers in Copilot, agents on Copilot cannot use Timon's tools and fall back to the `timon` command.
+- macOS: the usage of a Claude subscription account is not shown in the LLM quotas widget nor under the chat composer; Codex accounts are.
+- macOS: while Timon runs with no session open, Git over HTTPS and `gh` fail in missions; Git over SSH works.
+- MCP servers you add over HTTP are not passed to opencode and Hermes agents; Timon's own tools and stdio servers are.
+- Onboarding form details are still in English outside English, French and Simplified Chinese; the step titles are translated.
+- opencode and Hermes have not yet been tried on a tester's own account, so a first mission (Hermes especially) may still fail.
+- opencode decides its own tool permissions: Timon shows no Allow/Deny card for it and cannot restrict what it does. The agent editor says so.
+- Opening the model list of opencode or Hermes leaves one empty session per agent in that agent's own history.
+- Pi has not been tried with a tester's own model provider yet, so a first mission may fail.
+- **Sign in with Chrome** copies cookies only: a site that keeps its sign-in in the page's own storage (many apps built on Firebase) is not signed in by it.
+- **Sign in with Chrome** copies the sign-in into the built-in browser; whether Google keeps it valid there over time has not been verified, and a password or 2FA step has not been tried. Run it again if the session is lost.
+- **TIM-0034** — The installers are not code-signed: Windows SmartScreen or Smart App Control and macOS Gatekeeper warn about them or block them. On Windows, choose **More info → Run anyway** (turn Smart App Control off in Windows Security if it blocks); on macOS, allow the app in **System Settings → Privacy & Security**.
+- Windows: a CLI installed with pnpm or yarn can keep running after Timon stops or crashes; end it from Task Manager, or install it with npm.
+- Windows: a Codex agent in auto or acceptEdits mode cannot `git commit` (Codex keeps `.git` read-only); give its code and merge tasks the bypassPermissions mode, or run them on another backend.
+- Windows: installing a new version of the app closes the built-in terminal's shells.
+- Windows, and Linux without Landlock: missions are not fenced and can read Timon's private files; on an installation with several accounts, set the mission isolation to Required, or give the Spawn missions permission only to people you trust with the whole installation.
+- Windows: on a work or school account of a PC joined to Microsoft Entra ID, Windows may refuse to run Timon's background task; Timon then runs only while its window is open.
+- With Pi as the only backend, conversations keep their default title.
+
 ## [0.1.9] — 2026-11-18
 
 ### Highlights
