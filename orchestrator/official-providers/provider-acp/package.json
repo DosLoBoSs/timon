@@ -6,7 +6,7 @@
   "main": "lib/index.js",
   "timon": {
     "id": "provider-acp",
-    "apiVersion": 12,
+    "apiVersion": 18,
     "kind": "provider",
     "label": "ACP agents (opencode, Hermes, Antigravity)",
     "description": "Runs missions on opencode, Hermes or Google Antigravity over the Agent Client Protocol, with the agent's own sign-in and providers.",

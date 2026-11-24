@@ -102,6 +102,8 @@ Without a fence (Windows, or **Off**), a read-only folder is only a request to t
 
 Inside the fence your home folder is read-only, including the caches of npm and the other package managers. A fenced mission's package managers therefore use a cache that belongs to its agent, inside Timon's data folder: the first `npx -y` MCP server an agent starts downloads its package once, and later missions of that agent reuse it. Missions of other agents can neither read nor write it, and your own cache is never written. Deleting or renaming the agent removes it.
 
+opencode keeps its own cache and state in a folder of Timon's data folder too, one per opencode profile ([opencode](opencode.md#where-missions-keep-opencodes-cache)).
+
 Covered: `npx`, `pnpm dlx` and `uvx`. Not covered: `yarn dlx`, `bunx`, Deno's `npm:` packages, and the Python versions uv would have to download. They can fail inside the fence; adding their cache folder as writable for that agent is the way around it.
 
 ## Windows, and Linux without Landlock
