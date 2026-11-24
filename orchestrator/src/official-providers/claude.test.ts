@@ -2,7 +2,7 @@ import '../test-home.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createProviderContext, dialectConformance, defineConformanceTests } from '../../../packages/sdk/src/testing/index.js';
-import { createClaudeProvider } from '../../official-providers/provider-claude/lib/claude.js';
+import { createClaudeProvider, extraDirArgs } from '../../official-providers/provider-claude/lib/claude.js';
 import { createClaudeToken } from '../../official-providers/provider-claude/lib/token.js';
 import { createClaudeUsage } from '../../official-providers/provider-claude/lib/usage.js';
 // The contract the plugin's manifest declares, which `scratch.profile` needs.
@@ -85,4 +85,17 @@ test('#1104: the `claude` subscription profile keeps the CLI\'s own config folde
     cfg: { cwd: scratch.path, permission_mode: 'auto', mcp_servers: [] },
   } as never, { id: 'claude', cmd: 'claude', env: { ANTHROPIC_BASE_URL: 'https://example.invalid' } } as never);
   assert.equal(spec.env?.CLAUDE_CONFIG_DIR, undefined);
+});
+
+test('an agent\'s extra folders: --add-dir for each, an Edit rule refused on a read one, no read one without a fence', async () => {
+  const dirs = [{ path: '/srv/notes', mode: 'write' }, { path: '/srv/library/', mode: 'read' }, { path: '/srv/my books', mode: 'read' }];
+  assert.deepEqual(extraDirArgs(dirs, 'linux'), {
+    args: ['--add-dir', '/srv/notes', '--add-dir', '/srv/library/', '--add-dir', '/srv/my books'],
+    denied: ['Edit(//srv/library/**)'],
+  });
+  // Windows has no fence: a read folder is left to the permission classifier.
+  assert.deepEqual(extraDirArgs([{ path: 'C:\\docs', mode: 'read' }, { path: 'C:\\work', mode: 'write' }], 'win32'), {
+    args: ['--add-dir', 'C:\\work'], denied: [],
+  });
+  assert.deepEqual(extraDirArgs(undefined, 'linux'), { args: [], denied: [] });
 });

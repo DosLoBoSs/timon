@@ -411,6 +411,13 @@ export type FenceTarget = {
   runtime?: readonly string[] | undefined;
   /** Further paths under the Timon home the daemon hands the mission (chat attachments): readable. */
   timonRead?: readonly string[] | undefined;
+  /**
+   * The agent's own extra folders (`extra_dirs` of its config file), set by a
+   * person: `write` grants the folder read-write, `read` read-only, even below
+   * a writable folder. Checked like the configuration: never in the Timon home
+   * nor on one of its ancestors, never on a folder of credentials.
+   */
+  extraDirs?: ReadonlyArray<FenceExtraDir> | undefined;
   /** Top-level entries of the Timon home: refused copies get named. Listed from the folder when absent. */
   timonHomeEntries?: readonly string[] | undefined;
   /**
@@ -422,6 +429,9 @@ export type FenceTarget = {
    */
   realpath?: ((path: string) => string) | undefined;
 };
+
+/** One extra folder of an agent, as the fence reads it. */
+export type FenceExtraDir = { path: string; mode: 'read' | 'write' };
 
 export type FencePolicy = {
   mode: FenceMode;
@@ -822,7 +832,28 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
   const ownDirs = [...ownBuiltIn.map((d) => expand(`~/${d}`, home)), ...ownDeclared];
   if (!account) for (const path of ownDirs) grant(path, 'rw', 'own');
 
+  const candidates = [
+    ...DEFAULT_DENY_HOME_DIRS.map((d) => expand(`~/${d}`, home)),
+    ...Object.values(declared).flat().map((d) => expand(`~/${d}`, home)),
+    ...iso.deny.map((p) => expand(p, home)),
+  ];
+
   for (const path of exceptions.writable) grant(expand(path, home), 'rw', 'config');
+  // An agent's extra folders: a grant on a refused folder would reopen it (the
+  // same-path rule below), so they never land on one, nor on the Timon home's
+  // ancestors, whatever the agent's config file says.
+  for (const dir of target.extraDirs ?? []) {
+    const lexical = resolve(dir.path);
+    const resolved = resolveLinks(lexical);
+    const problem = resolved === null
+      ? null
+      : extraDirRefusal([lexical, resolved].map(fold), foldedHome, fold(home), candidates.map(fold));
+    if (problem) {
+      ignored.push({ path: dir.path, reason: problem });
+      continue;
+    }
+    grant(lexical, dir.mode === 'write' ? 'rw' : 'ro', 'config');
+  }
   const allowed = iso.allow
     .map((p) => grant(expand(p, home), 'ro', 'config'))
     .filter((path): path is string => path !== null);
@@ -832,11 +863,6 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
   for (const path of ro) rw.delete(path);
 
   const deny = new Set<string>();
-  const candidates = [
-    ...DEFAULT_DENY_HOME_DIRS.map((d) => expand(`~/${d}`, home)),
-    ...Object.values(declared).flat().map((d) => expand(`~/${d}`, home)),
-    ...iso.deny.map((p) => expand(p, home)),
-  ];
   for (const path of candidates) {
     if (ownDirs.includes(path)) continue;
     if (allowed.some((a) => contains(a, path))) continue;
@@ -863,6 +889,68 @@ export function resolveFence(config: TimonConfig, target: FenceTarget): FencePol
     ignored,
     ...(shared && sharedWorkspace ? { sharedWorkspace } : {}),
   };
+}
+
+/**
+ * Why an extra folder may not be granted, from paths already resolved and
+ * folded: the Timon home, an ancestor of it, a whole home or disk, a folder
+ * of credentials. `null` when it may stand.
+ */
+function extraDirRefusal(paths: readonly string[], timonHome: string, home: string, refused: readonly string[]): string | null {
+  for (const path of paths) {
+    if (path === parse(path).root) return 'the root of a disk is too wide: choose a folder inside it';
+    if (path === home) return 'the whole home folder is too wide: choose a folder inside it';
+    if (contains(timonHome, path)) return 'it lies in the Timon home, which a mission never reaches';
+    if (contains(path, timonHome)) return `it holds the Timon home (${timonHome}), which a mission never reaches`;
+    const hit = refused.find((r) => contains(r, path));
+    if (hit) return `it lies in ${hit}, which holds credentials a mission never reaches`;
+  }
+  return null;
+}
+
+/**
+ * Why `path` may not become one of an agent's extra folders, or `null`. The
+ * check a write of `extra_dirs` runs before anything is stored, whatever the
+ * fence mode: a folder granted while the fence is off must not open the
+ * Timon home or a folder of credentials the day it is turned on. The verdict
+ * is `fenceAccess` on the fence a mission of no particular backend gets, so
+ * every backend's credential folder counts as refused.
+ */
+export function extraDirFenceProblem(
+  config: TimonConfig,
+  path: string,
+  options: Pick<FenceTarget, 'timonHome' | 'home' | 'platform' | 'realpath' | 'timonHomeEntries'>,
+): string | null {
+  if (!isAbsolute(path)) return 'the path must be absolute';
+  const platform = options.platform ?? process.platform;
+  const realpath = options.realpath ?? ((p: string) => realpathSync.native(p));
+  const lexical = resolve(path);
+  let resolved: string;
+  try {
+    resolved = realpath(lexical);
+  } catch {
+    return 'the folder does not exist';
+  }
+  const fold = platform === 'darwin' || platform === 'win32' ? (p: string) => p.toLowerCase() : (p: string) => p;
+  const home = resolve(options.home ?? homedir());
+  let timonHome = resolve(options.timonHome);
+  try { timonHome = realpath(timonHome); } catch { /* a Timon home not created yet is refused by its name */ }
+  const iso = config.host.isolation;
+  const candidates = [
+    ...DEFAULT_DENY_HOME_DIRS.map((d) => expand(`~/${d}`, home)),
+    ...Object.values(declaredDirsSource()).flat().map((d) => expand(`~/${d}`, home)),
+    ...iso.deny.map((p) => expand(p, home)),
+  ];
+  const wide = extraDirRefusal([lexical, resolved].map(fold), fold(timonHome), fold(home), candidates.map(fold));
+  if (wide) return wide;
+  const policy = resolveFence(
+    { ...config, host: { ...config.host, isolation: { ...iso, filesystem: 'auto' } } },
+    { timonHome: options.timonHome, home, platform, realpath, timonHomeEntries: options.timonHomeEntries },
+  );
+  for (const candidate of [lexical, resolved]) {
+    if (!fenceAccess(policy, candidate).read) return 'the mission fence keeps this folder out of every mission\'s reach';
+  }
+  return null;
 }
 
 /**

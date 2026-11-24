@@ -119,6 +119,7 @@ import { parkProviderScratch } from './backends/provider-scratch.js';
 import { packageCacheEnv } from './backends/package-cache-env.js';
 import { launchBackendName, launchForMission, replaceMissionLaunch, resolveLaunchBackend } from './backends/account-launch.js';
 import { servedIconUrl } from './uploads.js';
+import { launchExtraDirs, storedExtraDirs, type AgentExtraDir } from './agent-extra-dirs.js';
 import {
   systemEnv, secretsEnvFor, inheritEnvEnabled,
   injectedSecretsFor, journalInjectedSecrets,
@@ -1922,7 +1923,16 @@ export function missionFenceTarget(input: {
     gitDirs: git.dirs,
     pluginDirs: pluginPackageDirs(commandLines, TIMON_HOME),
     timonRead: attachments ? [attachments] : [],
+    // Read again from the agent's config file, like `agentCwd`: the folders a
+    // person gave the agent, each checked again at this launch.
+    extraDirs: launchExtraDirs(input.agentName),
   };
+}
+
+/** The agent's extra folders for `BuildSpawnOpts`, each checked again; nothing when it has none. */
+function extraDirsOpt(agentName: string, missionId: string): Pick<BuildSpawnOpts, 'extraDirs'> {
+  const dirs = launchExtraDirs(agentName, (message) => console.warn(`[agent] mission ${missionId.slice(0, 8)}: ${message}`));
+  return dirs.length > 0 ? { extraDirs: dirs } : {};
 }
 
 /** Builds the backend's command and spawns it, confined and with the
@@ -2347,6 +2357,8 @@ async function spawnTurn(args: {
     cfg,
     missionId,
     memoryDir,
+    // A mission that reads no file is handed no folder either.
+    ...(readOnlyTools ? {} : extraDirsOpt(agentName, missionId)),
     // A backend that cannot use Timon's MCP servers is not handed them.
     ...(backendCapabilities(backend.name).timonMcp ? {} : { timonMcp: false }),
     ...(readOnlyTools ? { readOnlyTools: true } : {}),
@@ -4271,6 +4283,13 @@ function notifyParentOnComplete(
  *
  * Returns the number of processes signalled.
  */
+/** How many processes of `agentName` run now, with the configuration they were launched with. */
+export function runningCountForAgent(agentName: string): number {
+  let n = 0;
+  for (const ra of running.values()) if (ra.agentName === agentName) n++;
+  return n;
+}
+
 export function killRunningForAgent(agentName: string): number {
   let n = 0;
   for (const [missionId, ra] of running) {
@@ -4835,6 +4854,8 @@ export type AgentSummary = {
   reasoning_effort: string | null;
   /** `plugin:<id>` when a plugin created the agent, null otherwise. */
   created_by: string | null;
+  /** Folders outside `cwd` its missions may read or write (`agent-extra-dirs.ts`), as stored. */
+  extra_dirs: AgentExtraDir[];
 };
 
 export type AgentDetails = AgentSummary & { system_prompt: string };
@@ -4880,6 +4901,7 @@ export function getAgent(name: string): AgentDetails | null {
     directives: cfg.directives ?? null,
     reasoning_effort: cfg.reasoningEffort ?? null,
     created_by: cfg.created_by ?? null,
+    extra_dirs: storedExtraDirs(cfg),
   };
 }
 
@@ -4925,7 +4947,7 @@ function changedConfigKeys(before: AgentConfig, after: AgentConfig): string[] {
     .sort();
 }
 
-function publishAgentUpdated(name: string, changed: readonly string[], previousName: string | null = null): void {
+export function publishAgentUpdated(name: string, changed: readonly string[], previousName: string | null = null): void {
   if (changed.length === 0) return;
   const agent = agentEventSnapshot(name);
   if (agent) bus.publish({ kind: 'agent_updated', agent, changed, previousName });
@@ -4967,7 +4989,7 @@ export function upsertAgent(input: {
     // them would take the delegation rights away without anyone asking.
     // The mascot look and the avatar mode are picked elsewhere too
     // (onboarding, the Avatar tab, `agent_update look`, `agent_set_look`).
-    for (const key of ['reports_to', 'team', 'orchestrator', 'orchestrates', 'directives', 'created_by', 'uid', 'look', 'avatar'] as const) {
+    for (const key of ['reports_to', 'team', 'orchestrator', 'orchestrates', 'directives', 'created_by', 'uid', 'look', 'avatar', 'extra_dirs'] as const) {
       if (!(key in config) && current[key] !== undefined) (config as Record<string, unknown>)[key] = current[key];
     }
   }
@@ -5909,6 +5931,7 @@ export function listAgents(): AgentSummary[] {
       directives: cfg.directives ?? null,
       reasoning_effort: cfg.reasoningEffort ?? null,
       created_by: cfg.created_by ?? null,
+      extra_dirs: storedExtraDirs(cfg),
     });
   }
   return out;

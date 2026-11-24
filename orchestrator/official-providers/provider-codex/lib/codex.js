@@ -170,6 +170,14 @@ export function workspaceWriteRoots(gitRoots, platform = process.platform) {
     return platform === 'win32' ? [] : gitRoots;
 }
 
+/** The agent's extra folders (`opts.extraDirs`, checked by the daemon) its `workspace-write`
+ *  sandbox must let it write: the `write` ones. A `read` one needs nothing, the sandbox reads the
+ *  whole disk, and must stay out of the list, which is the only thing codex makes writable. Not
+ *  filtered on Windows like the git roots: an extra folder sits under no `.git` carve-out of codex. */
+export function extraWriteRoots(extraDirs) {
+    return (extraDirs ?? []).filter((dir) => dir.mode === 'write').map((dir) => dir.path);
+}
+
 /** `[model_providers.<id>]` table of a custom provider.
  *
  *  Two constraints verified empirically on codex-cli 0.130 (see
@@ -359,7 +367,7 @@ export function createCodexProvider(services, log) {
         scratch.writeFile('config.toml', [
             providerRootToml(profile.providerConfig),
             windowsSandboxToml(),
-            sandboxToml(gitRoots),
+            sandboxToml([...gitRoots, ...extraWriteRoots(opts.extraDirs)]),
             servers ?? '',
             providerTableToml(profile.providerConfig),
         ].join('\n'));

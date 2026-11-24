@@ -50,6 +50,7 @@ import { AgentAvatar, agentIdentity, avatarModeOf, lookOfAgent, type AgentAvatar
 import { defaultLookFor, type AgentLook } from '@/components/mascot/agent-look';
 import { AvatarTab, shownAvatarMode } from '@/components/agent-editor/avatar-tab';
 import { OrchestrationSection, type OrchestrationAgent } from '@/components/agent-editor/orchestration-section';
+import { AgentFoldersSection } from '@/components/agent-folders/agent-folders-section';
 import {
   useBackendCatalog,
   defaultModelFor,
@@ -1265,6 +1266,9 @@ export function AgentEditor({ agent, isNew, onClose, onDirtyChange, initialTab }
               <FormRow label={t('browserPanel.native.profile')} hint={t('browserPanel.native.profileHint')}>
                 <BrowserProfileSelect value={draft.browserProfileId} onChange={(value) => updateDraft('browserProfileId', value)} />
               </FormRow>
+              {/* Saved on their own, not with the draft: the daemon keeps them
+                  behind a door of their own, which a person opens. */}
+              {!wantsNew && selected?.name ? <AgentFoldersSection agents={[selected.name]} /> : null}
               <FormRow
                 label={t('editPage.projectTasks')}
                 hint={t('editPage.projectTasksHint')}
