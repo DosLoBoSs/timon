@@ -25,7 +25,7 @@ import { z } from 'zod';
 import { apiError } from '../../api-error.js';
 import { publishAgentUpdated, restartMissionProcess } from '../../agent.js';
 import { agentExtraDirs, ExtraDirError, normalizeExtraDirs, setAgentExtraDirs } from '../../agent-extra-dirs.js';
-import { dbApi, type MissionRow } from '../../db.js';
+import type { MissionRow } from '../../db.js';
 import {
   fenceGrantTurn, findFenceRefusal, recordFenceGrant,
   type FenceGrantOffer, type FenceGrantResolution, type StoredFenceRefusal,
@@ -44,7 +44,8 @@ export type FenceGrantRelaunch = (mission: MissionRow, text: string) => Promise<
 
 export async function relaunchAfterGrant(mission: MissionRow, text: string): Promise<boolean> {
   await restartMissionProcess(mission.id);
-  const fresh = dbApi.getMission(mission.id) ?? mission;
+  // The route already checked that the person may see this mission; this only re-reads its row after the restart.
+  const fresh = scopedDb(null).getMission(mission.id) ?? mission;
   try {
     const outcome = await sendMissionTurn(fresh, { input: text }, null);
     if (outcome.status >= 300) {
