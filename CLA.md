@@ -42,3 +42,4 @@ his successors and assigns.
 6. **Transfer.** We may transfer this agreement, with the rights it grants, to
    a successor that takes over the maintenance of Timon, for example a company
    created for it.
+I have read the CLA Document and I hereby sign the CLA
